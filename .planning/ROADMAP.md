@@ -162,7 +162,7 @@ Within each phase, plans that touch disjoint modules may run in parallel; plans 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Project Foundation & Data Dictionary | 5/5 | ✓ Complete | 2026-05-01 |
-| 2. Core Parser & Transfer Syntaxes | 4/6 | In Progress (02-01 + 02-02 + 02-03 + 02-04 complete) | — |
+| 2. Core Parser & Transfer Syntaxes | 5/6 | In Progress (02-01 + 02-02 + 02-03 + 02-04 + 02-05 complete) | — |
 | 3. Dataset Model, VR Parsing & Sequences | 0/~5 | Pending | — |
 | 4. Named Helpers, Paths, Character Sets & Pixel Exposure | 0/~5 | Pending | — |
 | 5. Serialization & Round-Trip | 0/~4 | Pending | — |
@@ -170,8 +170,8 @@ Within each phase, plans that touch disjoint modules may run in parallel; plans 
 | 7. Anonymization & Strict Validation | 0/~5 | Pending | — |
 | 8. Testing Hardening, Examples & Documentation | 0/~5 | Pending | — |
 
-**v1 milestone:** 1/8 phases complete; Phase 2 in progress (4/6 plans). Next: continue executing Phase 2 (plan 02-05 — Deflated Explicit VR LE).
+**v1 milestone:** 1/8 phases complete; Phase 2 in progress (5/6 plans). All four v1 transfer-syntax strategies are now backed by real parsers. Next: execute Phase 2 plan 02-06 (strict-mode escalation pair-test gate sweep + Phase 2 acceptance).
 
 ---
 
-*Last updated: 2026-04-22 after research reconciliation (v2 — see `.planning/research/SUMMARY.md`).*
+*Last updated: 2026-05-01 after plan 02-05 completion (Deflated Explicit VR LE — TS-04).*

@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1
 milestone_name: milestone
-status: "Phase 2 plan 02-04 complete — Explicit VR LE (TS-02) + Explicit VR BE (TS-03) + shared parseSequence shipped. Three of four v1 transfer syntaxes are real; only Deflated LE remains stubbed. CP-246 fallback (D-30) wired with state restore on failure; FFFE-under-BE bug closed (D-25 + PITFALLS §2.3); 64-deep nesting cap enforced; encapsulated pixel data structurally recognized (D-31). 204/204 tests pass. Plan 02-05 next (Deflated LE)."
-last_updated: "2026-05-01T16:25:00Z"
+status: "Phase 2 plan 02-05 complete — Deflated Explicit VR LE (TS-04) shipped. ALL FOUR v1 transfer syntaxes are now backed by real parsers. `zlib.inflateRawSync` (RFC 1951 raw deflate, NOT `inflateSync`) per CONTEXT D-26 / PITFALLS §1.4. 256 MiB decompression-bomb cap enforced (T-02-05-01); stream-corruption mitigation routes failures through `DicomParseError(INVALID_FILE_META)` (T-02-05-02). Inner emit wrapper tags `position.deflated=true` per D-27 and forwards through the outer chokepoint (strict-mode + onWarning preserved). 214/214 tests pass. Plan 02-06 next (strict-mode escalation gate sweep + final Phase 2 acceptance)."
+last_updated: "2026-05-01T16:35:00Z"
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 12
-  completed_plans: 9
-  percent: 14
+  completed_plans: 10
+  percent: 15
 ---
 
 # @cosyte/dicom — STATE
@@ -28,17 +28,17 @@ Project memory for session-to-session continuity. Updated at phase/plan boundari
 
 ## Current Position
 
-Phase: 2 — Wave 3 complete (plans 02-03 + 02-04). Three of four v1 TS strategies are real: Implicit VR LE (TS-01), Explicit VR LE (TS-02), Explicit VR BE (TS-03). Shared `parser/sequence.ts` ships `parseSequence` + `tryParseUnAsSQ` (CP-246 fallback per D-30, with state restore on failure). FFFE-under-BE bug closed (D-25 + PITFALLS §2.3). 64-deep SQ nesting cap enforced. Encapsulated pixel data structurally recognized (D-31). `Element.cp246Promoted` hint wired for Phase 3's lazy SQ decoder. Only Deflated Explicit VR LE (TS-04) remains stubbed.
-Next Step: execute plan 02-05 (Deflated Explicit VR LE — `zlib.inflateRawSync` per D-26; delegate to `parseExplicitLE`; `position.deflated=true` on dataset warnings per D-27).
+Phase: 2 — Wave 4 complete (plan 02-05). ALL FOUR v1 TS strategies are real: Implicit VR LE (TS-01), Explicit VR LE (TS-02), Explicit VR BE (TS-03), Deflated Explicit VR LE (TS-04). `parser/deflated-le.ts` uses `zlib.inflateRawSync` exclusively (RFC 1951 raw deflate per CONTEXT D-26 / PITFALLS §1.4). File Meta is parsed UNCOMPRESSED; the inflated bytes are handed to `parseExplicitLE` over a fresh inner ParseContext. Inner `emit` wrapper tags every emitted warning's `position.deflated = true` per D-27 and forwards through the outer chokepoint (strict-mode + onWarning preserved). 256 MiB decompression-bomb cap enforced via `inflateRawSync({ maxOutputLength })` (T-02-05-01); stream-corruption failures routed through `DicomParseError(INVALID_FILE_META)` (T-02-05-02). `buildDicom` extended with symmetric `zlib.deflateRawSync` encoder.
+Next Step: execute plan 02-06 (strict-mode escalation pair-test gate sweep across all actively-emitted Tier-2 codes per D-36 + final Phase 2 acceptance).
 
 - **Milestone:** v1
-- **Phase:** 2 (Core Parser & Transfer Syntaxes) — in progress (4/6 plans)
-- **Plans (milestone total):** 9 / ~40 anticipated across 8 phases (Phase 1: 5/5 ✓; Phase 2: 4/6)
-- **Status:** Plan 02-04 complete — 204/204 tests pass, dual ESM/CJS build green, smoke harness green
-- **Resume file:** `.planning/phases/02-core-parser/02-05-PLAN.md` (next plan to execute)
+- **Phase:** 2 (Core Parser & Transfer Syntaxes) — in progress (5/6 plans)
+- **Plans (milestone total):** 10 / ~40 anticipated across 8 phases (Phase 1: 5/5 ✓; Phase 2: 5/6)
+- **Status:** Plan 02-05 complete — 214/214 tests pass, dual ESM/CJS build green, smoke harness green
+- **Resume file:** `.planning/phases/02-core-parser/02-06-PLAN.md` (next plan to execute)
 
 ```
-[###                 ] 14%   (1 / 8 phases; Phase 2 at 4/6 plans)
+[###                 ] 15%   (1 / 8 phases; Phase 2 at 5/6 plans)
 ```
 
 ## Phase Map

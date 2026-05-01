@@ -49,7 +49,7 @@ All requirements are user-facing behaviors a developer consuming `@cosyte/dicom`
 - [x] **TS-01** — Parser handles **Implicit VR Little Endian** (`1.2.840.10008.1.2`) datasets: 4-byte length, VR inferred from the data dictionary.
 - [x] **TS-02** — Parser handles **Explicit VR Little Endian** (`1.2.840.10008.1.2.1`) datasets: VR encoded in the element header, including the 2-byte / 4-byte length distinction. **Long-form VRs (4-byte length with 2 reserved bytes):** `OB, OW, OF, OD, OL, SQ, UT, UN, UC, UR`. Parser asserts the 2 reserved bytes are `0x00 0x00`; non-zero reserved bytes emit `DICOM_NONZERO_RESERVED_BYTES`.
 - [x] **TS-03** — Parser handles **Explicit VR Big Endian** (`1.2.840.10008.1.2.2`) datasets with correct byte-order swapping for all numeric VRs (US, UL, SS, SL, FL, FD, AT, OW, OF, OD). **Special cases:** `AT` is two independent 2-byte swaps (group, then element — NOT one 4-byte swap); `OB` is byte-stream and never swapped regardless of byte order.
-- [ ] **TS-04** — Parser handles **Deflated Explicit VR Little Endian** (`1.2.840.10008.1.2.1.99`) datasets: transparently inflates the deflated dataset using **RFC 1951 raw deflate** via `zlib.inflateRawSync` (NOT `zlib.inflateSync`, which expects RFC 1950 zlib-wrapped input and would silently fail). File Meta is not deflated; inflation begins after File Meta ends.
+- [x] **TS-04** — Parser handles **Deflated Explicit VR Little Endian** (`1.2.840.10008.1.2.1.99`) datasets: transparently inflates the deflated dataset using **RFC 1951 raw deflate** via `zlib.inflateRawSync` (NOT `zlib.inflateSync`, which expects RFC 1950 zlib-wrapped input and would silently fail). File Meta is not deflated; inflation begins after File Meta ends.
 
 ### Dataset Model & Access (MODEL)
 
@@ -313,7 +313,7 @@ Every v1 REQ-ID maps to exactly one phase in `ROADMAP.md`. 144 / 144 mapped.
 | TEST-09 | Phase 1 — Project Foundation & Data Dictionary (CI scan; provenance doc in Phase 8) | Pending |
 | PARSE-01..06 | Phase 2 — Core Parser & Transfer Syntaxes | Pending |
 | FM-01..04 | Phase 2 — Core Parser & Transfer Syntaxes | Pending |
-| TS-01..04 | Phase 2 — Core Parser & Transfer Syntaxes | Pending |
+| TS-01..04 | Phase 2 — Core Parser & Transfer Syntaxes | Complete |
 | TOL-01..10 | Phase 2 — Core Parser & Transfer Syntaxes | Pending |
 | MODEL-01..07 | Phase 3 — Dataset Model, VR Parsing & Sequences | Pending |
 | VR-01..07 | Phase 3 — Dataset Model, VR Parsing & Sequences | Pending |
