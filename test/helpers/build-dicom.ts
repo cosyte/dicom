@@ -11,12 +11,16 @@
  * Plan 02-04 extends `encodeElement` with the Explicit VR BE branch (with
  * per-VR byte-swap) plus SQ item encoding (FFFE markers, defined- and
  * undefined-length forms, encapsulated pixel data fragments).
- * Plan 02-05 extends it with the Deflated Explicit VR LE branch.
+ * Plan 02-05 adds the Deflated Explicit VR LE branch (`zlib.deflateRawSync`
+ * applied to an Explicit-LE-encoded element body — symmetric counterpart
+ * to `parseDeflatedLE`'s `zlib.inflateRawSync` per CONTEXT D-26 /
+ * PITFALLS §1.4).
  *
  * @module
  */
 
 import { Buffer } from "node:buffer";
+import { deflateRawSync } from "node:zlib";
 
 import type { Tag, VR } from "../../src/dictionary/types.js";
 
@@ -198,8 +202,20 @@ export function buildDicom(opts: BuildDicomOptions): Buffer {
   parts.push(fileMetaBody);
 
   // Dataset elements per the requested transfer syntax.
-  for (const el of opts.elements) {
-    parts.push(encodeAnyElement(el, opts.transferSyntax));
+  // TS-04 (Deflated Explicit VR LE) is the symmetric counterpart of
+  // `parseDeflatedLE` — encode as Explicit VR LE first, then deflate
+  // the concatenation via `zlib.deflateRawSync` (RFC 1951 raw deflate,
+  // matching `inflateRawSync` on the parser side per CONTEXT D-26 /
+  // PITFALLS §1.4). File Meta is NOT deflated (FM-01).
+  if (opts.transferSyntax === "1.2.840.10008.1.2.1.99") {
+    const explicitLeBytes = Buffer.concat(
+      opts.elements.map((el) => encodeAnyElement(el, "1.2.840.10008.1.2.1")),
+    );
+    parts.push(deflateRawSync(explicitLeBytes));
+  } else {
+    for (const el of opts.elements) {
+      parts.push(encodeAnyElement(el, opts.transferSyntax));
+    }
   }
 
   if (opts.trailingBytes !== undefined) {
@@ -466,9 +482,11 @@ function encodeElement(el: BuildDicomElement, ts: string): Buffer {
   if (ts === "1.2.840.10008.1.2") return buildImplicitLeElement(el.tag, el.value);
   if (ts === "1.2.840.10008.1.2.1") return buildExplicitLeElement(el.tag, el.vr, el.value);
   if (ts === "1.2.840.10008.1.2.2") return buildExplicitBeElement(el.tag, el.vr, el.value);
-  // Plan 02-05 extends with Deflated Explicit VR LE.
+  // TS-04 (Deflated Explicit VR LE) is handled at the buildDicom level —
+  // dataset elements are encoded as Explicit VR LE, then the entire
+  // dataset is deflated. encodeElement is never reached for TS-04.
   throw new Error(
-    `buildDicom: encoder for transferSyntax="${ts}" not implemented yet (added in plan 02-05).`,
+    `buildDicom: encodeElement is not used for transferSyntax="${ts}" — Deflated TS encodes at the buildDicom level (caller bug).`,
   );
 }
 

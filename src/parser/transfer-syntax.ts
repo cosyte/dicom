@@ -6,10 +6,11 @@
  * the only Transfer Syntax UIDs supported by `@cosyte/dicom` v1.
  *
  * Plan 02-02 shipped stubs returning empty element maps. Plan 02-03
- * (this commit) replaces the Implicit VR LE stub with the real parser
- * implementation imported from `./implicit-le.js`. Plans 02-04 (Explicit
- * VR LE / BE) and 02-05 (Deflated LE) replace the remaining stubs in
- * place. The dispatch table itself does not change.
+ * replaced the Implicit VR LE stub. Plan 02-04 replaced the Explicit
+ * VR LE + BE stubs. Plan 02-05 (this commit) replaces the LAST stub —
+ * Deflated LE — with the real `zlib.inflateRawSync` + delegate-to-
+ * Explicit-LE pipeline imported from `./deflated-le.js`. All four v1
+ * transfer syntaxes are now backed by real implementations.
  *
  * @module
  */
@@ -18,13 +19,14 @@ import type { Buffer } from "node:buffer";
 
 import type { Element } from "../dataset/element.js";
 import type { Tag } from "../dictionary/types.js";
+import { parseDeflatedLE } from "./deflated-le.js";
 import { parseExplicitBE } from "./explicit-be.js";
 import { parseExplicitLE } from "./explicit-le.js";
 import { parseImplicitLE } from "./implicit-le.js";
 import type { ParseContext } from "./types.js";
 import type { DicomParseWarning } from "./warnings.js";
 
-export { parseImplicitLE, parseExplicitLE, parseExplicitBE };
+export { parseImplicitLE, parseExplicitLE, parseExplicitBE, parseDeflatedLE };
 
 /**
  * A single transfer-syntax parser strategy.
@@ -40,22 +42,6 @@ export type ParserStrategy = (
   ctx: ParseContext,
   emit: (w: DicomParseWarning) => void,
 ) => { elements: ReadonlyMap<Tag, Element>; endOffset?: number };
-
-/**
- * Deflated Explicit VR LE strategy — Plan 02-02 stub. Plan 02-05 replaces
- * with the real `zlib.inflateRawSync` + delegate-to-Explicit-LE pipeline
- * per CONTEXT D-26 / D-27.
- *
- * @internal
- */
-export function parseDeflatedLE(
-  _buffer: Buffer,
-  _datasetStart: number,
-  _ctx: ParseContext,
-  _emit: (w: DicomParseWarning) => void,
-): { elements: ReadonlyMap<Tag, Element> } {
-  return { elements: new Map() };
-}
 
 /**
  * Frozen dispatch table per CONTEXT.md D-20. Exactly the four v1 Transfer

@@ -256,7 +256,7 @@ describe("parseDeflatedLE — T-02-05-02 stream corruption", () => {
 });
 
 describe("parseDeflatedLE — copyValues honored through inflated parse", () => {
-  it("copyValues=true allocates new rawBytes buffers for inflated elements", () => {
+  it("copyValues=true and copyValues=false both yield correct values", () => {
     const buf = buildDicom({
       transferSyntax: TS_DEFLATED_LE,
       elements: [{ tag: "00100010", vr: "PN", value: Buffer.from("DOE^JANE", "ascii") }],
@@ -268,12 +268,17 @@ describe("parseDeflatedLE — copyValues honored through inflated parse", () => 
     const elView = elementsOf(dsView).get("00100010");
     const elCopy = elementsOf(dsCopy).get("00100010");
 
+    // Both modes must yield correct values — `copyValues` only controls
+    // backing-buffer detachment (Buffer.from vs Buffer.subarray), not the
+    // observable bytes.
     expect(elView?.rawBytes.toString("ascii")).toBe("DOE^JANE");
     expect(elCopy?.rawBytes.toString("ascii")).toBe("DOE^JANE");
-    // copyValues=true should detach from any pinned source — the rawBytes
-    // buffer's underlying ArrayBuffer is a fresh allocation (length matches
-    // exactly). For a Buffer.subarray view, byteLength of underlying buffer
-    // typically exceeds the slice length.
-    expect(elCopy?.rawBytes.buffer.byteLength).toBe(elCopy?.rawBytes.byteLength);
+    // copyValues=false yields a Buffer.subarray view — the underlying
+    // ArrayBuffer is the inflated buffer (size = inflated dataset).
+    // copyValues=true yields a Buffer.from copy — the underlying
+    // ArrayBuffer is from the Node Buffer pool. The two paths must
+    // produce DIFFERENT underlying ArrayBuffers (assuming both are non-
+    // empty, which they are here).
+    expect(elCopy?.rawBytes.buffer).not.toBe(elView?.rawBytes.buffer);
   });
 });
