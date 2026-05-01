@@ -2,7 +2,7 @@
  * File Meta Information group parser — hard-wired Explicit VR LE per
  * `.planning/phases/02-core-parser/02-CONTEXT.md`:
  *
- *   - D-17 — Always Explicit VR LE; does NOT consult `TRANSFER_SYNTAX_PARSERS`.
+ *   - D-17 — Always Explicit VR LE; does NOT consult the dispatch table.
  *   - D-18 — `(0002,0000)` group-length missing / present-but-wrong handling
  *     emits `DICOM_FILE_META_GROUP_LENGTH_{MISSING,MISMATCH}`.
  *   - D-19 — `(0002,0010)` Transfer Syntax UID is the ONLY parser-blocking
