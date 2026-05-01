@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1
 milestone_name: milestone
-status: "Phase 2 plan 02-03 complete — Implicit VR LE parser shipped (TS-01). D-21 5-case fallback + private-creator block-reservation (off-by-0x1000 trap closed) + TOL-09/TOL-10 emission. 171/171 tests pass. Plan 02-04 next (Explicit VR LE/BE + sequence)."
-last_updated: "2026-05-01T16:00:00Z"
+status: "Phase 2 plan 02-04 complete — Explicit VR LE (TS-02) + Explicit VR BE (TS-03) + shared parseSequence shipped. Three of four v1 transfer syntaxes are real; only Deflated LE remains stubbed. CP-246 fallback (D-30) wired with state restore on failure; FFFE-under-BE bug closed (D-25 + PITFALLS §2.3); 64-deep nesting cap enforced; encapsulated pixel data structurally recognized (D-31). 204/204 tests pass. Plan 02-05 next (Deflated LE)."
+last_updated: "2026-05-01T16:25:00Z"
 progress:
   total_phases: 8
   completed_phases: 1
-  total_plans: 11
-  completed_plans: 8
+  total_plans: 12
+  completed_plans: 9
   percent: 14
 ---
 
@@ -28,17 +28,17 @@ Project memory for session-to-session continuity. Updated at phase/plan boundari
 
 ## Current Position
 
-Phase: 2 — Wave 3a complete (plan 02-03). Implicit VR LE parser (TS-01) replaces its 02-02 stub in the dispatch table. D-21 5-case fallback wired against the Phase 1 `TAGS` map (including `repeatingGroup` family entries) + D-33/D-34 private-creator stack with the off-by-0x1000 block-reservation trap closed. TOL-09 / TOL-10 emit through the existing chokepoint. Three of four TS stubs remain (Explicit LE / Explicit BE / Deflated LE).
-Next Step: execute plan 02-04 (Explicit VR LE / BE + sequence). Plan 02-04 ships `parser/sequence.ts` which replaces the local `parseSequence` stub in `implicit-le.ts`.
+Phase: 2 — Wave 3 complete (plans 02-03 + 02-04). Three of four v1 TS strategies are real: Implicit VR LE (TS-01), Explicit VR LE (TS-02), Explicit VR BE (TS-03). Shared `parser/sequence.ts` ships `parseSequence` + `tryParseUnAsSQ` (CP-246 fallback per D-30, with state restore on failure). FFFE-under-BE bug closed (D-25 + PITFALLS §2.3). 64-deep SQ nesting cap enforced. Encapsulated pixel data structurally recognized (D-31). `Element.cp246Promoted` hint wired for Phase 3's lazy SQ decoder. Only Deflated Explicit VR LE (TS-04) remains stubbed.
+Next Step: execute plan 02-05 (Deflated Explicit VR LE — `zlib.inflateRawSync` per D-26; delegate to `parseExplicitLE`; `position.deflated=true` on dataset warnings per D-27).
 
 - **Milestone:** v1
-- **Phase:** 2 (Core Parser & Transfer Syntaxes) — in progress (3/6 plans)
-- **Plans (milestone total):** 8 / ~40 anticipated across 8 phases (Phase 1: 5/5 ✓; Phase 2: 3/6)
-- **Status:** Plan 02-03 complete — 171/171 tests pass, dual ESM/CJS build green, smoke harness green
-- **Resume file:** `.planning/phases/02-core-parser/02-04-PLAN.md` (next plan to execute)
+- **Phase:** 2 (Core Parser & Transfer Syntaxes) — in progress (4/6 plans)
+- **Plans (milestone total):** 9 / ~40 anticipated across 8 phases (Phase 1: 5/5 ✓; Phase 2: 4/6)
+- **Status:** Plan 02-04 complete — 204/204 tests pass, dual ESM/CJS build green, smoke harness green
+- **Resume file:** `.planning/phases/02-core-parser/02-05-PLAN.md` (next plan to execute)
 
 ```
-[###                 ] 14%   (1 / 8 phases; Phase 2 at 3/6 plans)
+[###                 ] 14%   (1 / 8 phases; Phase 2 at 4/6 plans)
 ```
 
 ## Phase Map
