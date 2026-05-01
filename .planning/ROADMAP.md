@@ -13,7 +13,7 @@ North star: **A developer can read a real-world, vendor-quirky DICOM Part 10 fil
 
 ## Phases
 
-- [ ] **Phase 1: Project Foundation & Data Dictionary** — Scaffold the repo (tsup, pnpm, TypeScript strict, Node 18+, Vitest 3.x, ESLint 9.x, Prettier) and build two build-time generators: the Part 6 data + UID dictionary generator (consuming Innolitics' `dicom-standard/attributes.json`) and the PS3.15 Annex E attribute-action-table generator. Plus a PHI-scan CI hook.
+- [x] **Phase 1: Project Foundation & Data Dictionary** — Scaffold the repo (tsup, pnpm, TypeScript strict, Node 18+, Vitest 3.x, ESLint 9.x, Prettier) and build two build-time generators: the Part 6 data + UID dictionary generator (consuming Innolitics' `dicom-standard/attributes.json`) and the PS3.15 Annex E attribute-action-table generator. Plus a PHI-scan CI hook. _Completed 2026-05-01._
 - [ ] **Phase 2: Core Parser & Transfer Syntaxes** — Parse DICOM Part 10 (preamble + `DICM` + File Meta Information + dataset) across all four v1 transfer syntaxes (Implicit VR LE, Explicit VR LE, Explicit VR BE, Deflated Explicit VR LE — using `zlib.inflateRawSync` for RFC 1951 raw deflate) with a lenient default, warnings system, and strict-mode escalation.
 - [ ] **Phase 3: Dataset Model, VR Parsing & Sequences** — Expose the parsed dataset as an immutable, tag-keyed model with lazy + memoized VR-aware value parsing (PN, DA/TM/DT, IS/DS, UI, numeric binaries, text) and proper sequence/item nesting for SQ elements (including CP-246 UN-as-SQ descent).
 - [ ] **Phase 4: Named Helpers, Paths, Character Sets & Pixel Exposure** — Ship the one-line DX: `ds.patient`, `ds.study`, `ds.series`, `ds.instance`, `ds.equipment`, `ds.image`; tag-path accessors (`ds.get('0040A730/00080100')`); `(0008,0005)` Specific Character Set decoding; raw pixel-data exposure plus uncompressed typed-array reshape via `ds.image.frames()` (PIXEL-04).
@@ -161,7 +161,7 @@ Within each phase, plans that touch disjoint modules may run in parallel; plans 
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Project Foundation & Data Dictionary | 0/~5 | Pending | — |
+| 1. Project Foundation & Data Dictionary | 5/5 | ✓ Complete | 2026-05-01 |
 | 2. Core Parser & Transfer Syntaxes | 0/~6 | Pending | — |
 | 3. Dataset Model, VR Parsing & Sequences | 0/~5 | Pending | — |
 | 4. Named Helpers, Paths, Character Sets & Pixel Exposure | 0/~5 | Pending | — |
@@ -170,7 +170,7 @@ Within each phase, plans that touch disjoint modules may run in parallel; plans 
 | 7. Anonymization & Strict Validation | 0/~5 | Pending | — |
 | 8. Testing Hardening, Examples & Documentation | 0/~5 | Pending | — |
 
-**v1 milestone:** 0/8 phases complete. Next: `/gsd-plan-phase 1`.
+**v1 milestone:** 1/8 phases complete. Next: `/gsd-discuss-phase 2 --auto` (then `/gsd-plan-phase 2` → `/gsd-execute-phase 2`).
 
 ---
 

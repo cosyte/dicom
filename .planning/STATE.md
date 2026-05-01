@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1
 milestone_name: milestone
-status: "Phase 1 planned. 5 plans in 3 waves (W1: 01-01 scaffold; W2: 01-02 dict + 01-03 annex-e + 01-04 phi-scan parallel; W3: 01-05 ci+smoke). Next: /gsd-execute-phase 1."
-last_updated: "2026-04-30T00:00:00Z"
+status: "Phase 1 complete (5/5 plans verified — typecheck/lint/format/test/build/smoke/attw/regen all green; 13/13 REQ-IDs satisfied; 27/27 CONTEXT decisions honored). Next: /gsd-discuss-phase 2 --auto."
+last_updated: "2026-05-01T00:00:00Z"
 progress:
   total_phases: 8
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 5
-  completed_plans: 0
-  percent: 0
+  completed_plans: 5
+  percent: 12
 ---
 
 # @cosyte/dicom — STATE
@@ -22,23 +22,23 @@ Project memory for session-to-session continuity. Updated at phase/plan boundari
 
 - **Name:** `@cosyte/dicom`
 - **Core value:** A developer can read a real-world, vendor-quirky DICOM Part 10 file and pull useful metadata fields out in one line — without having read the DICOM standard.
-- **Current focus:** Phase 1 planned. 5 PLAN.md files committed under `.planning/phases/01-project-foundation/`. All 13 Phase 1 REQ-IDs covered (SETUP-01..06, DICT-01..06, TEST-09); all 27 CONTEXT decisions (D-01..D-27) honored. Ready to execute.
+- **Current focus:** Phase 1 ✓ Complete. Repo scaffold + dual-build (ESM+CJS) + locked toolchain (Vitest 3.2.4, ESLint 9.x, TS 5.9, tsup 8.5, Node ≥18.18) + Innolitics dictionary generator (5,129 tags, 5,035 keywords, 268 UIDs) + PS3.15 Annex E action-table generator (617 entries, all 11 option sets) + Pure-Node PHI-scan + simple-git-hooks pre-commit + 3 CI workflows + ESM/CJS smoke harness + attw exports gate. All 13 REQ-IDs (SETUP-01..06, DICT-01..06, TEST-09) satisfied; all 27 CONTEXT decisions (D-01..D-27) honored. 33 unit tests pass. Byte-identical regen verified.
 - **Workflow config:** standard granularity, yolo mode, parallelization enabled, plan-check + verifier + Nyquist validation on, auto-advance on (mirrors `@cosyte/hl7`).
 - **Scope boundary:** v1 is metadata-first. Pixel data exposed (raw Buffer + encapsulated fragments + uncompressed typed-array reshape via PIXEL-04) but no codec-based decompression. No DIMSE, no DICOMweb. See `PROJECT.md` "Scope Posture" and "Companion Package Strategy".
 
 ## Current Position
 
-Phase: 1 — Planned (`/gsd-plan-phase 1` complete; plan-checker skipped per user direction).
-Next Step: `/gsd-execute-phase 1` — run all 5 plans in 3 waves with atomic commits.
+Phase: 2 — Pending (Phase 1 complete; ready to discuss/plan/execute Phase 2).
+Next Step: `/gsd-discuss-phase 2 --auto` — gather context for Core Parser & Transfer Syntaxes before planning.
 
 - **Milestone:** v1
-- **Phase:** 1 (Project Foundation & Data Dictionary) — plans locked
-- **Plans (milestone total):** 5 / ~40 anticipated across 8 phases
-- **Status:** Ready to execute Phase 1
-- **Resume file:** `.planning/phases/01-project-foundation/01-01-PLAN.md` (Wave 1 entry point)
+- **Phase:** 2 (Core Parser & Transfer Syntaxes) — pending
+- **Plans (milestone total):** 5 / ~40 anticipated across 8 phases (Phase 1: 5/5 ✓)
+- **Status:** Phase 1 verified complete; Phase 2 awaiting `/gsd-discuss-phase 2`
+- **Resume file:** `.planning/phases/01-project-foundation/01-VERIFICATION.md` (last verified artifact)
 
 ```
-[                    ] 0%   (0 / 8 phases)
+[##                  ] 12%   (1 / 8 phases)
 ```
 
 ## Phase Map
