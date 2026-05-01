@@ -77,20 +77,6 @@ function buildItemHeader(length: number, littleEndian: boolean): Buffer {
   return buf;
 }
 
-function buildItemDelim(littleEndian: boolean): Buffer {
-  const buf = Buffer.alloc(8);
-  if (littleEndian) {
-    buf.writeUInt16LE(0xfffe, 0);
-    buf.writeUInt16LE(0xe00d, 2);
-    buf.writeUInt32LE(0, 4);
-  } else {
-    buf.writeUInt16BE(0xfffe, 0);
-    buf.writeUInt16BE(0xe00d, 2);
-    buf.writeUInt32BE(0, 4);
-  }
-  return buf;
-}
-
 function buildSeqDelim(littleEndian: boolean): Buffer {
   const buf = Buffer.alloc(8);
   if (littleEndian) {

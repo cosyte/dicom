@@ -14,9 +14,11 @@
  * Element layout: `group(2 LE) + element(2 LE) + length(4 LE) + value`.
  * No on-wire VR; VR is inferred. Length `0xFFFFFFFF` is only valid on
  * tags whose resolved VR is `SQ` — the parser delegates SQ descent to
- * `parseSequence` (owned by plan 02-04 / `parser/sequence.ts`). Until
- * that plan ships, this file ships a local stub `parseSequence` that
- * returns an empty SQ; the import is replaced once plan 02-04 lands.
+ * `parseSequence` (`./sequence.js`).
+ *
+ * As of plan 02-04, `parseImplicitLE` accepts an optional `stopOnItemDelim`
+ * flag and returns `endOffset` — both required by the InnerParser contract
+ * the SQ parser invokes for undefined-length item bodies (D-28).
  *
  * Threat model (T-02-03-01 / T-02-03-02): all `RangeError`s from the
  * `ByteCursor` are caught and re-thrown as
@@ -39,6 +41,7 @@ import {
   resolvePrivateCreator,
 } from "./element-header.js";
 import { buildSnippet, DicomParseError, FATAL_CODES } from "./errors.js";
+import { parseSequence } from "./sequence.js";
 import type { ParseContext } from "./types.js";
 import { groupLengthInDataset, type DicomParseWarning } from "./warnings.js";
 
@@ -48,6 +51,12 @@ import { groupLengthInDataset, type DicomParseWarning } from "./warnings.js";
  * end of the buffer; returns the assembled element map for the parent
  * `Dataset`.
  *
+ * When `opts.stopOnItemDelim === true`, the loop terminates immediately
+ * upon reading `(FFFE,E00D)` ItemDelim — the cursor is advanced past the
+ * 4-byte length field (which is always 0) and the post-delim offset is
+ * returned. This contract is consumed by `parseSequence` for
+ * undefined-length item bodies (D-28).
+ *
  * @internal
  */
 export function parseImplicitLE(
@@ -55,7 +64,8 @@ export function parseImplicitLE(
   datasetStart: number,
   ctx: ParseContext,
   emit: (w: DicomParseWarning) => void,
-): { elements: ReadonlyMap<Tag, Element> } {
+  opts: { stopOnItemDelim?: boolean } = {},
+): { elements: ReadonlyMap<Tag, Element>; endOffset: number } {
   const cursor = new ByteCursor(buffer, true, datasetStart);
   const elements = new Map<Tag, Element>();
 
@@ -83,10 +93,16 @@ export function parseImplicitLE(
     const tag = joinTag(group, element);
 
     // FFFE markers under Implicit VR LE are item / item-delim / seq-delim
-    // markers. They are only valid INSIDE an SQ; SQ-aware logic lives in
-    // parser/sequence.ts (plan 02-04). Encountering one at root is
-    // structurally malformed — throw rather than silently consuming.
+    // markers. ItemDelim (FFFE,E00D) terminates an undefined-length SQ
+    // item body — when invoked as inner parser (opts.stopOnItemDelim ===
+    // true) we exit cleanly with the post-delim offset. Other FFFE
+    // markers at the dataset root are structurally malformed.
     if (group === 0xfffe) {
+      if (opts.stopOnItemDelim === true && tag === "FFFEE00D") {
+        // Length field was already consumed (always 0 for ItemDelim);
+        // cursor is now past the 8-byte ItemDelim marker.
+        return { elements, endOffset: cursor.position };
+      }
       throw new DicomParseError(
         FATAL_CODES.INVALID_FILE_META,
         `Unexpected FFFE marker (${tag}) at dataset root.`,
@@ -104,7 +120,11 @@ export function parseImplicitLE(
     // VR, so UN cannot be encoded explicitly with undefined length).
     if (length === 0xffffffff) {
       if (vr === "SQ") {
-        const seq = parseSequence(buffer, cursor.position, ctx, emit);
+        const seq = parseSequence(buffer, cursor.position, ctx, emit, {
+          explicitLength: undefined,
+          littleEndian: true,
+          innerStrategy: parseImplicitLE,
+        });
         const valueRawStart = headerStart;
         cursor.position = seq.endOffset;
         const rawBytes = ctx.copyValues
@@ -176,37 +196,5 @@ export function parseImplicitLE(
     );
   }
 
-  return { elements };
-}
-
-// ---------------------------------------------------------------------------
-// parseSequence import seam
-// ---------------------------------------------------------------------------
-//
-// Plan 02-04 ships `src/parser/sequence.ts` with the real `parseSequence`
-// implementation (FFFE Item / Item-Delim / Seq-Delim handling, undefined-
-// length SQ, encoding-context stack push/pop, CP-246 fallback under
-// Explicit VR). Wave 3 of Phase 2 runs 02-03 and 02-04 in parallel — when
-// 02-04 lands, the executor MUST replace this local stub with
-// `import { parseSequence } from "./sequence.js"`. Until then, any SQ
-// element under Implicit VR LE is treated as having zero items; tests
-// in this plan that exercise SQ structure remain LIGHT (the deeper SQ
-// matrix lives in plan 02-04).
-
-interface ParseSequenceResult {
-  readonly items: readonly unknown[];
-  readonly endOffset: number;
-}
-
-/**
- * Plan 02-03 stub. Replaced by `import { parseSequence } from "./sequence.js"`
- * once plan 02-04 ships. See the import-seam comment above.
- */
-function parseSequence(
-  _buffer: Buffer,
-  startOffset: number,
-  _ctx: ParseContext,
-  _emit: (w: DicomParseWarning) => void,
-): ParseSequenceResult {
-  return { items: [], endOffset: startOffset };
+  return { elements, endOffset: cursor.position };
 }
