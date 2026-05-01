@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1
 milestone_name: milestone
-status: "Phase 2 plan 02-02 complete — parseDicom entry wired (input normalization, Part 10 framing, File Meta parser, TS dispatch table). 141/141 tests pass. Plans 02-03 and 02-04 next (parallel-safe wave 3)."
-last_updated: "2026-05-01T15:55:00Z"
+status: "Phase 2 plan 02-03 complete — Implicit VR LE parser shipped (TS-01). D-21 5-case fallback + private-creator block-reservation (off-by-0x1000 trap closed) + TOL-09/TOL-10 emission. 171/171 tests pass. Plan 02-04 next (Explicit VR LE/BE + sequence)."
+last_updated: "2026-05-01T16:00:00Z"
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 11
-  completed_plans: 7
-  percent: 12
+  completed_plans: 8
+  percent: 14
 ---
 
 # @cosyte/dicom — STATE
@@ -28,17 +28,17 @@ Project memory for session-to-session continuity. Updated at phase/plan boundari
 
 ## Current Position
 
-Phase: 2 — Wave 2 complete (plan 02-02). parseDicom entry point wired with all four Tier-3 fatal codes; the four TS strategy bodies are stubs that plans 02-03 / 02-04 / 02-05 replace in place.
-Next Step: execute plans 02-03 (Implicit VR LE) and 02-04 (Explicit VR LE / BE + sequences) in parallel (wave 3).
+Phase: 2 — Wave 3a complete (plan 02-03). Implicit VR LE parser (TS-01) replaces its 02-02 stub in the dispatch table. D-21 5-case fallback wired against the Phase 1 `TAGS` map (including `repeatingGroup` family entries) + D-33/D-34 private-creator stack with the off-by-0x1000 block-reservation trap closed. TOL-09 / TOL-10 emit through the existing chokepoint. Three of four TS stubs remain (Explicit LE / Explicit BE / Deflated LE).
+Next Step: execute plan 02-04 (Explicit VR LE / BE + sequence). Plan 02-04 ships `parser/sequence.ts` which replaces the local `parseSequence` stub in `implicit-le.ts`.
 
 - **Milestone:** v1
-- **Phase:** 2 (Core Parser & Transfer Syntaxes) — in progress (2/6 plans)
-- **Plans (milestone total):** 7 / ~40 anticipated across 8 phases (Phase 1: 5/5 ✓; Phase 2: 2/6)
-- **Status:** Plan 02-02 complete — 141/141 tests pass, dual ESM/CJS build green, smoke harness green
-- **Resume file:** `.planning/phases/02-core-parser/02-03-PLAN.md` (next plan to execute)
+- **Phase:** 2 (Core Parser & Transfer Syntaxes) — in progress (3/6 plans)
+- **Plans (milestone total):** 8 / ~40 anticipated across 8 phases (Phase 1: 5/5 ✓; Phase 2: 3/6)
+- **Status:** Plan 02-03 complete — 171/171 tests pass, dual ESM/CJS build green, smoke harness green
+- **Resume file:** `.planning/phases/02-core-parser/02-04-PLAN.md` (next plan to execute)
 
 ```
-[###                 ] 14%   (1 / 8 phases; Phase 2 at 2/6 plans)
+[###                 ] 14%   (1 / 8 phases; Phase 2 at 3/6 plans)
 ```
 
 ## Phase Map

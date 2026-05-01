@@ -46,7 +46,7 @@ All requirements are user-facing behaviors a developer consuming `@cosyte/dicom`
 
 ### Transfer Syntaxes (TS)
 
-- [ ] **TS-01** — Parser handles **Implicit VR Little Endian** (`1.2.840.10008.1.2`) datasets: 4-byte length, VR inferred from the data dictionary.
+- [x] **TS-01** — Parser handles **Implicit VR Little Endian** (`1.2.840.10008.1.2`) datasets: 4-byte length, VR inferred from the data dictionary.
 - [ ] **TS-02** — Parser handles **Explicit VR Little Endian** (`1.2.840.10008.1.2.1`) datasets: VR encoded in the element header, including the 2-byte / 4-byte length distinction. **Long-form VRs (4-byte length with 2 reserved bytes):** `OB, OW, OF, OD, OL, SQ, UT, UN, UC, UR`. Parser asserts the 2 reserved bytes are `0x00 0x00`; non-zero reserved bytes emit `DICOM_NONZERO_RESERVED_BYTES`.
 - [ ] **TS-03** — Parser handles **Explicit VR Big Endian** (`1.2.840.10008.1.2.2`) datasets with correct byte-order swapping for all numeric VRs (US, UL, SS, SL, FL, FD, AT, OW, OF, OD). **Special cases:** `AT` is two independent 2-byte swaps (group, then element — NOT one 4-byte swap); `OB` is byte-stream and never swapped regardless of byte order.
 - [ ] **TS-04** — Parser handles **Deflated Explicit VR Little Endian** (`1.2.840.10008.1.2.1.99`) datasets: transparently inflates the deflated dataset using **RFC 1951 raw deflate** via `zlib.inflateRawSync` (NOT `zlib.inflateSync`, which expects RFC 1950 zlib-wrapped input and would silently fail). File Meta is not deflated; inflation begins after File Meta ends.
@@ -119,8 +119,8 @@ All requirements are user-facing behaviors a developer consuming `@cosyte/dicom`
 - [ ] **TOL-06** — Missing preamble (`stripPreamble: 'tolerate'`, the default) parses files that start directly with File Meta and emits `DICOM_MISSING_PREAMBLE`; `stripPreamble: 'require'` throws fatal.
 - [ ] **TOL-07** — Odd-length values are tolerated (padded per VR rules — space for text VRs, NULL for UI, NULL for OB) and emit `DICOM_ODD_LENGTH_VALUE_PADDED`; strict mode throws.
 - [ ] **TOL-08** — A known tag whose in-file VR disagrees with the dictionary VR is tolerated: the parser trusts the encoded VR, records the deviation as `DICOM_VR_MISMATCH`, and keeps parsing; strict mode throws.
-- [ ] **TOL-09** — Private tags in a `(gggg,0010-00FF)` range without a registered Private Creator are tolerated; emit `DICOM_PRIVATE_TAG_NO_CREATOR`; raw bytes remain accessible via `ds.get(tag)`.
-- [ ] **TOL-10** — Group length elements `(gggg,0000)` appearing in non-File-Meta groups are tolerated; emit `DICOM_GROUP_LENGTH_IN_DATASET`; value is exposed but not used for parsing.
+- [x] **TOL-09** — Private tags in a `(gggg,0010-00FF)` range without a registered Private Creator are tolerated; emit `DICOM_PRIVATE_TAG_NO_CREATOR`; raw bytes remain accessible via `ds.get(tag)`.
+- [x] **TOL-10** — Group length elements `(gggg,0000)` appearing in non-File-Meta groups are tolerated; emit `DICOM_GROUP_LENGTH_IN_DATASET`; value is exposed but not used for parsing.
 
 ### Serialization & Round-Trip (SER)
 
