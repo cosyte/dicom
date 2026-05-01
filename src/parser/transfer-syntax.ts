@@ -18,12 +18,13 @@ import type { Buffer } from "node:buffer";
 
 import type { Element } from "../dataset/element.js";
 import type { Tag } from "../dictionary/types.js";
+import { parseExplicitBE } from "./explicit-be.js";
 import { parseExplicitLE } from "./explicit-le.js";
 import { parseImplicitLE } from "./implicit-le.js";
 import type { ParseContext } from "./types.js";
 import type { DicomParseWarning } from "./warnings.js";
 
-export { parseImplicitLE, parseExplicitLE };
+export { parseImplicitLE, parseExplicitLE, parseExplicitBE };
 
 /**
  * A single transfer-syntax parser strategy.
@@ -39,21 +40,6 @@ export type ParserStrategy = (
   ctx: ParseContext,
   emit: (w: DicomParseWarning) => void,
 ) => { elements: ReadonlyMap<Tag, Element>; endOffset?: number };
-
-/**
- * Explicit VR BE strategy — Plan 02-02 stub. Plan 02-04 replaces with the
- * real Explicit VR BE parser per CONTEXT D-23 / D-24 / D-25.
- *
- * @internal
- */
-export function parseExplicitBE(
-  _buffer: Buffer,
-  _datasetStart: number,
-  _ctx: ParseContext,
-  _emit: (w: DicomParseWarning) => void,
-): { elements: ReadonlyMap<Tag, Element> } {
-  return { elements: new Map() };
-}
 
 /**
  * Deflated Explicit VR LE strategy — Plan 02-02 stub. Plan 02-05 replaces
