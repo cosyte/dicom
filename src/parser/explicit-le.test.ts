@@ -1,0 +1,352 @@
+/**
+ * Tests for `parseExplicitLE` — Phase 2 plan 02-04 task 2.
+ *
+ * Covers TS-02 end-to-end through `parseDicom`, plus the per-VR Explicit-LE
+ * header layout (short-form / long-form), TOL-07 (odd-length-padded),
+ * TOL-08 (VR mismatch), DICOM_NONZERO_RESERVED_BYTES, undefined-length-SQ
+ * (DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR), CP-246 success + failure
+ * (DICOM_UN_PARSED_AS_SQ + cp246Promoted hint), encapsulated pixel data
+ * structural recognition (D-31), private-creator block-reservation, and
+ * truncation throws (T-02-04-01).
+ */
+
+import { Buffer } from "node:buffer";
+import { describe, expect, it } from "vitest";
+
+import { buildDicom } from "../../test/helpers/build-dicom.js";
+import type { Dataset } from "../dataset/dataset.js";
+import type { Element } from "../dataset/element.js";
+import type { Tag } from "../dictionary/types.js";
+import { DicomParseError } from "./errors.js";
+import { parseDicom } from "./index.js";
+import { WARNING_CODES } from "./warnings.js";
+
+interface DatasetWithElements {
+  readonly _elements: ReadonlyMap<Tag, Element>;
+}
+function elementsOf(ds: Dataset): ReadonlyMap<Tag, Element> {
+  return (ds as unknown as DatasetWithElements)._elements;
+}
+
+const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
+
+describe("parseExplicitLE — TS-02 short-form happy path", () => {
+  it("parses (0010,0010) PN with 8-byte short-form header", () => {
+    const buf = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      elements: [{ tag: "00100010", vr: "PN", value: Buffer.from("DOE^JANE", "ascii") }],
+    });
+    const ds = parseDicom(buf);
+    const el = elementsOf(ds).get("00100010");
+    expect(el).toBeDefined();
+    expect(el?.vr).toBe("PN");
+    expect(el?.length).toBe(8);
+    expect(el?.rawBytes.toString("ascii")).toBe("DOE^JANE");
+  });
+});
+
+describe("parseExplicitLE — TS-02 long-form happy path (D-22)", () => {
+  it("parses (7FE0,0010) OB with 12-byte long-form header", () => {
+    const pixel = Buffer.from([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
+    const buf = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      elements: [{ tag: "7FE00010", vr: "OB", value: pixel }],
+    });
+    const ds = parseDicom(buf);
+    const el = elementsOf(ds).get("7FE00010");
+    expect(el).toBeDefined();
+    expect(el?.vr).toBe("OB");
+    expect(el?.length).toBe(8);
+    expect(el?.rawBytes.equals(pixel)).toBe(true);
+  });
+});
+
+describe("parseExplicitLE — TOL-07 odd-length value", () => {
+  it("emits DICOM_ODD_LENGTH_VALUE_PADDED for odd-length SH; element parsed with declared length", () => {
+    // SH with 5-byte value "12345" (odd-length on wire).
+    const buf = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      elements: [{ tag: "00080050", vr: "SH", value: Buffer.from("12345", "ascii") }],
+    });
+    const ds = parseDicom(buf);
+    expect(
+      ds.warnings.some((w) => w.code === WARNING_CODES.DICOM_ODD_LENGTH_VALUE_PADDED),
+    ).toBe(true);
+    const el = elementsOf(ds).get("00080050");
+    expect(el?.length).toBe(5);
+  });
+});
+
+describe("parseExplicitLE — TOL-08 VR mismatch", () => {
+  it("emits DICOM_VR_MISMATCH when in-file VR differs from dictionary", () => {
+    // (0010,0010) is dictionary VR=PN; encode with on-wire VR=LO.
+    const buf = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      elements: [{ tag: "00100010", vr: "LO", value: Buffer.from("X ", "ascii") }],
+    });
+    const ds = parseDicom(buf);
+    expect(ds.warnings.some((w) => w.code === WARNING_CODES.DICOM_VR_MISMATCH)).toBe(true);
+    const el = elementsOf(ds).get("00100010");
+    expect(el?.vr).toBe("LO"); // Trust on-wire VR per Postel's Law.
+  });
+});
+
+describe("parseExplicitLE — DICOM_NONZERO_RESERVED_BYTES", () => {
+  it("emits warning when long-form reserved bytes are non-zero", () => {
+    // Hand-build a buffer with one OB element whose reserved bytes are
+    // 0x01 0x02 (instead of 0x00 0x00).
+    const preamble = Buffer.alloc(128, 0x00);
+    const dicm = Buffer.from("DICM", "ascii");
+
+    // Build a valid File Meta with TS UID = Explicit VR LE.
+    const fmTsValue = Buffer.from(`${TS_EXPLICIT_LE}\0`, "ascii"); // even-length pad
+    const fmTsHeader = Buffer.from([
+      0x02, 0x00, 0x10, 0x00, 0x55, 0x49, // (0002,0010) UI
+      fmTsValue.length, 0x00, // 2-byte LE length
+    ]);
+    const fmTsElement = Buffer.concat([fmTsHeader, fmTsValue]);
+    const fmGroupLen = Buffer.alloc(4);
+    fmGroupLen.writeUInt32LE(fmTsElement.length, 0);
+    const fmGroupLenElement = Buffer.concat([
+      Buffer.from([0x02, 0x00, 0x00, 0x00, 0x55, 0x4c, 0x04, 0x00]), // (0002,0000) UL len=4
+      fmGroupLen,
+    ]);
+
+    // Hand-craft (7FE0,0010) OB long-form with bad reserved bytes.
+    const badOb = Buffer.concat([
+      Buffer.from([0xe0, 0x7f, 0x10, 0x00]), // (7FE0,0010) LE
+      Buffer.from("OB", "ascii"),
+      Buffer.from([0x01, 0x02]), // <-- BAD reserved
+      Buffer.from([0x04, 0x00, 0x00, 0x00]), // length=4 LE
+      Buffer.from([0xaa, 0xbb, 0xcc, 0xdd]),
+    ]);
+
+    const buf = Buffer.concat([preamble, dicm, fmGroupLenElement, fmTsElement, badOb]);
+    const ds = parseDicom(buf);
+    expect(
+      ds.warnings.some((w) => w.code === WARNING_CODES.DICOM_NONZERO_RESERVED_BYTES),
+    ).toBe(true);
+    // Element still parsed despite the reserved-byte issue.
+    const el = elementsOf(ds).get("7FE00010");
+    expect(el?.length).toBe(4);
+  });
+});
+
+describe("parseExplicitLE — explicit-length SQ", () => {
+  it("parses (0040,A730) ContentSequence with one defined-length item", () => {
+    const buf = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      elements: [
+        {
+          tag: "0040A730",
+          items: [
+            {
+              elements: [
+                {
+                  tag: "00080100",
+                  vr: "SH",
+                  value: Buffer.from("CODE", "ascii"),
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    const ds = parseDicom(buf);
+    const el = elementsOf(ds).get("0040A730");
+    expect(el).toBeDefined();
+    expect(el?.vr).toBe("SQ");
+    // No DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR for explicit-length SQ.
+    expect(
+      ds.warnings.some((w) => w.code === WARNING_CODES.DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR),
+    ).toBe(false);
+  });
+});
+
+describe("parseExplicitLE — undefined-length SQ (D-29)", () => {
+  it("emits DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR; SQ parsed correctly", () => {
+    const buf = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      elements: [
+        {
+          tag: "0040A730",
+          undefinedLength: true,
+          items: [
+            {
+              elements: [
+                { tag: "00080100", vr: "SH", value: Buffer.from("CODE", "ascii") },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    const ds = parseDicom(buf);
+    expect(
+      ds.warnings.some((w) => w.code === WARNING_CODES.DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR),
+    ).toBe(true);
+    const el = elementsOf(ds).get("0040A730");
+    expect(el?.vr).toBe("SQ");
+  });
+});
+
+describe("parseExplicitLE — CP-246 (D-30)", () => {
+  it("UN-undefined-length carrying valid Implicit-LE SQ → promoted to SQ + cp246Promoted=true", () => {
+    // Construct an Implicit-LE-encoded SQ payload (one undefined-length
+    // item with empty body + SeqDelim) and stuff it into a UN
+    // undefined-length value.
+    const itemHdr = Buffer.alloc(8);
+    itemHdr.writeUInt16LE(0xfffe, 0);
+    itemHdr.writeUInt16LE(0xe000, 2);
+    itemHdr.writeUInt32LE(0, 4); // empty defined-length item
+    const seqDelim = Buffer.alloc(8);
+    seqDelim.writeUInt16LE(0xfffe, 0);
+    seqDelim.writeUInt16LE(0xe0dd, 2);
+    seqDelim.writeUInt32LE(0, 4);
+    const sqPayload = Buffer.concat([itemHdr, seqDelim]);
+
+    // Use buildDicom encapsulatedPixelData=false but build an SQ-shaped
+    // helper element as raw bytes via encapsulatedPixelData with explicitVr=UN.
+    // The encapsulated-pixel-data path emits:
+    //   (tag) UN undefined-length + raw-byte-fragments + SeqDelim
+    // which is exactly what we need (the inner bytes happen to be a
+    // valid Implicit-LE SQ — the parser must recognize that via CP-246).
+    //
+    // But the encapsulated-pixel-data encoder emits its OWN FFFE,E000
+    // wrapper for fragments. We want the raw payload directly. Hand-craft
+    // the UN element via a buildDicom + a single fragment-less custom
+    // element layout instead. Approach: use the Buffer concat path.
+
+    // Simpler: hand-build the UN element header and append the payload.
+    const tag = Buffer.from([0x40, 0x00, 0x30, 0xa7]); // (0040,A730) LE
+    const unVr = Buffer.from("UN", "ascii");
+    const reserved = Buffer.from([0x00, 0x00]);
+    const undefLen = Buffer.from([0xff, 0xff, 0xff, 0xff]);
+    const unElement = Buffer.concat([tag, unVr, reserved, undefLen, sqPayload]);
+
+    // File Meta + preamble.
+    const preamble = Buffer.alloc(128, 0x00);
+    const dicm = Buffer.from("DICM", "ascii");
+    const fmTsValue = Buffer.from(`${TS_EXPLICIT_LE}\0`, "ascii");
+    const fmTsLen = Buffer.alloc(2);
+    fmTsLen.writeUInt16LE(fmTsValue.length, 0);
+    const fmTs = Buffer.concat([
+      Buffer.from([0x02, 0x00, 0x10, 0x00, 0x55, 0x49]),
+      fmTsLen,
+      fmTsValue,
+    ]);
+    const fmGroupLenValue = Buffer.alloc(4);
+    fmGroupLenValue.writeUInt32LE(fmTs.length, 0);
+    const fmGroupLen = Buffer.concat([
+      Buffer.from([0x02, 0x00, 0x00, 0x00, 0x55, 0x4c, 0x04, 0x00]),
+      fmGroupLenValue,
+    ]);
+
+    const buf = Buffer.concat([preamble, dicm, fmGroupLen, fmTs, unElement]);
+    const ds = parseDicom(buf);
+    expect(ds.warnings.some((w) => w.code === WARNING_CODES.DICOM_UN_PARSED_AS_SQ)).toBe(true);
+    const el = elementsOf(ds).get("0040A730");
+    expect(el).toBeDefined();
+    expect(el?.vr).toBe("SQ"); // Promoted.
+    expect(el?.cp246Promoted).toBe(true);
+  });
+
+  it("UN-undefined-length with random bytes → falls back; vr stays UN; cp246Promoted unset; NO warning", () => {
+    // 16 bytes of garbage that won't parse as Implicit-LE SQ.
+    const garbage = Buffer.from([
+      0xab, 0xcd, 0xef, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0, 0x11, 0x22, 0x33, 0x44,
+      0x55,
+    ]);
+    const tag = Buffer.from([0x40, 0x00, 0x30, 0xa7]);
+    const unVr = Buffer.from("UN", "ascii");
+    const reserved = Buffer.from([0x00, 0x00]);
+    const undefLen = Buffer.from([0xff, 0xff, 0xff, 0xff]);
+    const unElement = Buffer.concat([tag, unVr, reserved, undefLen, garbage]);
+    const preamble = Buffer.alloc(128, 0x00);
+    const dicm = Buffer.from("DICM", "ascii");
+    const fmTsValue = Buffer.from(`${TS_EXPLICIT_LE}\0`, "ascii");
+    const fmTsLen = Buffer.alloc(2);
+    fmTsLen.writeUInt16LE(fmTsValue.length, 0);
+    const fmTs = Buffer.concat([
+      Buffer.from([0x02, 0x00, 0x10, 0x00, 0x55, 0x49]),
+      fmTsLen,
+      fmTsValue,
+    ]);
+    const fmGroupLenValue = Buffer.alloc(4);
+    fmGroupLenValue.writeUInt32LE(fmTs.length, 0);
+    const fmGroupLen = Buffer.concat([
+      Buffer.from([0x02, 0x00, 0x00, 0x00, 0x55, 0x4c, 0x04, 0x00]),
+      fmGroupLenValue,
+    ]);
+    const buf = Buffer.concat([preamble, dicm, fmGroupLen, fmTs, unElement]);
+    const ds = parseDicom(buf);
+    expect(ds.warnings.some((w) => w.code === WARNING_CODES.DICOM_UN_PARSED_AS_SQ)).toBe(false);
+    const el = elementsOf(ds).get("0040A730");
+    // Element exists with vr=UN (fallback path keeps UN).
+    expect(el?.vr).toBe("UN");
+    expect(el?.cp246Promoted).toBeUndefined();
+  });
+});
+
+describe("parseExplicitLE — encapsulated pixel data (D-31)", () => {
+  it("(7FE0,0010) OB undefined-length with fragments parses structurally; vr stays OB", () => {
+    const buf = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      elements: [
+        {
+          tag: "7FE00010",
+          encapsulatedPixelData: true,
+          encapsulatedFragments: [
+            Buffer.alloc(0), // empty BOT
+            Buffer.from([0x01, 0x02, 0x03, 0x04]),
+            Buffer.from([0x05, 0x06, 0x07, 0x08]),
+          ],
+          items: [], // unused for encapsulatedPixelData path
+        },
+      ],
+    });
+    const ds = parseDicom(buf);
+    const el = elementsOf(ds).get("7FE00010");
+    expect(el).toBeDefined();
+    expect(el?.vr).toBe("OB"); // NOT promoted.
+    expect(el?.cp246Promoted).toBeUndefined();
+  });
+});
+
+describe("parseExplicitLE — private-creator block-reservation", () => {
+  it("Element.privateCreator populated for (0019,1000) when (0019,0010)='ACME'", () => {
+    const buf = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      elements: [
+        { tag: "00190010", vr: "LO", value: Buffer.from("ACME", "ascii") },
+        { tag: "00191000", vr: "UN", value: Buffer.from([0xaa, 0xbb]) },
+      ],
+    });
+    const ds = parseDicom(buf);
+    const el = elementsOf(ds).get("00191000");
+    expect(el?.privateCreator).toBe("ACME");
+    // Off-by-0x1000 trap: (0019,2000) does NOT resolve to ACME.
+    // (Not built in this fixture — verified in element-header.test.ts.)
+  });
+});
+
+describe("parseExplicitLE — truncation (T-02-04-01)", () => {
+  it("throws DicomParseError(INVALID_FILE_META) on truncated header", () => {
+    // Build a valid buffer, then chop the last 4 bytes off mid-element.
+    const buf = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      elements: [{ tag: "00100010", vr: "PN", value: Buffer.from("DOE^JANE", "ascii") }],
+    });
+    const truncated = buf.subarray(0, buf.length - 4); // chop value mid-byte
+    try {
+      parseDicom(truncated);
+      expect.fail("expected throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(DicomParseError);
+      if (err instanceof DicomParseError) {
+        expect(err.code).toBe("INVALID_FILE_META");
+      }
+    }
+  });
+});

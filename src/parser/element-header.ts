@@ -23,9 +23,11 @@ import { TAGS } from "../dictionary/generated/tags.js";
 import type { Buffer } from "node:buffer";
 
 import type { DictionaryEntry, Tag, VR } from "../dictionary/types.js";
+import type { ByteCursor } from "./byte-cursor.js";
 import type { DicomPosition, ParseContext } from "./types.js";
 import {
   implicitVRForPrivateTagWithoutVR,
+  nonzeroReservedBytes,
   privateTagNoCreator,
   type DicomParseWarning,
 } from "./warnings.js";
@@ -242,4 +244,80 @@ function matchesFamilyPattern(pattern: string, concrete: Tag): boolean {
     if (p.toUpperCase() !== c.toUpperCase()) return false;
   }
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// Explicit VR LE / BE — element-header reader (D-22 + D-25)
+// ---------------------------------------------------------------------------
+
+/**
+ * Result of reading an Explicit-VR element header (LE or BE — endianness
+ * is determined by the supplied `ByteCursor`'s `littleEndian` field).
+ *
+ * @internal
+ */
+export interface ExplicitElementHeader {
+  readonly tag: Tag;
+  readonly vr: VR;
+  readonly length: number;
+  /** Offset of the first byte of the header (group bytes). */
+  readonly headerStart: number;
+  /** Header byte length: 8 (short-form) or 12 (long-form). */
+  readonly headerLength: 8 | 12;
+}
+
+/**
+ * Read an Explicit-VR element header from `cursor` per D-22:
+ *   - Short-form: group(2) + element(2) + VR(2 ASCII) + length(2).
+ *   - Long-form (when VR ∈ {@link LONG_FORM_VRS}): group(2) + element(2) +
+ *     VR(2 ASCII) + reserved(2 — must be `0x00 0x00`) + length(4).
+ *
+ * Endianness comes from the cursor — group / element / length use
+ * `cursor.readUInt16` / `readUInt32`. The 2-byte VR field is ASCII and
+ * never byte-swapped; reserved bytes are read directly from the buffer
+ * (also endian-agnostic — they're a 2-byte zero-pad regardless).
+ *
+ * Non-zero reserved bytes emit `DICOM_NONZERO_RESERVED_BYTES` (D-22)
+ * and parsing continues — length is read from the explicit 4-byte field
+ * regardless of the reserved-byte payload.
+ *
+ * Caller is responsible for catching `RangeError` from the cursor and
+ * re-throwing as `DicomParseError(INVALID_FILE_META)` with positional
+ * context (per the per-TS parser's truncation-mitigation pattern).
+ *
+ * @internal
+ */
+export function readExplicitElementHeader(
+  cursor: ByteCursor,
+  _ctx: ParseContext,
+  emit: (w: DicomParseWarning) => void,
+): ExplicitElementHeader {
+  const headerStart = cursor.position;
+  const group = cursor.readUInt16();
+  const element = cursor.readUInt16();
+  const tag = `${group.toString(16).padStart(4, "0")}${element.toString(16).padStart(4, "0")}`.toUpperCase() as Tag;
+  // VR is always 2 ASCII bytes regardless of cursor endianness.
+  const vrSlice = cursor.slice(2);
+  const vr = vrSlice.toString("ascii") as VR;
+
+  let length: number;
+  let headerLength: 8 | 12;
+  if (LONG_FORM_VRS.has(vr)) {
+    // 2 reserved bytes (must be 0x00 0x00 per D-22) + 4-byte length.
+    const reserved0 = cursor.buffer[cursor.position];
+    const reserved1 = cursor.buffer[cursor.position + 1];
+    cursor.position += 2;
+    if ((reserved0 ?? 0) !== 0x00 || (reserved1 ?? 0) !== 0x00) {
+      const observed =
+        (reserved0 ?? 0).toString(16).padStart(2, "0") +
+        (reserved1 ?? 0).toString(16).padStart(2, "0");
+      emit(nonzeroReservedBytes({ byteOffset: headerStart }, tag, observed));
+    }
+    length = cursor.readUInt32();
+    headerLength = 12;
+  } else {
+    length = cursor.readUInt16();
+    headerLength = 8;
+  }
+  return { tag, vr, length, headerStart, headerLength };
 }
