@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1
 milestone_name: milestone
-status: "Phase 2 plans verified (auto-mode) — 6/6 PLAN.md files; 24/24 REQ-IDs covered (PARSE/FM/TS/TOL); 46/46 D-decisions referenced; plan-checker passed all 12 axes (BLOCKERs=0, WARNINGs=0). Next: /gsd-execute-phase 2 --auto."
-last_updated: "2026-05-01T02:00:00Z"
+status: "Phase 2 plan 02-02 complete — parseDicom entry wired (input normalization, Part 10 framing, File Meta parser, TS dispatch table). 141/141 tests pass. Plans 02-03 and 02-04 next (parallel-safe wave 3)."
+last_updated: "2026-05-01T15:55:00Z"
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 11
-  completed_plans: 5
+  completed_plans: 7
   percent: 12
 ---
 
@@ -28,17 +28,17 @@ Project memory for session-to-session continuity. Updated at phase/plan boundari
 
 ## Current Position
 
-Phase: 2 — Plans verified (Phase 1 complete + 02-CONTEXT.md + 02-PATTERNS.md + 02-{01..06}-PLAN.md committed; ready to execute Phase 2).
-Next Step: `/gsd-execute-phase 2 --auto` — execute the 6 plans across 5 waves (1: 02-01 → 2: 02-02 → 3: 02-03 ∥ 02-04 → 4: 02-05 → 5: 02-06).
+Phase: 2 — Wave 2 complete (plan 02-02). parseDicom entry point wired with all four Tier-3 fatal codes; the four TS strategy bodies are stubs that plans 02-03 / 02-04 / 02-05 replace in place.
+Next Step: execute plans 02-03 (Implicit VR LE) and 02-04 (Explicit VR LE / BE + sequences) in parallel (wave 3).
 
 - **Milestone:** v1
-- **Phase:** 2 (Core Parser & Transfer Syntaxes) — pending
-- **Plans (milestone total):** 5 / ~40 anticipated across 8 phases (Phase 1: 5/5 ✓; Phase 2: 0/6 planned)
-- **Status:** Phase 1 verified complete; Phase 2 planned (46 decisions + 6 plans + plan-checker green); awaiting `/gsd-execute-phase 2 --auto`
-- **Resume file:** `.planning/phases/02-core-parser/02-06-PLAN.md` (capstone plan; latest planning artifact)
+- **Phase:** 2 (Core Parser & Transfer Syntaxes) — in progress (2/6 plans)
+- **Plans (milestone total):** 7 / ~40 anticipated across 8 phases (Phase 1: 5/5 ✓; Phase 2: 2/6)
+- **Status:** Plan 02-02 complete — 141/141 tests pass, dual ESM/CJS build green, smoke harness green
+- **Resume file:** `.planning/phases/02-core-parser/02-03-PLAN.md` (next plan to execute)
 
 ```
-[##                  ] 12%   (1 / 8 phases)
+[###                 ] 14%   (1 / 8 phases; Phase 2 at 2/6 plans)
 ```
 
 ## Phase Map
