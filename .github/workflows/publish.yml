@@ -1,0 +1,66 @@
+name: Publish
+
+# Manual-trigger npm publish with OIDC provenance (T-01-05-01, T-01-05-05).
+# Mirrors @cosyte/hl7's publish.yml with dicom-specific deltas:
+#   - pnpm 10.33.1 (sibling: 9)
+#   - regenerate + byte-identical guard before publish
+#   - smoke + typecheck:exports gates before publish
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Regenerate (ensures dist matches inputs)
+        run: pnpm gen:all
+
+      - name: Verify byte-identical regen
+        run: git diff --exit-code src/dictionary/generated/
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Smoke
+        run: pnpm smoke
+
+      - name: typecheck:exports (attw on packed tarball)
+        run: |
+          pnpm pack
+          pnpm typecheck:exports
+
+      - name: Publish to npm
+        run: pnpm publish --access public --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

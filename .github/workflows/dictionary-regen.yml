@@ -1,0 +1,61 @@
+name: Dictionary Regen
+
+# Standalone byte-identical regen gate (D-11, DICT-05).
+# Runs `pnpm gen:all && git diff --exit-code src/dictionary/generated/`
+# to ensure the committed generated dictionary + Annex E artifacts stay
+# byte-for-byte equivalent to what the pinned vendor inputs would produce.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "vendor/**"
+      - "scripts/generate-dictionary.ts"
+      - "scripts/generate-annex-e.ts"
+      - "scripts/_annex-e-discovery.md"
+      - "src/dictionary/generated/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "vendor/**"
+      - "scripts/generate-dictionary.ts"
+      - "scripts/generate-annex-e.ts"
+      - "scripts/_annex-e-discovery.md"
+      - "src/dictionary/generated/**"
+
+permissions:
+  contents: read
+
+jobs:
+  regen:
+    name: byte-identical regen
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.1
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Regenerate dictionary + Annex E
+        run: pnpm gen:all
+
+      - name: Verify byte-identical regen
+        run: |
+          if ! git diff --exit-code src/dictionary/generated/; then
+            echo "::error::Generated dictionary or Annex E artifact drifted from committed output."
+            echo "Run 'pnpm gen:all' locally and commit the diff."
+            echo "Pinned inputs are under vendor/innolitics/<sha>/ and (if used) vendor/nema/<sha>/."
+            exit 1
+          fi
