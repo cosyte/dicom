@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1
 milestone_name: milestone
-status: "Phase 2 context gathered (auto-mode) — 46 decisions D-01..D-46 across 16 gray areas locked in 02-CONTEXT.md; 6-plan decomposition recommended; mirrors HL7 sibling parser/warnings patterns. Next: /gsd-plan-phase 2 --auto."
-last_updated: "2026-05-01T01:00:00Z"
+status: "Phase 2 plans verified (auto-mode) — 6/6 PLAN.md files; 24/24 REQ-IDs covered (PARSE/FM/TS/TOL); 46/46 D-decisions referenced; plan-checker passed all 12 axes (BLOCKERs=0, WARNINGs=0). Next: /gsd-execute-phase 2 --auto."
+last_updated: "2026-05-01T02:00:00Z"
 progress:
   total_phases: 8
   completed_phases: 1
-  total_plans: 5
+  total_plans: 11
   completed_plans: 5
   percent: 12
 ---
@@ -28,14 +28,14 @@ Project memory for session-to-session continuity. Updated at phase/plan boundari
 
 ## Current Position
 
-Phase: 2 — Context gathered (Phase 1 complete + Phase 2 02-CONTEXT.md committed; ready to plan/execute Phase 2).
-Next Step: `/gsd-plan-phase 2 --auto` — decompose Phase 2 into the 6 plans suggested in 02-CONTEXT.md D-40 (warnings+dataset-shell → part10-header+file-meta → implicit-LE → explicit-LE+BE+SQ+CP-246 → deflated-LE → strict-mode capstone).
+Phase: 2 — Plans verified (Phase 1 complete + 02-CONTEXT.md + 02-PATTERNS.md + 02-{01..06}-PLAN.md committed; ready to execute Phase 2).
+Next Step: `/gsd-execute-phase 2 --auto` — execute the 6 plans across 5 waves (1: 02-01 → 2: 02-02 → 3: 02-03 ∥ 02-04 → 4: 02-05 → 5: 02-06).
 
 - **Milestone:** v1
 - **Phase:** 2 (Core Parser & Transfer Syntaxes) — pending
-- **Plans (milestone total):** 5 / ~40 anticipated across 8 phases (Phase 1: 5/5 ✓)
-- **Status:** Phase 1 verified complete; Phase 2 context captured (46 decisions); awaiting `/gsd-plan-phase 2 --auto`
-- **Resume file:** `.planning/phases/02-core-parser/02-CONTEXT.md` (latest planning artifact)
+- **Plans (milestone total):** 5 / ~40 anticipated across 8 phases (Phase 1: 5/5 ✓; Phase 2: 0/6 planned)
+- **Status:** Phase 1 verified complete; Phase 2 planned (46 decisions + 6 plans + plan-checker green); awaiting `/gsd-execute-phase 2 --auto`
+- **Resume file:** `.planning/phases/02-core-parser/02-06-PLAN.md` (capstone plan; latest planning artifact)
 
 ```
 [##                  ] 12%   (1 / 8 phases)
