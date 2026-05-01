@@ -123,7 +123,15 @@ function parseArgs(argv: string[]): Args {
   let i = 0;
   while (i < argv.length) {
     const a = argv[i];
-    if (a === "--staged") {
+    if (a === "--") {
+      // POSIX `--` separator (also forwarded by pnpm). Treat all subsequent
+      // args as positional paths, even if they start with `-`.
+      for (let j = i + 1; j < argv.length; j += 1) {
+        const v = argv[j];
+        if (v !== undefined) paths.push(v);
+      }
+      break;
+    } else if (a === "--staged") {
       staged = true;
       i += 1;
     } else if (a === "--allow-fixture") {
