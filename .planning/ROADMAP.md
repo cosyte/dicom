@@ -37,7 +37,12 @@ North star: **A developer can read a real-world, vendor-quirky DICOM Part 10 fil
   4. A developer editing any `.ts` file gets strict-mode errors for `any`, unchecked index access, and missing types from their editor immediately.
   5. A developer calling `Dictionary.lookup('00100010')`, `Dictionary.lookup('PatientName')`, `Dictionary.byKeyword('StudyInstanceUID')`, and `Dictionary.uid('1.2.840.10008.1.2.1')` receives typed results; re-running both generators (Part 6 dictionary + Annex E action table) produces byte-identical output (CI gates on both).
   6. CI PHI-scan hook rejects any commit introducing fixture files with DA/DT within the last 120 years or PN values outside the synthetic allow-list.
-**Plans**: ~5 plans anticipated (package-scaffold, build-system + attw, lint-and-test, **data-dictionary + UID generator**, **Annex E action-table generator**, **PHI-scan CI hook**, smoke-verification) — consolidatable
+**Plans**: 5 plans
+- [ ] 01-01-PLAN.md — Package scaffold + locked toolchain + ALL pnpm scripts wired (SETUP-01..06)
+- [ ] 01-02-PLAN.md — Innolitics dictionary + UID generator → committed `src/dictionary/generated/{tags,keywords,uids}.ts` + public `Dictionary.{lookup,byKeyword,uid}` (DICT-01..06)
+- [ ] 01-03-PLAN.md — PS3.15 Annex E action-table generator (Innolitics-first / NEMA-DocBook-fallback per CONTEXT D-14) → `src/dictionary/generated/annex-e.ts` (Phase 7 input artifact)
+- [ ] 01-04-PLAN.md — Pure-Node PHI-scan + simple-git-hooks pre-commit hook + 9 unit tests (TEST-09 CI-scan half)
+- [ ] 01-05-PLAN.md — CI workflows (ci.yml on Node 18.18/20/22, dictionary-regen.yml, publish.yml) + ESM/CJS smoke harness + final acceptance run
 **UI hint**: no
 
 ### Phase 2: Core Parser & Transfer Syntaxes

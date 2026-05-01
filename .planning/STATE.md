@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1
 milestone_name: milestone
-status: "Phase 1 context gathered (--auto). Toolchain, generator output, PHI-scan, attw, CI matrix, smoke harness all locked. Next: /gsd-plan-phase 1."
+status: "Phase 1 planned. 5 plans in 3 waves (W1: 01-01 scaffold; W2: 01-02 dict + 01-03 annex-e + 01-04 phi-scan parallel; W3: 01-05 ci+smoke). Next: /gsd-execute-phase 1."
 last_updated: "2026-04-30T00:00:00Z"
 progress:
   total_phases: 8
   completed_phases: 0
-  total_plans: 0
+  total_plans: 5
   completed_plans: 0
   percent: 0
 ---
@@ -22,20 +22,20 @@ Project memory for session-to-session continuity. Updated at phase/plan boundari
 
 - **Name:** `@cosyte/dicom`
 - **Core value:** A developer can read a real-world, vendor-quirky DICOM Part 10 file and pull useful metadata fields out in one line — without having read the DICOM standard.
-- **Current focus:** Phase 0 initialization complete + 4-dimension research reconciled. Roadmap, requirements, and research committed. Ready to plan Phase 1 (Project Foundation & Data Dictionary).
+- **Current focus:** Phase 1 planned. 5 PLAN.md files committed under `.planning/phases/01-project-foundation/`. All 13 Phase 1 REQ-IDs covered (SETUP-01..06, DICT-01..06, TEST-09); all 27 CONTEXT decisions (D-01..D-27) honored. Ready to execute.
 - **Workflow config:** standard granularity, yolo mode, parallelization enabled, plan-check + verifier + Nyquist validation on, auto-advance on (mirrors `@cosyte/hl7`).
 - **Scope boundary:** v1 is metadata-first. Pixel data exposed (raw Buffer + encapsulated fragments + uncompressed typed-array reshape via PIXEL-04) but no codec-based decompression. No DIMSE, no DICOMweb. See `PROJECT.md` "Scope Posture" and "Companion Package Strategy".
 
 ## Current Position
 
-Phase: 1 — Context gathered (`/gsd-discuss-phase 1 --auto` complete).
-Next Step: `/gsd-plan-phase 1` — decompose Phase 1 (Project Foundation & Data Dictionary) into plans.
+Phase: 1 — Planned (`/gsd-plan-phase 1` complete; plan-checker skipped per user direction).
+Next Step: `/gsd-execute-phase 1` — run all 5 plans in 3 waves with atomic commits.
 
 - **Milestone:** v1
-- **Phase:** 1 (Project Foundation & Data Dictionary) — context locked
-- **Plans (milestone total):** 0 / ~40 anticipated across 8 phases
-- **Status:** Ready to plan Phase 1
-- **Resume file:** `.planning/phases/01-project-foundation/01-CONTEXT.md`
+- **Phase:** 1 (Project Foundation & Data Dictionary) — plans locked
+- **Plans (milestone total):** 5 / ~40 anticipated across 8 phases
+- **Status:** Ready to execute Phase 1
+- **Resume file:** `.planning/phases/01-project-foundation/01-01-PLAN.md` (Wave 1 entry point)
 
 ```
 [                    ] 0%   (0 / 8 phases)
