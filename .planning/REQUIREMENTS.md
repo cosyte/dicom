@@ -111,7 +111,7 @@ All requirements are user-facing behaviors a developer consuming `@cosyte/dicom`
 
 ### Real-World Tolerance (TOL)
 
-- [ ] **TOL-01** — Default parse mode is lenient; strict mode via `{ strict: true }` escalates every Tier 2 warning to a thrown `DicomParseError`.
+- [x] **TOL-01** — Default parse mode is lenient; strict mode via `{ strict: true }` escalates every Tier 2 warning to a thrown `DicomParseError`.
 - [ ] **TOL-02** — Tier 3 fatal errors throw `DicomParseError` with stable codes even in lenient mode: `NOT_DICOM_PART_10`, `INVALID_FILE_META`, `UNSUPPORTED_TRANSFER_SYNTAX`, `EMPTY_INPUT`. Each error includes `message`, `position` (byte offset), `snippet`.
 - [ ] **TOL-03** — Parser emits Tier 2 warnings with stable codes and byte-offset positional context. **Baseline warning-code catalog:** `DICOM_MISSING_PREAMBLE`, `DICOM_FILE_META_GROUP_LENGTH_MISSING`, `DICOM_FILE_META_GROUP_LENGTH_MISMATCH`, `DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR`, `DICOM_ODD_LENGTH_VALUE_PADDED`, `DICOM_VR_MISMATCH`, `DICOM_PRIVATE_TAG_NO_CREATOR`, `DICOM_PRIVATE_CREATOR_UNKNOWN`, `DICOM_GROUP_LENGTH_IN_DATASET`, `DICOM_BOM_IN_TEXT_VR`, `DICOM_UNSUPPORTED_CHARSET`, `DICOM_CHARSET_AMBIGUOUS_SEPARATOR`, `DICOM_UI_TRAILING_SPACE`, `DICOM_DA_LEGACY_FORMAT`, `DICOM_DT_NONSTANDARD_OFFSET`, `DICOM_IS_NONINTEGER_VALUE`, `DICOM_NON_ASCII_IN_ASCII_VR`, `DICOM_NONZERO_RESERVED_BYTES`, `DICOM_UN_PARSED_AS_SQ`, `DICOM_EMPTY_ITEM_IN_SEQUENCE`, `DICOM_TRAILING_NULL_IN_TEXT_VR`, `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR`, `DICOM_PIXEL_DATA_LENGTH_MISMATCH`, `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED` (see ANON-08).
 - [ ] **TOL-04** — `ds.warnings` is always an array of `DicomParseWarning` objects (possibly empty) on a parsed dataset. Warnings are snapshot-stable after parse (structural-pass warnings are emitted eagerly even though value decoding is lazy).
@@ -314,7 +314,7 @@ Every v1 REQ-ID maps to exactly one phase in `ROADMAP.md`. 144 / 144 mapped.
 | PARSE-01..06 | Phase 2 — Core Parser & Transfer Syntaxes | Pending |
 | FM-01..04 | Phase 2 — Core Parser & Transfer Syntaxes | Pending |
 | TS-01..04 | Phase 2 — Core Parser & Transfer Syntaxes | Complete |
-| TOL-01..10 | Phase 2 — Core Parser & Transfer Syntaxes | Pending |
+| TOL-01..10 | Phase 2 — Core Parser & Transfer Syntaxes | Partial (TOL-01, TOL-07, TOL-08, TOL-09, TOL-10 complete; TOL-02..06 pending plan-level marks) |
 | MODEL-01..07 | Phase 3 — Dataset Model, VR Parsing & Sequences | Pending |
 | VR-01..07 | Phase 3 — Dataset Model, VR Parsing & Sequences | Pending |
 | SQ-01..05 | Phase 3 — Dataset Model, VR Parsing & Sequences | Pending |

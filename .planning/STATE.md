@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1
 milestone_name: milestone
-status: "Phase 2 plan 02-05 complete — Deflated Explicit VR LE (TS-04) shipped. ALL FOUR v1 transfer syntaxes are now backed by real parsers. `zlib.inflateRawSync` (RFC 1951 raw deflate, NOT `inflateSync`) per CONTEXT D-26 / PITFALLS §1.4. 256 MiB decompression-bomb cap enforced (T-02-05-01); stream-corruption mitigation routes failures through `DicomParseError(INVALID_FILE_META)` (T-02-05-02). Inner emit wrapper tags `position.deflated=true` per D-27 and forwards through the outer chokepoint (strict-mode + onWarning preserved). 214/214 tests pass. Plan 02-06 next (strict-mode escalation gate sweep + final Phase 2 acceptance)."
-last_updated: "2026-05-01T16:35:00Z"
+status: "Phase 2 plan 02-06 complete — capstone strict-mode pair-test gate (D-36) + STRIDE security sweep + ROADMAP §SC1-§SC5 acceptance sweep all green. 273/275 tests pass with 2 documented `it.todo` placeholders (DICOM_PIXEL_DATA_LENGTH_MISMATCH per D-32 deferred post-pass; DICOM_UN_PARSED_AS_SQ strict-mode regression — `tryParseUnAsSQ` try/catch swallows the chokepoint throw, ~5-line Phase-2-minor patch). All 6 Phase-2 plans done; Phase 2 ready for /gsd-verify-work 2."
+last_updated: "2026-05-01T16:55:00Z"
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 12
-  completed_plans: 10
-  percent: 15
+  completed_plans: 11
+  percent: 18
 ---
 
 # @cosyte/dicom — STATE
@@ -28,17 +28,17 @@ Project memory for session-to-session continuity. Updated at phase/plan boundari
 
 ## Current Position
 
-Phase: 2 — Wave 4 complete (plan 02-05). ALL FOUR v1 TS strategies are real: Implicit VR LE (TS-01), Explicit VR LE (TS-02), Explicit VR BE (TS-03), Deflated Explicit VR LE (TS-04). `parser/deflated-le.ts` uses `zlib.inflateRawSync` exclusively (RFC 1951 raw deflate per CONTEXT D-26 / PITFALLS §1.4). File Meta is parsed UNCOMPRESSED; the inflated bytes are handed to `parseExplicitLE` over a fresh inner ParseContext. Inner `emit` wrapper tags every emitted warning's `position.deflated = true` per D-27 and forwards through the outer chokepoint (strict-mode + onWarning preserved). 256 MiB decompression-bomb cap enforced via `inflateRawSync({ maxOutputLength })` (T-02-05-01); stream-corruption failures routed through `DicomParseError(INVALID_FILE_META)` (T-02-05-02). `buildDicom` extended with symmetric `zlib.deflateRawSync` encoder.
-Next Step: execute plan 02-06 (strict-mode escalation pair-test gate sweep across all actively-emitted Tier-2 codes per D-36 + final Phase 2 acceptance).
+Phase: 2 — ALL 6 plans complete (Wave 5 capstone landed). Plan 02-06 ships three integration-test files under `test/integration/`: `parser-strict-mode.test.ts` (D-36 pair-test gate across 11 of 13 actively-emitted Tier-2 codes; 2 deferred), `parser-security.test.ts` (5-group STRIDE sweep — buffer over-read / SQ depth-cap / CP-246 pathological / decompression bomb / copyValues retention), `parser-acceptance.test.ts` (ROADMAP §SC1-§SC5 — 4 v1 TS round-trip; long-form VR + AT-pair-swap + OB-no-swap; inflateRawSync source-grep gate; 4 fatal codes; FM-02 fields; Dictionary.uid TS names). 273/275 tests pass; 2 `it.todo` track documented gaps. No `src/` modifications introduced. Phase 2 is shippable.
+Next Step: `/gsd-verify-work 2` and `/gsd-validate-phase 2`. Two minor follow-ups tracked: (1) narrow `tryParseUnAsSQ` catch in `src/parser/sequence.ts` to non-DicomParseError; (2) wire D-32 pixel-data-length-mismatch post-pass after Phase-3 lazy decoders ship.
 
 - **Milestone:** v1
-- **Phase:** 2 (Core Parser & Transfer Syntaxes) — in progress (5/6 plans)
-- **Plans (milestone total):** 10 / ~40 anticipated across 8 phases (Phase 1: 5/5 ✓; Phase 2: 5/6)
-- **Status:** Plan 02-05 complete — 214/214 tests pass, dual ESM/CJS build green, smoke harness green
-- **Resume file:** `.planning/phases/02-core-parser/02-06-PLAN.md` (next plan to execute)
+- **Phase:** 2 (Core Parser & Transfer Syntaxes) — Complete (6/6 plans)
+- **Plans (milestone total):** 11 / ~40 anticipated across 8 phases (Phase 1: 5/5 ✓; Phase 2: 6/6 ✓)
+- **Status:** Plan 02-06 complete — 273/275 tests pass (2 `it.todo` documented), dual ESM/CJS build green, smoke harness green
+- **Resume file:** Phase 2 verifier next; then Phase 3 discuss/plan/execute loop.
 
 ```
-[###                 ] 15%   (1 / 8 phases; Phase 2 at 5/6 plans)
+[####                ] 18%   (1 / 8 phases complete; Phase 2 at 6/6 plans — verifier next)
 ```
 
 ## Phase Map
