@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1
 milestone_name: milestone
-status: "Phase 1 complete (5/5 plans verified — typecheck/lint/format/test/build/smoke/attw/regen all green; 13/13 REQ-IDs satisfied; 27/27 CONTEXT decisions honored). Next: /gsd-discuss-phase 2 --auto."
-last_updated: "2026-05-01T00:00:00Z"
+status: "Phase 2 context gathered (auto-mode) — 46 decisions D-01..D-46 across 16 gray areas locked in 02-CONTEXT.md; 6-plan decomposition recommended; mirrors HL7 sibling parser/warnings patterns. Next: /gsd-plan-phase 2 --auto."
+last_updated: "2026-05-01T01:00:00Z"
 progress:
   total_phases: 8
   completed_phases: 1
@@ -28,14 +28,14 @@ Project memory for session-to-session continuity. Updated at phase/plan boundari
 
 ## Current Position
 
-Phase: 2 — Pending (Phase 1 complete; ready to discuss/plan/execute Phase 2).
-Next Step: `/gsd-discuss-phase 2 --auto` — gather context for Core Parser & Transfer Syntaxes before planning.
+Phase: 2 — Context gathered (Phase 1 complete + Phase 2 02-CONTEXT.md committed; ready to plan/execute Phase 2).
+Next Step: `/gsd-plan-phase 2 --auto` — decompose Phase 2 into the 6 plans suggested in 02-CONTEXT.md D-40 (warnings+dataset-shell → part10-header+file-meta → implicit-LE → explicit-LE+BE+SQ+CP-246 → deflated-LE → strict-mode capstone).
 
 - **Milestone:** v1
 - **Phase:** 2 (Core Parser & Transfer Syntaxes) — pending
 - **Plans (milestone total):** 5 / ~40 anticipated across 8 phases (Phase 1: 5/5 ✓)
-- **Status:** Phase 1 verified complete; Phase 2 awaiting `/gsd-discuss-phase 2`
-- **Resume file:** `.planning/phases/01-project-foundation/01-VERIFICATION.md` (last verified artifact)
+- **Status:** Phase 1 verified complete; Phase 2 context captured (46 decisions); awaiting `/gsd-plan-phase 2 --auto`
+- **Resume file:** `.planning/phases/02-core-parser/02-CONTEXT.md` (latest planning artifact)
 
 ```
 [##                  ] 12%   (1 / 8 phases)
