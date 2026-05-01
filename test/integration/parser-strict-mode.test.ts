@@ -138,16 +138,14 @@ function buildNonzeroReservedBytesFixture(): Buffer {
  * for missing creators, so the outer tag does not need a creator slot.
  */
 function buildCp246Fixture(): Buffer {
-  // Inner Implicit-LE SQ payload: empty defined-length item + SeqDelim.
-  const itemHdr = Buffer.alloc(8);
-  itemHdr.writeUInt16LE(0xfffe, 0);
-  itemHdr.writeUInt16LE(0xe000, 2);
-  itemHdr.writeUInt32LE(0, 4);
+  // Inner Implicit-LE SQ payload: SeqDelim only (zero items). A defined-length
+  // empty item would emit DICOM_EMPTY_ITEM_IN_SEQUENCE during the descent,
+  // which strict-mode would escalate before reaching the CP-246 emit point.
   const seqDelim = Buffer.alloc(8);
   seqDelim.writeUInt16LE(0xfffe, 0);
   seqDelim.writeUInt16LE(0xe0dd, 2);
   seqDelim.writeUInt32LE(0, 4);
-  const sqPayload = Buffer.concat([itemHdr, seqDelim]);
+  const sqPayload = seqDelim;
 
   // Outer UN-undefined-length element header for private tag (0009,1000)
   // under Explicit-LE. Group=0x0009 (odd → private), element=0x1000.
@@ -376,11 +374,16 @@ describe("DICOM_UN_PARSED_AS_SQ — CP-246 detection (D-30)", () => {
     expect(ds.warnings.some((w) => w.code === WARNING_CODES.DICOM_UN_PARSED_AS_SQ)).toBe(true);
   });
 
-  it.todo(
-    "strict mode: throws DicomParseError(DICOM_UN_PARSED_AS_SQ) — blocked by " +
-      "try/catch in tryParseUnAsSQ swallowing the chokepoint throw. Tracked as " +
-      "Phase-2 minor follow-up; see 02-06-SUMMARY.md deviations.",
-  );
+  it("strict mode: throws DicomParseError(DICOM_UN_PARSED_AS_SQ)", () => {
+    let caught: DicomParseError | undefined;
+    try {
+      parseDicom(buildCp246Fixture(), { strict: true });
+    } catch (err) {
+      if (err instanceof DicomParseError) caught = err;
+    }
+    expect(caught).toBeInstanceOf(DicomParseError);
+    expect(caught?.code).toBe(WARNING_CODES.DICOM_UN_PARSED_AS_SQ);
+  });
 });
 
 describe("DICOM_PIXEL_DATA_LENGTH_MISMATCH — D-32 post-pass status", () => {

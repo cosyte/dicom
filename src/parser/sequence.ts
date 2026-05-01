@@ -55,6 +55,7 @@ import { joinTag } from "../dataset/tag.js";
 import type { Tag } from "../dictionary/types.js";
 import { ByteCursor } from "./byte-cursor.js";
 import { buildSnippet, DicomParseError, FATAL_CODES } from "./errors.js";
+import { WARNING_CODES } from "./warnings.js";
 import type { ParseContext } from "./types.js";
 import {
   emptyItemInSequence,
@@ -323,7 +324,18 @@ export function tryParseUnAsSQ(
       items: result.items,
       endOffset: valueStart + result.endOffset,
     };
-  } catch {
+  } catch (err) {
+    // Strict-mode escalation (D-36): the emit chokepoint throws
+    // `DicomParseError` carrying a Tier-2 `WarningCode` when ctx.strict is
+    // true. Those throws must propagate. Tier-3 structural fatals
+    // (`FatalCode`) thrown mid-descent indicate the bytes don't actually
+    // form a valid SQ — fall back to UN-as-bytes as designed.
+    if (err instanceof DicomParseError) {
+      const warningCodeValues = Object.values(WARNING_CODES) as readonly string[];
+      if (warningCodeValues.includes(err.code)) {
+        throw err;
+      }
+    }
     // Restore state — drop any warnings emitted during the failed descent.
     ctx.nestingDepth = savedDepth;
     while (ctx.encodingContextStack.length > savedStackLen) {
