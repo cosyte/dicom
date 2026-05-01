@@ -18,13 +18,7 @@
 
 import { describe, it, expect, beforeAll } from "vitest";
 import { spawnSync } from "node:child_process";
-import {
-  writeFileSync,
-  mkdirSync,
-  readFileSync,
-  appendFileSync,
-  existsSync,
-} from "node:fs";
+import { writeFileSync, mkdirSync, readFileSync, appendFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
 const REPO_ROOT = process.cwd();
@@ -232,10 +226,7 @@ describe("phi-scan: non-DICOM file regex sweep", () => {
 
 describe("phi-scan: --allow-fixture override (D-17)", () => {
   it("rejects --allow-fixture without an override-log entry (exit 2)", () => {
-    const r = runScanner([
-      "--allow-fixture",
-      join(FIX_DIR, "recent-date-violator.dcm"),
-    ]);
+    const r = runScanner(["--allow-fixture", join(FIX_DIR, "recent-date-violator.dcm")]);
     expect(r.code).toBe(2);
     expect(r.stderr).toMatch(/phi-scan-overrides\.md/);
   });
@@ -253,10 +244,7 @@ describe("phi-scan: --allow-fixture override (D-17)", () => {
         "- **Approved by:** vitest\n" +
         "- **Expires:** permanent\n";
       appendFileSync(OVERRIDES_PATH, entry);
-      const r = runScanner([
-        "--allow-fixture",
-        "test/fixtures/phi-scan/recent-date-violator.dcm",
-      ]);
+      const r = runScanner(["--allow-fixture", "test/fixtures/phi-scan/recent-date-violator.dcm"]);
       expect(r.code, `stderr: ${r.stderr}`).toBe(0);
     } finally {
       writeFileSync(OVERRIDES_PATH, original);

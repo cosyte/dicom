@@ -67,18 +67,7 @@ const DT_TAGS = new Set<string>([
 
 // VRs that use the long form length encoding in Explicit VR LE.
 // 2 reserved bytes + 4-byte length.
-const LONG_FORM_VRS = new Set<string>([
-  "OB",
-  "OW",
-  "OF",
-  "OD",
-  "OL",
-  "SQ",
-  "UT",
-  "UN",
-  "UC",
-  "UR",
-]);
+const LONG_FORM_VRS = new Set<string>(["OB", "OW", "OF", "OD", "OL", "SQ", "UT", "UN", "UC", "UR"]);
 
 // ---------------------------------------------------------------------------
 // Types
@@ -300,14 +289,10 @@ function buildTargetsForAll(): Target[] {
       // NOTE: when `input` is set, do NOT pass `encoding: "buffer"` — Node
       // rejects that combination ("Unknown encoding: buffer"). Default
       // (undefined) encoding returns a Buffer, which is what we want.
-      const out = execFileSync(
-        "git",
-        ["check-ignore", "--stdin", "-z"],
-        {
-          input: all.map((p) => normalizePath(p)).join("\0"),
-          stdio: ["pipe", "pipe", "ignore"],
-        },
-      );
+      const out = execFileSync("git", ["check-ignore", "--stdin", "-z"], {
+        input: all.map((p) => normalizePath(p)).join("\0"),
+        stdio: ["pipe", "pipe", "ignore"],
+      });
       for (const p of out.toString("utf8").split("\0")) {
         if (p.length > 0) ignored.add(p);
       }
@@ -329,11 +314,10 @@ function buildTargetsForStaged(): Target[] {
   // SECURITY: array-form execFileSync, no shell.
   let listBuf: Buffer;
   try {
-    listBuf = execFileSync(
-      "git",
-      ["diff", "--cached", "--name-only", "--diff-filter=AM", "-z"],
-      { encoding: "buffer", stdio: ["ignore", "pipe", "pipe"] },
-    );
+    listBuf = execFileSync("git", ["diff", "--cached", "--name-only", "--diff-filter=AM", "-z"], {
+      encoding: "buffer",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
   } catch (err) {
     throw new InvocationError(
       `git diff --cached failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -539,9 +523,7 @@ function scanDicom(target: Target, buf: Buffer, allow: AllowList, hits: Hit[]): 
   const implicit = transferSyntax === "1.2.840.10008.1.2";
   // Continue with dataset.
   while (offset + 8 <= buf.length) {
-    const result = implicit
-      ? readElementImplicit(buf, offset)
-      : readElementExplicit(buf, offset);
+    const result = implicit ? readElementImplicit(buf, offset) : readElementExplicit(buf, offset);
     if (result === null) break;
     const { group, element, vr, valueOffset, valueLength, nextOffset } = result;
     inspectElement(target, buf, group, element, vr, valueOffset, valueLength, allow, hits);
