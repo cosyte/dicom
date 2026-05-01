@@ -36,6 +36,15 @@ export interface ElementInit {
   readonly rawBytes: Buffer;
   readonly byteOffset: number;
   readonly privateCreator?: string;
+  /**
+   * Phase 2 hint set by the parser when an `Element` was promoted from
+   * `VR=UN` with undefined length to `VR=SQ` via the CP-246 fallback (D-30).
+   * Phase 3 reads this to choose the inner SQ decoder (Implicit VR LE) on
+   * first lazy access. Never set on standard SQ elements.
+   *
+   * @internal
+   */
+  readonly cp246Promoted?: boolean;
 }
 
 /**
@@ -75,6 +84,15 @@ export class Element {
   public readonly rawBytes: Buffer;
   public readonly byteOffset: number;
   public readonly privateCreator: string | undefined;
+  /**
+   * Phase 2 hint for Phase 3's lazy SQ decoder per D-30. `true` when this
+   * Element was promoted from `VR=UN` with undefined length to `VR=SQ` via
+   * the CP-246 fallback. Phase 3 uses this to choose the Implicit VR LE
+   * inner decoder. Always `undefined` on standard SQ elements.
+   *
+   * @internal
+   */
+  public readonly cp246Promoted: boolean | undefined;
 
   /**
    * Construct a new structural `Element`. Producers (parser plans 02-03
@@ -91,5 +109,6 @@ export class Element {
     this.rawBytes = init.rawBytes;
     this.byteOffset = init.byteOffset;
     this.privateCreator = init.privateCreator;
+    this.cp246Promoted = init.cp246Promoted;
   }
 }

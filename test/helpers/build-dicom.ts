@@ -8,8 +8,10 @@
  * production version of this code.
  *
  * Phase 2 plan 02-02 implements Implicit VR LE and Explicit VR LE encoders.
- * Plan 02-04 extends `encodeElement` with the Explicit VR BE branch and
- * plan 02-05 extends it with the Deflated Explicit VR LE branch.
+ * Plan 02-04 extends `encodeElement` with the Explicit VR BE branch (with
+ * per-VR byte-swap) plus SQ item encoding (FFFE markers, defined- and
+ * undefined-length forms, encapsulated pixel data fragments).
+ * Plan 02-05 extends it with the Deflated Explicit VR LE branch.
  *
  * @module
  */
@@ -31,14 +33,85 @@ const LONG_FORM_VRS = new Set<VR>([
   "UR",
 ]);
 
+/**
+ * Per-VR byte-stride for Explicit VR Big Endian byte-swap (mirror of the
+ * production `BE_VR_STRIDE` in `src/parser/endian.ts`). Duplicated here so
+ * the test helper has no runtime dependency on the source-code constant —
+ * a regression in either copy is caught by the `endian.test.ts` table tests
+ * + the BE round-trip tests in `explicit-be.test.ts`.
+ *
+ * - 0 → no swap (OB / UN / ASCII / spec-defined)
+ * - 2 → AT, US, SS, OW
+ * - 4 → UL, SL, FL, OF, OL
+ * - 8 → FD, OD, OV, SV, UV
+ */
+const BE_VR_STRIDE_LOCAL: Readonly<Record<VR, 0 | 2 | 4 | 8>> = {
+  AT: 2, US: 2, SS: 2, OW: 2,
+  UL: 4, SL: 4, FL: 4, OF: 4, OL: 4,
+  FD: 8, OD: 8, OV: 8, SV: 8, UV: 8,
+  OB: 0, UN: 0, AE: 0, AS: 0, CS: 0, DA: 0, DS: 0, DT: 0,
+  IS: 0, LO: 0, LT: 0, PN: 0, SH: 0, ST: 0, TM: 0, UC: 0,
+  UI: 0, UR: 0, UT: 0, SQ: 0,
+};
+
 /** A single dataset element to emit. */
 export interface BuildDicomElement {
   /** 8-char uppercase hex tag, e.g. `"00100010"`. */
   readonly tag: Tag;
   /** Value Representation. */
   readonly vr: VR;
-  /** Raw value bytes (caller pads to even length when required by the VR). */
+  /**
+   * Raw value bytes (caller pads to even length when required by the VR).
+   *
+   * **Endian convention for BE TS:** for numeric VRs whose
+   * `BE_VR_STRIDE > 0` (US/SS/UL/SL/FL/FD/AT/OW/OF/OL/OD/OV/SV/UV), pass
+   * the value bytes in **little-endian / native** order. The encoder
+   * byte-swaps to BE on emit. This keeps the call-site identical for LE
+   * and BE fixtures (caller writes `Buffer.from([0x05, 0x00])` for US=5
+   * regardless of TS).
+   */
   readonly value: Buffer;
+}
+
+/**
+ * One item inside an SQ element, encoded with FFFE,E000 + length + nested
+ * elements + (optional) FFFE,E00D ItemDelim. Plan 02-04 only.
+ */
+export interface BuildDicomSqItem {
+  readonly elements: readonly (BuildDicomElement | BuildDicomSqElement)[];
+  /** When true, item is encoded with undefined length + FFFE,E00D ItemDelim. */
+  readonly undefinedLength?: boolean;
+}
+
+/**
+ * An SQ-typed element (or encapsulated-pixel-data element when
+ * `encapsulatedPixelData === true`). The encoder writes the SQ header
+ * with VR=SQ (or VR=OB for encapsulated pixel data), the items, and the
+ * FFFE,E0DD SeqDelim if `undefinedLength === true`. Plan 02-04 only.
+ */
+export interface BuildDicomSqElement {
+  readonly tag: Tag;
+  /** When true, the SQ value uses undefined length + FFFE,E0DD SeqDelim. */
+  readonly undefinedLength?: boolean;
+  readonly items: readonly BuildDicomSqItem[];
+  /** Default `false`. When true, fragments are emitted as raw Buffer items. */
+  readonly encapsulatedPixelData?: boolean;
+  /** Required when `encapsulatedPixelData === true` — fragment byte streams. */
+  readonly encapsulatedFragments?: readonly Buffer[];
+  /**
+   * When `encapsulatedPixelData === true`, override the on-wire VR. Defaults
+   * to `OB` (per D-31). Setting to `UN` (with `undefinedLength: true`) lets
+   * the test helper produce a CP-246 fixture: a UN-undefined-length value
+   * containing Implicit-VR-LE-encoded SQ bytes.
+   */
+  readonly explicitVr?: VR;
+}
+
+/** Discriminate SqElement vs primitive. */
+function isSqElement(
+  el: BuildDicomElement | BuildDicomSqElement,
+): el is BuildDicomSqElement {
+  return Object.prototype.hasOwnProperty.call(el, "items");
 }
 
 /** Options for {@link buildDicom}. */
@@ -46,7 +119,7 @@ export interface BuildDicomOptions {
   /** Transfer Syntax UID for the dataset elements. */
   readonly transferSyntax: string;
   /** Dataset elements to emit (after File Meta). */
-  readonly elements: readonly BuildDicomElement[];
+  readonly elements: readonly (BuildDicomElement | BuildDicomSqElement)[];
   /** When `true`, omits the 128-byte preamble + DICM magic. */
   readonly skipPreamble?: boolean;
   /**
@@ -126,7 +199,7 @@ export function buildDicom(opts: BuildDicomOptions): Buffer {
 
   // Dataset elements per the requested transfer syntax.
   for (const el of opts.elements) {
-    parts.push(encodeElement(el, opts.transferSyntax));
+    parts.push(encodeAnyElement(el, opts.transferSyntax));
   }
 
   if (opts.trailingBytes !== undefined) {
@@ -169,12 +242,233 @@ function buildImplicitLeElement(tag: Tag, value: Buffer): Buffer {
   return Buffer.concat([groupBuf, elementBuf, lengthBuf, value]);
 }
 
+/**
+ * In-place reverse of `count` consecutive groups of `stride` bytes inside
+ * `src`. Returns a new Buffer; `src` is not mutated. Used by the BE
+ * encoder to flip caller-supplied LE / native value bytes to BE on wire.
+ */
+function swapBytes(src: Buffer, stride: 0 | 2 | 4 | 8): Buffer {
+  if (stride === 0) return Buffer.from(src);
+  if (src.length % stride !== 0) {
+    throw new Error(
+      `buildDicom: BE swap stride=${String(stride)} does not divide value length=${String(src.length)}.`,
+    );
+  }
+  const out = Buffer.alloc(src.length);
+  for (let i = 0; i < src.length; i += stride) {
+    for (let j = 0; j < stride; j++) {
+      out[i + j] = src[i + (stride - 1 - j)] ?? 0;
+    }
+  }
+  return out;
+}
+
+function buildExplicitBeElement(tag: Tag, vr: VR, value: Buffer): Buffer {
+  const { group, element } = splitTag(tag);
+  const groupBuf = Buffer.alloc(2);
+  groupBuf.writeUInt16BE(group, 0);
+  const elementBuf = Buffer.alloc(2);
+  elementBuf.writeUInt16BE(element, 0);
+  const vrBuf = Buffer.from(vr, "ascii");
+  // Per D-23 / D-24: swap value bytes per the per-VR stride before emit.
+  // OB / UN stride = 0 → no swap (D-24).
+  // AT stride=2: caller-supplied bytes are interpreted as a contiguous run
+  // of group/element 16-bit halves, each emitted BE — total swap count is
+  // value.length/2.
+  const swapped = swapBytes(value, BE_VR_STRIDE_LOCAL[vr]);
+  if (LONG_FORM_VRS.has(vr)) {
+    const reserved = Buffer.from([0x00, 0x00]);
+    const lengthBuf = Buffer.alloc(4);
+    lengthBuf.writeUInt32BE(swapped.length, 0);
+    return Buffer.concat([groupBuf, elementBuf, vrBuf, reserved, lengthBuf, swapped]);
+  }
+  const lengthBuf = Buffer.alloc(2);
+  lengthBuf.writeUInt16BE(swapped.length, 0);
+  return Buffer.concat([groupBuf, elementBuf, vrBuf, lengthBuf, swapped]);
+}
+
+// ---------------------------------------------------------------------------
+// FFFE markers + SQ encoders (D-25, D-28, D-29)
+// ---------------------------------------------------------------------------
+
+const ITEM_TAG_GROUP = 0xfffe;
+const ITEM_TAG_ELEMENT = 0xe000;
+const ITEM_DELIM_TAG_ELEMENT = 0xe00d;
+const SEQ_DELIM_TAG_ELEMENT = 0xe0dd;
+const UNDEFINED_LENGTH = 0xffffffff;
+
+/**
+ * Build a 4-byte FFFE marker tag. Identical layout under Implicit/Explicit
+ * LE (group/element 16-bit LE); mirrored to BE under Explicit BE per D-25.
+ *
+ * The `littleEndian` flag matches the dataset cursor's endianness — the
+ * canonical FFFE-under-BE bug per PITFALLS §2.3 is exactly the case where
+ * a parser fails to honor this rule.
+ */
+function buildFffeTagBytes(elementCode: number, littleEndian: boolean): Buffer {
+  const buf = Buffer.alloc(4);
+  if (littleEndian) {
+    buf.writeUInt16LE(ITEM_TAG_GROUP, 0);
+    buf.writeUInt16LE(elementCode, 2);
+  } else {
+    buf.writeUInt16BE(ITEM_TAG_GROUP, 0);
+    buf.writeUInt16BE(elementCode, 2);
+  }
+  return buf;
+}
+
+function buildLengthBytes(length: number, littleEndian: boolean): Buffer {
+  const buf = Buffer.alloc(4);
+  if (littleEndian) buf.writeUInt32LE(length, 0);
+  else buf.writeUInt32BE(length, 0);
+  return buf;
+}
+
+/** Build an SQ-item header (FFFE,E000 + length). */
+function buildItemHeader(length: number, littleEndian: boolean): Buffer {
+  return Buffer.concat([
+    buildFffeTagBytes(ITEM_TAG_ELEMENT, littleEndian),
+    buildLengthBytes(length, littleEndian),
+  ]);
+}
+
+/** Build an SQ-item delimiter (FFFE,E00D + length=0). */
+function buildItemDelim(littleEndian: boolean): Buffer {
+  return Buffer.concat([
+    buildFffeTagBytes(ITEM_DELIM_TAG_ELEMENT, littleEndian),
+    buildLengthBytes(0, littleEndian),
+  ]);
+}
+
+/** Build an SQ-sequence delimiter (FFFE,E0DD + length=0). */
+function buildSeqDelim(littleEndian: boolean): Buffer {
+  return Buffer.concat([
+    buildFffeTagBytes(SEQ_DELIM_TAG_ELEMENT, littleEndian),
+    buildLengthBytes(0, littleEndian),
+  ]);
+}
+
+function tsLittleEndian(ts: string): boolean {
+  // 1.2.840.10008.1.2.2 is Explicit VR BE; everything else in v1 is LE.
+  return ts !== "1.2.840.10008.1.2.2";
+}
+
+/** Encode an item (FFFE,E000 + length + nested elements + optional ItemDelim). */
+function encodeSqItem(item: BuildDicomSqItem, ts: string): Buffer {
+  const littleEndian = tsLittleEndian(ts);
+  const innerParts: Buffer[] = [];
+  for (const inner of item.elements) {
+    innerParts.push(encodeAnyElement(inner, ts));
+  }
+  const innerBody = Buffer.concat(innerParts);
+  if (item.undefinedLength === true) {
+    return Buffer.concat([
+      buildItemHeader(UNDEFINED_LENGTH, littleEndian),
+      innerBody,
+      buildItemDelim(littleEndian),
+    ]);
+  }
+  return Buffer.concat([buildItemHeader(innerBody.length, littleEndian), innerBody]);
+}
+
+/** Encode an SQ element (header + items + optional SeqDelim). */
+function encodeSqElement(sq: BuildDicomSqElement, ts: string): Buffer {
+  const littleEndian = tsLittleEndian(ts);
+
+  // Encapsulated pixel data path (D-31): VR=OB undefined-length + raw
+  // fragment items (no nested elements). The first fragment is the Basic
+  // Offset Table per PS3.5 §A.4. Use undefinedLength=true unconditionally.
+  if (sq.encapsulatedPixelData === true) {
+    const fragments = sq.encapsulatedFragments ?? [];
+    const itemBufs: Buffer[] = [];
+    for (const frag of fragments) {
+      itemBufs.push(buildItemHeader(frag.length, littleEndian));
+      itemBufs.push(frag);
+    }
+    const body = Buffer.concat([...itemBufs, buildSeqDelim(littleEndian)]);
+    const overrideVr: VR = sq.explicitVr ?? "OB";
+    return encodeSqHeader(sq.tag, overrideVr, ts, body, /* undefinedLength */ true);
+  }
+
+  const itemBufs: Buffer[] = [];
+  for (const item of sq.items) {
+    itemBufs.push(encodeSqItem(item, ts));
+  }
+  if (sq.undefinedLength === true) {
+    const body = Buffer.concat([...itemBufs, buildSeqDelim(littleEndian)]);
+    const vr: VR = sq.explicitVr ?? "SQ";
+    return encodeSqHeader(sq.tag, vr, ts, body, /* undefinedLength */ true);
+  }
+  const body = Buffer.concat(itemBufs);
+  const vr: VR = sq.explicitVr ?? "SQ";
+  return encodeSqHeader(sq.tag, vr, ts, body, /* undefinedLength */ false);
+}
+
+/**
+ * Encode an SQ-element header followed by its body. The header layout
+ * depends on the TS:
+ *  - Implicit VR LE (1.2.840.10008.1.2): group(2)+element(2)+length(4).
+ *  - Explicit VR LE/BE: long-form header (group/element/VR/reserved/length).
+ *
+ * `undefinedLength` controls whether the 4-byte length field is the body
+ * length or 0xFFFFFFFF.
+ */
+function encodeSqHeader(
+  tag: Tag,
+  vr: VR,
+  ts: string,
+  body: Buffer,
+  undefinedLength: boolean,
+): Buffer {
+  const { group, element } = splitTag(tag);
+  const length = undefinedLength ? UNDEFINED_LENGTH : body.length;
+
+  if (ts === "1.2.840.10008.1.2") {
+    // Implicit VR LE — no on-wire VR field.
+    const groupBuf = Buffer.alloc(2);
+    groupBuf.writeUInt16LE(group, 0);
+    const elementBuf = Buffer.alloc(2);
+    elementBuf.writeUInt16LE(element, 0);
+    const lengthBuf = Buffer.alloc(4);
+    lengthBuf.writeUInt32LE(length, 0);
+    return Buffer.concat([groupBuf, elementBuf, lengthBuf, body]);
+  }
+
+  // Explicit VR LE / BE — long-form header (SQ/OB/UN are all in LONG_FORM_VRS).
+  const littleEndian = tsLittleEndian(ts);
+  const groupBuf = Buffer.alloc(2);
+  const elementBuf = Buffer.alloc(2);
+  const lengthBuf = Buffer.alloc(4);
+  if (littleEndian) {
+    groupBuf.writeUInt16LE(group, 0);
+    elementBuf.writeUInt16LE(element, 0);
+    lengthBuf.writeUInt32LE(length, 0);
+  } else {
+    groupBuf.writeUInt16BE(group, 0);
+    elementBuf.writeUInt16BE(element, 0);
+    lengthBuf.writeUInt32BE(length, 0);
+  }
+  const vrBuf = Buffer.from(vr, "ascii");
+  const reserved = Buffer.from([0x00, 0x00]);
+  return Buffer.concat([groupBuf, elementBuf, vrBuf, reserved, lengthBuf, body]);
+}
+
+/** Top-level encoder dispatch — picks per-TS strategy and SQ vs primitive. */
+function encodeAnyElement(
+  el: BuildDicomElement | BuildDicomSqElement,
+  ts: string,
+): Buffer {
+  if (isSqElement(el)) return encodeSqElement(el, ts);
+  return encodeElement(el, ts);
+}
+
 function encodeElement(el: BuildDicomElement, ts: string): Buffer {
   if (ts === "1.2.840.10008.1.2") return buildImplicitLeElement(el.tag, el.value);
   if (ts === "1.2.840.10008.1.2.1") return buildExplicitLeElement(el.tag, el.vr, el.value);
-  // Plan 02-04 extends with Explicit VR BE; plan 02-05 extends with Deflated Explicit VR LE.
+  if (ts === "1.2.840.10008.1.2.2") return buildExplicitBeElement(el.tag, el.vr, el.value);
+  // Plan 02-05 extends with Deflated Explicit VR LE.
   throw new Error(
-    `buildDicom: encoder for transferSyntax="${ts}" not implemented yet (added in plan 02-04 / 02-05).`,
+    `buildDicom: encoder for transferSyntax="${ts}" not implemented yet (added in plan 02-05).`,
   );
 }
 
