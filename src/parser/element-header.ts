@@ -295,7 +295,7 @@ export function readExplicitElementHeader(
   const headerStart = cursor.position;
   const group = cursor.readUInt16();
   const element = cursor.readUInt16();
-  const tag = `${group.toString(16).padStart(4, "0")}${element.toString(16).padStart(4, "0")}`.toUpperCase() as Tag;
+  const tag: Tag = `${group.toString(16).padStart(4, "0")}${element.toString(16).padStart(4, "0")}`.toUpperCase();
   // VR is always 2 ASCII bytes regardless of cursor endianness.
   const vrSlice = cursor.slice(2);
   const vr = vrSlice.toString("ascii") as VR;

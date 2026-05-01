@@ -18,34 +18,27 @@ import type { Buffer } from "node:buffer";
 
 import type { Element } from "../dataset/element.js";
 import type { Tag } from "../dictionary/types.js";
+import { parseExplicitLE } from "./explicit-le.js";
 import { parseImplicitLE } from "./implicit-le.js";
 import type { ParseContext } from "./types.js";
 import type { DicomParseWarning } from "./warnings.js";
 
-export { parseImplicitLE };
+export { parseImplicitLE, parseExplicitLE };
 
-/** A single transfer-syntax parser strategy. */
+/**
+ * A single transfer-syntax parser strategy.
+ *
+ * `endOffset` is OPTIONAL — the top-level `parseDicom` dispatch ignores
+ * it (the dataset is parsed to end-of-buffer), but SQ-inner descents
+ * (via the {@link InnerParser} contract in `parser/sequence.ts`) require
+ * it. Plans 02-04 / 02-05 implementations always populate it.
+ */
 export type ParserStrategy = (
   buffer: Buffer,
   datasetStart: number,
   ctx: ParseContext,
   emit: (w: DicomParseWarning) => void,
-) => { elements: ReadonlyMap<Tag, Element> };
-
-/**
- * Explicit VR LE strategy — Plan 02-02 stub. Plan 02-04 replaces with the
- * real Explicit VR LE parser.
- *
- * @internal
- */
-export function parseExplicitLE(
-  _buffer: Buffer,
-  _datasetStart: number,
-  _ctx: ParseContext,
-  _emit: (w: DicomParseWarning) => void,
-): { elements: ReadonlyMap<Tag, Element> } {
-  return { elements: new Map() };
-}
+) => { elements: ReadonlyMap<Tag, Element>; endOffset?: number };
 
 /**
  * Explicit VR BE strategy — Plan 02-02 stub. Plan 02-04 replaces with the
