@@ -1,0 +1,91 @@
+{
+  "name": "@cosyte/dicom",
+  "version": "0.0.0",
+  "description": "Developer-focused DICOM Part 10 parser + utility library for Node.js and TypeScript — metadata-first, vendor-quirky-tolerant, dual ESM/CJS.",
+  "keywords": [
+    "dicom",
+    "parser",
+    "medical-imaging",
+    "healthcare",
+    "interoperability",
+    "typescript",
+    "part-10",
+    "metadata"
+  ],
+  "homepage": "https://github.com/cosyte/dicom#readme",
+  "bugs": {
+    "url": "https://github.com/cosyte/dicom/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cosyte/dicom.git"
+  },
+  "license": "MIT",
+  "author": "Cosyte <hello@cosyte.com> (https://cosyte.com)",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=18.18.0"
+  },
+  "packageManager": "pnpm@10.33.1",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsup",
+    "clean": "rm -rf dist coverage",
+    "typecheck": "tsc --noEmit",
+    "typecheck:exports": "attw --pack . --profile node16",
+    "lint": "eslint \"src/**/*.ts\" \"scripts/**/*.ts\" \"test/**/*.ts\" --max-warnings=0",
+    "lint:fix": "eslint \"src/**/*.ts\" \"scripts/**/*.ts\" \"test/**/*.ts\" --fix",
+    "format": "prettier --write \"src/**/*.{ts,md}\" \"scripts/**/*.ts\" \"test/**/*.ts\" \"*.{json,md,yml,yaml}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,md}\" \"scripts/**/*.ts\" \"test/**/*.ts\" \"*.{json,md,yml,yaml}\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "gen:dictionary": "tsx scripts/generate-dictionary.ts",
+    "gen:annex-e": "tsx scripts/generate-annex-e.ts",
+    "gen:all": "pnpm gen:dictionary && pnpm gen:annex-e",
+    "phi-scan": "tsx scripts/phi-scan.ts",
+    "smoke": "tsx scripts/smoke.ts",
+    "prepublishOnly": "pnpm clean && pnpm gen:all && pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm typecheck:exports"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.2",
+    "@types/node": "^20.11.0",
+    "@vitest/coverage-v8": "^3.2.0",
+    "eslint": "^9.39.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-jsdoc": "^50.6.0",
+    "prettier": "^3.8.3",
+    "simple-git-hooks": "^2.13.0",
+    "tsup": "^8.5.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.59.0",
+    "vitest": "^3.2.0"
+  },
+  "dependencies": {},
+  "simple-git-hooks": {
+    "pre-commit": "pnpm phi-scan --staged"
+  }
+}
