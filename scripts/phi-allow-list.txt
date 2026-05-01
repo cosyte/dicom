@@ -1,0 +1,31 @@
+# scripts/phi-allow-list.txt
+# PHI-scan allow-list for synthetic test fixtures.
+#
+# Format: one entry per line. Lines starting with `#` are comments. Blank lines ignored.
+# Sections are pure documentation; the scanner reads ALL non-comment lines into a
+# single Set<string> for PN matching, and treats lines starting with `DATE:` as
+# additional date allow-list entries (raw 8-char YYYYMMDD strings).
+
+# --- Synthetic PN prefixes (case-sensitive) ---
+ANON^
+TEST^
+DOE^
+SYNTHETIC^
+PHANTOM^
+
+# --- Allow-listed exact PN values (full match) ---
+ANON^PATIENT
+ANON^^
+TEST^PATIENT
+DOE^JANE
+DOE^JOHN
+SYNTHETIC^FIXTURE
+
+# --- Allow-listed dates (8-char YYYYMMDD, ignored by 120-year check) ---
+DATE:19000101
+DATE:19500101
+
+# --- Notes ---
+# To add a new synthetic identifier: append a line above and commit.
+# To bypass for one fixture without listing it here: run `pnpm phi-scan -- --allow-fixture <path>`
+# AND add a justification entry to phi-scan-overrides.md (otherwise the bypass is rejected).
