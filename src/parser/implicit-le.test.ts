@@ -11,7 +11,7 @@ import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
 import { buildDicom } from "../../test/helpers/build-dicom.js";
-import { Dataset } from "../dataset/dataset.js";
+import type { Dataset } from "../dataset/dataset.js";
 import type { Element } from "../dataset/element.js";
 import type { Tag } from "../dictionary/types.js";
 import { DicomParseError } from "./errors.js";
@@ -19,37 +19,33 @@ import { parseDicom } from "./index.js";
 import { WARNING_CODES } from "./warnings.js";
 
 /**
- * Test-only Dataset subclass that exposes the protected `_elements` map so
- * Phase 2 tests can verify structural parsing. Phase 3 promotes the map
- * to a public navigation surface (per D-42); until then, tests reach in
- * via this subclass shape.
+ * Reach the protected `_elements` map for Phase 2 verification. Phase 3
+ * promotes this to a public navigation surface (per D-42); until then,
+ * tests cast through a structural shape that mirrors the protected slot.
  */
-class TestDataset extends Dataset {
-  public elementsMap(): ReadonlyMap<Tag, Element> {
-    return this._elements;
-  }
+interface DatasetWithElements {
+  readonly _elements: ReadonlyMap<Tag, Element>;
 }
 function elementsOf(ds: Dataset): ReadonlyMap<Tag, Element> {
-  // Cast through unknown is justified: Dataset is the public class, but
-  // _elements is `protected` — subclasses (Item, future Phase-3
-  // extensions) and tests legitimately read it.
-  return (ds as unknown as TestDataset).elementsMap();
+  return (ds as unknown as DatasetWithElements)._elements;
 }
 
 describe("parseImplicitLE — TS-01 happy path", () => {
   it("parses (0010,0010) PatientName from a minimal Implicit VR LE buffer", () => {
+    // 8-byte even-length value; Implicit VR LE has no on-wire VR so the
+    // VR field on Element is resolved from the dictionary (PN).
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2",
-      elements: [{ tag: "00100010", vr: "PN", value: Buffer.from("DOE^JANE ", "ascii") }],
+      elements: [{ tag: "00100010", vr: "PN", value: Buffer.from("DOE^JANE", "ascii") }],
     });
     const ds = parseDicom(buf);
     const els = elementsOf(ds);
     const el = els.get("00100010");
     expect(el).toBeDefined();
     expect(el?.vr).toBe("PN");
-    expect(el?.length).toBe(10);
+    expect(el?.length).toBe(8);
     expect(el?.byteOffset).toBeGreaterThan(0);
-    expect(el?.rawBytes.toString("ascii").trim()).toBe("DOE^JANE");
+    expect(el?.rawBytes.toString("ascii")).toBe("DOE^JANE");
   });
 
   it("Element.byteOffset points at the element header (not the value)", () => {
@@ -81,7 +77,7 @@ describe("parseImplicitLE — D-16 buffer-view vs copy", () => {
     expect(el?.rawBytes.buffer).toBe(buf.buffer);
   });
 
-  it("copyValues=true: rawBytes is a fresh ArrayBuffer (copy)", () => {
+  it("copyValues=true: mutating the source does NOT affect rawBytes", () => {
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2",
       elements: [{ tag: "00100010", vr: "PN", value: Buffer.from("DOE^JANE", "ascii") }],
@@ -89,7 +85,26 @@ describe("parseImplicitLE — D-16 buffer-view vs copy", () => {
     const ds = parseDicom(buf, { copyValues: true });
     const el = elementsOf(ds).get("00100010");
     expect(el).toBeDefined();
-    expect(el?.rawBytes.buffer).not.toBe(buf.buffer);
+    const before = el?.rawBytes.toString("ascii");
+    // Smash the source buffer where the value lived. With copyValues=true
+    // the Element.rawBytes was Buffer.from(slice) (independent storage)
+    // so the read-back must be unchanged.
+    buf.fill(0xff, 0, buf.length);
+    expect(el?.rawBytes.toString("ascii")).toBe(before);
+  });
+
+  it("default (copyValues=false): mutating the source DOES affect rawBytes (zero-copy view)", () => {
+    const buf = buildDicom({
+      transferSyntax: "1.2.840.10008.1.2",
+      elements: [{ tag: "00100010", vr: "PN", value: Buffer.from("DOE^JANE", "ascii") }],
+    });
+    const ds = parseDicom(buf);
+    const el = elementsOf(ds).get("00100010");
+    expect(el).toBeDefined();
+    const before = el?.rawBytes.toString("ascii");
+    buf.fill(0xff, 0, buf.length);
+    // Subarray view sees the mutation.
+    expect(el?.rawBytes.toString("ascii")).not.toBe(before);
   });
 });
 

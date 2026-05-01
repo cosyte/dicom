@@ -5,10 +5,11 @@
  * `Readonly<Record<string, ParserStrategy>>` with EXACTLY four entries —
  * the only Transfer Syntax UIDs supported by `@cosyte/dicom` v1.
  *
- * Plan 02-02 (this plan) ships stubs that return empty element maps. Plans
- * 02-03 (Implicit LE), 02-04 (Explicit LE / BE), and 02-05 (Deflated LE)
- * replace the bodies with real parser implementations. The dispatch table
- * itself does not change after 02-02.
+ * Plan 02-02 shipped stubs returning empty element maps. Plan 02-03
+ * (this commit) replaces the Implicit VR LE stub with the real parser
+ * implementation imported from `./implicit-le.js`. Plans 02-04 (Explicit
+ * VR LE / BE) and 02-05 (Deflated LE) replace the remaining stubs in
+ * place. The dispatch table itself does not change.
  *
  * @module
  */
@@ -17,8 +18,11 @@ import type { Buffer } from "node:buffer";
 
 import type { Element } from "../dataset/element.js";
 import type { Tag } from "../dictionary/types.js";
+import { parseImplicitLE } from "./implicit-le.js";
 import type { ParseContext } from "./types.js";
 import type { DicomParseWarning } from "./warnings.js";
+
+export { parseImplicitLE };
 
 /** A single transfer-syntax parser strategy. */
 export type ParserStrategy = (
@@ -27,21 +31,6 @@ export type ParserStrategy = (
   ctx: ParseContext,
   emit: (w: DicomParseWarning) => void,
 ) => { elements: ReadonlyMap<Tag, Element> };
-
-/**
- * Implicit VR LE strategy — Plan 02-02 stub. Plan 02-03 replaces with the
- * real Implicit VR LE parser per CONTEXT D-21.
- *
- * @internal
- */
-export function parseImplicitLE(
-  _buffer: Buffer,
-  _datasetStart: number,
-  _ctx: ParseContext,
-  _emit: (w: DicomParseWarning) => void,
-): { elements: ReadonlyMap<Tag, Element> } {
-  return { elements: new Map() };
-}
 
 /**
  * Explicit VR LE strategy — Plan 02-02 stub. Plan 02-04 replaces with the
