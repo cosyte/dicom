@@ -1,5 +1,4 @@
 #!/usr/bin/env tsx
-/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument */
 //
 // Phase 1 Plan 03 generator: PS3.15 Annex E action table -> committed TS module.
 //
@@ -85,9 +84,7 @@ function parseDiscovery(): Discovery {
   const decisionMatch =
     /\*\*Decision:\*\*\s*`?(Innolitics-machine-readable|NEMA-DocBook-fallback)`?/.exec(text);
   if (!decisionMatch) {
-    console.error(
-      "generate-annex-e: cannot find Decision line in scripts/_annex-e-discovery.md",
-    );
+    console.error("generate-annex-e: cannot find Decision line in scripts/_annex-e-discovery.md");
     process.exit(1);
   }
   const decision = decisionMatch[1] as Discovery["decision"];
@@ -99,10 +96,7 @@ function parseDiscovery(): Discovery {
       pinnedSha = readFileSync(shaPath, "utf8").trim().split(/\s+/)[0] ?? "";
     } catch (err) {
       console.error(
-        "generate-annex-e: cannot read " +
-          shaPath +
-          " (plan 01-02 owns this file): " +
-          String(err),
+        "generate-annex-e: cannot read " + shaPath + " (plan 01-02 owns this file): " + String(err),
       );
       process.exit(1);
     }
@@ -231,7 +225,7 @@ function parseInnolitics(jsonText: string): NormalizedEntry[] {
 
     const optionPairs: Array<[string, string]> = [];
     for (const [innoField, optionName] of Object.entries(INNOLITICS_FIELD_TO_OPTION)) {
-      const v = (entry as Record<string, unknown>)[innoField];
+      const v = (entry as unknown as Record<string, unknown>)[innoField];
       if (typeof v !== "string" || v.length === 0) continue;
       if (!ACTION_CODES.has(v)) {
         console.error(
