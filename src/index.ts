@@ -11,4 +11,4 @@
 export { VERSION } from "./version.js";
 
 // PLAN-02-INSERTION-POINT: Dictionary namespace re-export.
-// Plan 01-02 will append:   export * as Dictionary from "./dictionary/index.js";
+export * as Dictionary from "./dictionary/index.js";
