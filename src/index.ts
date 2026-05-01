@@ -1,9 +1,13 @@
 /**
  * `@cosyte/dicom` — developer-focused DICOM Part 10 parser + utility library.
  *
- * Phase 1 public surface (per `.planning/phases/01-project-foundation/01-CONTEXT.md` D-10 & D-27):
+ * Phase 1 surface (already shipped):
  *  - `VERSION` — package version constant.
- *  - `Dictionary` namespace — Part 6 + UID + Annex E lookups (added by plan 01-02 + 01-03).
+ *  - `Dictionary` namespace — Part 6 + UID + Annex E lookups.
+ *
+ * Phase 2 surface (this plan + 02-02..02-06): parser entry, structural
+ * `Dataset` shell, warning / error registries. Per
+ * `.planning/phases/02-core-parser/02-CONTEXT.md` D-04.
  *
  * Subsequent phases extend this surface. See `.planning/ROADMAP.md`.
  */
@@ -12,3 +16,31 @@ export { VERSION } from "./version.js";
 
 // PLAN-02-INSERTION-POINT: Dictionary namespace re-export.
 export * as Dictionary from "./dictionary/index.js";
+
+// === Phase 2 — D-04 public surface delta ===
+
+export { parseDicom } from "./parser/index.js";
+
+export { Dataset } from "./dataset/dataset.js";
+export { Element } from "./dataset/element.js";
+export { Sequence } from "./dataset/sequence.js";
+export { Item } from "./dataset/item.js";
+export type { FileMeta } from "./dataset/file-meta.js";
+
+export {
+  WARNING_CODES,
+  type WarningCode,
+  type DicomParseWarning,
+} from "./parser/warnings.js";
+
+export {
+  FATAL_CODES,
+  type FatalCode,
+  DicomParseError,
+} from "./parser/errors.js";
+
+export type {
+  DicomPosition,
+  ParseOptions,
+  OnWarningCallback,
+} from "./parser/types.js";
