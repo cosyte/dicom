@@ -1,13 +1,14 @@
 ---
 phase: 02-core-parser
 verified: 2026-05-01T16:55:00Z
-status: human_needed
-score: 4.5/5 must-haves verified (SC4 partial — CP-246 strict-mode regression flagged)
+status: passed
+score: 5/5 must-haves verified (SC4 gap resolved by commit 2551b3f)
 overrides_applied: 0
 re_verification:
-  previous_status: none
-  previous_score: n/a
-  gaps_closed: []
+  previous_status: human_needed
+  previous_score: 4.5/5
+  gaps_closed:
+    - "SC4 — CP-246 strict-mode escalation: tryParseUnAsSQ now propagates Tier-2 escalations (commit 2551b3f)"
   gaps_remaining: []
   regressions: []
 gaps:

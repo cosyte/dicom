@@ -311,10 +311,10 @@ Every v1 REQ-ID maps to exactly one phase in `ROADMAP.md`. 144 / 144 mapped.
 | SETUP-01..06 | Phase 1 — Project Foundation & Data Dictionary | Pending |
 | DICT-01..06 | Phase 1 — Project Foundation & Data Dictionary | Pending |
 | TEST-09 | Phase 1 — Project Foundation & Data Dictionary (CI scan; provenance doc in Phase 8) | Pending |
-| PARSE-01..06 | Phase 2 — Core Parser & Transfer Syntaxes | Pending |
-| FM-01..04 | Phase 2 — Core Parser & Transfer Syntaxes | Pending |
+| PARSE-01..06 | Phase 2 — Core Parser & Transfer Syntaxes | Complete |
+| FM-01..04 | Phase 2 — Core Parser & Transfer Syntaxes | Complete |
 | TS-01..04 | Phase 2 — Core Parser & Transfer Syntaxes | Complete |
-| TOL-01..10 | Phase 2 — Core Parser & Transfer Syntaxes | Partial (TOL-01, TOL-07, TOL-08, TOL-09, TOL-10 complete; TOL-02..06 pending plan-level marks) |
+| TOL-01..10 | Phase 2 — Core Parser & Transfer Syntaxes | Complete |
 | MODEL-01..07 | Phase 3 — Dataset Model, VR Parsing & Sequences | Pending |
 | VR-01..07 | Phase 3 — Dataset Model, VR Parsing & Sequences | Pending |
 | SQ-01..05 | Phase 3 — Dataset Model, VR Parsing & Sequences | Pending |

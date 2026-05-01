@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1
 milestone_name: milestone
-status: "Phase 2 plan 02-06 complete — capstone strict-mode pair-test gate (D-36) + STRIDE security sweep + ROADMAP §SC1-§SC5 acceptance sweep all green. 273/275 tests pass with 2 documented `it.todo` placeholders (DICOM_PIXEL_DATA_LENGTH_MISMATCH per D-32 deferred post-pass; DICOM_UN_PARSED_AS_SQ strict-mode regression — `tryParseUnAsSQ` try/catch swallows the chokepoint throw, ~5-line Phase-2-minor patch). All 6 Phase-2 plans done; Phase 2 ready for /gsd-verify-work 2."
-last_updated: "2026-05-01T16:55:00Z"
+status: "Phase 2 COMPLETE — verifier passed 5/5 success criteria after SC4 gap fix (commit 2551b3f narrowed `tryParseUnAsSQ` catch to discriminate Tier-2 strict-mode escalations from Tier-3 structural fatals; activated deferred CP-246 strict-mode pair test). 274/275 tests pass; 1 documented `it.todo` (DICOM_PIXEL_DATA_LENGTH_MISMATCH per D-32, deferred to Phase 3 lazy decoders). All 4 v1 transfer syntaxes (Implicit LE / Explicit LE / Explicit BE / Deflated LE) shippable end-to-end. Next: Phase 3 discuss/plan/execute loop."
+last_updated: "2026-05-01T17:03:00Z"
 progress:
   total_phases: 8
-  completed_phases: 1
-  total_plans: 12
+  completed_phases: 2
+  total_plans: 11
   completed_plans: 11
-  percent: 18
+  percent: 25
 ---
 
 # @cosyte/dicom — STATE
