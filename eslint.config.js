@@ -3,19 +3,20 @@ import tseslint from "typescript-eslint";
 import jsdoc from "eslint-plugin-jsdoc";
 import prettierConfig from "eslint-config-prettier";
 
-/**
- * ESLint flat config for @cosyte/dicom.
- *
- * Sibling-divergence callouts (vs `@cosyte/hl7`):
- *  - ESLint 9 flat-config (sibling uses ESLint 8). Justified by Node 18 floor + D-04.
- *  - `typescript-eslint` unified package (sibling uses split parser+plugin).
- *    Justified by ESLint 9 flat-config ergonomics.
- *  - `eslint-plugin-jsdoc@^50` (sibling pins `^48`). ESLint 9 requires jsdoc >= 50.
- *  - Two extra `files` overrides for `scripts/**/*.ts` and tests (sibling has only
- *    one). Justification: this repo has hand-written generators + smoke + phi-scan
- *    that legitimately use `console.log` to report progress to stdout. Scripts are
- *    build-time tools, not library code; CLAUDE.md "no console.*" applies to `src/`.
- */
+//
+// ESLint flat config for @cosyte/dicom.
+//
+// Sibling-divergence callouts (vs `@cosyte/hl7`):
+//   - ESLint 9 flat-config (sibling uses ESLint 8). Justified by Node 18 floor + D-04.
+//   - `typescript-eslint` unified package (sibling uses split parser+plugin).
+//     Justified by ESLint 9 flat-config ergonomics.
+//   - `eslint-plugin-jsdoc@^50` (sibling pins `^48`). ESLint 9 requires jsdoc >= 50.
+//   - Two extra `files` overrides for scripts and tests (sibling has only one).
+//     Justification: this repo has hand-written generators + smoke + phi-scan
+//     that legitimately use `console.log` to report progress to stdout. Scripts
+//     are build-time tools, not library code; CLAUDE.md "no console.*" applies
+//     to src/.
+//
 
 /** @type {import("eslint").Linter.Config[]} */
 export default [
