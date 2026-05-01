@@ -109,7 +109,10 @@ export function buildDicom(opts: BuildDicomOptions): Buffer {
   if (opts.fileMetaGroupLength !== "omit") {
     let declared: number;
     if (opts.fileMetaGroupLength === "wrong") {
-      declared = fileMetaBody.length + 99;
+      // Under-report by 8 bytes: parser reads forward until first non-(0002,xxxx)
+      // group, observes actual > declared, emits MISMATCH, and trusts actual.
+      // (Over-reporting can collide with the truncated-buffer fatal in T-02-02-01.)
+      declared = Math.max(0, fileMetaBody.length - 8);
     } else if (typeof opts.fileMetaGroupLength === "number") {
       declared = opts.fileMetaGroupLength;
     } else {
