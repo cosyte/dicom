@@ -1,9 +1,8 @@
 # vendor/nema/
 
-This directory is reserved for the PS3.15 DocBook XML fallback path described in
-`.planning/phases/01-project-foundation/01-CONTEXT.md` D-14. The Phase 1 plan 03
-discovery sub-task determined the Innolitics-machine-readable path was sufficient —
-see `scripts/_annex-e-discovery.md`.
+This directory is reserved for the PS3.15 DocBook XML fallback path (D-14). The
+Phase 1 discovery sub-task determined the Innolitics-machine-readable path was
+sufficient — see `scripts/_annex-e-discovery.md`.
 
 This directory contains only this README and a `.gitkeep` placeholder. If a future
 re-pinning needs to switch to the NEMA fallback (because Innolitics drops Annex E

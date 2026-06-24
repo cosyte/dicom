@@ -1,8 +1,8 @@
 /**
  * Unit tests for the Phase 1 public Dictionary namespace.
  *
- * Per `.planning/phases/01-project-foundation/01-CONTEXT.md` D-21: Phase 1 unit
- * tests cover only `src/dictionary/`. These tests use a hand-curated set of
+ * D-21: Phase 1 unit tests cover only `src/dictionary/`. These tests use a
+ * hand-curated set of
  * well-known tags / keywords / UIDs that are stable across DICOM editions.
  *
  * Each describe block references the DICT-* requirement it covers.

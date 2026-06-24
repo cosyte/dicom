@@ -1,8 +1,8 @@
 /**
  * Programmatic Part 10 fixture builder — internal test utility.
  *
- * Per `.planning/phases/02-core-parser/02-CONTEXT.md` D-37 / D-38: this
- * helper lives in `test/helpers/` and is NOT exported from `src/index.ts`.
+ * D-37 / D-38: this helper lives in `test/helpers/` and is NOT exported from
+ * `src/index.ts`.
  * Phase 2 ships zero curated `.dcm` fixture files; everything is built in
  * memory by this helper. Phase 5's serializer eventually subsumes the
  * production version of this code.
@@ -24,18 +24,7 @@ import { deflateRawSync } from "node:zlib";
 
 import type { Tag, VR } from "../../src/dictionary/types.js";
 
-const LONG_FORM_VRS = new Set<VR>([
-  "OB",
-  "OW",
-  "OF",
-  "OD",
-  "OL",
-  "SQ",
-  "UT",
-  "UN",
-  "UC",
-  "UR",
-]);
+const LONG_FORM_VRS = new Set<VR>(["OB", "OW", "OF", "OD", "OL", "SQ", "UT", "UN", "UC", "UR"]);
 
 /**
  * Per-VR byte-stride for Explicit VR Big Endian byte-swap (mirror of the
@@ -50,12 +39,40 @@ const LONG_FORM_VRS = new Set<VR>([
  * - 8 → FD, OD, OV, SV, UV
  */
 const BE_VR_STRIDE_LOCAL: Readonly<Record<VR, 0 | 2 | 4 | 8>> = {
-  AT: 2, US: 2, SS: 2, OW: 2,
-  UL: 4, SL: 4, FL: 4, OF: 4, OL: 4,
-  FD: 8, OD: 8, OV: 8, SV: 8, UV: 8,
-  OB: 0, UN: 0, AE: 0, AS: 0, CS: 0, DA: 0, DS: 0, DT: 0,
-  IS: 0, LO: 0, LT: 0, PN: 0, SH: 0, ST: 0, TM: 0, UC: 0,
-  UI: 0, UR: 0, UT: 0, SQ: 0,
+  AT: 2,
+  US: 2,
+  SS: 2,
+  OW: 2,
+  UL: 4,
+  SL: 4,
+  FL: 4,
+  OF: 4,
+  OL: 4,
+  FD: 8,
+  OD: 8,
+  OV: 8,
+  SV: 8,
+  UV: 8,
+  OB: 0,
+  UN: 0,
+  AE: 0,
+  AS: 0,
+  CS: 0,
+  DA: 0,
+  DS: 0,
+  DT: 0,
+  IS: 0,
+  LO: 0,
+  LT: 0,
+  PN: 0,
+  SH: 0,
+  ST: 0,
+  TM: 0,
+  UC: 0,
+  UI: 0,
+  UR: 0,
+  UT: 0,
+  SQ: 0,
 };
 
 /** A single dataset element to emit. */
@@ -112,9 +129,7 @@ export interface BuildDicomSqElement {
 }
 
 /** Discriminate SqElement vs primitive. */
-function isSqElement(
-  el: BuildDicomElement | BuildDicomSqElement,
-): el is BuildDicomSqElement {
+function isSqElement(el: BuildDicomElement | BuildDicomSqElement): el is BuildDicomSqElement {
   return Object.prototype.hasOwnProperty.call(el, "items");
 }
 
@@ -470,10 +485,7 @@ function encodeSqHeader(
 }
 
 /** Top-level encoder dispatch — picks per-TS strategy and SQ vs primitive. */
-function encodeAnyElement(
-  el: BuildDicomElement | BuildDicomSqElement,
-  ts: string,
-): Buffer {
+function encodeAnyElement(el: BuildDicomElement | BuildDicomSqElement, ts: string): Buffer {
   if (isSqElement(el)) return encodeSqElement(el, ts);
   return encodeElement(el, ts);
 }

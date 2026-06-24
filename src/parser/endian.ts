@@ -1,7 +1,7 @@
 /**
  * Per-VR byte-stride table for Explicit VR Big Endian byte-swap.
  *
- * Per `.planning/phases/02-core-parser/02-CONTEXT.md`:
+ * Phase 2 core-parser context:
  *   - D-23 — `BE_VR_STRIDE` mapping verbatim. `0` means "no swap" (byte
  *     stream / ASCII / spec-defined). The `AT` special case has stride=2
  *     and count=2 (group, then element — NEVER one 4-byte swap).

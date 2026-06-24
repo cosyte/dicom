@@ -1,7 +1,5 @@
 # @cosyte/dicom — Project Guide for Claude
 
-This repo is managed with the **GSD (Get Shit Done)** workflow. Planning artifacts live in `.planning/` and are committed with the code.
-
 ## Project
 
 **`@cosyte/dicom`** — a developer-focused DICOM parser + utility library for Node.js/TypeScript, published under the Cosyte brand. Open-source (MIT). Sibling to `@cosyte/hl7` at `../hl7-parser`.
@@ -10,49 +8,19 @@ This repo is managed with the **GSD (Get Shit Done)** workflow. Planning artifac
 
 **Scope boundary (v1):** Metadata-first. Pixel data is exposed as raw `Buffer` + encapsulated fragments but **not decoded**. DIMSE network services and DICOMweb are explicit non-goals — tracked as future companion packages (`@cosyte/dicom-pixel`, `@cosyte/dicom-net`, `@cosyte/dicomweb`).
 
-See `.planning/PROJECT.md` for full context, requirements, constraints, and key decisions.
-
 ## Status
 
-- **Phase 0 — Initialized.** Next: `/gsd-plan-phase 1`
-- Roadmap: 8 phases, 137 v1 REQ-IDs mapped → see `.planning/ROADMAP.md`
-
-## GSD Workflow
-
-**Config** (`.planning/config.json`) — mirrors `@cosyte/hl7` verbatim:
-
-- Mode: `yolo` (auto-approve plans/execution)
-- Granularity: `standard` (5–8 phases, 3–5 plans each)
-- Parallelization: enabled
-- Plan Check + Verifier + Nyquist Validation: enabled
-- Commit docs: yes
-
-**Typical phase loop:**
-
-1. `/gsd-discuss-phase N --auto` — gather context / resolve gray-area decisions before planning
-2. `/gsd-plan-phase N` — decompose phase into plans (with plan-check agent)
-3. `/gsd-execute-phase N` — execute plans in parallel where possible, atomic commits
-4. `/gsd-verify-work N` — verifier confirms deliverables match phase goal
-5. `/gsd-validate-phase N` — Nyquist validation audits test coverage
-6. `/gsd-transition` — update PROJECT.md, advance state
-
-**Commands most likely needed:**
-
-- `/gsd-progress` — status + routing
-- `/gsd-next` — auto-advance to next logical step
-- `/gsd-plan-phase N` — plan a specific phase
-- `/gsd-execute-phase N` — execute a planned phase
-- `/gsd-discuss-phase N --auto` — clarify context before planning
+- **Phase 2 of 8 complete** (274/275 tests passing).
 
 ## Tech Stack (locked)
 
 - **Language:** TypeScript (strict, `noUncheckedIndexedAccess`)
 - **Target:** ES2022, dual ESM + CJS via `tsup`
-- **Node:** 18+
+- **Node:** 22+
 - **Package manager:** pnpm
 - **Testing:** Vitest
 - **Linting:** ESLint + Prettier
-- **Runtime deps:** **≤ 3**, each MIT/Apache-licensed and ADR-justified under `.planning/`. Deliberate divergence from `@cosyte/hl7`'s zero-dep rule; DICOM byte-level + charset work earns the exception.
+- **Runtime deps:** **≤ 3**, each MIT/Apache-licensed and ADR-justified. Deliberate divergence from `@cosyte/hl7`'s zero-dep rule; DICOM byte-level + charset work earns the exception.
 - **License:** MIT
 
 ## Engineering Guardrails
@@ -70,17 +38,24 @@ See `.planning/PROJECT.md` for full context, requirements, constraints, and key 
 
 ## Style Reference
 
-This project mirrors `@cosyte/hl7`'s tooling, artifact discipline, and engineering bar — read `../hl7-parser/.planning/` when in doubt. Two deliberate divergences:
+This project mirrors `@cosyte/hl7`'s tooling, artifact discipline, and engineering bar. Two deliberate divergences:
 
 1. **Runtime deps allowed (≤ 3)** — see Tech Stack above.
 2. **v1 scope narrower than the full standard** — metadata-first, no pixel decode, no network.
 
-## Key Files
+## Standing disciplines (every change)
 
-- `.planning/PROJECT.md` — vision, requirements summary, constraints, decisions
-- `.planning/REQUIREMENTS.md` — 137 v1 REQ-IDs with phase traceability
-- `.planning/ROADMAP.md` — 8-phase breakdown with success criteria
-- `.planning/STATE.md` — current state (what's next)
-- `.planning/config.json` — GSD workflow settings
+These three bind every change in this repo (mirrored from the cosyte meta-repo's
+`documentation/conventions.md`):
 
-When in doubt, read `.planning/ROADMAP.md` first to understand the phase structure and which phase a change belongs to.
+1. **Documentation follows code.** A public-surface / stack / status change isn't done until its
+   docs are: this package's own docs (`docs-content/` + JSDoc), and — in the meta-repo — its
+   `documentation/repos/<repo>.md` and the `ecosystem-map.md` status table.
+2. **Version + changelog every meaningful change.** Add a Changeset (`pnpm changeset`, `patch`
+   during pre-alpha) and keep `CHANGELOG.md`'s `[Unreleased]` current. Stay on `0.0.x` until first alpha.
+3. **Crew + knowledgebase feedback loop.** When a standard, decision, or public surface changes,
+   flag whether a `crew` skill or `knowledgebase` doc needs creating/updating — never silently skip.
+
+Build, lint, format, and TypeScript settings come from the shared `@cosyte/*` config packages
+(`@cosyte/tsconfig` · `@cosyte/eslint-config` · `@cosyte/prettier-config`; see
+`documentation/conventions.md` → "Canonical toolchain (enforced)"). Node ≥ 22.

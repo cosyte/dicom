@@ -42,7 +42,25 @@ describe("BE_VR_STRIDE (D-23, D-24)", () => {
   });
 
   it("ASCII/text VRs use stride=0 (no swap)", () => {
-    for (const vr of ["AE", "AS", "CS", "DA", "DS", "DT", "IS", "LO", "LT", "PN", "SH", "ST", "TM", "UC", "UI", "UR", "UT"] as const) {
+    for (const vr of [
+      "AE",
+      "AS",
+      "CS",
+      "DA",
+      "DS",
+      "DT",
+      "IS",
+      "LO",
+      "LT",
+      "PN",
+      "SH",
+      "ST",
+      "TM",
+      "UC",
+      "UI",
+      "UR",
+      "UT",
+    ] as const) {
       expect(BE_VR_STRIDE[vr]).toBe(0);
     }
   });

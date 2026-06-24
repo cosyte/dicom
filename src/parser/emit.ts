@@ -1,7 +1,7 @@
 /**
  * Single chokepoint for Tier-2 warning emission.
  *
- * Per `.planning/phases/02-core-parser/02-CONTEXT.md`:
+ * Phase 2 core-parser context:
  *   - D-03 — Push order: warning is appended to `ctx.warnings` BEFORE the
  *     `onWarning` callback fires. The callback observes the warning
  *     already present in `ctx.warnings.length`.

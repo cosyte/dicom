@@ -1,7 +1,7 @@
 /**
  * Public Dictionary namespace for `@cosyte/dicom` — Phase 1 deliverable.
  *
- * Per `.planning/phases/01-project-foundation/01-CONTEXT.md` D-10:
+ * D-10:
  *
  *  - {@link lookup} — accepts either an 8-char hex tag (`"00100010"`) or a
  *    keyword (`"PatientName"`) and returns the typed {@link DictionaryEntry}

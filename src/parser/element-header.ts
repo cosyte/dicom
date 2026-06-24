@@ -1,7 +1,7 @@
 /**
  * Shared element-header primitives for Phase 2's transfer-syntax parsers.
  *
- * Per `.planning/phases/02-core-parser/02-CONTEXT.md`:
+ * Phase 2 core-parser context:
  *   - D-22 — `LONG_FORM_VRS` is the set of VRs that use the long-form
  *     header layout (2-byte VR + 2 reserved bytes + 4-byte length).
  *     Internally exported for the Phase 5 serializer per D-44.
@@ -295,7 +295,8 @@ export function readExplicitElementHeader(
   const headerStart = cursor.position;
   const group = cursor.readUInt16();
   const element = cursor.readUInt16();
-  const tag: Tag = `${group.toString(16).padStart(4, "0")}${element.toString(16).padStart(4, "0")}`.toUpperCase();
+  const tag: Tag =
+    `${group.toString(16).padStart(4, "0")}${element.toString(16).padStart(4, "0")}`.toUpperCase();
   // VR is always 2 ASCII bytes regardless of cursor endianness.
   const vrSlice = cursor.slice(2);
   const vr = vrSlice.toString("ascii") as VR;

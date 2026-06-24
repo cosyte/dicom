@@ -1,7 +1,7 @@
 /**
  * Part 10 framing detection — preamble + DICM magic recognition.
  *
- * Per `.planning/phases/02-core-parser/02-CONTEXT.md`:
+ * Phase 2 core-parser context:
  *   - D-14 — `stripPreamble` tri-state semantics (`"tolerate"` default,
  *     `"require"` strict-equivalent for this one code).
  *   - D-15 — NOT_DICOM_PART_10 detection heuristic: input must have either

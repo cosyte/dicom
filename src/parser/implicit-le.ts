@@ -1,7 +1,7 @@
 /**
  * Implicit VR Little Endian dataset parser — TS-01 (`1.2.840.10008.1.2`).
  *
- * Per `.planning/phases/02-core-parser/02-CONTEXT.md`:
+ * Phase 2 core-parser context:
  *   - D-21 — VR resolution via the 5-case fallback in `resolveImplicitVR`
  *     (single VR / multi-VR / repeating-group family / private → UN /
  *     unknown standard → UN silently).

@@ -1,8 +1,8 @@
 /**
  * Type definitions for the Phase 1 public Dictionary namespace.
  *
- * Frozen by `.planning/phases/01-project-foundation/01-02-PLAN.md`. Phase 2
- * (parser), Phase 3 (dataset/VR), and Phase 7 (validate) all depend on this
+ * Frozen surface. Phase 2 (parser), Phase 3 (dataset/VR), and Phase 7
+ * (validate) all depend on this
  * shape — schema-breaking changes here cascade through the codebase.
  *
  * @module

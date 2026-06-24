@@ -5,11 +5,10 @@
  *  - `VERSION` — package version constant.
  *  - `Dictionary` namespace — Part 6 + UID + Annex E lookups.
  *
- * Phase 2 surface (this plan + 02-02..02-06): parser entry, structural
- * `Dataset` shell, warning / error registries. Per
- * `.planning/phases/02-core-parser/02-CONTEXT.md` D-04.
+ * Phase 2 surface: parser entry, structural `Dataset` shell, warning / error
+ * registries (D-04).
  *
- * Subsequent phases extend this surface. See `.planning/ROADMAP.md`.
+ * Subsequent phases extend this surface.
  */
 
 export { VERSION } from "./version.js";
@@ -27,20 +26,8 @@ export { Sequence } from "./dataset/sequence.js";
 export { Item } from "./dataset/item.js";
 export type { FileMeta } from "./dataset/file-meta.js";
 
-export {
-  WARNING_CODES,
-  type WarningCode,
-  type DicomParseWarning,
-} from "./parser/warnings.js";
+export { WARNING_CODES, type WarningCode, type DicomParseWarning } from "./parser/warnings.js";
 
-export {
-  FATAL_CODES,
-  type FatalCode,
-  DicomParseError,
-} from "./parser/errors.js";
+export { FATAL_CODES, type FatalCode, DicomParseError } from "./parser/errors.js";
 
-export type {
-  DicomPosition,
-  ParseOptions,
-  OnWarningCallback,
-} from "./parser/types.js";
+export type { DicomPosition, ParseOptions, OnWarningCallback } from "./parser/types.js";

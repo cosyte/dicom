@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  isFileMetaTag,
-  isPrivateTag,
-  isValidTag,
-  joinTag,
-  splitTag,
-} from "./tag.js";
+import { isFileMetaTag, isPrivateTag, isValidTag, joinTag, splitTag } from "./tag.js";
 
 describe("isValidTag", () => {
   it("accepts well-formed 8-char uppercase hex", () => {

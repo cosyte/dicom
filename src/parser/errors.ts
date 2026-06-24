@@ -1,7 +1,7 @@
 /**
  * Fatal error taxonomy for the `@cosyte/dicom` parser pipeline.
  *
- * Per `.planning/phases/02-core-parser/02-CONTEXT.md`:
+ * Phase 2 core-parser context:
  *   - D-09 — `FATAL_CODES` is a frozen `as const` registry with EXACTLY
  *     four codes; anything less severe MUST be a Tier-2 warning.
  *   - D-10 — `DicomParseError` carries `code`, `byteOffset`, `snippet`
@@ -115,9 +115,7 @@ export class DicomParseError extends Error {
   ) {
     const formatted =
       `[${code}] ${message} (offset=${String(byteOffset)})` +
-      (contextPath !== undefined && contextPath.length > 0
-        ? ` … in ${contextPath.join("/")}`
-        : "");
+      (contextPath !== undefined && contextPath.length > 0 ? ` … in ${contextPath.join("/")}` : "");
     super(formatted);
     this.name = "DicomParseError";
     this.code = code;

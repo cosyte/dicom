@@ -76,9 +76,7 @@ export class ByteCursor {
     if (offset < 0 || offset + 2 > this.buffer.length) {
       throw new RangeError("ByteCursor: read past end of buffer");
     }
-    return this.littleEndian
-      ? this.buffer.readUInt16LE(offset)
-      : this.buffer.readUInt16BE(offset);
+    return this.littleEndian ? this.buffer.readUInt16LE(offset) : this.buffer.readUInt16BE(offset);
   }
 
   /** Read a 32-bit unsigned integer at an explicit offset; cursor unchanged. */
@@ -86,9 +84,7 @@ export class ByteCursor {
     if (offset < 0 || offset + 4 > this.buffer.length) {
       throw new RangeError("ByteCursor: read past end of buffer");
     }
-    return this.littleEndian
-      ? this.buffer.readUInt32LE(offset)
-      : this.buffer.readUInt32BE(offset);
+    return this.littleEndian ? this.buffer.readUInt32LE(offset) : this.buffer.readUInt32BE(offset);
   }
 
   /**

@@ -171,9 +171,7 @@ describe("parseImplicitLE — D-33 / D-34 private-creator block-reservation", ()
     const el = elementsOf(ds).get("00192000");
     expect(el).toBeDefined();
     expect(el?.privateCreator).toBeUndefined();
-    expect(ds.warnings.map((w) => w.code)).toContain(
-      WARNING_CODES.DICOM_PRIVATE_TAG_NO_CREATOR,
-    );
+    expect(ds.warnings.map((w) => w.code)).toContain(WARNING_CODES.DICOM_PRIVATE_TAG_NO_CREATOR);
   });
 });
 

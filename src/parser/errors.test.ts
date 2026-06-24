@@ -34,35 +34,22 @@ describe("DicomParseError (D-10)", () => {
   });
 
   it("formats Error.message as `[CODE] msg (offset=N)` (CONTEXT specifics §)", () => {
-    const err = new DicomParseError(
-      FATAL_CODES.NOT_DICOM_PART_10,
-      "no DICM magic",
-      0,
-      "",
-    );
+    const err = new DicomParseError(FATAL_CODES.NOT_DICOM_PART_10, "no DICM magic", 0, "");
     expect(err.message.startsWith("[NOT_DICOM_PART_10] no DICM magic (offset=0)")).toBe(true);
   });
 
   it("appends `… in path/segments` when contextPath is provided", () => {
-    const err = new DicomParseError(
-      FATAL_CODES.INVALID_FILE_META,
-      "missing TS UID",
-      132,
-      "",
-      ["0040A730", "0", "00080100"],
-    );
+    const err = new DicomParseError(FATAL_CODES.INVALID_FILE_META, "missing TS UID", 132, "", [
+      "0040A730",
+      "0",
+      "00080100",
+    ]);
     expect(err.message).toContain("… in 0040A730/0/00080100");
     expect(err.contextPath).toEqual(["0040A730", "0", "00080100"]);
   });
 
   it("does not append `… in …` when contextPath is empty array", () => {
-    const err = new DicomParseError(
-      FATAL_CODES.EMPTY_INPUT,
-      "input is empty",
-      0,
-      "",
-      [],
-    );
+    const err = new DicomParseError(FATAL_CODES.EMPTY_INPUT, "input is empty", 0, "", []);
     expect(err.message).not.toContain("… in");
   });
 });

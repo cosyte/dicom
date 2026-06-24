@@ -42,3 +42,4 @@ test/fixtures/phi-scan/*.dcm
 test/fixtures/phi-scan/*.json
 test/fixtures/phi-scan/*.txt
 !test/fixtures/phi-scan/README.md
+dist-artifacts/

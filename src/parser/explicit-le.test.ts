@@ -69,9 +69,9 @@ describe("parseExplicitLE — TOL-07 odd-length value", () => {
       elements: [{ tag: "00080050", vr: "SH", value: Buffer.from("12345", "ascii") }],
     });
     const ds = parseDicom(buf);
-    expect(
-      ds.warnings.some((w) => w.code === WARNING_CODES.DICOM_ODD_LENGTH_VALUE_PADDED),
-    ).toBe(true);
+    expect(ds.warnings.some((w) => w.code === WARNING_CODES.DICOM_ODD_LENGTH_VALUE_PADDED)).toBe(
+      true,
+    );
     const el = elementsOf(ds).get("00080050");
     expect(el?.length).toBe(5);
   });
@@ -101,8 +101,14 @@ describe("parseExplicitLE — DICOM_NONZERO_RESERVED_BYTES", () => {
     // Build a valid File Meta with TS UID = Explicit VR LE.
     const fmTsValue = Buffer.from(`${TS_EXPLICIT_LE}\0`, "ascii"); // even-length pad
     const fmTsHeader = Buffer.from([
-      0x02, 0x00, 0x10, 0x00, 0x55, 0x49, // (0002,0010) UI
-      fmTsValue.length, 0x00, // 2-byte LE length
+      0x02,
+      0x00,
+      0x10,
+      0x00,
+      0x55,
+      0x49, // (0002,0010) UI
+      fmTsValue.length,
+      0x00, // 2-byte LE length
     ]);
     const fmTsElement = Buffer.concat([fmTsHeader, fmTsValue]);
     const fmGroupLen = Buffer.alloc(4);
@@ -123,9 +129,9 @@ describe("parseExplicitLE — DICOM_NONZERO_RESERVED_BYTES", () => {
 
     const buf = Buffer.concat([preamble, dicm, fmGroupLenElement, fmTsElement, badOb]);
     const ds = parseDicom(buf);
-    expect(
-      ds.warnings.some((w) => w.code === WARNING_CODES.DICOM_NONZERO_RESERVED_BYTES),
-    ).toBe(true);
+    expect(ds.warnings.some((w) => w.code === WARNING_CODES.DICOM_NONZERO_RESERVED_BYTES)).toBe(
+      true,
+    );
     // Element still parsed despite the reserved-byte issue.
     const el = elementsOf(ds).get("7FE00010");
     expect(el?.length).toBe(4);
@@ -174,9 +180,7 @@ describe("parseExplicitLE — undefined-length SQ (D-29)", () => {
           undefinedLength: true,
           items: [
             {
-              elements: [
-                { tag: "00080100", vr: "SH", value: Buffer.from("CODE", "ascii") },
-              ],
+              elements: [{ tag: "00080100", vr: "SH", value: Buffer.from("CODE", "ascii") }],
             },
           ],
         },

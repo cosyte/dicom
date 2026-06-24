@@ -88,9 +88,7 @@ describe("parseExplicitBE — AT special case (D-23)", () => {
     // Encoder's swapBytes(stride=2) yields BE bytes: (0x00,0x10,0x00,0x20).
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_BE,
-      elements: [
-        { tag: "00280009", vr: "AT", value: Buffer.from([0x10, 0x00, 0x20, 0x00]) },
-      ],
+      elements: [{ tag: "00280009", vr: "AT", value: Buffer.from([0x10, 0x00, 0x20, 0x00]) }],
     });
     const ds = parseDicom(buf);
     const el = elementsOf(ds).get("00280009");
@@ -135,9 +133,7 @@ describe("parseExplicitBE — FFFE under BE (D-25 + PITFALLS §2.3)", () => {
           undefinedLength: true,
           items: [
             {
-              elements: [
-                { tag: "00080100", vr: "SH", value: Buffer.from("CODE", "ascii") },
-              ],
+              elements: [{ tag: "00080100", vr: "SH", value: Buffer.from("CODE", "ascii") }],
             },
           ],
         },
@@ -172,9 +168,9 @@ describe("parseExplicitBE — TOL-08 + TOL-07 + DICOM_NONZERO_RESERVED_BYTES und
       elements: [{ tag: "00080050", vr: "SH", value: Buffer.from("12345", "ascii") }],
     });
     const ds = parseDicom(buf);
-    expect(
-      ds.warnings.some((w) => w.code === WARNING_CODES.DICOM_ODD_LENGTH_VALUE_PADDED),
-    ).toBe(true);
+    expect(ds.warnings.some((w) => w.code === WARNING_CODES.DICOM_ODD_LENGTH_VALUE_PADDED)).toBe(
+      true,
+    );
   });
 });
 

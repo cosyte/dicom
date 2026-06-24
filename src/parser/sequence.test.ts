@@ -222,14 +222,7 @@ describe("tryParseUnAsSQ — CP-246 fallback (D-30)", () => {
     const seqBody = Buffer.concat([buildItemHeader(0, true), buildSeqDelim(true)]);
     const ctx = makeContext(seqBody);
     const emit = makeEmit(ctx);
-    const result = tryParseUnAsSQ(
-      seqBody,
-      0,
-      0xffffffff,
-      ctx,
-      emit,
-      parseImplicitLE,
-    );
+    const result = tryParseUnAsSQ(seqBody, 0, 0xffffffff, ctx, emit, parseImplicitLE);
     expect(result.success).toBe(true);
     // CP-246 success emits DICOM_UN_PARSED_AS_SQ.
     expect(ctx.warnings.some((w) => w.code === WARNING_CODES.DICOM_UN_PARSED_AS_SQ)).toBe(true);

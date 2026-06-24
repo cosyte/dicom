@@ -1,7 +1,7 @@
 /**
  * Explicit VR Big Endian dataset parser — TS-03 (`1.2.840.10008.1.2.2`).
  *
- * Per `.planning/phases/02-core-parser/02-CONTEXT.md`:
+ * Phase 2 core-parser context:
  *   - D-23 — Header / value bytes are big-endian. Per-VR byte-stride for
  *     value swap is captured by `BE_VR_STRIDE` in `./endian.ts`. **Phase
  *     2 stores rawBytes verbatim from on-wire bytes (no swap)**; Phase 3's

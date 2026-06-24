@@ -1,7 +1,7 @@
 /**
  * Shared parser-pipeline types for `@cosyte/dicom`.
  *
- * Per `.planning/phases/02-core-parser/02-CONTEXT.md`:
+ * Phase 2 core-parser context:
  *   - D-02 — `ParseOptions` shape (Phase 2 only; no `profile` field).
  *   - D-03 — `OnWarningCallback` ordering contract (invoked AFTER push to `ctx.warnings`).
  *   - D-07 — `DicomPosition` shape (`byteOffset`, optional `fileMeta` / `deflated` / `contextPath`).

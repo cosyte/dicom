@@ -25,9 +25,9 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=18.18.0"
+    "node": ">=22.0.0"
   },
-  "packageManager": "pnpm@10.33.1",
+  "packageManager": "pnpm@10.0.0",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -55,8 +55,10 @@
     "access": "public",
     "provenance": true
   },
+  "prettier": "@cosyte/prettier-config",
   "scripts": {
     "build": "tsup",
+    "changeset": "changeset",
     "clean": "rm -rf dist coverage",
     "typecheck": "tsc --noEmit",
     "typecheck:exports": "attw --pack . --profile node16",
@@ -72,22 +74,25 @@
     "gen:all": "pnpm gen:dictionary && pnpm gen:annex-e",
     "phi-scan": "tsx scripts/phi-scan.ts",
     "smoke": "tsx scripts/smoke.ts",
+    "pack:docs": "bash scripts/build-docs-artifacts.sh",
+    "release": "changeset publish",
     "prepublishOnly": "pnpm clean && pnpm gen:all && pnpm typecheck && pnpm lint && pnpm test && pnpm build && pnpm typecheck:exports",
     "prepare": "command -v simple-git-hooks >/dev/null 2>&1 && simple-git-hooks || true"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.2",
+    "@changesets/cli": "^2.27.0",
+    "@cosyte/eslint-config": "^0.0.2",
+    "@cosyte/prettier-config": "^0.0.1",
+    "@cosyte/tsconfig": "^0.0.1",
     "@types/node": "^20.11.0",
     "@vitest/coverage-v8": "^3.2.0",
     "eslint": "^9.39.0",
-    "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-jsdoc": "^50.6.0",
     "prettier": "^3.8.3",
     "simple-git-hooks": "^2.13.0",
     "tsup": "^8.5.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.59.0",
     "vitest": "^3.2.0"
   },
   "dependencies": {},

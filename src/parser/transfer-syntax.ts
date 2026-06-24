@@ -1,8 +1,8 @@
 /**
  * Transfer Syntax dispatch table — maps TS UIDs to per-strategy parsers.
  *
- * Per `.planning/phases/02-core-parser/02-CONTEXT.md` D-20: a frozen
- * `Readonly<Record<string, ParserStrategy>>` with EXACTLY four entries —
+ * D-20: a frozen `Readonly<Record<string, ParserStrategy>>` with EXACTLY four
+ * entries —
  * the only Transfer Syntax UIDs supported by `@cosyte/dicom` v1.
  *
  * Plan 02-02 shipped stubs returning empty element maps. Plan 02-03

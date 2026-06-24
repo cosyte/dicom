@@ -2,7 +2,7 @@
  * Shared SQ (Sequence) + FFFE marker parser used by all three structural
  * transfer-syntax strategies (Implicit-LE, Explicit-LE, Explicit-BE).
  *
- * Per `.planning/phases/02-core-parser/02-CONTEXT.md`:
+ * Phase 2 core-parser context:
  *   - D-25 — FFFE item-marker reads route through the same endian-aware
  *     ByteCursor as every other read (closes the BE-FFFE bug per
  *     PITFALLS.md §2.3).
@@ -57,11 +57,7 @@ import { ByteCursor } from "./byte-cursor.js";
 import { buildSnippet, DicomParseError, FATAL_CODES } from "./errors.js";
 import { WARNING_CODES } from "./warnings.js";
 import type { ParseContext } from "./types.js";
-import {
-  emptyItemInSequence,
-  unParsedAsSQ,
-  type DicomParseWarning,
-} from "./warnings.js";
+import { emptyItemInSequence, unParsedAsSQ, type DicomParseWarning } from "./warnings.js";
 
 const ITEM_TAG: Tag = "FFFEE000";
 // `(FFFE,E00D)` ItemDelim is consumed by the inner-strategy via the
@@ -231,9 +227,7 @@ export function parseSequence(
           );
         }
         cursor.position += itemLength;
-        items.push(
-          new Item({ warnings: [], elements: new Map(), index: itemIndex }),
-        );
+        items.push(new Item({ warnings: [], elements: new Map(), index: itemIndex }));
         itemIndex += 1;
         continue;
       }
@@ -244,9 +238,7 @@ export function parseSequence(
         const inner = opts.innerStrategy(buffer, cursor.position, ctx, emit, {
           stopOnItemDelim: true,
         });
-        items.push(
-          new Item({ warnings: [], elements: inner.elements, index: itemIndex }),
-        );
+        items.push(new Item({ warnings: [], elements: inner.elements, index: itemIndex }));
         cursor.position = inner.endOffset;
       } else {
         // Defined-length item — slice and parse exactly `itemLength` bytes.
@@ -260,9 +252,7 @@ export function parseSequence(
         }
         const itemSlice = buffer.subarray(cursor.position, cursor.position + itemLength);
         const inner = opts.innerStrategy(itemSlice, 0, ctx, emit);
-        items.push(
-          new Item({ warnings: [], elements: inner.elements, index: itemIndex }),
-        );
+        items.push(new Item({ warnings: [], elements: inner.elements, index: itemIndex }));
         cursor.position += itemLength;
       }
       itemIndex += 1;

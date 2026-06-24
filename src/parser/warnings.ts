@@ -2,7 +2,7 @@
  * Tier-2 warning registry and factories for the `@cosyte/dicom` parser
  * pipeline.
  *
- * Per `.planning/phases/02-core-parser/02-CONTEXT.md`:
+ * Phase 2 core-parser context:
  *   - D-08 — `WARNING_CODES` is a frozen `as const` registry with every code
  *     in the TOL-03 catalog (≥25 entries). Phase 2 actively emits 13;
  *     7 VR-decode-time codes are reserved for Phase 3; 2 charset codes are
@@ -152,7 +152,8 @@ export function missingPreamble(position: DicomPosition): DicomParseWarning {
 export function fileMetaGroupLengthMissing(position: DicomPosition): DicomParseWarning {
   return {
     code: WARNING_CODES.DICOM_FILE_META_GROUP_LENGTH_MISSING,
-    message: "(0002,0000) FileMetaInformationGroupLength missing; scanning forward to first non-(0002,xxxx) element.",
+    message:
+      "(0002,0000) FileMetaInformationGroupLength missing; scanning forward to first non-(0002,xxxx) element.",
     position,
   };
 }
@@ -261,10 +262,7 @@ export function vrMismatch(
  * const w = privateTagNoCreator({ byteOffset: 800 }, "00191020");
  * ```
  */
-export function privateTagNoCreator(
-  position: DicomPosition,
-  tag: string,
-): DicomParseWarning {
+export function privateTagNoCreator(position: DicomPosition, tag: string): DicomParseWarning {
   return {
     code: WARNING_CODES.DICOM_PRIVATE_TAG_NO_CREATOR,
     message: `Private element (${tag}) has no Private Creator registered for its block; treating as VR=UN.`,
@@ -284,10 +282,7 @@ export function privateTagNoCreator(
  * const w = groupLengthInDataset({ byteOffset: 400 }, "00080000");
  * ```
  */
-export function groupLengthInDataset(
-  position: DicomPosition,
-  tag: string,
-): DicomParseWarning {
+export function groupLengthInDataset(position: DicomPosition, tag: string): DicomParseWarning {
   return {
     code: WARNING_CODES.DICOM_GROUP_LENGTH_IN_DATASET,
     message: `Retired Group Length element (${tag}) encountered in dataset; preserved as-is.`,
@@ -329,10 +324,7 @@ export function nonzeroReservedBytes(
  * const w = unParsedAsSQ({ byteOffset: 600 }, "0040A730");
  * ```
  */
-export function unParsedAsSQ(
-  position: DicomPosition,
-  tag: string,
-): DicomParseWarning {
+export function unParsedAsSQ(position: DicomPosition, tag: string): DicomParseWarning {
   return {
     code: WARNING_CODES.DICOM_UN_PARSED_AS_SQ,
     message: `Element (${tag}) declared VR=UN with undefined length; descended as Implicit VR LE sequence per CP-246.`,
@@ -351,10 +343,7 @@ export function unParsedAsSQ(
  * const w = emptyItemInSequence({ byteOffset: 700 }, "0040A730");
  * ```
  */
-export function emptyItemInSequence(
-  position: DicomPosition,
-  tag: string,
-): DicomParseWarning {
+export function emptyItemInSequence(position: DicomPosition, tag: string): DicomParseWarning {
   return {
     code: WARNING_CODES.DICOM_EMPTY_ITEM_IN_SEQUENCE,
     message: `Sequence (${tag}) contains an empty item (length=0); tolerated.`,

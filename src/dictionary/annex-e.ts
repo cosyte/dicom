@@ -2,8 +2,8 @@
  * PS3.15 Annex E attribute-action table — DICOM Basic Application Confidentiality
  * Profile + 11 retention/clean option sets.
  *
- * Phase 1 Plan 03 deliverable per `.planning/phases/01-project-foundation/01-CONTEXT.md`
- * D-08 / D-09 / D-14. Consumed by Phase 7 `anonymize()` (ANON-01..ANON-10).
+ * Phase 1 deliverable (D-08 / D-09 / D-14). Consumed by Phase 7 `anonymize()`
+ * (ANON-01..ANON-10).
  *
  * NOTE: This module is NOT re-exported from the package's `src/index.ts` (per D-10 +
  * D-27 — Phase 1's external surface is `Dictionary.{lookup,byKeyword,uid}` + `VERSION`

@@ -1,8 +1,8 @@
 /**
  * Phase 2 capstone — strict-mode escalation pair-test gate (D-36, TOL-01).
  *
- * Per `.planning/phases/02-core-parser/02-CONTEXT.md` D-36: every Tier-2
- * code that Phase 2 *actively emits* (the D-08 active-emit list — 13 codes)
+ * D-36: every Tier-2 code that Phase 2 *actively emits* (the D-08 active-emit
+ * list — 13 codes)
  * MUST have a strict-mode pair test. Lenient mode emits the warning AND
  * parsing continues; strict mode throws a `DicomParseError` carrying the
  * matching code through the single emit chokepoint shipped in plan 02-01.
@@ -29,12 +29,7 @@ import { Buffer } from "node:buffer";
 
 import { describe, expect, it } from "vitest";
 
-import {
-  DicomParseError,
-  parseDicom,
-  WARNING_CODES,
-  type WarningCode,
-} from "../../src/index.js";
+import { DicomParseError, parseDicom, WARNING_CODES, type WarningCode } from "../../src/index.js";
 import { buildDicom } from "../helpers/build-dicom.js";
 
 // -- Active-emit list (D-08) --------------------------------------------------
@@ -218,9 +213,7 @@ const FIXTURES: readonly PairFixture[] = [
             undefinedLength: true,
             items: [
               {
-                elements: [
-                  { tag: "00080100", vr: "SH", value: Buffer.from("CODE", "ascii") },
-                ],
+                elements: [{ tag: "00080100", vr: "SH", value: Buffer.from("CODE", "ascii") }],
               },
             ],
           },
@@ -233,9 +226,7 @@ const FIXTURES: readonly PairFixture[] = [
     buildBuffer: () =>
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
-        elements: [
-          { tag: "00080050", vr: "SH", value: Buffer.from("12345", "ascii") },
-        ],
+        elements: [{ tag: "00080050", vr: "SH", value: Buffer.from("12345", "ascii") }],
       }),
   },
   {
@@ -244,9 +235,7 @@ const FIXTURES: readonly PairFixture[] = [
     buildBuffer: () =>
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
-        elements: [
-          { tag: "00100010", vr: "LO", value: Buffer.from("DOE^JANE", "ascii") },
-        ],
+        elements: [{ tag: "00100010", vr: "LO", value: Buffer.from("DOE^JANE", "ascii") }],
       }),
   },
   {
@@ -255,9 +244,7 @@ const FIXTURES: readonly PairFixture[] = [
     buildBuffer: () =>
       buildDicom({
         transferSyntax: TS_IMPLICIT_LE,
-        elements: [
-          { tag: "00191000", vr: "UN", value: Buffer.from("vendor", "ascii") },
-        ],
+        elements: [{ tag: "00191000", vr: "UN", value: Buffer.from("vendor", "ascii") }],
       }),
   },
   {
@@ -266,9 +253,7 @@ const FIXTURES: readonly PairFixture[] = [
     buildBuffer: () =>
       buildDicom({
         transferSyntax: TS_IMPLICIT_LE,
-        elements: [
-          { tag: "00080000", vr: "UL", value: Buffer.alloc(4, 0x00) },
-        ],
+        elements: [{ tag: "00080000", vr: "UL", value: Buffer.alloc(4, 0x00) }],
       }),
   },
   {
@@ -393,5 +378,7 @@ describe("DICOM_PIXEL_DATA_LENGTH_MISMATCH — D-32 post-pass status", () => {
   // but no emission site fires under any current input. The factory will be
   // activated when D-32's post-pass lands (Phase-2 minor commit or Phase-3
   // pixel-data work — see Phase-2 deviations in 02-06-SUMMARY.md).
-  it.todo("pair test pending D-32 post-pass implementation (factory exists; emission site deferred)");
+  it.todo(
+    "pair test pending D-32 post-pass implementation (factory exists; emission site deferred)",
+  );
 });

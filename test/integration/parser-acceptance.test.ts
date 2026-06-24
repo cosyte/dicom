@@ -8,7 +8,7 @@
  * fixtures from `test/helpers/build-dicom.ts` (D-38 — Phase 2 ships zero
  * curated `.dcm` files).
  *
- * Reference: `.planning/ROADMAP.md` lines 52–57 (Phase 2 success criteria).
+ * Each block maps to a Phase 2 success criterion (#1–#5).
  *
  * @module
  */
@@ -57,9 +57,7 @@ describe("ROADMAP Phase 2 §SC1: parses all 4 v1 transfer syntaxes correctly", (
     it(`parses ${ts} (${Dictionary.uid(ts)?.name ?? "<unknown>"}) end-to-end with PN element preserved`, () => {
       const buf = buildDicom({
         transferSyntax: ts,
-        elements: [
-          { tag: "00100010", vr: "PN", value: Buffer.from("DOE^JANE", "ascii") },
-        ],
+        elements: [{ tag: "00100010", vr: "PN", value: Buffer.from("DOE^JANE", "ascii") }],
       });
       const ds = parseDicom(buf);
       expect(ds.fileMeta?.transferSyntaxUID).toBe(ts);
@@ -154,9 +152,7 @@ describe("ROADMAP Phase 2 §SC1: parses all 4 v1 transfer syntaxes correctly", (
   it("Deflated TS uses inflateRawSync (RFC 1951) — round-trip succeeds and source has no inflateSync reference", async () => {
     const buf = buildDicom({
       transferSyntax: TS_DEFLATED_LE,
-      elements: [
-        { tag: "00100010", vr: "PN", value: Buffer.from("ROUNDTRIP", "ascii") },
-      ],
+      elements: [{ tag: "00100010", vr: "PN", value: Buffer.from("ROUNDTRIP", "ascii") }],
     });
     const ds = parseDicom(buf);
     expect(ds.fileMeta?.transferSyntaxUID).toBe(TS_DEFLATED_LE);
@@ -211,9 +207,7 @@ describe("ROADMAP Phase 2 §SC2: TOL-03 deviations produce stable-coded warnings
   it("File Meta group-length mismatch emits warning + parser trusts actual length", () => {
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
-      elements: [
-        { tag: "00100010", vr: "PN", value: Buffer.from("DOE^JANE", "ascii") },
-      ],
+      elements: [{ tag: "00100010", vr: "PN", value: Buffer.from("DOE^JANE", "ascii") }],
       fileMetaGroupLength: "wrong",
     });
     const ds = parseDicom(buf);
@@ -318,9 +312,7 @@ describe("ROADMAP Phase 2 §SC3: 4 fatal codes throw with byteOffset + snippet (
   it("fatals throw even in lenient mode (default)", () => {
     // Re-assert the four cases all throw without `{ strict: true }`.
     expect(() => parseDicom(Buffer.alloc(0))).toThrow(DicomParseError);
-    expect(() => parseDicom(Buffer.from("garbage".repeat(40), "ascii"))).toThrow(
-      DicomParseError,
-    );
+    expect(() => parseDicom(Buffer.from("garbage".repeat(40), "ascii"))).toThrow(DicomParseError);
   });
 });
 

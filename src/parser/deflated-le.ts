@@ -2,7 +2,7 @@
  * Deflated Explicit VR Little Endian dataset parser — TS-04
  * (`1.2.840.10008.1.2.1.99`).
  *
- * Per `.planning/phases/02-core-parser/02-CONTEXT.md`:
+ * Phase 2 core-parser context:
  *   - D-26 — uses Node's `zlib.inflateRawSync` (RFC 1951 raw deflate).
  *     **MUST NOT** use `inflateSync` (RFC 1950 zlib-wrapped) — that's the
  *     silent-wrong bug per PROJECT.md key decision and PITFALLS.md §1.4.
@@ -82,13 +82,7 @@ export function parseDeflatedLE(
   ctx: ParseContext,
   emit: (w: DicomParseWarning) => void,
 ): { elements: ReadonlyMap<Tag, Element>; endOffset: number } {
-  return parseDeflatedLEWithCap(
-    buffer,
-    datasetStart,
-    ctx,
-    emit,
-    DEFAULT_MAX_INFLATED_BYTES,
-  );
+  return parseDeflatedLEWithCap(buffer, datasetStart, ctx, emit, DEFAULT_MAX_INFLATED_BYTES);
 }
 
 /**

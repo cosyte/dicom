@@ -1,6 +1,7 @@
 /**
- * File Meta Information group parser — hard-wired Explicit VR LE per
- * `.planning/phases/02-core-parser/02-CONTEXT.md`:
+ * File Meta Information group parser — hard-wired Explicit VR LE.
+ *
+ * Phase 2 core-parser context:
  *
  *   - D-17 — Always Explicit VR LE; does NOT consult the dispatch table.
  *   - D-18 — `(0002,0000)` group-length missing / present-but-wrong handling
@@ -78,7 +79,11 @@ export function parseFileMeta(
   let consumedAfterGroupLength = 0;
   const fmElements: FmRawElement[] = [];
 
-  if (firstElement.tag === "00020000" && firstElement.vr === "UL" && firstElement.value.length === 4) {
+  if (
+    firstElement.tag === "00020000" &&
+    firstElement.vr === "UL" &&
+    firstElement.value.length === 4
+  ) {
     declaredFmLength = firstElement.value.readUInt32LE(0);
     // T-02-02-01: declared length must fit in the remaining buffer.
     if (cursor.position + declaredFmLength > buffer.length) {

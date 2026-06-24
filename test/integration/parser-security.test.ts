@@ -68,9 +68,7 @@ describe("Security: buffer over-read on truncated input (T-02-01-06, T-02-02-01,
     // T-02-02-01 unit-test fixture in src/parser/file-meta.test.ts.
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
-      elements: [
-        { tag: "00100010", vr: "PN", value: Buffer.from("DOE^JANE", "ascii") },
-      ],
+      elements: [{ tag: "00100010", vr: "PN", value: Buffer.from("DOE^JANE", "ascii") }],
       fileMetaGroupLength: 10_000,
     });
     let thrown: unknown;
@@ -112,9 +110,7 @@ describe("Security: buffer over-read on truncated input (T-02-01-06, T-02-02-01,
   it("truncated Explicit-LE dataset throws DicomParseError", () => {
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
-      elements: [
-        { tag: "00100010", vr: "PN", value: Buffer.from("A".repeat(100), "ascii") },
-      ],
+      elements: [{ tag: "00100010", vr: "PN", value: Buffer.from("A".repeat(100), "ascii") }],
     });
     const truncated = buf.subarray(0, buf.length - 50);
     let thrown: unknown;
@@ -130,9 +126,7 @@ describe("Security: buffer over-read on truncated input (T-02-01-06, T-02-02-01,
   it("truncated Explicit-BE dataset throws DicomParseError", () => {
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_BE,
-      elements: [
-        { tag: "00100010", vr: "PN", value: Buffer.from("A".repeat(100), "ascii") },
-      ],
+      elements: [{ tag: "00100010", vr: "PN", value: Buffer.from("A".repeat(100), "ascii") }],
     });
     const truncated = buf.subarray(0, buf.length - 50);
     let thrown: unknown;
@@ -151,9 +145,7 @@ describe("Security: buffer over-read on truncated input (T-02-01-06, T-02-02-01,
     // INVALID_FILE_META.
     const buf = buildDicom({
       transferSyntax: TS_DEFLATED_LE,
-      elements: [
-        { tag: "00100010", vr: "PN", value: Buffer.from("DOE^JANE", "ascii") },
-      ],
+      elements: [{ tag: "00100010", vr: "PN", value: Buffer.from("DOE^JANE", "ascii") }],
     });
     const truncated = buf.subarray(0, buf.length - 4);
     let thrown: unknown;

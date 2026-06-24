@@ -14,7 +14,10 @@ import type { ParseContext } from "./types.js";
 import type { DicomParseWarning } from "./warnings.js";
 import { WARNING_CODES } from "./warnings.js";
 
-function makeCtx(buffer: Buffer, stripPreamble: "tolerate" | "require" = "tolerate"): {
+function makeCtx(
+  buffer: Buffer,
+  stripPreamble: "tolerate" | "require" = "tolerate",
+): {
   ctx: ParseContext;
   emitted: DicomParseWarning[];
 } {
@@ -36,9 +39,7 @@ function makeCtx(buffer: Buffer, stripPreamble: "tolerate" | "require" = "tolera
 /** Minimal "looks like (0002,0000) UL length=4" header at offset 0. */
 function bareFileMetaPrefix(): Buffer {
   // group=0x0002, element=0x0000, VR='UL', length=0x0004, value=0x000000ce
-  return Buffer.from([
-    0x02, 0x00, 0x00, 0x00, 0x55, 0x4c, 0x04, 0x00, 0xce, 0x00, 0x00, 0x00,
-  ]);
+  return Buffer.from([0x02, 0x00, 0x00, 0x00, 0x55, 0x4c, 0x04, 0x00, 0xce, 0x00, 0x00, 0x00]);
 }
 
 describe("parsePart10Header — DICM at offset 128", () => {
@@ -80,9 +81,7 @@ describe("parsePart10Header — stripPreamble='require'", () => {
   it("throws NOT_DICOM_PART_10 when DICM magic is absent even with valid bare File Meta", () => {
     const buf = bareFileMetaPrefix();
     const { ctx } = makeCtx(buf, "require");
-    expect(() => parsePart10Header(buf, ctx, (w) => ctx.warnings.push(w))).toThrow(
-      DicomParseError,
-    );
+    expect(() => parsePart10Header(buf, ctx, (w) => ctx.warnings.push(w))).toThrow(DicomParseError);
     try {
       parsePart10Header(buf, ctx, (w) => ctx.warnings.push(w));
     } catch (err) {

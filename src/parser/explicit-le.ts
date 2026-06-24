@@ -2,7 +2,7 @@
  * Explicit VR Little Endian dataset parser — TS-02 (`1.2.840.10008.1.2.1`)
  * AND the shared body that Explicit VR Big Endian (TS-03) wraps.
  *
- * Per `.planning/phases/02-core-parser/02-CONTEXT.md`:
+ * Phase 2 core-parser context:
  *   - D-22 — short-form / long-form element header layout (8 vs 12 bytes).
  *     `LONG_FORM_VRS` from `element-header.ts` lists the 10 VRs that use
  *     the long-form. Reserved bytes ≠ 0x00 0x00 emit
@@ -216,11 +216,7 @@ export function _parseExplicit(
     }
 
     // Encapsulated pixel data branch (D-31): (7FE0,0010) OB undefined-length.
-    if (
-      tag === "7FE00010" &&
-      vr === "OB" &&
-      length === UNDEFINED_LENGTH
-    ) {
+    if (tag === "7FE00010" && vr === "OB" && length === UNDEFINED_LENGTH) {
       const valueStart = cursor.position;
       const seqOpts: ParseSequenceOptions = {
         explicitLength: undefined,
@@ -340,11 +336,7 @@ export function _parseExplicit(
     }
 
     // Private Creator slot (gggg,0010..00FF) — register into the stack.
-    if (
-      groupNum % 2 === 1 &&
-      elementHexNum >= 0x0010 &&
-      elementHexNum <= 0x00ff
-    ) {
+    if (groupNum % 2 === 1 && elementHexNum >= 0x0010 && elementHexNum <= 0x00ff) {
       registerPrivateCreator(tag, valueSlice, ctx);
     }
 

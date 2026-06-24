@@ -102,9 +102,7 @@ describe("parseDeflatedLE — D-27 position.deflated annotation", () => {
 
     const ds = parseDicom(buf);
 
-    const vrMismatch = ds.warnings.find(
-      (w) => w.code === WARNING_CODES.DICOM_VR_MISMATCH,
-    );
+    const vrMismatch = ds.warnings.find((w) => w.code === WARNING_CODES.DICOM_VR_MISMATCH);
     expect(vrMismatch).toBeDefined();
     expect(vrMismatch?.position.deflated).toBe(true);
   });
@@ -170,9 +168,7 @@ describe("parseDeflatedLE — T-02-05-01 decompression-bomb cap", () => {
     const ctx = buildCtx(fakeOnDisk);
     const emit = makeEmitter(ctx);
 
-    expect(() =>
-      parseDeflatedLEWithCap(fakeOnDisk, 64, ctx, emit, 1024),
-    ).toThrow(DicomParseError);
+    expect(() => parseDeflatedLEWithCap(fakeOnDisk, 64, ctx, emit, 1024)).toThrow(DicomParseError);
 
     try {
       parseDeflatedLEWithCap(fakeOnDisk, 64, ctx, emit, 1024);
@@ -190,8 +186,8 @@ describe("parseDeflatedLE — T-02-05-01 decompression-bomb cap", () => {
 describe("parseDeflatedLE — T-02-05-02 stream corruption", () => {
   it("throws INVALID_FILE_META on random non-deflate bytes (NOT a raw zlib error)", () => {
     const garbage = Buffer.from([
-      0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-      0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+      0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e,
+      0x0f,
     ]);
     const fakeOnDisk = Buffer.concat([Buffer.alloc(32), garbage]);
     const ctx = buildCtx(fakeOnDisk);

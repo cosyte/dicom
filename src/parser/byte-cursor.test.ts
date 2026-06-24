@@ -42,7 +42,10 @@ describe("ByteCursor (D-05; T-02-01-06 truncation mitigation)", () => {
   });
 
   it("readUInt32At does not advance position", () => {
-    const cur = new ByteCursor(Buffer.from([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]), false);
+    const cur = new ByteCursor(
+      Buffer.from([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]),
+      false,
+    );
     cur.position = 0;
     expect(cur.readUInt32At(0)).toBe(0x01020304);
     expect(cur.position).toBe(0);
