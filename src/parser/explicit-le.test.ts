@@ -354,3 +354,189 @@ describe("parseExplicitLE — truncation (T-02-04-01)", () => {
     }
   });
 });
+
+describe("parseExplicitLE — TOL-10 group-length element in dataset", () => {
+  it("(0009,0000) private-group length in the dataset emits DICOM_GROUP_LENGTH_IN_DATASET", () => {
+    // A (gggg,0000) group-length element outside File Meta (group != 0002) is
+    // legal-but-discouraged; the parser keeps the element and warns. Using an
+    // odd private group avoids a standard-tag VR-mismatch warning muddying the
+    // assertion. UL is the canonical group-length VR.
+    const value = Buffer.alloc(4);
+    value.writeUInt32LE(0, 0);
+    const buf = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      elements: [{ tag: "00090000", vr: "UL", value }],
+    });
+    const ds = parseDicom(buf);
+    expect(ds.warnings.some((w) => w.code === WARNING_CODES.DICOM_GROUP_LENGTH_IN_DATASET)).toBe(
+      true,
+    );
+    expect(elementsOf(ds).has("00090000")).toBe(true);
+  });
+});
+
+describe("parseExplicitLE — undefined length on a non-SQ VR is fatal", () => {
+  it("throws INVALID_FILE_META for a long-form VR carrying 0xFFFFFFFF on a non-pixel-data tag", () => {
+    // Undefined length is only legal for SQ, the (7FE0,0010) OB encapsulated-
+    // pixel-data special case, or CP-246 UN. An OB element on a NON-pixel-data
+    // tag with undefined length therefore falls through to the structural
+    // "undefined length on non-SQ" fatal. (0008,0008) ImageType is not
+    // (7FE0,0010), so it exercises that branch.
+    const fmOnly = buildDicom({ transferSyntax: TS_EXPLICIT_LE, elements: [] });
+    const nonPdTag = Buffer.from([0x08, 0x00, 0x08, 0x00]); // (0008,0008) LE
+    const obVr = Buffer.from("OB", "ascii"); // long-form VR -> 12-byte header
+    const reserved = Buffer.from([0x00, 0x00]);
+    const undefLen = Buffer.from([0xff, 0xff, 0xff, 0xff]);
+    const element = Buffer.concat([nonPdTag, obVr, reserved, undefLen]);
+    const buf = Buffer.concat([fmOnly, element]);
+    try {
+      parseDicom(buf);
+      throw new Error("expected throw");
+    } catch (err) {
+      if (!(err instanceof DicomParseError)) throw err;
+      expect(err.code).toBe("INVALID_FILE_META");
+      expect(err.message).toMatch(/non-SQ/);
+    }
+  });
+});
+
+describe("parseExplicitLE — unexpected FFFE marker at dataset root", () => {
+  it("throws INVALID_FILE_META for a stray (FFFE,E000) item header at the root", () => {
+    const fmOnly = buildDicom({ transferSyntax: TS_EXPLICIT_LE, elements: [] });
+    const itemHeader = Buffer.alloc(8);
+    itemHeader.writeUInt16LE(0xfffe, 0);
+    itemHeader.writeUInt16LE(0xe000, 2);
+    itemHeader.writeUInt32LE(0, 4);
+    const buf = Buffer.concat([fmOnly, itemHeader]);
+    try {
+      parseDicom(buf);
+      throw new Error("expected throw");
+    } catch (err) {
+      if (!(err instanceof DicomParseError)) throw err;
+      expect(err.code).toBe("INVALID_FILE_META");
+      expect(err.message).toContain("FFFE");
+    }
+  });
+});
+
+describe("parseExplicitLE — undefined-length SQ with an undefined-length item", () => {
+  it("terminates the inner item on (FFFE,E00D) ItemDelim and still parses the item body", () => {
+    // Both the SQ and its single item use undefined length, so the SQ is
+    // delimited by (FFFE,E0DD) and the item body by (FFFE,E00D). The inner
+    // explicit parser is invoked with stopOnItemDelim=true and must exit on
+    // the ItemDelim marker (the FFFE-at-item-level early-return path).
+    const buf = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      elements: [
+        {
+          tag: "0040A730",
+          undefinedLength: true,
+          items: [
+            {
+              undefinedLength: true,
+              elements: [{ tag: "00080100", vr: "SH", value: Buffer.from("CODE", "ascii") }],
+            },
+          ],
+        },
+      ],
+    });
+    const ds = parseDicom(buf);
+    const el = elementsOf(ds).get("0040A730");
+    expect(el).toBeDefined();
+    expect(el?.vr).toBe("SQ");
+    expect(el?.vm).toBe(1);
+  });
+});
+
+describe("parseExplicitLE — truncation points (T-02-04-01)", () => {
+  it("throws INVALID_FILE_META when the buffer ends with a single dangling byte (peek overrun)", () => {
+    // Build a clean buffer, then leave exactly one trailing byte where the
+    // next element header would start. The 2-byte group peek overruns ->
+    // typed INVALID_FILE_META, not a raw RangeError.
+    const base = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      elements: [{ tag: "00100010", vr: "PN", value: Buffer.from("DOE^JANE", "ascii") }],
+    });
+    const buf = Buffer.concat([base, Buffer.from([0x10])]); // one dangling byte
+    try {
+      parseDicom(buf);
+      throw new Error("expected throw");
+    } catch (err) {
+      if (!(err instanceof DicomParseError)) throw err;
+      expect(err.code).toBe("INVALID_FILE_META");
+    }
+  });
+
+  it("throws INVALID_FILE_META when an FFFE marker's header is truncated", () => {
+    // An FFFE tag (group peeks as 0xFFFE) but only the 4 tag bytes are present
+    // — reading the 4-byte length overruns inside the FFFE branch.
+    const fmOnly = buildDicom({ transferSyntax: TS_EXPLICIT_LE, elements: [] });
+    const danglingFffe = Buffer.from([0xfe, 0xff, 0x00, 0xe0]); // (FFFE,E000), no length
+    const buf = Buffer.concat([fmOnly, danglingFffe]);
+    try {
+      parseDicom(buf);
+      throw new Error("expected throw");
+    } catch (err) {
+      if (!(err instanceof DicomParseError)) throw err;
+      expect(err.code).toBe("INVALID_FILE_META");
+    }
+  });
+
+  it("throws INVALID_FILE_META when a standard element header is truncated after the group peek", () => {
+    // Group peek succeeds (group 0010), but only 3 bytes follow — the full
+    // explicit-VR header read overruns inside readExplicitElementHeader.
+    const fmOnly = buildDicom({ transferSyntax: TS_EXPLICIT_LE, elements: [] });
+    const partialHeader = Buffer.from([0x10, 0x00, 0x10]); // (0010,00..) cut mid-header
+    const buf = Buffer.concat([fmOnly, partialHeader]);
+    try {
+      parseDicom(buf);
+      throw new Error("expected throw");
+    } catch (err) {
+      if (!(err instanceof DicomParseError)) throw err;
+      expect(err.code).toBe("INVALID_FILE_META");
+    }
+  });
+});
+
+describe("parseExplicitLE — D-16 copyValues on composite values", () => {
+  it("copyValues=true isolates an undefined-length SQ element's rawBytes", () => {
+    const buf = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      elements: [
+        {
+          tag: "0040A730",
+          undefinedLength: true,
+          items: [
+            { elements: [{ tag: "00080100", vr: "SH", value: Buffer.from("CODE", "ascii") }] },
+          ],
+        },
+      ],
+    });
+    const ds = parseDicom(buf, { copyValues: true });
+    const el = elementsOf(ds).get("0040A730");
+    expect(el).toBeDefined();
+    const before = Buffer.from(el?.rawBytes ?? Buffer.alloc(0));
+    buf.fill(0xff, 0, buf.length);
+    expect(el?.rawBytes.equals(before)).toBe(true);
+  });
+
+  it("copyValues=true isolates encapsulated pixel-data rawBytes", () => {
+    const buf = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      elements: [
+        {
+          tag: "7FE00010",
+          encapsulatedPixelData: true,
+          encapsulatedFragments: [Buffer.alloc(0), Buffer.from([0x01, 0x02, 0x03, 0x04])],
+          items: [],
+        },
+      ],
+    });
+    const ds = parseDicom(buf, { copyValues: true });
+    const el = elementsOf(ds).get("7FE00010");
+    expect(el?.vr).toBe("OB");
+    const before = Buffer.from(el?.rawBytes ?? Buffer.alloc(0));
+    buf.fill(0xff, 0, buf.length);
+    expect(el?.rawBytes.equals(before)).toBe(true);
+  });
+});

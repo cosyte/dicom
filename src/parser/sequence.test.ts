@@ -280,6 +280,36 @@ describe("parseSequence — encapsulated pixel data (D-31)", () => {
     // 4 items: BOT + 3 fragments.
     expect(result.items.length).toBe(4);
   });
+
+  it("throws INVALID_FILE_META when a fragment declares more bytes than remain", () => {
+    // A fragment item header claims 64 bytes of pixel data but only a few
+    // follow — the bounds check must reject it (T-02-04-01) rather than
+    // over-reading past the buffer.
+    const buffer = Buffer.concat([
+      buildItemHeader(0, true), // empty BOT
+      buildItemHeader(64, true), // fragment claims 64 bytes...
+      Buffer.from([0x01, 0x02, 0x03, 0x04]), // ...but only 4 are present
+    ]);
+    const ctx = makeContext(buffer);
+    const emit = makeEmit(ctx);
+    const innerStub: InnerParser = (_buf, start) => ({ elements: new Map(), endOffset: start });
+    const opts: ParseSequenceOptions = {
+      explicitLength: undefined,
+      littleEndian: true,
+      innerStrategy: innerStub,
+      encapsulatedPixelData: true,
+    };
+    try {
+      parseSequence(buffer, 0, ctx, emit, opts);
+      expect.fail("expected throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(DicomParseError);
+      if (err instanceof DicomParseError) {
+        expect(err.code).toBe("INVALID_FILE_META");
+        expect(err.message).toMatch(/fragment/);
+      }
+    }
+  });
 });
 
 describe("parseSequence — truncated input (T-02-04-01)", () => {

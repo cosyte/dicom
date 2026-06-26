@@ -3,7 +3,7 @@
  * Covers CONTEXT.md D-17 / D-18 / D-19 + threat T-02-02-01.
  */
 
-import type { Buffer } from "node:buffer";
+import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
 import { buildDicom } from "../../test/helpers/build-dicom.js";
@@ -160,5 +160,136 @@ describe("parseFileMeta — T-02-02-01 truncated input mitigation", () => {
     const { ctx } = ctxFor(buf);
     const { datasetStart } = parsePart10Header(buf, ctx, emitFor(ctx));
     expect(() => parseFileMeta(buf, datasetStart, ctx, emitFor(ctx))).toThrow(DicomParseError);
+  });
+
+  it("throws INVALID_FILE_META when the buffer ends inside the very first FM element", () => {
+    // The first read after (0002,0000) is the group-length element itself.
+    // Cut the buffer mid-first-element so readExplicitLeElement's cursor read
+    // overruns -> RangeError -> typed INVALID_FILE_META, not a raw RangeError.
+    const full = buildDicom({ transferSyntax: "1.2.840.10008.1.2.1", elements: [] });
+    const dicm = full.indexOf("DICM");
+    // Keep preamble + DICM + 4 bytes into the first element header (a partial
+    // (0002,0000) header). parsePart10Header consumes through DICM; parseFileMeta
+    // then tries to read the first element from a 4-byte remainder.
+    const truncated = full.subarray(0, dicm + 4 + 4);
+    const { ctx } = ctxFor(truncated);
+    const { datasetStart } = parsePart10Header(truncated, ctx, emitFor(ctx));
+    try {
+      parseFileMeta(truncated, datasetStart, ctx, emitFor(ctx));
+      throw new Error("expected throw");
+    } catch (err) {
+      if (!(err instanceof DicomParseError)) throw err;
+      expect(err.code).toBe("INVALID_FILE_META");
+    }
+  });
+});
+
+describe("parseFileMeta — D-18 mismatch recovery loop", () => {
+  it("severely under-declared (0002,0000) still projects all FM fields via the recovery loop", () => {
+    // FM element sizes are deterministic: (0002,0010)=28, (0002,0002)=34,
+    // (0002,0003)=26, (0002,0012)=16 bytes. Declaring 30 makes the main loop
+    // overshoot after the second element while two FM elements remain, so the
+    // post-mismatch recovery loop (which reads forward until the first non-0002
+    // group) is exercised — and every FM field must still project correctly.
+    const buf = buildDicom({
+      transferSyntax: "1.2.840.10008.1.2.1",
+      elements: [],
+      fileMetaGroupLength: 30,
+      mediaStorageSOPClassUID: "1.2.840.10008.5.1.4.1.1.2",
+      mediaStorageSOPInstanceUID: "1.2.3.4.5.6.7.8.9",
+      implementationClassUID: "1.2.3.4",
+    });
+    const { ctx } = ctxFor(buf);
+    const { datasetStart } = parsePart10Header(buf, ctx, emitFor(ctx));
+    const { fileMeta } = parseFileMeta(buf, datasetStart, ctx, emitFor(ctx));
+    expect(
+      ctx.warnings.some((w) => w.code === WARNING_CODES.DICOM_FILE_META_GROUP_LENGTH_MISMATCH),
+    ).toBe(true);
+    // All FM fields recovered despite the wrong group length.
+    expect(fileMeta.transferSyntaxUID).toBe("1.2.840.10008.1.2.1");
+    expect(fileMeta.mediaStorageSOPClassUID).toBe("1.2.840.10008.5.1.4.1.1.2");
+    expect(fileMeta.mediaStorageSOPInstanceUID).toBe("1.2.3.4.5.6.7.8.9");
+    expect(fileMeta.implementationClassUID).toBe("1.2.3.4");
+  });
+});
+
+describe("parseFileMeta — (0002,0001) FileMetaInformationVersion (long-form OB)", () => {
+  it("reads the long-form OB header and projects fileMetaInformationVersion raw", () => {
+    // (0002,0001) is an OB element — a long-form VR (12-byte header with 2
+    // reserved bytes + 4-byte length). It exercises the LONG_FORM_VRS branch
+    // in the File Meta reader and the raw-value projection. Hand-build the FM
+    // since the buildDicom helper does not emit (0002,0001).
+    const version = Buffer.from([0x00, 0x01]); // the canonical 2-byte FM version
+    const verEl = Buffer.alloc(12 + version.length);
+    verEl.writeUInt16LE(0x0002, 0);
+    verEl.writeUInt16LE(0x0001, 2);
+    verEl.write("OB", 4, "ascii");
+    // bytes 6-7 reserved (0x0000)
+    verEl.writeUInt32LE(version.length, 8);
+    version.copy(verEl, 12);
+
+    const tsValue = Buffer.from("1.2.840.10008.1.2.1\0", "ascii");
+    const tsEl = Buffer.alloc(8 + tsValue.length);
+    tsEl.writeUInt16LE(0x0002, 0);
+    tsEl.writeUInt16LE(0x0010, 2);
+    tsEl.write("UI", 4, "ascii");
+    tsEl.writeUInt16LE(tsValue.length, 6);
+    tsValue.copy(tsEl, 8);
+
+    const fmBody = Buffer.concat([verEl, tsEl]);
+    const gl = Buffer.alloc(12);
+    gl.writeUInt16LE(0x0002, 0);
+    gl.writeUInt16LE(0x0000, 2);
+    gl.write("UL", 4, "ascii");
+    gl.writeUInt16LE(4, 6);
+    gl.writeUInt32LE(fmBody.length, 8);
+
+    const buf = Buffer.concat([Buffer.alloc(128, 0x00), Buffer.from("DICM", "ascii"), gl, fmBody]);
+    const { ctx } = ctxFor(buf);
+    const { datasetStart } = parsePart10Header(buf, ctx, emitFor(ctx));
+    const { fileMeta } = parseFileMeta(buf, datasetStart, ctx, emitFor(ctx));
+    expect(fileMeta.transferSyntaxUID).toBe("1.2.840.10008.1.2.1");
+    expect(fileMeta.fileMetaInformationVersion).toBeDefined();
+    expect(
+      Buffer.from(fileMeta.fileMetaInformationVersion ?? Buffer.alloc(0)).equals(version),
+    ).toBe(true);
+  });
+});
+
+describe("parseFileMeta — D-19 Transfer Syntax UID with wrong VR", () => {
+  it("throws INVALID_FILE_META when (0002,0010) is present but its VR is not UI", () => {
+    // Hand-build a File Meta where (0002,0010) carries VR=SH instead of UI.
+    // D-19 requires the TS UID element to be UI; otherwise the file is fatal.
+    const fmStart = (): Buffer => {
+      // (0002,0010) SH short-form: tag(4) + "SH"(2) + len(2) + value
+      const value = Buffer.from("1.2.840.10008.1.2.1\0", "ascii"); // even length
+      const el = Buffer.alloc(8 + value.length);
+      el.writeUInt16LE(0x0002, 0);
+      el.writeUInt16LE(0x0010, 2);
+      el.write("SH", 4, "ascii");
+      el.writeUInt16LE(value.length, 6);
+      value.copy(el, 8);
+      // (0002,0000) UL group length declaring exactly el.length.
+      const gl = Buffer.alloc(12);
+      gl.writeUInt16LE(0x0002, 0);
+      gl.writeUInt16LE(0x0000, 2);
+      gl.write("UL", 4, "ascii");
+      gl.writeUInt16LE(4, 6);
+      gl.writeUInt32LE(el.length, 8);
+      return Buffer.concat([gl, el]);
+    };
+    const preamble = Buffer.alloc(128, 0x00);
+    const dicm = Buffer.from("DICM", "ascii");
+    const buf = Buffer.concat([preamble, dicm, fmStart()]);
+    const { ctx } = ctxFor(buf);
+    const { datasetStart } = parsePart10Header(buf, ctx, emitFor(ctx));
+    try {
+      parseFileMeta(buf, datasetStart, ctx, emitFor(ctx));
+      throw new Error("expected throw");
+    } catch (err) {
+      if (!(err instanceof DicomParseError)) throw err;
+      expect(err.code).toBe("INVALID_FILE_META");
+      expect(err.message).toMatch(/Transfer Syntax UID/);
+    }
   });
 });

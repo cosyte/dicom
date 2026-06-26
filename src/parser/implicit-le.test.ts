@@ -175,6 +175,101 @@ describe("parseImplicitLE — D-33 / D-34 private-creator block-reservation", ()
   });
 });
 
+describe("parseImplicitLE — undefined-length SQ descent (D-21 + parseSequence)", () => {
+  it("(0040,A730) ContentSequence with undefined length descends into the item body", () => {
+    // Implicit VR LE has no on-wire VR; the parser resolves SQ from the
+    // dictionary for ContentSequence, sees length 0xFFFFFFFF, and delegates
+    // to parseSequence. The inner item carries one Implicit-LE element.
+    const buf = buildDicom({
+      transferSyntax: "1.2.840.10008.1.2",
+      elements: [
+        {
+          tag: "0040A730",
+          undefinedLength: true,
+          items: [
+            {
+              undefinedLength: true,
+              elements: [{ tag: "00080100", vr: "SH", value: Buffer.from("CODE", "ascii") }],
+            },
+          ],
+        },
+      ],
+    });
+    const ds = parseDicom(buf);
+    const el = elementsOf(ds).get("0040A730");
+    expect(el).toBeDefined();
+    expect(el?.vr).toBe("SQ");
+    expect(el?.length).toBe(0xffffffff);
+    // vm reflects the one parsed item.
+    expect(el?.vm).toBe(1);
+  });
+
+  it("explicit-length SQ also descends (defined item body, no SeqDelim)", () => {
+    const buf = buildDicom({
+      transferSyntax: "1.2.840.10008.1.2",
+      elements: [
+        {
+          tag: "0040A730",
+          items: [
+            { elements: [{ tag: "00080100", vr: "SH", value: Buffer.from("ABCD", "ascii") }] },
+          ],
+        },
+      ],
+    });
+    const ds = parseDicom(buf);
+    const el = elementsOf(ds).get("0040A730");
+    expect(el?.vr).toBe("SQ");
+    expect(el?.vm).toBe(1);
+  });
+
+  it("copyValues=true on an SQ element isolates the composite rawBytes from the source", () => {
+    const buf = buildDicom({
+      transferSyntax: "1.2.840.10008.1.2",
+      elements: [
+        {
+          tag: "0040A730",
+          undefinedLength: true,
+          items: [
+            {
+              undefinedLength: true,
+              elements: [{ tag: "00080100", vr: "SH", value: Buffer.from("CODE", "ascii") }],
+            },
+          ],
+        },
+      ],
+    });
+    const ds = parseDicom(buf, { copyValues: true });
+    const el = elementsOf(ds).get("0040A730");
+    expect(el).toBeDefined();
+    const before = Buffer.from(el?.rawBytes ?? Buffer.alloc(0));
+    // Smash the source; copied composite bytes must be unaffected.
+    buf.fill(0xff, 0, buf.length);
+    expect(el?.rawBytes.equals(before)).toBe(true);
+  });
+});
+
+describe("parseImplicitLE — undefined length on a non-SQ VR is fatal", () => {
+  it("throws INVALID_FILE_META for a non-SQ tag carrying length 0xFFFFFFFF", () => {
+    // (0010,0010) PatientName resolves to PN, not SQ. Under Implicit VR LE
+    // there is no way to encode an explicit UN, so undefined length here is
+    // structurally invalid and must not be mistaken for a sequence.
+    const headerBuf = buildDicom({ transferSyntax: "1.2.840.10008.1.2", elements: [] });
+    const malformed = Buffer.alloc(8);
+    malformed.writeUInt16LE(0x0010, 0); // group
+    malformed.writeUInt16LE(0x0010, 2); // element -> PN
+    malformed.writeUInt32LE(0xffffffff, 4); // undefined length on a non-SQ VR
+    const buf = Buffer.concat([headerBuf, malformed]);
+    try {
+      parseDicom(buf);
+      throw new Error("expected throw");
+    } catch (err) {
+      if (!(err instanceof DicomParseError)) throw err;
+      expect(err.code).toBe("INVALID_FILE_META");
+      expect(err.message).toMatch(/non-SQ/);
+    }
+  });
+});
+
 describe("parseImplicitLE — threat model mitigations", () => {
   it("T-02-03-01: truncated dataset throws DicomParseError(INVALID_FILE_META) not RangeError", () => {
     const buf = buildDicom({
@@ -186,6 +281,22 @@ describe("parseImplicitLE — threat model mitigations", () => {
     const truncated = buf.subarray(0, buf.length - 6);
     try {
       parseDicom(truncated);
+      throw new Error("expected throw");
+    } catch (err) {
+      if (!(err instanceof DicomParseError)) throw err;
+      expect(err.code).toBe("INVALID_FILE_META");
+    }
+  });
+
+  it("T-02-03-01: buffer ending INSIDE an element header (not its value) → INVALID_FILE_META", () => {
+    // Distinct from the value-overflow case: here the 8-byte element header
+    // itself is truncated, so the group/element/length cursor reads overrun
+    // and the RangeError is caught and re-thrown as a typed fatal.
+    const headerBuf = buildDicom({ transferSyntax: "1.2.840.10008.1.2", elements: [] });
+    const partialHeader = Buffer.from([0x10, 0x00, 0x10, 0x00]); // 4 of 8 header bytes
+    const buf = Buffer.concat([headerBuf, partialHeader]);
+    try {
+      parseDicom(buf);
       throw new Error("expected throw");
     } catch (err) {
       if (!(err instanceof DicomParseError)) throw err;

@@ -178,6 +178,21 @@ describe("registerPrivateCreator — trims trailing space/NUL padding", () => {
     registerPrivateCreator("00190010", Buffer.from([0x20, 0x20]), ctx);
     expect(ctx.creators.size).toBe(0);
   });
+
+  it("registers two creators in the same private group into one shared block map", () => {
+    // Two creator slots in group 0019: (0019,0010)='ACME' reserves block 10
+    // and (0019,0011)='WIDGET' reserves block 11. The second registration must
+    // reuse the existing per-group Map rather than replacing it, so BOTH blocks
+    // resolve. This is the common real-world case of a vendor reserving several
+    // private blocks in one group.
+    const ctx = makeCtx();
+    registerPrivateCreator("00190010", Buffer.from("ACME", "ascii"), ctx);
+    registerPrivateCreator("00190011", Buffer.from("WIDGET", "ascii"), ctx);
+    expect(ctx.creators.size).toBe(1); // single group entry
+    expect(ctx.creators.get(0x0019)?.size).toBe(2); // two blocks within it
+    expect(resolvePrivateCreator("00191000", ctx)).toBe("ACME"); // block 10
+    expect(resolvePrivateCreator("00191100", ctx)).toBe("WIDGET"); // block 11
+  });
 });
 
 describe("matchRepeatingGroup — pattern matching against family entries", () => {
