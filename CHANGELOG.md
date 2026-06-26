@@ -7,3 +7,16 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 ### Added
 
 - Initial repo scaffold (Phase 1).
+- Unit coverage for the PS3.15 Annex E lookup helper (`annexE`), enabling the per-directory
+  coverage gate on `src/dictionary/`.
+
+### Changed
+
+- Migrated onto the shared cosyte engineering standard (Phase E): tooling now flows from the
+  published `@cosyte/*` config packages (`@cosyte/tsup-config`, `@cosyte/vitest-config`,
+  ESLint 10 via `@cosyte/eslint-config`) instead of repo-local copies; devDependencies pinned to
+  the canonical exact versions; `attw` build/publish gate added; the per-directory coverage gate is
+  now enabled (transient sub-90 floors with TODOs while the test layer fills in).
+- CI/release workflows reduced to thin callers of the reusable `cosyte/.github` pipelines
+  (`ci.yml` runs the shared PHI scan; `release.yml` targets `@cosyte/dicom`). The repo-specific
+  byte-identical dictionary-regen workflow is kept and bumped to Node 22.

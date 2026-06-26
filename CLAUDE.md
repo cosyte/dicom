@@ -2,7 +2,7 @@
 
 ## Project
 
-**`@cosyte/dicom`** — a developer-focused DICOM parser + utility library for Node.js/TypeScript, published under the Cosyte brand. Open-source (MIT). Sibling to `@cosyte/hl7` at `../hl7-parser`.
+**`@cosyte/dicom`** — a developer-focused DICOM parser + utility library for Node.js/TypeScript, published under the Cosyte brand. Open-source (MIT). Sibling to `@cosyte/hl7` at `../hl7`.
 
 **North star:** A developer can read a real-world, vendor-quirky DICOM Part 10 file and pull useful metadata fields out in one line — without having read the DICOM standard.
 
@@ -12,15 +12,28 @@
 
 - **Phase 2 of 8 complete** (274/275 tests passing).
 
-## Tech Stack (locked)
+## Tech Stack (the shared `@cosyte/*` standard)
 
-- **Language:** TypeScript (strict, `noUncheckedIndexedAccess`)
-- **Target:** ES2022, dual ESM + CJS via `tsup`
-- **Node:** 22+
-- **Package manager:** pnpm
-- **Testing:** Vitest
-- **Linting:** ESLint + Prettier
-- **Runtime deps:** **≤ 3**, each MIT/Apache-licensed and ADR-justified. Deliberate divergence from `@cosyte/hl7`'s zero-dep rule; DICOM byte-level + charset work earns the exception.
+dicom inherits the canonical toolchain by depending on the published `@cosyte/*` config packages,
+not by copying files (Phase E migration). The source of truth is the meta-repo's
+`documentation/conventions.md`; this is a summary.
+
+- **Language:** TypeScript (strict, full rigor set incl. `noUncheckedIndexedAccess`) via
+  `@cosyte/tsconfig`. **Target ES2023**, `NodeNext`.
+- **Build:** dual ESM + CJS + `.d.ts`/`.d.cts` via `tsup` (`@cosyte/tsup-config`); `attw` is a
+  publish gate (per-condition types: `.d.ts` for `import`, `.d.cts` for `require`).
+- **Node:** **>= 22** (CI matrix 22 + 24).
+- **Package manager:** `pnpm@10`.
+- **Lint/format:** **ESLint 10** + unified `typescript-eslint` (type-checked) via
+  `@cosyte/eslint-config`; Prettier via `@cosyte/prettier-config`. Lint at `--max-warnings=0`.
+- **Testing:** **Vitest 4** + v8 coverage (`@cosyte/vitest-config`), per-directory gates. The
+  gate is **enabled**; floors currently sit just below 90 (transient, with TODOs) while the early
+  phases fill in coverage — see `vitest.config.ts`.
+- **CI/CD:** thin callers of the reusable `cosyte/.github` workflows; the repo-specific
+  `dictionary-regen.yml` byte-identical regen gate is kept.
+- **Runtime deps:** **≤ 3**, each MIT/Apache-licensed and ADR-justified. Deliberate divergence from
+  `@cosyte/hl7`'s zero-dep rule; DICOM byte-level + charset work earns the exception. (Currently
+  zero are taken.)
 - **License:** MIT
 
 ## Engineering Guardrails
@@ -34,7 +47,10 @@
 - Fatal errors only for unrecoverable structural corruption (4 Tier-3 codes: `NOT_DICOM_PART_10`, `INVALID_FILE_META`, `UNSUPPORTED_TRANSFER_SYNTAX`, `EMPTY_INPUT`). Everything else is a warning.
 - Buffer-first API for binary values. String decoding respects `(0008,0005)` Specific Character Set.
 - Data dictionary is generated at build time from the official DICOM Part 6 source and committed; runtime has no network/filesystem dependency on it.
-- Coverage target: ≥ 90% on `src/parser/`, `src/dataset/`, `src/dictionary/`, `src/helpers/`.
+- Coverage: per-directory gate **enabled** on `src/parser/`, `src/dataset/`, `src/dictionary/` (and
+  `src/helpers/` once it exists) via `pnpm test:coverage`. Canonical bar is ≥ 90%; early-phase floors
+  currently sit just below that as documented transient relaxations with TODOs — raise them toward 90
+  as coverage fills in, never disable the gate. `vitest.config.ts` is the source of truth.
 
 ## Style Reference
 
