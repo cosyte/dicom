@@ -9,6 +9,13 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 - Initial repo scaffold (Phase 1).
 - Unit coverage for the PS3.15 Annex E lookup helper (`annexE`), enabling the per-directory
   coverage gate on `src/dictionary/`.
+- Adopted the shared `@cosyte/test-utils` conformance kit (first parser to do so) and added a
+  `fast-check` property + fuzz test layer under `test/property/`: synthetic-only generators
+  (`_arbitraries.ts`) plus invariant suites for round-trip fidelity, lenient-mode robustness,
+  parsed-model immutability, warning/fatal-code stability (snapshot), and a byte-parser fuzz sweep
+  that feeds arbitrary buffers + random truncations and asserts the parser only ever throws a
+  sanctioned Tier-3 `DicomParseError` — never an unexpected error, hang, or OOM. No public API
+  change. (devDeps: `@cosyte/test-utils@^0.0.1`, `fast-check@3.23.2`.)
 
 ### Changed
 
