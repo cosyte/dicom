@@ -10,7 +10,15 @@
 
 ## Status
 
-- **Phase 5 of 8 complete** (500 tests passing, 1 todo). Spec-clean Part 10 serializer live:
+- **Phase 6 of 8 complete** (532 tests passing, 1 todo). Source/vendor profile system live:
+  `defineProfile()` + `parseDicom(buf, { profile })` opt into a composable, immutable `Profile`
+  bundling warning `escalate` / `suppress` posture and a private-creator-keyed overlay that resolves
+  the Implicit VR of vendor private data elements by the file's live creator string (canonical
+  `"GGGGxxLL"` key, PS3.5 §7.8.1 — never a hard-coded block). Five built-ins under the frozen
+  `profiles` namespace (`ge` / `siemens` / `philips` vendor overlays + `strict` / `lenient` posture
+  presets); an unrecognized creator degrades to `UN` plus `DICOM_PRIVATE_CREATOR_UNKNOWN`, never a
+  wrong decode. A profile only tightens or annotates — selecting one never changes a correct decode.
+- **Phase 5 of 8 complete.** Spec-clean Part 10 serializer live:
   `serializeDicom(ds)` writes a `Dataset` back to a Part 10 `Buffer` (preamble + `DICM`, File Meta
   always Explicit VR LE with computed group length, dataset body in the source transfer syntax — no
   transcode — across all four v1 syntaxes), with even-length padding, short/long-form headers, retired

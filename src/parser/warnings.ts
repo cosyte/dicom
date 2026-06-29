@@ -398,6 +398,32 @@ export function implicitVRForPrivateTagWithoutVR(
   };
 }
 
+/**
+ * Build a `DICOM_PRIVATE_CREATOR_UNKNOWN` warning (Phase 6, D-45). Emitted
+ * under Implicit VR LE when a parse-time {@link Profile} is active and a
+ * private data element carries a registered Private Creator that the profile's
+ * private-dictionary overlay does not recognize — the element degrades to the
+ * generic `UN` fallback rather than risking a wrong decode. The `creator`
+ * string is a vendor schema identifier (e.g. `"ACME PRIVATE 01"`), not PHI.
+ *
+ * @example
+ * ```ts
+ * import { privateCreatorUnknown } from "@cosyte/dicom";
+ * const w = privateCreatorUnknown({ byteOffset: 900 }, "00191020", "ACME PRIVATE 01");
+ * ```
+ */
+export function privateCreatorUnknown(
+  position: DicomPosition,
+  tag: string,
+  creator: string,
+): DicomParseWarning {
+  return {
+    code: WARNING_CODES.DICOM_PRIVATE_CREATOR_UNKNOWN,
+    message: `Private element (${tag}) creator "${creator}" is not in the active profile's private dictionary; falling back to UN.`,
+    position,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Phase 3 VR-decode-time factories (D-08 / D-42).
 //

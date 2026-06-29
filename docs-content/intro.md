@@ -102,6 +102,45 @@ occurred, not failures. Only four unrecoverable structural conditions throw. Whe
 the writer always emits spec-clean Part 10 — correct File Meta group length, even-length values,
 proper padding (Postel's Law).
 
+## Source profiles
+
+Real files come from real vendors, and vendors deviate in documented, predictable ways. A **profile**
+lets you opt into source-specific tolerance without ever risking a wrong decode. Pass one to
+`parseDicom`:
+
+```ts
+import { parseDicom, profiles } from "@cosyte/dicom";
+
+// Resolve Siemens CSA private headers to their real VRs instead of UN.
+const ds = parseDicom(buf, { profile: profiles.siemens });
+```
+
+A profile bundles three things that only ever **tighten or annotate** a parse — never loosen it past
+the lenient default:
+
+- **Private-dictionary overlay** — resolves the Implicit VR of vendor private data elements by the
+  file's _live_ private-creator string (e.g. `"SIEMENS CSA HEADER"`), never a hard-coded block number.
+  A creator the profile does not know degrades to `UN` plus a `DICOM_PRIVATE_CREATOR_UNKNOWN` warning.
+- **Escalations** — Tier-2 warning codes promoted to a thrown `DicomParseError` (a stricter posture
+  for known-unsafe deviations).
+- **Suppressions** — benign, high-volume warning codes silenced for a known-quirky source.
+
+Five built-ins ship under the `profiles` namespace: `ge`, `siemens`, `philips` (vendor overlays) and
+`strict` / `lenient` (posture presets). Build your own with `defineProfile()` — it validates input,
+composes via `extends`, and returns a frozen profile:
+
+```ts
+import { defineProfile, profiles } from "@cosyte/dicom";
+
+const acmeStrict = defineProfile({
+  name: "acme-strict",
+  extends: profiles.strict,
+  privateTags: {
+    "ACME PRIV 01": { "0019XX10": { vr: "DS", keyword: "AcmeDose", name: "ACME Dose" } },
+  },
+});
+```
+
 ## Next
 
 - Read the **API reference** for every export, generated from source.

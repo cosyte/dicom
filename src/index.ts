@@ -79,3 +79,13 @@ export {
   type SerializeErrorCode,
   DicomSerializeError,
 } from "./serialize/errors.js";
+
+// === Phase 6 — source/vendor profile surface (D-45) ===
+
+export { defineProfile, profiles, ProfileDefinitionError } from "./profiles/index.js";
+export type {
+  Profile,
+  PrivateTagDefinition,
+  DefineProfileOptions,
+  ProfilePrivateTags,
+} from "./profiles/index.js";

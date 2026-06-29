@@ -15,8 +15,10 @@
  *      stubs — real bodies arrive in plans 02-03 / 02-04 / 02-05).
  *   7. The result is assembled into a structural {@link Dataset}.
  *
- * The Phase 2 overload (no `profile` parameter) is locked here per D-01;
- * the third overload accepting a `Profile` is reserved for Phase 6 (D-45).
+ * Phase 6 (D-45) wires a source/vendor `Profile` via `ParseOptions.profile`:
+ * its `escalations` / `suppressions` reshape Tier-2 emission at the
+ * {@link makeEmitter} chokepoint, and its private-dictionary overlay resolves
+ * the Implicit VR of vendor private data elements.
  *
  * @module
  */
@@ -164,7 +166,7 @@ function buildContext(
   options: ParseOptions,
   warnings: DicomParseWarning[],
 ): ParseContext {
-  const base: Omit<ParseContext, "onWarning"> = {
+  const base: Omit<ParseContext, "onWarning" | "profile"> = {
     buffer,
     strict: options.strict === true,
     stripPreamble: options.stripPreamble ?? "tolerate",
@@ -173,11 +175,14 @@ function buildContext(
     encodingContextStack: ["Root"],
     nestingDepth: 0,
     copyValues: options.copyValues === true,
-    // Per D-45 — `profile` field is reserved for Phase 6; intentionally absent in Phase 2.
   };
+  // Per D-45 — thread the source/vendor profile (Phase 6) when supplied;
+  // omit the key entirely otherwise (exactOptionalPropertyTypes / D-02).
+  const withProfile: Omit<ParseContext, "onWarning"> =
+    options.profile !== undefined ? { ...base, profile: options.profile } : base;
   if (options.onWarning !== undefined) {
     const onWarning: OnWarningCallback = options.onWarning;
-    return { ...base, onWarning };
+    return { ...withProfile, onWarning };
   }
-  return base;
+  return withProfile;
 }
