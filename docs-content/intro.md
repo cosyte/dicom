@@ -38,6 +38,26 @@ ds.warnings; // stable, byte-offset tolerance warnings
 
 Elements are reachable by keyword or by `(group,element)` tag through the same `get` path.
 
+## Typed values
+
+`get` returns an `Element`; its `.value` lazily decodes the raw bytes into a typed, discriminated
+`DicomValue` and caches the result. Every one of the 34 VRs has a decode: numbers, 64-bit `bigint`s,
+attribute tags, person names (3-group / 5-component), strings, free text, numeric strings
+(`DS`/`IS`), temporal values (`DA`/`TM`/`DT`), sequences, and raw `binary` for bulk data.
+
+```ts
+const rows = ds.get("Rows")?.value; // US
+if (rows?.kind === "numbers") rows.values[0]; // 512
+
+const name = ds.get("PatientName")?.value; // PN
+if (name?.kind === "personName") name.values[0]?.alphabetic.givenName; // "Jane"
+```
+
+Decode is **fail-safe**: it never throws and never coerces a malformed value to a
+plausible-but-wrong one (a bad `DS`/`IS` token becomes `null`, never `NaN`→0). Per-value deviations
+surface on the returned value's own `warnings`. String VRs honor the `(0008,0005)` Specific
+Character Set (UTF-8, ISO-8859, ISO-2022), threaded through nested sequence items.
+
 ## Lenient by default
 
 The parser is **lenient by default** — the quirks real scanners emit (odd-length values, missing

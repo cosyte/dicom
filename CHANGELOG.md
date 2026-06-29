@@ -6,6 +6,23 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Added
 
+- **VR value decode + dataset navigation (Phase 3).** `Element.value` now lazily decodes (and
+  memoizes) an element's raw bytes into a typed, discriminated `DicomValue` covering all 34 VRs —
+  numbers (`US/UL/SS/SL/FL/FD`), 64-bit `bigint`s (`SV/UV`), attribute tags (`AT`), person names
+  (`PN` → 3-group / 5-component), strings, free text, numeric strings (`DS/IS` → `number | null`,
+  never `NaN`→0), temporal values (`DA/TM/DT`), sequences (`SQ` → threaded items), and raw `binary`
+  for the bulk VRs. Decode is fail-safe (never throws, never coerces a malformed value to a
+  plausible-but-wrong one) and surfaces per-value `warnings` with stable codes + byte offsets.
+- String decode honors `(0008,0005)` Specific Character Set, threaded through the parser per
+  dataset/SQ-item scope: UTF-8 (`ISO_IR 192`), the ISO-8859 single-byte family, and ISO-2022
+  multibyte, with three term-list corrections vs PS3.3 §C.12.1.1.2 (no `ISO_IR 14`; `IR 87/159` are
+  code-extension-only; `ISO_IR 203` Latin-9 is included). An unknown term emits
+  `DICOM_UNSUPPORTED_CHARSET` and falls back to a best-effort decode.
+- `Dataset`/`Item` navigation API: `get` / `has` / `elements` / `getAll`, tag lookup
+  case-insensitive.
+- Public surface: `decodeElementValue`, `parseSpecificCharacterSet`, `isKnownCharsetTerm`,
+  `resolveDecoderLabel`, `decodeText`, `parsePersonName`, `parseDate`, `parseTime`, `parseDateTime`,
+  and the `DicomValue` / `PersonName` / `DicomDate` / `DicomTime` / `DicomDateTime` types.
 - Initial repo scaffold (Phase 1).
 - Unit coverage for the PS3.15 Annex E lookup helper (`annexE`), enabling the per-directory
   coverage gate on `src/dictionary/`.

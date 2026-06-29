@@ -397,3 +397,169 @@ export function implicitVRForPrivateTagWithoutVR(
     position,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Phase 3 VR-decode-time factories (D-08 / D-42).
+//
+// PHI discipline: these messages NEVER include a decoded value (no PN, no
+// date/time, no text content) — only the tag, VR, and structural facts.
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a `DICOM_BOM_IN_TEXT_VR` warning. Emitted when a charset-decoded
+ * text value begins with a UTF-8 byte-order mark (`EF BB BF`) — tolerated
+ * (the BOM is stripped on decode) but non-conformant per PS3.5 §6.1.2.3.
+ *
+ * @example
+ * ```ts
+ * import { bomInTextVR } from "@cosyte/dicom";
+ * const w = bomInTextVR({ byteOffset: 320 }, "00081030", "LO");
+ * ```
+ */
+export function bomInTextVR(position: DicomPosition, tag: string, vr: VR): DicomParseWarning {
+  return {
+    code: WARNING_CODES.DICOM_BOM_IN_TEXT_VR,
+    message: `Element (${tag}) ${vr} value begins with a UTF-8 BOM; stripped on decode.`,
+    position,
+  };
+}
+
+/**
+ * Build a `DICOM_TRAILING_NULL_IN_TEXT_VR` warning. Emitted when a text VR
+ * that should pad with SPACE (`0x20`) instead carries a trailing NULL
+ * (`0x00`) — tolerated (trimmed on decode) per PS3.5 §6.2.
+ *
+ * @example
+ * ```ts
+ * import { trailingNullInTextVR } from "@cosyte/dicom";
+ * const w = trailingNullInTextVR({ byteOffset: 320 }, "00080060", "CS");
+ * ```
+ */
+export function trailingNullInTextVR(
+  position: DicomPosition,
+  tag: string,
+  vr: VR,
+): DicomParseWarning {
+  return {
+    code: WARNING_CODES.DICOM_TRAILING_NULL_IN_TEXT_VR,
+    message: `Element (${tag}) ${vr} value has a trailing NULL pad where SPACE is expected; trimmed.`,
+    position,
+  };
+}
+
+/**
+ * Build a `DICOM_UI_TRAILING_SPACE` warning. Emitted when a `UI` value is
+ * padded with SPACE (`0x20`) instead of the spec-mandated NULL (`0x00`)
+ * per PS3.5 §6.2; tolerated (trimmed on decode).
+ *
+ * @example
+ * ```ts
+ * import { uiTrailingSpace } from "@cosyte/dicom";
+ * const w = uiTrailingSpace({ byteOffset: 132 }, "00080016");
+ * ```
+ */
+export function uiTrailingSpace(position: DicomPosition, tag: string): DicomParseWarning {
+  return {
+    code: WARNING_CODES.DICOM_UI_TRAILING_SPACE,
+    message: `Element (${tag}) UI value is SPACE-padded; UI requires NULL padding (PS3.5 §6.2). Trimmed.`,
+    position,
+  };
+}
+
+/**
+ * Build a `DICOM_NON_ASCII_IN_ASCII_VR` warning. Emitted when a VR defined
+ * as the Default Character Repertoire (ASCII) — e.g. `AE CS DA DT TM UI UR
+ * DS IS AS` — contains a byte ≥ `0x80`; tolerated (decoded as Latin-1
+ * best-effort) per Postel's Law.
+ *
+ * @example
+ * ```ts
+ * import { nonAsciiInAsciiVR } from "@cosyte/dicom";
+ * const w = nonAsciiInAsciiVR({ byteOffset: 200 }, "00080060", "CS");
+ * ```
+ */
+export function nonAsciiInAsciiVR(position: DicomPosition, tag: string, vr: VR): DicomParseWarning {
+  return {
+    code: WARNING_CODES.DICOM_NON_ASCII_IN_ASCII_VR,
+    message: `Element (${tag}) ${vr} is an ASCII-only VR but contains non-ASCII bytes; decoded as Latin-1 best-effort.`,
+    position,
+  };
+}
+
+/**
+ * Build a `DICOM_IS_NONINTEGER_VALUE` warning. Emitted when an `IS`
+ * (Integer String) value does not parse to a base-10 integer — the value
+ * is surfaced as `null` (never `NaN`-coerced-to-0) with the raw bytes
+ * preserved on the Element.
+ *
+ * @example
+ * ```ts
+ * import { isNonintegerValue } from "@cosyte/dicom";
+ * const w = isNonintegerValue({ byteOffset: 240 }, "00200013");
+ * ```
+ */
+export function isNonintegerValue(position: DicomPosition, tag: string): DicomParseWarning {
+  return {
+    code: WARNING_CODES.DICOM_IS_NONINTEGER_VALUE,
+    message: `Element (${tag}) IS value is not a base-10 integer; surfaced as null with raw bytes preserved.`,
+    position,
+  };
+}
+
+/**
+ * Build a `DICOM_DA_LEGACY_FORMAT` warning. Emitted when a `DA` value uses
+ * a tolerated non-`YYYYMMDD` form (retired dotted `YYYY.MM.DD`, or a
+ * partial/empty date) — decoded best-effort, raw preserved, never thrown.
+ * The legacy string itself is NEVER included (PHI discipline).
+ *
+ * @example
+ * ```ts
+ * import { daLegacyFormat } from "@cosyte/dicom";
+ * const w = daLegacyFormat({ byteOffset: 260 }, "00080020");
+ * ```
+ */
+export function daLegacyFormat(position: DicomPosition, tag: string): DicomParseWarning {
+  return {
+    code: WARNING_CODES.DICOM_DA_LEGACY_FORMAT,
+    message: `Element (${tag}) DA value is not in canonical YYYYMMDD form; decoded best-effort, raw preserved.`,
+    position,
+  };
+}
+
+/**
+ * Build a `DICOM_DT_NONSTANDARD_OFFSET` warning. Emitted when a `DT` value
+ * carries a malformed or out-of-range UTC offset suffix — decoded
+ * best-effort, raw preserved, never thrown. The value is NEVER included.
+ *
+ * @example
+ * ```ts
+ * import { dtNonstandardOffset } from "@cosyte/dicom";
+ * const w = dtNonstandardOffset({ byteOffset: 280 }, "0040A120");
+ * ```
+ */
+export function dtNonstandardOffset(position: DicomPosition, tag: string): DicomParseWarning {
+  return {
+    code: WARNING_CODES.DICOM_DT_NONSTANDARD_OFFSET,
+    message: `Element (${tag}) DT value has a non-standard UTC offset; decoded best-effort, raw preserved.`,
+    position,
+  };
+}
+
+/**
+ * Build a `DICOM_UNSUPPORTED_CHARSET` warning. Emitted when `(0008,0005)`
+ * Specific Character Set names a defined term this build cannot map to a
+ * decoder — text is decoded best-effort as UTF-8 and raw bytes preserved.
+ *
+ * @example
+ * ```ts
+ * import { unsupportedCharset } from "@cosyte/dicom";
+ * const w = unsupportedCharset({ byteOffset: 180, fileMeta: false }, "ISO_IR 9999");
+ * ```
+ */
+export function unsupportedCharset(position: DicomPosition, term: string): DicomParseWarning {
+  return {
+    code: WARNING_CODES.DICOM_UNSUPPORTED_CHARSET,
+    message: `Specific Character Set term "${term}" is not supported; decoding text as UTF-8 best-effort.`,
+    position,
+  };
+}

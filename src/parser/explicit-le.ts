@@ -30,14 +30,15 @@
  * @module
  */
 
-import { Buffer } from "node:buffer";
+import type { Buffer } from "node:buffer";
 
 import { Element } from "../dataset/element.js";
 import { joinTag } from "../dataset/tag.js";
 import { lookup as dictionaryLookup } from "../dictionary/index.js";
 import type { Tag, VR } from "../dictionary/types.js";
-import { ByteCursor } from "./byte-cursor.js";
+import { ByteCursor, copyValueBytes } from "./byte-cursor.js";
 import {
+  applySpecificCharacterSet,
   readExplicitElementHeader,
   registerPrivateCreator,
   resolvePrivateCreator,
@@ -197,7 +198,7 @@ export function _parseExplicit(
       }
       cursor.position = seqResult.endOffset;
       const rawBytes = ctx.copyValues
-        ? Buffer.from(buffer.subarray(headerStart, cursor.position))
+        ? copyValueBytes(buffer.subarray(headerStart, cursor.position))
         : buffer.subarray(headerStart, cursor.position);
       const privateCreator = resolvePrivateCreator(tag, ctx);
       elements.set(
@@ -209,6 +210,8 @@ export function _parseExplicit(
           length,
           rawBytes,
           byteOffset: headerStart,
+          littleEndian: mode.littleEndian,
+          items: seqResult.items,
           ...(privateCreator !== undefined ? { privateCreator } : {}),
         }),
       );
@@ -227,7 +230,7 @@ export function _parseExplicit(
       const result = parseSequence(buffer, valueStart, ctx, emit, seqOpts);
       cursor.position = result.endOffset;
       const rawBytes = ctx.copyValues
-        ? Buffer.from(buffer.subarray(headerStart, cursor.position))
+        ? copyValueBytes(buffer.subarray(headerStart, cursor.position))
         : buffer.subarray(headerStart, cursor.position);
       elements.set(
         tag,
@@ -238,6 +241,8 @@ export function _parseExplicit(
           length: UNDEFINED_LENGTH,
           rawBytes,
           byteOffset: headerStart,
+          littleEndian: mode.littleEndian,
+          items: result.items,
         }),
       );
       continue;
@@ -257,7 +262,7 @@ export function _parseExplicit(
       if (cp246.success) {
         cursor.position = cp246.endOffset;
         const rawBytes = ctx.copyValues
-          ? Buffer.from(buffer.subarray(headerStart, cursor.position))
+          ? copyValueBytes(buffer.subarray(headerStart, cursor.position))
           : buffer.subarray(headerStart, cursor.position);
         const privateCreator = resolvePrivateCreator(tag, ctx);
         elements.set(
@@ -270,6 +275,8 @@ export function _parseExplicit(
             rawBytes,
             byteOffset: headerStart,
             cp246Promoted: true,
+            littleEndian: mode.littleEndian,
+            items: cp246.items,
             ...(privateCreator !== undefined ? { privateCreator } : {}),
           }),
         );
@@ -285,7 +292,7 @@ export function _parseExplicit(
       const privateCreator = resolvePrivateCreator(tag, ctx);
       const fallbackEnd = buffer.length;
       const fallbackBytes = ctx.copyValues
-        ? Buffer.from(buffer.subarray(headerStart, fallbackEnd))
+        ? copyValueBytes(buffer.subarray(headerStart, fallbackEnd))
         : buffer.subarray(headerStart, fallbackEnd);
       elements.set(
         tag,
@@ -296,6 +303,7 @@ export function _parseExplicit(
           length: UNDEFINED_LENGTH,
           rawBytes: fallbackBytes,
           byteOffset: headerStart,
+          littleEndian: mode.littleEndian,
           ...(privateCreator !== undefined ? { privateCreator } : {}),
         }),
       );
@@ -325,7 +333,7 @@ export function _parseExplicit(
     const valueStart = cursor.position;
     const valueEnd = valueStart + length;
     const valueSlice = ctx.copyValues
-      ? Buffer.from(buffer.subarray(valueStart, valueEnd))
+      ? copyValueBytes(buffer.subarray(valueStart, valueEnd))
       : buffer.subarray(valueStart, valueEnd);
     cursor.position = valueEnd;
 
@@ -340,6 +348,9 @@ export function _parseExplicit(
       registerPrivateCreator(tag, valueSlice, ctx);
     }
 
+    // (0008,0005) Specific Character Set governs subsequent text decode.
+    applySpecificCharacterSet(tag, valueSlice, ctx, emit, position);
+
     const privateCreator = resolvePrivateCreator(tag, ctx);
     const finalVr: VR = vr; // Postel: trust on-wire VR (warning already emitted on mismatch).
     elements.set(
@@ -352,6 +363,8 @@ export function _parseExplicit(
         length,
         rawBytes: valueSlice,
         byteOffset: headerStart,
+        littleEndian: mode.littleEndian,
+        ...(ctx.currentCharset !== undefined ? { specificCharacterSet: ctx.currentCharset } : {}),
         ...(privateCreator !== undefined ? { privateCreator } : {}),
       }),
     );

@@ -12,7 +12,28 @@
  * @module
  */
 
-import type { Buffer } from "node:buffer";
+import { Buffer } from "node:buffer";
+
+/**
+ * Copy `src` into a freshly allocated, **standalone** Buffer for the
+ * `copyValues: true` path (D-16 / T-02-05-04).
+ *
+ * `Buffer.from(src)` is not sufficient: for small slices Node serves the
+ * copy from the shared internal Buffer pool, so its backing `ArrayBuffer`
+ * can be shared with unrelated small allocations (including a small source
+ * dataset buffer). That defeats the detachment guarantee `copyValues: true`
+ * exists to provide — releasing the source buffer and not co-locating a PHI
+ * value with foreign bytes. `Buffer.allocUnsafeSlow` always allocates a
+ * dedicated `ArrayBuffer`; copying the exact length over it leaves no
+ * uninitialised bytes exposed.
+ *
+ * @internal
+ */
+export function copyValueBytes(src: Buffer): Buffer {
+  const out = Buffer.allocUnsafeSlow(src.length);
+  src.copy(out);
+  return out;
+}
 
 /**
  * Endian-aware Buffer cursor used by all Phase 2 parser strategies.

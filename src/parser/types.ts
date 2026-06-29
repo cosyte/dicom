@@ -149,6 +149,14 @@ export interface ParseContext {
    */
   nestingDepth: number;
   /**
+   * The `(0008,0005)` Specific Character Set terms resolved so far during
+   * this parse, threaded onto each `Element` so Phase 3 text decoders can
+   * honour the dataset's charset. Mutable: set when `(0008,0005)` is read,
+   * inherited into SQ items and restored per-item by `parseSequence`.
+   * `undefined` means the Default Repertoire (ISO_IR 6).
+   */
+  currentCharset?: readonly string[];
+  /**
    * @remarks Reserved for Phase 6 (D-45) — never set in Phase 2; declared
    * here so the shape is stable when Phase 6 wires profile threading.
    */

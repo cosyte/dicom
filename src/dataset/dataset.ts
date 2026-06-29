@@ -76,4 +76,67 @@ export class Dataset {
     this.warnings = Object.freeze([...init.warnings]);
     this._elements = init.elements;
   }
+
+  /**
+   * Look up a single element by tag. Tags are normalised to 8-char
+   * uppercase hex, so `"7fe00010"` and `"7FE00010"` resolve to the same
+   * element. Returns `undefined` when the tag is absent.
+   *
+   * @example
+   * ```ts
+   * import { parseDicom } from "@cosyte/dicom";
+   * const ds = parseDicom(buf);
+   * const rows = ds.get("00280010"); // Rows
+   * if (rows?.value.kind === "numbers") console.log(rows.value.values[0]);
+   * ```
+   */
+  public get(tag: Tag): Element | undefined {
+    return this._elements.get(tag.toUpperCase());
+  }
+
+  /**
+   * `true` when an element with the given tag is present (case-insensitive).
+   *
+   * @example
+   * ```ts
+   * import { parseDicom } from "@cosyte/dicom";
+   * const ds = parseDicom(buf);
+   * if (ds.has("00100010")) console.log("has Patient's Name");
+   * ```
+   */
+  public has(tag: Tag): boolean {
+    return this._elements.has(tag.toUpperCase());
+  }
+
+  /**
+   * All elements in this dataset, in parse (insertion) order.
+   *
+   * @example
+   * ```ts
+   * import { parseDicom } from "@cosyte/dicom";
+   * const ds = parseDicom(buf);
+   * for (const el of ds.elements()) console.log(el.tag, el.vr);
+   * ```
+   */
+  public elements(): readonly Element[] {
+    return [...this._elements.values()];
+  }
+
+  /**
+   * All elements matching a tag as an array (never `undefined`). A dataset
+   * holds at most one element per tag, so this returns a 0- or 1-length
+   * array — the convenience complement of {@link Dataset.get} for callers
+   * that prefer an always-array shape.
+   *
+   * @example
+   * ```ts
+   * import { parseDicom } from "@cosyte/dicom";
+   * const ds = parseDicom(buf);
+   * for (const el of ds.getAll("00080060")) console.log(el.value);
+   * ```
+   */
+  public getAll(tag: Tag): readonly Element[] {
+    const el = this._elements.get(tag.toUpperCase());
+    return el !== undefined ? [el] : [];
+  }
 }

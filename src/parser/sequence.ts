@@ -157,6 +157,16 @@ export function parseSequence(
   ctx.encodingContextStack.push(
     opts.encapsulatedPixelData === true ? "EncapsulatedPixelData" : "SqItem",
   );
+  // Items inherit the parent dataset's charset; an item's own (0008,0005)
+  // override must NOT leak to sibling items or back to the parent.
+  const parentCharset = ctx.currentCharset;
+  const restoreParentCharset = (): void => {
+    if (parentCharset === undefined) {
+      delete ctx.currentCharset;
+    } else {
+      ctx.currentCharset = parentCharset;
+    }
+  };
 
   try {
     const cursor = new ByteCursor(buffer, opts.littleEndian, valueStart);
@@ -232,6 +242,9 @@ export function parseSequence(
         continue;
       }
 
+      // Reset to the parent charset before each item so an item's own
+      // (0008,0005) cannot leak to its siblings.
+      restoreParentCharset();
       if (itemLength === UNDEFINED_LENGTH) {
         // Undefined-length item — call innerStrategy with stopOnItemDelim;
         // it returns the post-ItemDelim offset.
@@ -262,6 +275,7 @@ export function parseSequence(
   } finally {
     ctx.nestingDepth -= 1;
     ctx.encodingContextStack.pop();
+    restoreParentCharset();
   }
 }
 

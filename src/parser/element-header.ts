@@ -22,6 +22,7 @@
 import { TAGS } from "../dictionary/generated/tags.js";
 import type { Buffer } from "node:buffer";
 
+import { isKnownCharsetTerm, parseSpecificCharacterSet } from "../dataset/vr/charset.js";
 import type { DictionaryEntry, Tag, VR } from "../dictionary/types.js";
 import type { ByteCursor } from "./byte-cursor.js";
 import type { DicomPosition, ParseContext } from "./types.js";
@@ -29,18 +30,46 @@ import {
   implicitVRForPrivateTagWithoutVR,
   nonzeroReservedBytes,
   privateTagNoCreator,
+  unsupportedCharset,
   type DicomParseWarning,
 } from "./warnings.js";
+
+/** The `(0008,0005)` Specific Character Set tag. */
+const SPECIFIC_CHARACTER_SET_TAG: Tag = "00080005";
+
+/**
+ * When `tag` is `(0008,0005)`, parse its value into Specific Character Set
+ * terms and record them on `ctx.currentCharset` so subsequent elements
+ * decode their text correctly (PS3.3 §C.12.1.1.2). Unknown terms emit
+ * `DICOM_UNSUPPORTED_CHARSET` and decoding falls back to UTF-8 best-effort.
+ *
+ * @internal
+ */
+export function applySpecificCharacterSet(
+  tag: Tag,
+  value: Buffer,
+  ctx: ParseContext,
+  emit: (w: DicomParseWarning) => void,
+  position: DicomPosition,
+): void {
+  if (tag !== SPECIFIC_CHARACTER_SET_TAG) return;
+  const terms = parseSpecificCharacterSet(value);
+  for (const term of terms) {
+    if (!isKnownCharsetTerm(term)) emit(unsupportedCharset(position, term));
+  }
+  ctx.currentCharset = terms;
+}
 
 /**
  * VRs whose Explicit VR header uses the long form: 2-byte VR + 2 reserved
  * bytes (must be `0x00 0x00`; non-zero emits
  * `DICOM_NONZERO_RESERVED_BYTES`) + 4-byte length.
  *
- * Per D-22. The 10-VR set is the union of OB/OW/OF/OD/OL (octet-stream
- * variants), SQ (sequences), UT/UN/UC/UR (unlimited-length text /
- * unknown / unlimited-character / URI). Phase 5 serializer reuses this
- * set for symmetric long-form encoding (D-44).
+ * Per D-22, corrected for CP-2199: the 13-VR set is the union of
+ * OB/OW/OF/OD/OL/OV (octet-stream variants), SQ (sequences),
+ * UT/UN/UC/UR (unlimited-length text / unknown / unlimited-character / URI),
+ * and the 64-bit SV/UV (which are long-form, NOT short-form). Phase 5
+ * serializer reuses this set for symmetric long-form encoding (D-44).
  *
  * @example
  * ```ts
@@ -55,11 +84,14 @@ export const LONG_FORM_VRS: ReadonlySet<VR> = new Set<VR>([
   "OF",
   "OD",
   "OL",
+  "OV",
   "SQ",
   "UT",
   "UN",
   "UC",
   "UR",
+  "SV",
+  "UV",
 ]);
 
 // ---------------------------------------------------------------------------
