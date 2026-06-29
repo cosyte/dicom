@@ -11,11 +11,16 @@ import { cosyteVitest } from "@cosyte/vitest-config";
  * The early-phase TRANSIENT relaxations (a few points under 90 while the test layer filled in) have
  * been retired: a targeted branch/edge-case pass over the core parse paths (implicit-LE / explicit-LE
  * SQ descent + CP-246 + copy semantics, File Meta group-length recovery + long-form OB + truncation,
- * encapsulated-PD bounds, private-creator block reuse) brought every gated dir to the canonical 90.
- * Measured at this pass:
- *   - global:         lines 97.1 / branches 90.4 / funcs 100 / statements 96.3
- *   - src/parser:     lines 96.9 / branches 90.2 / funcs 100 / statements 96.1
- *   - src/dataset:    100 across the board
+ * encapsulated-PD bounds, private-creator block reuse) brought every gated dir to the canonical 90,
+ * and a DICOM-COV pass over the Phase 4 Enhanced multi-frame resolver (`functional-groups.ts`) closed
+ * its Per-Frame-else-Shared branches: both optional macros (Pixel Value Transformation / Frame VOI
+ * LUT), shared-only resolution, the inner-attribute lenient-absence paths, and all three
+ * MISSING_REQUIRED_FUNCTIONAL_GROUP throws — taking that file from ~53% to 100% branch. Measured at
+ * this pass:
+ *   - global:         lines 98.2 / branches 93.2 / funcs 100 / statements 97.9
+ *   - src/parser:     lines 97.1 / branches 90.2 / funcs 100 / statements 96.3
+ *   - src/dataset/helpers: lines 100 / branches 97.1 / funcs 100 / statements 100
+ *   - src/dataset/vr:      lines 97.6 / branches 93.7 / funcs 100 / statements 97.5
  *   - src/dictionary: 100 across the board (only annex-e.ts is measured)
  *
  * NOTE: parser branch coverage sits right at the 90 boundary (287/318). The remaining uncovered
