@@ -27,7 +27,7 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 - **File Meta round-trip is over the modeled surface, not byte-exact.** Only the typed `FileMeta`
   fields round-trip; any other `(0002,xxxx)` element a source file carried (e.g. `(0002,0100)` Private
-  Information Creator UID) is dropped at *parse* time (the Phase 2 `FileMeta` view does not model it)
+  Information Creator UID) is dropped at _parse_ time (the Phase 2 `FileMeta` view does not model it)
   and so cannot be re-emitted. The preamble is normalized to zeros and odd-length values are padded
   even — the output stays spec-clean but is not a byte-identical copy of a non-conformant input.
 
