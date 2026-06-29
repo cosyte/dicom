@@ -70,3 +70,12 @@ export {
   type ValueErrorCode,
   DicomValueError,
 } from "./dataset/helpers/errors.js";
+
+// === Phase 5 — spec-clean serializer surface (§5) ===
+
+export { serializeDicom } from "./serialize/serialize.js";
+export {
+  SERIALIZE_ERROR_CODES,
+  type SerializeErrorCode,
+  DicomSerializeError,
+} from "./serialize/errors.js";

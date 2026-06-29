@@ -10,11 +10,17 @@
 
 ## Status
 
-- **Phase 4 of 8 complete** (467 tests passing, 1 todo). Safety-critical domain helpers live:
-  `ds.patient` / `ds.study` / `ds.series` / `ds.image` typed fail-safe views over the §4 attributes,
-  Enhanced multi-frame functional-group resolution (`image.frame(i)`, Per-Frame-else-Shared), coded
-  triplets (`readCode`), and the value-layer `DicomValueError`. Builds on Phase 3 VR value decode
-  (all 34 VRs via `Element.value`) + the `Dataset`/`Item` navigation API.
+- **Phase 5 of 8 complete** (500 tests passing, 1 todo). Spec-clean Part 10 serializer live:
+  `serializeDicom(ds)` writes a `Dataset` back to a Part 10 `Buffer` (preamble + `DICM`, File Meta
+  always Explicit VR LE with computed group length, dataset body in the source transfer syntax — no
+  transcode — across all four v1 syntaxes), with even-length padding, short/long-form headers, retired
+  group-length omission, and byte-for-byte SQ / encapsulated-pixel-data passthrough; plus the
+  `DicomSerializeError` taxonomy. Known limitation: only the typed `FileMeta` fields round-trip.
+- **Phase 4 complete.** Safety-critical domain helpers: `ds.patient` / `ds.study` / `ds.series` /
+  `ds.image` typed fail-safe views over the §4 attributes, Enhanced multi-frame functional-group
+  resolution (`image.frame(i)`, Per-Frame-else-Shared), coded triplets (`readCode`), and the
+  value-layer `DicomValueError`. Builds on Phase 3 VR value decode (all 34 VRs via `Element.value`) +
+  the `Dataset`/`Item` navigation API.
 
 ## Tech Stack (the shared `@cosyte/*` standard)
 
