@@ -40,18 +40,28 @@ import { DicomParseError, buildSnippet, type FatalCode } from "./errors.js";
  * @internal
  */
 export function makeEmitter(ctx: ParseContext): (w: DicomParseWarning) => void {
+  const escalate = (w: DicomParseWarning): never => {
+    throw new DicomParseError(
+      // D-35 cast: the WarningCode union does not overlap FatalCode at the
+      // type level, but at runtime the strict-thrown error carries the
+      // warning code so consumers can narrow on err.code uniformly.
+      w.code as unknown as FatalCode,
+      w.message,
+      w.position.byteOffset,
+      buildSnippet(ctx.buffer, w.position.byteOffset),
+      w.position.contextPath,
+    );
+  };
   return (w) => {
-    if (ctx.strict) {
-      throw new DicomParseError(
-        // D-35 cast: the WarningCode union does not overlap FatalCode at the
-        // type level, but at runtime the strict-thrown error carries the
-        // warning code so consumers can narrow on err.code uniformly.
-        w.code as unknown as FatalCode,
-        w.message,
-        w.position.byteOffset,
-        buildSnippet(ctx.buffer, w.position.byteOffset),
-        w.position.contextPath,
-      );
+    // Global strict mode (D-35) escalates every Tier-2 code, overriding any
+    // profile posture.
+    if (ctx.strict) escalate(w);
+    // Profile posture (D-45): suppress drops a tolerated warning entirely;
+    // escalate promotes it to a thrown error. `defineProfile` guarantees a
+    // code is never in both sets, so the order between them is immaterial.
+    if (ctx.profile !== undefined) {
+      if (ctx.profile.suppressions.has(w.code)) return;
+      if (ctx.profile.escalations.has(w.code)) escalate(w);
     }
     ctx.warnings.push(w);
     if (ctx.onWarning !== undefined) {

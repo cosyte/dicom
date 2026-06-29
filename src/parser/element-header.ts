@@ -29,10 +29,12 @@ import type { DicomPosition, ParseContext } from "./types.js";
 import {
   implicitVRForPrivateTagWithoutVR,
   nonzeroReservedBytes,
+  privateCreatorUnknown,
   privateTagNoCreator,
   unsupportedCharset,
   type DicomParseWarning,
 } from "./warnings.js";
+import { resolvePrivateTag } from "../profiles/lookup.js";
 
 /** The `(0008,0005)` Specific Character Set tag. */
 const SPECIFIC_CHARACTER_SET_TAG: Tag = "00080005";
@@ -111,10 +113,16 @@ export const LONG_FORM_VRS: ReadonlySet<VR> = new Set<VR>([
  *      `(1010,xxxx)`) → use the family entry's first VR.
  *   4. Private tag (odd group):
  *        - `(gggg,0010..00FF)` Private Creator slot → VR=LO (PS3.5 §7.8).
- *        - Otherwise → fallback UN; emit `DICOM_PRIVATE_TAG_NO_CREATOR`
- *          (TOL-09) when no creator is registered for the element's
- *          block; ALWAYS emit `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR`
- *          (Phase 6 profile-supplied VR overrides will resolve this).
+ *        - No creator registered for the block → fallback UN; emit
+ *          `DICOM_PRIVATE_TAG_NO_CREATOR` (TOL-09) +
+ *          `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR`.
+ *        - Creator registered + active profile resolves the
+ *          `(group, creator, element-byte)` triple → vendor-documented VR,
+ *          no warning (Phase 6 / D-45).
+ *        - Creator registered but unresolved → fallback UN; emit
+ *          `DICOM_PRIVATE_CREATOR_UNKNOWN` when an active profile does not
+ *          recognize the creator, plus
+ *          `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR`.
  *   5. Unknown standard tag (not in dict, not a repeating-group family)
  *      → fallback UN silently — the standard explicitly allows this.
  *
@@ -139,9 +147,21 @@ export function resolveImplicitVR(
     const creator = resolvePrivateCreator(tag, ctx);
     if (creator === undefined) {
       emit(privateTagNoCreator(position, tag));
+      emit(implicitVRForPrivateTagWithoutVR(position, tag));
+      return "UN";
     }
-    // Phase 6 may override based on profile dictionary; Phase 2 always
-    // falls back UN here.
+    // Phase 6 (D-45): an active profile's private-dictionary overlay may
+    // resolve the VR from the live creator string. A hit returns the
+    // vendor-documented VR with no warning; otherwise we degrade to UN. When
+    // the profile does not recognize the creator at all, that degrade is
+    // flagged with DICOM_PRIVATE_CREATOR_UNKNOWN — never a wrong decode.
+    if (ctx.profile !== undefined) {
+      const def = resolvePrivateTag(ctx.profile, tag, creator);
+      if (def !== undefined) return def.vr;
+      if (!ctx.profile.privateDictionary.has(creator)) {
+        emit(privateCreatorUnknown(position, tag, creator));
+      }
+    }
     emit(implicitVRForPrivateTagWithoutVR(position, tag));
     return "UN";
   }

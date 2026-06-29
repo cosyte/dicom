@@ -6,6 +6,25 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Added
 
+- **Source/vendor profile system (Phase 6).** New `defineProfile()` factory builds an immutable,
+  composable `Profile` that a parse opts into via `parseDicom(buf, { profile })`. A profile bundles
+  three things that only ever _tighten or annotate_ a parse, never loosen it past the lenient default:
+  `escalate` (Tier-2 warning codes promoted to a thrown `DicomParseError`), `suppress` (codes silenced
+  as a documented benign quirk of the source), and `privateTags` (a private-creator-keyed overlay that
+  resolves the Implicit VR of vendor private data elements). Private resolution is keyed on the file's
+  **live** private-creator string and the canonical `"GGGGxxLL"` key (PS3.5 §7.8.1) — never a
+  hard-coded block number — so the same vendor schema resolves regardless of which block it landed in.
+  Profiles compose via `extends` (de-duplicated lineage, union of escalations/suppressions, child-wins
+  dictionary merge) and expose a deterministic `describe()` summary. Five built-ins ship under the
+  frozen `profiles` namespace: three vendor overlays (`ge`, `siemens`, `philips`, grounded in the
+  public GDCM / dcm4che / dcm2niix private dictionaries) and two posture presets (`strict` escalates
+  integrity-relevant warnings; `lenient` suppresses cosmetic, high-volume ones). A creator the active
+  profile does not recognize degrades to generic `UN` plus the new `DICOM_PRIVATE_CREATOR_UNKNOWN`
+  warning — never a wrong decode. Selecting a profile never changes a correct decode. New public
+  exports: `defineProfile`, `profiles`, `ProfileDefinitionError`, and the types `Profile`,
+  `PrivateTagDefinition`, `DefineProfileOptions`, `ProfilePrivateTags`; `ParseOptions` gains an
+  optional `profile` field. The reserved `DICOM_PRIVATE_CREATOR_UNKNOWN` code is now actively emitted
+  (no change to the `WARNING_CODES` registry surface).
 - **Spec-clean Part 10 serializer (Phase 5).** New `serializeDicom(ds)` writes a `Dataset` back to a
   DICOM Part 10 `Buffer` — the conservative half of Postel's Law. Emits the 128-byte zero preamble +
   `DICM`, a File Meta group (always Explicit VR LE) with a computed `(0002,0000)` group length and

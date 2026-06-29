@@ -14,7 +14,71 @@
  */
 
 import type { Buffer } from "node:buffer";
-import type { DicomParseWarning } from "./warnings.js";
+import type { VR } from "../dictionary/types.js";
+import type { DicomParseWarning, WarningCode } from "./warnings.js";
+
+/**
+ * One private-data attribute definition supplied by a {@link Profile}'s
+ * private-dictionary overlay. The `vr` resolves the Implicit-VR of a private
+ * data element whose on-wire encoding carries no VR; `keyword` / `name` carry
+ * the vendor-documented identity for tooling and docs.
+ *
+ * @example
+ * ```ts
+ * import type { PrivateTagDefinition } from "@cosyte/dicom";
+ * const def: PrivateTagDefinition = {
+ *   vr: "OB",
+ *   keyword: "CSAImageHeaderInfo",
+ *   name: "CSA Image Header Info",
+ * };
+ * ```
+ */
+export interface PrivateTagDefinition {
+  readonly vr: VR;
+  readonly keyword: string;
+  readonly name: string;
+}
+
+/**
+ * A source/vendor tolerance preset (Phase 6). A `Profile` bundles three
+ * things that only ever **tighten or annotate** a parse — never loosen it
+ * past the Postel's-Law default:
+ *
+ *  - `escalations` — Tier-2 warning codes promoted to a thrown
+ *    `DicomParseError` (a stricter posture for known-unsafe deviations).
+ *  - `suppressions` — Tier-2 warning codes silenced because they are a
+ *    documented, benign quirk of the named source (annotation, not loss).
+ *  - `privateDictionary` — a private-creator-keyed overlay resolving the
+ *    Implicit-VR of vendor private data elements via the file's **live**
+ *    private-creator string (never a hard-coded block number).
+ *
+ * Build one with `defineProfile()`; never hand-author the frozen shape.
+ * Profiles are immutable and composable via `extends`.
+ *
+ * @example
+ * ```ts
+ * import { parseDicom, profiles } from "@cosyte/dicom";
+ * const ds = parseDicom(buf, { profile: profiles.siemens });
+ * console.log(ds.fileMeta?.transferSyntaxUID);
+ * ```
+ */
+export interface Profile {
+  readonly name: string;
+  readonly lineage: readonly string[];
+  readonly description?: string;
+  readonly escalations: ReadonlySet<WarningCode>;
+  readonly suppressions: ReadonlySet<WarningCode>;
+  /**
+   * Creator string → canonical private-tag key (`"GGGGxxEE"`, e.g.
+   * `"0029xx10"`) → definition. The `xx` placeholder stands for the
+   * file-assigned private block byte, mirroring the published DICOM
+   * private-dictionary notation; resolution is therefore by creator string,
+   * never by a fixed block number.
+   */
+  readonly privateDictionary: ReadonlyMap<string, ReadonlyMap<string, PrivateTagDefinition>>;
+  /** Render a human-readable, deterministic one-line summary of the profile. */
+  readonly describe?: () => string;
+}
 
 /**
  * Positional context for a `DicomParseWarning` or `DicomParseError`.
@@ -115,6 +179,18 @@ export interface ParseOptions {
    * Per D-16 / MODEL-03. Omit to use the default.
    */
   readonly copyValues?: boolean;
+  /**
+   * Source/vendor tolerance preset (Phase 6, D-45). Applies the profile's
+   * `escalations` / `suppressions` to warning emission and its
+   * `privateDictionary` to Implicit-VR resolution of private data elements.
+   * A profile only tightens or annotates — it never makes the default
+   * lenient parse throw outside the four Tier-3 fatals, and a private
+   * creator the profile does not recognize degrades to generic UN handling
+   * plus a `DICOM_PRIVATE_CREATOR_UNKNOWN` warning, never a wrong decode.
+   *
+   * Omit (do not pass `undefined`) for the unprofiled default behaviour.
+   */
+  readonly profile?: Profile;
 }
 
 /**
@@ -157,10 +233,12 @@ export interface ParseContext {
    */
   currentCharset?: readonly string[];
   /**
-   * @remarks Reserved for Phase 6 (D-45) — never set in Phase 2; declared
-   * here so the shape is stable when Phase 6 wires profile threading.
+   * Active source/vendor {@link Profile} (Phase 6, D-45). Threaded from
+   * `ParseOptions.profile`. When absent the parse is unprofiled (the Phase 2
+   * baseline). Consulted by the emitter (escalations / suppressions) and by
+   * Implicit-VR private-tag resolution (private-dictionary overlay).
    */
-  readonly profile?: unknown;
+  readonly profile?: Profile;
   /**
    * When `true`, `Element.rawBytes` is `Buffer.from(slice)` (copy); when
    * `false` (default), `Buffer.subarray(slice)` (view). Per D-16.
