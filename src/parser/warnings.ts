@@ -424,6 +424,30 @@ export function privateCreatorUnknown(
   };
 }
 
+/**
+ * Build a `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED` warning (Phase 7). Emitted by
+ * `deidentify` when a dataset carries Pixel Data `(7FE0,0010)` and either
+ * `(0028,0301)` Burned In Annotation is absent or its value is not `"NO"` — the
+ * metadata-only de-identifier cannot inspect or clean pixels (that is deferred to
+ * `@cosyte/dicom-pixel`), so it warns rather than silently implying the image is
+ * clean (PS3.15 §E.3.1 / §E.3.2 are out of scope here). The message carries no
+ * pixel content — only the structural fact.
+ *
+ * @example
+ * ```ts
+ * import { burnedInAnnotationNotRemoved } from "@cosyte/dicom";
+ * const w = burnedInAnnotationNotRemoved({ byteOffset: 4096, fileMeta: false });
+ * ```
+ */
+export function burnedInAnnotationNotRemoved(position: DicomPosition): DicomParseWarning {
+  return {
+    code: WARNING_CODES.DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED,
+    message:
+      "Pixel Data is present and Burned In Annotation is not 'NO'; this metadata-only de-identifier cannot inspect or clean pixels. Recognizable text may remain burned into the image.",
+    position,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Phase 3 VR-decode-time factories (D-08 / D-42).
 //

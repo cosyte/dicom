@@ -89,3 +89,18 @@ export type {
   DefineProfileOptions,
   ProfilePrivateTags,
 } from "./profiles/index.js";
+
+// === Phase 7 — metadata de-identification surface (PS3.15 Annex E) ===
+
+export { deidentify, makeUidRemapper, DEFAULT_UID_ROOT } from "./deident/index.js";
+export { DEIDENTIFY_OPTIONS, DEIDENTIFY_ERROR_CODES, DeidentifyError } from "./deident/index.js";
+export type {
+  UidRemapper,
+  AppliedAction,
+  DeidentifiedAttribute,
+  DeidentifyErrorCode,
+  DeidentifyOption,
+  DeidentifyOptions,
+  DeidentifyReport,
+  DeidentifyResult,
+} from "./deident/index.js";

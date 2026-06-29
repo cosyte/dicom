@@ -10,7 +10,20 @@
 
 ## Status
 
-- **Phase 6 of 8 complete** (532 tests passing, 1 todo). Source/vendor profile system live:
+- **Phase 7 of 8 complete** (580 tests passing, 1 todo). Metadata-level de-identification live:
+  `deidentify(ds, options?)` applies the PS3.15 Annex E Basic Application Level Confidentiality Profile
+  plus the nine metadata-affecting Options, driven by the generated Table E.1-1 action map. Pure
+  function: input `Dataset` never mutated; returns a fresh de-identified `Dataset` + a value-free
+  `DeidentifyReport`. Conditional codes collapse to their most-protective leftmost branch (no IOD
+  Type-1 analysis — fail-safe toward more removal); `U`-coded UIDs get deterministic, content-derived
+  `2.25` replacements that stay referentially consistent across files; kept sequences are recursively
+  de-identified **and re-encoded** so nested PHI is gone from the serialized bytes. Private attributes
+  are removed by default (`RetainSafePrivate` + a `Profile` keeps only creator-recognized safe ones).
+  Pixel-level cleaning is out of scope (deferred to `@cosyte/dicom-pixel`): burned-in annotation is
+  warned (`DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED`), never silently passed. New exports: `deidentify`,
+  `makeUidRemapper`, `DEFAULT_UID_ROOT`, `DEIDENTIFY_OPTIONS`, `DEIDENTIFY_ERROR_CODES`,
+  `DeidentifyError` + the `Deidentify*` types.
+- **Phase 6 of 8 complete.** Source/vendor profile system live:
   `defineProfile()` + `parseDicom(buf, { profile })` opt into a composable, immutable `Profile`
   bundling warning `escalate` / `suppress` posture and a private-creator-keyed overlay that resolves
   the Implicit VR of vendor private data elements by the file's live creator string (canonical

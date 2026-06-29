@@ -141,6 +141,37 @@ const acmeStrict = defineProfile({
 });
 ```
 
+## De-identify
+
+Before sharing a file, strip the identifying metadata. `deidentify()` applies the PS3.15 Annex E
+**Basic Application Level Confidentiality Profile** — replacing, emptying, or removing every attribute
+the standard lists as identifying — and returns a fresh dataset plus a value-free report of what it did.
+
+```ts
+import { parseDicom, deidentify, serializeDicom } from "@cosyte/dicom";
+
+const { dataset, report } = deidentify(parseDicom(buf));
+const safe = serializeDicom(dataset); // safe to share
+
+console.log(report.attributes.length, "attributes acted on");
+console.log(report.warnings); // e.g. burned-in pixel annotation that this layer cannot clean
+```
+
+It is a pure function — your input dataset is never mutated. UIDs are remapped to deterministic `2.25`
+replacements that stay consistent across files, so a de-identified study still hangs together. Opt into
+any of the nine metadata-affecting Annex E Options to keep specific classes of attribute:
+
+```ts
+// Keep original UIDs and acquisition dates; clean (rather than drop) free-text descriptions.
+const { dataset } = deidentify(parseDicom(buf), {
+  retain: ["RetainUIDs", "RetainLongitudinalTemporal", "CleanDescriptors"],
+});
+```
+
+This is **metadata-level** de-identification. Pixel data is out of scope: when a file carries burned-in
+annotation that this layer cannot remove, you get a `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED` warning
+rather than a false sense of safety — pixel cleaning is deferred to `@cosyte/dicom-pixel`.
+
 ## Next
 
 - Read the **API reference** for every export, generated from source.
