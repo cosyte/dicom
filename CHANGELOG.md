@@ -4,6 +4,17 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ## [Unreleased]
 
+### Tests
+
+- **Enhanced multi-frame coverage (DICOM-COV).** Closed the Per-Frame-else-Shared branch gaps left by
+  the Phase 4 functional-group resolver (`functional-groups.ts`: ~53% → 100% branch): both optional
+  macros (Pixel Value Transformation `(0028,9145)`, Frame VOI LUT `(0028,9132)`), Pixel Measures
+  `spacingBetweenSlices`, shared-only resolution (no Per-Frame Functional Groups Sequence), the
+  lenient inner-attribute-absence paths (a macro item present but its attributes omitted ⇒ typed-absent,
+  never coerced), and all three `MISSING_REQUIRED_FUNCTIONAL_GROUP` throws (Pixel Measures / Plane
+  Position / Plane Orientation). Synthetic fixtures only; no public-surface change. Per-directory
+  coverage now sits genuinely ≥ 90 on every gated directory (global branches 93.2%).
+
 ### Added
 
 - **Safety-critical domain helpers (Phase 4).** New `Dataset` accessors `patient` / `study` /
