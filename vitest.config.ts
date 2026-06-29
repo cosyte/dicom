@@ -29,7 +29,7 @@ import { cosyteVitest } from "@cosyte/vitest-config";
  * a new parser branch must add a covering test or the gate goes red; that is the intended behavior.
  */
 export default cosyteVitest({
-  coverageDirs: ["parser", "dataset", "dictionary"],
+  coverageDirs: ["parser", "dataset", "dictionary", "serialize"],
   coverageThresholds: {
     lines: 90,
     branches: 90,
@@ -38,6 +38,7 @@ export default cosyteVitest({
     "src/parser/**": { lines: 90, branches: 90, functions: 90, statements: 90 },
     "src/dataset/**": { lines: 90, branches: 90, functions: 90, statements: 90 },
     "src/dictionary/**": { lines: 90, branches: 90, functions: 90, statements: 90 },
+    "src/serialize/**": { lines: 90, branches: 90, functions: 90, statements: 90 },
   },
   test: {
     globals: false,

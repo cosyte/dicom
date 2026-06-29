@@ -4,6 +4,33 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ## [Unreleased]
 
+### Added
+
+- **Spec-clean Part 10 serializer (Phase 5).** New `serializeDicom(ds)` writes a `Dataset` back to a
+  DICOM Part 10 `Buffer` — the conservative half of Postel's Law. Emits the 128-byte zero preamble +
+  `DICM`, a File Meta group (always Explicit VR LE) with a computed `(0002,0000)` group length and
+  conservative Type-1 defaults (File Meta Version `0x0001`, cosyte Implementation Class UID under the
+  `2.25` UUID arc), then the dataset body in the dataset's own transfer syntax — **no transcode** —
+  across all four v1 syntaxes (Implicit VR LE, Explicit VR LE/BE, Deflated Explicit VR LE). Scalar
+  values are padded to even length per PS3.5 §6.2 (`0x00` for `UI`/byte-stream VRs, `0x20` for text),
+  short vs long-form headers are chosen by VR per §7.1.2 (`SV`/`UV` long-form), retired `(gggg,0000)`
+  group-length elements are omitted per §7.2, and sequence + encapsulated-pixel-data spans pass
+  through byte-for-byte per §7.5 / §A.4. Pure function — the input `Dataset` is never mutated.
+- **Serializer error taxonomy.** New `DicomSerializeError` with codes `MISSING_TRANSFER_SYNTAX`
+  (no File Meta Transfer Syntax UID) and `UNSUPPORTED_TRANSFER_SYNTAX` (a UID outside the v1 set) —
+  separate from the parser's fatal codes and the value layer's `DicomValueError`. The message is
+  built only from the code + the offending Transfer Syntax UID (structural facts), never a decoded
+  value, so it is always safe to log. New public exports: `serializeDicom`, `DicomSerializeError`,
+  `SERIALIZE_ERROR_CODES`, `SerializeErrorCode`.
+
+### Known limitations
+
+- **File Meta round-trip is over the modeled surface, not byte-exact.** Only the typed `FileMeta`
+  fields round-trip; any other `(0002,xxxx)` element a source file carried (e.g. `(0002,0100)` Private
+  Information Creator UID) is dropped at *parse* time (the Phase 2 `FileMeta` view does not model it)
+  and so cannot be re-emitted. The preamble is normalized to zeros and odd-length values are padded
+  even — the output stays spec-clean but is not a byte-identical copy of a non-conformant input.
+
 ### Tests
 
 - **Enhanced multi-frame coverage (DICOM-COV).** Closed the Per-Frame-else-Shared branch gaps left by
