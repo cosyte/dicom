@@ -6,6 +6,31 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Added
 
+- **Metadata-level de-identification (Phase 7).** New `deidentify(ds, options?)` applies the PS3.15
+  Annex E **Basic Application Level Confidentiality Profile** plus the nine metadata-affecting Annex E
+  Options (`RetainUIDs`, `RetainLongitudinalTemporal`, `RetainPatientCharacteristics`,
+  `RetainDeviceIdentity`, `RetainInstitutionIdentity`, `RetainSafePrivate`, `CleanDescriptors`,
+  `CleanStructuredContent`, `CleanGraphics`), driven by the generated Table E.1-1 action map. It is a
+  **pure** function — the input `Dataset` is never mutated; it returns a fresh de-identified `Dataset`
+  and a value-free `DeidentifyReport` (tags, keywords, resolved action codes, the UID map, warnings).
+  Each attribute's action (`D` dummy, `Z` zero-length, `X` remove, `K` keep, `C` clean, `U` consistent
+  UID) is resolved from the Basic Profile, overridden by any active Option; conditional codes (`Z/D`,
+  `X/Z`, `X/D`, `X/Z/D`, `X/Z/U*`, `C/X`) collapse to their most-protective **leftmost** branch (the
+  tool does no IOD Type-1 conformance analysis, so it fails safe toward _more_ removal). `U`-coded UIDs
+  are remapped to deterministic, content-derived `2.25` replacements that stay referentially consistent
+  across files (`makeUidRemapper`, default root `DEFAULT_UID_ROOT`). Kept sequences are recursively
+  de-identified and **re-encoded** so nested PHI is removed from the serialized bytes, not just the
+  object model. Private attributes are removed by default; `RetainSafePrivate` + a `Profile` keeps only
+  the creator-recognized safe private elements. `(0012,0062)` Patient Identity Removed = `YES` and
+  `(0012,0063)` De-identification Method are written automatically. Pixel-level cleaning is out of scope
+  (deferred to `@cosyte/dicom-pixel`): when Pixel Data is present and not affirmatively marked free of
+  burned-in text, a `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED` warning is raised rather than silently
+  passing identifying pixels. New public exports: `deidentify`, `makeUidRemapper`, `DEFAULT_UID_ROOT`,
+  `DEIDENTIFY_OPTIONS`, `DEIDENTIFY_ERROR_CODES`, `DeidentifyError`, and the types `UidRemapper`,
+  `AppliedAction`, `DeidentifiedAttribute`, `DeidentifyErrorCode`, `DeidentifyOption`,
+  `DeidentifyOptions`, `DeidentifyReport`, `DeidentifyResult`. The reserved
+  `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED` warning code is now actively emitted (no change to the
+  `WARNING_CODES` registry surface).
 - **Source/vendor profile system (Phase 6).** New `defineProfile()` factory builds an immutable,
   composable `Profile` that a parse opts into via `parseDicom(buf, { profile })`. A profile bundles
   three things that only ever _tighten or annotate_ a parse, never loosen it past the lenient default:
