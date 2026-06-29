@@ -19,6 +19,11 @@ import type { Tag } from "../dictionary/types.js";
 import type { DicomParseWarning } from "../parser/warnings.js";
 import type { Element } from "./element.js";
 import type { FileMeta } from "./file-meta.js";
+import { buildImage } from "./helpers/image.js";
+import { buildPatient } from "./helpers/patient.js";
+import { buildSeries } from "./helpers/series.js";
+import { buildStudy } from "./helpers/study.js";
+import type { ImageView, PatientView, SeriesView, StudyView } from "./helpers/types.js";
 
 /**
  * Initialiser shape accepted by the `Dataset` (and `Item`) constructor.
@@ -64,6 +69,12 @@ export class Dataset {
    * @internal
    */
   protected readonly _elements: ReadonlyMap<Tag, Element>;
+
+  /** Memoised Phase 4 domain views (built once, on first access). */
+  private _patient?: PatientView;
+  private _study?: StudyView;
+  private _series?: SeriesView;
+  private _image?: ImageView;
 
   /**
    * Construct a new structural `Dataset`. Phase 2 freezes the warnings
@@ -138,5 +149,69 @@ export class Dataset {
   public getAll(tag: Tag): readonly Element[] {
     const el = this._elements.get(tag.toUpperCase());
     return el !== undefined ? [el] : [];
+  }
+
+  /**
+   * Patient-identity view (§4.1). Fail-safe typed-absent fields; `id` is
+   * **not** globally unique — match on the `{id, issuerOfId, ...}` tuple
+   * plus `otherIds`, never on a bare `(0010,0020)`. Memoised on first read.
+   *
+   * @example
+   * ```ts
+   * import { parseDicom } from "@cosyte/dicom";
+   * const p = parseDicom(buf).patient;
+   * p.name?.alphabetic.familyName; // structured PN, never flattened
+   * ```
+   */
+  public get patient(): PatientView {
+    return (this._patient ??= buildPatient(this));
+  }
+
+  /**
+   * Study-identity view (§4.1). `instanceUid` is the cross-system study
+   * key; `accessionNumber` ties it to the order. Memoised on first read.
+   *
+   * @example
+   * ```ts
+   * import { parseDicom } from "@cosyte/dicom";
+   * const s = parseDicom(buf).study;
+   * s.instanceUid; // "1.2.840.113619..."
+   * ```
+   */
+  public get study(): StudyView {
+    return (this._study ??= buildStudy(this));
+  }
+
+  /**
+   * Series-identity & co-registration view (§4.1, §4.3). A shared
+   * `frameOfReferenceUid` means images are spatially co-registered.
+   * Memoised on first read.
+   *
+   * @example
+   * ```ts
+   * import { parseDicom } from "@cosyte/dicom";
+   * const s = parseDicom(buf).series;
+   * s.modality; // "CT"
+   * ```
+   */
+  public get series(): SeriesView {
+    return (this._series ??= buildSeries(this));
+  }
+
+  /**
+   * Pixel-interpretation + geometry view (§4.2–§4.5). Surfaces exactly
+   * what a renderer needs without guessing: `rescaleSlope`/`signed`/
+   * `photometricInterpretation` stay absent rather than defaulted, and the
+   * three pixel-spacing tags are distinct. Memoised on first read.
+   *
+   * @example
+   * ```ts
+   * import { parseDicom } from "@cosyte/dicom";
+   * const img = parseDicom(buf).image;
+   * img.rescaleSlope; // undefined ⇒ MUST NOT assume 1
+   * ```
+   */
+  public get image(): ImageView {
+    return (this._image ??= buildImage(this));
   }
 }

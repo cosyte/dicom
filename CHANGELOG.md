@@ -6,6 +6,32 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Added
 
+- **Safety-critical domain helpers (Phase 4).** New `Dataset` accessors `patient` / `study` /
+  `series` / `image` return typed, fail-safe views over the DICOM §4 safety-critical attributes
+  (memoized on first access). `patient` surfaces the `{id, issuerOfId, issuerQualifiers}` identity
+  tuple plus Other Patient IDs (so a caller never matches on a bare, non-unique `(0010,0020)`) and
+  keeps `PN` structured; `study`/`series` surface the cross-system UIDs, accession number, modality
+  and Frame of Reference UID. `image` surfaces the pixel-interpretation + geometry metadata a
+  renderer needs — with the safety-critical omissions intact: `rescaleSlope` is **absent** (not `1`)
+  when the tag is absent, `signed` is absent (never guessed) unless `(0028,0103)` was present,
+  `photometricInterpretation` is never defaulted to `MONOCHROME2`, and the three pixel-spacing tags
+  (`(0028,0030)` / `(0018,1164)` / `(0018,2010)`) are distinct, never aliased.
+- **Enhanced multi-frame functional groups.** `image.frame(i)` resolves the per-frame macros
+  Per-Frame-else-Shared (PS3.3 §C.7.6.16): Pixel Measures, Plane Position, Plane Orientation, Pixel
+  Value Transformation, Frame VOI LUT. `image.isEnhancedMultiFrame` flags such objects.
+- **Value-layer error taxonomy.** New `DicomValueError` (codes `FRAME_INDEX_OUT_OF_RANGE`,
+  `MISSING_REQUIRED_FUNCTIONAL_GROUP`) — separate from the parser's four fatal codes. The helpers are
+  otherwise fail-safe (typed-absent for missing data) and throw only for a structural contract
+  violation; the error message carries only structural facts (indices, tag/macro names), never a
+  decoded PHI value.
+- **Coded terminology.** `readCode` reads the `Code Value`/`Coding Scheme Designator`/`Code Meaning`
+  triplet and resolves the canonical scheme OID via `codingSchemeOid` / `CODING_SCHEME_OIDS` for the
+  four standard designators (`DCM`/`SCT`/`UCUM`/`LN`); legacy SNOMED designators
+  (`SRT`/`SNM3`/`99SDM`) deliberately do **not** resolve to `SCT` (CP-730). Real World Value Mappings
+  bind slope/intercept atomically to their measurement-units code.
+- Public types: `PatientView`, `OtherPatientId`, `StudyView`, `SeriesView`, `ImageView`,
+  `CodedConcept`, `RealWorldValueMap`, `FrameFunctionalGroups`, `ValueErrorCode`, plus
+  `VALUE_ERROR_CODES` and the `readCode` / `codingSchemeOid` / `CODING_SCHEME_OIDS` helpers.
 - **VR value decode + dataset navigation (Phase 3).** `Element.value` now lazily decodes (and
   memoizes) an element's raw bytes into a typed, discriminated `DicomValue` covering all 34 VRs —
   numbers (`US/UL/SS/SL/FL/FD`), 64-bit `bigint`s (`SV/UV`), attribute tags (`AT`), person names
