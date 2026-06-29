@@ -10,7 +10,8 @@
 
 ## Status
 
-- **Phase 2 of 8 complete** (274/275 tests passing).
+- **Phase 3 of 8 complete** (431 tests passing, 1 todo). VR value decode (all 34 VRs via
+  `Element.value`) + `Dataset`/`Item` navigation API live.
 
 ## Tech Stack (the shared `@cosyte/*` standard)
 

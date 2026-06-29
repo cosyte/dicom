@@ -82,9 +82,23 @@ describe("BE_VR_STRIDE (D-23, D-24)", () => {
 });
 
 describe("LONG_FORM_VRS (D-22)", () => {
-  it("contains exactly the 10 long-form VRs", () => {
-    expect(LONG_FORM_VRS.size).toBe(10);
-    for (const vr of ["OB", "OW", "OF", "OD", "OL", "SQ", "UT", "UN", "UC", "UR"] as const) {
+  it("contains exactly the 13 long-form VRs (incl. OV/SV/UV per CP-2199)", () => {
+    expect(LONG_FORM_VRS.size).toBe(13);
+    for (const vr of [
+      "OB",
+      "OW",
+      "OF",
+      "OD",
+      "OL",
+      "OV",
+      "SQ",
+      "UT",
+      "UN",
+      "UC",
+      "UR",
+      "SV",
+      "UV",
+    ] as const) {
       expect(LONG_FORM_VRS.has(vr)).toBe(true);
     }
   });

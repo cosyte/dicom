@@ -29,13 +29,14 @@
  * @module
  */
 
-import { Buffer } from "node:buffer";
+import type { Buffer } from "node:buffer";
 
 import { Element } from "../dataset/element.js";
 import { joinTag } from "../dataset/tag.js";
 import type { Tag } from "../dictionary/types.js";
-import { ByteCursor } from "./byte-cursor.js";
+import { ByteCursor, copyValueBytes } from "./byte-cursor.js";
 import {
+  applySpecificCharacterSet,
   registerPrivateCreator,
   resolveImplicitVR,
   resolvePrivateCreator,
@@ -128,7 +129,7 @@ export function parseImplicitLE(
         const valueRawStart = headerStart;
         cursor.position = seq.endOffset;
         const rawBytes = ctx.copyValues
-          ? Buffer.from(buffer.subarray(valueRawStart, cursor.position))
+          ? copyValueBytes(buffer.subarray(valueRawStart, cursor.position))
           : buffer.subarray(valueRawStart, cursor.position);
         const privateCreator = resolvePrivateCreator(tag, ctx);
         elements.set(
@@ -140,6 +141,8 @@ export function parseImplicitLE(
             length: 0xffffffff,
             rawBytes,
             byteOffset: headerStart,
+            littleEndian: true,
+            items: seq.items,
             ...(privateCreator !== undefined ? { privateCreator } : {}),
           }),
         );
@@ -166,7 +169,7 @@ export function parseImplicitLE(
     const valueStart = cursor.position;
     const valueEnd = valueStart + length;
     const valueSlice = ctx.copyValues
-      ? Buffer.from(buffer.subarray(valueStart, valueEnd))
+      ? copyValueBytes(buffer.subarray(valueStart, valueEnd))
       : buffer.subarray(valueStart, valueEnd);
     cursor.position = valueEnd;
 
@@ -180,6 +183,9 @@ export function parseImplicitLE(
       registerPrivateCreator(tag, valueSlice, ctx);
     }
 
+    // (0008,0005) Specific Character Set governs subsequent text decode.
+    applySpecificCharacterSet(tag, valueSlice, ctx, emit, position);
+
     const privateCreator = resolvePrivateCreator(tag, ctx);
     elements.set(
       tag,
@@ -191,6 +197,8 @@ export function parseImplicitLE(
         length,
         rawBytes: valueSlice,
         byteOffset: headerStart,
+        littleEndian: true,
+        ...(ctx.currentCharset !== undefined ? { specificCharacterSet: ctx.currentCharset } : {}),
         ...(privateCreator !== undefined ? { privateCreator } : {}),
       }),
     );

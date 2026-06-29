@@ -31,3 +31,23 @@ export { WARNING_CODES, type WarningCode, type DicomParseWarning } from "./parse
 export { FATAL_CODES, type FatalCode, DicomParseError } from "./parser/errors.js";
 
 export type { DicomPosition, ParseOptions, OnWarningCallback } from "./parser/types.js";
+
+// === Phase 3 — VR value decode surface (D-42) ===
+
+export type {
+  DicomValue,
+  PersonName,
+  PersonNameGroup,
+  DicomDate,
+  DicomTime,
+  DicomDateTime,
+} from "./dataset/vr/types.js";
+export { decodeElementValue } from "./dataset/vr/decode.js";
+export {
+  parseSpecificCharacterSet,
+  isKnownCharsetTerm,
+  resolveDecoderLabel,
+  decodeText,
+} from "./dataset/vr/charset.js";
+export { parsePersonName } from "./dataset/vr/person-name.js";
+export { parseDate, parseTime, parseDateTime } from "./dataset/vr/datetime.js";

@@ -24,7 +24,21 @@ import { deflateRawSync } from "node:zlib";
 
 import type { Tag, VR } from "../../src/dictionary/types.js";
 
-const LONG_FORM_VRS = new Set<VR>(["OB", "OW", "OF", "OD", "OL", "SQ", "UT", "UN", "UC", "UR"]);
+const LONG_FORM_VRS = new Set<VR>([
+  "OB",
+  "OW",
+  "OF",
+  "OD",
+  "OL",
+  "OV",
+  "SQ",
+  "UT",
+  "UN",
+  "UC",
+  "UR",
+  "SV",
+  "UV",
+]);
 
 /**
  * Per-VR byte-stride for Explicit VR Big Endian byte-swap (mirror of the
