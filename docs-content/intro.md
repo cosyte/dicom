@@ -58,6 +58,42 @@ plausible-but-wrong one (a bad `DS`/`IS` token becomes `null`, never `NaN`→0).
 surface on the returned value's own `warnings`. String VRs honor the `(0008,0005)` Specific
 Character Set (UTF-8, ISO-8859, ISO-2022), threaded through nested sequence items.
 
+## Safety-critical views
+
+Pulling the right field out of raw tags is error-prone in exactly the places that matter most, so the
+`Dataset` exposes four typed, fail-safe views over the safety-critical attributes — `patient`,
+`study`, `series`, and `image`:
+
+```ts
+const p = ds.patient;
+p.id; // "MRN-42" — NOT globally unique on its own…
+p.issuerOfId; // …pair it with the issuer for cross-system matching
+p.name?.alphabetic.familyName; // structured PN, never flattened
+
+const img = ds.image;
+img.rescaleSlope; // undefined ⇒ MUST NOT assume 1
+img.signed; // undefined ⇒ signedness unknown, never guessed
+img.pixelSpacing; // patient-plane mm — distinct from imagerPixelSpacing
+```
+
+The omissions are deliberate and load-bearing: a missing value is **typed-absent** (`undefined`),
+never a substituted default — because the dangerous DICOM failure is the confident, wrong image.
+`rescaleSlope` is absent (not `1`) when the tag is absent; `signed` is absent unless Pixel
+Representation was present; `photometricInterpretation` is never defaulted to `MONOCHROME2`; and the
+three pixel-spacing tags are distinct fields, never aliased.
+
+For Enhanced multi-frame objects, `image.frame(i)` resolves each frame's functional-group macros
+Per-Frame-else-Shared (it throws a `DicomValueError` for an out-of-range frame, or a required
+geometry macro missing from both groups — the message carries only structural facts, never PHI):
+
+```ts
+if (img.isEnhancedMultiFrame) {
+  const f = img.frame(0);
+  f.planePosition?.imagePositionPatient; // this frame's [x, y, z]
+  f.pixelMeasures?.pixelSpacing; // this frame's [row, col] mm
+}
+```
+
 ## Lenient by default
 
 The parser is **lenient by default** — the quirks real scanners emit (odd-length values, missing

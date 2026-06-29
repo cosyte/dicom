@@ -10,8 +10,11 @@
 
 ## Status
 
-- **Phase 3 of 8 complete** (431 tests passing, 1 todo). VR value decode (all 34 VRs via
-  `Element.value`) + `Dataset`/`Item` navigation API live.
+- **Phase 4 of 8 complete** (467 tests passing, 1 todo). Safety-critical domain helpers live:
+  `ds.patient` / `ds.study` / `ds.series` / `ds.image` typed fail-safe views over the §4 attributes,
+  Enhanced multi-frame functional-group resolution (`image.frame(i)`, Per-Frame-else-Shared), coded
+  triplets (`readCode`), and the value-layer `DicomValueError`. Builds on Phase 3 VR value decode
+  (all 34 VRs via `Element.value`) + the `Dataset`/`Item` navigation API.
 
 ## Tech Stack (the shared `@cosyte/*` standard)
 

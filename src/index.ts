@@ -51,3 +51,22 @@ export {
 } from "./dataset/vr/charset.js";
 export { parsePersonName } from "./dataset/vr/person-name.js";
 export { parseDate, parseTime, parseDateTime } from "./dataset/vr/datetime.js";
+
+// === Phase 4 — safety-critical domain helper surface (§4) ===
+
+export type {
+  PatientView,
+  OtherPatientId,
+  StudyView,
+  SeriesView,
+  ImageView,
+  CodedConcept,
+  RealWorldValueMap,
+  FrameFunctionalGroups,
+} from "./dataset/helpers/types.js";
+export { readCode, codingSchemeOid, CODING_SCHEME_OIDS } from "./dataset/helpers/coded.js";
+export {
+  VALUE_ERROR_CODES,
+  type ValueErrorCode,
+  DicomValueError,
+} from "./dataset/helpers/errors.js";
