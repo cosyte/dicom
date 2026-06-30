@@ -351,6 +351,103 @@ describe("serializeDicom — immutability", () => {
   });
 });
 
+describe("serializeDicom — non-modeled File Meta round-trip (lossless)", () => {
+  // Long-form VRs for walking the serialized File Meta group on the wire.
+  const FM_LONG_FORM: ReadonlySet<string> = new Set([
+    "OB",
+    "OW",
+    "OF",
+    "OD",
+    "OL",
+    "OV",
+    "UN",
+    "UT",
+  ]);
+
+  /** Walk the serialized output's File Meta group, returning its tags in order. */
+  function fileMetaTagsInOrder(out: Buffer): string[] {
+    // Preamble(128)+DICM(4) = 132. (0002,0000): tag(4)+VR(2)+len(2)+value(4),
+    // so its 4-byte group-length value is at 140 and the body starts at 144.
+    const groupLength = out.readUInt32LE(140);
+    const end = 144 + groupLength;
+    const tags: string[] = [];
+    let pos = 144;
+    while (pos < end) {
+      const group = out.readUInt16LE(pos);
+      const element = out.readUInt16LE(pos + 2);
+      const tag = (
+        group.toString(16).padStart(4, "0") + element.toString(16).padStart(4, "0")
+      ).toUpperCase();
+      const vr = out.subarray(pos + 4, pos + 6).toString("ascii");
+      const long = FM_LONG_FORM.has(vr);
+      const len = long ? out.readUInt32LE(pos + 8) : out.readUInt16LE(pos + 6);
+      tags.push(tag);
+      pos += (long ? 12 : 8) + len;
+    }
+    return tags;
+  }
+
+  it("preserves non-modeled (0002,xxxx) elements and round-trips byte-exact", () => {
+    const priv = Buffer.from([0xde, 0xad, 0xbe, 0xef]);
+    const buf = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      mediaStorageSOPClassUID: "1.2.840.10008.5.1.4.1.1.7",
+      mediaStorageSOPInstanceUID: "1.2.3.4.5",
+      implementationClassUID: "1.2.276.0.7230010.3.0.3.6.4",
+      implementationVersionName: "OFFIS_DCMTK_364",
+      fileMetaExtraElements: [
+        { tag: "00020018", vr: "AE", value: Buffer.from("RECV_AE ", "ascii") }, // Receiving AE
+        { tag: "00020100", vr: "UI", value: Buffer.from("1.2.3.4.5.6\0", "ascii") }, // Priv Creator
+        { tag: "00020102", vr: "OB", value: priv }, // Private Information
+      ],
+      elements: [{ tag: "00080060", vr: "CS", value: Buffer.from("CT", "ascii") }],
+    });
+
+    const ds1 = parseDicom(buf);
+    expect((ds1.fileMeta?.extraElements ?? []).map((e) => e.tag)).toEqual([
+      "00020018",
+      "00020100",
+      "00020102",
+    ]);
+
+    const out = serializeDicom(ds1);
+    const ds2 = parseDicom(out);
+    // The non-modeled elements survive the write → read cycle.
+    expect((ds2.fileMeta?.extraElements ?? []).map((e) => e.tag)).toEqual([
+      "00020018",
+      "00020100",
+      "00020102",
+    ]);
+    // Byte-exact golden: re-serializing the re-parsed dataset reproduces the
+    // exact same bytes — the File Meta group round-trips byte-for-byte.
+    expect(serializeDicom(ds2).equals(out)).toBe(true);
+    // The private-information bytes survive intact in the output.
+    expect(out.includes(priv)).toBe(true);
+  });
+
+  it("emits the whole File Meta group in ascending tag order, extras interleaved", () => {
+    // extraElements deliberately supplied out of order to prove the writer sorts.
+    const ds = new Dataset({
+      fileMeta: {
+        transferSyntaxUID: TS_EXPLICIT_LE,
+        mediaStorageSOPClassUID: "1.2.840.10008.5.1.4.1.1.7",
+        extraElements: [
+          { tag: "00020102", vr: "OB", value: Buffer.from([0x01, 0x02]) },
+          { tag: "00020018", vr: "AE", value: Buffer.from("RX_AE_01", "ascii") },
+        ],
+      },
+      warnings: [],
+      elements: new Map(),
+    });
+
+    const out = serializeDicom(ds);
+    const tags = fileMetaTagsInOrder(out);
+    expect(tags).toEqual([...tags].sort()); // strictly ascending
+    // Both modeled and non-modeled tags are present.
+    expect(tags).toEqual(["00020001", "00020002", "00020010", "00020012", "00020018", "00020102"]);
+  });
+});
+
 describe("serializeDicom — error taxonomy", () => {
   it("throws MISSING_TRANSFER_SYNTAX when the dataset has no File Meta", () => {
     const ds = new Dataset({ warnings: [], elements: new Map() });

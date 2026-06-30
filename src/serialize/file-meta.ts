@@ -16,13 +16,12 @@
  * optional descriptive elements are emitted only when present (the writer never
  * invents a SOP identity).
  *
- * Known limitation (by design, until the parser retains them): only the typed
- * {@link FileMeta} fields round-trip. Any other `(0002,xxxx)` element a source
- * file carried — e.g. `(0002,0100)` Private Information Creator UID, `(0002,0102)`
- * Private Information, `(0002,0017)`/`(0002,0018)` Sending/Receiving AE — is
- * dropped at *parse* time (the Phase 2 `FileMeta` view does not model them), so
- * it cannot be re-emitted here. The output stays spec-clean; it is just not a
- * byte-exact copy of an exotic File Meta group.
+ * Lossless round-trip: non-modeled `(0002,xxxx)` elements a source file carried
+ * — e.g. `(0002,0017)`/`(0002,0018)` Sending/Receiving AE Title, `(0002,0100)`
+ * Private Information Creator UID, `(0002,0102)` Private Information — are
+ * retained by the parser on {@link FileMeta.extraElements} and merged back here,
+ * with the whole group emitted in ascending tag order. So an exotic File Meta
+ * group round-trips byte-for-byte, not just the typed fields.
  *
  * @module
  */
@@ -94,37 +93,46 @@ function latin1(value: string): Buffer {
  * @internal
  */
 export function encodeFileMeta(fileMeta: FileMeta): Buffer {
-  const body: Buffer[] = [];
-
-  body.push(
-    encodeMetaElement(
-      "00020001",
-      "OB",
-      fileMeta.fileMetaInformationVersion ?? DEFAULT_FILE_META_VERSION,
-    ),
-  );
+  // Collect every modeled element present, plus any preserved non-modeled
+  // elements, then emit in ascending tag order (PS3.5 §7.4) so the group is
+  // both spec-clean and a byte-exact round-trip of an exotic source group.
+  const entries: { tag: Tag; vr: VR; value: Buffer }[] = [
+    {
+      tag: "00020001",
+      vr: "OB",
+      value: fileMeta.fileMetaInformationVersion ?? DEFAULT_FILE_META_VERSION,
+    },
+    { tag: "00020010", vr: "UI", value: latin1(fileMeta.transferSyntaxUID) },
+    {
+      tag: "00020012",
+      vr: "UI",
+      value: latin1(fileMeta.implementationClassUID ?? COSYTE_IMPLEMENTATION_CLASS_UID),
+    },
+  ];
   if (fileMeta.mediaStorageSOPClassUID !== undefined) {
-    body.push(encodeMetaElement("00020002", "UI", latin1(fileMeta.mediaStorageSOPClassUID)));
+    entries.push({ tag: "00020002", vr: "UI", value: latin1(fileMeta.mediaStorageSOPClassUID) });
   }
   if (fileMeta.mediaStorageSOPInstanceUID !== undefined) {
-    body.push(encodeMetaElement("00020003", "UI", latin1(fileMeta.mediaStorageSOPInstanceUID)));
+    entries.push({ tag: "00020003", vr: "UI", value: latin1(fileMeta.mediaStorageSOPInstanceUID) });
   }
-  body.push(encodeMetaElement("00020010", "UI", latin1(fileMeta.transferSyntaxUID)));
-  body.push(
-    encodeMetaElement(
-      "00020012",
-      "UI",
-      latin1(fileMeta.implementationClassUID ?? COSYTE_IMPLEMENTATION_CLASS_UID),
-    ),
-  );
   if (fileMeta.implementationVersionName !== undefined) {
-    body.push(encodeMetaElement("00020013", "SH", latin1(fileMeta.implementationVersionName)));
+    entries.push({ tag: "00020013", vr: "SH", value: latin1(fileMeta.implementationVersionName) });
   }
   if (fileMeta.sourceApplicationEntityTitle !== undefined) {
-    body.push(encodeMetaElement("00020016", "AE", latin1(fileMeta.sourceApplicationEntityTitle)));
+    entries.push({
+      tag: "00020016",
+      vr: "AE",
+      value: latin1(fileMeta.sourceApplicationEntityTitle),
+    });
+  }
+  for (const extra of fileMeta.extraElements ?? []) {
+    entries.push({ tag: extra.tag.toUpperCase(), vr: extra.vr, value: extra.value });
   }
 
-  const bodyBytes = Buffer.concat(body);
+  // 8-char uppercase hex tags sort lexicographically in ascending numeric order.
+  entries.sort((a, b) => (a.tag < b.tag ? -1 : a.tag > b.tag ? 1 : 0));
+
+  const bodyBytes = Buffer.concat(entries.map((e) => encodeMetaElement(e.tag, e.vr, e.value)));
   const groupLengthValue = Buffer.alloc(4);
   groupLengthValue.writeUInt32LE(bodyBytes.length, 0);
   const groupLength = encodeMetaElement(TAG_GROUP_LENGTH, "UL", groupLengthValue);

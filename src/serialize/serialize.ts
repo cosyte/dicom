@@ -83,11 +83,12 @@ function encodeBody(ds: Dataset, encoding: BodyEncoding): Buffer {
  *
  * **Round-trip scope.** `parseDicom(out)` re-reads to a dataset that is equal
  * over the *modeled* surface (every dataset element + the typed
- * {@link "../dataset/file-meta".FileMeta} fields), not a byte-exact copy of the
- * original file: the 128-byte preamble is normalized to zeros, the File Meta
- * group is rebuilt from the typed view (non-modeled `(0002,xxxx)` elements are
- * not preserved — see {@link encodeFileMeta}), odd-length values are padded
- * even, and retired `(gggg,0000)` group lengths are dropped.
+ * {@link "../dataset/file-meta".FileMeta} fields plus any non-modeled File Meta
+ * elements preserved on `extraElements`), not a byte-exact copy of the original
+ * file: the 128-byte preamble is normalized to zeros, the File Meta group is
+ * rebuilt in ascending tag order (modeled fields + `extraElements` — see
+ * {@link encodeFileMeta}), odd-length values are padded even, and retired
+ * `(gggg,0000)` group lengths are dropped.
  *
  * @throws {@link DicomSerializeError} with code `MISSING_TRANSFER_SYNTAX` when
  *   the dataset has no File Meta Transfer Syntax UID, or

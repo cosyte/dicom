@@ -170,6 +170,12 @@ export interface BuildDicomOptions {
   readonly mediaStorageSOPInstanceUID?: string;
   readonly implementationClassUID?: string;
   readonly implementationVersionName?: string;
+  /**
+   * Non-modeled `(0002,xxxx)` File Meta elements (e.g. Sending/Receiving AE
+   * Title, Private Information), emitted Explicit VR LE inside the File Meta
+   * group and counted in `(0002,0000)`. Caller passes even-length values.
+   */
+  readonly fileMetaExtraElements?: readonly BuildDicomElement[];
   /** Trailing junk appended to the buffer after all dataset elements. */
   readonly trailingBytes?: Buffer;
 }
@@ -209,6 +215,9 @@ export function buildDicom(opts: BuildDicomOptions): Buffer {
     fileMetaElements.push(
       buildExplicitLeElement("00020013", "SH", padText(opts.implementationVersionName)),
     );
+  }
+  for (const extra of opts.fileMetaExtraElements ?? []) {
+    fileMetaElements.push(buildExplicitLeElement(extra.tag, extra.vr, extra.value));
   }
   const fileMetaBody = Buffer.concat(fileMetaElements);
 
