@@ -12,6 +12,28 @@
 
 import type { Buffer } from "node:buffer";
 
+import type { Tag, VR } from "../dictionary/types.js";
+
+/**
+ * A non-modeled `(0002,xxxx)` File Meta element, preserved verbatim so the
+ * serializer can re-emit an exotic File Meta group byte-for-byte.
+ *
+ * The typed {@link FileMeta} fields cover the common Type-1/Type-3 elements;
+ * anything else a source file carried — e.g. `(0002,0017)`/`(0002,0018)`
+ * Sending/Receiving AE Title, `(0002,0100)` Private Information Creator UID,
+ * `(0002,0102)` Private Information — is captured here as raw bytes (the
+ * on-wire value, even-length per PS3.5 §6.2) rather than dropped. `value` is a
+ * defensive copy, so the view never aliases the parsed input buffer.
+ */
+export interface FileMetaRawElement {
+  /** 8-char uppercase hex tag, e.g. `"00020100"`. */
+  readonly tag: Tag;
+  /** The element's Value Representation as read under Explicit VR LE. */
+  readonly vr: VR;
+  /** The raw on-wire value bytes (even-length), copied out of the input. */
+  readonly value: Buffer;
+}
+
 /**
  * The Part-10 File Meta Information group, projected as a typed view
  * over `(0002,xxxx)` elements parsed during the File Meta pre-pass.
@@ -39,4 +61,10 @@ export interface FileMeta {
   readonly implementationClassUID?: string;
   readonly implementationVersionName?: string;
   readonly sourceApplicationEntityTitle?: string;
+  /**
+   * Any `(0002,xxxx)` elements the source carried that the typed fields above
+   * do not model, preserved in tag order so a round-trip re-emits the File Meta
+   * group byte-for-byte. Omitted when the group held only modeled elements.
+   */
+  readonly extraElements?: readonly FileMetaRawElement[];
 }

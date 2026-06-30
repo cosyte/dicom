@@ -67,6 +67,60 @@ describe("parseFileMeta — happy path", () => {
   });
 });
 
+describe("parseFileMeta — non-modeled element preservation (lossless round-trip)", () => {
+  it("preserves non-modeled (0002,xxxx) elements verbatim on extraElements", () => {
+    const buf = buildDicom({
+      transferSyntax: "1.2.840.10008.1.2.1",
+      elements: [],
+      fileMetaExtraElements: [
+        // (0002,0017) Sending AE Title (AE, short form) — even-length value.
+        { tag: "00020017", vr: "AE", value: Buffer.from("SEND_AE ", "ascii") },
+        // (0002,0102) Private Information (OB, long form) — even-length value.
+        { tag: "00020102", vr: "OB", value: Buffer.from([0xde, 0xad, 0xbe, 0xef]) },
+      ],
+    });
+    const { ctx } = ctxFor(buf);
+    const { datasetStart } = parsePart10Header(buf, ctx, emitFor(ctx));
+    const { fileMeta } = parseFileMeta(buf, datasetStart, ctx, emitFor(ctx));
+
+    const extras = fileMeta.extraElements ?? [];
+    expect(extras.map((e) => e.tag)).toEqual(["00020017", "00020102"]);
+    const ae = extras.find((e) => e.tag === "00020017");
+    expect(ae?.vr).toBe("AE");
+    expect(ae?.value.toString("ascii")).toBe("SEND_AE ");
+    const priv = extras.find((e) => e.tag === "00020102");
+    expect(priv?.vr).toBe("OB");
+    expect(priv?.value.equals(Buffer.from([0xde, 0xad, 0xbe, 0xef]))).toBe(true);
+    expect(ctx.warnings).toHaveLength(0);
+  });
+
+  it("omits extraElements when the group holds only modeled elements", () => {
+    const buf = buildDicom({ transferSyntax: "1.2.840.10008.1.2.1", elements: [] });
+    const { ctx } = ctxFor(buf);
+    const { datasetStart } = parsePart10Header(buf, ctx, emitFor(ctx));
+    const { fileMeta } = parseFileMeta(buf, datasetStart, ctx, emitFor(ctx));
+    expect(fileMeta.extraElements).toBeUndefined();
+  });
+
+  it("copies extra values so the view never aliases the input buffer", () => {
+    const buf = buildDicom({
+      transferSyntax: "1.2.840.10008.1.2.1",
+      elements: [],
+      fileMetaExtraElements: [
+        { tag: "00020100", vr: "UI", value: Buffer.from("1.2.3.4\0", "ascii") },
+      ],
+    });
+    const { ctx } = ctxFor(buf);
+    const { datasetStart } = parsePart10Header(buf, ctx, emitFor(ctx));
+    const { fileMeta } = parseFileMeta(buf, datasetStart, ctx, emitFor(ctx));
+    const stored = fileMeta.extraElements?.[0]?.value;
+    expect(stored).toBeDefined();
+    // Mutating the source buffer must not change the preserved value.
+    buf.fill(0xff);
+    expect((stored as Buffer).toString("ascii")).toBe("1.2.3.4\0");
+  });
+});
+
 describe("parseFileMeta — D-18 group-length handling", () => {
   it("emits DICOM_FILE_META_GROUP_LENGTH_MISSING when (0002,0000) is absent", () => {
     const buf = buildDicom({

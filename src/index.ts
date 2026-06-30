@@ -24,7 +24,7 @@ export { Dataset } from "./dataset/dataset.js";
 export { Element } from "./dataset/element.js";
 export { Sequence } from "./dataset/sequence.js";
 export { Item } from "./dataset/item.js";
-export type { FileMeta } from "./dataset/file-meta.js";
+export type { FileMeta, FileMetaRawElement } from "./dataset/file-meta.js";
 
 export { WARNING_CODES, type WarningCode, type DicomParseWarning } from "./parser/warnings.js";
 

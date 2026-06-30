@@ -43,7 +43,7 @@ That's the pitch: no config, no schema upload, no spec lookup. The parser accept
 - **Real-world tolerance, Postel's Law** — a lenient reader emits 24 stable warning codes for what it tolerated; only 4 truly-structural conditions are fatal. The serializer always writes spec-clean Part 10.
 - **Source/vendor profile system** — `defineProfile()` + 5 built-ins (`ge`, `siemens`, `philips`, `strict`, `lenient`) that only ever _tighten or annotate_ a parse, resolving vendor private tags by the file's live Private Creator string — never a wrong decode.
 - **Metadata-level de-identification** — `deidentify()` applies the PS3.15 Annex E Basic Profile + the nine metadata Options, returning a fresh dataset and a value-free audit report.
-- **Spec-clean serializer** — `serializeDicom(ds)` round-trips a dataset back to Part 10 bytes in its source transfer syntax (no transcode), with correct File Meta group length, even-length padding, and byte-exact sequence passthrough.
+- **Spec-clean serializer** — `serializeDicom(ds)` round-trips a dataset back to Part 10 bytes in its source transfer syntax (no transcode), with correct File Meta group length, even-length padding, byte-exact sequence passthrough, and lossless File Meta — non-modeled `(0002,xxxx)` elements are preserved and re-emitted in tag order.
 - **Strict TypeScript, dual ESM + CJS, Node ≥ 22** — `noUncheckedIndexedAccess`, no `any`, JSDoc + `@example` on every public export feeding your editor's IntelliSense. Zero runtime dependencies today.
 
 ---
@@ -241,7 +241,7 @@ const ds = parseDicom(buf);
 const out = serializeDicom(ds); // spec-clean Part 10, same transfer syntax — no transcode
 ```
 
-The serializer is the conservative half of Postel's Law: it rebuilds the File Meta group with a correct `(0002,0000)` length, pads values to even length, and re-emits sequences and encapsulated pixel data byte-for-byte.
+The serializer is the conservative half of Postel's Law: it rebuilds the File Meta group with a correct `(0002,0000)` length, pads values to even length, and re-emits sequences and encapsulated pixel data byte-for-byte. The File Meta group round-trips losslessly — non-modeled `(0002,xxxx)` elements (Sending/Receiving AE Title, Private Information, etc.) are preserved on parse and re-emitted in ascending tag order.
 
 ---
 
@@ -351,7 +351,6 @@ Thrown by `serializeDicom` for `MISSING_TRANSFER_SYNTAX` (the dataset names no t
 - **Networking & web.** No DIMSE (C-STORE/FIND/MOVE, MWL, MPPS); no DICOMweb (QIDO/WADO/STOW). → `@cosyte/dicom-net`, `@cosyte/dicomweb`.
 - **Transcoding.** No transfer-syntax conversion. The serializer re-emits in the dataset's source syntax only.
 - **Terminology resolution.** Coded values are surfaced (designator + canonical source) but not validated against SNOMED/LOINC/etc.
-- **Exotic File Meta round-trip.** Only the typed `FileMeta` fields round-trip; a non-modeled `(0002,xxxx)` element is dropped at parse time, so output is spec-clean but not byte-exact for an unusual File Meta group.
 
 Supported transfer syntaxes (structure for all; **pixels never decoded**): Implicit VR LE `1.2.840.10008.1.2`, Explicit VR LE `…1.2.1`, Deflated Explicit VR LE `…1.2.1.99`, Explicit VR BE `…1.2.2` (retired, legacy-only), and any compressed syntax at the structural level (fragments preserved).
 

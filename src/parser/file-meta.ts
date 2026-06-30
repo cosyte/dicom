@@ -16,9 +16,9 @@
  * @module
  */
 
-import type { Buffer } from "node:buffer";
+import { Buffer } from "node:buffer";
 
-import type { FileMeta } from "../dataset/file-meta.js";
+import type { FileMeta, FileMetaRawElement } from "../dataset/file-meta.js";
 import type { Tag, VR } from "../dictionary/types.js";
 import { ByteCursor } from "./byte-cursor.js";
 import { LONG_FORM_VRS } from "./element-header.js";
@@ -26,6 +26,22 @@ import { buildSnippet, DicomParseError, FATAL_CODES } from "./errors.js";
 import type { ParseContext } from "./types.js";
 import type { DicomParseWarning } from "./warnings.js";
 import { fileMetaGroupLengthMismatch, fileMetaGroupLengthMissing } from "./warnings.js";
+
+/**
+ * The `(0002,xxxx)` tags projected into typed {@link FileMeta} fields, plus the
+ * group-length `(0002,0000)` (recomputed on write). Every other File Meta tag is
+ * preserved as a {@link FileMetaRawElement} for byte-exact round-trip.
+ */
+const MODELED_FM_TAGS: ReadonlySet<Tag> = new Set<Tag>([
+  "00020000",
+  "00020001",
+  "00020002",
+  "00020003",
+  "00020010",
+  "00020012",
+  "00020013",
+  "00020016",
+]);
 
 interface FmRawElement {
   readonly tag: Tag;
@@ -169,6 +185,14 @@ export function parseFileMeta(
     );
   }
 
+  // Any (0002,xxxx) element not projected into a typed field above is preserved
+  // verbatim so the serializer can re-emit the group byte-for-byte (LOSSLESS
+  // File Meta round-trip). The group-length (00020000) is recomputed on write,
+  // so it is never carried here.
+  const extraElements: FileMetaRawElement[] = fmElements
+    .filter((e) => !MODELED_FM_TAGS.has(e.tag))
+    .map((e) => Object.freeze({ tag: e.tag, vr: e.vr, value: Buffer.from(e.value) }));
+
   const fileMeta: FileMeta = {
     transferSyntaxUID: trimUI(tsElement.value),
     ...projectUI(fmElements, "00020002", "mediaStorageSOPClassUID"),
@@ -177,6 +201,7 @@ export function parseFileMeta(
     ...projectUI(fmElements, "00020012", "implementationClassUID"),
     ...projectText(fmElements, "00020013", "implementationVersionName"),
     ...projectText(fmElements, "00020016", "sourceApplicationEntityTitle"),
+    ...(extraElements.length > 0 ? { extraElements: Object.freeze(extraElements) } : {}),
   };
 
   return { fileMeta, fileMetaEnd: cursor.position };
