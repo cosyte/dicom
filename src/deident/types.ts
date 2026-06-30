@@ -23,7 +23,15 @@ import type { DicomParseWarning } from "../parser/warnings.js";
  */
 export type DeidentifyOption = Exclude<AnnexEOption, "CleanPixelData" | "CleanRecognizableVisual">;
 
-/** The nine metadata option-set names, frozen for runtime validation. */
+/**
+ * The nine metadata option-set names, frozen for runtime validation.
+ *
+ * @example
+ * ```ts
+ * import { DEIDENTIFY_OPTIONS } from "@cosyte/dicom";
+ * DEIDENTIFY_OPTIONS.includes("RetainUIDs"); // true
+ * ```
+ */
 export const DEIDENTIFY_OPTIONS: readonly DeidentifyOption[] = Object.freeze([
   "CleanGraphics",
   "CleanStructuredContent",
@@ -48,6 +56,13 @@ export const DEIDENTIFY_OPTIONS: readonly DeidentifyOption[] = Object.freeze([
  *   cannot be synthesised at the metadata layer (`C`; see known limitations).
  * - `kept` — retained, either by an active Retain option or because the SQ was
  *   kept and its items cleaned recursively.
+ *
+ * @example
+ * ```ts
+ * import { deidentify, parseDicom, type AppliedAction } from "@cosyte/dicom";
+ * const { report } = deidentify(parseDicom(buf));
+ * const removed = report.attributes.filter((a) => a.applied === ("removed" satisfies AppliedAction));
+ * ```
  */
 export type AppliedAction = "removed" | "emptied" | "dummied" | "uid-remapped" | "cleaned" | "kept";
 
@@ -55,6 +70,15 @@ export type AppliedAction = "removed" | "emptied" | "dummied" | "uid-remapped" |
  * One audited attribute outcome. Carries only structural facts — tag, keyword,
  * the resolved Annex E action code, and the SQ context path — **never** a
  * decoded value, so a report is always safe to log.
+ *
+ * @example
+ * ```ts
+ * import { deidentify, parseDicom, type DeidentifiedAttribute } from "@cosyte/dicom";
+ * const { report } = deidentify(parseDicom(buf));
+ * report.attributes.forEach((a: DeidentifiedAttribute) => {
+ *   console.log(a.keyword, a.action, a.applied); // structural facts only — safe to log
+ * });
+ * ```
  */
 export interface DeidentifiedAttribute {
   readonly tag: Tag;
@@ -70,6 +94,14 @@ export interface DeidentifiedAttribute {
  * The audit trail returned alongside the de-identified dataset. Contains no
  * decoded values — only tags, keywords, action codes, and the UID map (whose
  * keys/values are UIDs, not patient data).
+ *
+ * @example
+ * ```ts
+ * import { deidentify, parseDicom, type DeidentifyReport } from "@cosyte/dicom";
+ * const { report }: { report: DeidentifyReport } = deidentify(parseDicom(buf));
+ * console.log(report.attributes.length, "attributes acted on");
+ * console.log(report.warnings.map((w) => w.code)); // e.g. burned-in annotation
+ * ```
  */
 export interface DeidentifyReport {
   /** Per-attribute outcomes for every attribute Annex E acted on. */
@@ -87,6 +119,13 @@ export interface DeidentifyReport {
 /**
  * Options controlling a de-identification run. All optional — the default is
  * the Basic Application Level Confidentiality Profile with no Retain options.
+ *
+ * @example
+ * ```ts
+ * import { deidentify, parseDicom, type DeidentifyOptions } from "@cosyte/dicom";
+ * const opts: DeidentifyOptions = { retain: ["RetainLongitudinalTemporal", "CleanDescriptors"] };
+ * const { dataset } = deidentify(parseDicom(buf), opts);
+ * ```
  */
 export interface DeidentifyOptions {
   /** Annex E option sets to activate (Retain* / Clean*). Default: none. */
@@ -113,18 +152,45 @@ export interface DeidentifyOptions {
   readonly deidentificationMethod?: string;
 }
 
-/** The result of {@link deidentify}: a new dataset plus its audit report. */
+/**
+ * The result of {@link deidentify}: a new dataset plus its audit report.
+ *
+ * @example
+ * ```ts
+ * import { deidentify, parseDicom, serializeDicom, type DeidentifyResult } from "@cosyte/dicom";
+ * const { dataset, report }: DeidentifyResult<ReturnType<typeof parseDicom>> = deidentify(parseDicom(buf));
+ * const safe = serializeDicom(dataset); // input dataset is never mutated
+ * void report;
+ * ```
+ */
 export interface DeidentifyResult<TDataset> {
   readonly dataset: TDataset;
   readonly report: DeidentifyReport;
 }
 
-/** Stable codes for {@link DeidentifyError}. */
+/**
+ * Stable codes for {@link DeidentifyError}.
+ *
+ * @example
+ * ```ts
+ * import { DEIDENTIFY_ERROR_CODES } from "@cosyte/dicom";
+ * DEIDENTIFY_ERROR_CODES.INVALID_OPTIONS; // "INVALID_OPTIONS"
+ * ```
+ */
 export const DEIDENTIFY_ERROR_CODES = Object.freeze({
   INVALID_OPTIONS: "INVALID_OPTIONS",
 } as const);
 
-/** One of the {@link DEIDENTIFY_ERROR_CODES} values. */
+/**
+ * One of the {@link DEIDENTIFY_ERROR_CODES} values.
+ *
+ * @example
+ * ```ts
+ * import { DeidentifyError, type DeidentifyErrorCode } from "@cosyte/dicom";
+ * const code: DeidentifyErrorCode = "INVALID_OPTIONS";
+ * throw new DeidentifyError("unknown retain option", code);
+ * ```
+ */
 export type DeidentifyErrorCode =
   (typeof DEIDENTIFY_ERROR_CODES)[keyof typeof DEIDENTIFY_ERROR_CODES];
 

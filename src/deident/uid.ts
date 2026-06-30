@@ -21,13 +21,32 @@ import { createHash } from "node:crypto";
 
 import { DeidentifyError } from "./types.js";
 
-/** DICOM `2.25` UUID-derived root (PS3.5 §B.2) — no registration required. */
+/**
+ * DICOM `2.25` UUID-derived root (PS3.5 §B.2) — no registration required.
+ *
+ * @example
+ * ```ts
+ * import { makeUidRemapper, DEFAULT_UID_ROOT } from "@cosyte/dicom";
+ * const remap = makeUidRemapper(DEFAULT_UID_ROOT);
+ * remap.map("1.2.840.113619.2.55.3").startsWith("2.25."); // true
+ * ```
+ */
 export const DEFAULT_UID_ROOT = "2.25";
 
 const ROOT_RE = /^[0-9]+(\.[0-9]+)*$/;
 const MAX_UID_LENGTH = 64;
 
-/** A UID remapper: a stable `map(src)` plus the backing cache it fills. */
+/**
+ * A UID remapper: a stable `map(src)` plus the backing cache it fills.
+ *
+ * @example
+ * ```ts
+ * import { makeUidRemapper, type UidRemapper } from "@cosyte/dicom";
+ * const remap: UidRemapper = makeUidRemapper();
+ * const replaced = remap.map("1.2.840.10008.5.1.4.1.1.2");
+ * remap.cache.get("1.2.840.10008.5.1.4.1.1.2") === replaced; // true
+ * ```
+ */
 export interface UidRemapper {
   /** Map one source UID to its deterministic replacement (cached). */
   readonly map: (sourceUid: string) => string;
