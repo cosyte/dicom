@@ -4,6 +4,22 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ## [Unreleased]
 
+### Security
+
+- **Dev-dependency advisory remediation (no runtime impact — the published
+  artifact is unchanged).** Added scoped `pnpm.overrides` pinning two
+  transitive **dev/build-time** packages to their patched releases: `esbuild`
+  (`>=0.27.3 <0.28.1` → `0.28.1`; GHSA dev-server path-traversal — not
+  reachable here: the library builds via `tsup`/`vitest` and never runs
+  `esbuild serve`) and the `@changesets/parse` copy of `js-yaml`
+  (`>=4.0.0 <4.2.0` → `4.2.0`; GHSA-h67p-54hq-rp68 merge-key DoS). The
+  `js-yaml@3.14.2` pulled by `read-yaml-file@1.1.0` (via
+  `@manypkg/get-packages` → `@changesets/cli`) is **intentionally left**: it
+  calls `yaml.safeLoad`, removed/throwing in js-yaml 4, so it cannot be
+  force-upgraded without breaking the release tooling, and it only parses
+  trusted local repo YAML at release time. This is the shared canonical
+  override block, enforced suite-wide by the `@cosyte/config` drift check.
+
 ### Added
 
 - **Documentation completeness (Phase 8).** Rewrote `README.md` into a full developer guide — quickstart,
