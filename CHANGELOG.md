@@ -6,6 +6,15 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Added
 
+- **Documentation completeness (Phase 8).** Rewrote `README.md` into a full developer guide — quickstart,
+  feature tour, a "DICOM in 90 seconds" primer, the two access patterns, an 80/20 **cookbook** (index a
+  folder, build routing keys, read pixel-interpretation metadata safely, de-identify, bridge to FHIR
+  `ImagingStudy` / HL7 v2, round-trip serialize), the four-tier tolerance model, the warning/fatal code
+  taxonomy, typed-error handling, and an explicit known-limitations / non-goals section. Every public
+  export now carries a JSDoc `@example`. Extended the dual ESM/CJS smoke harnesses to exercise the full
+  Phase 1–7 published surface so the documented entrypoints are guaranteed importable from both module
+  systems. Also corrected an `intro.md` snippet that referenced a nonexistent `ds.pixelData` getter (the
+  real accessor is `ds.get("PixelData")?.value`). Docs-only — no runtime API change.
 - **Metadata-level de-identification (Phase 7).** New `deidentify(ds, options?)` applies the PS3.15
   Annex E **Basic Application Level Confidentiality Profile** plus the nine metadata-affecting Annex E
   Options (`RetainUIDs`, `RetainLongitudinalTemporal`, `RetainPatientCharacteristics`,

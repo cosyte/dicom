@@ -32,7 +32,7 @@ const ds = parseDicom(await readFile("study.dcm"));
 ds.get("PatientName"); // "Doe^Jane"
 ds.get("(0010,0010)"); // same element, by tag
 ds.get("StudyDate"); // "20240115"
-ds.pixelData; // raw Buffer — not decoded
+ds.get("PixelData")?.value; // { kind: "binary", bytes } — raw, never decoded
 ds.warnings; // stable, byte-offset tolerance warnings
 ```
 
