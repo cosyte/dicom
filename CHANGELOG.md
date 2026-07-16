@@ -6,6 +6,12 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Fixed
 
+- **`private: true` removed — `@cosyte/dicom` can publish.** The flag dated to the very first
+  scaffold commit and was never explained; `changeset publish` silently skips a private package, so
+  this repo was the one parser that could not reach npm even once its pipeline worked. It also
+  contradicted the `publishConfig: { access: "public" }` in the same file. Removed as part of the
+  coordinated public launch (`PUB-FLIP`).
+
 - **The release can actually bump the version.** `package.json` had no `version` script, so the
   shared pipeline's `pnpm run version` failed with `Command "version" not found` and the release
   aborted before opening a "Version Packages" PR. Adds `scripts/sync-version.mjs` (the `hl7`

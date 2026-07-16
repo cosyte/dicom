@@ -22,7 +22,6 @@
   },
   "license": "MIT",
   "author": "Cosyte <hello@cosyte.com> (https://cosyte.com)",
-  "private": true,
   "type": "module",
   "engines": {
     "node": ">=22.0.0"
