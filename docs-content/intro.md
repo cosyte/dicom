@@ -25,18 +25,23 @@ npm install @cosyte/dicom
 
 ```ts
 import { readFile } from "node:fs/promises";
-import { parseDicom } from "@cosyte/dicom";
+import { parseDicom, Dictionary } from "@cosyte/dicom";
 
 const ds = parseDicom(await readFile("study.dcm"));
 
-ds.get("PatientName"); // "Doe^Jane"
-ds.get("(0010,0010)"); // same element, by tag
-ds.get("StudyDate"); // "20240115"
-ds.get("PixelData")?.value; // { kind: "binary", bytes } — raw, never decoded
+ds.get("00100010")?.value; // Patient's Name — a typed PersonName value
+ds.get("00080020")?.value; // Study Date — a typed DicomDate value
+ds.get("7FE00010")?.value; // Pixel Data — { kind: "binary", bytes } — raw, never decoded
 ds.warnings; // stable, byte-offset tolerance warnings
+
+// Prefer keywords? Resolve one to its tag through the dictionary:
+ds.get(Dictionary.byKeyword("PatientName")?.tag ?? "");
 ```
 
-Elements are reachable by keyword or by `(group,element)` tag through the same `get` path.
+Elements are keyed by their 8-character `(group,element)` **tag** (`"00100010"`), and `get` /
+`has` take that tag form. A keyword like `"PatientName"` is resolved to its tag through
+`Dictionary.byKeyword` — `get` itself does not take keywords. The safety-critical fields have an
+even shorter path: the typed `patient` / `study` / `series` / `image` views below.
 
 ## Typed values
 
@@ -46,10 +51,10 @@ attribute tags, person names (3-group / 5-component), strings, free text, numeri
 (`DS`/`IS`), temporal values (`DA`/`TM`/`DT`), sequences, and raw `binary` for bulk data.
 
 ```ts
-const rows = ds.get("Rows")?.value; // US
+const rows = ds.get("00280010")?.value; // Rows (US)
 if (rows?.kind === "numbers") rows.values[0]; // 512
 
-const name = ds.get("PatientName")?.value; // PN
+const name = ds.get("00100010")?.value; // Patient's Name (PN)
 if (name?.kind === "personName") name.values[0]?.alphabetic.givenName; // "Jane"
 ```
 

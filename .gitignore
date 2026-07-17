@@ -10,6 +10,9 @@ dist/
 coverage/
 .vitest-cache/
 
+# docSnippetSuite() temp modules (cleaned by the suite; ignored in case a run is interrupted)
+.cosyte-doc-snippets/
+
 # Environment
 .env
 .env.*
