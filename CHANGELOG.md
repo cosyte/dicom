@@ -4,7 +4,32 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ## [Unreleased]
 
+### Added
+
+- **`docs-content/` now covers the full canonical Diátaxis spine** (`DOCS-CONTENT-P6`). Beyond the
+  existing Overview (`intro`), the sidebar gains **Installation** and **Quickstart** (tutorials),
+  five **Core Concepts** notes — the object model, the tolerance/warning model, the typed value
+  layer, the safety-critical views, and the source-profile system — a **Guides** cookbook (four
+  recipes: re-serialize, de-identify, read raw pixel data, triage warnings), and a
+  **Troubleshooting & known limitations** reference. Every documented capability is grounded in the
+  package's actually-shipped surface; the metadata-first boundary is stated explicitly, with the
+  permanent non-goals named in Troubleshooting (**no pixel decode, no DIMSE networking, no
+  DICOMweb**, no pixel-level de-identification).
+- **Doc/code-agreement gate (`test/docs-content.test.ts`).** Every ` ```ts runnable ` snippet in
+  `docs-content/` is extracted, compiled, and executed against the **built** package via
+  `docSnippetSuite()` from `@cosyte/vitest-config/snippets`, with its inline `// =>` assertions
+  checked — so a documented example can never silently drift from the code. All examples use
+  synthetic, base64-encoded Part 10 objects (invented patient, fake UIDs); no real PHI, no `.dcm`
+  file on disk.
+
 ### Changed
+
+- **Bumped the `@cosyte/vitest-config` devDependency to `^0.0.2`** to pick up the `./snippets`
+  export that ships the doc/code-agreement runner.
+- **Corrected the element-access examples in `intro.md`.** `Dataset.get` / `has` take the
+  8-character `(group,element)` **tag** form only — the prior snippets showed `get("PatientName")`,
+  `get("(0010,0010)")`, and `get("StudyDate")`, all of which return `undefined`. They now use the
+  tag form (and show resolving a keyword to its tag via `Dictionary.byKeyword`), matching the code.
 
 - **All tests now live in a top-level `test/` mirroring `src/`.** `@cosyte/dicom` was the lone parser
   that co-located `*.test.ts` files beside their source; the 32 co-located suites were moved to
