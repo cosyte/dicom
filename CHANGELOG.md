@@ -4,6 +4,18 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ## [Unreleased]
 
+### Changed
+
+- **All tests now live in a top-level `test/` mirroring `src/`.** `@cosyte/dicom` was the lone parser
+  that co-located `*.test.ts` files beside their source; the 32 co-located suites were moved to
+  `test/<path>/` preserving the `src/` sub-structure, bringing the repo in line with the
+  `hl7`/`mllp`/`x12`/`ccda`/`ncpdp` archetype (`DICOM-TEST-RELOCATE`). Relative imports in the moved
+  files were retargeted (`./foo.js` → `../../src/<path>/foo.js`). `vitest.config.ts` drops the
+  `src/**/*.test.ts` include glob, so the config now matches the archetype and a stray co-located
+  test is no longer silently collected alongside the `test/` suite. Test-only, no public-surface
+  change: same 585 passing tests (+1 todo), coverage gates (still pointed at the `src/` source
+  directories) unchanged and green.
+
 ### Fixed
 
 - **`private: true` removed — `@cosyte/dicom` can publish.** The flag dated to the very first
