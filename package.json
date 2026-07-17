@@ -1,6 +1,6 @@
 {
   "name": "@cosyte/dicom",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Developer-focused DICOM Part 10 parser + utility library for Node.js and TypeScript — metadata-first, vendor-quirky-tolerant, dual ESM/CJS.",
   "keywords": [
     "dicom",
