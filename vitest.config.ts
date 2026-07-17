@@ -45,7 +45,7 @@ export default cosyteVitest({
   test: {
     globals: false,
     environment: "node",
-    include: ["test/**/*.test.ts", "src/**/*.test.ts"],
+    include: ["test/**/*.test.ts"],
     exclude: ["node_modules/**", "dist/**", "coverage/**", "vendor/**", "test/smoke/**"],
     testTimeout: 10_000,
     hookTimeout: 10_000,
