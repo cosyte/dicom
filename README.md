@@ -372,6 +372,11 @@ Vendor-quirk fixtures (synthetic or properly de-identified), profile improvement
 
 ---
 
+## Trademarks
+
+GE, Siemens, and Philips are trademarks of their respective owners. cosyte is not affiliated with, endorsed by, or
+sponsored by any of them — the names identify the vendors whose private dictionaries the built-in profiles resolve. See [TRADEMARKS.md](./TRADEMARKS.md).
+
 ## License
 
 [MIT](./LICENSE) © Cosyte

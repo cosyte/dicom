@@ -53,6 +53,7 @@
     "dist",
     "README.md",
     "LICENSE",
+    "TRADEMARKS.md",
     "CHANGELOG.md"
   ],
   "sideEffects": false,

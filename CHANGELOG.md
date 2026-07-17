@@ -49,6 +49,12 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Added
 
+- **Trademark notice (`TRADEMARKS.md`).** This package names third-party systems to describe what it
+  interoperates with; the notice records that cosyte is not affiliated with, endorsed by, or
+  sponsored by any of them, that every reference is descriptive, and that the built-in profiles are
+  authored from public sources only. Added to `files` so it ships inside the published tarball, not
+  just on GitHub. Documentation only — no runtime or API change.
+
 - **Lossless File Meta round-trip.** The parser now retains non-modeled
   `(0002,xxxx)` File Meta elements — e.g. `(0002,0017)`/`(0002,0018)`
   Sending/Receiving AE Title, `(0002,0100)` Private Information Creator UID,
