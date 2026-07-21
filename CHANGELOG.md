@@ -43,6 +43,14 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Fixed
 
+- **Corrected stale publish-status language in `docs-content/` (`README-ORG-SWEEP`).**
+  `installation.md` claimed the package was "not yet published to npm" and that the install command
+  was only "the shape it will take at first publish"; `troubleshooting.md` listed a "Not yet
+  published … not on npm; the first provenance publish is gated on the coordinated public launch"
+  non-goal. `@cosyte/dicom` is published on npm at `0.0.1` and public. Both now state the truth —
+  published, public, still pre-alpha on the `0.0.x`-until-first-alpha ladder — and the troubleshooting
+  bullet becomes an honest pin-your-version pre-alpha caveat rather than a stale non-goal.
+
 - **`private: true` removed — `@cosyte/dicom` can publish.** The flag dated to the very first
   scaffold commit and was never explained; `changeset publish` silently skips a private package, so
   this repo was the one parser that could not reach npm even once its pipeline worked. It also
