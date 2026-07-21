@@ -96,8 +96,9 @@ each is tracked as a future companion package, not a gap to be filled here:
 
 - **A parser + serializer + de-identifier for DICOM Part 10, metadata-first.** Not a viewer, not a
   network stack, not a pixel toolkit.
-- **Not yet published.** The package sits on the `0.0.x`-until-first-alpha ladder and is **not on
-  npm**; the first provenance publish is gated on the coordinated public launch.
+- **Pre-alpha, published on npm at `0.0.1`.** The package is public on npm (`npm install
+  @cosyte/dicom`) but sits on the `0.0.x`-until-first-alpha ladder: pin an exact version, and expect
+  the surface to keep moving until first alpha.
 
 For the phase-by-phase surface and the exact fields each view decodes, see the package's `README.md`
 and `CLAUDE.md` status sections and the [Core Concepts](./spec-notes-model).

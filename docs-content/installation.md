@@ -12,8 +12,8 @@ without configuration, and it takes **zero runtime dependencies** — the byte-l
 work is done in-house (the package budget allows up to three ADR-justified deps; none are currently
 taken).
 
-> **Status:** pre-alpha (`0.0.x`), not yet published to npm. The command below is the shape it will
-> take at first publish; until then, consume it from source or a workspace link.
+> **Status:** pre-alpha (`0.0.x`), published on npm at `0.0.1` and public. The install command below
+> is live; expect the surface to keep moving until first alpha.
 
 ## Prerequisites
 
