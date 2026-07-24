@@ -1,7 +1,7 @@
 /**
  * Phase 5 serializer unit + round-trip tests.
  *
- * Everything is **synthetic** — fixtures are built in memory by the
+ * Everything is **synthetic** - fixtures are built in memory by the
  * `build-dicom` helper (D-38: the repo ships zero curated `.dcm` files). No
  * real PHI ever touches this suite.
  *
@@ -73,7 +73,7 @@ function roundTrip(buf: Buffer): { out: Buffer; ds1: Dataset; ds2: Dataset } {
   return { out, ds1, ds2 };
 }
 
-describe("serializeDicom — framing", () => {
+describe("serializeDicom - framing", () => {
   it("emits a 128-byte zero preamble + DICM magic", () => {
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
@@ -104,7 +104,7 @@ describe("serializeDicom — framing", () => {
   });
 });
 
-describe("serializeDicom — even-length padding (PS3.5 §6.2)", () => {
+describe("serializeDicom - even-length padding (PS3.5 §6.2)", () => {
   it("pads an odd-length text value with SPACE (0x20)", () => {
     // Explicit-LE carries the declared odd length on-wire (parser keeps it).
     const buf = buildDicom({
@@ -131,7 +131,7 @@ describe("serializeDicom — even-length padding (PS3.5 §6.2)", () => {
   });
 });
 
-describe("serializeDicom — short/long-form headers (PS3.5 §7.1.2)", () => {
+describe("serializeDicom - short/long-form headers (PS3.5 §7.1.2)", () => {
   it.each<[string, VR]>([
     ["SV", "SV"],
     ["UV", "UV"],
@@ -164,7 +164,7 @@ describe("serializeDicom — short/long-form headers (PS3.5 §7.1.2)", () => {
   });
 });
 
-describe("serializeDicom — retired group-length omission (PS3.5 §7.2)", () => {
+describe("serializeDicom - retired group-length omission (PS3.5 §7.2)", () => {
   it("drops a (gggg,0000) dataset group-length element on write", () => {
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
@@ -181,7 +181,7 @@ describe("serializeDicom — retired group-length omission (PS3.5 §7.2)", () =>
   });
 });
 
-describe("serializeDicom — full-span passthrough (SQ / encapsulated PD)", () => {
+describe("serializeDicom - full-span passthrough (SQ / encapsulated PD)", () => {
   it("blits an SQ element byte-for-byte", () => {
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
@@ -224,7 +224,7 @@ describe("serializeDicom — full-span passthrough (SQ / encapsulated PD)", () =
   });
 });
 
-describe("serializeDicom — all four v1 transfer syntaxes round-trip", () => {
+describe("serializeDicom - all four v1 transfer syntaxes round-trip", () => {
   const richElements: BuildDicomOptions["elements"] = [
     { tag: "00100010", vr: "PN", value: Buffer.from("DOE^JANE", "ascii") },
     { tag: "00080060", vr: "CS", value: Buffer.from("CT", "ascii") },
@@ -248,18 +248,18 @@ describe("serializeDicom — all four v1 transfer syntaxes round-trip", () => {
   it("produces a deflated body that re-inflates to the same dataset", () => {
     const buf = buildDicom({ transferSyntax: TS_DEFLATED_LE, elements: richElements });
     const out = serializeDicom(parseDicom(buf));
-    // The deflated dataset body is not the raw element bytes — re-parse proves
+    // The deflated dataset body is not the raw element bytes - re-parse proves
     // it inflated correctly rather than being passed through uncompressed.
     const ds = parseDicom(out);
     expect(ds.get("00100010")?.rawBytes.toString("ascii")).toBe("DOE^JANE");
   });
 });
 
-describe("serializeDicom — Implicit-LE defined-length SQ reconstruction", () => {
+describe("serializeDicom - Implicit-LE defined-length SQ reconstruction", () => {
   it("rebuilds the header for a value-only defined-length SQ (no full-span blit)", () => {
     // Under Implicit VR LE the parser stores a *defined-length* SQ as a
     // value-only slice (only undefined-length SQ keeps a full span), so the
-    // writer must reconstruct the group+element+length header — a verbatim
+    // writer must reconstruct the group+element+length header - a verbatim
     // blit would drop it and the re-parse would hit the SQ item bytes as the
     // dataset root, throwing INVALID_FILE_META. See element.ts isFullSpanElement.
     const buf = buildDicom({
@@ -285,7 +285,7 @@ describe("serializeDicom — Implicit-LE defined-length SQ reconstruction", () =
   });
 });
 
-describe("serializeDicom — NULL-padded byte VRs (PS3.5 §6.2)", () => {
+describe("serializeDicom - NULL-padded byte VRs (PS3.5 §6.2)", () => {
   it("pads an odd-length UN scalar with NULL (0x00)", () => {
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
@@ -307,7 +307,7 @@ describe("serializeDicom — NULL-padded byte VRs (PS3.5 §6.2)", () => {
   });
 });
 
-describe("serializeDicom — Explicit BE long-form length byte order", () => {
+describe("serializeDicom - Explicit BE long-form length byte order", () => {
   it("writes the 4-byte length big-endian for a long-form VR under Explicit VR BE", () => {
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_BE,
@@ -323,9 +323,9 @@ describe("serializeDicom — Explicit BE long-form length byte order", () => {
   });
 });
 
-describe("serializeDicom — File Meta default injection (PS3.10 §7.1)", () => {
+describe("serializeDicom - File Meta default injection (PS3.10 §7.1)", () => {
   it("injects the cosyte Implementation Class UID and default version when absent", () => {
-    // The fixture carries only (0002,0010) TS UID — no version, no impl class.
+    // The fixture carries only (0002,0010) TS UID - no version, no impl class.
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
       elements: [{ tag: "00080060", vr: "CS", value: Buffer.from("CT", "ascii") }],
@@ -338,7 +338,7 @@ describe("serializeDicom — File Meta default injection (PS3.10 §7.1)", () => 
   });
 });
 
-describe("serializeDicom — immutability", () => {
+describe("serializeDicom - immutability", () => {
   it("does not mutate the source dataset's element bytes", () => {
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
@@ -351,7 +351,7 @@ describe("serializeDicom — immutability", () => {
   });
 });
 
-describe("serializeDicom — non-modeled File Meta round-trip (lossless)", () => {
+describe("serializeDicom - non-modeled File Meta round-trip (lossless)", () => {
   // Long-form VRs for walking the serialized File Meta group on the wire.
   const FM_LONG_FORM: ReadonlySet<string> = new Set([
     "OB",
@@ -419,7 +419,7 @@ describe("serializeDicom — non-modeled File Meta round-trip (lossless)", () =>
       "00020102",
     ]);
     // Byte-exact golden: re-serializing the re-parsed dataset reproduces the
-    // exact same bytes — the File Meta group round-trips byte-for-byte.
+    // exact same bytes - the File Meta group round-trips byte-for-byte.
     expect(serializeDicom(ds2).equals(out)).toBe(true);
     // The private-information bytes survive intact in the output.
     expect(out.includes(priv)).toBe(true);
@@ -448,7 +448,7 @@ describe("serializeDicom — non-modeled File Meta round-trip (lossless)", () =>
   });
 });
 
-describe("serializeDicom — error taxonomy", () => {
+describe("serializeDicom - error taxonomy", () => {
   it("throws MISSING_TRANSFER_SYNTAX when the dataset has no File Meta", () => {
     const ds = new Dataset({ warnings: [], elements: new Map() });
     expect(() => serializeDicom(ds)).toThrow(DicomSerializeError);

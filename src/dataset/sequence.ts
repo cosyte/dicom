@@ -1,7 +1,7 @@
 /**
- * Phase 2 structural `Sequence` — wrapper around an SQ element's items.
+ * Phase 2 structural `Sequence` - wrapper around an SQ element's items.
  *
- * Per `02-CONTEXT.md` D-04: structural surface only — `items` and
+ * Per `02-CONTEXT.md` D-04: structural surface only - `items` and
  * `length`. No navigation methods. Phase 3 adds `Sequence.items[N].get(...)`
  * via `Item`'s `Dataset`-superclass extension per D-42.
  *

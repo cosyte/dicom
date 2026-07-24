@@ -2,7 +2,7 @@
  * Public barrel for the Phase 6 profile system.
  *
  * A {@link Profile} is a source/vendor tolerance preset that only ever
- * *tightens or annotates* a parse — it bundles warning `escalations` /
+ * *tightens or annotates* a parse - it bundles warning `escalations` /
  * `suppressions` and a private-dictionary overlay, and never makes the lenient
  * default throw outside the four Tier-3 fatals. Build your own with
  * {@link defineProfile}, or reach for one of the frozen built-ins under the

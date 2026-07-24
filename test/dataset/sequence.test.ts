@@ -3,7 +3,7 @@
  *
  * The class is a thin, immutable container: `items` (frozen at the
  * constructor boundary) + the on-wire `length`. These tests pin that
- * structural contract — the frozen-copy guarantee in particular — since the
+ * structural contract - the frozen-copy guarantee in particular - since the
  * parser plan that constructs `Sequence` values relies on it.
  */
 
@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
 import type { Item } from "../../src/dataset/item.js";
 import { Sequence } from "../../src/dataset/sequence.js";
 
-describe("Sequence — structural wrapper", () => {
+describe("Sequence - structural wrapper", () => {
   it("stores items and the on-wire length", () => {
     const items: readonly Item[] = [];
     const seq = new Sequence(items, 0xffffffff);

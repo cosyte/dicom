@@ -84,7 +84,7 @@ describe("decodeText (never throws)", () => {
     expect(decodeText(Buffer.from([0x41, 0x42]), undefined)).toBe("AB");
   });
 
-  it("decodes ISO-8859-15 (Latin-9, ISO_IR 203) — euro sign at 0xA4", () => {
+  it("decodes ISO-8859-15 (Latin-9, ISO_IR 203) - euro sign at 0xA4", () => {
     expect(decodeText(Buffer.from([0xa4]), ["ISO_IR 203"])).toBe("€");
   });
 });

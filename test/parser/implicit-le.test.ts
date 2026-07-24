@@ -1,5 +1,5 @@
 /**
- * Tests for `parseImplicitLE` — Phase 2 plan 02-03 task 2.
+ * Tests for `parseImplicitLE` - Phase 2 plan 02-03 task 2.
  *
  * Covers TS-01 (Implicit VR LE) end-to-end through `parseDicom`, plus
  * TOL-09 (private-tag-no-creator), TOL-10 (group-length-in-dataset),
@@ -30,7 +30,7 @@ function elementsOf(ds: Dataset): ReadonlyMap<Tag, Element> {
   return (ds as unknown as DatasetWithElements)._elements;
 }
 
-describe("parseImplicitLE — TS-01 happy path", () => {
+describe("parseImplicitLE - TS-01 happy path", () => {
   it("parses (0010,0010) PatientName from a minimal Implicit VR LE buffer", () => {
     // 8-byte even-length value; Implicit VR LE has no on-wire VR so the
     // VR field on Element is resolved from the dictionary (PN).
@@ -65,7 +65,7 @@ describe("parseImplicitLE — TS-01 happy path", () => {
   });
 });
 
-describe("parseImplicitLE — D-16 buffer-view vs copy", () => {
+describe("parseImplicitLE - D-16 buffer-view vs copy", () => {
   it("default: rawBytes shares the source ArrayBuffer (zero-copy view)", () => {
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2",
@@ -108,7 +108,7 @@ describe("parseImplicitLE — D-16 buffer-view vs copy", () => {
   });
 });
 
-describe("parseImplicitLE — TOL-10 group-length-in-dataset", () => {
+describe("parseImplicitLE - TOL-10 group-length-in-dataset", () => {
   it("(0008,0000) group length in non-FM group emits DICOM_GROUP_LENGTH_IN_DATASET; element preserved", () => {
     const value = Buffer.alloc(4);
     value.writeUInt32LE(0, 0);
@@ -124,7 +124,7 @@ describe("parseImplicitLE — TOL-10 group-length-in-dataset", () => {
   });
 });
 
-describe("parseImplicitLE — TOL-09 + Case 4a private-tag-no-creator", () => {
+describe("parseImplicitLE - TOL-09 + Case 4a private-tag-no-creator", () => {
   it("private element with no creator emits both TOL-09 codes; element.vr === 'UN'", () => {
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2",
@@ -139,7 +139,7 @@ describe("parseImplicitLE — TOL-09 + Case 4a private-tag-no-creator", () => {
   });
 });
 
-describe("parseImplicitLE — D-33 / D-34 private-creator block-reservation", () => {
+describe("parseImplicitLE - D-33 / D-34 private-creator block-reservation", () => {
   it("creator at (0019,0010)='ACME' covers (0019,1000): privateCreator='ACME', vr='UN', no NO_CREATOR warning", () => {
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2",
@@ -175,7 +175,7 @@ describe("parseImplicitLE — D-33 / D-34 private-creator block-reservation", ()
   });
 });
 
-describe("parseImplicitLE — undefined-length SQ descent (D-21 + parseSequence)", () => {
+describe("parseImplicitLE - undefined-length SQ descent (D-21 + parseSequence)", () => {
   it("(0040,A730) ContentSequence with undefined length descends into the item body", () => {
     // Implicit VR LE has no on-wire VR; the parser resolves SQ from the
     // dictionary for ContentSequence, sees length 0xFFFFFFFF, and delegates
@@ -248,7 +248,7 @@ describe("parseImplicitLE — undefined-length SQ descent (D-21 + parseSequence)
   });
 });
 
-describe("parseImplicitLE — undefined length on a non-SQ VR is fatal", () => {
+describe("parseImplicitLE - undefined length on a non-SQ VR is fatal", () => {
   it("throws INVALID_FILE_META for a non-SQ tag carrying length 0xFFFFFFFF", () => {
     // (0010,0010) PatientName resolves to PN, not SQ. Under Implicit VR LE
     // there is no way to encode an explicit UN, so undefined length here is
@@ -270,7 +270,7 @@ describe("parseImplicitLE — undefined length on a non-SQ VR is fatal", () => {
   });
 });
 
-describe("parseImplicitLE — threat model mitigations", () => {
+describe("parseImplicitLE - threat model mitigations", () => {
   it("T-02-03-01: truncated dataset throws DicomParseError(INVALID_FILE_META) not RangeError", () => {
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2",
@@ -331,7 +331,7 @@ describe("parseImplicitLE — threat model mitigations", () => {
       transferSyntax: "1.2.840.10008.1.2",
       elements: [],
     });
-    // (FFFE,E000) Item header at root with length=0 — valid only inside
+    // (FFFE,E000) Item header at root with length=0 - valid only inside
     // a sequence; at root it must throw.
     const itemHeader = Buffer.alloc(8);
     itemHeader.writeUInt16LE(0xfffe, 0);

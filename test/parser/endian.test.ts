@@ -4,12 +4,12 @@ import { LONG_FORM_VRS } from "../../src/parser/element-header.js";
 import { BE_VR_STRIDE } from "../../src/parser/endian.js";
 
 describe("BE_VR_STRIDE (D-23, D-24)", () => {
-  it("OB and UN are byte streams — never swapped (D-24)", () => {
+  it("OB and UN are byte streams - never swapped (D-24)", () => {
     expect(BE_VR_STRIDE.OB).toBe(0);
     expect(BE_VR_STRIDE.UN).toBe(0);
   });
 
-  it("AT uses stride=2 (group then element — NEVER one 4-byte swap)", () => {
+  it("AT uses stride=2 (group then element - NEVER one 4-byte swap)", () => {
     expect(BE_VR_STRIDE.AT).toBe(2);
   });
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * Phase 1 Plan 05 smoke driver — D-22.
+ * Phase 1 Plan 05 smoke driver - D-22.
  *
  * Validates the built `dist/` artifacts by spawning two separate `node`
  * processes:
@@ -14,7 +14,7 @@
  * dist/index.d.ts must exist. The driver verifies these and exits with a useful
  * message if not.
  *
- * Subprocess model: `spawnSync` with array args + `shell: false` — no shell
+ * Subprocess model: `spawnSync` with array args + `shell: false` - no shell
  * interpolation, no PATH lookups beyond `node` (which is the host process's
  * own binary). Hardcoded relative paths only. (Threat T-01-05-08.)
  */
@@ -71,4 +71,4 @@ if (failed > 0) {
   process.exit(1);
 }
 
-process.stdout.write("[smoke] OK — both ESM and CJS harnesses passed.\n");
+process.stdout.write("[smoke] OK - both ESM and CJS harnesses passed.\n");

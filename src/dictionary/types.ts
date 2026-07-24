@@ -3,7 +3,7 @@
  *
  * Frozen surface. Phase 2 (parser), Phase 3 (dataset/VR), and Phase 7
  * (validate) all depend on this
- * shape — schema-breaking changes here cascade through the codebase.
+ * shape - schema-breaking changes here cascade through the codebase.
  *
  * @module
  */
@@ -13,7 +13,7 @@
  *
  * For repeating-group attribute families (`(50xx,xxxx)` curves, `(60xx,xxxx)`
  * overlays, etc.), the tag string preserves lowercase `x` placeholders verbatim
- * — those entries cannot be looked up by concrete tag and are flagged via
+ * - those entries cannot be looked up by concrete tag and are flagged via
  * {@link DictionaryEntry.repeatingGroup}.
  *
  * @example
@@ -26,7 +26,7 @@ export type Tag = string;
  * additions (`OV`, `SV`, `UV`) introduced in DICOM 2018.
  *
  * Note that some attributes in the data dictionary list MULTIPLE possible VRs
- * — see {@link DictionaryEntry.vr} (which is always an array, possibly empty
+ * - see {@link DictionaryEntry.vr} (which is always an array, possibly empty
  * for retired entries with no VR or special "See Note" entries).
  *
  * @example
@@ -87,7 +87,7 @@ export interface DictionaryEntry {
   readonly vm: string;
   readonly retired: boolean;
   /**
-   * `true` for repeating-group families (`(50xx,xxxx)`, `(60xx,xxxx)` —
+   * `true` for repeating-group families (`(50xx,xxxx)`, `(60xx,xxxx)`:
    * curves/overlays); the {@link DictionaryEntry.tag} field for these contains
    * lowercase `x` placeholders, NOT a concrete 8-hex-char tag. Repeating-group
    * entries are not surfaced by `Dictionary.lookup(tag)` for concrete tags.

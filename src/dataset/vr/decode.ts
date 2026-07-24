@@ -1,5 +1,5 @@
 /**
- * VR-aware value dispatch — the body behind `Element.value`.
+ * VR-aware value dispatch - the body behind `Element.value`.
  *
  * `decodeElementValue` maps an `Element`'s `vr` + raw bytes to a typed
  * {@link DicomValue}, applying the fail-safe rules from PS3.5 §6.2:
@@ -171,7 +171,7 @@ export function decodeElementValue(element: Element): DicomValue {
     const values = text.split("\\").map((v) => {
       const t = v.trim();
       if (t.length === 0) return null;
-      // PS3.5 DS grammar only — reject hex/binary/octal/Infinity literals that
+      // PS3.5 DS grammar only - reject hex/binary/octal/Infinity literals that
       // `Number()` would otherwise coerce to a plausible-but-wrong value.
       if (!/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/u.test(t)) return null;
       const n = Number(t);
@@ -216,7 +216,7 @@ export function decodeElementValue(element: Element): DicomValue {
     return attachWarnings({ kind: "dateTimes", values } as const, warnings);
   }
 
-  // Any VR not enumerated above (should be unreachable — all 34 are handled).
+  // Any VR not enumerated above (should be unreachable - all 34 are handled).
   // Fail-safe: surface the raw decoded Latin-1 text.
   const value = decodeAsciiString(trimmed, tag, vr, position, warnings);
   return attachWarnings({ kind: "text", value } as const, warnings);

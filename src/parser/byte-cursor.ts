@@ -1,12 +1,12 @@
 /**
- * Endian-aware cursor over a Node `Buffer` — the single byte-level read
+ * Endian-aware cursor over a Node `Buffer` - the single byte-level read
  * primitive shared by all four Phase 2 transfer-syntax parsers (D-05).
  *
  * Uses Node `Buffer.readUInt16LE/BE` and `Buffer.readUInt32LE/BE` rather
  * than `DataView` per `02-CONTEXT.md` specifics § (Buffer methods are
  * faster and the project idiom). Every read validates
  * `position + N <= buffer.length` before touching memory and throws a
- * `RangeError` on under-read — this is the cross-cutting truncation
+ * `RangeError` on under-read - this is the cross-cutting truncation
  * mitigation declared by the Phase 2 threat model T-02-01-06.
  *
  * @module
@@ -22,7 +22,7 @@ import { Buffer } from "node:buffer";
  * copy from the shared internal Buffer pool, so its backing `ArrayBuffer`
  * can be shared with unrelated small allocations (including a small source
  * dataset buffer). That defeats the detachment guarantee `copyValues: true`
- * exists to provide — releasing the source buffer and not co-locating a PHI
+ * exists to provide - releasing the source buffer and not co-locating a PHI
  * value with foreign bytes. `Buffer.allocUnsafeSlow` always allocates a
  * dedicated `ArrayBuffer`; copying the exact length over it leaves no
  * uninitialised bytes exposed.
@@ -47,8 +47,8 @@ export function copyValueBytes(src: Buffer): Buffer {
  * import { Buffer } from "node:buffer";
  * import { ByteCursor } from "@cosyte/dicom";
  * const cur = new ByteCursor(Buffer.from([0x10, 0x00, 0x10, 0x00]), true);
- * cur.readUInt16(); // 0x0010 — group
- * cur.readUInt16(); // 0x0010 — element
+ * cur.readUInt16(); // 0x0010 - group
+ * cur.readUInt16(); // 0x0010 - element
  * ```
  */
 export class ByteCursor {

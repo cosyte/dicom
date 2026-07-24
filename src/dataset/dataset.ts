@@ -1,5 +1,5 @@
 /**
- * Phase 2 structural `Dataset` — top-level container produced by
+ * Phase 2 structural `Dataset` - top-level container produced by
  * `parseDicom`.
  *
  * Per `02-CONTEXT.md` D-04 + D-42: only `fileMeta` and `warnings` are
@@ -29,7 +29,7 @@ import type { ImageView, PatientView, SeriesView, StudyView } from "./helpers/ty
  * Initialiser shape accepted by the `Dataset` (and `Item`) constructor.
  *
  * `fileMeta` is optional because nested `Item` datasets do not carry
- * their own File Meta — only the root `Dataset` returned by
+ * their own File Meta - only the root `Dataset` returned by
  * `parseDicom` does.
  *
  * @internal
@@ -41,7 +41,7 @@ export interface DatasetInit {
 }
 
 /**
- * One parsed DICOM dataset — the structural shell shipped by Phase 2.
+ * One parsed DICOM dataset - the structural shell shipped by Phase 2.
  *
  * Phase 2 public surface: `fileMeta`, `warnings`. The internal element
  * map is stored on `_elements` (protected) and Phase 3 promotes it to
@@ -136,7 +136,7 @@ export class Dataset {
   /**
    * All elements matching a tag as an array (never `undefined`). A dataset
    * holds at most one element per tag, so this returns a 0- or 1-length
-   * array — the convenience complement of {@link Dataset.get} for callers
+   * array - the convenience complement of {@link Dataset.get} for callers
    * that prefer an always-array shape.
    *
    * @example
@@ -153,7 +153,7 @@ export class Dataset {
 
   /**
    * Patient-identity view (§4.1). Fail-safe typed-absent fields; `id` is
-   * **not** globally unique — match on the `{id, issuerOfId, ...}` tuple
+   * **not** globally unique - match on the `{id, issuerOfId, ...}` tuple
    * plus `otherIds`, never on a bare `(0010,0020)`. Memoised on first read.
    *
    * @example

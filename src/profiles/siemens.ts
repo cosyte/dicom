@@ -1,5 +1,5 @@
 /**
- * Built-in **Siemens** source profile — private-dictionary overlay for the
+ * Built-in **Siemens** source profile - private-dictionary overlay for the
  * Siemens MR/CT private blocks most commonly encountered in real-world Part 10
  * files. The marquee entries are the two CSA headers (`(0029,xx10)`
  * CSAImageHeaderInfo / `(0029,xx20)` CSASeriesHeaderInfo): opaque `OB` blobs
@@ -9,11 +9,11 @@
  * with it they resolve to their vendor-documented `OB`.
  *
  * Resolution is keyed on the **live private-creator string**, never a fixed
- * block number — the same schema can land in block `0x10` in one file and
+ * block number - the same schema can land in block `0x10` in one file and
  * `0x11` in another (PS3.5 §7.8.1). The canonical `"GGGGxxLL"` key collapses
  * the file-assigned block byte to the `xx` placeholder.
  *
- * Sources (public vendor schema identifiers — NOT PHI):
+ * Sources (public vendor schema identifiers - NOT PHI):
  *   - GDCM private dictionary (`gdcmPrivateDefaultDicts.cxx`).
  *   - dcm4che `private.xml` (Siemens creators).
  *   - dcm2niix / nibabel CSA-header reverse-engineering notes.

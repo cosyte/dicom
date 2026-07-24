@@ -1,6 +1,6 @@
 /**
  * Tests for `resolveImplicitVR`, `resolvePrivateCreator`,
- * `registerPrivateCreator`, and `matchRepeatingGroup` — Phase 2 plan 02-03
+ * `registerPrivateCreator`, and `matchRepeatingGroup` - Phase 2 plan 02-03
  * task 1.
  *
  * Covers CONTEXT.md D-21 (5-case fallback), D-33 (private-creator stack),
@@ -38,7 +38,7 @@ function makeEmit(warnings: DicomParseWarning[]): (w: DicomParseWarning) => void
   return (w) => warnings.push(w);
 }
 
-describe("resolveImplicitVR — D-21 case 1: standard tag with single VR", () => {
+describe("resolveImplicitVR - D-21 case 1: standard tag with single VR", () => {
   it("returns PN for (0010,0010) PatientName", () => {
     const ctx = makeCtx();
     const captured: DicomParseWarning[] = [];
@@ -48,7 +48,7 @@ describe("resolveImplicitVR — D-21 case 1: standard tag with single VR", () =>
   });
 });
 
-describe("resolveImplicitVR — D-21 case 2: standard tag with multi-VR (first array entry)", () => {
+describe("resolveImplicitVR - D-21 case 2: standard tag with multi-VR (first array entry)", () => {
   it("returns US for (0028,0106) SmallestImagePixelValue (declared US/SS)", () => {
     const ctx = makeCtx();
     const captured: DicomParseWarning[] = [];
@@ -58,7 +58,7 @@ describe("resolveImplicitVR — D-21 case 2: standard tag with multi-VR (first a
   });
 });
 
-describe("resolveImplicitVR — D-21 case 3: repeating-group family", () => {
+describe("resolveImplicitVR - D-21 case 3: repeating-group family", () => {
   it("returns OB (first array entry) for concrete (50A0,3000) matching (50xx,3000) Curve Data family", () => {
     const ctx = makeCtx();
     const captured: DicomParseWarning[] = [];
@@ -69,7 +69,7 @@ describe("resolveImplicitVR — D-21 case 3: repeating-group family", () => {
   });
 });
 
-describe("resolveImplicitVR — D-21 case 4a: private tag, no creator registered", () => {
+describe("resolveImplicitVR - D-21 case 4a: private tag, no creator registered", () => {
   it("returns UN; emits BOTH DICOM_PRIVATE_TAG_NO_CREATOR and DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR", () => {
     const ctx = makeCtx();
     const captured: DicomParseWarning[] = [];
@@ -82,7 +82,7 @@ describe("resolveImplicitVR — D-21 case 4a: private tag, no creator registered
   });
 });
 
-describe("resolveImplicitVR — D-21 case 4b: private creator slot itself", () => {
+describe("resolveImplicitVR - D-21 case 4b: private creator slot itself", () => {
   it("returns LO with NO warnings for (0019,0010) (the creator declaration slot)", () => {
     const ctx = makeCtx();
     const captured: DicomParseWarning[] = [];
@@ -92,7 +92,7 @@ describe("resolveImplicitVR — D-21 case 4b: private creator slot itself", () =
   });
 });
 
-describe("resolveImplicitVR — D-21 case 4c: private tag WITH creator registered", () => {
+describe("resolveImplicitVR - D-21 case 4c: private tag WITH creator registered", () => {
   it("returns UN and emits ONLY DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR (no NO_CREATOR)", () => {
     const ctx = makeCtx();
     registerPrivateCreator("00190010", Buffer.from("ACME", "ascii"), ctx);
@@ -104,21 +104,21 @@ describe("resolveImplicitVR — D-21 case 4c: private tag WITH creator registere
   });
 });
 
-describe("resolveImplicitVR — D-21 case 5: unknown standard tag", () => {
+describe("resolveImplicitVR - D-21 case 5: unknown standard tag", () => {
   it("returns UN silently with no warnings", () => {
     const ctx = makeCtx();
     const captured: DicomParseWarning[] = [];
     // (FFFE,FFFE) is even-group + not in dict + not a repeating-group family.
-    // But FFFE is reserved for delimiter markers — pick a safer unknown tag.
-    // Use (0008,FFFE) — even-group, not in dict (we hope).
+    // But FFFE is reserved for delimiter markers - pick a safer unknown tag.
+    // Use (0008,FFFE) - even-group, not in dict (we hope).
     const vr = resolveImplicitVR("0008FFFE", ctx, makeEmit(captured), { byteOffset: 0 });
     expect(vr).toBe("UN");
     expect(captured).toHaveLength(0);
   });
 });
 
-describe("resolvePrivateCreator — block-reservation rule (PITFALLS §7.1)", () => {
-  it("creator at (0019,0010) covers block (0019,1000)..(0019,10FF) only — off-by-0x1000 trap", () => {
+describe("resolvePrivateCreator - block-reservation rule (PITFALLS §7.1)", () => {
+  it("creator at (0019,0010) covers block (0019,1000)..(0019,10FF) only - off-by-0x1000 trap", () => {
     const ctx = makeCtx();
     registerPrivateCreator("00190010", Buffer.from("ACME", "ascii"), ctx);
 
@@ -148,7 +148,7 @@ describe("resolvePrivateCreator — block-reservation rule (PITFALLS §7.1)", ()
   });
 });
 
-describe("registerPrivateCreator — trims trailing space/NUL padding", () => {
+describe("registerPrivateCreator - trims trailing space/NUL padding", () => {
   it("trims trailing space from creator string ('ACME ' → 'ACME')", () => {
     const ctx = makeCtx();
     registerPrivateCreator("00190010", Buffer.from("ACME ", "ascii"), ctx);
@@ -195,7 +195,7 @@ describe("registerPrivateCreator — trims trailing space/NUL padding", () => {
   });
 });
 
-describe("matchRepeatingGroup — pattern matching against family entries", () => {
+describe("matchRepeatingGroup - pattern matching against family entries", () => {
   it("matches (50A0,3000) against (50xx,3000) Curve Data family", () => {
     const fam = matchRepeatingGroup("50A03000");
     expect(fam).toBeDefined();

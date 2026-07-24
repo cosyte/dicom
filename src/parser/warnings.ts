@@ -3,11 +3,11 @@
  * pipeline.
  *
  * Phase 2 core-parser context:
- *   - D-08 — `WARNING_CODES` is a frozen `as const` registry with every code
+ *   - D-08 - `WARNING_CODES` is a frozen `as const` registry with every code
  *     in the TOL-03 catalog (≥25 entries). Phase 2 actively emits 13;
  *     7 VR-decode-time codes are reserved for Phase 3; 2 charset codes are
  *     reserved for Phase 4; 2 codes are reserved for Phase 6 / Phase 7.
- *   - D-12 — Exactly one named factory per actively-emitted code; each
+ *   - D-12 - Exactly one named factory per actively-emitted code; each
  *     factory carries its own JSDoc + `@example` and returns a typed
  *     `DicomParseWarning`.
  *
@@ -25,7 +25,7 @@ import type { DicomPosition } from "./types.js";
  * Stable string codes for every Tier-2 warning the parser may emit.
  *
  * The registry is frozen via `as const` so TypeScript infers the exact
- * string-literal union for `WarningCode` — there is zero runtime cost and
+ * string-literal union for `WarningCode` - there is zero runtime cost and
  * no magic-string comparisons for consumers. Reserved-but-not-emitted
  * codes carry inline comments documenting which phase activates them
  * (Phase 2 declares the union so the schema is stable for downstream
@@ -41,7 +41,7 @@ import type { DicomPosition } from "./types.js";
  * ```
  */
 export const WARNING_CODES = {
-  // === Phase 2 actively emits (D-08 active list — alphabetical-within-prefix per CONTEXT specifics §) ===
+  // === Phase 2 actively emits (D-08 active list - alphabetical-within-prefix per CONTEXT specifics §) ===
   DICOM_EMPTY_ITEM_IN_SEQUENCE: "DICOM_EMPTY_ITEM_IN_SEQUENCE",
   DICOM_FILE_META_GROUP_LENGTH_MISMATCH: "DICOM_FILE_META_GROUP_LENGTH_MISMATCH",
   DICOM_FILE_META_GROUP_LENGTH_MISSING: "DICOM_FILE_META_GROUP_LENGTH_MISSING",
@@ -56,7 +56,7 @@ export const WARNING_CODES = {
   DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR: "DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR",
   DICOM_VR_MISMATCH: "DICOM_VR_MISMATCH",
 
-  // === VR-decode-time codes (declared but not emitted in Phase 2; Phase 3 lazy decoders fire these — D-08, D-42) ===
+  // === VR-decode-time codes (declared but not emitted in Phase 2; Phase 3 lazy decoders fire these - D-08, D-42) ===
   DICOM_BOM_IN_TEXT_VR: "DICOM_BOM_IN_TEXT_VR",
   DICOM_DA_LEGACY_FORMAT: "DICOM_DA_LEGACY_FORMAT",
   DICOM_DT_NONSTANDARD_OFFSET: "DICOM_DT_NONSTANDARD_OFFSET",
@@ -65,13 +65,13 @@ export const WARNING_CODES = {
   DICOM_TRAILING_NULL_IN_TEXT_VR: "DICOM_TRAILING_NULL_IN_TEXT_VR",
   DICOM_UI_TRAILING_SPACE: "DICOM_UI_TRAILING_SPACE",
 
-  // === Phase 4 charset-decode codes (declared, not emitted in Phase 2 — D-08, D-43) ===
+  // === Phase 4 charset-decode codes (declared, not emitted in Phase 2 - D-08, D-43) ===
   DICOM_CHARSET_AMBIGUOUS_SEPARATOR: "DICOM_CHARSET_AMBIGUOUS_SEPARATOR",
   DICOM_UNSUPPORTED_CHARSET: "DICOM_UNSUPPORTED_CHARSET",
 
   // === Reserved by later phases (declared, not emitted in Phase 2) ===
-  DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED: "DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED", // reserved by Phase 7 — not emitted in Phase 2
-  DICOM_PRIVATE_CREATOR_UNKNOWN: "DICOM_PRIVATE_CREATOR_UNKNOWN", // reserved by Phase 6 — not emitted in Phase 2
+  DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED: "DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED", // reserved by Phase 7 - not emitted in Phase 2
+  DICOM_PRIVATE_CREATOR_UNKNOWN: "DICOM_PRIVATE_CREATOR_UNKNOWN", // reserved by Phase 6 - not emitted in Phase 2
 } as const;
 
 /**
@@ -98,7 +98,7 @@ export type WarningCode = (typeof WARNING_CODES)[keyof typeof WARNING_CODES];
  * subclass) so they can be safely accumulated into `Dataset.warnings` and
  * passed to `onWarning` callbacks.
  *
- * Per D-07 there is intentionally NO `snippet` field on warnings —
+ * Per D-07 there is intentionally NO `snippet` field on warnings:
  * real-world files routinely produce 50+ warnings and a per-warning
  * snippet would balloon retained memory. Snippets appear only on
  * `DicomParseError` (the strict-mode escalation path).
@@ -140,7 +140,7 @@ export function missingPreamble(position: DicomPosition): DicomParseWarning {
 /**
  * Build a `DICOM_FILE_META_GROUP_LENGTH_MISSING` warning. Emitted when the
  * File Meta group does not start with `(0002,0000)
- * FileMetaInformationGroupLength` — the parser falls back to scanning
+ * FileMetaInformationGroupLength` - the parser falls back to scanning
  * forward until the first non-`(0002,xxxx)` element (D-18).
  *
  * @example
@@ -184,7 +184,7 @@ export function fileMetaGroupLengthMismatch(
 /**
  * Build a `DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR` warning. Emitted for an
  * SQ element with length `0xFFFFFFFF` parsed under an Explicit VR transfer
- * syntax — legal per the standard but commonly misencoded by older tools
+ * syntax - legal per the standard but commonly misencoded by older tools
  * (D-29).
  *
  * @example
@@ -272,7 +272,7 @@ export function privateTagNoCreator(position: DicomPosition, tag: string): Dicom
 
 /**
  * Build a `DICOM_GROUP_LENGTH_IN_DATASET` warning. Emitted when a `(gggg,0000)`
- * Group Length element is encountered outside the File Meta group — the
+ * Group Length element is encountered outside the File Meta group - the
  * standard retired group-length elements in PS3.5 §7.2 but real-world
  * encoders still emit them.
  *
@@ -334,7 +334,7 @@ export function unParsedAsSQ(position: DicomPosition, tag: string): DicomParseWa
 
 /**
  * Build a `DICOM_EMPTY_ITEM_IN_SEQUENCE` warning. Emitted when an
- * `(FFFE,E000) Item` marker has length 0 — tolerated per D-28 but flagged
+ * `(FFFE,E000) Item` marker has length 0 - tolerated per D-28 but flagged
  * as it usually signals a sender bug.
  *
  * @example
@@ -402,7 +402,7 @@ export function implicitVRForPrivateTagWithoutVR(
  * Build a `DICOM_PRIVATE_CREATOR_UNKNOWN` warning (Phase 6, D-45). Emitted
  * under Implicit VR LE when a parse-time {@link Profile} is active and a
  * private data element carries a registered Private Creator that the profile's
- * private-dictionary overlay does not recognize — the element degrades to the
+ * private-dictionary overlay does not recognize - the element degrades to the
  * generic `UN` fallback rather than risking a wrong decode. The `creator`
  * string is a vendor schema identifier (e.g. `"ACME PRIVATE 01"`), not PHI.
  *
@@ -427,11 +427,11 @@ export function privateCreatorUnknown(
 /**
  * Build a `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED` warning (Phase 7). Emitted by
  * `deidentify` when a dataset carries Pixel Data `(7FE0,0010)` and either
- * `(0028,0301)` Burned In Annotation is absent or its value is not `"NO"` — the
+ * `(0028,0301)` Burned In Annotation is absent or its value is not `"NO"` - the
  * metadata-only de-identifier cannot inspect or clean pixels (that is deferred to
  * `@cosyte/dicom-pixel`), so it warns rather than silently implying the image is
  * clean (PS3.15 §E.3.1 / §E.3.2 are out of scope here). The message carries no
- * pixel content — only the structural fact.
+ * pixel content - only the structural fact.
  *
  * @example
  * ```ts
@@ -452,12 +452,12 @@ export function burnedInAnnotationNotRemoved(position: DicomPosition): DicomPars
 // Phase 3 VR-decode-time factories (D-08 / D-42).
 //
 // PHI discipline: these messages NEVER include a decoded value (no PN, no
-// date/time, no text content) — only the tag, VR, and structural facts.
+// date/time, no text content) - only the tag, VR, and structural facts.
 // ---------------------------------------------------------------------------
 
 /**
  * Build a `DICOM_BOM_IN_TEXT_VR` warning. Emitted when a charset-decoded
- * text value begins with a UTF-8 byte-order mark (`EF BB BF`) — tolerated
+ * text value begins with a UTF-8 byte-order mark (`EF BB BF`) - tolerated
  * (the BOM is stripped on decode) but non-conformant per PS3.5 §6.1.2.3.
  *
  * @example
@@ -477,7 +477,7 @@ export function bomInTextVR(position: DicomPosition, tag: string, vr: VR): Dicom
 /**
  * Build a `DICOM_TRAILING_NULL_IN_TEXT_VR` warning. Emitted when a text VR
  * that should pad with SPACE (`0x20`) instead carries a trailing NULL
- * (`0x00`) — tolerated (trimmed on decode) per PS3.5 §6.2.
+ * (`0x00`) - tolerated (trimmed on decode) per PS3.5 §6.2.
  *
  * @example
  * ```ts
@@ -518,8 +518,8 @@ export function uiTrailingSpace(position: DicomPosition, tag: string): DicomPars
 
 /**
  * Build a `DICOM_NON_ASCII_IN_ASCII_VR` warning. Emitted when a VR defined
- * as the Default Character Repertoire (ASCII) — e.g. `AE CS DA DT TM UI UR
- * DS IS AS` — contains a byte ≥ `0x80`; tolerated (decoded as Latin-1
+ * as the Default Character Repertoire (ASCII) - e.g. `AE CS DA DT TM UI UR
+ * DS IS AS` - contains a byte ≥ `0x80`; tolerated (decoded as Latin-1
  * best-effort) per Postel's Law.
  *
  * @example
@@ -538,7 +538,7 @@ export function nonAsciiInAsciiVR(position: DicomPosition, tag: string, vr: VR):
 
 /**
  * Build a `DICOM_IS_NONINTEGER_VALUE` warning. Emitted when an `IS`
- * (Integer String) value does not parse to a base-10 integer — the value
+ * (Integer String) value does not parse to a base-10 integer - the value
  * is surfaced as `null` (never `NaN`-coerced-to-0) with the raw bytes
  * preserved on the Element.
  *
@@ -559,7 +559,7 @@ export function isNonintegerValue(position: DicomPosition, tag: string): DicomPa
 /**
  * Build a `DICOM_DA_LEGACY_FORMAT` warning. Emitted when a `DA` value uses
  * a tolerated non-`YYYYMMDD` form (retired dotted `YYYY.MM.DD`, or a
- * partial/empty date) — decoded best-effort, raw preserved, never thrown.
+ * partial/empty date) - decoded best-effort, raw preserved, never thrown.
  * The legacy string itself is NEVER included (PHI discipline).
  *
  * @example
@@ -578,7 +578,7 @@ export function daLegacyFormat(position: DicomPosition, tag: string): DicomParse
 
 /**
  * Build a `DICOM_DT_NONSTANDARD_OFFSET` warning. Emitted when a `DT` value
- * carries a malformed or out-of-range UTC offset suffix — decoded
+ * carries a malformed or out-of-range UTC offset suffix - decoded
  * best-effort, raw preserved, never thrown. The value is NEVER included.
  *
  * @example
@@ -598,7 +598,7 @@ export function dtNonstandardOffset(position: DicomPosition, tag: string): Dicom
 /**
  * Build a `DICOM_UNSUPPORTED_CHARSET` warning. Emitted when `(0008,0005)`
  * Specific Character Set names a defined term this build cannot map to a
- * decoder — text is decoded best-effort as UTF-8 and raw bytes preserved.
+ * decoder - text is decoded best-effort as UTF-8 and raw bytes preserved.
  *
  * @example
  * ```ts

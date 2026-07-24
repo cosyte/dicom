@@ -1,5 +1,5 @@
 /**
- * `deidentify` — PS3.15 Annex E metadata-level de-identification.
+ * `deidentify` - PS3.15 Annex E metadata-level de-identification.
  *
  * Applies the **Basic Application Level Confidentiality Profile** plus any of the
  * nine *metadata-affecting* Annex E Options, driven by the generated Table E.1-1
@@ -14,7 +14,7 @@
  *   VR-consistent dummy (falling back to `Z` where no safe dummy exists), `C`
  *   conservative blank, `U` deterministic consistent-UID remap, `K` keep.
  * - Recurses into kept sequences and **re-encodes** them so nested PHI is removed
- *   in the *serialized* bytes too — not just the object model (the Phase 5 writer
+ *   in the *serialized* bytes too - not just the object model (the Phase 5 writer
  *   blits `SQ` spans verbatim, so a rebuilt `items` array alone would not survive
  *   serialization). Rebuilt sequences are normalized to defined length.
  * - Removes all private attributes by default; with `RetainSafePrivate` + a
@@ -24,18 +24,18 @@
  *   `RetainUIDs`), writes `(0012,0062)` Patient Identity Removed = `YES` and
  *   `(0012,0063)` De-identification Method, and warns
  *   (`DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED`) when Pixel Data is present and not
- *   marked free of burned-in annotation — this metadata-only pass cannot clean
+ *   marked free of burned-in annotation - this metadata-only pass cannot clean
  *   pixels (deferred to `@cosyte/dicom-pixel`).
  *
  * **Known limitations** (documented, fail-safe toward *more* removal):
  * - No IOD Type-1 conformance analysis, so conditional codes always take the
- *   most-protective leftmost branch — a Type-1 attribute that strictly needed a
+ *   most-protective leftmost branch - a Type-1 attribute that strictly needed a
  *   dummy is instead removed/emptied.
  * - `C` (clean) is a conservative blank, not a meaning-preserving structured
  *   replacement (which needs domain context the metadata layer lacks).
  * - Pixel-level options (`CleanPixelData`, `CleanRecognizableVisual`) are out of
  *   scope; burned-in text is warned, never cleaned.
- * - A private data element kept under `RetainSafePrivate` is kept *verbatim* — if
+ * - A private data element kept under `RetainSafePrivate` is kept *verbatim* - if
  *   it is itself a sequence carrying standard PHI attributes, that nested content
  *   is not recursed. The profile vouches the element is safe; nest accordingly.
  * - A sequence whose `items` the parser did not materialize (e.g. an
@@ -232,7 +232,7 @@ function rebuildSequence(orig: Element, items: readonly Item[], encoding: BodyEn
   return new Element(init);
 }
 
-/** Decode a private-creator element's value (an `LO` vendor schema id — not PHI). */
+/** Decode a private-creator element's value (an `LO` vendor schema id - not PHI). */
 function decodeCreator(el: Element): string {
   return el.rawBytes
     .toString("latin1")
@@ -441,7 +441,7 @@ function hasUncleanedBurnedIn(ds: Dataset): boolean {
 }
 
 /**
- * De-identify a {@link Dataset} per PS3.15 Annex E — the Basic Application Level
+ * De-identify a {@link Dataset} per PS3.15 Annex E - the Basic Application Level
  * Confidentiality Profile, plus any Retain/Clean Options passed in `retain`.
  *
  * Pure: `ds` is never mutated. Returns a fresh dataset and a value-free

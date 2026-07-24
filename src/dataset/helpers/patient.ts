@@ -1,5 +1,5 @@
 /**
- * Patient-identity view builder (§4.1 — the wrong-patient failure class).
+ * Patient-identity view builder (§4.1 - the wrong-patient failure class).
  *
  * Surfaces the `{id, issuer, qualifiers}` tuple plus Other Patient IDs so a
  * caller is never tempted to match on a bare, non-unique `(0010,0020)`, and

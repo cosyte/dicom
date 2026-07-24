@@ -3,23 +3,23 @@
  * transfer-syntax strategies (Implicit-LE, Explicit-LE, Explicit-BE).
  *
  * Phase 2 core-parser context:
- *   - D-25 — FFFE item-marker reads route through the same endian-aware
+ *   - D-25 - FFFE item-marker reads route through the same endian-aware
  *     ByteCursor as every other read (closes the BE-FFFE bug per
  *     PITFALLS.md §2.3).
- *   - D-28 — Encoding-context stack (`Root | SqItem | EncapsulatedPixelData`).
- *     Empty item (`(FFFE,E000) length=0`) is tolerated — emit
+ *   - D-28 - Encoding-context stack (`Root | SqItem | EncapsulatedPixelData`).
+ *     Empty item (`(FFFE,E000) length=0`) is tolerated - emit
  *     `DICOM_EMPTY_ITEM_IN_SEQUENCE` and continue.
- *   - D-29 — Undefined-length SQ in Explicit VR is legal but emits
- *     `DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR` (caller responsibility — the
+ *   - D-29 - Undefined-length SQ in Explicit VR is legal but emits
+ *     `DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR` (caller responsibility - the
  *     warning fires from the per-TS strategy, NOT from inside parseSequence
  *     because Implicit-LE-undefined-length-SQ is the spec-default form for
  *     that TS).
- *   - D-30 — CP-246 fallback: when `VR=UN` AND `length=0xFFFFFFFF` under
+ *   - D-30 - CP-246 fallback: when `VR=UN` AND `length=0xFFFFFFFF` under
  *     Explicit VR, attempt SQ descent using **Implicit VR LE inner
  *     encoding**. On success → promote element to `VR=SQ` + emit
  *     `DICOM_UN_PARSED_AS_SQ`. On failure → restore state + NO warning.
  *     Implemented as `tryParseUnAsSQ`.
- *   - D-31 — Encapsulated pixel data (`(7FE0,0010) VR=OB length=0xFFFFFFFF`):
+ *   - D-31 - Encapsulated pixel data (`(7FE0,0010) VR=OB length=0xFFFFFFFF`):
  *     each FFFE,E000 item is a fragment (Phase 2 records the structure as
  *     empty Items; Phase 4 surfaces fragments + Basic Offset Table via
  *     `ds.pixelData`).
@@ -35,13 +35,13 @@
  *     ...)`.
  *   - T-02-04-03: CPU DoS via pathological CP-246. tryParseUnAsSQ caps
  *     attempts at the same nesting-depth limit; on parse failure, state
- *     is restored — no infinite retry loop.
+ *     is restored - no infinite retry loop.
  *
  * Circular-import note: `parseSequence` calls into the per-TS parsers
  * (Implicit-LE / Explicit-LE / Explicit-BE), and those parsers ALSO call
  * `parseSequence`. The cycle is broken by passing the inner strategy in
  * via `ParseSequenceOptions.innerStrategy` rather than importing it
- * statically — each per-TS parser passes itself into parseSequence via
+ * statically - each per-TS parser passes itself into parseSequence via
  * the `innerStrategy` field.
  *
  * @module
@@ -61,7 +61,7 @@ import { emptyItemInSequence, unParsedAsSQ, type DicomParseWarning } from "./war
 
 const ITEM_TAG: Tag = "FFFEE000";
 // `(FFFE,E00D)` ItemDelim is consumed by the inner-strategy via the
-// `stopOnItemDelim` contract — never directly inside parseSequence.
+// `stopOnItemDelim` contract - never directly inside parseSequence.
 const SEQ_DELIM_TAG: Tag = "FFFEE0DD";
 const UNDEFINED_LENGTH = 0xffffffff;
 
@@ -73,7 +73,7 @@ export const NESTING_DEPTH_LIMIT = 64;
 
 /**
  * Inner-parser strategy signature consumed by `parseSequence`. Each per-TS
- * parser accepts a `stopOnItemDelim?: boolean` option — when set, the
+ * parser accepts a `stopOnItemDelim?: boolean` option - when set, the
  * inner element loop terminates upon reading `(FFFE,E00D)` ItemDelim
  * (cursor advanced past the delim's 4-byte length field) and the parser
  * returns the post-delim offset.
@@ -127,7 +127,7 @@ export interface ParseSequenceResult {
  * the item bodies + delimiters and returns the items array + the offset
  * where parsing finished.
  *
- * Phase 2 surfaces only the structural shape — the per-TS strategy DOES
+ * Phase 2 surfaces only the structural shape - the per-TS strategy DOES
  * NOT thread the resulting items onto the SQ Element. Per D-04, Phase 2
  * SQ Elements expose only `rawBytes` covering the on-wire span; Phase 3
  * lazily re-parses for navigation.
@@ -145,7 +145,7 @@ export function parseSequence(
   if (ctx.nestingDepth > NESTING_DEPTH_LIMIT) {
     // Decrement before throwing so caller `finally` rebalancing isn't
     // double-decremented (parseSequence's own try/finally below would
-    // decrement again — but we throw BEFORE the try block, so do it here).
+    // decrement again - but we throw BEFORE the try block, so do it here).
     ctx.nestingDepth -= 1;
     throw new DicomParseError(
       FATAL_CODES.INVALID_FILE_META,
@@ -198,7 +198,7 @@ export function parseSequence(
       const itemTag = joinTag(group, element);
 
       if (itemTag === SEQ_DELIM_TAG) {
-        // SeqDelim — skip the 4-byte length field (already consumed) and exit.
+        // SeqDelim - skip the 4-byte length field (already consumed) and exit.
         return { items, endOffset: cursor.position };
       }
       if (itemTag !== ITEM_TAG) {
@@ -246,7 +246,7 @@ export function parseSequence(
       // (0008,0005) cannot leak to its siblings.
       restoreParentCharset();
       if (itemLength === UNDEFINED_LENGTH) {
-        // Undefined-length item — call innerStrategy with stopOnItemDelim;
+        // Undefined-length item - call innerStrategy with stopOnItemDelim;
         // it returns the post-ItemDelim offset.
         const inner = opts.innerStrategy(buffer, cursor.position, ctx, emit, {
           stopOnItemDelim: true,
@@ -254,7 +254,7 @@ export function parseSequence(
         items.push(new Item({ warnings: [], elements: inner.elements, index: itemIndex }));
         cursor.position = inner.endOffset;
       } else {
-        // Defined-length item — slice and parse exactly `itemLength` bytes.
+        // Defined-length item - slice and parse exactly `itemLength` bytes.
         if (cursor.position + itemLength > buffer.length) {
           throw new DicomParseError(
             FATAL_CODES.INVALID_FILE_META,
@@ -333,14 +333,14 @@ export function tryParseUnAsSQ(
     // `DicomParseError` carrying a Tier-2 `WarningCode` when ctx.strict is
     // true. Those throws must propagate. Tier-3 structural fatals
     // (`FatalCode`) thrown mid-descent indicate the bytes don't actually
-    // form a valid SQ — fall back to UN-as-bytes as designed.
+    // form a valid SQ - fall back to UN-as-bytes as designed.
     if (err instanceof DicomParseError) {
       const warningCodeValues = Object.values(WARNING_CODES) as readonly string[];
       if (warningCodeValues.includes(err.code)) {
         throw err;
       }
     }
-    // Restore state — drop any warnings emitted during the failed descent.
+    // Restore state - drop any warnings emitted during the failed descent.
     ctx.nestingDepth = savedDepth;
     while (ctx.encodingContextStack.length > savedStackLen) {
       ctx.encodingContextStack.pop();

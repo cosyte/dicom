@@ -2,7 +2,7 @@
  * Tag hex utilities for the structural Phase 2 dataset shell.
  *
  * Per `02-CONTEXT.md` Claude's discretion §: Phase 2 ships utility
- * functions only — no `Tag` class. Phase 3 may promote to a class if
+ * functions only - no `Tag` class. Phase 3 may promote to a class if
  * navigation methods need to hang off the type.
  *
  * @module
@@ -65,7 +65,7 @@ export function joinTag(group: number, element: number): Tag {
 }
 
 /**
- * True when the tag's group is odd — i.e. a private group per PS3.5 §7.8.
+ * True when the tag's group is odd - i.e. a private group per PS3.5 §7.8.
  *
  * @example
  * ```ts
@@ -79,7 +79,7 @@ export function isPrivateTag(tag: Tag): boolean {
 }
 
 /**
- * True when the tag's group is `0x0002` — i.e. inside the File Meta
+ * True when the tag's group is `0x0002` - i.e. inside the File Meta
  * group per PS3.10.
  *
  * @example

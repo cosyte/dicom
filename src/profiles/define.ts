@@ -1,5 +1,5 @@
 /**
- * `defineProfile()` — the public factory for building immutable {@link Profile}
+ * `defineProfile()` - the public factory for building immutable {@link Profile}
  * objects (Phase 6). Mirrors the `@cosyte/hl7` sibling's profile factory: a
  * validated options object in, a frozen `Profile` with a `describe()` method
  * out. Invalid input throws {@link ProfileDefinitionError} with an actionable
@@ -25,7 +25,7 @@ import type { VR } from "../dictionary/types.js";
 import { WARNING_CODES, type WarningCode } from "../parser/warnings.js";
 import { ProfileDefinitionError } from "./errors.js";
 
-/** Every valid VR string — the runtime mirror of the `VR` type union. */
+/** Every valid VR string - the runtime mirror of the `VR` type union. */
 const VALID_VRS: ReadonlySet<string> = new Set<VR>([
   "AE",
   "AS",
@@ -63,7 +63,7 @@ const VALID_VRS: ReadonlySet<string> = new Set<VR>([
   "UV",
 ]);
 
-/** Every valid warning code — the runtime mirror used for option validation. */
+/** Every valid warning code - the runtime mirror used for option validation. */
 const VALID_WARNING_CODES: ReadonlySet<string> = new Set<string>(Object.values(WARNING_CODES));
 
 /** Recognized top-level option keys (drives the unknown-key typo guard). */

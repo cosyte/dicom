@@ -1,16 +1,16 @@
 /**
- * File Meta Information group parser — hard-wired Explicit VR LE.
+ * File Meta Information group parser - hard-wired Explicit VR LE.
  *
  * Phase 2 core-parser context:
  *
- *   - D-17 — Always Explicit VR LE; does NOT consult the dispatch table.
- *   - D-18 — `(0002,0000)` group-length missing / present-but-wrong handling
+ *   - D-17 - Always Explicit VR LE; does NOT consult the dispatch table.
+ *   - D-18 - `(0002,0000)` group-length missing / present-but-wrong handling
  *     emits `DICOM_FILE_META_GROUP_LENGTH_{MISSING,MISMATCH}`.
- *   - D-19 — `(0002,0010)` Transfer Syntax UID is the ONLY parser-blocking
+ *   - D-19 - `(0002,0010)` Transfer Syntax UID is the ONLY parser-blocking
  *     element; missing throws `INVALID_FILE_META` regardless of strict mode.
  *     All other FM Type-1 elements are projected when present, NOT enforced
  *     (Phase 7's `validate()` enforces them).
- *   - T-02-02-01 — Truncated File Meta (declared length > remaining buffer)
+ *   - T-02-02-01 - Truncated File Meta (declared length > remaining buffer)
  *     throws `INVALID_FILE_META` rather than over-reading.
  *
  * @module
@@ -111,7 +111,7 @@ export function parseFileMeta(
       );
     }
   } else {
-    // (0002,0000) absent — emit warning and treat the first element as the start of the FM body.
+    // (0002,0000) absent - emit warning and treat the first element as the start of the FM body.
     emit(fileMetaGroupLengthMissing({ byteOffset: fmStart, fileMeta: true }));
     fmElements.push(firstElement);
     consumedAfterGroupLength = firstElement.bytesConsumed;
@@ -222,7 +222,7 @@ function readExplicitLeElement(cursor: ByteCursor): FmRawElement {
   let length: number;
   let headerLength: number;
   if (LONG_FORM_VRS.has(vr)) {
-    cursor.slice(2); // 2 reserved bytes — File Meta tolerates non-zero here; long-form check lives in dataset parsers.
+    cursor.slice(2); // 2 reserved bytes - File Meta tolerates non-zero here; long-form check lives in dataset parsers.
     length = cursor.readUInt32();
     headerLength = 12;
   } else {
@@ -234,7 +234,7 @@ function readExplicitLeElement(cursor: ByteCursor): FmRawElement {
   }
   const value = cursor.slice(length);
   const bytesConsumed = cursor.position - headerStart;
-  // Sanity invariant — bytesConsumed must equal headerLength + length.
+  // Sanity invariant - bytesConsumed must equal headerLength + length.
   if (bytesConsumed !== headerLength + length) {
     throw new RangeError("File Meta element accounting mismatch");
   }

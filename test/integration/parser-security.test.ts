@@ -1,18 +1,18 @@
 /**
- * Phase 2 capstone — security-vector sweep across plans 02-01..02-05.
+ * Phase 2 capstone - security-vector sweep across plans 02-01..02-05.
  *
  * Each `describe` block targets a STRIDE threat declared in a prior plan's
  * threat model and asserts that the documented mitigation activates
  * correctly under adversarial input. All fixtures are programmatically
- * built — no curated `.dcm` PHI files (D-38).
+ * built - no curated `.dcm` PHI files (D-38).
  *
  * Coverage map (by threat ID):
- *   - T-02-01-06, T-02-02-01, T-02-04-01 — buffer over-read on truncated
+ *   - T-02-01-06, T-02-02-01, T-02-04-01 - buffer over-read on truncated
  *     input (Implicit-LE / Explicit-LE / Explicit-BE / Deflated-LE).
- *   - T-02-04-02 — SQ stack-overflow protection at the 64-depth cap.
- *   - T-02-04-03 — CP-246 pathological-input bound (CPU DoS).
- *   - T-02-05-01 — decompression-bomb cap (256 MiB default; 1 KiB override).
- *   - T-02-01-04 / T-02-05-04 — `copyValues` opt-out for Buffer-slice
+ *   - T-02-04-02 - SQ stack-overflow protection at the 64-depth cap.
+ *   - T-02-04-03 - CP-246 pathological-input bound (CPU DoS).
+ *   - T-02-05-01 - decompression-bomb cap (256 MiB default; 1 KiB override).
+ *   - T-02-01-04 / T-02-05-04 - `copyValues` opt-out for Buffer-slice
  *     retention (heap pressure).
  *
  * @module
@@ -55,9 +55,9 @@ const TS_EXPLICIT_BE = "1.2.840.10008.1.2.2";
 const TS_DEFLATED_LE = "1.2.840.10008.1.2.1.99";
 
 // ===========================================================================
-// T-02-01-06 / T-02-02-01 / T-02-04-01 / T-02-05-02 — buffer over-read on
+// T-02-01-06 / T-02-02-01 / T-02-04-01 / T-02-05-02 - buffer over-read on
 // truncated input. Every cursor read across all four parsers is wrapped
-// such that a buffer overflow surfaces as a typed `DicomParseError` —
+// such that a buffer overflow surfaces as a typed `DicomParseError`,
 // never a raw `RangeError`.
 // ===========================================================================
 
@@ -92,7 +92,7 @@ describe("Security: buffer over-read on truncated input (T-02-01-06, T-02-02-01,
         },
       ],
     });
-    // Chop 50 bytes off the end — declared element length now overruns
+    // Chop 50 bytes off the end - declared element length now overruns
     // the available buffer.
     const truncated = buf.subarray(0, buf.length - 50);
     let thrown: unknown;
@@ -141,7 +141,7 @@ describe("Security: buffer over-read on truncated input (T-02-01-06, T-02-02-01,
 
   it("truncated Deflated-LE buffer throws DicomParseError (T-02-05-02 stream corruption)", () => {
     // Build a valid Deflated-LE buffer, then truncate inside the deflate
-    // stream — `inflateRawSync` will raise, the parser converts to
+    // stream - `inflateRawSync` will raise, the parser converts to
     // INVALID_FILE_META.
     const buf = buildDicom({
       transferSyntax: TS_DEFLATED_LE,
@@ -160,13 +160,13 @@ describe("Security: buffer over-read on truncated input (T-02-01-06, T-02-02-01,
 });
 
 // ===========================================================================
-// T-02-04-02 — SQ stack-overflow protection. NESTING_DEPTH_LIMIT = 64 in
+// T-02-04-02 - SQ stack-overflow protection. NESTING_DEPTH_LIMIT = 64 in
 // `parseSequence`. Plan 02-04 ships unit tests at the parseSequence level;
 // this end-to-end test asserts the cap activates for a real `parseDicom`
 // call carrying a 65-deep SQ tree.
 // ===========================================================================
 
-describe("Security: SQ stack-overflow protection — 64-depth cap (T-02-04-02)", () => {
+describe("Security: SQ stack-overflow protection - 64-depth cap (T-02-04-02)", () => {
   /** Build an SQ-element JSON shape `depth` levels deep. */
   function buildNestedSqShape(depth: number): {
     tag: Tag;
@@ -182,7 +182,7 @@ describe("Security: SQ stack-overflow protection — 64-depth cap (T-02-04-02)",
   }
 
   it("65-level deeply-nested SQ throws DicomParseError(INVALID_FILE_META) with 'depth exceeds 64' message", () => {
-    // 65 `parseSequence` invocations nested — depth-66 push would trigger
+    // 65 `parseSequence` invocations nested - depth-66 push would trigger
     // the cap. Constructing 64-deep means the check at the next descent
     // (depth=65) fires.
     const elements = [buildNestedSqShape(65)];
@@ -213,7 +213,7 @@ describe("Security: SQ stack-overflow protection — 64-depth cap (T-02-04-02)",
 });
 
 // ===========================================================================
-// T-02-04-03 — CP-246 pathological-input bound. tryParseUnAsSQ saves and
+// T-02-04-03 - CP-246 pathological-input bound. tryParseUnAsSQ saves and
 // restores parser state on inner-parse failure; the descent must complete
 // in bounded time even for adversarial UN-undefined-length payloads.
 // ===========================================================================
@@ -267,7 +267,7 @@ describe("Security: CP-246 pathological-input bound (T-02-04-03)", () => {
 });
 
 // ===========================================================================
-// T-02-05-01 — Decompression bomb. Default cap is 256 MiB; the parser
+// T-02-05-01 - Decompression bomb. Default cap is 256 MiB; the parser
 // re-exports `parseDeflatedLEWithCap` for tractable bomb-cap tests at a
 // 1 KiB cap. Plan 02-05 ships the unit-level test; this re-asserts the
 // mitigation is reachable from the public surface and the typed throw
@@ -284,7 +284,7 @@ describe("Security: decompression-bomb cap (T-02-05-01)", () => {
     });
 
     // Locate datasetStart by parsing File Meta only (skipping the dataset)
-    // is overkill — instead, assemble a fresh ParseContext + outer emitter
+    // is overkill - instead, assemble a fresh ParseContext + outer emitter
     // and call parseDeflatedLEWithCap directly with the 1 KiB cap.
     // The deflate stream begins after File Meta; the simplest reach for
     // datasetStart is to parse the Part-10 frame ourselves. For test
@@ -336,7 +336,7 @@ function findDatasetStart(buf: Buffer): number {
 }
 
 // ===========================================================================
-// T-02-01-04 / T-02-05-04 — Buffer-slice retention. Default `copyValues:
+// T-02-01-04 / T-02-05-04 - Buffer-slice retention. Default `copyValues:
 // false` makes Element.rawBytes a Buffer.subarray view that pins the source
 // ArrayBuffer; `copyValues: true` opts into Buffer.from(slice) so the
 // source can be released. Verified by mutating the source buffer post-parse
@@ -402,7 +402,7 @@ describe("Security: Buffer-slice retention (T-02-01-04 / T-02-05-04 / D-16)", ()
     // Both yield the same value bytes regardless of copy mode.
     expect(elCopy.rawBytes.toString("ascii")).toBe("DEFLATE^TEST");
     expect(elView.rawBytes.toString("ascii")).toBe("DEFLATE^TEST");
-    // The underlying ArrayBuffers differ — copyValues=true detaches into a
+    // The underlying ArrayBuffers differ - copyValues=true detaches into a
     // fresh allocation (Buffer.from), copyValues=false views the inflated
     // buffer (Buffer.subarray).
     expect(elCopy.rawBytes.buffer).not.toBe(elView.rawBytes.buffer);
@@ -415,7 +415,7 @@ describe("Security: Buffer-slice retention (T-02-01-04 / T-02-05-04 / D-16)", ()
 // test re-asserts the structural rule for visibility.
 // ===========================================================================
 
-describe("Security: D-38 — Phase 2 ships zero curated DICOM fixtures", () => {
+describe("Security: D-38 - Phase 2 ships zero curated DICOM fixtures", () => {
   it("no .dcm files exist under test/integration/", async () => {
     const { readdir } = await import("node:fs/promises");
     const path = await import("node:path");

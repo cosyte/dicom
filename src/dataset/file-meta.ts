@@ -2,7 +2,7 @@
  * Phase 2 structural `FileMeta` view-object shape.
  *
  * Per `02-CONTEXT.md` D-04 + D-17 + FM-02: a plain interface (not a class)
- * since Phase 2 has no methods. Only `transferSyntaxUID` is required —
+ * since Phase 2 has no methods. Only `transferSyntaxUID` is required;
  * the rest are populated by `parseFileMeta` (plan 02-02) when present
  * but never enforced (Phase 7's `validate()` enforces FM Type-1 fields
  * per D-19). Phase 3 may promote to a class if helpers are added.
@@ -19,9 +19,9 @@ import type { Tag, VR } from "../dictionary/types.js";
  * serializer can re-emit an exotic File Meta group byte-for-byte.
  *
  * The typed {@link FileMeta} fields cover the common Type-1/Type-3 elements;
- * anything else a source file carried — e.g. `(0002,0017)`/`(0002,0018)`
+ * anything else a source file carried - e.g. `(0002,0017)`/`(0002,0018)`
  * Sending/Receiving AE Title, `(0002,0100)` Private Information Creator UID,
- * `(0002,0102)` Private Information — is captured here as raw bytes (the
+ * `(0002,0102)` Private Information - is captured here as raw bytes (the
  * on-wire value, even-length per PS3.5 §6.2) rather than dropped. `value` is a
  * defensive copy, so the view never aliases the parsed input buffer.
  */

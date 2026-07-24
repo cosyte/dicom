@@ -5,13 +5,13 @@
  * The replacement is a pure function of the source UID and the chosen root:
  * `sha256(sourceUid)` reduced to a decimal string under `<root>.…`. Because it
  * is content-derived, the *same* source UID maps to the *same* replacement
- * across separate `deidentify` calls and across files in a study set — without
- * any shared state — so cross-instance referential integrity (Study ⇄ Series ⇄
+ * across separate `deidentify` calls and across files in a study set - without
+ * any shared state - so cross-instance referential integrity (Study ⇄ Series ⇄
  * SOP, Frame of Reference, referenced instances) is preserved. A per-call cache
  * `Map` makes repeats within one call O(1) and lets a caller thread one map
  * through a whole archive if they prefer explicit sharing.
  *
- * Default root `2.25` is the DICOM-sanctioned UUID-derived arc (PS3.5 §B.2) —
+ * Default root `2.25` is the DICOM-sanctioned UUID-derived arc (PS3.5 §B.2):
  * a globally-unique root that needs no registration.
  *
  * @module
@@ -22,7 +22,7 @@ import { createHash } from "node:crypto";
 import { DeidentifyError } from "./types.js";
 
 /**
- * DICOM `2.25` UUID-derived root (PS3.5 §B.2) — no registration required.
+ * DICOM `2.25` UUID-derived root (PS3.5 §B.2) - no registration required.
  *
  * @example
  * ```ts
@@ -100,7 +100,7 @@ function deriveUid(root: string, sourceUid: string): string {
   const hex = createHash("sha256").update(sourceUid, "utf8").digest("hex");
   const fullDecimal = BigInt(`0x${hex}`).toString(10);
   // Budget: "<root>." prefix + the value component, total ≤ 64 chars. The digest
-  // is truncated to fit — deterministically, so referential integrity holds — but
+  // is truncated to fit - deterministically, so referential integrity holds - but
   // a longer `root` leaves fewer value digits and so trades away collision margin.
   // The default `2.25` root keeps ~62 digits (collision-free in practice).
   const budget = MAX_UID_LENGTH - root.length - 1;

@@ -1,19 +1,19 @@
 /**
- * PS3.15 Annex E attribute-action table — DICOM Basic Application Confidentiality
+ * PS3.15 Annex E attribute-action table - DICOM Basic Application Confidentiality
  * Profile + 11 retention/clean option sets.
  *
  * Phase 1 deliverable (D-08 / D-09 / D-14). Consumed by Phase 7 `anonymize()`
  * (ANON-01..ANON-10).
  *
  * NOTE: This module is NOT re-exported from the package's `src/index.ts` (per D-10 +
- * D-27 — Phase 1's external surface is `Dictionary.{lookup,byKeyword,uid}` + `VERSION`
+ * D-27 - Phase 1's external surface is `Dictionary.{lookup,byKeyword,uid}` + `VERSION`
  * only). Phase 7 imports `annexE` via the `@cosyte/dicom/dictionary/annex-e` internal
  * path, which the `package.json` `exports` map will admit when Phase 7 lands its plans.
  *
  * The 9 *metadata-affecting* PS3.15 Annex E option-set columns (E.3.3–E.3.11 plus the
  * collapsed E.3.6 "RetainLongitudinalTemporal") populate `AnnexEAction.optionSet`
- * keys per attribute. The two *pixel-level* options — E.3.1 `CleanPixelData` and
- * E.3.2 `CleanRecognizableVisual` — are not represented per-attribute (PS3.15 Table
+ * keys per attribute. The two *pixel-level* options - E.3.1 `CleanPixelData` and
+ * E.3.2 `CleanRecognizableVisual` - are not represented per-attribute (PS3.15 Table
  * E.1-1 has no column for them); Phase 7 enforces them at the pixel-decode layer.
  * Both names remain in `AnnexEOption` for completeness and for Phase 7's API.
  */
@@ -80,7 +80,7 @@ export type AnnexEOption =
  * The PS3.15 Annex E action for one DICOM attribute.
  *
  * `basicProfile` is the action under the Basic Profile with no retention/clean
- * options activated. `optionSet` carries per-option-set overrides — keys are the
+ * options activated. `optionSet` carries per-option-set overrides - keys are the
  * `AnnexEOption` names; values are the action that applies IF the caller has
  * activated that option set. Missing keys = no override (the `basicProfile`
  * action wins).
@@ -109,7 +109,7 @@ export interface AnnexEAction {
  * Look up the PS3.15 Annex E action for a DICOM tag.
  *
  * Returns `undefined` for tags not listed in Annex E Table E.1-1; those attributes
- * are unaffected by anonymization (effectively `K` — keep). Phase 7's
+ * are unaffected by anonymization (effectively `K` - keep). Phase 7's
  * `anonymize()` consumes this; library users invoke `anonymize()` directly,
  * not `annexE()`.
  *

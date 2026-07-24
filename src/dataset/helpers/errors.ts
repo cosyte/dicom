@@ -3,15 +3,15 @@
  *
  * This is **separate** from the parser's four-code `FATAL_CODES` /
  * `DicomParseError` (locked to unrecoverable Part 10 structural corruption
- * — see `../../parser/errors.ts`). The §4 helpers are otherwise fail-safe:
+ * - see `../../parser/errors.ts`). The §4 helpers are otherwise fail-safe:
  * a missing *value* is typed-absent (`undefined`), never an exception. The
  * helper layer throws only for a **structural contract violation** the
  * caller asked it to resolve and that cannot be answered safely:
  *
- *   - `FRAME_INDEX_OUT_OF_RANGE` — `image.frame(i)` called with an index
+ *   - `FRAME_INDEX_OUT_OF_RANGE` - `image.frame(i)` called with an index
  *     outside `[0, numberOfFrames)`. Returning a guessed frame would be a
  *     silent wrong-image, so we refuse.
- *   - `MISSING_REQUIRED_FUNCTIONAL_GROUP` — an Enhanced multi-frame object
+ *   - `MISSING_REQUIRED_FUNCTIONAL_GROUP` - an Enhanced multi-frame object
  *     lacks a required geometry macro (Pixel Measures / Plane Position /
  *     Plane Orientation) in *both* the Per-Frame and Shared groups, so the
  *     frame cannot be spatially placed.

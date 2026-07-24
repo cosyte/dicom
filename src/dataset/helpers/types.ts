@@ -6,11 +6,11 @@
  * a missing value is **typed-absent** (`undefined`), never a substituted
  * default; a malformed numeric component stays `null` inside its array
  * rather than being coerced; raw bytes are always still reachable via the
- * underlying `Element`. These views *interpret* nothing about pixels — they
+ * underlying `Element`. These views *interpret* nothing about pixels - they
  * surface the metadata a downstream renderer needs to interpret them
  * correctly.
  *
- * The dangerous DICOM failure is the confident, wrong image — so the
+ * The dangerous DICOM failure is the confident, wrong image - so the
  * deliberate omissions are as load-bearing as the fields: there is no
  * `signed` boolean unless `(0028,0103)` was actually present, no rescale
  * slope unless `(0028,1053)` was, and the three pixel-spacing tags are
@@ -23,7 +23,7 @@ import type { Item } from "../item.js";
 import type { DicomDate, DicomTime, PersonName } from "../vr/types.js";
 
 /**
- * One entry of Other Patient IDs Sequence `(0010,1002)` — a `{id, issuer,
+ * One entry of Other Patient IDs Sequence `(0010,1002)` - a `{id, issuer,
  * typeCode}` triple (PS3.3 §10.15, the DICOM analogue of an HL7 v2 CX
  * repetition). Surfaced so a caller never matches on a bare `(0010,0020)`.
  *
@@ -40,7 +40,7 @@ export interface OtherPatientId {
 }
 
 /**
- * Patient & study identity (§4.1 — the wrong-patient failure class).
+ * Patient & study identity (§4.1 - the wrong-patient failure class).
  *
  * `id` is **not globally unique**; correct cross-system matching needs the
  * `{id, issuerOfId, issuerQualifiers}` tuple plus `otherIds`. `name` keeps
@@ -50,7 +50,7 @@ export interface OtherPatientId {
  * ```ts
  * import { parseDicom } from "@cosyte/dicom";
  * const p = parseDicom(buf).patient;
- * p.id;                       // "MRN-42" — meaningless without the issuer
+ * p.id;                       // "MRN-42" - meaningless without the issuer
  * p.issuerOfId;              // "HOSP_A"
  * p.name?.alphabetic.familyName; // "Doe"
  * ```
@@ -132,7 +132,7 @@ export interface CodedConcept {
 }
 
 /**
- * A Real World Value Mapping (§4.5) — slope/intercept bound atomically to
+ * A Real World Value Mapping (§4.5) - slope/intercept bound atomically to
  * its UCUM measurement-units code, so a number is never detached from its
  * units. From Real World Value Mapping Sequence `(0040,9096)`.
  *
@@ -153,7 +153,7 @@ export interface RealWorldValueMap {
  * single frame Per-Frame-else-Shared (§4.4, PS3.3 §C.7.6.16). Each macro is
  * typed-absent when present in neither the per-frame nor the shared group
  * (the three *geometry* macros are treated as required for an enhanced
- * object — see {@link ImageView.frame}).
+ * object - see {@link ImageView.frame}).
  *
  * @example
  * ```ts
@@ -188,7 +188,7 @@ export interface FrameFunctionalGroups {
 }
 
 /**
- * Pixel-interpretation + geometry metadata (§4.2 / §4.3 / §4.4 / §4.5) — the
+ * Pixel-interpretation + geometry metadata (§4.2 / §4.3 / §4.4 / §4.5) - the
  * "wrong pixels look fine" and "looks fine, measures wrong" classes. v1 does
  * not decode pixels; this view surfaces exactly what a renderer needs so it
  * does not have to guess.
@@ -206,7 +206,7 @@ export interface FrameFunctionalGroups {
  * const img = parseDicom(buf).image;
  * img.rescaleSlope; // undefined ⇒ caller MUST NOT assume 1
  * img.signed;       // undefined ⇒ signedness unknown, never guess
- * img.pixelSpacing; // patient-plane mm — distinct from imagerPixelSpacing
+ * img.pixelSpacing; // patient-plane mm - distinct from imagerPixelSpacing
  * ```
  */
 export interface ImageView {

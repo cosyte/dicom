@@ -93,7 +93,7 @@ describe("buildPatient (§4.1 wrong-patient class)", () => {
     expect(ds.patient.otherIds).toEqual([{ id: "ALT-1" }]);
   });
 
-  it("never invents an absent id/issuer — typed-absent, otherIds always []", () => {
+  it("never invents an absent id/issuer - typed-absent, otherIds always []", () => {
     const ds = parseDicom(
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,

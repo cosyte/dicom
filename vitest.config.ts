@@ -15,7 +15,7 @@ import { cosyteVitest } from "@cosyte/vitest-config";
  * and a DICOM-COV pass over the Phase 4 Enhanced multi-frame resolver (`functional-groups.ts`) closed
  * its Per-Frame-else-Shared branches: both optional macros (Pixel Value Transformation / Frame VOI
  * LUT), shared-only resolution, the inner-attribute lenient-absence paths, and all three
- * MISSING_REQUIRED_FUNCTIONAL_GROUP throws — taking that file from ~53% to 100% branch. Measured at
+ * MISSING_REQUIRED_FUNCTIONAL_GROUP throws - taking that file from ~53% to 100% branch. Measured at
  * this pass:
  *   - global:         lines 98.2 / branches 93.2 / funcs 100 / statements 97.9
  *   - src/parser:     lines 97.1 / branches 90.2 / funcs 100 / statements 96.3
@@ -25,7 +25,7 @@ import { cosyteVitest } from "@cosyte/vitest-config";
  *
  * NOTE: parser branch coverage sits right at the 90 boundary (287/318). The remaining uncovered
  * branches are defensive `throw err` re-throws (the non-RangeError arm of cursor try/catch blocks)
- * plus two Node-version-fallback arms in deflated-le.ts — not cheaply reachable. A change that adds
+ * plus two Node-version-fallback arms in deflated-le.ts - not cheaply reachable. A change that adds
  * a new parser branch must add a covering test or the gate goes red; that is the intended behavior.
  */
 export default cosyteVitest({

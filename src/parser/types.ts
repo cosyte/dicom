@@ -2,10 +2,10 @@
  * Shared parser-pipeline types for `@cosyte/dicom`.
  *
  * Phase 2 core-parser context:
- *   - D-02 — `ParseOptions` shape (Phase 2 only; no `profile` field).
- *   - D-03 — `OnWarningCallback` ordering contract (invoked AFTER push to `ctx.warnings`).
- *   - D-07 — `DicomPosition` shape (`byteOffset`, optional `fileMeta` / `deflated` / `contextPath`).
- *   - D-45 — `ParseContext.profile?: unknown` is reserved for Phase 6; Phase 2 never sets it.
+ *   - D-02 - `ParseOptions` shape (Phase 2 only; no `profile` field).
+ *   - D-03 - `OnWarningCallback` ordering contract (invoked AFTER push to `ctx.warnings`).
+ *   - D-07 - `DicomPosition` shape (`byteOffset`, optional `fileMeta` / `deflated` / `contextPath`).
+ *   - D-45 - `ParseContext.profile?: unknown` is reserved for Phase 6; Phase 2 never sets it.
  *
  * Public types (exported via `src/index.ts`): `DicomPosition`, `ParseOptions`, `OnWarningCallback`.
  * Internal type (NOT exported from `src/index.ts`): `ParseContext`.
@@ -41,14 +41,14 @@ export interface PrivateTagDefinition {
 
 /**
  * A source/vendor tolerance preset (Phase 6). A `Profile` bundles three
- * things that only ever **tighten or annotate** a parse — never loosen it
+ * things that only ever **tighten or annotate** a parse - never loosen it
  * past the Postel's-Law default:
  *
- *  - `escalations` — Tier-2 warning codes promoted to a thrown
+ *  - `escalations` - Tier-2 warning codes promoted to a thrown
  *    `DicomParseError` (a stricter posture for known-unsafe deviations).
- *  - `suppressions` — Tier-2 warning codes silenced because they are a
+ *  - `suppressions` - Tier-2 warning codes silenced because they are a
  *    documented, benign quirk of the named source (annotation, not loss).
- *  - `privateDictionary` — a private-creator-keyed overlay resolving the
+ *  - `privateDictionary` - a private-creator-keyed overlay resolving the
  *    Implicit-VR of vendor private data elements via the file's **live**
  *    private-creator string (never a hard-coded block number).
  *
@@ -129,7 +129,7 @@ export type OnWarningCallback = (warning: DicomParseWarning) => void;
 /**
  * Options accepted by `parseDicom`.
  *
- * Per `02-CONTEXT.md` D-02 — Phase 2 form only. No `profile` field; Phase 6
+ * Per `02-CONTEXT.md` D-02 - Phase 2 form only. No `profile` field; Phase 6
  * adds it. With `exactOptionalPropertyTypes: true`, callers omit unset keys
  * rather than passing `undefined` for any field below.
  *
@@ -171,9 +171,9 @@ export interface ParseOptions {
    */
   readonly onWarning?: OnWarningCallback;
   /**
-   * When `true`, every `Element.rawBytes` is `Buffer.from(slice)` — copying
+   * When `true`, every `Element.rawBytes` is `Buffer.from(slice)` - copying
    * each value out so the source buffer can be released. When `false` (the
-   * default), `Element.rawBytes` is `Buffer.subarray(slice)` — a zero-copy
+   * default), `Element.rawBytes` is `Buffer.subarray(slice)` - a zero-copy
    * view that pins the source ArrayBuffer until every Element is GC'd.
    *
    * Per D-16 / MODEL-03. Omit to use the default.
@@ -183,7 +183,7 @@ export interface ParseOptions {
    * Source/vendor tolerance preset (Phase 6, D-45). Applies the profile's
    * `escalations` / `suppressions` to warning emission and its
    * `privateDictionary` to Implicit-VR resolution of private data elements.
-   * A profile only tightens or annotates — it never makes the default
+   * A profile only tightens or annotates - it never makes the default
    * lenient parse throw outside the four Tier-3 fatals, and a private
    * creator the profile does not recognize degrades to generic UN handling
    * plus a `DICOM_PRIVATE_CREATOR_UNKNOWN` warning, never a wrong decode.
@@ -214,12 +214,12 @@ export interface ParseContext {
    */
   readonly creators: Map<number, Map<number, string>>;
   /**
-   * Sequence-encoding stack — the top entry determines FFFE-marker semantics
+   * Sequence-encoding stack - the top entry determines FFFE-marker semantics
    * per D-28. Initial stack is `["Root"]`.
    */
   readonly encodingContextStack: Array<"Root" | "SqItem" | "EncapsulatedPixelData">;
   /**
-   * Hard-cap counter — incremented on SQ descent, decremented on ascent.
+   * Hard-cap counter - incremented on SQ descent, decremented on ascent.
    * Plan 02-04 enforces a depth cap; Phase 2-06 adds the overflow security
    * test (T-02-01-07).
    */

@@ -1,6 +1,6 @@
 // test/smoke/esm/index.mjs
 //
-// ESM smoke harness — runs against the built dist/ artifacts.
+// ESM smoke harness - runs against the built dist/ artifacts.
 // Invoked by scripts/smoke.ts via spawnSync('node', [...]); no package install.
 // See test/smoke/README.md for the harness shape and intent.
 
@@ -59,7 +59,7 @@ for (const fn of [parseDicom, serializeDicom, deidentify, defineProfile, makeUid
   assert.strictEqual(typeof fn, "function", "expected a callable export");
 }
 
-// Profiles (Phase 6) — five built-ins, each a frozen Profile with a private-dictionary Map.
+// Profiles (Phase 6) - five built-ins, each a frozen Profile with a private-dictionary Map.
 assert.strictEqual(Object.keys(profiles).length, 5, "expected 5 built-in profiles");
 for (const key of ["ge", "siemens", "philips", "strict", "lenient"]) {
   assert.ok(profiles[key], `profiles.${key} missing`);
@@ -74,7 +74,7 @@ const customProfile = defineProfile({ name: "smoke-test", extends: profiles.stri
 assert.strictEqual(customProfile.name, "smoke-test", "defineProfile name mismatch");
 assert.strictEqual(typeof customProfile.describe, "function", "Profile.describe missing");
 
-// UID remapper (Phase 7) — deterministic, content-derived, rooted at 2.25.
+// UID remapper (Phase 7) - deterministic, content-derived, rooted at 2.25.
 assert.strictEqual(DEFAULT_UID_ROOT, "2.25", "DEFAULT_UID_ROOT mismatch");
 const remap = makeUidRemapper();
 assert.strictEqual(remap.map("1.2.3"), remap.map("1.2.3"), "UID remap not deterministic");
@@ -101,4 +101,4 @@ assert.strictEqual(
   "value error code mismatch",
 );
 
-console.log("[smoke:esm] OK — VERSION=" + VERSION + " PN=" + pnByTag.keyword + " TS=" + ts.name);
+console.log("[smoke:esm] OK - VERSION=" + VERSION + " PN=" + pnByTag.keyword + " TS=" + ts.name);

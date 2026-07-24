@@ -1,10 +1,10 @@
 /**
- * Tests for `TRANSFER_SYNTAX_PARSERS` dispatch table — Phase 2 plan 02-02
+ * Tests for `TRANSFER_SYNTAX_PARSERS` dispatch table - Phase 2 plan 02-02
  * task 2. Covers CONTEXT.md D-20 + threat T-02-02-04.
  *
  * Plan 02-05 update: all four strategies are now backed by real parsers.
  * The "callable as a stub" suite has been retargeted to assert that each
- * strategy is callable end-to-end on a minimally valid input — an empty
+ * strategy is callable end-to-end on a minimally valid input - an empty
  * Explicit/Implicit-LE/BE buffer parses to an empty element map; an
  * empty deflate stream (the 2-byte raw-deflate empty marker) inflates to
  * zero bytes which then parses to an empty element map.
@@ -79,7 +79,7 @@ describe("TRANSFER_SYNTAX_PARSERS dispatch table", () => {
     });
 
     it("parseDeflatedLE inflates an empty raw-deflate stream and parses to empty elements", () => {
-      // Empty raw-deflate stream — `deflateRawSync(Buffer.alloc(0))`
+      // Empty raw-deflate stream - `deflateRawSync(Buffer.alloc(0))`
       // produces the canonical RFC 1951 empty-stored-block marker. Round
       // trip: inflate yields 0 bytes; parseExplicitLE on 0 bytes yields
       // an empty element map.

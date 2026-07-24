@@ -2,20 +2,20 @@
  * Single chokepoint for Tier-2 warning emission.
  *
  * Phase 2 core-parser context:
- *   - D-03 — Push order: warning is appended to `ctx.warnings` BEFORE the
+ *   - D-03 - Push order: warning is appended to `ctx.warnings` BEFORE the
  *     `onWarning` callback fires. The callback observes the warning
  *     already present in `ctx.warnings.length`.
- *   - D-11 — Every Tier-2 emission flows through this one function. No
+ *   - D-11 - Every Tier-2 emission flows through this one function. No
  *     per-call-site `if (ctx.strict) throw` checks anywhere else in the
  *     parser tree.
- *   - D-35 — Strict-mode escalation: when `ctx.strict === true` the
+ *   - D-35 - Strict-mode escalation: when `ctx.strict === true` the
  *     closure throws `DicomParseError` carrying the warning code (cast
  *     through `as unknown as FatalCode` per the HL7 sibling Plan 06
- *     decision (b)). Strict mode bypasses `ctx.warnings` entirely — no
+ *     decision (b)). Strict mode bypasses `ctx.warnings` entirely - no
  *     residue.
  *
  * Threat model T-02-01-02: a consumer-supplied `onWarning` that throws
- * MUST NOT corrupt parser state — wrapped in try/catch with silent swallow.
+ * MUST NOT corrupt parser state - wrapped in try/catch with silent swallow.
  *
  * @module
  */
@@ -33,7 +33,7 @@ import { DicomParseError, buildSnippet, type FatalCode } from "./errors.js";
  *
  * Strict (`ctx.strict === true`): throw `DicomParseError` carrying the
  * warning code. The `code` field is typed `FatalCode` at compile time
- * but at runtime carries the `WarningCode` literal — consumers narrow
+ * but at runtime carries the `WarningCode` literal - consumers narrow
  * on `err.code` after catch (HL7 sibling Plan 06 decision (b); D-35
  * cast).
  *
@@ -68,7 +68,7 @@ export function makeEmitter(ctx: ParseContext): (w: DicomParseWarning) => void {
       try {
         ctx.onWarning(w);
       } catch {
-        // D-03 silent swallow — a noisy handler must not corrupt parser
+        // D-03 silent swallow - a noisy handler must not corrupt parser
         // state (T-02-01-02). Mirrors @cosyte/hl7 sibling.
       }
     }

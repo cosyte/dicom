@@ -1,5 +1,5 @@
 /**
- * Public parser entry — `parseDicom`.
+ * Public parser entry - `parseDicom`.
  *
  * Pipeline (Phase 2 plan 02-02):
  *   1. Dual EMPTY_INPUT check (raw input + post-normalize) per CONTEXT D-13.
@@ -12,7 +12,7 @@
  *      unsupported UIDs throw `UNSUPPORTED_TRANSFER_SYNTAX` carrying the
  *      `Dictionary.uid(uid)?.name` in `err.snippet`.
  *   6. The chosen strategy returns a `ReadonlyMap<Tag, Element>` (Phase 2
- *      stubs — real bodies arrive in plans 02-03 / 02-04 / 02-05).
+ *      stubs - real bodies arrive in plans 02-03 / 02-04 / 02-05).
  *   7. The result is assembled into a structural {@link Dataset}.
  *
  * Phase 6 (D-45) wires a source/vendor `Profile` via `ParseOptions.profile`:
@@ -38,17 +38,17 @@ import type { DicomParseWarning } from "./warnings.js";
 /**
  * Parse a DICOM Part 10 buffer into a structural {@link Dataset}.
  *
- * Lenient by default — recoverable deviations (missing preamble, File Meta
+ * Lenient by default - recoverable deviations (missing preamble, File Meta
  * group-length mismatch, odd-length value, etc.) are pushed into
  * `ds.warnings` with stable codes from `WARNING_CODES`. Four unrecoverable
  * structural failures throw `DicomParseError`:
  *
- *   - `EMPTY_INPUT` — empty `Buffer | Uint8Array | ArrayBuffer`.
- *   - `NOT_DICOM_PART_10` — input lacks both `DICM` magic at offset 128 and
+ *   - `EMPTY_INPUT` - empty `Buffer | Uint8Array | ArrayBuffer`.
+ *   - `NOT_DICOM_PART_10` - input lacks both `DICM` magic at offset 128 and
  *     a recognizable `(0002,0000)` File Meta Group Length at offset 0.
- *   - `INVALID_FILE_META` — File Meta is truncated or `(0002,0010)`
+ *   - `INVALID_FILE_META` - File Meta is truncated or `(0002,0010)`
  *     Transfer Syntax UID is missing.
- *   - `UNSUPPORTED_TRANSFER_SYNTAX` — Transfer Syntax UID is not one of the
+ *   - `UNSUPPORTED_TRANSFER_SYNTAX` - Transfer Syntax UID is not one of the
  *     four v1 UIDs (`1.2.840.10008.1.2`, `…1.2.1`, `…1.2.2`, `…1.2.1.99`).
  *
  * Pass `{ strict: true }` to escalate every Tier-2 warning to a thrown
@@ -91,19 +91,19 @@ export function parseDicom(
   input: Buffer | Uint8Array | ArrayBuffer,
   options: ParseOptions,
 ): Dataset;
-/** @internal — implementation signature. Public JSDoc lives on the overloads above. */
+/** @internal - implementation signature. Public JSDoc lives on the overloads above. */
 export function parseDicom(
   input: Buffer | Uint8Array | ArrayBuffer,
   options: ParseOptions = {},
 ): Dataset {
-  // First EMPTY_INPUT check — raw input length (D-13 dual-check, first half).
+  // First EMPTY_INPUT check - raw input length (D-13 dual-check, first half).
   if (rawInputIsEmpty(input)) {
     throw new DicomParseError(FATAL_CODES.EMPTY_INPUT, "Input is empty.", 0, "");
   }
 
   const buffer = normalizeInput(input);
 
-  // Second EMPTY_INPUT check — after normalization (D-13 corner-case for views).
+  // Second EMPTY_INPUT check - after normalization (D-13 corner-case for views).
   if (buffer.length === 0) {
     throw new DicomParseError(
       FATAL_CODES.EMPTY_INPUT,
@@ -176,7 +176,7 @@ function buildContext(
     nestingDepth: 0,
     copyValues: options.copyValues === true,
   };
-  // Per D-45 — thread the source/vendor profile (Phase 6) when supplied;
+  // Per D-45 - thread the source/vendor profile (Phase 6) when supplied;
   // omit the key entirely otherwise (exactOptionalPropertyTypes / D-02).
   const withProfile: Omit<ParseContext, "onWarning"> =
     options.profile !== undefined ? { ...base, profile: options.profile } : base;

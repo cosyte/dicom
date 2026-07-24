@@ -1,5 +1,5 @@
 /**
- * Built-in **Philips** source profile — private-dictionary overlay for the
+ * Built-in **Philips** source profile - private-dictionary overlay for the
  * Philips MR private blocks most commonly mined out of real-world files:
  * diffusion b-factor / gradient orientation and stack geometry, addressed via
  * the "Philips Imaging DD 001" (group 2001) and "Philips MR Imaging DD 001"
@@ -8,10 +8,10 @@
  * resolve to their vendor-documented VRs.
  *
  * Resolution is keyed on the **live private-creator string**, never a fixed
- * block number (PS3.5 §7.8.1) — the canonical `"GGGGxxLL"` key collapses the
+ * block number (PS3.5 §7.8.1) - the canonical `"GGGGxxLL"` key collapses the
  * file-assigned block byte to the `xx` placeholder.
  *
- * Sources (public vendor schema identifiers — NOT PHI):
+ * Sources (public vendor schema identifiers - NOT PHI):
  *   - GDCM private dictionary (`gdcmPrivateDefaultDicts.cxx`, Philips creators).
  *   - dcm4che `private.xml`.
  *   - dcm2niix Philips diffusion-tag notes.

@@ -1,14 +1,14 @@
 /**
- * Lenient-mode property test — the Postel's-Law *parse* side, via the shared
+ * Lenient-mode property test - the Postel's-Law *parse* side, via the shared
  * `@cosyte/test-utils` `lenientNeverThrowsProperty` runner.
  *
  * The contract (parser/index.ts + emit.ts + errors.ts): in lenient (default)
  * mode `parseDicom` may throw ONLY a `DicomParseError` carrying one of the four
  * Tier-3 fatal codes (`EMPTY_INPUT`, `NOT_DICOM_PART_10`, `INVALID_FILE_META`,
- * `UNSUPPORTED_TRANSFER_SYNTAX`). Every other deviation — missing preamble,
+ * `UNSUPPORTED_TRANSFER_SYNTAX`). Every other deviation - missing preamble,
  * group-length mismatch/missing, odd-length value, retired group-length,
  * non-zero reserved bytes, undefined-length under Explicit VR, empty SQ item,
- * trailing junk, even arbitrary bytes — must be recovered into `ds.warnings`,
+ * trailing junk, even arbitrary bytes - must be recovered into `ds.warnings`,
  * never thrown.
  *
  * Wiring to dicom's real shapes:
@@ -37,7 +37,7 @@ import { arbitraryBytes, recoverableInput, truncatedValidFile } from "./_arbitra
 /** Stable run budget so any counterexample reproduces deterministically. */
 const NUM_RUNS = 600;
 
-/** The only throwable codes — the four Tier-3 fatals. */
+/** The only throwable codes - the four Tier-3 fatals. */
 const FATAL_CODE_SET: ReadonlySet<string> = new Set(Object.values(FATAL_CODES));
 
 /** The full Tier-2 warning-code registry. */
@@ -61,7 +61,7 @@ function hasPositionalContext(w: { readonly position?: unknown }): boolean {
 }
 
 describe("dicom conformance: lenient mode never throws except sanctioned Tier-3 fatals", () => {
-  it("recoverable/quirky/garbage input either parses or throws a Tier-3 fatal — nothing else", () => {
+  it("recoverable/quirky/garbage input either parses or throws a Tier-3 fatal - nothing else", () => {
     lenientNeverThrowsProperty({
       arbitrary: recoverableInput(),
       parse: (raw: Buffer) => parseDicom(raw),

@@ -2,12 +2,12 @@
  * Per-VR byte-stride table for Explicit VR Big Endian byte-swap.
  *
  * Phase 2 core-parser context:
- *   - D-23 — `BE_VR_STRIDE` mapping verbatim. `0` means "no swap" (byte
+ *   - D-23 - `BE_VR_STRIDE` mapping verbatim. `0` means "no swap" (byte
  *     stream / ASCII / spec-defined). The `AT` special case has stride=2
- *     and count=2 (group, then element — NEVER one 4-byte swap).
- *   - D-24 — `OB` and `UN` are byte streams and are NEVER swapped, even
+ *     and count=2 (group, then element - NEVER one 4-byte swap).
+ *   - D-24 - `OB` and `UN` are byte streams and are NEVER swapped, even
  *     under Explicit VR Big Endian. Both are pinned at 0 here.
- *   - D-44 — Internally exported (and re-exported by Phase 5 serializer)
+ *   - D-44 - Internally exported (and re-exported by Phase 5 serializer)
  *     so swap logic stays symmetric between parser and emitter.
  *
  * @module
@@ -20,7 +20,7 @@ import type { VR } from "../dictionary/types.js";
  * (1.2.840.10008.1.2.2). The parser swaps every value-buffer slice in
  * groups of `BE_VR_STRIDE[vr]` bytes; `0` means leave-as-is.
  *
- * **`AT` special case** (D-23): stride is 2 and count is 2 — group first,
+ * **`AT` special case** (D-23): stride is 2 and count is 2 - group first,
  * then element. Two independent 2-byte swaps, NEVER one 4-byte swap.
  * Multi-valued AT therefore has stride=2 and count=N×2.
  *
@@ -30,9 +30,9 @@ import type { VR } from "../dictionary/types.js";
  * @example
  * ```ts
  * import { BE_VR_STRIDE } from "@cosyte/dicom";
- * BE_VR_STRIDE.OB; // 0 — never swap
- * BE_VR_STRIDE.AT; // 2 — group then element
- * BE_VR_STRIDE.FD; // 8 — 64-bit float
+ * BE_VR_STRIDE.OB; // 0 - never swap
+ * BE_VR_STRIDE.AT; // 2 - group then element
+ * BE_VR_STRIDE.FD; // 8 - 64-bit float
  * ```
  */
 export const BE_VR_STRIDE: Readonly<Record<VR, 0 | 2 | 4 | 8>> = Object.freeze({
@@ -53,7 +53,7 @@ export const BE_VR_STRIDE: Readonly<Record<VR, 0 | 2 | 4 | 8>> = Object.freeze({
   OV: 8,
   SV: 8,
   UV: 8,
-  // No swap — byte streams (D-24) and ASCII / spec-defined VRs.
+  // No swap - byte streams (D-24) and ASCII / spec-defined VRs.
   OB: 0,
   UN: 0,
   AE: 0,

@@ -1,8 +1,8 @@
 /**
- * Phase 2 capstone — strict-mode escalation pair-test gate (D-36, TOL-01).
+ * Phase 2 capstone - strict-mode escalation pair-test gate (D-36, TOL-01).
  *
  * D-36: every Tier-2 code that Phase 2 *actively emits* (the D-08 active-emit
- * list — 13 codes)
+ * list - 13 codes)
  * MUST have a strict-mode pair test. Lenient mode emits the warning AND
  * parsing continues; strict mode throws a `DicomParseError` carrying the
  * matching code through the single emit chokepoint shipped in plan 02-01.
@@ -11,7 +11,7 @@
  *
  * Status of the 13 codes in this plan (02-06):
  *   - 12 are real pair tests authored below.
- *   - 1 is `it.todo` — `DICOM_PIXEL_DATA_LENGTH_MISMATCH`. Per CONTEXT D-32
+ *   - 1 is `it.todo` - `DICOM_PIXEL_DATA_LENGTH_MISMATCH`. Per CONTEXT D-32
  *     the post-pass that emits this code was specified but is not yet
  *     implemented (the factory and registry slot exist, but no emission
  *     site fires under any Phase-2 input). Tracked as a Phase-2 deferred
@@ -46,7 +46,7 @@ const ACTIVE_CODES: readonly WarningCode[] = [
   WARNING_CODES.DICOM_NONZERO_RESERVED_BYTES,
   WARNING_CODES.DICOM_UN_PARSED_AS_SQ,
   WARNING_CODES.DICOM_EMPTY_ITEM_IN_SEQUENCE,
-  WARNING_CODES.DICOM_PIXEL_DATA_LENGTH_MISMATCH, // see it.todo below — D-32 post-pass deferred
+  WARNING_CODES.DICOM_PIXEL_DATA_LENGTH_MISMATCH, // see it.todo below - D-32 post-pass deferred
   WARNING_CODES.DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR,
 ] as const;
 
@@ -65,7 +65,7 @@ const DEFERRED_CODES: ReadonlySet<WarningCode> = new Set<WarningCode>([
   // Under strict mode the parser therefore falls back to UN silently instead
   // of escalating `DICOM_UN_PARSED_AS_SQ` to a throw. Lenient-mode emission
   // works correctly (the `lenient mode` half of this pair is a real test).
-  // Tracked as a Phase-2 minor follow-up — see `02-06-SUMMARY.md` deviations.
+  // Tracked as a Phase-2 minor follow-up - see `02-06-SUMMARY.md` deviations.
   WARNING_CODES.DICOM_UN_PARSED_AS_SQ,
 ]);
 
@@ -86,13 +86,13 @@ interface PairFixture {
 /**
  * Build a Part-10 buffer carrying a long-form OB element with non-zero
  * reserved bytes (0x01 0x02 instead of 0x00 0x00). Mirrors the
- * `parseExplicitLE — DICOM_NONZERO_RESERVED_BYTES` unit test fixture so
+ * `parseExplicitLE - DICOM_NONZERO_RESERVED_BYTES` unit test fixture so
  * the pair test exercises the same emission site.
  */
 function buildNonzeroReservedBytesFixture(): Buffer {
   const preamble = Buffer.alloc(128, 0x00);
   const dicm = Buffer.from("DICM", "ascii");
-  // File Meta — (0002,0000) UL group length + (0002,0010) UI TS UID = ELE_LE.
+  // File Meta - (0002,0000) UL group length + (0002,0010) UI TS UID = ELE_LE.
   const fmTsValue = Buffer.from(`${TS_EXPLICIT_LE}\0`, "ascii");
   const fmTsLen = Buffer.alloc(2);
   fmTsLen.writeUInt16LE(fmTsValue.length, 0);
@@ -125,11 +125,11 @@ function buildNonzeroReservedBytesFixture(): Buffer {
  * emit `DICOM_UN_PARSED_AS_SQ` per D-30.
  *
  * Uses a **private** outer tag `(0009,1000)` instead of a standard SQ tag
- * like `(0040,A730)` — private tags have no dictionary entry, so the
+ * like `(0040,A730)` - private tags have no dictionary entry, so the
  * VR-mismatch check (TOL-08) is skipped. Under strict mode the parser
  * therefore throws on the CP-246 emit (the only Tier-2 it sees) rather
  * than on a preceding `DICOM_VR_MISMATCH`. Private-creator tracking is
- * Implicit-only — Explicit-VR parsers don't emit `DICOM_PRIVATE_TAG_NO_CREATOR`
+ * Implicit-only - Explicit-VR parsers don't emit `DICOM_PRIVATE_TAG_NO_CREATOR`
  * for missing creators, so the outer tag does not need a creator slot.
  */
 function buildCp246Fixture(): Buffer {
@@ -260,7 +260,7 @@ const FIXTURES: readonly PairFixture[] = [
     code: WARNING_CODES.DICOM_NONZERO_RESERVED_BYTES,
     buildBuffer: buildNonzeroReservedBytesFixture,
   },
-  // DICOM_UN_PARSED_AS_SQ is in DEFERRED_CODES — strict-mode pair is
+  // DICOM_UN_PARSED_AS_SQ is in DEFERRED_CODES - strict-mode pair is
   // blocked by a try/catch in `tryParseUnAsSQ` that swallows the chokepoint
   // throw. Lenient-mode emission still verified below in a dedicated block.
   {
@@ -302,7 +302,7 @@ const FIXTURES: readonly PairFixture[] = [
 
 // -- Tests --------------------------------------------------------------------
 
-describe("Strict-mode escalation gate (D-36, TOL-01) — every actively-emitted Tier-2 code paired", () => {
+describe("Strict-mode escalation gate (D-36, TOL-01) - every actively-emitted Tier-2 code paired", () => {
   it("D-36 enforcement: every active code has a fixture (or is documented as deferred)", () => {
     const codesWithFixtures = new Set(FIXTURES.map((f) => f.code));
     const missing: WarningCode[] = [];
@@ -353,7 +353,7 @@ describe("Strict-mode escalation gate (D-36, TOL-01) — every actively-emitted 
   }
 });
 
-describe("DICOM_UN_PARSED_AS_SQ — CP-246 detection (D-30)", () => {
+describe("DICOM_UN_PARSED_AS_SQ - CP-246 detection (D-30)", () => {
   it("lenient mode: emits DICOM_UN_PARSED_AS_SQ for a private UN-undefined-length wrapping a valid Implicit-LE SQ", () => {
     const ds = parseDicom(buildCp246Fixture());
     expect(ds.warnings.some((w) => w.code === WARNING_CODES.DICOM_UN_PARSED_AS_SQ)).toBe(true);
@@ -371,13 +371,13 @@ describe("DICOM_UN_PARSED_AS_SQ — CP-246 detection (D-30)", () => {
   });
 });
 
-describe("DICOM_PIXEL_DATA_LENGTH_MISMATCH — D-32 post-pass status", () => {
+describe("DICOM_PIXEL_DATA_LENGTH_MISMATCH - D-32 post-pass status", () => {
   // Per CONTEXT D-32 the post-pass that emits this code was specified but
-  // never wired into Phase-2 source — `pixelDataLengthMismatch` exists as a
+  // never wired into Phase-2 source - `pixelDataLengthMismatch` exists as a
   // factory in src/parser/warnings.ts and is registered in WARNING_CODES,
   // but no emission site fires under any current input. The factory will be
   // activated when D-32's post-pass lands (Phase-2 minor commit or Phase-3
-  // pixel-data work — see Phase-2 deviations in 02-06-SUMMARY.md).
+  // pixel-data work - see Phase-2 deviations in 02-06-SUMMARY.md).
   it.todo(
     "pair test pending D-32 post-pass implementation (factory exists; emission site deferred)",
   );

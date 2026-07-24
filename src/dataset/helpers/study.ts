@@ -1,9 +1,9 @@
 /**
- * Study-identity view builder (§4.1 — the wrong-patient/wrong-study class).
+ * Study-identity view builder (§4.1 - the wrong-patient/wrong-study class).
  *
  * `instanceUid` is the cross-system study key; `accessionNumber` ties the
  * study back to the placer/filler order. Every field is fail-safe
- * typed-absent — a missing value is `undefined`, never a substituted
+ * typed-absent - a missing value is `undefined`, never a substituted
  * default.
  *
  * @module
@@ -30,7 +30,7 @@ type Tag = string;
  * ```ts
  * import { parseDicom } from "@cosyte/dicom";
  * const s = parseDicom(buf).study;
- * s.instanceUid;     // "1.2.840.113619..." — the cross-system study key
+ * s.instanceUid;     // "1.2.840.113619..." - the cross-system study key
  * s.accessionNumber; // "ACC123"
  * ```
  */

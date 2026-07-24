@@ -5,7 +5,7 @@
  * fallback list (`Z/D`, `X/Z`, `X/D`, `X/Z/D`, `X/Z/U*`, `C/X`) where the
  * stricter action applies only as IOD Type conformance requires. A metadata-only
  * de-identifier does not perform IOD Type-1 conformance analysis, so it resolves
- * every conditional to its **leftmost** branch — which §E.1 lists first as the
+ * every conditional to its **leftmost** branch - which §E.1 lists first as the
  * primary action and which is the most privacy-protective (`X` before `Z` before
  * `D`/`U`). This is conservative and spec-aligned; the trade-off is that a
  * Type-1 attribute that strictly needed a dummy is instead removed/emptied.
@@ -57,14 +57,14 @@ const TEXT_DUMMIES: Partial<Record<VR, string>> = {
 
 /**
  * The dummy value bytes for action `D` on a VR, padded to even length, or
- * `null` when no safe textual dummy exists (binary numeric VRs, `UI`, `SQ`) —
+ * `null` when no safe textual dummy exists (binary numeric VRs, `UI`, `SQ`),
  * in which case the caller falls back to a zero-length value (action `Z`), which
  * is still non-identifying.
  *
  * @example
  * ```ts
  * dummyBytes("DA")?.toString("latin1"); // "10000101"
- * dummyBytes("US"); // null — no safe textual dummy; caller empties instead
+ * dummyBytes("US"); // null - no safe textual dummy; caller empties instead
  * ```
  */
 export function dummyBytes(vr: VR): Buffer | null {

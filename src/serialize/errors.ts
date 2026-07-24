@@ -4,14 +4,14 @@
  * Like the Phase 4 {@link "../dataset/helpers/errors".DicomValueError}, this
  * is **separate** from the parser's four-code `FATAL_CODES` /
  * `DicomParseError` (which are locked to *read*-side Part 10 structural
- * corruption — see `../parser/errors.ts`). The serializer throws only when
+ * corruption - see `../parser/errors.ts`). The serializer throws only when
  * it is asked to emit a buffer it cannot make spec-clean:
  *
- *   - `MISSING_TRANSFER_SYNTAX` — the `Dataset` has no `fileMeta`, or its
+ *   - `MISSING_TRANSFER_SYNTAX` - the `Dataset` has no `fileMeta`, or its
  *     `fileMeta.transferSyntaxUID` is empty. The Transfer Syntax UID is the
  *     dispatch input that decides every byte of the encoding, so there is no
  *     safe default to fall back to.
- *   - `UNSUPPORTED_TRANSFER_SYNTAX` — the Transfer Syntax UID is not one of
+ *   - `UNSUPPORTED_TRANSFER_SYNTAX` - the Transfer Syntax UID is not one of
  *     the four v1 syntaxes the writer (and parser) support. The writer never
  *     transcodes, so it cannot emit a syntax it does not understand.
  *

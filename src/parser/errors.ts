@@ -2,9 +2,9 @@
  * Fatal error taxonomy for the `@cosyte/dicom` parser pipeline.
  *
  * Phase 2 core-parser context:
- *   - D-09 — `FATAL_CODES` is a frozen `as const` registry with EXACTLY
+ *   - D-09 - `FATAL_CODES` is a frozen `as const` registry with EXACTLY
  *     four codes; anything less severe MUST be a Tier-2 warning.
- *   - D-10 — `DicomParseError` carries `code`, `byteOffset`, `snippet`
+ *   - D-10 - `DicomParseError` carries `code`, `byteOffset`, `snippet`
  *     (up to 16 source bytes, space-separated lowercase hex), and an
  *     optional `contextPath`. The thrown `Error.message` is formatted
  *     `[CODE] msg (offset=N)` with `… in path/segments` appended when
@@ -69,7 +69,7 @@ export type FatalCode = (typeof FATAL_CODES)[keyof typeof FATAL_CODES];
 
 /**
  * Thrown by `parseDicom` when the input violates one of the four
- * unrecoverable Tier-3 structural rules — or, under `{ strict: true }`,
+ * unrecoverable Tier-3 structural rules - or, under `{ strict: true }`,
  * when any Tier-2 warning is escalated through the single `emit`
  * chokepoint (D-35). Carries byte-offset positional context plus a short
  * source snippet so consumers can log actionable errors.
@@ -78,7 +78,7 @@ export type FatalCode = (typeof FATAL_CODES)[keyof typeof FATAL_CODES];
  * when `contextPath` is provided.
  *
  * @remarks
- * Snippets may contain PHI when parsing real clinical files — redact at
+ * Snippets may contain PHI when parsing real clinical files - redact at
  * the call site if required by your compliance posture. The library does
  * not redact snippets itself.
  *

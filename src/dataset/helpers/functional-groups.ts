@@ -3,16 +3,16 @@
  *
  * An Enhanced object carries two parallel structures:
  *
- *   - Per-Frame Functional Groups Sequence `(5200,9230)` — one item per
+ *   - Per-Frame Functional Groups Sequence `(5200,9230)` - one item per
  *     frame, holding the macros that vary frame-to-frame;
- *   - Shared Functional Groups Sequence `(5200,9229)` — a single item with
+ *   - Shared Functional Groups Sequence `(5200,9229)` - a single item with
  *     the macros constant across every frame.
  *
  * A frame's value for any macro is resolved **Per-Frame-else-Shared**: look
  * in this frame's per-frame item first, then fall back to the shared item.
  * Each macro is itself a single-item nested sequence. The three *geometry*
  * macros (Pixel Measures, Plane Position, Plane Orientation) are required
- * for an enhanced object — if one is absent from *both* groups the frame
+ * for an enhanced object - if one is absent from *both* groups the frame
  * cannot be placed and we throw {@link DicomValueError}
  * `MISSING_REQUIRED_FUNCTIONAL_GROUP` rather than silently mis-locate it.
  *
@@ -49,7 +49,7 @@ type Tag = string;
 
 /**
  * `true` when this dataset carries either functional-group sequence
- * (Per-Frame `(5200,9230)` or Shared `(5200,9229)`) — i.e. it is an
+ * (Per-Frame `(5200,9230)` or Shared `(5200,9229)`) - i.e. it is an
  * Enhanced multi-frame object.
  *
  * @example

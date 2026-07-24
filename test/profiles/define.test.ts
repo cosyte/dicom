@@ -3,8 +3,8 @@
  * private-key helpers (`canonicalPrivateKey` / `resolvePrivateTag`), and the
  * `ProfileDefinitionError` failure surface.
  *
- * These exercise the author-time layer in isolation — validation, `extends`
- * composition, immutability, and `describe()` — without touching the byte
+ * These exercise the author-time layer in isolation - validation, `extends`
+ * composition, immutability, and `describe()` - without touching the byte
  * parser. Private-creator strings used here are synthetic vendor schema
  * identifiers, never PHI.
  *
@@ -23,7 +23,7 @@ describe("defineProfile: name + option-key validation", () => {
   });
 
   it("throws on an unknown top-level option key", () => {
-    // @ts-expect-error — deliberately passing an unknown key to hit the guard.
+    // @ts-expect-error - deliberately passing an unknown key to hit the guard.
     expect(() => defineProfile({ name: "x", privateTag: {} })).toThrow(
       /Unknown defineProfile option "privateTag"/,
     );
@@ -31,7 +31,7 @@ describe("defineProfile: name + option-key validation", () => {
 
   it("attaches the offending profile name to the error (when known)", () => {
     try {
-      // @ts-expect-error — unknown key on a named profile.
+      // @ts-expect-error - unknown key on a named profile.
       defineProfile({ name: "acme", bogus: 1 });
       expect.unreachable("should have thrown");
     } catch (err) {
@@ -53,14 +53,14 @@ describe("defineProfile: name + option-key validation", () => {
 describe("defineProfile: warning-code validation", () => {
   it("throws on an unknown escalate code", () => {
     expect(() =>
-      // @ts-expect-error — not a member of the WarningCode union.
+      // @ts-expect-error - not a member of the WarningCode union.
       defineProfile({ name: "x", escalate: ["NOPE"] }),
     ).toThrow(/escalate lists unknown warning code "NOPE"/);
   });
 
   it("throws on an unknown suppress code", () => {
     expect(() =>
-      // @ts-expect-error — not a member of the WarningCode union.
+      // @ts-expect-error - not a member of the WarningCode union.
       defineProfile({ name: "x", suppress: ["ALSO_NOPE"] }),
     ).toThrow(/suppress lists unknown warning code "ALSO_NOPE"/);
   });
@@ -109,7 +109,7 @@ describe("defineProfile: private-dictionary validation + normalization", () => {
     expect(() =>
       defineProfile({
         name: "x",
-        // @ts-expect-error — "ZZ" is not a VR.
+        // @ts-expect-error - "ZZ" is not a VR.
         privateTags: { ACME: { "0019XX10": { vr: "ZZ", keyword: "k", name: "n" } } },
       }),
     ).toThrow(/invalid VR "ZZ"/);
@@ -119,7 +119,7 @@ describe("defineProfile: private-dictionary validation + normalization", () => {
     expect(() =>
       defineProfile({
         name: "x",
-        // @ts-expect-error — keyword/name omitted; runtime guard must catch it.
+        // @ts-expect-error - keyword/name omitted; runtime guard must catch it.
         privateTags: { ACME: { "0019XX10": { vr: "DS" } } },
       }),
     ).toThrow(/must supply string "keyword" and "name"/);
