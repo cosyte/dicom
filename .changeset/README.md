@@ -10,6 +10,6 @@ Add a changeset for every meaningful change:
 pnpm changeset
 ```
 
-During pre-alpha, pick **patch** — that keeps the package on the `0.0.x` ladder until its first
+During pre-alpha, pick **patch**: that keeps the package on the `0.0.x` ladder until its first
 alpha. (`@cosyte/dicom` is currently `private`; it versions locally but won't publish until the flag
 is removed.) See the cosyte version ladder in the meta-repo's `documentation/conventions.md`.

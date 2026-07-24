@@ -2,7 +2,7 @@
 
 This directory is reserved for the PS3.15 DocBook XML fallback path (D-14). The
 Phase 1 discovery sub-task determined the Innolitics-machine-readable path was
-sufficient — see `scripts/_annex-e-discovery.md`.
+sufficient: see `scripts/_annex-e-discovery.md`.
 
 This directory contains only this README and a `.gitkeep` placeholder. If a future
 re-pinning needs to switch to the NEMA fallback (because Innolitics drops Annex E
@@ -21,5 +21,5 @@ publication), follow plan 03's NEMA-fallback procedure:
 7. Update `scripts/generate-annex-e.ts` to take the DocBook-XML branch (the generator
    already has a comment-marked seam for the fallback parser).
 
-The SHA pinning in `SHA.txt` and the generator's input-path read in lockstep — they
+The SHA pinning in `SHA.txt` and the generator's input-path read in lockstep: they
 are committed together so that re-pinning is one PR.

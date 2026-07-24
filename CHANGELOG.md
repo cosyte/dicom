@@ -8,8 +8,8 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 - **`docs-content/` now covers the full canonical Diátaxis spine** (`DOCS-CONTENT-P6`). Beyond the
   existing Overview (`intro`), the sidebar gains **Installation** and **Quickstart** (tutorials),
-  five **Core Concepts** notes — the object model, the tolerance/warning model, the typed value
-  layer, the safety-critical views, and the source-profile system — a **Guides** cookbook (four
+  five **Core Concepts** notes (the object model, the tolerance/warning model, the typed value
+  layer, the safety-critical views, and the source-profile system), a **Guides** cookbook (four
   recipes: re-serialize, de-identify, read raw pixel data, triage warnings), and a
   **Troubleshooting & known limitations** reference. Every documented capability is grounded in the
   package's actually-shipped surface; the metadata-first boundary is stated explicitly, with the
@@ -18,7 +18,7 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 - **Doc/code-agreement gate (`test/docs-content.test.ts`).** Every ` ```ts runnable ` snippet in
   `docs-content/` is extracted, compiled, and executed against the **built** package via
   `docSnippetSuite()` from `@cosyte/vitest-config/snippets`, with its inline `// =>` assertions
-  checked — so a documented example can never silently drift from the code. All examples use
+  checked, so a documented example can never silently drift from the code. All examples use
   synthetic, base64-encoded Part 10 objects (invented patient, fake UIDs); no real PHI, no `.dcm`
   file on disk.
 
@@ -27,7 +27,7 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 - **Bumped the `@cosyte/vitest-config` devDependency to `^0.0.2`** to pick up the `./snippets`
   export that ships the doc/code-agreement runner.
 - **Corrected the element-access examples in `intro.md`.** `Dataset.get` / `has` take the
-  8-character `(group,element)` **tag** form only — the prior snippets showed `get("PatientName")`,
+  8-character `(group,element)` **tag** form only. The prior snippets showed `get("PatientName")`,
   `get("(0010,0010)")`, and `get("StudyDate")`, all of which return `undefined`. They now use the
   tag form (and show resolving a keyword to its tag via `Dictionary.byKeyword`), matching the code.
 
@@ -47,11 +47,11 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   `installation.md` claimed the package was "not yet published to npm" and that the install command
   was only "the shape it will take at first publish"; `troubleshooting.md` listed a "Not yet
   published … not on npm; the first provenance publish is gated on the coordinated public launch"
-  non-goal. `@cosyte/dicom` is published on npm at `0.0.1` and public. Both now state the truth —
-  published, public, still pre-alpha on the `0.0.x`-until-first-alpha ladder — and the troubleshooting
+  non-goal. `@cosyte/dicom` is published on npm at `0.0.1` and public. Both now state the truth
+  (published, public, still pre-alpha on the `0.0.x`-until-first-alpha ladder), and the troubleshooting
   bullet becomes an honest pin-your-version pre-alpha caveat rather than a stale non-goal.
 
-- **`private: true` removed — `@cosyte/dicom` can publish.** The flag dated to the very first
+- **`private: true` removed: `@cosyte/dicom` can publish.** The flag dated to the very first
   scaffold commit and was never explained; `changeset publish` silently skips a private package, so
   this repo was the one parser that could not reach npm even once its pipeline worked. It also
   contradicted the `publishConfig: { access: "public" }` in the same file. Removed as part of the
@@ -63,25 +63,25 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   reference, retargeted at `src/version.ts`) and the `version` script that runs it after
   `changeset version`, so the bump and the `VERSION` constant land in the same commit.
 - **`VERSION` is no longer typed as a string literal.** It was declared `export const VERSION =
-"0.0.0"`, giving it the literal type `"0.0.0"` — so the exported type would change on every
+"0.0.0"`, giving it the literal type `"0.0.0"`, so the exported type would change on every
   release, making each version bump a breaking type change. Now annotated `: string`, matching the
   `hl7` reference. Type-only; the runtime value is unchanged. Done now because the package is
-  unpublished — after the first publish this would itself be a breaking change.
+  unpublished. After the first publish this would itself be a breaking change.
 
 - **The Release workflow can actually start.** `.github/workflows/release.yml` calls the shared
   `cosyte/.github` pipeline, which requests `contents`/`id-token`/`pull-requests: write`, but declared
-  no `permissions:` of its own — so it inherited the repo default of `contents: read`. A called
+  no `permissions:` of its own, so it inherited the repo default of `contents: read`. A called
   workflow may only downgrade the caller's `GITHUB_TOKEN`, never escalate it, so GitHub rejected the
   workflow at startup (~1s, no jobs, no logs). Every Release run from June 2026 until now failed this
   way, unnoticed, because a `startup_failure` produces no logs to read. The caller job now declares
-  the three scopes explicitly. CI-only — no runtime or API change.
+  the three scopes explicitly. CI-only: no runtime or API change.
 
 ### Security
 
-- **Dev-dependency advisory remediation (no runtime impact — the published
+- **Dev-dependency advisory remediation (no runtime impact: the published
   artifact is unchanged).** Added scoped `pnpm.overrides` pinning two
   transitive **dev/build-time** packages to their patched releases: `esbuild`
-  (`>=0.27.3 <0.28.1` → `0.28.1`; GHSA dev-server path-traversal — not
+  (`>=0.27.3 <0.28.1` → `0.28.1`; GHSA dev-server path-traversal, not
   reachable here: the library builds via `tsup`/`vitest` and never runs
   `esbuild serve`) and the `@changesets/parse` copy of `js-yaml`
   (`>=4.0.0 <4.2.0` → `4.2.0`; GHSA-h67p-54hq-rp68 merge-key DoS). The
@@ -98,21 +98,21 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   interoperates with; the notice records that cosyte is not affiliated with, endorsed by, or
   sponsored by any of them, that every reference is descriptive, and that the built-in profiles are
   authored from public sources only. Added to `files` so it ships inside the published tarball, not
-  just on GitHub. Documentation only — no runtime or API change.
+  just on GitHub. Documentation only: no runtime or API change.
 
 - **Lossless File Meta round-trip.** The parser now retains non-modeled
-  `(0002,xxxx)` File Meta elements — e.g. `(0002,0017)`/`(0002,0018)`
+  `(0002,xxxx)` File Meta elements (e.g. `(0002,0017)`/`(0002,0018)`
   Sending/Receiving AE Title, `(0002,0100)` Private Information Creator UID,
-  `(0002,0102)` Private Information — as raw on-wire bytes on the new
+  `(0002,0102)` Private Information) as raw on-wire bytes on the new
   `FileMeta.extraElements` view (each a `FileMetaRawElement` carrying the tag,
   its Explicit-VR-LE VR, and a defensively copied even-length value). The
   serializer merges these with the typed fields and emits the whole group in
   ascending tag order (PS3.5 §7.4) with a recomputed `(0002,0000)` group length
-  (PS3.10 §7.1), so an exotic File Meta group now round-trips byte-for-byte —
+  (PS3.10 §7.1), so an exotic File Meta group now round-trips byte-for-byte,
   not just the typed fields. New exported type: `FileMetaRawElement`. This
   resolves the Phase 5 serializer known-limitation ("only the typed `FileMeta`
   fields round-trip").
-- **Documentation completeness (Phase 8).** Rewrote `README.md` into a full developer guide — quickstart,
+- **Documentation completeness (Phase 8).** Rewrote `README.md` into a full developer guide: quickstart,
   feature tour, a "DICOM in 90 seconds" primer, the two access patterns, an 80/20 **cookbook** (index a
   folder, build routing keys, read pixel-interpretation metadata safely, de-identify, bridge to FHIR
   `ImagingStudy` / HL7 v2, round-trip serialize), the four-tier tolerance model, the warning/fatal code
@@ -120,13 +120,13 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   export now carries a JSDoc `@example`. Extended the dual ESM/CJS smoke harnesses to exercise the full
   Phase 1–7 published surface so the documented entrypoints are guaranteed importable from both module
   systems. Also corrected an `intro.md` snippet that referenced a nonexistent `ds.pixelData` getter (the
-  real accessor is `ds.get("PixelData")?.value`). Docs-only — no runtime API change.
+  real accessor is `ds.get("PixelData")?.value`). Docs-only: no runtime API change.
 - **Metadata-level de-identification (Phase 7).** New `deidentify(ds, options?)` applies the PS3.15
   Annex E **Basic Application Level Confidentiality Profile** plus the nine metadata-affecting Annex E
   Options (`RetainUIDs`, `RetainLongitudinalTemporal`, `RetainPatientCharacteristics`,
   `RetainDeviceIdentity`, `RetainInstitutionIdentity`, `RetainSafePrivate`, `CleanDescriptors`,
   `CleanStructuredContent`, `CleanGraphics`), driven by the generated Table E.1-1 action map. It is a
-  **pure** function — the input `Dataset` is never mutated; it returns a fresh de-identified `Dataset`
+  **pure** function: the input `Dataset` is never mutated; it returns a fresh de-identified `Dataset`
   and a value-free `DeidentifyReport` (tags, keywords, resolved action codes, the UID map, warnings).
   Each attribute's action (`D` dummy, `Z` zero-length, `X` remove, `K` keep, `C` clean, `U` consistent
   UID) is resolved from the Basic Profile, overridden by any active Option; conditional codes (`Z/D`,
@@ -152,31 +152,31 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   `escalate` (Tier-2 warning codes promoted to a thrown `DicomParseError`), `suppress` (codes silenced
   as a documented benign quirk of the source), and `privateTags` (a private-creator-keyed overlay that
   resolves the Implicit VR of vendor private data elements). Private resolution is keyed on the file's
-  **live** private-creator string and the canonical `"GGGGxxLL"` key (PS3.5 §7.8.1) — never a
-  hard-coded block number — so the same vendor schema resolves regardless of which block it landed in.
+  **live** private-creator string and the canonical `"GGGGxxLL"` key (PS3.5 §7.8.1), never a
+  hard-coded block number, so the same vendor schema resolves regardless of which block it landed in.
   Profiles compose via `extends` (de-duplicated lineage, union of escalations/suppressions, child-wins
   dictionary merge) and expose a deterministic `describe()` summary. Five built-ins ship under the
   frozen `profiles` namespace: three vendor overlays (`ge`, `siemens`, `philips`, grounded in the
   public GDCM / dcm4che / dcm2niix private dictionaries) and two posture presets (`strict` escalates
   integrity-relevant warnings; `lenient` suppresses cosmetic, high-volume ones). A creator the active
   profile does not recognize degrades to generic `UN` plus the new `DICOM_PRIVATE_CREATOR_UNKNOWN`
-  warning — never a wrong decode. Selecting a profile never changes a correct decode. New public
+  warning, never a wrong decode. Selecting a profile never changes a correct decode. New public
   exports: `defineProfile`, `profiles`, `ProfileDefinitionError`, and the types `Profile`,
   `PrivateTagDefinition`, `DefineProfileOptions`, `ProfilePrivateTags`; `ParseOptions` gains an
   optional `profile` field. The reserved `DICOM_PRIVATE_CREATOR_UNKNOWN` code is now actively emitted
   (no change to the `WARNING_CODES` registry surface).
 - **Spec-clean Part 10 serializer (Phase 5).** New `serializeDicom(ds)` writes a `Dataset` back to a
-  DICOM Part 10 `Buffer` — the conservative half of Postel's Law. Emits the 128-byte zero preamble +
+  DICOM Part 10 `Buffer`, the conservative half of Postel's Law. Emits the 128-byte zero preamble +
   `DICM`, a File Meta group (always Explicit VR LE) with a computed `(0002,0000)` group length and
   conservative Type-1 defaults (File Meta Version `0x0001`, cosyte Implementation Class UID under the
-  `2.25` UUID arc), then the dataset body in the dataset's own transfer syntax — **no transcode** —
+  `2.25` UUID arc), then the dataset body in the dataset's own transfer syntax (**no transcode**)
   across all four v1 syntaxes (Implicit VR LE, Explicit VR LE/BE, Deflated Explicit VR LE). Scalar
   values are padded to even length per PS3.5 §6.2 (`0x00` for `UI`/byte-stream VRs, `0x20` for text),
   short vs long-form headers are chosen by VR per §7.1.2 (`SV`/`UV` long-form), retired `(gggg,0000)`
   group-length elements are omitted per §7.2, and sequence + encapsulated-pixel-data spans pass
-  through byte-for-byte per §7.5 / §A.4. Pure function — the input `Dataset` is never mutated.
+  through byte-for-byte per §7.5 / §A.4. Pure function: the input `Dataset` is never mutated.
 - **Serializer error taxonomy.** New `DicomSerializeError` with codes `MISSING_TRANSFER_SYNTAX`
-  (no File Meta Transfer Syntax UID) and `UNSUPPORTED_TRANSFER_SYNTAX` (a UID outside the v1 set) —
+  (no File Meta Transfer Syntax UID) and `UNSUPPORTED_TRANSFER_SYNTAX` (a UID outside the v1 set),
   separate from the parser's fatal codes and the value layer's `DicomValueError`. The message is
   built only from the code + the offending Transfer Syntax UID (structural facts), never a decoded
   value, so it is always safe to log. New public exports: `serializeDicom`, `DicomSerializeError`,
@@ -188,7 +188,7 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   fields round-trip; any other `(0002,xxxx)` element a source file carried (e.g. `(0002,0100)` Private
   Information Creator UID) is dropped at _parse_ time (the Phase 2 `FileMeta` view does not model it)
   and so cannot be re-emitted. The preamble is normalized to zeros and odd-length values are padded
-  even — the output stays spec-clean but is not a byte-identical copy of a non-conformant input.
+  even. The output stays spec-clean but is not a byte-identical copy of a non-conformant input.
 
 ### Tests
 
@@ -209,7 +209,7 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   tuple plus Other Patient IDs (so a caller never matches on a bare, non-unique `(0010,0020)`) and
   keeps `PN` structured; `study`/`series` surface the cross-system UIDs, accession number, modality
   and Frame of Reference UID. `image` surfaces the pixel-interpretation + geometry metadata a
-  renderer needs — with the safety-critical omissions intact: `rescaleSlope` is **absent** (not `1`)
+  renderer needs, with the safety-critical omissions intact: `rescaleSlope` is **absent** (not `1`)
   when the tag is absent, `signed` is absent (never guessed) unless `(0028,0103)` was present,
   `photometricInterpretation` is never defaulted to `MONOCHROME2`, and the three pixel-spacing tags
   (`(0028,0030)` / `(0018,1164)` / `(0018,2010)`) are distinct, never aliased.
@@ -217,7 +217,7 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   Per-Frame-else-Shared (PS3.3 §C.7.6.16): Pixel Measures, Plane Position, Plane Orientation, Pixel
   Value Transformation, Frame VOI LUT. `image.isEnhancedMultiFrame` flags such objects.
 - **Value-layer error taxonomy.** New `DicomValueError` (codes `FRAME_INDEX_OUT_OF_RANGE`,
-  `MISSING_REQUIRED_FUNCTIONAL_GROUP`) — separate from the parser's four fatal codes. The helpers are
+  `MISSING_REQUIRED_FUNCTIONAL_GROUP`), separate from the parser's four fatal codes. The helpers are
   otherwise fail-safe (typed-absent for missing data) and throw only for a structural contract
   violation; the error message carries only structural facts (indices, tag/macro names), never a
   decoded PHI value.
@@ -230,7 +230,7 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   `CodedConcept`, `RealWorldValueMap`, `FrameFunctionalGroups`, `ValueErrorCode`, plus
   `VALUE_ERROR_CODES` and the `readCode` / `codingSchemeOid` / `CODING_SCHEME_OIDS` helpers.
 - **VR value decode + dataset navigation (Phase 3).** `Element.value` now lazily decodes (and
-  memoizes) an element's raw bytes into a typed, discriminated `DicomValue` covering all 34 VRs —
+  memoizes) an element's raw bytes into a typed, discriminated `DicomValue` covering all 34 VRs:
   numbers (`US/UL/SS/SL/FL/FD`), 64-bit `bigint`s (`SV/UV`), attribute tags (`AT`), person names
   (`PN` → 3-group / 5-component), strings, free text, numeric strings (`DS/IS` → `number | null`,
   never `NaN`→0), temporal values (`DA/TM/DT`), sequences (`SQ` → threaded items), and raw `binary`
@@ -254,7 +254,7 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   (`_arbitraries.ts`) plus invariant suites for round-trip fidelity, lenient-mode robustness,
   parsed-model immutability, warning/fatal-code stability (snapshot), and a byte-parser fuzz sweep
   that feeds arbitrary buffers + random truncations and asserts the parser only ever throws a
-  sanctioned Tier-3 `DicomParseError` — never an unexpected error, hang, or OOM. No public API
+  sanctioned Tier-3 `DicomParseError`, never an unexpected error, hang, or OOM. No public API
   change. (devDeps: `@cosyte/test-utils@^0.0.1`, `fast-check@3.23.2`.)
 
 ### Changed
