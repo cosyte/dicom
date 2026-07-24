@@ -1,12 +1,12 @@
 /**
- * `ProfileDefinitionError` — the single typed failure surface for
+ * `ProfileDefinitionError` - the single typed failure surface for
  * `defineProfile()`. Thrown (never returned) when profile-author input is
  * malformed: a bad name, an unknown option key, an unknown warning code, an
  * invalid VR, or a private-tag key that does not match the canonical
  * `GGGGxxEE` notation.
  *
  * This is distinct from the parse-time taxonomy (`DicomParseError` /
- * `DicomValueError` / `DicomSerializeError`) — a profile is built once, at
+ * `DicomValueError` / `DicomSerializeError`) - a profile is built once, at
  * author time, long before any byte is parsed, so its errors never carry a
  * byte offset.
  *

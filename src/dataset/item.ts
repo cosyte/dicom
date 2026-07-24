@@ -1,5 +1,5 @@
 /**
- * Phase 2 structural `Item` — a single `(FFFE,E000)`-delimited Item
+ * Phase 2 structural `Item` - a single `(FFFE,E000)`-delimited Item
  * inside a Sequence, carrying a nested `Dataset`.
  *
  * Per `02-CONTEXT.md` D-04: structural surface only; navigation methods
@@ -11,7 +11,7 @@
 import { Dataset, type DatasetInit } from "./dataset.js";
 
 /**
- * Initialiser shape for an `Item` — extends `DatasetInit` with `index`,
+ * Initialiser shape for an `Item` - extends `DatasetInit` with `index`,
  * the 0-based position of the item inside its parent `Sequence`.
  *
  * @internal

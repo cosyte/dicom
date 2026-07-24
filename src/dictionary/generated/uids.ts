@@ -1,5 +1,5 @@
 /* eslint-disable */
-// generated — do not edit by hand.
+// generated - do not edit by hand.
 //
 // Generator: scripts/generate-dictionary.ts
 // Innolitics dicom-standard SHA (pinned, full): 90571bcc4e46b08bc815bd683e6c466308bcff9a

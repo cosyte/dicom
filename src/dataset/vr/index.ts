@@ -1,7 +1,7 @@
 /**
  * Public barrel for the Phase 3 VR value decoders.
  *
- * Excluded from the coverage gate (barrels are not measured) — the dispatch
+ * Excluded from the coverage gate (barrels are not measured) - the dispatch
  * logic lives in `./decode.ts` so it is covered.
  *
  * @module

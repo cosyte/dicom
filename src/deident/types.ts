@@ -11,7 +11,7 @@ import type { Profile } from "../parser/types.js";
 import type { DicomParseWarning } from "../parser/warnings.js";
 
 /**
- * The PS3.15 Annex E option sets `deidentify` honours — the nine
+ * The PS3.15 Annex E option sets `deidentify` honours - the nine
  * *metadata-affecting* columns of Table E.1-1. The two pixel-level options
  * (`CleanPixelData` §E.3.1, `CleanRecognizableVisual` §E.3.2) are deliberately
  * excluded: this is a metadata-only de-identifier and cannot inspect pixels
@@ -45,16 +45,16 @@ export const DEIDENTIFY_OPTIONS: readonly DeidentifyOption[] = Object.freeze([
 ]);
 
 /**
- * What `deidentify` actually did to one attribute — the concrete outcome of the
+ * What `deidentify` actually did to one attribute - the concrete outcome of the
  * resolved Annex E action.
  *
- * - `removed` — the element was deleted (`X`).
- * - `emptied` — replaced with a zero-length value (`Z`).
- * - `dummied` — replaced with a non-identifying dummy of compatible VR (`D`).
- * - `uid-remapped` — UID(s) replaced with internally-consistent UIDs (`U`).
- * - `cleaned` — conservatively blanked because a safe similar-meaning value
+ * - `removed` - the element was deleted (`X`).
+ * - `emptied` - replaced with a zero-length value (`Z`).
+ * - `dummied` - replaced with a non-identifying dummy of compatible VR (`D`).
+ * - `uid-remapped` - UID(s) replaced with internally-consistent UIDs (`U`).
+ * - `cleaned` - conservatively blanked because a safe similar-meaning value
  *   cannot be synthesised at the metadata layer (`C`; see known limitations).
- * - `kept` — retained, either by an active Retain option or because the SQ was
+ * - `kept` - retained, either by an active Retain option or because the SQ was
  *   kept and its items cleaned recursively.
  *
  * @example
@@ -67,8 +67,8 @@ export const DEIDENTIFY_OPTIONS: readonly DeidentifyOption[] = Object.freeze([
 export type AppliedAction = "removed" | "emptied" | "dummied" | "uid-remapped" | "cleaned" | "kept";
 
 /**
- * One audited attribute outcome. Carries only structural facts — tag, keyword,
- * the resolved Annex E action code, and the SQ context path — **never** a
+ * One audited attribute outcome. Carries only structural facts - tag, keyword,
+ * the resolved Annex E action code, and the SQ context path - **never** a
  * decoded value, so a report is always safe to log.
  *
  * @example
@@ -76,7 +76,7 @@ export type AppliedAction = "removed" | "emptied" | "dummied" | "uid-remapped" |
  * import { deidentify, parseDicom, type DeidentifiedAttribute } from "@cosyte/dicom";
  * const { report } = deidentify(parseDicom(buf));
  * report.attributes.forEach((a: DeidentifiedAttribute) => {
- *   console.log(a.keyword, a.action, a.applied); // structural facts only — safe to log
+ *   console.log(a.keyword, a.action, a.applied); // structural facts only - safe to log
  * });
  * ```
  */
@@ -92,7 +92,7 @@ export interface DeidentifiedAttribute {
 
 /**
  * The audit trail returned alongside the de-identified dataset. Contains no
- * decoded values — only tags, keywords, action codes, and the UID map (whose
+ * decoded values - only tags, keywords, action codes, and the UID map (whose
  * keys/values are UIDs, not patient data).
  *
  * @example
@@ -110,14 +110,14 @@ export interface DeidentifyReport {
   readonly removedPrivateTags: readonly Tag[];
   /** Source UID → replacement UID, for cross-file consistency. */
   readonly uidMap: ReadonlyMap<string, string>;
-  /** Safety warnings — notably burned-in-pixel annotation that cannot be cleaned. */
+  /** Safety warnings - notably burned-in-pixel annotation that cannot be cleaned. */
   readonly warnings: readonly DicomParseWarning[];
   /** The Retain/Clean options that were active for this run. */
   readonly retained: readonly DeidentifyOption[];
 }
 
 /**
- * Options controlling a de-identification run. All optional — the default is
+ * Options controlling a de-identification run. All optional - the default is
  * the Basic Application Level Confidentiality Profile with no Retain options.
  *
  * @example
@@ -135,8 +135,8 @@ export interface DeidentifyOptions {
   /**
    * A caller-owned source→replacement UID cache. Pass one shared map across a
    * whole study/archive to make UID remapping consistent by construction even
-   * across separate calls (it is consistent anyway — the mapping is content-
-   * derived — but a shared map also makes repeats O(1)).
+   * across separate calls (it is consistent anyway - the mapping is content-
+   * derived - but a shared map also makes repeats O(1)).
    */
   readonly uidMap?: Map<string, string>;
   /**
@@ -198,14 +198,14 @@ export type DeidentifyErrorCode =
  * Thrown for an author-time misconfiguration of {@link deidentify} (an unknown
  * Retain option, a malformed UID root). Distinct from the parser's fatal codes,
  * the value layer's `DicomValueError`, and the serializer's `DicomSerializeError`.
- * The message carries only structural facts (option names, the UID root) — never
+ * The message carries only structural facts (option names, the UID root) - never
  * a decoded value.
  *
  * @example
  * ```ts
  * import { deidentify, DeidentifyError } from "@cosyte/dicom";
  * try {
- *   // @ts-expect-error — not a valid option
+ *   // @ts-expect-error - not a valid option
  *   deidentify(ds, { retain: ["RetainEverything"] });
  * } catch (e) {
  *   if (e instanceof DeidentifyError) console.error(e.code); // "INVALID_OPTIONS"

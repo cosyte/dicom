@@ -1,5 +1,5 @@
 /**
- * Built-in **GE** source profile — private-dictionary overlay for the GE
+ * Built-in **GE** source profile - private-dictionary overlay for the GE
  * Medical Systems (`GEMS_*`) private blocks most commonly mined out of MR
  * files: pulse-sequence identity and the diffusion gradient direction / b-value
  * triple that the neuroimaging community relies on. Under Implicit VR LE these
@@ -7,10 +7,10 @@
  * `UN`; with it they resolve to their vendor-documented VRs.
  *
  * Resolution is keyed on the **live private-creator string**, never a fixed
- * block number (PS3.5 §7.8.1) — the canonical `"GGGGxxLL"` key collapses the
+ * block number (PS3.5 §7.8.1) - the canonical `"GGGGxxLL"` key collapses the
  * file-assigned block byte to the `xx` placeholder.
  *
- * Sources (public vendor schema identifiers — NOT PHI):
+ * Sources (public vendor schema identifiers - NOT PHI):
  *   - GDCM private dictionary (`gdcmPrivateDefaultDicts.cxx`, `GEMS_*` creators).
  *   - dcm4che `private.xml`.
  *   - dcm2niix GE diffusion-tag notes (`GEMS_ACQU_01` / `GEMS_PARM_01`).

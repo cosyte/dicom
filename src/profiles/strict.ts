@@ -1,5 +1,5 @@
 /**
- * Built-in **strict** tolerance preset — a posture profile (no private
+ * Built-in **strict** tolerance preset - a posture profile (no private
  * dictionary) that escalates the integrity-relevant Tier-2 warnings to thrown
  * `DicomParseError`s. Use it for conformance gating: an archive-validation or
  * gateway-ingest path that should *reject* a file the moment it deviates in a
@@ -11,7 +11,7 @@
  * length under Explicit VR, non-zero reserved bytes, an orphaned private
  * element, a UN-as-SQ descent, a File Meta group-length mismatch). Purely
  * cosmetic deviations (odd-length padding, a SPACE-padded UI, a missing
- * preamble) are left as warnings — strict is conformance gating, not pedantry.
+ * preamble) are left as warnings - strict is conformance gating, not pedantry.
  *
  * A preset never *loosens* the parse: outside the four Tier-3 fatals the
  * unprofiled default already tolerates everything, and `strict` only tightens.

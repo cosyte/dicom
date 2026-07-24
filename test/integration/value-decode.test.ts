@@ -1,5 +1,5 @@
 /**
- * Phase 3 capstone — end-to-end value decode through the public surface.
+ * Phase 3 capstone - end-to-end value decode through the public surface.
  *
  * Exercises `Element.value` + the `Dataset.get/has/elements/getAll`
  * navigation API over full Part 10 fixtures built by `build-dicom.ts`,
@@ -19,7 +19,7 @@ import { buildDicom } from "../helpers/build-dicom.js";
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
 const TS_EXPLICIT_BE = "1.2.840.10008.1.2.2";
 
-describe("Element.value — end-to-end decode", () => {
+describe("Element.value - end-to-end decode", () => {
   it("decodes PN to its structured form via Dataset.get", () => {
     const ds = parseDicom(
       buildDicom({
@@ -32,7 +32,7 @@ describe("Element.value — end-to-end decode", () => {
     if (v?.kind === "personName") expect(v.values[0]?.alphabetic.givenName).toBe("Jane");
   });
 
-  it("decodes US (Rows) — endianness honored for Explicit BE", () => {
+  it("decodes US (Rows) - endianness honored for Explicit BE", () => {
     // US=512 → caller passes native LE bytes; encoder swaps to BE for the BE TS.
     const value = Buffer.from([0x00, 0x02]);
     for (const ts of [TS_EXPLICIT_LE, TS_EXPLICIT_BE]) {
@@ -45,7 +45,7 @@ describe("Element.value — end-to-end decode", () => {
     }
   });
 
-  it("memoizes — repeated .value access returns the same object", () => {
+  it("memoizes - repeated .value access returns the same object", () => {
     const ds = parseDicom(
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,

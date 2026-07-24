@@ -34,7 +34,7 @@ describe("Dictionary.lookup (DICT-03 + DICT-04)", () => {
     expect(byKw).toBeDefined();
     expect(byTag?.tag).toBe(byKw?.tag);
     expect(byTag?.keyword).toBe(byKw?.keyword);
-    // Same object reference — TAGS map is the single source of truth.
+    // Same object reference - TAGS map is the single source of truth.
     expect(byTag).toBe(byKw);
   });
 
@@ -59,7 +59,7 @@ describe("Dictionary.lookup (DICT-03 + DICT-04)", () => {
 
   it("does NOT resolve repeating-group placeholder tags via lookup() (concrete-tags only)", () => {
     // (50xx,xxxx) family entries are stored under lowercase-x ids and are
-    // intentionally not retrievable by concrete tag — Phase 2 will own
+    // intentionally not retrievable by concrete tag - Phase 2 will own
     // family-resolution logic.
     expect(Dictionary.lookup("50000000")).toBeUndefined();
   });
@@ -155,7 +155,7 @@ describe("Dictionary entries are immutable (CLAUDE.md immutability guardrail)", 
     expect(e).toBeDefined();
     expect(Object.isFrozen(e)).toBe(true);
     expect(() => {
-      // Intentional mutation attempt at runtime — the deep-freeze in
+      // Intentional mutation attempt at runtime - the deep-freeze in
       // src/dictionary/index.ts must reject this in strict mode.
       (e as unknown as { keyword: string }).keyword = "Hacked";
     }).toThrow();

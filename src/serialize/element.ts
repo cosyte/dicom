@@ -4,12 +4,12 @@
  * Two element shapes are handled, distinguished by the parser's `rawBytes`
  * representation (D-16 + the per-strategy parsers):
  *
- *  - **Full-span elements** — Explicit-VR `SQ` (defined or undefined length),
+ *  - **Full-span elements** - Explicit-VR `SQ` (defined or undefined length),
  *    *undefined-length* Implicit-VR `SQ`, encapsulated Pixel Data
  *    (`(7FE0,0010) OB` undefined length), CP-246-promoted `UN→SQ`, and the `UN`
  *    undefined-length fallback. For all of these the parser stored `rawBytes` as
  *    the *complete on-wire span* (header + value), so the writer blits them
- *    **verbatim** — this is the byte-for-byte pixel-fragment and nested-sequence
+ *    **verbatim** - this is the byte-for-byte pixel-fragment and nested-sequence
  *    passthrough the spec requires (PS3.5 §A.4 / §7.5). Because the writer never
  *    transcodes, the stored span is already in the output transfer syntax.
  *
@@ -18,7 +18,7 @@
  *    length (`implicit-le.ts`), so a defined-length SQ arrives as a value-only
  *    slice and is reconstructed like any other long-form element below.
  *
- *  - **Scalar (leaf) elements** — the parser stored `rawBytes` as the *value
+ *  - **Scalar (leaf) elements** - the parser stored `rawBytes` as the *value
  *    only*. The writer reconstructs the element header for the chosen encoding
  *    (PS3.5 §7.1.2 short/long form) and re-emits the value, padded to even
  *    length (PS3.5 §6.2). This is where the conservative half of Postel's Law
@@ -34,7 +34,7 @@ import { splitTag } from "../dataset/tag.js";
 import type { VR } from "../dictionary/types.js";
 import { LONG_FORM_VRS } from "../parser/element-header.js";
 
-/** `0xFFFFFFFF` — the undefined-length sentinel (PS3.5 §7.1.1). */
+/** `0xFFFFFFFF` - the undefined-length sentinel (PS3.5 §7.1.1). */
 const UNDEFINED_LENGTH = 0xffffffff;
 
 /**
@@ -59,7 +59,7 @@ const NULL_PAD_VRS: ReadonlySet<VR> = new Set<VR>(["UI", "OB", "OW", "OF", "OD",
 
 /**
  * Return `value` padded to even length per PS3.5 §6.2. The original buffer is
- * never mutated — an already-even value is returned as a defensive copy so the
+ * never mutated - an already-even value is returned as a defensive copy so the
  * caller can freely concat without aliasing the parsed dataset (immutability).
  *
  * @internal
@@ -115,7 +115,7 @@ export function isFullSpanElement(el: Element, encoding: BodyEncoding): boolean 
  */
 export function encodeDatasetElement(el: Element, encoding: BodyEncoding): Buffer {
   if (isFullSpanElement(el, encoding)) {
-    // Verbatim passthrough — already in the output transfer syntax (no
+    // Verbatim passthrough - already in the output transfer syntax (no
     // transcode). Copy so the result never aliases the parsed dataset.
     return Buffer.from(el.rawBytes);
   }

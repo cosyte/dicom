@@ -2,13 +2,13 @@
  * Binary numeric decoders for the fixed-width VRs (PS3.5 §6.2).
  *
  * Endianness comes from the parsed Element (`littleEndian`, set per transfer
- * syntax). **Signedness comes from the VR, never guessed** — `SS/SL/SV` are
+ * syntax). **Signedness comes from the VR, never guessed** - `SS/SL/SV` are
  * signed; `US/UL/UV` unsigned; `FL/FD` IEEE-754. 64-bit `SV/UV` decode to
  * `bigint` so values above 2^53 keep full precision. `AT` decodes each
  * 4-byte group/element pair to an 8-hex tag string.
  *
  * A trailing partial unit (length not a whole multiple of the stride) is
- * ignored — fail-safe, never throws.
+ * ignored - fail-safe, never throws.
  *
  * @module
  */

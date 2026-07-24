@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { parseDate, parseDateTime, parseTime } from "../../../src/dataset/vr/datetime.js";
 
-describe("parseDate (DA — tolerant, raw always preserved)", () => {
+describe("parseDate (DA - tolerant, raw always preserved)", () => {
   it("parses a canonical YYYYMMDD date", () => {
     const { value, legacy } = parseDate("20240115");
     expect(legacy).toBe(false);
@@ -40,7 +40,7 @@ describe("parseDate (DA — tolerant, raw always preserved)", () => {
   });
 });
 
-describe("parseTime (TM — max 14 bytes, right-truncatable precision)", () => {
+describe("parseTime (TM - max 14 bytes, right-truncatable precision)", () => {
   it("parses full HHMMSS.FFFFFF", () => {
     const { value } = parseTime("133015.250000");
     expect(value).toEqual({
@@ -78,7 +78,7 @@ describe("parseTime (TM — max 14 bytes, right-truncatable precision)", () => {
   });
 });
 
-describe("parseDateTime (DT — optional &ZZXX offset)", () => {
+describe("parseDateTime (DT - optional &ZZXX offset)", () => {
   it("parses datetime with positive offset", () => {
     const { value, nonstandardOffset } = parseDateTime("20240115133015+0100");
     expect(nonstandardOffset).toBe(false);

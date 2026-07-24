@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { parsePersonName } from "../../../src/dataset/vr/person-name.js";
 
-describe("parsePersonName (PN — PS3.5 §6.2.1.1)", () => {
+describe("parsePersonName (PN - PS3.5 §6.2.1.1)", () => {
   it("splits five ^-delimited components, filling trailing slots with ''", () => {
     const pn = parsePersonName("Doe^Jane^^Dr^");
     expect(pn.alphabetic).toEqual({

@@ -2,7 +2,7 @@
  * Pixel-interpretation + geometry view builder (§4.2 / §4.3 / §4.4 / §4.5).
  *
  * This is the "wrong pixels look fine" / "looks fine, measures wrong"
- * surface. v1 does **not** decode pixels — it surfaces exactly the metadata
+ * surface. v1 does **not** decode pixels - it surfaces exactly the metadata
  * a renderer needs so it never has to guess. Every safety-critical omission
  * is deliberate and load-bearing:
  *
@@ -10,7 +10,7 @@
  *   - `signed` is **absent** (not a guess) unless `(0028,0103)` was present,
  *     and is then exactly `1 → true` / `0 → false`;
  *   - `photometricInterpretation` is **absent** (not `MONOCHROME2`) when
- *     absent — MONOCHROME1 vs MONOCHROME2 is an inversion, never defaulted;
+ *     absent - MONOCHROME1 vs MONOCHROME2 is an inversion, never defaulted;
  *   - the three pixel-spacing tags are three **distinct** fields, never
  *     aliased (patient-plane vs detector-plane vs nominal-scanned).
  *

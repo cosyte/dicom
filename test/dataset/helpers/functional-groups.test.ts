@@ -41,7 +41,7 @@ const planePositionShared: BuildDicomSqElement = {
   tag: "00209113",
   items: [{ elements: [{ tag: "00200032", vr: "DS", value: ascii("0\\0\\0") }] }],
 };
-// Pixel Value Transformation macro (0028,9145) — an optional functional group.
+// Pixel Value Transformation macro (0028,9145) - an optional functional group.
 const pixelValueTransformation: BuildDicomSqElement = {
   tag: "00289145",
   items: [
@@ -54,7 +54,7 @@ const pixelValueTransformation: BuildDicomSqElement = {
     },
   ],
 };
-// Frame VOI LUT macro (0028,9132) — an optional functional group.
+// Frame VOI LUT macro (0028,9132) - an optional functional group.
 const frameVoiLut: BuildDicomSqElement = {
   tag: "00289132",
   items: [
@@ -290,7 +290,7 @@ describe("resolveFrame (§4.4 enhanced multi-frame, Per-Frame-else-Shared)", () 
   it("keeps inner macro attributes typed-absent when a macro item omits them (lenient)", () => {
     // Each required geometry macro item is PRESENT (so the frame resolves) but
     // carries none of its inner attributes, and the optional macros are present
-    // but empty — every field must come back undefined, never a coerced value.
+    // but empty - every field must come back undefined, never a coerced value.
     const emptyItem = (tag: string): BuildDicomSqElement => ({ tag, items: [{ elements: [] }] });
     const ds = enhanced({
       numberOfFrames: "1",

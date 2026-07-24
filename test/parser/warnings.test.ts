@@ -18,12 +18,12 @@ import {
 } from "../../src/parser/warnings.js";
 
 describe("WARNING_CODES (D-08)", () => {
-  it("has at least 24 codes (D-08 — full TOL-03 catalog enumeration)", () => {
+  it("has at least 24 codes (D-08 - full TOL-03 catalog enumeration)", () => {
     // CONTEXT.md D-08 enumerates 24 unique codes: 13 actively-emitted + 7
     // VR-decode-time (Phase 3) + 2 charset (Phase 4) + 2 reserved
     // (Phase 6 PRIVATE_CREATOR_UNKNOWN + Phase 7 BURNED_IN_ANNOTATION_NOT_REMOVED).
     // The plan's ≥25 verification grep counts lines containing "DICOM_" across
-    // both the registry and the factory references — that grep is satisfied
+    // both the registry and the factory references - that grep is satisfied
     // independently of the unique-key count.
     expect(Object.keys(WARNING_CODES).length).toBeGreaterThanOrEqual(24);
   });
@@ -57,7 +57,7 @@ describe("WARNING_CODES (D-08)", () => {
 
   it("contains every reserved (declared but not emitted in Phase 2) code", () => {
     const reserved: ReadonlyArray<keyof typeof WARNING_CODES> = [
-      // Phase 3 — VR-decode-time
+      // Phase 3 - VR-decode-time
       "DICOM_BOM_IN_TEXT_VR",
       "DICOM_DA_LEGACY_FORMAT",
       "DICOM_DT_NONSTANDARD_OFFSET",
@@ -65,10 +65,10 @@ describe("WARNING_CODES (D-08)", () => {
       "DICOM_NON_ASCII_IN_ASCII_VR",
       "DICOM_TRAILING_NULL_IN_TEXT_VR",
       "DICOM_UI_TRAILING_SPACE",
-      // Phase 4 — charset-decode
+      // Phase 4 - charset-decode
       "DICOM_CHARSET_AMBIGUOUS_SEPARATOR",
       "DICOM_UNSUPPORTED_CHARSET",
-      // Phase 6 / Phase 7 — reserved
+      // Phase 6 / Phase 7 - reserved
       "DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED",
       "DICOM_PRIVATE_CREATOR_UNKNOWN",
     ];
@@ -78,7 +78,7 @@ describe("WARNING_CODES (D-08)", () => {
   });
 });
 
-describe("warning factories (D-12 — one named factory per active-emit code)", () => {
+describe("warning factories (D-12 - one named factory per active-emit code)", () => {
   const pos = { byteOffset: 0 } as const;
 
   it("missingPreamble", () => {

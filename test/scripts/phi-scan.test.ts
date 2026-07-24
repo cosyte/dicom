@@ -38,7 +38,7 @@ const OVERRIDES_PATH = join(REPO_ROOT, "phi-scan-overrides.md");
 function buildDicomFixture(studyDate: string, patientName: string): Buffer {
   // Pad PN to even length with trailing space (DICOM requires even-length values).
   const pnPadded = patientName.length % 2 === 0 ? patientName : patientName + " ";
-  // Pad DA — DICOM DA is always 8 chars YYYYMMDD; that's already even.
+  // Pad DA - DICOM DA is always 8 chars YYYYMMDD; that's already even.
   if (studyDate.length !== 8) {
     throw new Error(`buildDicomFixture: studyDate must be 8 chars, got ${studyDate}`);
   }
@@ -67,7 +67,7 @@ function buildDicomFixture(studyDate: string, patientName: string): Buffer {
   // element. Group length value = byte length of all subsequent file-meta
   // elements.
 
-  // (0002,0001) OB length=2 value="\x00\x01" — long-form: 2 reserved + 4-byte length
+  // (0002,0001) OB length=2 value="\x00\x01" - long-form: 2 reserved + 4-byte length
   const fileMetaInfoVersion = Buffer.alloc(12 + 2);
   fileMetaInfoVersion.writeUInt16LE(0x0002, 0);
   fileMetaInfoVersion.writeUInt16LE(0x0001, 2);
@@ -89,11 +89,11 @@ function buildDicomFixture(studyDate: string, patientName: string): Buffer {
     return out;
   }
 
-  // (0002,0002) Media Storage SOP Class UID — CT Image Storage
+  // (0002,0002) Media Storage SOP Class UID - CT Image Storage
   const sopClass = uiElement(0x0002, 0x0002, "1.2.840.10008.5.1.4.1.1.2");
   // (0002,0003) Media Storage SOP Instance UID
   const sopInstance = uiElement(0x0002, 0x0003, "1.2.3.4");
-  // (0002,0010) Transfer Syntax UID — Explicit VR Little Endian
+  // (0002,0010) Transfer Syntax UID - Explicit VR Little Endian
   const transferSyntax = uiElement(0x0002, 0x0010, "1.2.840.10008.1.2.1");
   // (0002,0012) Implementation Class UID
   const implClass = uiElement(0x0002, 0x0012, "1.2.3.4.5");
@@ -170,7 +170,7 @@ beforeAll(() => {
   );
   writeFileSync(
     join(FIX_DIR, "non-dicom-violator.txt"),
-    "Sample DOB record: 1990-04-15 (recent — should fail)",
+    "Sample DOB record: 1990-04-15 (recent - should fail)",
   );
 });
 

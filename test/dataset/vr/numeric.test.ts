@@ -8,7 +8,7 @@ import {
   decodeNumbers,
 } from "../../../src/dataset/vr/numeric.js";
 
-describe("decodeNumbers (PS3.5 §6.2 — signedness from VR, endianness from flag)", () => {
+describe("decodeNumbers (PS3.5 §6.2 - signedness from VR, endianness from flag)", () => {
   it("US decodes little- and big-endian unsigned 16-bit words", () => {
     const le = Buffer.from([0x05, 0x00, 0xff, 0xff]);
     expect(decodeNumbers(le, "US", true)).toEqual([5, 65535]);
@@ -73,7 +73,7 @@ describe("decodeBigInts (SV signed / UV unsigned 64-bit → bigint)", () => {
   });
 });
 
-describe("decodeAttributeTags (AT — group/element pairs → 8-hex tag)", () => {
+describe("decodeAttributeTags (AT - group/element pairs → 8-hex tag)", () => {
   it("decodes one tag little-endian", () => {
     // (0010,0010): group 0x0010, element 0x0010
     const buf = Buffer.from([0x10, 0x00, 0x10, 0x00]);

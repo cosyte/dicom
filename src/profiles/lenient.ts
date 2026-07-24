@@ -1,5 +1,5 @@
 /**
- * Built-in **lenient** tolerance preset — a posture profile (no private
+ * Built-in **lenient** tolerance preset - a posture profile (no private
  * dictionary) that *suppresses* the cosmetic, high-volume Tier-2 warnings a
  * conformance-loose source (older modalities, archive CDs, anonymizer output)
  * routinely emits. The decode is byte-for-byte identical to the unprofiled
@@ -10,7 +10,7 @@
  * missing preamble, odd-length padding, retired in-dataset group lengths, a
  * SPACE-padded UI, a trailing NULL in a text VR, a missing File Meta group
  * length (recovered by forward scan). Integrity-relevant codes (VR mismatch,
- * pixel-data length mismatch, …) are left intact — lenient quiets cosmetics, it
+ * pixel-data length mismatch, …) are left intact - lenient quiets cosmetics, it
  * does not blind you to corruption.
  *
  * A preset never *loosens* the parse past the lenient default it inherits:

@@ -1,14 +1,14 @@
 /**
- * Transfer Syntax dispatch table — maps TS UIDs to per-strategy parsers.
+ * Transfer Syntax dispatch table - maps TS UIDs to per-strategy parsers.
  *
  * D-20: a frozen `Readonly<Record<string, ParserStrategy>>` with EXACTLY four
- * entries —
+ * entries:
  * the only Transfer Syntax UIDs supported by `@cosyte/dicom` v1.
  *
  * Plan 02-02 shipped stubs returning empty element maps. Plan 02-03
  * replaced the Implicit VR LE stub. Plan 02-04 replaced the Explicit
- * VR LE + BE stubs. Plan 02-05 (this commit) replaces the LAST stub —
- * Deflated LE — with the real `zlib.inflateRawSync` + delegate-to-
+ * VR LE + BE stubs. Plan 02-05 (this commit) replaces the LAST stub:
+ * Deflated LE - with the real `zlib.inflateRawSync` + delegate-to-
  * Explicit-LE pipeline imported from `./deflated-le.js`. All four v1
  * transfer syntaxes are now backed by real implementations.
  *
@@ -31,7 +31,7 @@ export { parseImplicitLE, parseExplicitLE, parseExplicitBE, parseDeflatedLE };
 /**
  * A single transfer-syntax parser strategy.
  *
- * `endOffset` is OPTIONAL — the top-level `parseDicom` dispatch ignores
+ * `endOffset` is OPTIONAL - the top-level `parseDicom` dispatch ignores
  * it (the dataset is parsed to end-of-buffer), but SQ-inner descents
  * (via the {@link InnerParser} contract in `parser/sequence.ts`) require
  * it. Plans 02-04 / 02-05 implementations always populate it.

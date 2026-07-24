@@ -1,7 +1,7 @@
 /**
  * Phase 7 metadata de-identification tests (PS3.15 Annex E).
  *
- * Everything is **synthetic** — fixtures are built in memory by `build-dicom`
+ * Everything is **synthetic** - fixtures are built in memory by `build-dicom`
  * (the repo ships zero curated `.dcm` files). The recognizable-but-fake PHI
  * strings below (`"DOE^JANE"`, `"SECRET-MRN-123"`, …) exist only to prove they
  * are gone from the de-identified output; no real patient data is used.
@@ -169,7 +169,7 @@ describe("makeUidRemapper", () => {
   });
 });
 
-describe("deidentify — Basic Profile actions", () => {
+describe("deidentify - Basic Profile actions", () => {
   it("empties Z attributes and removes X attributes", () => {
     const { dataset } = deidentify(buildPhiDataset());
     expect(dataset.get("00100010")?.rawBytes.length).toBe(0); // PatientName Z
@@ -219,7 +219,7 @@ describe("deidentify — Basic Profile actions", () => {
   });
 });
 
-describe("deidentify — UID referential integrity", () => {
+describe("deidentify - UID referential integrity", () => {
   it("maps the same source UID to the same replacement across files", () => {
     const a = deidentify(buildPhiDataset()).dataset.get("00080018")?.rawBytes.toString("latin1");
     const b = deidentify(buildPhiDataset()).dataset.get("00080018")?.rawBytes.toString("latin1");
@@ -234,7 +234,7 @@ describe("deidentify — UID referential integrity", () => {
   });
 });
 
-describe("deidentify — Retain / Clean options", () => {
+describe("deidentify - Retain / Clean options", () => {
   it("RetainUIDs keeps UIDs verbatim", () => {
     const { dataset } = deidentify(buildPhiDataset(), { retain: ["RetainUIDs"] });
     expect(
@@ -270,7 +270,7 @@ describe("deidentify — Retain / Clean options", () => {
   });
 
   it("rejects an unknown retain option", () => {
-    // @ts-expect-error — not a valid option
+    // @ts-expect-error - not a valid option
     expect(() => deidentify(buildPhiDataset(), { retain: ["RetainEverything"] })).toThrow(
       DeidentifyError,
     );
@@ -282,7 +282,7 @@ describe("deidentify — Retain / Clean options", () => {
   });
 });
 
-describe("deidentify — private attributes", () => {
+describe("deidentify - private attributes", () => {
   const withPrivate: BuildDicomOptions["elements"] = [
     { tag: "00090010", vr: "LO", value: pad("ACME PRIVATE 01") },
     { tag: "00091001", vr: "LO", value: pad("VENDOR-SECRET") },
@@ -314,7 +314,7 @@ describe("deidentify — private attributes", () => {
   });
 });
 
-describe("deidentify — nested sequences", () => {
+describe("deidentify - nested sequences", () => {
   const nameInItem = { tag: "00100010" as Tag, vr: "PN" as const, value: pad("NESTED^PATIENT") };
   // (0008,1115) Referenced Series Sequence is not in Annex E → kept + recursed.
   const seq = { tag: "00081115" as Tag, items: [{ elements: [nameInItem] }] };
@@ -343,7 +343,7 @@ describe("deidentify — nested sequences", () => {
   });
 });
 
-describe("deidentify — sequence actions", () => {
+describe("deidentify - sequence actions", () => {
   const phiItem = {
     elements: [{ tag: "00100010" as Tag, vr: "PN" as const, value: pad("NESTED^PATIENT") }],
   };
@@ -352,7 +352,7 @@ describe("deidentify — sequence actions", () => {
   }
 
   it("removes an X-coded sequence outright", () => {
-    // (0008,1120) Referenced Patient Sequence — basic profile X.
+    // (0008,1120) Referenced Patient Sequence - basic profile X.
     const { dataset, report } = deidentify(seqDataset("00081120"));
     expect(dataset.has("00081120")).toBe(false);
     const audit = report.attributes.find((a) => a.tag === "00081120");
@@ -360,7 +360,7 @@ describe("deidentify — sequence actions", () => {
   });
 
   it("empties a Z-coded sequence (kept tag, zero items)", () => {
-    // (0040,0513) Issuer of the Container Identifier Sequence — basic profile Z.
+    // (0040,0513) Issuer of the Container Identifier Sequence - basic profile Z.
     const { dataset, report } = deidentify(seqDataset("00400513"));
     expect(dataset.has("00400513")).toBe(true);
     expect(dataset.get("00400513")?.items?.length).toBe(0);
@@ -368,7 +368,7 @@ describe("deidentify — sequence actions", () => {
   });
 
   it("empties a D-coded sequence (no VR-consistent dummy for SQ)", () => {
-    // (0040,A073) Verifying Observer Sequence — basic profile D.
+    // (0040,A073) Verifying Observer Sequence - basic profile D.
     const { dataset, report } = deidentify(seqDataset("0040A073"));
     expect(dataset.get("0040A073")?.items?.length).toBe(0);
     const audit = report.attributes.find((a) => a.tag === "0040A073");
@@ -376,7 +376,7 @@ describe("deidentify — sequence actions", () => {
   });
 
   it("cleans a sequence (C) by recursing, not emptying it", () => {
-    // (0040,0275) Request Attributes Sequence — CleanDescriptors overrides X→C.
+    // (0040,0275) Request Attributes Sequence - CleanDescriptors overrides X→C.
     const { dataset, report } = deidentify(seqDataset("00400275"), {
       retain: ["CleanDescriptors"],
     });
@@ -420,9 +420,9 @@ describe("deidentify — sequence actions", () => {
   });
 });
 
-describe("deidentify — scalar D action", () => {
+describe("deidentify - scalar D action", () => {
   it("dummies a D-coded text attribute with a VR-consistent value", () => {
-    // (0012,0010) Clinical Trial Sponsor Name — LO, basic profile D.
+    // (0012,0010) Clinical Trial Sponsor Name - LO, basic profile D.
     const { dataset, report } = deidentify(
       buildPhiDataset([{ tag: "00120010", vr: "LO", value: pad("ACME TRIALS INC") }]),
     );
@@ -431,7 +431,7 @@ describe("deidentify — scalar D action", () => {
   });
 
   it("empties a D-coded binary attribute when no safe dummy exists", () => {
-    // (0034,0002) Flow Identifier — OB, basic profile D; dummyBytes(OB) is null.
+    // (0034,0002) Flow Identifier - OB, basic profile D; dummyBytes(OB) is null.
     const { dataset, report } = deidentify(
       buildPhiDataset([
         { tag: "00340002", vr: "OB", value: Buffer.from([0x01, 0x02, 0x03, 0x04]) },
@@ -443,9 +443,9 @@ describe("deidentify — scalar D action", () => {
   });
 });
 
-describe("deidentify — transfer syntaxes", () => {
+describe("deidentify - transfer syntaxes", () => {
   const nestedName = { tag: "00100010" as Tag, vr: "PN" as const, value: pad("NESTED^PATIENT") };
-  // (0008,1115) Referenced Series Sequence — not in Annex E → kept + recursed.
+  // (0008,1115) Referenced Series Sequence - not in Annex E → kept + recursed.
 
   it("re-encodes a kept sequence under Implicit VR LE", () => {
     // Implicit VR LE only descends *undefined-length* SQ, so encode it that way.
@@ -474,7 +474,7 @@ describe("deidentify — transfer syntaxes", () => {
   });
 });
 
-describe("deidentify — burned-in annotation safety", () => {
+describe("deidentify - burned-in annotation safety", () => {
   const pixel: BuildDicomOptions["elements"] = [
     { tag: "7FE00010", vr: "OW", value: Buffer.from([0x00, 0x01, 0x02, 0x03]) },
   ];
@@ -498,7 +498,7 @@ describe("deidentify — burned-in annotation safety", () => {
   });
 });
 
-describe("deidentify — dataset without File Meta", () => {
+describe("deidentify - dataset without File Meta", () => {
   function elem(tag: Tag, vr: "PN", value: Buffer): Element {
     return new Element({
       tag,
@@ -524,7 +524,7 @@ describe("deidentify — dataset without File Meta", () => {
   });
 });
 
-describe("deidentify — PHI-free output", () => {
+describe("deidentify - PHI-free output", () => {
   it("leaves no recognizable PHI in the serialized buffer", () => {
     const { dataset } = deidentify(buildPhiDataset());
     const out = serializeDicom(dataset);

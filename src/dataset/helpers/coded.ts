@@ -4,7 +4,7 @@
  * A coded concept is the triplet `Code Value (0008,0100)` /
  * `Coding Scheme Designator (0008,0102)` / `Code Meaning (0008,0104)`. This
  * module **surfaces** the triplet and resolves the canonical scheme OID for
- * the four standard designators — it performs **no lookup, validation, or
+ * the four standard designators - it performs **no lookup, validation, or
  * mapping** (deferred). Detaching a code value from its scheme is unsafe, so
  * the three parts always travel together.
  *
@@ -50,7 +50,7 @@ export const CODING_SCHEME_OIDS = {
  * ```ts
  * import { codingSchemeOid } from "@cosyte/dicom";
  * codingSchemeOid("UCUM"); // "2.16.840.1.113883.6.8"
- * codingSchemeOid("SRT");  // undefined — not SCT (CP-730)
+ * codingSchemeOid("SRT");  // undefined - not SCT (CP-730)
  * ```
  */
 export function codingSchemeOid(designator: string | undefined): string | undefined {

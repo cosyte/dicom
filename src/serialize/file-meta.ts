@@ -9,16 +9,16 @@
  * the group length is always correct and the elements are always in ascending
  * tag order.
  *
- * Required (Type 1) elements per PS3.10 are always emitted — File Meta
+ * Required (Type 1) elements per PS3.10 are always emitted - File Meta
  * Information Version `(0002,0001)`, Transfer Syntax UID `(0002,0010)`, and
- * Implementation Class UID `(0002,0012)` — with conservative defaults when the
+ * Implementation Class UID `(0002,0012)` - with conservative defaults when the
  * parsed view omitted them. The Media Storage SOP Class/Instance UIDs and the
  * optional descriptive elements are emitted only when present (the writer never
  * invents a SOP identity).
  *
  * Lossless round-trip: non-modeled `(0002,xxxx)` elements a source file carried
- * — e.g. `(0002,0017)`/`(0002,0018)` Sending/Receiving AE Title, `(0002,0100)`
- * Private Information Creator UID, `(0002,0102)` Private Information — are
+ * - e.g. `(0002,0017)`/`(0002,0018)` Sending/Receiving AE Title, `(0002,0100)`
+ * Private Information Creator UID, `(0002,0102)` Private Information - are
  * retained by the parser on {@link FileMeta.extraElements} and merged back here,
  * with the whole group emitted in ascending tag order. So an exotic File Meta
  * group round-trips byte-for-byte, not just the typed fields.
@@ -44,7 +44,7 @@ import { padValue } from "./element.js";
  */
 export const COSYTE_IMPLEMENTATION_CLASS_UID = "2.25.200853462534740285303254730069375064698";
 
-/** Default File Meta Information Version value — `0x0001` (PS3.10 §7.1). */
+/** Default File Meta Information Version value - `0x0001` (PS3.10 §7.1). */
 const DEFAULT_FILE_META_VERSION = Buffer.from([0x00, 0x01]);
 
 const TAG_GROUP_LENGTH: Tag = "00020000";
@@ -78,7 +78,7 @@ function encodeMetaElement(tag: Tag, vr: VR, rawValue: Buffer): Buffer {
 /**
  * UI/AE/SH text → bytes (padding to even length is handled on encode). Uses
  * `latin1` rather than `ascii` so a stray byte > 0x7F is preserved 1:1 instead
- * of being silently masked to 7 bits — these values (UIDs, AE titles) are ASCII
+ * of being silently masked to 7 bits - these values (UIDs, AE titles) are ASCII
  * by spec, but a non-conformant source value must not be corrupted on write.
  */
 function latin1(value: string): Buffer {

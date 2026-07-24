@@ -106,7 +106,7 @@ describe("buildImage (§4.2 wrong-pixels class)", () => {
   });
 });
 
-describe("buildImage (full surface — present-arm coverage)", () => {
+describe("buildImage (full surface - present-arm coverage)", () => {
   it("surfaces every pixel-interpretation + geometry field when present", () => {
     const ds = parseDicom(
       buildDicom({

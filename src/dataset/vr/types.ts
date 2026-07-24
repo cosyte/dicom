@@ -1,30 +1,30 @@
 /**
- * Decoded-value model for Phase 3 — the typed result of `Element.value`.
+ * Decoded-value model for Phase 3 - the typed result of `Element.value`.
  *
  * `DicomValue` is a discriminated union keyed on `kind`; each variant maps
  * to a family of VRs that share a decode shape (per PS3.5 §6.2 Table 6.2-1):
  *
- *   - `empty`         — zero-length value (any VR).
- *   - `text`          — single-value text VRs `LT ST UT UR` (no backslash
+ *   - `empty`         - zero-length value (any VR).
+ *   - `text`          - single-value text VRs `LT ST UT UR` (no backslash
  *                       multiplicity; charset-decoded except `UR`).
- *   - `strings`       — backslash-multi-valued string VRs
+ *   - `strings`       - backslash-multi-valued string VRs
  *                       `AE AS CS LO SH UC UI` (charset-decoded for
  *                       `LO SH UC`; ASCII for the rest).
- *   - `personName`    — `PN`, decoded to its 3-group / 5-component structure.
- *   - `numbers`       — binary numeric VRs `US UL SS SL FL FD` (signedness
+ *   - `personName`    - `PN`, decoded to its 3-group / 5-component structure.
+ *   - `numbers`       - binary numeric VRs `US UL SS SL FL FD` (signedness
  *                       from the VR, never guessed).
- *   - `bigints`       — 64-bit binary VRs `SV UV` (kept as `bigint` so no
+ *   - `bigints`       - 64-bit binary VRs `SV UV` (kept as `bigint` so no
  *                       precision is lost above 2^53).
- *   - `attributeTags` — `AT`, decoded to 8-hex tag strings.
- *   - `decimalString` — `DS`, parsed to `number | null` (non-numeric → null).
- *   - `integerString` — `IS`, parsed to `number | null` (non-integer → null).
- *   - `dates`         — `DA`, tolerant temporal decode.
- *   - `times`         — `TM`, tolerant temporal decode.
- *   - `dateTimes`     — `DT`, tolerant temporal decode.
- *   - `binary`        — bulk byte VRs `OB OD OF OL OV OW UN` (raw preserved;
- *                       not interpreted in v1 — avoids the giant-typed-array
+ *   - `attributeTags` - `AT`, decoded to 8-hex tag strings.
+ *   - `decimalString` - `DS`, parsed to `number | null` (non-numeric → null).
+ *   - `integerString` - `IS`, parsed to `number | null` (non-integer → null).
+ *   - `dates`         - `DA`, tolerant temporal decode.
+ *   - `times`         - `TM`, tolerant temporal decode.
+ *   - `dateTimes`     - `DT`, tolerant temporal decode.
+ *   - `binary`        - bulk byte VRs `OB OD OF OL OV OW UN` (raw preserved;
+ *                       not interpreted in v1 - avoids the giant-typed-array
  *                       footgun for pixel / LUT payloads).
- *   - `sequence`      — `SQ`, the parsed `Item[]`.
+ *   - `sequence`      - `SQ`, the parsed `Item[]`.
  *
  * Every variant whose decode may flag a tolerated deviation carries an
  * optional `warnings` array (decode is lazy and post-parse, so these cannot
@@ -65,7 +65,7 @@ export interface PersonNameGroup {
 }
 
 /**
- * A decoded `PN` value — up to three component groups separated on-wire by
+ * A decoded `PN` value - up to three component groups separated on-wire by
  * `=` (PS3.5 §6.2.1.1). `alphabetic` is always present; `ideographic` and
  * `phonetic` are present only when the value supplied them.
  *
@@ -86,7 +86,7 @@ export interface PersonName {
 
 /**
  * A tolerantly-decoded `DA` (Date) value. `raw` always carries the on-wire
- * string (PHI-safe — a date is not an identifier on its own, but is
+ * string (PHI-safe - a date is not an identifier on its own, but is
  * preserved verbatim regardless). `valid` is `true` only when the string
  * parsed cleanly to a `YYYYMMDD` calendar date; otherwise the numeric
  * fields are omitted and `raw` is the source of truth.

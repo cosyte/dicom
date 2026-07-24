@@ -1,5 +1,5 @@
 /**
- * Tests for `parseSequence` — Phase 2 plan 02-04 task 1.
+ * Tests for `parseSequence` - Phase 2 plan 02-04 task 1.
  *
  * Covers the shared SQ + FFFE marker handling consumed by the three
  * structural parsers (Implicit-LE, Explicit-LE, Explicit-BE):
@@ -91,7 +91,7 @@ function buildSeqDelim(littleEndian: boolean): Buffer {
   return buf;
 }
 
-describe("parseSequence — defined-length item (D-28)", () => {
+describe("parseSequence - defined-length item (D-28)", () => {
   it("parses a single defined-length item with one inner Implicit-LE element", () => {
     // Inner element: (0008,0100) CodeValue SH "CODE" (4 bytes, even length).
     const innerElement = buildImplicitLeElement("00080100", 4, Buffer.from("CODE", "ascii"));
@@ -109,7 +109,7 @@ describe("parseSequence — defined-length item (D-28)", () => {
   });
 });
 
-describe("parseSequence — undefined-length SQ + SeqDelim (D-25 + D-29)", () => {
+describe("parseSequence - undefined-length SQ + SeqDelim (D-25 + D-29)", () => {
   it("parses two defined-length items terminated by FFFE,E0DD SeqDelim", () => {
     const inner1 = buildImplicitLeElement("00080100", 4, Buffer.from("AAAA", "ascii"));
     const item1 = Buffer.concat([buildItemHeader(inner1.length, true), inner1]);
@@ -129,7 +129,7 @@ describe("parseSequence — undefined-length SQ + SeqDelim (D-25 + D-29)", () =>
   });
 });
 
-describe("parseSequence — empty item tolerance (D-28)", () => {
+describe("parseSequence - empty item tolerance (D-28)", () => {
   it("emits DICOM_EMPTY_ITEM_IN_SEQUENCE; the empty item is still in items array", () => {
     const buffer = Buffer.concat([buildItemHeader(0, true), buildSeqDelim(true)]);
     const ctx = makeContext(buffer);
@@ -147,7 +147,7 @@ describe("parseSequence — empty item tolerance (D-28)", () => {
   });
 });
 
-describe("parseSequence — nesting-depth cap (T-02-04-02)", () => {
+describe("parseSequence - nesting-depth cap (T-02-04-02)", () => {
   it("succeeds at nesting depth 64", () => {
     // Build a synthetic buffer; we drive parseSequence directly with a
     // mock InnerParser that recurses by calling parseSequence again on
@@ -189,12 +189,12 @@ describe("parseSequence — nesting-depth cap (T-02-04-02)", () => {
   });
 });
 
-describe("parseSequence — FFFE under BE (D-25 + PITFALLS §2.3)", () => {
+describe("parseSequence - FFFE under BE (D-25 + PITFALLS §2.3)", () => {
   it("undefined-length SQ in BE terminates correctly via FFFE,E0DD", () => {
     // Build BE item with one inner element (use a minimal SH-encoded
     // synthetic; the inner parser is a stub here that returns empty
     // elements + endOffset).
-    const itemBody = Buffer.alloc(0); // empty body — matches "two empty items" pattern
+    const itemBody = Buffer.alloc(0); // empty body - matches "two empty items" pattern
     const buffer = Buffer.concat([
       buildItemHeader(itemBody.length, /* LE */ false),
       itemBody,
@@ -202,7 +202,7 @@ describe("parseSequence — FFFE under BE (D-25 + PITFALLS §2.3)", () => {
     ]);
     const ctx = makeContext(buffer);
     const emit = makeEmit(ctx);
-    // Mock InnerParser — returns empty elements + endOffset = startOffset.
+    // Mock InnerParser - returns empty elements + endOffset = startOffset.
     const innerStub: InnerParser = (_buf, start) => ({ elements: new Map(), endOffset: start });
     const opts: ParseSequenceOptions = {
       explicitLength: undefined,
@@ -215,7 +215,7 @@ describe("parseSequence — FFFE under BE (D-25 + PITFALLS §2.3)", () => {
   });
 });
 
-describe("tryParseUnAsSQ — CP-246 fallback (D-30)", () => {
+describe("tryParseUnAsSQ - CP-246 fallback (D-30)", () => {
   it("success: descends a UN-undefined-length value containing valid Implicit-LE SQ", () => {
     // A UN value carrying an Implicit-LE-encoded SQ:
     //   undefined-length item with empty body + SeqDelim.
@@ -249,7 +249,7 @@ describe("tryParseUnAsSQ — CP-246 fallback (D-30)", () => {
   });
 });
 
-describe("parseSequence — encapsulated pixel data (D-31)", () => {
+describe("parseSequence - encapsulated pixel data (D-31)", () => {
   it("collects fragments + Basic Offset Table as items", () => {
     // 3 fragments + BOT. Each fragment is FFFE,E000 + length + raw bytes.
     const bot = Buffer.alloc(0); // empty BOT
@@ -283,7 +283,7 @@ describe("parseSequence — encapsulated pixel data (D-31)", () => {
 
   it("throws INVALID_FILE_META when a fragment declares more bytes than remain", () => {
     // A fragment item header claims 64 bytes of pixel data but only a few
-    // follow — the bounds check must reject it (T-02-04-01) rather than
+    // follow - the bounds check must reject it (T-02-04-01) rather than
     // over-reading past the buffer.
     const buffer = Buffer.concat([
       buildItemHeader(0, true), // empty BOT
@@ -312,9 +312,9 @@ describe("parseSequence — encapsulated pixel data (D-31)", () => {
   });
 });
 
-describe("parseSequence — truncated input (T-02-04-01)", () => {
+describe("parseSequence - truncated input (T-02-04-01)", () => {
   it("throws DicomParseError(INVALID_FILE_META) on truncated item header", () => {
-    // Just half of an item header — 4 bytes instead of 8.
+    // Just half of an item header - 4 bytes instead of 8.
     const buffer = Buffer.from([0xfe, 0xff, 0x00, 0xe0]);
     const ctx = makeContext(buffer);
     const emit = makeEmit(ctx);

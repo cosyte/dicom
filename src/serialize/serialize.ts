@@ -1,5 +1,5 @@
 /**
- * `serializeDicom` — the Phase 5 Part 10 writer (the conservative half of
+ * `serializeDicom` - the Phase 5 Part 10 writer (the conservative half of
  * Postel's Law).
  *
  * Takes a {@link Dataset} (from `parseDicom`, or hand-built) and emits a
@@ -7,10 +7,10 @@
  *
  *   1. 128-byte zero preamble + `DICM` magic (PS3.10 §7.1).
  *   2. File Meta group `0002`, always Explicit VR LE, with a correct
- *      `(0002,0000)` group length — see {@link encodeFileMeta}.
+ *      `(0002,0000)` group length - see {@link encodeFileMeta}.
  *   3. The dataset body, in the dataset's own transfer syntax (**no
- *      transcode**): Implicit VR LE, Explicit VR LE/BE, or — for the Deflated
- *      syntax — an Explicit VR LE body run through RFC 1951 raw deflate
+ *      transcode**): Implicit VR LE, Explicit VR LE/BE, or - for the Deflated
+ *      syntax - an Explicit VR LE body run through RFC 1951 raw deflate
  *      (`zlib.deflateRawSync`), symmetric to the parser's `inflateRawSync`.
  *
  * Conservative behaviour (PS3.5): scalar values are padded to even length on
@@ -72,7 +72,7 @@ function encodeBody(ds: Dataset, encoding: BodyEncoding): Buffer {
  * The dataset's transfer syntax is preserved (no transcoding): pixel-data
  * fragments and nested sequences are written back byte-for-byte, while scalar
  * values are re-emitted with correct even-length padding and File Meta group
- * length. Pure function — the input `Dataset` is never mutated.
+ * length. Pure function - the input `Dataset` is never mutated.
  *
  * **Input contract.** The writer is designed for a {@link Dataset} produced by
  * `parseDicom`: it relies on the parser's `Element.rawBytes` representation
@@ -86,7 +86,7 @@ function encodeBody(ds: Dataset, encoding: BodyEncoding): Buffer {
  * {@link "../dataset/file-meta".FileMeta} fields plus any non-modeled File Meta
  * elements preserved on `extraElements`), not a byte-exact copy of the original
  * file: the 128-byte preamble is normalized to zeros, the File Meta group is
- * rebuilt in ascending tag order (modeled fields + `extraElements` — see
+ * rebuilt in ascending tag order (modeled fields + `extraElements` - see
  * {@link encodeFileMeta}), odd-length values are padded even, and retired
  * `(gggg,0000)` group lengths are dropped.
  *

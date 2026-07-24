@@ -115,7 +115,7 @@ describe("makeEmitter (D-03, D-11, D-35)", () => {
     }
   });
 
-  it("FATAL_CODES are not subject to chokepoint — emit only operates on DicomParseWarning", () => {
+  it("FATAL_CODES are not subject to chokepoint - emit only operates on DicomParseWarning", () => {
     // Type-level check: FatalCode and WarningCode are disjoint string literal
     // unions. Runtime smoke: registry has exactly 4 fatal codes.
     expect(Object.keys(FATAL_CODES)).toHaveLength(4);

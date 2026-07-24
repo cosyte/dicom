@@ -2,13 +2,13 @@
  * Shared element-header primitives for Phase 2's transfer-syntax parsers.
  *
  * Phase 2 core-parser context:
- *   - D-22 — `LONG_FORM_VRS` is the set of VRs that use the long-form
+ *   - D-22 - `LONG_FORM_VRS` is the set of VRs that use the long-form
  *     header layout (2-byte VR + 2 reserved bytes + 4-byte length).
  *     Internally exported for the Phase 5 serializer per D-44.
- *   - D-21 — `resolveImplicitVR` implements the 5-case Implicit VR LE
+ *   - D-21 - `resolveImplicitVR` implements the 5-case Implicit VR LE
  *     fallback decision tree (single VR / multi-VR / repeating-group
  *     family / private tag → UN / unknown standard tag → UN).
- *   - D-33 / D-34 + PITFALLS §7.1 — private-creator stack tracking via
+ *   - D-33 / D-34 + PITFALLS §7.1 - private-creator stack tracking via
  *     `registerPrivateCreator` / `resolvePrivateCreator`. Implements the
  *     PS3.5 §7.8 block-reservation rule (creator at `(gggg,00XX)` reserves
  *     `(gggg,XX00)..(gggg,XXFF)`) and closes the off-by-0x1000 trap.
@@ -97,7 +97,7 @@ export const LONG_FORM_VRS: ReadonlySet<VR> = new Set<VR>([
 ]);
 
 // ---------------------------------------------------------------------------
-// Implicit VR LE — VR resolution (D-21)
+// Implicit VR LE - VR resolution (D-21)
 // ---------------------------------------------------------------------------
 
 /**
@@ -124,7 +124,7 @@ export const LONG_FORM_VRS: ReadonlySet<VR> = new Set<VR>([
  *          recognize the creator, plus
  *          `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR`.
  *   5. Unknown standard tag (not in dict, not a repeating-group family)
- *      → fallback UN silently — the standard explicitly allows this.
+ *      → fallback UN silently - the standard explicitly allows this.
  *
  * @internal
  */
@@ -134,14 +134,14 @@ export function resolveImplicitVR(
   emit: (w: DicomParseWarning) => void,
   position: DicomPosition,
 ): VR {
-  // Case 4 first — private (odd-group) tags never resolve via dictionary
+  // Case 4 first - private (odd-group) tags never resolve via dictionary
   // tag lookup (they're vendor-specific) other than the creator-slot path.
   const group = parseInt(tag.slice(0, 4), 16);
   const isPrivate = group % 2 === 1;
   if (isPrivate) {
     const element = parseInt(tag.slice(4, 8), 16);
     if (element >= 0x0010 && element <= 0x00ff) {
-      // Private Creator slot — VR is always LO per PS3.5 §7.8.
+      // Private Creator slot - VR is always LO per PS3.5 §7.8.
       return "LO";
     }
     const creator = resolvePrivateCreator(tag, ctx);
@@ -154,7 +154,7 @@ export function resolveImplicitVR(
     // resolve the VR from the live creator string. A hit returns the
     // vendor-documented VR with no warning; otherwise we degrade to UN. When
     // the profile does not recognize the creator at all, that degrade is
-    // flagged with DICOM_PRIVATE_CREATOR_UNKNOWN — never a wrong decode.
+    // flagged with DICOM_PRIVATE_CREATOR_UNKNOWN - never a wrong decode.
     if (ctx.profile !== undefined) {
       const def = resolvePrivateTag(ctx.profile, tag, creator);
       if (def !== undefined) return def.vr;
@@ -166,7 +166,7 @@ export function resolveImplicitVR(
     return "UN";
   }
 
-  // Cases 1, 2, 3, 5 — standard (even-group) tag.
+  // Cases 1, 2, 3, 5 - standard (even-group) tag.
   const direct = TAGS[tag];
   if (direct !== undefined) {
     // Case 1 / 2: dict has a direct entry. Pick first VR (multi-VR
@@ -178,7 +178,7 @@ export function resolveImplicitVR(
   if (family !== undefined) {
     return family.vr[0] ?? "UN";
   }
-  // Case 5: unknown standard tag — silent UN fallback.
+  // Case 5: unknown standard tag - silent UN fallback.
   return "UN";
 }
 
@@ -299,11 +299,11 @@ function matchesFamilyPattern(pattern: string, concrete: Tag): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Explicit VR LE / BE — element-header reader (D-22 + D-25)
+// Explicit VR LE / BE - element-header reader (D-22 + D-25)
 // ---------------------------------------------------------------------------
 
 /**
- * Result of reading an Explicit-VR element header (LE or BE — endianness
+ * Result of reading an Explicit-VR element header (LE or BE - endianness
  * is determined by the supplied `ByteCursor`'s `littleEndian` field).
  *
  * @internal
@@ -322,15 +322,15 @@ export interface ExplicitElementHeader {
  * Read an Explicit-VR element header from `cursor` per D-22:
  *   - Short-form: group(2) + element(2) + VR(2 ASCII) + length(2).
  *   - Long-form (when VR ∈ {@link LONG_FORM_VRS}): group(2) + element(2) +
- *     VR(2 ASCII) + reserved(2 — must be `0x00 0x00`) + length(4).
+ *     VR(2 ASCII) + reserved(2 - must be `0x00 0x00`) + length(4).
  *
- * Endianness comes from the cursor — group / element / length use
+ * Endianness comes from the cursor - group / element / length use
  * `cursor.readUInt16` / `readUInt32`. The 2-byte VR field is ASCII and
  * never byte-swapped; reserved bytes are read directly from the buffer
- * (also endian-agnostic — they're a 2-byte zero-pad regardless).
+ * (also endian-agnostic - they're a 2-byte zero-pad regardless).
  *
  * Non-zero reserved bytes emit `DICOM_NONZERO_RESERVED_BYTES` (D-22)
- * and parsing continues — length is read from the explicit 4-byte field
+ * and parsing continues - length is read from the explicit 4-byte field
  * regardless of the reserved-byte payload.
  *
  * Caller is responsible for catching `RangeError` from the cursor and

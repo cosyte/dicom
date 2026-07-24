@@ -1,13 +1,13 @@
 /**
- * Part 10 framing detection — preamble + DICM magic recognition.
+ * Part 10 framing detection - preamble + DICM magic recognition.
  *
  * Phase 2 core-parser context:
- *   - D-14 — `stripPreamble` tri-state semantics (`"tolerate"` default,
+ *   - D-14 - `stripPreamble` tri-state semantics (`"tolerate"` default,
  *     `"require"` strict-equivalent for this one code).
- *   - D-15 — NOT_DICOM_PART_10 detection heuristic: input must have either
+ *   - D-15 - NOT_DICOM_PART_10 detection heuristic: input must have either
  *     `DICM` magic at offset 128 OR a plausible `(0002,0000)` File Meta
  *     Group Length element in valid Explicit VR LE form at offset 0.
- *   - T-02-02-02 / T-02-02-03 — Truncated and spoofed inputs are rejected
+ *   - T-02-02-02 / T-02-02-03 - Truncated and spoofed inputs are rejected
  *     with a fatal throw rather than indexing past buffer end.
  *
  * @module
@@ -89,7 +89,7 @@ export function parsePart10Header(
  * form.
  *
  * Layout (12 bytes): group(2) + element(2) + VR='UL'(2) + length=0x0004(2) +
- * value(4). The value bytes themselves are not validated here — they are the
+ * value(4). The value bytes themselves are not validated here - they are the
  * declared File Meta group length, which `parseFileMeta` cross-checks.
  */
 function looksLikeFileMetaGroupLengthAtOffsetZero(buffer: Buffer): boolean {

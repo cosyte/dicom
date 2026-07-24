@@ -1,5 +1,5 @@
 /**
- * Tests for `parseExplicitLE` — Phase 2 plan 02-04 task 2.
+ * Tests for `parseExplicitLE` - Phase 2 plan 02-04 task 2.
  *
  * Covers TS-02 end-to-end through `parseDicom`, plus the per-VR Explicit-LE
  * header layout (short-form / long-form), TOL-07 (odd-length-padded),
@@ -30,7 +30,7 @@ function elementsOf(ds: Dataset): ReadonlyMap<Tag, Element> {
 
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
 
-describe("parseExplicitLE — TS-02 short-form happy path", () => {
+describe("parseExplicitLE - TS-02 short-form happy path", () => {
   it("parses (0010,0010) PN with 8-byte short-form header", () => {
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
@@ -45,7 +45,7 @@ describe("parseExplicitLE — TS-02 short-form happy path", () => {
   });
 });
 
-describe("parseExplicitLE — TS-02 long-form happy path (D-22)", () => {
+describe("parseExplicitLE - TS-02 long-form happy path (D-22)", () => {
   it("parses (7FE0,0010) OB with 12-byte long-form header", () => {
     const pixel = Buffer.from([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
     const buf = buildDicom({
@@ -61,7 +61,7 @@ describe("parseExplicitLE — TS-02 long-form happy path (D-22)", () => {
   });
 });
 
-describe("parseExplicitLE — TOL-07 odd-length value", () => {
+describe("parseExplicitLE - TOL-07 odd-length value", () => {
   it("emits DICOM_ODD_LENGTH_VALUE_PADDED for odd-length SH; element parsed with declared length", () => {
     // SH with 5-byte value "12345" (odd-length on wire).
     const buf = buildDicom({
@@ -77,7 +77,7 @@ describe("parseExplicitLE — TOL-07 odd-length value", () => {
   });
 });
 
-describe("parseExplicitLE — TOL-08 VR mismatch", () => {
+describe("parseExplicitLE - TOL-08 VR mismatch", () => {
   it("emits DICOM_VR_MISMATCH when in-file VR differs from dictionary", () => {
     // (0010,0010) is dictionary VR=PN; encode with on-wire VR=LO.
     const buf = buildDicom({
@@ -91,7 +91,7 @@ describe("parseExplicitLE — TOL-08 VR mismatch", () => {
   });
 });
 
-describe("parseExplicitLE — DICOM_NONZERO_RESERVED_BYTES", () => {
+describe("parseExplicitLE - DICOM_NONZERO_RESERVED_BYTES", () => {
   it("emits warning when long-form reserved bytes are non-zero", () => {
     // Hand-build a buffer with one OB element whose reserved bytes are
     // 0x01 0x02 (instead of 0x00 0x00).
@@ -138,7 +138,7 @@ describe("parseExplicitLE — DICOM_NONZERO_RESERVED_BYTES", () => {
   });
 });
 
-describe("parseExplicitLE — explicit-length SQ", () => {
+describe("parseExplicitLE - explicit-length SQ", () => {
   it("parses (0040,A730) ContentSequence with one defined-length item", () => {
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
@@ -170,7 +170,7 @@ describe("parseExplicitLE — explicit-length SQ", () => {
   });
 });
 
-describe("parseExplicitLE — undefined-length SQ (D-29)", () => {
+describe("parseExplicitLE - undefined-length SQ (D-29)", () => {
   it("emits DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR; SQ parsed correctly", () => {
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
@@ -195,7 +195,7 @@ describe("parseExplicitLE — undefined-length SQ (D-29)", () => {
   });
 });
 
-describe("parseExplicitLE — CP-246 (D-30)", () => {
+describe("parseExplicitLE - CP-246 (D-30)", () => {
   it("UN-undefined-length carrying valid Implicit-LE SQ → promoted to SQ + cp246Promoted=true", () => {
     // Construct an Implicit-LE-encoded SQ payload (one undefined-length
     // item with empty body + SeqDelim) and stuff it into a UN
@@ -215,7 +215,7 @@ describe("parseExplicitLE — CP-246 (D-30)", () => {
     // The encapsulated-pixel-data path emits:
     //   (tag) UN undefined-length + raw-byte-fragments + SeqDelim
     // which is exactly what we need (the inner bytes happen to be a
-    // valid Implicit-LE SQ — the parser must recognize that via CP-246).
+    // valid Implicit-LE SQ - the parser must recognize that via CP-246).
     //
     // But the encapsulated-pixel-data encoder emits its OWN FFFE,E000
     // wrapper for fragments. We want the raw payload directly. Hand-craft
@@ -293,7 +293,7 @@ describe("parseExplicitLE — CP-246 (D-30)", () => {
   });
 });
 
-describe("parseExplicitLE — encapsulated pixel data (D-31)", () => {
+describe("parseExplicitLE - encapsulated pixel data (D-31)", () => {
   it("(7FE0,0010) OB undefined-length with fragments parses structurally; vr stays OB", () => {
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
@@ -318,7 +318,7 @@ describe("parseExplicitLE — encapsulated pixel data (D-31)", () => {
   });
 });
 
-describe("parseExplicitLE — private-creator block-reservation", () => {
+describe("parseExplicitLE - private-creator block-reservation", () => {
   it("Element.privateCreator populated for (0019,1000) when (0019,0010)='ACME'", () => {
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
@@ -331,11 +331,11 @@ describe("parseExplicitLE — private-creator block-reservation", () => {
     const el = elementsOf(ds).get("00191000");
     expect(el?.privateCreator).toBe("ACME");
     // Off-by-0x1000 trap: (0019,2000) does NOT resolve to ACME.
-    // (Not built in this fixture — verified in element-header.test.ts.)
+    // (Not built in this fixture - verified in element-header.test.ts.)
   });
 });
 
-describe("parseExplicitLE — truncation (T-02-04-01)", () => {
+describe("parseExplicitLE - truncation (T-02-04-01)", () => {
   it("throws DicomParseError(INVALID_FILE_META) on truncated header", () => {
     // Build a valid buffer, then chop the last 4 bytes off mid-element.
     const buf = buildDicom({
@@ -355,7 +355,7 @@ describe("parseExplicitLE — truncation (T-02-04-01)", () => {
   });
 });
 
-describe("parseExplicitLE — TOL-10 group-length element in dataset", () => {
+describe("parseExplicitLE - TOL-10 group-length element in dataset", () => {
   it("(0009,0000) private-group length in the dataset emits DICOM_GROUP_LENGTH_IN_DATASET", () => {
     // A (gggg,0000) group-length element outside File Meta (group != 0002) is
     // legal-but-discouraged; the parser keeps the element and warns. Using an
@@ -375,7 +375,7 @@ describe("parseExplicitLE — TOL-10 group-length element in dataset", () => {
   });
 });
 
-describe("parseExplicitLE — undefined length on a non-SQ VR is fatal", () => {
+describe("parseExplicitLE - undefined length on a non-SQ VR is fatal", () => {
   it("throws INVALID_FILE_META for a long-form VR carrying 0xFFFFFFFF on a non-pixel-data tag", () => {
     // Undefined length is only legal for SQ, the (7FE0,0010) OB encapsulated-
     // pixel-data special case, or CP-246 UN. An OB element on a NON-pixel-data
@@ -400,7 +400,7 @@ describe("parseExplicitLE — undefined length on a non-SQ VR is fatal", () => {
   });
 });
 
-describe("parseExplicitLE — unexpected FFFE marker at dataset root", () => {
+describe("parseExplicitLE - unexpected FFFE marker at dataset root", () => {
   it("throws INVALID_FILE_META for a stray (FFFE,E000) item header at the root", () => {
     const fmOnly = buildDicom({ transferSyntax: TS_EXPLICIT_LE, elements: [] });
     const itemHeader = Buffer.alloc(8);
@@ -419,7 +419,7 @@ describe("parseExplicitLE — unexpected FFFE marker at dataset root", () => {
   });
 });
 
-describe("parseExplicitLE — undefined-length SQ with an undefined-length item", () => {
+describe("parseExplicitLE - undefined-length SQ with an undefined-length item", () => {
   it("terminates the inner item on (FFFE,E00D) ItemDelim and still parses the item body", () => {
     // Both the SQ and its single item use undefined length, so the SQ is
     // delimited by (FFFE,E0DD) and the item body by (FFFE,E00D). The inner
@@ -448,7 +448,7 @@ describe("parseExplicitLE — undefined-length SQ with an undefined-length item"
   });
 });
 
-describe("parseExplicitLE — truncation points (T-02-04-01)", () => {
+describe("parseExplicitLE - truncation points (T-02-04-01)", () => {
   it("throws INVALID_FILE_META when the buffer ends with a single dangling byte (peek overrun)", () => {
     // Build a clean buffer, then leave exactly one trailing byte where the
     // next element header would start. The 2-byte group peek overruns ->
@@ -469,7 +469,7 @@ describe("parseExplicitLE — truncation points (T-02-04-01)", () => {
 
   it("throws INVALID_FILE_META when an FFFE marker's header is truncated", () => {
     // An FFFE tag (group peeks as 0xFFFE) but only the 4 tag bytes are present
-    // — reading the 4-byte length overruns inside the FFFE branch.
+    // - reading the 4-byte length overruns inside the FFFE branch.
     const fmOnly = buildDicom({ transferSyntax: TS_EXPLICIT_LE, elements: [] });
     const danglingFffe = Buffer.from([0xfe, 0xff, 0x00, 0xe0]); // (FFFE,E000), no length
     const buf = Buffer.concat([fmOnly, danglingFffe]);
@@ -483,7 +483,7 @@ describe("parseExplicitLE — truncation points (T-02-04-01)", () => {
   });
 
   it("throws INVALID_FILE_META when a standard element header is truncated after the group peek", () => {
-    // Group peek succeeds (group 0010), but only 3 bytes follow — the full
+    // Group peek succeeds (group 0010), but only 3 bytes follow - the full
     // explicit-VR header read overruns inside readExplicitElementHeader.
     const fmOnly = buildDicom({ transferSyntax: TS_EXPLICIT_LE, elements: [] });
     const partialHeader = Buffer.from([0x10, 0x00, 0x10]); // (0010,00..) cut mid-header
@@ -498,7 +498,7 @@ describe("parseExplicitLE — truncation points (T-02-04-01)", () => {
   });
 });
 
-describe("parseExplicitLE — D-16 copyValues on composite values", () => {
+describe("parseExplicitLE - D-16 copyValues on composite values", () => {
   it("copyValues=true isolates an undefined-length SQ element's rawBytes", () => {
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,

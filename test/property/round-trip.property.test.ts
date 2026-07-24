@@ -1,5 +1,5 @@
 /**
- * Round-trip property test — the Postel's-Law *serialize* side, via the shared
+ * Round-trip property test - the Postel's-Law *serialize* side, via the shared
  * `@cosyte/test-utils` `roundTripProperty` runner.
  *
  * dicom's serializer is Phase 5; Phase 2 has no `write()`. The `buildDicom`
@@ -8,7 +8,7 @@
  * `parse(write(model))` is structurally equal to `model`, and re-encoding the
  * re-projected model is byte-stable.
  *
- * Model type `T` = {@link DicomModel} — a tag-keyed structural projection
+ * Model type `T` = {@link DicomModel} - a tag-keyed structural projection
  * (transfer syntax + per-element tag/VR/value-hex). The runner's pipeline is:
  *
  *   arbitrary → wellFormedModel()
@@ -17,7 +17,7 @@
  *   equals    → deep structural compare of the two DicomModels
  *
  * Explicit-BE is excluded from generation (the encoder byte-swaps numeric VRs
- * while the parser stores rawBytes verbatim — a sanctioned lossy transform, not
+ * while the parser stores rawBytes verbatim - a sanctioned lossy transform, not
  * a fidelity bug); it is covered by the lenient + fuzz invariants instead.
  *
  * @module

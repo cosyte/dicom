@@ -27,7 +27,7 @@ function el(
 
 const ascii = (s: string): Buffer => Buffer.from(s, "latin1");
 
-describe("decodeElementValue — structural kinds", () => {
+describe("decodeElementValue - structural kinds", () => {
   it("SQ → sequence, exposing the threaded items", () => {
     const item = new Item({ index: 0, warnings: [], elements: new Map() });
     const v = decodeElementValue(el("SQ", Buffer.alloc(0), { items: [item] }));
@@ -55,7 +55,7 @@ describe("decodeElementValue — structural kinds", () => {
   });
 });
 
-describe("decodeElementValue — numeric kinds", () => {
+describe("decodeElementValue - numeric kinds", () => {
   it.each(["US", "UL", "SS", "SL", "FL", "FD"] as const)("%s → numbers", (vr) => {
     const bytes = Buffer.alloc(8); // enough for any stride
     const v = decodeElementValue(el(vr, bytes));
@@ -73,7 +73,7 @@ describe("decodeElementValue — numeric kinds", () => {
   });
 });
 
-describe("decodeElementValue — string / text kinds", () => {
+describe("decodeElementValue - string / text kinds", () => {
   it("PN → personName, charset-decoded", () => {
     const v = decodeElementValue(el("PN", ascii("Doe^Jane")));
     expect(v.kind).toBe("personName");
@@ -101,7 +101,7 @@ describe("decodeElementValue — string / text kinds", () => {
   });
 });
 
-describe("decodeElementValue — numeric strings (fail-safe, never NaN→0)", () => {
+describe("decodeElementValue - numeric strings (fail-safe, never NaN→0)", () => {
   it("DS → decimalString, non-numeric → null (raw still preserved on element)", () => {
     const e = el("DS", ascii("1.5\\bad\\"));
     const v = decodeElementValue(e);
@@ -124,7 +124,7 @@ describe("decodeElementValue — numeric strings (fail-safe, never NaN→0)", ()
   });
 });
 
-describe("decodeElementValue — temporal kinds", () => {
+describe("decodeElementValue - temporal kinds", () => {
   it("DA → dates; dotted legacy form emits DICOM_DA_LEGACY_FORMAT", () => {
     const v = decodeElementValue(el("DA", ascii("2024.01.15"), { tag: "00080020" }));
     expect(v.kind).toBe("dates");
@@ -147,7 +147,7 @@ describe("decodeElementValue — temporal kinds", () => {
   });
 });
 
-describe("decodeElementValue — padding & tolerance", () => {
+describe("decodeElementValue - padding & tolerance", () => {
   it("string VR strips trailing SPACE pad", () => {
     const v = decodeElementValue(el("LO", ascii("VALUE ")));
     expect(v).toMatchObject({ kind: "strings", values: ["VALUE"] });
@@ -194,7 +194,7 @@ describe("decodeElementValue — padding & tolerance", () => {
   });
 });
 
-describe("decodeElementValue — charset threading", () => {
+describe("decodeElementValue - charset threading", () => {
   it("LO honors UTF-8 via the element's specificCharacterSet", () => {
     const v = decodeElementValue(
       el("LO", Buffer.from("Müller", "utf-8"), { charset: ["ISO_IR 192"] }),

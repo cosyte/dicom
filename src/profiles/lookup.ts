@@ -3,9 +3,9 @@
  *
  * A private data element is addressed as `(gggg,BBLL)` where `BB` is the
  * **file-assigned** private block byte (`0x10..0xFF`) and `LL` is the
- * element-within-block byte. The block `BB` is not stable across files — the
+ * element-within-block byte. The block `BB` is not stable across files - the
  * same vendor schema can land in block `0x10` in one study and `0x11` in
- * another — so a profile's overlay is keyed on the *stable* coordinates only:
+ * another - so a profile's overlay is keyed on the *stable* coordinates only:
  * the group, the creator string, and `LL`. The canonical key collapses `BB`
  * to the `XX` placeholder (`"GGGGXXLL"`, e.g. `"0029XX10"`), mirroring the
  * published DICOM private-dictionary notation.
@@ -17,7 +17,7 @@ import type { PrivateTagDefinition, Profile } from "../parser/types.js";
 import type { Tag } from "../dictionary/types.js";
 
 /**
- * Build the canonical private-tag key for a concrete tag — the group, the
+ * Build the canonical private-tag key for a concrete tag - the group, the
  * `XX` block placeholder, and the element-within-block (low) byte, all
  * uppercase. `(0029,1010)` → `"0029XX10"`.
  *

@@ -1,5 +1,5 @@
 /**
- * Tests for `parsePart10Header` — Phase 2 plan 02-02 task 1.
+ * Tests for `parsePart10Header` - Phase 2 plan 02-02 task 1.
  *
  * Covers CONTEXT.md D-13 / D-14 / D-15 + threat T-02-02-02 / T-02-02-03 from
  * the plan threat model.
@@ -42,7 +42,7 @@ function bareFileMetaPrefix(): Buffer {
   return Buffer.from([0x02, 0x00, 0x00, 0x00, 0x55, 0x4c, 0x04, 0x00, 0xce, 0x00, 0x00, 0x00]);
 }
 
-describe("parsePart10Header — DICM at offset 128", () => {
+describe("parsePart10Header - DICM at offset 128", () => {
   it("returns datasetStart=132, hadPreamble=true and emits no warnings", () => {
     const buf = Buffer.concat([
       Buffer.alloc(128, 0x00),
@@ -58,7 +58,7 @@ describe("parsePart10Header — DICM at offset 128", () => {
   });
 });
 
-describe("parsePart10Header — stripPreamble='tolerate' (default)", () => {
+describe("parsePart10Header - stripPreamble='tolerate' (default)", () => {
   it("emits DICOM_MISSING_PREAMBLE and returns datasetStart=0 when bare File Meta is at offset 0", () => {
     const buf = bareFileMetaPrefix();
     const { ctx, emitted } = makeCtx(buf, "tolerate");
@@ -77,7 +77,7 @@ describe("parsePart10Header — stripPreamble='tolerate' (default)", () => {
   });
 });
 
-describe("parsePart10Header — stripPreamble='require'", () => {
+describe("parsePart10Header - stripPreamble='require'", () => {
   it("throws NOT_DICOM_PART_10 when DICM magic is absent even with valid bare File Meta", () => {
     const buf = bareFileMetaPrefix();
     const { ctx } = makeCtx(buf, "require");
@@ -92,7 +92,7 @@ describe("parsePart10Header — stripPreamble='require'", () => {
   });
 });
 
-describe("parsePart10Header — non-DICOM input", () => {
+describe("parsePart10Header - non-DICOM input", () => {
   it("throws NOT_DICOM_PART_10 with byteOffset=0 and a non-empty hex snippet for random binary blob", () => {
     const buf = Buffer.alloc(200);
     for (let i = 0; i < buf.length; i++) buf[i] = (i * 13 + 7) & 0xff;
@@ -111,7 +111,7 @@ describe("parsePart10Header — non-DICOM input", () => {
     }
   });
 
-  it("throws NOT_DICOM_PART_10 (not RangeError) for buffers shorter than 12 bytes — T-02-02-02", () => {
+  it("throws NOT_DICOM_PART_10 (not RangeError) for buffers shorter than 12 bytes - T-02-02-02", () => {
     const buf = Buffer.from([0x02, 0x00]);
     const { ctx } = makeCtx(buf);
     expect(() => parsePart10Header(buf, ctx, (w) => ctx.warnings.push(w))).toThrowError(

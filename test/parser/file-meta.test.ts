@@ -1,5 +1,5 @@
 /**
- * Tests for `parseFileMeta` — Phase 2 plan 02-02 task 2.
+ * Tests for `parseFileMeta` - Phase 2 plan 02-02 task 2.
  * Covers CONTEXT.md D-17 / D-18 / D-19 + threat T-02-02-01.
  */
 
@@ -35,7 +35,7 @@ function emitFor(ctx: ParseContext): (w: DicomParseWarning) => void {
   };
 }
 
-describe("parseFileMeta — happy path", () => {
+describe("parseFileMeta - happy path", () => {
   it("populates transferSyntaxUID with no warnings when (0002,0000) is accurate", () => {
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2.1",
@@ -67,15 +67,15 @@ describe("parseFileMeta — happy path", () => {
   });
 });
 
-describe("parseFileMeta — non-modeled element preservation (lossless round-trip)", () => {
+describe("parseFileMeta - non-modeled element preservation (lossless round-trip)", () => {
   it("preserves non-modeled (0002,xxxx) elements verbatim on extraElements", () => {
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2.1",
       elements: [],
       fileMetaExtraElements: [
-        // (0002,0017) Sending AE Title (AE, short form) — even-length value.
+        // (0002,0017) Sending AE Title (AE, short form) - even-length value.
         { tag: "00020017", vr: "AE", value: Buffer.from("SEND_AE ", "ascii") },
-        // (0002,0102) Private Information (OB, long form) — even-length value.
+        // (0002,0102) Private Information (OB, long form) - even-length value.
         { tag: "00020102", vr: "OB", value: Buffer.from([0xde, 0xad, 0xbe, 0xef]) },
       ],
     });
@@ -121,7 +121,7 @@ describe("parseFileMeta — non-modeled element preservation (lossless round-tri
   });
 });
 
-describe("parseFileMeta — D-18 group-length handling", () => {
+describe("parseFileMeta - D-18 group-length handling", () => {
   it("emits DICOM_FILE_META_GROUP_LENGTH_MISSING when (0002,0000) is absent", () => {
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2.1",
@@ -158,7 +158,7 @@ describe("parseFileMeta — D-18 group-length handling", () => {
   });
 });
 
-describe("parseFileMeta — D-19 required TS UID", () => {
+describe("parseFileMeta - D-19 required TS UID", () => {
   it("throws INVALID_FILE_META in lenient mode when (0002,0010) Transfer Syntax UID is missing", () => {
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2.1",
@@ -188,9 +188,9 @@ describe("parseFileMeta — D-19 required TS UID", () => {
   });
 });
 
-describe("parseFileMeta — UI trimming", () => {
+describe("parseFileMeta - UI trimming", () => {
   it("silently trims trailing NUL on TS UID", () => {
-    // "1.2.840.10008.1.2.1" is 19 chars (odd) — buildDicom auto-pads with NUL to 20.
+    // "1.2.840.10008.1.2.1" is 19 chars (odd) - buildDicom auto-pads with NUL to 20.
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2.1",
       elements: [],
@@ -203,9 +203,9 @@ describe("parseFileMeta — UI trimming", () => {
   });
 });
 
-describe("parseFileMeta — T-02-02-01 truncated input mitigation", () => {
+describe("parseFileMeta - T-02-02-01 truncated input mitigation", () => {
   it("throws INVALID_FILE_META when declared (0002,0000) exceeds remaining buffer", () => {
-    // Build a Part 10 with a (0002,0000) that lies — claims 10000 bytes follow but only ~30 do.
+    // Build a Part 10 with a (0002,0000) that lies - claims 10000 bytes follow but only ~30 do.
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2.1",
       elements: [],
@@ -238,13 +238,13 @@ describe("parseFileMeta — T-02-02-01 truncated input mitigation", () => {
   });
 });
 
-describe("parseFileMeta — D-18 mismatch recovery loop", () => {
+describe("parseFileMeta - D-18 mismatch recovery loop", () => {
   it("severely under-declared (0002,0000) still projects all FM fields via the recovery loop", () => {
     // FM element sizes are deterministic: (0002,0010)=28, (0002,0002)=34,
     // (0002,0003)=26, (0002,0012)=16 bytes. Declaring 30 makes the main loop
     // overshoot after the second element while two FM elements remain, so the
     // post-mismatch recovery loop (which reads forward until the first non-0002
-    // group) is exercised — and every FM field must still project correctly.
+    // group) is exercised - and every FM field must still project correctly.
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2.1",
       elements: [],
@@ -267,9 +267,9 @@ describe("parseFileMeta — D-18 mismatch recovery loop", () => {
   });
 });
 
-describe("parseFileMeta — (0002,0001) FileMetaInformationVersion (long-form OB)", () => {
+describe("parseFileMeta - (0002,0001) FileMetaInformationVersion (long-form OB)", () => {
   it("reads the long-form OB header and projects fileMetaInformationVersion raw", () => {
-    // (0002,0001) is an OB element — a long-form VR (12-byte header with 2
+    // (0002,0001) is an OB element - a long-form VR (12-byte header with 2
     // reserved bytes + 4-byte length). It exercises the LONG_FORM_VRS branch
     // in the File Meta reader and the raw-value projection. Hand-build the FM
     // since the buildDicom helper does not emit (0002,0001).
@@ -310,7 +310,7 @@ describe("parseFileMeta — (0002,0001) FileMetaInformationVersion (long-form OB
   });
 });
 
-describe("parseFileMeta — D-19 Transfer Syntax UID with wrong VR", () => {
+describe("parseFileMeta - D-19 Transfer Syntax UID with wrong VR", () => {
   it("throws INVALID_FILE_META when (0002,0010) is present but its VR is not UI", () => {
     // Hand-build a File Meta where (0002,0010) carries VR=SH instead of UI.
     // D-19 requires the TS UID element to be UI; otherwise the file is fatal.

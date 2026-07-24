@@ -1,11 +1,11 @@
 /**
- * Phase 2 capstone — ROADMAP §"Phase 2" Success Criteria #1–#5 verified
+ * Phase 2 capstone - ROADMAP §"Phase 2" Success Criteria #1–#5 verified
  * end-to-end.
  *
  * Each `describe` block targets one of the five success criteria. Tests
  * exercise the public surface (`parseDicom`, `Dataset`, `WARNING_CODES`,
  * `FATAL_CODES`, `DicomParseError`, `Dictionary.uid`) over programmatic
- * fixtures from `test/helpers/build-dicom.ts` (D-38 — Phase 2 ships zero
+ * fixtures from `test/helpers/build-dicom.ts` (D-38 - Phase 2 ships zero
  * curated `.dcm` files).
  *
  * Each block maps to a Phase 2 success criterion (#1–#5).
@@ -95,7 +95,7 @@ describe("ROADMAP Phase 2 §SC1: parses all 4 v1 transfer syntaxes correctly", (
       expect(el?.length).toBe(8);
     }
 
-    // SQ separately — empty defined-length SQ exercises the long-form
+    // SQ separately - empty defined-length SQ exercises the long-form
     // header without a value-bytes burden.
     const sqBuf = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
@@ -110,7 +110,7 @@ describe("ROADMAP Phase 2 §SC1: parses all 4 v1 transfer syntaxes correctly", (
   });
 
   it("AT under BE: 4 bytes preserved on-wire as two independent 2-byte BE swaps (group, then element)", () => {
-    // Caller-side bytes — interpreted as (0010,0020) in LE/native order:
+    // Caller-side bytes - interpreted as (0010,0020) in LE/native order:
     //   group_lo, group_hi, element_lo, element_hi
     // Encoder swaps each 2-byte pair → on-wire BE: 00 10 00 20.
     // Parser stores rawBytes verbatim (BE-ordered); Phase 3 decodes the
@@ -129,7 +129,7 @@ describe("ROADMAP Phase 2 §SC1: parses all 4 v1 transfer syntaxes correctly", (
     const el = elementsOf(ds).get("00280009");
     expect(el).toBeDefined();
     expect(el?.vr).toBe("AT");
-    // On-wire BE byte sequence — group BE then element BE.
+    // On-wire BE byte sequence - group BE then element BE.
     expect(Array.from(el?.rawBytes ?? [])).toEqual([0x00, 0x10, 0x00, 0x20]);
   });
 
@@ -149,7 +149,7 @@ describe("ROADMAP Phase 2 §SC1: parses all 4 v1 transfer syntaxes correctly", (
     expect(Array.from(el?.rawBytes ?? [])).toEqual([0x01, 0x02, 0x03, 0x04]);
   });
 
-  it("Deflated TS uses inflateRawSync (RFC 1951) — round-trip succeeds and source has no inflateSync reference", async () => {
+  it("Deflated TS uses inflateRawSync (RFC 1951) - round-trip succeeds and source has no inflateSync reference", async () => {
     const buf = buildDicom({
       transferSyntax: TS_DEFLATED_LE,
       elements: [{ tag: "00100010", vr: "PN", value: Buffer.from("ROUNDTRIP", "ascii") }],
@@ -162,7 +162,7 @@ describe("ROADMAP Phase 2 §SC1: parses all 4 v1 transfer syntaxes correctly", (
     // Source-grep gate: the Deflated parser must reference `inflateRawSync`
     // and must NOT call `inflateSync` / `gunzipSync` / `unzipSync` outside
     // JSDoc commentary. Mirrors plan 02-05's source-grep evidence at the
-    // module level — re-asserted here so the public surface guarantee is
+    // module level - re-asserted here so the public surface guarantee is
     // visible from a single integration sweep.
     const fs = await import("node:fs/promises");
     const path = await import("node:path");
@@ -272,7 +272,7 @@ describe("ROADMAP Phase 2 §SC3: 4 fatal codes throw with byteOffset + snippet (
     expect(e.snippet.length).toBeGreaterThan(0);
   });
 
-  it("INVALID_FILE_META — missing Transfer Syntax UID", () => {
+  it("INVALID_FILE_META - missing Transfer Syntax UID", () => {
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
       elements: [],
@@ -288,7 +288,7 @@ describe("ROADMAP Phase 2 §SC3: 4 fatal codes throw with byteOffset + snippet (
     expect((thrown as DicomParseError).code).toBe(FATAL_CODES.INVALID_FILE_META);
   });
 
-  it("UNSUPPORTED_TRANSFER_SYNTAX — JPEG Baseline (1.2.840.10008.1.2.4.50)", () => {
+  it("UNSUPPORTED_TRANSFER_SYNTAX - JPEG Baseline (1.2.840.10008.1.2.4.50)", () => {
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2.4.50",
       elements: [],
@@ -367,7 +367,7 @@ describe("ROADMAP Phase 2 §SC5: ds.fileMeta exposes FM-02 fields; FM is Explici
     }
   });
 
-  it("File Meta is parsed as Explicit VR LE regardless of dataset TS — Implicit-LE dataset still has Explicit-LE FM", () => {
+  it("File Meta is parsed as Explicit VR LE regardless of dataset TS - Implicit-LE dataset still has Explicit-LE FM", () => {
     // Build under Implicit-LE; if the parser were dispatching FM through
     // the TS table, it would try to parse FM as Implicit-LE and fail to
     // recover the per-element VR. The fact that `ds.fileMeta` populates
@@ -391,8 +391,8 @@ describe("ROADMAP Phase 2 §SC5: ds.fileMeta exposes FM-02 fields; FM is Explici
     expect(Dictionary.uid(TS_DEFLATED_LE)?.name).toBe("Deflated Explicit VR Little Endian");
   });
 
-  it("ds.fileMeta is undefined when File Meta cannot be parsed — never present (no half-parsed shape)", () => {
-    // Negative case: missing TS UID throws INVALID_FILE_META — there is no
+  it("ds.fileMeta is undefined when File Meta cannot be parsed - never present (no half-parsed shape)", () => {
+    // Negative case: missing TS UID throws INVALID_FILE_META - there is no
     // Dataset returned at all. Fatal-code throw means no half-parsed
     // fileMeta surfaces to the caller.
     const buf = buildDicom({

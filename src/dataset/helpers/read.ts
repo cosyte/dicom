@@ -8,7 +8,7 @@
  *   - absent tag, empty value, or wrong `kind` → `undefined` (typed-absent);
  *   - a malformed numeric component stays `null` in the returned array
  *     (never coerced to 0 or dropped);
- *   - nothing here ever throws — the throwing behaviour lives only in the
+ *   - nothing here ever throws - the throwing behaviour lives only in the
  *     functional-group resolver, which models a structural conformance
  *     failure, not a missing value.
  *

@@ -1,17 +1,17 @@
 /**
- * Phase 6 capstone — source/vendor profile behaviour end-to-end (D-45).
+ * Phase 6 capstone - source/vendor profile behaviour end-to-end (D-45).
  *
  * Verifies the four acceptance pillars of DICOM-6 against programmatic
- * fixtures (D-38 — no curated `.dcm` files):
+ * fixtures (D-38 - no curated `.dcm` files):
  *   1. A vendor profile's private-dictionary overlay resolves the Implicit VR
  *      of a private data element from the LIVE creator string (not a block).
- *   2. Selecting a profile NEVER changes a correct decode — unprofiled and
+ *   2. Selecting a profile NEVER changes a correct decode - unprofiled and
  *      profiled parses of the same valid file agree on every standard element.
  *   3. A posture preset reshapes warning emission: `strict` escalates an
  *      integrity-relevant warning to a thrown error; `lenient` suppresses a
  *      cosmetic one.
  *   4. A creator the active profile does not recognize degrades to generic UN
- *      plus `DICOM_PRIVATE_CREATOR_UNKNOWN` — never a wrong decode.
+ *      plus `DICOM_PRIVATE_CREATOR_UNKNOWN` - never a wrong decode.
  *
  * Private-creator strings are public vendor schema identifiers, not PHI.
  *
@@ -168,7 +168,7 @@ describe("profile pillar 3: posture presets reshape warning emission", () => {
 describe("profile pillar 4: unknown creator degrades to UN, never a wrong decode", () => {
   it("flags DICOM_PRIVATE_CREATOR_UNKNOWN and keeps VR=UN when the profile lacks the creator", () => {
     // A Siemens-block fixture parsed under the GE profile: GE does not know
-    // the Siemens creator, so the element must degrade — not mis-resolve.
+    // the Siemens creator, so the element must degrade - not mis-resolve.
     const buf = buildPrivateFixture("SIEMENS CSA HEADER");
     const ds = parseDicom(buf, { profile: profiles.ge });
     expect(elementsOf(ds).get("00291010")?.vr).toBe("UN");

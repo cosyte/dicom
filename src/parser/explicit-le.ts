@@ -1,31 +1,31 @@
 /**
- * Explicit VR Little Endian dataset parser — TS-02 (`1.2.840.10008.1.2.1`)
+ * Explicit VR Little Endian dataset parser - TS-02 (`1.2.840.10008.1.2.1`)
  * AND the shared body that Explicit VR Big Endian (TS-03) wraps.
  *
  * Phase 2 core-parser context:
- *   - D-22 — short-form / long-form element header layout (8 vs 12 bytes).
+ *   - D-22 - short-form / long-form element header layout (8 vs 12 bytes).
  *     `LONG_FORM_VRS` from `element-header.ts` lists the 10 VRs that use
  *     the long-form. Reserved bytes ≠ 0x00 0x00 emit
  *     `DICOM_NONZERO_RESERVED_BYTES`.
- *   - D-25 — FFFE markers route through the same endian-aware ByteCursor
+ *   - D-25 - FFFE markers route through the same endian-aware ByteCursor
  *     as every other read; ItemDelim termination of undefined-length items
  *     supported via `opts.stopOnItemDelim`.
- *   - D-29 — undefined-length SQ legal in Explicit VR but emits
+ *   - D-29 - undefined-length SQ legal in Explicit VR but emits
  *     `DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR`.
- *   - D-30 — CP-246 fallback: when `VR=UN` AND `length=0xFFFFFFFF`, attempt
+ *   - D-30 - CP-246 fallback: when `VR=UN` AND `length=0xFFFFFFFF`, attempt
  *     SQ descent using **Implicit VR LE inner encoding**. On success →
  *     promote element to `VR=SQ` + emit `DICOM_UN_PARSED_AS_SQ` + set
  *     `cp246Promoted: true`. On failure → keep `VR=UN` + raw bytes
  *     (best-effort empty when undefined-length, per CONTEXT D-30).
- *   - D-31 — `(7FE0,0010) VR=OB length=0xFFFFFFFF` is encapsulated pixel
+ *   - D-31 - `(7FE0,0010) VR=OB length=0xFFFFFFFF` is encapsulated pixel
  *     data; SQ-style fragment iteration; element keeps `vr=OB`.
  *
  * Threat model:
- *   - T-02-04-01 — every cursor read wrapped; RangeError → typed throw.
- *   - T-02-04-02 — depth cap enforced inside parseSequence.
- *   - T-02-04-05 — non-zero reserved bytes are NOT trusted to drive parsing;
+ *   - T-02-04-01 - every cursor read wrapped; RangeError → typed throw.
+ *   - T-02-04-02 - depth cap enforced inside parseSequence.
+ *   - T-02-04-05 - non-zero reserved bytes are NOT trusted to drive parsing;
  *     length is read from the explicit 4-byte field.
- *   - T-02-04-06 — `ctx.copyValues === true` → `Buffer.from(slice)`.
+ *   - T-02-04-06 - `ctx.copyValues === true` → `Buffer.from(slice)`.
  *
  * @module
  */
@@ -65,8 +65,8 @@ const UNDEFINED_LENGTH = 0xffffffff;
 /**
  * Shared Explicit-VR element loop used by both LE (TS-02) and BE (TS-03)
  * strategies. The only TS-specific knobs are:
- *   - `mode.littleEndian` — drives ByteCursor + FFFE marker reads.
- *   - `mode.innerStrategy` — passed as `innerStrategy` when descending SQ
+ *   - `mode.littleEndian` - drives ByteCursor + FFFE marker reads.
+ *   - `mode.innerStrategy` - passed as `innerStrategy` when descending SQ
  *     and as the per-item parser for SQ-inner element bodies. (Each TS
  *     strategy passes itself in to break the circular import.)
  *
@@ -86,7 +86,7 @@ export function _parseExplicit(
   while (cursor.remaining() > 0) {
     const headerStart = cursor.position;
 
-    // Detect FFFE markers BEFORE the explicit-VR header read — FFFE
+    // Detect FFFE markers BEFORE the explicit-VR header read - FFFE
     // markers have no on-wire VR field and would mis-decode through
     // readExplicitElementHeader. The peek-then-decide pattern matches
     // PITFALLS.md §2.3 (D-25).
@@ -127,7 +127,7 @@ export function _parseExplicit(
       }
       const fffeTag = joinTag(grp, ele);
       if (opts.stopOnItemDelim === true && fffeTag === "FFFEE00D") {
-        // ItemDelim — cursor consumed past the 8-byte marker.
+        // ItemDelim - cursor consumed past the 8-byte marker.
         return { elements, endOffset: cursor.position };
       }
       throw new DicomParseError(
@@ -170,7 +170,7 @@ export function _parseExplicit(
     }
 
     // Odd-length warning (TOL-07): emitted for explicit-length values
-    // whose declared length is odd. Don't pad — that's the serializer's
+    // whose declared length is odd. Don't pad - that's the serializer's
     // job (Phase 5).
     if (length !== UNDEFINED_LENGTH && length % 2 === 1) {
       emit(oddLengthValuePadded(position, tag, length));
@@ -284,7 +284,7 @@ export function _parseExplicit(
       }
       // Failure path: per CONTEXT D-30 "restore VR=UN with raw bytes
       // preserved". UN with undefined length is malformed if it isn't a
-      // CP-246 SQ — we cannot reliably know where the value ends, so the
+      // CP-246 SQ - we cannot reliably know where the value ends, so the
       // conservative interpretation is to consume the remainder of the
       // input as the UN value (best-effort, documented in D-30 + plan
       // 02-04 task 2 behavior section). The cursor advances to
@@ -343,7 +343,7 @@ export function _parseExplicit(
       emit(groupLengthInDataset(position, tag));
     }
 
-    // Private Creator slot (gggg,0010..00FF) — register into the stack.
+    // Private Creator slot (gggg,0010..00FF) - register into the stack.
     if (groupNum % 2 === 1 && elementHexNum >= 0x0010 && elementHexNum <= 0x00ff) {
       registerPrivateCreator(tag, valueSlice, ctx);
     }
@@ -358,7 +358,7 @@ export function _parseExplicit(
       new Element({
         tag,
         vr: finalVr,
-        // Phase 2 placeholder — Phase 3 derives VM from VR + value layout.
+        // Phase 2 placeholder - Phase 3 derives VM from VR + value layout.
         vm: 1,
         length,
         rawBytes: valueSlice,

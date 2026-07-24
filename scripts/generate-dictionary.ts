@@ -20,7 +20,7 @@
  *
  * Determinism (DICT-05):
  *   - The header comment uses ONLY the pinned Innolitics SHA + the input file
- *     SHA-256 — NEVER `Date.now()` or `new Date()`.
+ *     SHA-256 - NEVER `Date.now()` or `new Date()`.
  *   - Entries are sorted lexicographically (tag/keyword/UID).
  *   - All Object.entries / iteration is explicit-sorted before emit.
  *   - Re-running the generator with unchanged inputs produces byte-identical output.
@@ -41,7 +41,7 @@ const SHA_FILE = join(VENDOR_ROOT, "SHA.txt");
 const OUT_DIR = join(REPO_ROOT, "src", "dictionary", "generated");
 
 // -----------------------------------------------------------------------------
-// Curated UID table — PS3.6 §A.1 / Table A-1.
+// Curated UID table - PS3.6 §A.1 / Table A-1.
 //
 // Scope: Transfer Syntax UIDs + Well-Known UIDs + a handful of canonical
 // MetaSOPClass / Coding Scheme / Application Context UIDs. SOP Class UIDs come
@@ -683,7 +683,7 @@ function readSha(): { full: string; short: string } {
   if (!/^[0-9a-f]{40}$/.test(raw)) {
     throw new Error(`vendor/innolitics/SHA.txt must contain a 40-char hex SHA, got: ${raw}`);
   }
-  // 7-char short SHA — aligned with plan 01-03 (which committed first using 7-char).
+  // 7-char short SHA - aligned with plan 01-03 (which committed first using 7-char).
   // Both worktrees converge on the same vendor/innolitics/<short>/ directory at merge.
   return { full: raw, short: raw.slice(0, 7) };
 }
@@ -706,7 +706,7 @@ function escape(s: string): string {
 /**
  * Map an Innolitics id (8-char, possibly with lowercase `x`) to the Tag string
  * we emit. For concrete tags we uppercase. For repeating-group families we
- * preserve lowercase `x` placeholders verbatim — these are NOT lookable up by
+ * preserve lowercase `x` placeholders verbatim - these are NOT lookable up by
  * concrete tag and are flagged via `repeatingGroup: true`.
  */
 function normalizeId(id: string): { tag: string; repeatingGroup: boolean } {
@@ -746,7 +746,7 @@ function emitHeader(
 ): string {
   const lines: string[] = [
     "/* eslint-disable */",
-    "// generated — do not edit by hand.",
+    "// generated - do not edit by hand.",
     "//",
     `// Generator: scripts/${generatorName}`,
     `// Innolitics dicom-standard SHA (pinned, full): ${innoSha}`,
@@ -775,7 +775,7 @@ function buildTagsTs(
   attrSha: string,
 ): { ts: string; tagCount: number; keywordCount: number } {
   // Build entries keyed by tag (concrete or repeating-group placeholder).
-  // Multiple attributes can share an id ONLY in retired shadow-cases — collapse
+  // Multiple attributes can share an id ONLY in retired shadow-cases - collapse
   // by preferring non-retired, then alphabetical keyword for stability.
   const seen = new Map<string, InnoliticsAttribute>();
   for (const a of attrs) {
@@ -847,7 +847,7 @@ function buildTagsTs(
     keywordPairs.map((p) => `  ${escape(p.keyword)}: ${escape(p.tag)},`).join("\n") +
     `\n};\n`;
 
-  // We're emitting two files in this single function — return TS for tags and
+  // We're emitting two files in this single function - return TS for tags and
   // pass keywordsTs out via a side channel by writing directly. Cleaner: split.
   // Keep clean by writing keywords inline here and returning both:
   writeFileSync(join(OUT_DIR, "keywords.ts"), keywordsTs, "utf8");
@@ -958,7 +958,7 @@ function main(): void {
   writeFileSync(join(OUT_DIR, "uids.ts"), uidsTs, "utf8");
 
   console.log(
-    `[gen:dictionary] done — tags: ${tagCount}, keywords: ${keywordCount}, uids: ${uidCount}`,
+    `[gen:dictionary] done - tags: ${tagCount}, keywords: ${keywordCount}, uids: ${uidCount}`,
   );
 }
 

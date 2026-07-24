@@ -4,7 +4,7 @@ import { describe, it, expect } from "vitest";
 import { DicomParseError, FATAL_CODES, buildSnippet } from "../../src/parser/errors.js";
 
 describe("FATAL_CODES (D-09)", () => {
-  it("has exactly 4 codes (D-09 — locked at 4, no expansion)", () => {
+  it("has exactly 4 codes (D-09 - locked at 4, no expansion)", () => {
     expect(Object.keys(FATAL_CODES)).toHaveLength(4);
   });
 
@@ -54,7 +54,7 @@ describe("DicomParseError (D-10)", () => {
   });
 });
 
-describe("buildSnippet (D-10 — up to 16 bytes, lowercase hex, space-separated)", () => {
+describe("buildSnippet (D-10 - up to 16 bytes, lowercase hex, space-separated)", () => {
   it("renders bytes as space-separated lowercase 2-char hex", () => {
     const buf = Buffer.from([0x44, 0x49, 0x43, 0x4d]);
     expect(buildSnippet(buf, 0)).toBe("44 49 43 4d");

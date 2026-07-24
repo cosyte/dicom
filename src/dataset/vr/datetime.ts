@@ -2,7 +2,7 @@
  * Tolerant temporal decoders for `DA` / `TM` / `DT` (PS3.5 §6.2).
  *
  * Every decoder is fail-safe: a malformed value yields `valid: false` with
- * the raw string preserved and the numeric fields omitted — it NEVER throws
+ * the raw string preserved and the numeric fields omitted - it NEVER throws
  * and NEVER coerces to a plausible-but-wrong date. Tolerated legacy forms
  * (retired dotted `YYYY.MM.DD`, partial precision, non-standard offsets) are
  * decoded best-effort and flagged to the caller so it can emit the matching
@@ -53,7 +53,7 @@ export function parseDate(raw: string): { value: DicomDate; legacy: boolean } {
       legacy: true,
     };
   }
-  // Empty component is a normal "no value" — not flagged. Anything else is a
+  // Empty component is a normal "no value" - not flagged. Anything else is a
   // tolerated non-conformance (e.g. "ANONYMIZED").
   return { value: { raw, valid: false }, legacy: raw.length > 0 };
 }

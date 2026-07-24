@@ -1,18 +1,18 @@
 /**
- * Tests for `parseDeflatedLE` — Phase 2 plan 02-05 (TS-04).
+ * Tests for `parseDeflatedLE` - Phase 2 plan 02-05 (TS-04).
  *
  * Covers:
  *   - Happy-path Deflated-LE round-trip through `parseDicom + buildDicom`
- *     (CONTEXT D-26 — `inflateRawSync` + delegate to parseExplicitLE).
- *   - Position annotation (D-27 — warnings emitted from inflated content
+ *     (CONTEXT D-26 - `inflateRawSync` + delegate to parseExplicitLE).
+ *   - Position annotation (D-27 - warnings emitted from inflated content
  *     carry `position.deflated === true`).
- *   - ParseContext propagation — strict-mode escalation works through the
+ *   - ParseContext propagation - strict-mode escalation works through the
  *     inner emit wrapper (proves it does NOT bypass the outer chokepoint).
- *   - Decompression-bomb mitigation (T-02-05-01 — 256 MiB cap; tested
+ *   - Decompression-bomb mitigation (T-02-05-01 - 256 MiB cap; tested
  *     against a 1 KiB cap via `parseDeflatedLEWithCap` for tractability).
- *   - Stream-corruption mitigation (T-02-05-02 — random non-deflate bytes
+ *   - Stream-corruption mitigation (T-02-05-02 - random non-deflate bytes
  *     throw `INVALID_FILE_META`, NOT a raw zlib `RangeError`).
- *   - `inflateRawSync` invariant (NOT `inflateSync`) — verified by the
+ *   - `inflateRawSync` invariant (NOT `inflateSync`) - verified by the
  *     symmetry of the round-trip test (encoder uses `deflateRawSync`,
  *     parser must use `inflateRawSync` for the round-trip to succeed) +
  *     the source-grep verification in `<must_haves>`.
@@ -57,7 +57,7 @@ function buildCtx(buffer: Buffer, opts: { strict?: boolean } = {}): ParseContext
   };
 }
 
-describe("parseDeflatedLE — TS-04 happy path (D-26)", () => {
+describe("parseDeflatedLE - TS-04 happy path (D-26)", () => {
   it("round-trips a single PN element through buildDicom + parseDicom", () => {
     const buf = buildDicom({
       transferSyntax: TS_DEFLATED_LE,
@@ -92,7 +92,7 @@ describe("parseDeflatedLE — TS-04 happy path (D-26)", () => {
   });
 });
 
-describe("parseDeflatedLE — D-27 position.deflated annotation", () => {
+describe("parseDeflatedLE - D-27 position.deflated annotation", () => {
   it("warnings emitted from inflated content carry position.deflated === true", () => {
     // VR mismatch: dictionary expects PN for (0010,0010); we encode as LO.
     const buf = buildDicom({
@@ -127,7 +127,7 @@ describe("parseDeflatedLE — D-27 position.deflated annotation", () => {
   });
 });
 
-describe("parseDeflatedLE — strict-mode escalation through inner emit", () => {
+describe("parseDeflatedLE - strict-mode escalation through inner emit", () => {
   it("strict mode escalates a Tier-2 warning emitted from inflated content", () => {
     // Odd-length SH triggers DICOM_ODD_LENGTH_VALUE_PADDED inside the
     // inflated dataset. The inner emit wrapper MUST flow through the
@@ -156,7 +156,7 @@ describe("parseDeflatedLE — strict-mode escalation through inner emit", () => 
   });
 });
 
-describe("parseDeflatedLE — T-02-05-01 decompression-bomb cap", () => {
+describe("parseDeflatedLE - T-02-05-01 decompression-bomb cap", () => {
   it("throws INVALID_FILE_META when inflated output exceeds the cap", () => {
     // Build a payload whose inflation exceeds a 1 KiB cap. ~2 KiB of
     // identical bytes deflates to a tiny buffer (the classic deflate-bomb
@@ -183,7 +183,7 @@ describe("parseDeflatedLE — T-02-05-01 decompression-bomb cap", () => {
   });
 });
 
-describe("parseDeflatedLE — T-02-05-02 stream corruption", () => {
+describe("parseDeflatedLE - T-02-05-02 stream corruption", () => {
   it("throws INVALID_FILE_META on random non-deflate bytes (NOT a raw zlib error)", () => {
     const garbage = Buffer.from([
       0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e,
@@ -213,7 +213,7 @@ describe("parseDeflatedLE — T-02-05-02 stream corruption", () => {
       transferSyntax: TS_DEFLATED_LE,
       elements: [{ tag: "00100010", vr: "PN", value: Buffer.from("DOE^JANE", "ascii") }],
     });
-    // Find where File Meta ends — the original deflate stream begins at
+    // Find where File Meta ends - the original deflate stream begins at
     // some offset. Since buildDicom currently throws for TS-04 (RED phase
     // baseline), this test will start passing once Step 3 wires the
     // encoder. Once it does, we splice gibberish over the deflate body.
@@ -231,14 +231,14 @@ describe("parseDeflatedLE — T-02-05-02 stream corruption", () => {
     // header layout, then truncate to where the deflate body begins.
     // The deflate body begins immediately after the File Meta group.
     // For simplicity in this test we mutate the last 16 bytes of `valid`
-    // to non-deflate junk — corrupting the tail of the deflate stream is
+    // to non-deflate junk - corrupting the tail of the deflate stream is
     // sufficient to trigger an inflate failure.
     const corrupted = Buffer.from(valid);
     for (let i = corrupted.length - 16; i < corrupted.length; i++) {
       corrupted[i] = 0xff;
     }
     // Also replace the entire deflate body with garbage after preamble +
-    // File Meta — to be thorough, fill the last 50% of the buffer with
+    // File Meta - to be thorough, fill the last 50% of the buffer with
     // junk (preserving preamble + DICM + File Meta + (0002,0010) UID).
     // 132 (preamble+DICM) + ~70 bytes File Meta is a safe lower bound;
     // assume File Meta < 200 bytes.
@@ -251,7 +251,7 @@ describe("parseDeflatedLE — T-02-05-02 stream corruption", () => {
   });
 });
 
-describe("parseDeflatedLE — copyValues honored through inflated parse", () => {
+describe("parseDeflatedLE - copyValues honored through inflated parse", () => {
   it("copyValues=true and copyValues=false both yield correct values", () => {
     const buf = buildDicom({
       transferSyntax: TS_DEFLATED_LE,
@@ -264,14 +264,14 @@ describe("parseDeflatedLE — copyValues honored through inflated parse", () => 
     const elView = elementsOf(dsView).get("00100010");
     const elCopy = elementsOf(dsCopy).get("00100010");
 
-    // Both modes must yield correct values — `copyValues` only controls
+    // Both modes must yield correct values - `copyValues` only controls
     // backing-buffer detachment (Buffer.from vs Buffer.subarray), not the
     // observable bytes.
     expect(elView?.rawBytes.toString("ascii")).toBe("DOE^JANE");
     expect(elCopy?.rawBytes.toString("ascii")).toBe("DOE^JANE");
-    // copyValues=false yields a Buffer.subarray view — the underlying
+    // copyValues=false yields a Buffer.subarray view - the underlying
     // ArrayBuffer is the inflated buffer (size = inflated dataset).
-    // copyValues=true yields a Buffer.from copy — the underlying
+    // copyValues=true yields a Buffer.from copy - the underlying
     // ArrayBuffer is from the Node Buffer pool. The two paths must
     // produce DIFFERENT underlying ArrayBuffers (assuming both are non-
     // empty, which they are here).

@@ -1,9 +1,9 @@
 /**
- * Phase 2 structural `Element` — leaf wrapper over an on-wire DICOM
+ * Phase 2 structural `Element` - leaf wrapper over an on-wire DICOM
  * Data Element.
  *
  * Per `02-CONTEXT.md` D-04 + D-42: structural fields ONLY. No `.value`
- * getter, no decoders, no `.items` navigation — those land in Phase 3,
+ * getter, no decoders, no `.items` navigation - those land in Phase 3,
  * which extends this class.
  *
  * Per D-16: `rawBytes` is a `Buffer.subarray()` view over the source
@@ -51,7 +51,7 @@ export interface ElementInit {
   /**
    * Byte order of the value bytes, set by the parser per transfer syntax
    * (`true` for Implicit/Explicit VR LE + Deflated; `false` for Explicit VR
-   * BE). Phase 3 numeric decoders read this — signedness comes from the VR,
+   * BE). Phase 3 numeric decoders read this - signedness comes from the VR,
    * endianness from here.
    */
   readonly littleEndian: boolean;
@@ -151,7 +151,7 @@ export class Element {
 
   /**
    * The decoded value of this element, by VR. Decode is lazy (the structural
-   * parse stays eager; field decode runs on first access) and memoized — the
+   * parse stays eager; field decode runs on first access) and memoized - the
    * documented ~30× win on large studies where most fields are never read.
    * Fail-safe: never throws; a malformed value surfaces as typed-absent with
    * the deviation on the returned value's `warnings`.

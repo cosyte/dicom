@@ -1,19 +1,19 @@
 /**
  * Immutability property tests for the parsed `Dataset` model.
  *
- * Phase 2 NOTE — dicom's mutation API (`setElement` / `addElement` /
+ * Phase 2 NOTE - dicom's mutation API (`setElement` / `addElement` /
  * `removeElement` / `addItem` / `removeItem`, copy-on-write returning a NEW
  * document) is a Phase 3 surface and does not exist yet. The two immutability
  * guarantees the model makes TODAY are:
  *
- *   1. `Dataset.warnings` is frozen at the constructor boundary — a mutation
+ *   1. `Dataset.warnings` is frozen at the constructor boundary - a mutation
  *      attempt (e.g. `Array.prototype.push`) throws and leaves it unchanged.
  *      This is wired to the shared `immutabilityProperty` runner: `mutate`
  *      attempts the push (the runner tolerates the throw as a valid frozen
  *      response) and `getSnapshot` captures the warning codes by value.
  *   2. Copy-on-read detachment: with `{ copyValues: true }`, each
- *      `Element.rawBytes` is `Buffer.from(slice)` — independent of the source
- *      buffer — so mutating the source post-parse never perturbs a parsed
+ *      `Element.rawBytes` is `Buffer.from(slice)` - independent of the source
+ *      buffer - so mutating the source post-parse never perturbs a parsed
  *      Element (the byte-parser analogue of "the original stays byte-identical").
  *      This is the closest standing invariant to the prompt's copy-on-write
  *      requirement; the full new-document COW lands with the Phase 3 mutation
@@ -45,7 +45,7 @@ function elementsOf(ds: Dataset): ReadonlyMap<Tag, Element> {
 }
 
 describe("dicom conformance: parsed-model immutability", () => {
-  it("Dataset.warnings is frozen — a mutation attempt throws or no-ops, never edits in place", () => {
+  it("Dataset.warnings is frozen - a mutation attempt throws or no-ops, never edits in place", () => {
     immutabilityProperty<Dataset>({
       // Recoverable inputs maximize the chance the warnings array is non-empty,
       // but the invariant holds for empty arrays too. Inputs that throw a fatal
@@ -86,7 +86,7 @@ describe("dicom conformance: parsed-model immutability", () => {
     );
   });
 
-  it("copyValues:true detaches rawBytes — mutating the source never perturbs a parsed Element", () => {
+  it("copyValues:true detaches rawBytes - mutating the source never perturbs a parsed Element", () => {
     fc.assert(
       fc.property(wellFormedModel(), (model) => {
         const source = Buffer.from(encodeModel(model), "latin1");
@@ -108,11 +108,11 @@ describe("dicom conformance: parsed-model immutability", () => {
     );
   });
 
-  it("copyValues:false (default) views the source — mutating the source DOES perturb the view", () => {
+  it("copyValues:false (default) views the source - mutating the source DOES perturb the view", () => {
     // The behavioral complement of the copyValues:true test: a default-mode
     // parse yields rawBytes that ARE a live view of the source, so scribbling
     // the source is reflected in the parsed Element. (We assert behavior, not
-    // ArrayBuffer identity — Node pools small Buffers into a shared backing
+    // ArrayBuffer identity - Node pools small Buffers into a shared backing
     // store, so `.buffer` identity is not a reliable copy-vs-view discriminator.)
     //
     // Scoped to NON-deflated syntaxes: under Deflated Explicit VR LE the view is

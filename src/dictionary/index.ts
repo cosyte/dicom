@@ -1,17 +1,17 @@
 /**
- * Public Dictionary namespace for `@cosyte/dicom` — Phase 1 deliverable.
+ * Public Dictionary namespace for `@cosyte/dicom` - Phase 1 deliverable.
  *
  * D-10:
  *
- *  - {@link lookup} — accepts either an 8-char hex tag (`"00100010"`) or a
+ *  - {@link lookup} - accepts either an 8-char hex tag (`"00100010"`) or a
  *    keyword (`"PatientName"`) and returns the typed {@link DictionaryEntry}
  *    or `undefined`.
- *  - {@link byKeyword} — keyword-only lookup; for cases where the caller has
+ *  - {@link byKeyword} - keyword-only lookup; for cases where the caller has
  *    already validated the input shape and wants a narrower call.
- *  - {@link uid} — UID lookup (DICT-06).
+ *  - {@link uid} - UID lookup (DICT-06).
  *
  * No function throws on miss (D-10: "Returns the typed entry or `undefined`.
- * No throws on miss."). Returned entries are deeply frozen — mutation attempts
+ * No throws on miss."). Returned entries are deeply frozen - mutation attempts
  * throw `TypeError` in strict mode (which all of `@cosyte/dicom`'s emitted code
  * runs under, given `"use strict"` is implicit for ES modules).
  *
@@ -58,7 +58,7 @@ Object.freeze(KEYWORDS);
  * Hex tag input is normalized to uppercase; keyword input is case-sensitive.
  * Returns `undefined` for unknown tags, unknown keywords, malformed input, or
  * tags from repeating-group families (those resolve via the family entry's
- * `repeatingGroup` flag — see {@link DictionaryEntry}).
+ * `repeatingGroup` flag - see {@link DictionaryEntry}).
  *
  * @example
  *   import { Dictionary } from "@cosyte/dicom";
