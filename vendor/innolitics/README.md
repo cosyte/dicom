@@ -1,6 +1,6 @@
 # Innolitics dicom-standard input artifacts
 
-This directory pins the Innolitics [`dicom-standard`](https://github.com/innolitics/dicom-standard) repository at a specific commit SHA. The committed JSON files are the **input** to `scripts/generate-dictionary.ts` (run via `pnpm gen:dictionary`) and `scripts/generate-annex-e.ts` (run via `pnpm gen:annex-e`). Runtime has zero dependency on these files — only the generated TypeScript modules under `src/dictionary/generated/` are imported by the library at runtime.
+This directory pins the Innolitics [`dicom-standard`](https://github.com/innolitics/dicom-standard) repository at a specific commit SHA. The committed JSON files are the **input** to `scripts/generate-dictionary.ts` (run via `pnpm gen:dictionary`) and `scripts/generate-annex-e.ts` (run via `pnpm gen:annex-e`). Runtime has zero dependency on these files: only the generated TypeScript modules under `src/dictionary/generated/` are imported by the library at runtime.
 
 ## Pinning
 
@@ -46,4 +46,4 @@ Per D-13: re-pin monthly, evaluated at minor releases. To bump:
 6. Commit both the new `vendor/innolitics/<sha>/` tree AND the regenerated `src/dictionary/generated/` files together (CI gate in plan 05 enforces lockstep regen).
 7. Delete the old `<short>/` directory in the same commit.
 
-If the upstream JSON shape changes, each generator's input-validation step will fail loudly with a structured `console.error` — fix the generator, regenerate, and capture the schema delta in a follow-up ADR.
+If the upstream JSON shape changes, each generator's input-validation step will fail loudly with a structured `console.error`: fix the generator, regenerate, and capture the schema delta in a follow-up ADR.

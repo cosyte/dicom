@@ -7,7 +7,7 @@ sidebar_position: 5
 
 # Source & vendor profiles
 
-Real objects come from real vendors, and vendors deviate in documented, predictable ways — private
+Real objects come from real vendors, and vendors deviate in documented, predictable ways: private
 data elements with implicit VRs, benign quirks emitted at high volume, deviations you want to treat
 as hard errors from a trusted sender. A **profile** lets you opt into source-specific tolerance
 without ever risking a wrong decode. Pass one to `parseDicom`:
@@ -20,7 +20,7 @@ const buf = Buffer.from(
   "base64",
 );
 
-// Selecting a vendor profile never changes a correct decode — it only tightens
+// Selecting a vendor profile never changes a correct decode. It only tightens
 // or annotates. This clean object reads identically with the Siemens overlay.
 const ds = parseDicom(buf, { profile: profiles.siemens });
 
@@ -30,22 +30,22 @@ ds.warnings.length; // => 0
 
 ## What a profile bundles
 
-A profile only ever **tightens or annotates** a parse — it never loosens one past the lenient
+A profile only ever **tightens or annotates** a parse. It never loosens one past the lenient
 default:
 
-- **Private-dictionary overlay** — resolves the Implicit VR of vendor private data elements by the
+- **Private-dictionary overlay**: resolves the Implicit VR of vendor private data elements by the
   object's _live_ private-creator string (canonical `"GGGGxxLL"` key, PS3.5 §7.8.1), never a
   hard-coded block number. A creator the profile does not recognize degrades to `UN` plus a
-  `DICOM_PRIVATE_CREATOR_UNKNOWN` warning — never a wrong decode.
-- **Escalations** — chosen Tier-2 warning codes promoted to a thrown `DicomParseError`, a stricter
+  `DICOM_PRIVATE_CREATOR_UNKNOWN` warning: never a wrong decode.
+- **Escalations**: chosen Tier-2 warning codes promoted to a thrown `DicomParseError`, a stricter
   posture for known-unsafe deviations from a trusted sender.
-- **Suppressions** — benign, high-volume warning codes silenced for a known-quirky source.
+- **Suppressions**: benign, high-volume warning codes silenced for a known-quirky source.
 
 ## The five built-ins
 
 Five profiles ship under the frozen `profiles` namespace: `ge`, `siemens`, `philips` (vendor
 overlays) and `strict` / `lenient` (posture presets). They are the [tolerance dial](./spec-notes-tolerance)
-made concrete — `strict` escalates, `lenient` suppresses.
+made concrete: `strict` escalates, `lenient` suppresses.
 
 ## Build your own
 
@@ -69,5 +69,5 @@ Object.isFrozen(acmeStrict); // => true
 ```
 
 A profile is a value, not a side effect: it never mutates a dataset and never changes a decode that
-was already correct. Selecting the wrong vendor overlay costs you resolved private tags — it can
+was already correct. Selecting the wrong vendor overlay costs you resolved private tags. It can
 never turn a right answer into a wrong one.

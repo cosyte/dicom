@@ -7,7 +7,7 @@ sidebar_position: 3
 
 # Typed values & VR decode
 
-`ds.get(tag)` returns an `Element` — the raw bytes and the VR. Its **`.value`** getter lazily decodes
+`ds.get(tag)` returns an `Element`: the raw bytes and the VR. Its **`.value`** getter lazily decodes
 those bytes into a typed, discriminated `DicomValue` and caches the result. Every one of the 34 VRs
 has a decode: integers and floats (`numbers`), 64-bit values (`bigints`), attribute tags, person
 names (`personName`), strings (`strings`), free text (`text`), numeric strings (`DS`/`IS`), temporal
@@ -15,7 +15,7 @@ values (`dates` / `times` / `dateTimes`), sequences, and raw `binary` for bulk d
 
 ## The DicomValue union
 
-`DicomValue` is a discriminated union — switch on `.kind` and the payload narrows:
+`DicomValue` is a discriminated union. Switch on `.kind` and the payload narrows:
 
 ```ts runnable
 import { parseDicom } from "@cosyte/dicom";
@@ -50,7 +50,7 @@ const num = ds.get("00200011")?.value; // Series Number
 num?.kind; // => "integerString"
 ```
 
-## Decode is fail-safe — a bad token is `null`, never a plausible wrong number
+## Decode is fail-safe: a bad token is `null`, never a plausible wrong number
 
 The decode never throws and never coerces a malformed value into a plausible-but-wrong one. A bad
 `DS`/`IS` token becomes `null` (never `NaN`→`0`); an out-of-range date part is flagged rather than
@@ -61,15 +61,15 @@ hand you a confident wrong one.
 
 ## Character sets
 
-String VRs honor the object's `(0008,0005)` Specific Character Set — UTF-8 (`ISO_IR 192`), the
-ISO-8859 family, and ISO-2022 escapes — and the active charset is threaded through nested sequence
+String VRs honor the object's `(0008,0005)` Specific Character Set: UTF-8 (`ISO_IR 192`), the
+ISO-8859 family, and ISO-2022 escapes. The active charset is threaded through nested sequence
 items so a code-string inside a sequence decodes the same way a top-level one does. An unsupported
 charset term degrades to a `DICOM_UNSUPPORTED_CHARSET` warning with a safe fallback, never a wrong
 decode.
 
 ## Bulk data stays raw
 
-Pixel Data and other bulk elements decode to `{ kind: "binary", bytes }` — the raw `Buffer`, never
+Pixel Data and other bulk elements decode to `{ kind: "binary", bytes }`: the raw `Buffer`, never
 interpreted. This is the metadata-first boundary in the value layer: the bytes are handed to you
 exactly as stored (for encapsulated transfer syntaxes, as their fragments), and pixel decoding is out
 of scope. See [Reading raw pixel data](./cookbook) and the non-goals in

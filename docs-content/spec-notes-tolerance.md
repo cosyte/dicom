@@ -8,7 +8,7 @@ sidebar_position: 2
 # Tolerance & the warning model
 
 Real scanners and archives emit objects that deviate from the letter of the standard in documented,
-recoverable ways — odd-length values with no padding, a missing preamble, an off-spec VR, a
+recoverable ways: odd-length values with no padding, a missing preamble, an off-spec VR, a
 group-length that disagrees with reality. `@cosyte/dicom` follows **Postel's Law**: the parser is
 liberal (it recovers and records a stable-coded warning), and the serializer is conservative (it
 always emits spec-clean Part 10). A recoverable quirk is **never** a silent change and never a throw.
@@ -26,7 +26,7 @@ always emits spec-clean Part 10). A recoverable quirk is **never** a silent chan
 ```ts runnable
 import { parseDicom, WARNING_CODES } from "@cosyte/dicom";
 
-// Synthetic object with the 128-byte preamble omitted — a recoverable quirk.
+// Synthetic object with the 128-byte preamble omitted: a recoverable quirk.
 const buf = Buffer.from(
   "AgAAAFVMBAAcAAAAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xAAgAYABDUwIAQ1QQACAATE8GAE1STi00Mg==",
   "base64",
@@ -34,7 +34,7 @@ const buf = Buffer.from(
 
 const ds = parseDicom(buf);
 
-// It parsed — the data is intact...
+// It parsed. The data is intact...
 ds.series.modality; // => "CT"
 ds.patient.id; // => "MRN-42"
 
@@ -65,15 +65,15 @@ code === FATAL_CODES.EMPTY_INPUT; // => true
 
 ## Positions are PHI-free by construction
 
-Every warning and error carries a **byte offset** (and, for nested elements, the sequence path) —
+Every warning and error carries a **byte offset** (and, for nested elements, the sequence path):
 never the value that triggered it. A `DicomParseError` retains no raw input snippet. You can log the
 full `ds.warnings` array without leaking: it holds codes and positions, not patient data. Keep the
-same discipline in your own code — log `w.code` and `w.position`, never the element value. See
+same discipline in your own code: log `w.code` and `w.position`, never the element value. See
 [Troubleshooting](./troubleshooting) for the full symptom table and the logging posture.
 
 ## Escalate when you want strictness
 
 The tolerance posture is not fixed. A [source profile](./spec-notes-profiles) can **escalate** chosen
 warning codes to a thrown error (a stricter gate for a trusted sender) or **suppress** benign,
-high-volume codes for a known-quirky source — without ever loosening a correct decode. The built-in
+high-volume codes for a known-quirky source, without ever loosening a correct decode. The built-in
 `profiles.strict` and `profiles.lenient` are the two ends of that dial.

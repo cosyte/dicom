@@ -1,6 +1,6 @@
 # Generated DICOM dictionary modules
 
-**DO NOT EDIT BY HAND.** All files in this directory are produced by `scripts/generate-dictionary.ts` (run via `pnpm gen:dictionary`) and `scripts/generate-annex-e.ts` (run via `pnpm gen:annex-e`). CI gates a byte-identical regen on every PR — see `.github/workflows/ci.yml` and `.github/workflows/dictionary-regen.yml` (committed by Phase 1 Plan 05).
+**DO NOT EDIT BY HAND.** All files in this directory are produced by `scripts/generate-dictionary.ts` (run via `pnpm gen:dictionary`) and `scripts/generate-annex-e.ts` (run via `pnpm gen:annex-e`). CI gates a byte-identical regen on every PR: see `.github/workflows/ci.yml` and `.github/workflows/dictionary-regen.yml` (committed by Phase 1 Plan 05).
 
 ## Files
 
@@ -18,4 +18,4 @@ pnpm gen:all                          # runs gen:dictionary + gen:annex-e in seq
 git diff src/dictionary/generated/    # MUST be empty for the inputs at the pinned SHAs
 ```
 
-If the diff is non-empty after a fresh regen against unchanged inputs, the generator has non-determinism — file an issue. The byte-identical regen is a Phase 1 Plan 05 CI gate (DICT-05).
+If the diff is non-empty after a fresh regen against unchanged inputs, the generator has non-determinism. File an issue. The byte-identical regen is a Phase 1 Plan 05 CI gate (DICT-05).
