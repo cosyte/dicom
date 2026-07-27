@@ -5,7 +5,7 @@ name: Release
 # Requires the NPM_TOKEN and DOCS_REPO_DISPATCH_TOKEN secrets (passed via `secrets: inherit`).
 #
 # NOTE: @cosyte/dicom is currently `private: true`, so `changeset publish` is a no-op until that flag
-# is removed — the pipeline is wired ahead of that so it just works once dicom ships.
+# is removed. The pipeline is wired ahead of that so it just works once dicom ships.
 
 on:
   push:
@@ -14,7 +14,7 @@ on:
 jobs:
   release:
     # Required. The repo default for GITHUB_TOKEN is `contents: read`, and a called workflow can only
-    # downgrade the caller's token, never escalate it — so without this the shared pipeline's
+    # downgrade the caller's token, never escalate it, so without this the shared pipeline's
     # `contents/id-token/pull-requests: write` is an escalation and GitHub rejects the whole workflow
     # at startup (1s, no jobs, no logs). That is what every Release run did from June until this.
     permissions:

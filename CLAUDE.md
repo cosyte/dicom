@@ -42,6 +42,29 @@
   resolution (`image.frame(i)`, Per-Frame-else-Shared), coded triplets (`readCode`), and the
   value-layer `DicomValueError`. Builds on Phase 3 VR value decode (all 34 VRs via `Element.value`) +
   the `Dataset`/`Item` navigation API.
+- **Em-dash brand gate armed.** `scripts/check-no-emdash.sh` (`pnpm check:no-emdash`) plus
+  `.github/workflows/no-emdash.yml` enforce the founder directive banning `U+2014` outright
+  (`knowledgebase/06-brand/voice-and-tone.md`, "No em dashes. Ever."). It scans **both** halves the
+  rule covers: every tracked file, **and** the PR title, body, and commit messages, on the
+  non-default `edited` trigger so retitling a PR re-checks it. What lands on `main` here is a repo
+  setting, read rather than assumed: `squash_merge_commit_title: COMMIT_OR_PR_TITLE` and
+  `squash_merge_commit_message: COMMIT_MESSAGES`, so the subject comes from the PR title (or from
+  the lone commit's subject, when the branch has exactly one) and the body from the branch commit
+  messages. The PR body does not land; the gate scans it anyway, as deliberate over-strictness on a
+  surface that costs nothing to cover. The script is the **text-only** variant, taken from
+  `ncpdp` rather than the older `knowledgebase` copy so that it carries `ncpdp`'s two shape fixes
+  (a tracked file named `-` was read as stdin and never opened; `-d skip` silently passed a tracked
+  symlink to a directory). dicom was **not** clean when this landed: an earlier markdown-only survey
+  said it was, but six em dashes lived in four non-markdown files and this slice removed them,
+  including the npm `description`. **Measure every tracked file, not just markdown.**
+  It deliberately omits `grep -I`, and that is the choice to understand before touching this file.
+  `src/dataset/vr/charset.ts` holds a **functional NUL** inside `/[\x00 ]+$/u` (DICOM's own padding,
+  stripped by that regex), so grep classifies it binary. It carries no em dash, so it scans green.
+  If it ever gains one, grep writes `binary file matches` to stderr with empty stdout and the
+  stderr capture reds the run. Adding `-I` would make that same edit pass in silence, so do not add
+  it, and do not remove the NUL to quiet the gate. When the gate goes red the fix is never to
+  re-encode the character: rewrite with a period, colon, comma, or parentheses. Known limits are in
+  the script header and are shared across every copy, so fix them there, not here.
 
 ## Tech Stack (the shared `@cosyte/*` standard)
 
