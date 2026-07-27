@@ -4,8 +4,9 @@ name: Release
 # this repo is public) -> docs artifacts -> GitHub release -> repository_dispatch to cosyte/docs.
 # Requires the NPM_TOKEN and DOCS_REPO_DISPATCH_TOKEN secrets (passed via `secrets: inherit`).
 #
-# NOTE: @cosyte/dicom is currently `private: true`, so `changeset publish` is a no-op until that flag
-# is removed. The pipeline is wired ahead of that so it just works once dicom ships.
+# NOTE: @cosyte/dicom is public and published on npm at 0.0.1. package.json carries no `private`
+# field, so `changeset publish` really publishes. This comment previously claimed `private: true`
+# and described the pipeline as a no-op; that has been untrue since the package shipped.
 
 on:
   push:
