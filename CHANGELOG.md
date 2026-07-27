@@ -6,6 +6,54 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Added
 
+- **Em-dash brand gate in CI (`EMDASH-CONFORMANCE`).** The founder directive of 2026-07-24
+  (`knowledgebase/06-brand/voice-and-tone.md`, "No em dashes. Ever.") bans `U+2014` outright across
+  every cosyte surface and names commit messages explicitly, and the meta-repo's
+  `documentation/conventions.md` has stated for weeks that the rule is CI-gated. It now actually is,
+  here: `scripts/check-no-emdash.sh` (`pnpm check:no-emdash`) plus a dedicated
+  `.github/workflows/no-emdash.yml` job that scans **both** halves the rule covers, the tracked files
+  **and** the PR title, body, and commit messages. The workflow carries the non-default `edited`
+  pull-request trigger, which is load-bearing: this repo squash-merges under
+  `squash_merge_commit_title: COMMIT_OR_PR_TITLE` and `squash_merge_commit_message: COMMIT_MESSAGES`
+  (read off the repo, not assumed), so the subject that lands on `main` is the PR title, or the lone
+  commit's subject when the branch has exactly one, and the body is the branch commit messages.
+  Without `edited` a title changed after the last push would never be re-checked. The PR body does
+  **not** land; the gate scans it anyway, as deliberate over-strictness on a surface that costs
+  nothing to cover. It is a separate workflow rather than a job in `ci.yml` because that trigger
+  would otherwise re-run the whole Node 22 + 24 matrix on every typo fix, and because the shared
+  `cosyte/.github` pipeline runs no arbitrary repo script.
+  **This one did change content, unlike the earlier ports.** An ecosystem survey had measured
+  markdown only (0 of 25 `.md` files) and read dicom as already clean. Measuring all 178 tracked
+  files found six live em dashes in four non-markdown files, all removed here (see Changed, below).
+  Measure every tracked file, because that is what the scan covers.
+  The script is the **text-only** variant, taken from `ncpdp` (PR #34, `39212bb`) rather than from
+  the older `knowledgebase` copy, so it carries `ncpdp`'s two fixes to the shared shape instead of
+  inheriting the holes: a tracked file named `-` was read by `grep` as standard input (which `xargs`
+  points at `/dev/null`) and so was never opened, and `-d skip` silently passed a tracked symlink to
+  a directory. Both are re-proved here rather than taken on faith: with the `./` path prefix removed
+  the gate prints OK and exits 0 over a live em dash in a file named `-`, and with `-d skip` restored
+  it goes green over an unread symlink.
+  It deliberately omits `grep -I`, and in this repo that is the most load-bearing flag choice in the
+  file. `src/dataset/vr/charset.ts` holds a functional NUL byte inside `/[\x00 ]+$/u`, the regex that
+  strips DICOM's own padding, so grep classifies it binary. It carries no em dash today and scans
+  green, which is the whole answer to the belief that this port was blocked: the red would come from
+  a match, never from the NUL. **If it ever gains one, the gate reds.** Measured with GNU grep 3.8:
+  grep exits 0, writes nothing to stdout, and writes `binary file matches` to stderr, so the hit
+  never reaches the hit list and the stderr capture fails the run instead. With `-I` added, the same
+  edit goes green, which is why `-I` stays out. The failure message names that case explicitly rather
+  than blaming an I/O error that did not happen.
+  A gate that prints OK when it did not read its input is worse than no gate, so nine routes by which
+  a dead or blind scan could still report green are each checked red, not assumed: a corrupt git
+  index, an unreadable tracked file, a tracked file named `-q`, a C-quoted non-ASCII path, a
+  mis-encoded text file, an empty tracked-file list, a tracked file named `-`, a tracked symlink to a
+  directory, and the NUL-bearing source file gaining an em dash.
+  Known limits are documented in the script header and inherited knowingly from the shared shape
+  rather than patched in this copy alone: encoded-form matching is literal (so `&#x2014` without the
+  semicolon, and lowercase `%e2%80%94`, pass), stderr capture binds to the scanning `grep` rather
+  than to the filters ahead of it, an em dash encoded in a non-UTF-8 charset is not matched (a live
+  possibility here, given `(0008,0005)` Specific Character Set fixtures), and the scan reads file
+  **contents** only, so a tracked path that itself carries an em dash passes. Tooling only: no
+  runtime, public-API, or parse-behavior change.
 - **`docs-content/` now covers the full canonical Diátaxis spine** (`DOCS-CONTENT-P6`). Beyond the
   existing Overview (`intro`), the sidebar gains **Installation** and **Quickstart** (tutorials),
   five **Core Concepts** notes (the object model, the tolerance/warning model, the typed value
@@ -24,6 +72,14 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Changed
 
+- **Removed the six em dashes the new gate found (`EMDASH-CONFORMANCE`).** Four tracked files, none
+  of them markdown: `.github/CODEOWNERS` (2), `.github/workflows/release.yml` (2),
+  `vendor/nema/SHA.txt` (1), and the npm `description` in `package.json` (1). The last is the only
+  one visible outside the repo: the package description on npm and on the GitHub sidebar now reads
+  "Developer-focused DICOM Part 10 parser + utility library for Node.js and TypeScript:
+  metadata-first, vendor-quirky-tolerant, dual ESM/CJS." Each rewrite replaces the character with a
+  period, colon, or comma, per the rule's own instruction; none re-encodes it, and no wording beyond
+  the punctuation changed.
 - **Bumped the `@cosyte/vitest-config` devDependency to `^0.0.2`** to pick up the `./snippets`
   export that ships the doc/code-agreement runner.
 - **Corrected the element-access examples in `intro.md`.** `Dataset.get` / `has` take the
