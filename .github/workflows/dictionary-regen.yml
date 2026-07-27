@@ -14,6 +14,9 @@ on:
       - "scripts/generate-annex-e.ts"
       - "scripts/_annex-e-discovery.md"
       - "src/dictionary/generated/**"
+      # The gate re-runs when the gate itself changes. Without this, a broken
+      # workflow file cannot be proven fixed by the PR that fixes it.
+      - ".github/workflows/dictionary-regen.yml"
   pull_request:
     branches: [main]
     paths:
@@ -22,6 +25,7 @@ on:
       - "scripts/generate-annex-e.ts"
       - "scripts/_annex-e-discovery.md"
       - "src/dictionary/generated/**"
+      - ".github/workflows/dictionary-regen.yml"
 
 permissions:
   contents: read
@@ -34,10 +38,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # No `version:` input. package.json's `packageManager` field is the single
+      # source of truth for the pnpm version; passing both makes action-setup v6
+      # fail hard with "Multiple versions of pnpm specified", which is what reds
+      # every run of this workflow from 2026-06-24 onward.
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
-        with:
-          version: 10
 
       - name: Setup Node.js 22
         uses: actions/setup-node@v6
@@ -53,7 +59,21 @@ jobs:
 
       - name: Verify byte-identical regen
         run: |
-          if ! git diff --exit-code src/dictionary/generated/; then
+          drift=0
+          git diff --exit-code src/dictionary/generated/ || drift=1
+
+          # `git diff` reports modified *tracked* files only, so a generator that
+          # started emitting a brand-new artifact would leave it untracked and
+          # slip past the gate. src/dictionary/generated/ is not gitignored, so
+          # anything untracked under it is real drift.
+          untracked="$(git ls-files --others --exclude-standard -- src/dictionary/generated/)"
+          if [ -n "$untracked" ]; then
+            echo "Untracked generated artifacts:"
+            echo "$untracked"
+            drift=1
+          fi
+
+          if [ "$drift" -ne 0 ]; then
             echo "::error::Generated dictionary or Annex E artifact drifted from committed output."
             echo "Run 'pnpm gen:all' locally and commit the diff."
             echo "Pinned inputs are under vendor/innolitics/<sha>/ and (if used) vendor/nema/<sha>/."
