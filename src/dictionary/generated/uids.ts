@@ -63,7 +63,7 @@ export const UIDS: { readonly [uid: string]: UidEntry } = {
   "1.2.840.10008.1.2.4.94": { uid: "1.2.840.10008.1.2.4.94", name: "JPIP Referenced", type: "TransferSyntax", retired: false },
   "1.2.840.10008.1.2.4.95": { uid: "1.2.840.10008.1.2.4.95", name: "JPIP Referenced Deflate", type: "TransferSyntax", retired: false },
   "1.2.840.10008.1.2.5": { uid: "1.2.840.10008.1.2.5", name: "RLE Lossless", type: "TransferSyntax", retired: false },
-  "1.2.840.10008.1.2.6.1": { uid: "1.2.840.10008.1.2.6.1", name: "RFC 2557 MIME Encapsulation", type: "TransferSyntax", retired: true },
+  "1.2.840.10008.1.2.6.1": { uid: "1.2.840.10008.1.2.6.1", name: "RFC 2557 MIME encapsulation", type: "TransferSyntax", retired: true },
   "1.2.840.10008.1.2.6.2": { uid: "1.2.840.10008.1.2.6.2", name: "XML Encoding", type: "TransferSyntax", retired: true },
   "1.2.840.10008.1.2.7.1": { uid: "1.2.840.10008.1.2.7.1", name: "SMPTE ST 2110-20 Uncompressed Progressive Active Video", type: "TransferSyntax", retired: false },
   "1.2.840.10008.1.2.7.2": { uid: "1.2.840.10008.1.2.7.2", name: "SMPTE ST 2110-20 Uncompressed Interlaced Active Video", type: "TransferSyntax", retired: false },

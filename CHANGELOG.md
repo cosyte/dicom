@@ -72,24 +72,30 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Fixed
 
-- **175 SOP Class UID names in `UIDS` were wrong (`DICOM-DICT-CURRENCY`).** The dictionary generator
+- **174 SOP Class UID names in `UIDS` were wrong (`DICOM-DICT-CURRENCY`).** The dictionary generator
   appended `" Storage"` to every name it took from the vendor `sops.json`, but that field is already
   the full PS3.6 Table A-1 UID Name. The result was a doubled suffix on the 164 names that already
   ended in "Storage", so `UIDS["1.2.840.10008.5.1.4.1.1.2"].name` read **"CT Image Storage Storage"**,
-  and an equally wrong tail on the other 11 ("Digital X-Ray Image Storage - For Presentation Storage",
-  "Macular Grid Thickness and Volume Report Storage"). All 175 shipped in `0.0.1` through `0.0.3`.
-  The suffix is gone and the names now come through verbatim. One entry needed the opposite
-  treatment and got it through the curated table rather than a blanket rule:
+  and an equally wrong tail on 10 of the other 11 ("Digital X-Ray Image Storage - For Presentation
+  Storage"). Every one shipped in `0.0.1` through `0.0.3`. The suffix is gone and the names now come
+  through verbatim.
+  The rule was wrong for all 175 entries it touched but landed on the right string for exactly one,
+  so removing it needed a compensating correction rather than a second blanket rule:
   `1.2.840.10008.5.1.4.1.1.79.1` is the single UID whose vendor name genuinely lacks the suffix, and
-  PS3.6 2026c Table A-1 calls it "Macular Grid Thickness and Volume Report Storage".
-  Measured on this branch against PS3.6 2026c: **all 261 UIDs shared with Table A-1 now match its
-  `UID Name` exactly, with zero retirement-flag disagreements**, and the 7 well-known frames of
-  reference match Table A-2 verbatim. Four transfer-syntax names remain a deliberate short-form
-  deviation, listed in `vendor/innolitics/README.md`. Name only: no UID value, `type`, or `retired`
-  flag changed. Transfer-syntax dispatch keys off the UID **value**, never the name, so no parse or
-  de-identification behavior changes. The one place a name reaches a caller at runtime is the
-  human-readable `snippet` on the fatal `UNSUPPORTED_TRANSFER_SYNTAX` error, which is improved by
-  the correction rather than altered in meaning.
+  it is now pinned in the generator's curated table to the "Macular Grid Thickness and Volume Report
+  Storage" that PS3.6 2026c Table A-1 gives it.
+  One further name is corrected: `1.2.840.10008.1.2.6.1`, the retired RFC 2557 transfer syntax, read
+  "RFC 2557 MIME Encapsulation" where PS3.6 prints "RFC 2557 MIME encapsulation".
+  Measured on this branch (`66fb3d7` plus this commit) against PS3.6 2026c: of the **261** UIDs
+  shared with Table A-1, **257 now match its `UID Name` character for character** and the remaining
+  4 are the deliberate transfer-syntax short forms tabulated in `vendor/innolitics/README.md`. There
+  are **zero** retirement-flag disagreements, and all **7** well-known frames of reference match
+  Table A-2 character for character. `uids.ts` changes on 175 lines in total.
+  Name only: no UID value, `type`, or `retired` flag changed. Transfer-syntax dispatch keys off the
+  UID **value**, never the name, so no parse or de-identification behavior changes. The one place a
+  name reaches a caller at runtime is the human-readable `snippet` on the fatal
+  `UNSUPPORTED_TRANSFER_SYNTAX` error, which is improved by the correction rather than altered in
+  meaning.
 - **The byte-identical regen gate could go green while generating nothing (`DICOM-DICT-CURRENCY`).**
   Two ways, both fixed by making the gate delete `src/dictionary/generated/` (except the hand-written
   `README.md`) before running `pnpm gen:all`, so it measures what the generators produce instead of

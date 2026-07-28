@@ -52,9 +52,9 @@ None of the above is corrected by hand. The dictionary is generated, and a hand-
 
 ### UIDs
 
-`uids.ts` merges `sops.json` with the curated PS3.6 table inside the generator. After the corrections in this slice, **all 261 UIDs shared with PS3.6 2026c Table A-1 match its `UID Name` exactly**, and there are **zero** retirement-flag disagreements. The 7 well-known frames of reference match Table A-2 verbatim.
+`uids.ts` merges `sops.json` with the curated PS3.6 table inside the generator. After the corrections in this slice, of the **261** UIDs shared with PS3.6 2026c Table A-1, **257 match its `UID Name` character for character** and the remaining 4 are the deliberate short forms tabulated below. There are **zero** retirement-flag disagreements: where Table A-1 marks retirement by appending "(Retired)" to the name, this dictionary carries a structured `retired` boolean instead, and the two agree on every shared UID. All **7** well-known frames of reference match Table A-2 character for character.
 
-Four transfer-syntax names are a deliberate, documented deviation: PS3.6 appends a descriptive clause after a colon, and this dictionary carries the short form that every DICOM toolkit uses.
+The four deviations: PS3.6 appends a descriptive clause after a colon, and this dictionary carries the short form that every DICOM toolkit uses.
 
 | UID | Here | PS3.6 2026c Table A-1 |
 | --- | --- | --- |

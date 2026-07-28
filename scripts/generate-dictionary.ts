@@ -376,7 +376,10 @@ const CURATED_UIDS: readonly CuratedUid[] = [
   { uid: "1.2.840.10008.1.2.5", name: "RLE Lossless", type: "TransferSyntax", retired: false },
   {
     uid: "1.2.840.10008.1.2.6.1",
-    name: "RFC 2557 MIME Encapsulation",
+    // Lowercase "encapsulation" is what PS3.6 Table A-1 prints, verified against
+    // PS3.6 2026c. The capitalized form here was the only remaining name in this
+    // table that did not match the standard character for character.
+    name: "RFC 2557 MIME encapsulation",
     type: "TransferSyntax",
     retired: true,
   },
