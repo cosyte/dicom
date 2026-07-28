@@ -46,3 +46,6 @@ test/fixtures/phi-scan/*.json
 test/fixtures/phi-scan/*.txt
 !test/fixtures/phi-scan/README.md
 dist-artifacts/
+
+# `attw --pack .` writes a tarball into the repo root while it runs.
+*.tgz

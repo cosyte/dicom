@@ -70,7 +70,73 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   synthetic, base64-encoded Part 10 objects (invented patient, fake UIDs); no real PHI, no `.dcm`
   file on disk.
 
+### Fixed
+
+- **174 SOP Class UID names in `UIDS` were wrong (`DICOM-DICT-CURRENCY`).** The dictionary generator
+  appended `" Storage"` to every name it took from the vendor `sops.json`, but that field is already
+  the full PS3.6 Table A-1 UID Name. The result was a doubled suffix on the 164 names that already
+  ended in "Storage", so `UIDS["1.2.840.10008.5.1.4.1.1.2"].name` read **"CT Image Storage Storage"**,
+  and an equally wrong tail on 10 of the other 11 ("Digital X-Ray Image Storage - For Presentation
+  Storage"). Every one shipped in `0.0.1` through `0.0.3`. The suffix is gone and the names now come
+  through verbatim.
+  The rule was wrong for all 175 entries it touched but landed on the right string for exactly one,
+  so removing it needed a compensating correction rather than a second blanket rule:
+  `1.2.840.10008.5.1.4.1.1.79.1` is the single UID whose vendor name genuinely lacks the suffix, and
+  it is now pinned in the generator's curated table to the "Macular Grid Thickness and Volume Report
+  Storage" that PS3.6 2026c Table A-1 gives it.
+  One further name is corrected: `1.2.840.10008.1.2.6.1`, the retired RFC 2557 transfer syntax, read
+  "RFC 2557 MIME Encapsulation" where PS3.6 prints "RFC 2557 MIME encapsulation".
+  Measured against PS3.6 2026c on the branch head: of the **261** UIDs shared with Table A-1,
+  **240 match the `UID Name` column byte for byte**; a further **17** differ only in that Table A-1
+  writes retirement into the name as a trailing " (Retired)" where this dictionary carries a
+  structured `retired` boolean, which gives **257** when those are read as matches and **zero**
+  retirement-flag disagreements; the remaining **4** are the deliberate transfer-syntax short forms
+  tabulated in `vendor/innolitics/README.md`; **0** are unexplained. All **7** well-known frames of
+  reference match Table A-2 byte for byte. `uids.ts` changes on 175 lines in total.
+  Name only: no UID value, `type`, or `retired` flag changed. Transfer-syntax dispatch keys off the
+  UID **value**, never the name, so no parse or de-identification behavior changes. The one place a
+  name reaches a caller at runtime is the human-readable `snippet` on the fatal
+  `UNSUPPORTED_TRANSFER_SYNTAX` error, which is improved by the correction rather than altered in
+  meaning.
+- **The byte-identical regen gate could go green while generating nothing (`DICOM-DICT-CURRENCY`).**
+  Two ways, both fixed by making the gate delete `src/dictionary/generated/` (except the hand-written
+  `README.md`) before running `pnpm gen:all`, so it measures what the generators produce instead of
+  what happens to be on disk. A stale orphan, an artifact a generator used to emit and no longer
+  does, was never rewritten and never diffed, so it passed indefinitely. And gutting `gen:all` to a
+  no-op wrote nothing, left every committed artifact untouched, and produced an empty `git diff`:
+  permanently green. `package.json` also joins the workflow's `paths` filters, without which that
+  second case never triggered the gate at all. Both now red, proved by seeding each defect and
+  watching the run fail. The delete is `-mindepth 1` rather than `-type f`, so a stale symlink or
+  subdirectory cannot become an orphan the gate is blind to, and the step asserts that only
+  `README.md` survives instead of printing an expectation nothing checks. `pnpm gen:clean` exposes
+  the same delete for local use but is deliberately **not** chained into `gen:all`: the generators
+  throw on malformed or missing vendor input, which is the normal state part-way through a re-pin,
+  and a chained clean would leave the working tree empty and the build broken. The gate does its own
+  delete rather than trusting the script under test.
+
 ### Changed
+
+- **Recorded what the vendor pin is actually current against (`DICOM-DICT-CURRENCY`).**
+  `vendor/innolitics/README.md` gains a measured Currency section and drops the "re-pin monthly"
+  policy, which nothing ran and which measured the wrong thing. The pin is exactly current against
+  upstream: `git ls-remote` resolves `master` to the pinned SHA and all four vendored files are
+  byte-identical to upstream at it. Upstream itself is the stale link, having last changed
+  `attributes.json` on 2024-04-18 ("Update standard to rev2024b"), so the tag tables are grounded in
+  PS3.6 2024b while the current edition is PS3.6 2026c. The drift is now measured rather than
+  assumed, against the NEMA DocBook source for 2026c, and every non-additive difference is named in
+  that file. Figures on `86ab6c1` (`origin/main` at measurement time; this slice does not touch
+  `tags.ts` or `keywords.ts`): all **5,129** committed tags are shared with PS3.6 2026c, and across
+  them there are **zero VR differences**, zero name differences and zero VM differences, with 2
+  keyword and 2 retirement-status differences. **Every tag this dictionary carries is still in
+  PS3.6 2026c**; the drift is otherwise purely additive, 180 tags the standard has gained. VR is
+  what turns bytes into a value, so zero VR drift is the result that matters for reading a real
+  study. Nothing in the dictionary is hand-edited to close the gap: it is generated, and the
+  remaining differences are recorded for the next re-pin. One method note lives with the
+  measurement, because getting it wrong is easy and was got wrong on the first run: DICOM tag values
+  are hexadecimal and their case is not semantic, so tag keys must be compared case-insensitively.
+  PS3.6 prints them uniformly uppercase and `tags.ts` agrees on 1,540 of its 5,129 keys, but
+  `tags.ts` lowercases the 8 repeating-group keys whose trailing digits are hex letters and no
+  others, so a verbatim comparison mis-classifies exactly those 8.
 
 - **Removed the six em dashes the new gate found (`EMDASH-CONFORMANCE`).** Four tracked files, none
   of them markdown: `.github/CODEOWNERS` (2), `.github/workflows/release.yml` (2),
