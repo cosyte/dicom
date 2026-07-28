@@ -1,22 +1,58 @@
 # Annex E generator input source: discovery resolution
 
-Per Phase 1 CONTEXT D-14, the planner must decide whether to consume Innolitics'
-machine-readable Annex E artifact (preferred) or fall back to parsing the official
-PS3.15 DocBook XML. This file records the resolution.
+This file records how `scripts/generate-annex-e.ts` gets its input, and why.
 
-## Innolitics SHA inspected
+**Current resolution: the normative PS3.15 DocBook is the authority, overlaid per field
+on the Innolitics mirror.** Both inputs are read on every run. There is no branch and no
+mode; the sections below are the history that got here.
 
-- Pinned SHA: `90571bcc4e46b08bc815bd683e6c466308bcff9a` (full).
-- Short SHA: `90571bc`.
-- Inspected on: `2026-05-01`.
+## Why the mirror alone was not enough
 
-The SHA was discovered independently of plan 01-02 (which runs in the same wave and
-also pins this repo). Plan 01-02 will write the same SHA to `vendor/innolitics/SHA.txt`;
-when both worktrees are merged the SHAs MUST match. If they diverge, the orchestrator's
-post-merge stitching step is responsible for reconciling, typically by re-pinning to
-whichever SHA is younger and re-running both generators.
+The generator originally consumed only Innolitics'
+`standard/confidentiality_profile_attributes.json`, pinned at
+`90571bcc4e46b08bc815bd683e6c466308bcff9a`. That pin carries 621 entries, of which 617 are
+concrete tags. PS3.15 2026c Table E.1-1 carries 656 rows, 652 of them concrete.
 
-## Files at `90571bc/standard/` searched
+The 35 concrete attributes the mirror was missing were not obscure. They included
+`(0010,0011)` Person Names to Use Sequence through `(0010,0016)` Pronoun Comment,
+`(0010,0041)` through `(0010,0047)` (gender identity and sex-parameters-for-clinical-use),
+and `(0010,2161)` / `(0010,2162)`, the two attributes that replaced the retired
+`(0010,2160)` Ethnic Group. **32 of the 35 are marked X (remove)** by the current standard; the
+other three are `(0040,B020)` Waveform Annotation Sequence (`X/D`), `(0070,0006)` Unformatted Text
+Value (`D`), and `(300A,0054)` Table Top Position Alignment UID (`U`). Because `annexE()` returns `undefined` for a tag it does not carry, and
+`deidentify()` treats `undefined` as "not listed, keep", each of those patient attributes
+survived a call whose entire contract is that it does not, and the returned
+`DeidentifyReport` said nothing about them.
+
+A mirror is a third-party parse on a third party's schedule. For a table that decides
+whether a patient identifier survives, the schedule has to be NEMA's.
+
+## What each input is authoritative for
+
+| Input | Path | Authority |
+| ----- | ---- | --------- |
+| NEMA PS3.15 DocBook | `vendor/nema/part15/<sha256>/part15.xml` | **Normative.** Table E.1-1: attribute name, Basic Profile action code, and all nine metadata-affecting option columns, for every tag it publishes. |
+| Innolitics mirror | `vendor/innolitics/<short-sha>/confidentiality_profile_attributes.json` | Base rows. Supplies a tag PS3.15 does not publish, and nothing else. |
+
+The overlay is **per field, not wholesale**:
+
+- A tag both carry: PS3.15 supplies the name, the Basic Profile code, and the whole option
+  set. Every action-code override is printed individually at generation time, because a
+  changed action code is the one difference that decides whether an identifier survives.
+- A tag only PS3.15 carries: added.
+- A tag only the mirror carries: **kept.** PS3.15 retires rows rather than deleting them,
+  so an absence is far more likely to be a parse gap here than a withdrawal there, and
+  dropping one would turn an attribute the de-identifier acts on into one it silently
+  keeps. That set is **empty today**, and the generator prints its size on every run so
+  the claim stays observable rather than assumed.
+
+The pin is a **precondition**, not a comment: the generator re-hashes `part15.xml` and
+refuses to run if it does not match `vendor/nema/part15/SHA.txt`.
+
+There is deliberately **no staleness clock**. See `vendor/nema/README.md` for the reasoning
+and for the one content-comparing command that answers "has NEMA moved".
+
+## Files at `90571bc/standard/` searched (original discovery, 2026-05-01)
 
 ```
 standard/attributes.json
@@ -32,86 +68,72 @@ standard/references.json
 standard/sops.json
 ```
 
-(Listed via `git ls-remote https://github.com/innolitics/dicom-standard HEAD` then
-GitHub trees API at the resolved SHA: no clone, no auth.)
-
-## Candidate files found
-
-| File                                       | Path                                                       | Schema notes                                                                                                                                                                                                                                                                                                                                                                                  | Annex-E-suitable? |
-| ------------------------------------------ | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
-| `confidentiality_profile_attributes.json`  | `standard/confidentiality_profile_attributes.json`         | JSON array, **621 entries**. Each entry: `{ name, tag (paren-comma form), id (8-char hex), stdCompIOD, basicProfile, ...optionFields }`. Action codes observed: `D, Z, X, K, C, U, Z/D, X/Z, X/D, X/Z/D, X/Z/U*`, all members of our `AnnexEActionCode` union. Per-option-set fields: `cleanDescOpt, cleanGraphOpt, cleanStructContOpt, rtnDevIdOpt, rtnInstIdOpt, rtnLongFullDatesOpt, rtnLongModifDatesOpt, rtnPatCharsOpt, rtnSafePrivOpt, rtnUIDsOpt`. | YES               |
-| `attributes.json`                          | `standard/attributes.json`                                 | Part 6 attribute table: keyword/VR/VM/name. Not Annex E.                                                                                                                                                                                                                                                                                                                                      | NO                |
-| `uids.json`                                | `standard/uids.json`                                       | UID dictionary. Not Annex E.                                                                                                                                                                                                                                                                                                                                                                   | NO                |
-| `ciods.json` / `modules.json` / `macros.json` / `*_to_*.json` | `standard/...`                            | Composite IOD / module / macro composition tables. Not Annex E.                                                                                                                                                                                                                                                                                                                                | NO                |
+| File                                       | Schema notes                                                                                                                                                                                                                                                                                                                                                                                  | Annex-E-suitable? |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| `confidentiality_profile_attributes.json`  | JSON array, 621 entries. Each entry: `{ name, tag (paren-comma form), id (8-char hex), stdCompIOD, basicProfile, ...optionFields }`. Per-option-set fields: `cleanDescOpt, cleanGraphOpt, cleanStructContOpt, rtnDevIdOpt, rtnInstIdOpt, rtnLongFullDatesOpt, rtnLongModifDatesOpt, rtnPatCharsOpt, rtnSafePrivOpt, rtnUIDsOpt`. | YES (as the base) |
+| `attributes.json`                          | Part 6 attribute table: keyword/VR/VM/name. Not Annex E.                                                                                                                                                                                                                                                                                                                                      | NO                |
+| `uids.json`                                | UID dictionary. Not Annex E.                                                                                                                                                                                                                                                                                                                                                                  | NO                |
+| `ciods.json` / `modules.json` / `macros.json` / `*_to_*.json` | Composite IOD / module / macro composition tables. Not Annex E.                                                                                                                                                                                                                                                            | NO                |
 
 ## Coverage vs PS3.15 Annex E option sets
 
-The 11 option sets in `AnnexEOption` (per CONTEXT D-09 / REQUIREMENTS.md ANON-02) map
-to Innolitics' fields as follows:
+The 11 option sets in `AnnexEOption` map to Table E.1-1 columns as follows.
 
-| `AnnexEOption` (E.3.x)                        | Innolitics field             | Notes |
+| `AnnexEOption` (E.3.x)                        | Table E.1-1 column           | Notes |
 | --------------------------------------------- | ---------------------------- | ----- |
-| `CleanPixelData` (E.3.1)                      | _none_ (pixel-level)         | E.3.1 acts on pixel data, not metadata; PS3.15 Annex E Table E.1-1 has no per-attribute column for it. Phase 7 handles at the pixel-decode layer. |
+| `CleanPixelData` (E.3.1)                      | _none_ (pixel-level)         | E.3.1 acts on pixel data, not metadata; Table E.1-1 has no per-attribute column for it. Enforced at the pixel-decode layer. |
 | `CleanRecognizableVisual` (E.3.2)             | _none_ (pixel-level)         | Same: pixel/burned-in-text scrubbing, not per-attribute. |
-| `CleanGraphics` (E.3.3)                       | `cleanGraphOpt`              | Direct mapping. |
-| `CleanStructuredContent` (E.3.4)              | `cleanStructContOpt`         | Direct mapping. |
-| `CleanDescriptors` (E.3.5)                    | `cleanDescOpt`               | Direct mapping. |
-| `RetainLongitudinalTemporal` (E.3.6)          | `rtnLongFullDatesOpt` AND `rtnLongModifDatesOpt` | E.3.6 has TWO sub-options in the PS3.15 table (full dates vs modified dates). The generator emits the per-attribute action under `RetainLongitudinalTemporal` as the `rtnLongFullDatesOpt` value when present, and exposes the modified-dates variant via a parallel `optionSet` key only if it differs (it usually doesn't: both columns are typically `K`/`C`). For v1, we collapse by emitting `rtnLongFullDatesOpt` as the canonical value; if the two columns ever diverge per-attribute, the generator records the divergence in a comment. |
-| `RetainPatientCharacteristics` (E.3.7)        | `rtnPatCharsOpt`             | Direct mapping. |
-| `RetainDeviceIdentity` (E.3.8)                | `rtnDevIdOpt`                | Direct mapping. |
-| `RetainUIDs` (E.3.9)                          | `rtnUIDsOpt`                 | Direct mapping. |
-| `RetainSafePrivate` (E.3.10)                  | `rtnSafePrivOpt`             | Direct mapping. |
-| `RetainInstitutionIdentity` (E.3.11)          | `rtnInstIdOpt`               | Direct mapping. |
+| `CleanGraphics` (E.3.3)                       | `Clean Graph. Opt.`          | Direct. |
+| `CleanStructuredContent` (E.3.4)              | `Clean Struct. Cont. Opt.`   | Direct. |
+| `CleanDescriptors` (E.3.5)                    | `Clean Desc. Opt.`           | Direct. |
+| `RetainLongitudinalTemporal` (E.3.6)          | `Rtn. Long. Full Dates Opt.` | **Collapsed.** See below. |
+| `RetainPatientCharacteristics` (E.3.7)        | `Rtn. Pat. Chars. Opt.`      | Direct. |
+| `RetainDeviceIdentity` (E.3.8)                | `Rtn. Dev. Id. Opt.`         | Direct. |
+| `RetainUIDs` (E.3.9)                          | `Rtn. UIDs Opt.`             | Direct. |
+| `RetainSafePrivate` (E.3.10)                  | `Rtn. Safe Priv. Opt.`       | Direct. |
+| `RetainInstitutionIdentity` (E.3.11)          | `Rtn. Inst. Id. Opt.`        | Direct. |
 
-The 9 option fields populated in the JSON cover all 9 metadata-affecting columns of
-PS3.15 Annex E Table E.1-1; the two pixel-level options (E.3.1, E.3.2) are handled
-out-of-band by Phase 7's pixel-decode path.
+### The E.3.6 collapse, measured
 
-Action codes observed (all members of `AnnexEActionCode`): `D, Z, X, K, C, U, Z/D,
-X/Z, X/D, X/Z/D, X/Z/U*`. The `C/X` compound is in the `AnnexEActionCode` union but
-not used in this Innolitics edition; it remains in the union for forward-compatibility.
+E.3.6 is two options in PS3.15, not one: retain longitudinal temporal information **with
+full dates**, and **with modified dates**. `AnnexEOption` carries a single
+`RetainLongitudinalTemporal`, which takes the full-dates column. The original resolution
+said the two columns "usually don't" diverge and that the generator would record it if
+they did. They diverge on **169 of the 652 concrete rows** in PS3.15 2026c, essentially
+all of them `K` under full dates and `C` under modified dates.
 
-621 entries, substantially more than the ≥ 200 minimum required by the plan's
-acceptance criteria.
+That number is now printed on every generator run rather than asserted here. Splitting the
+option in two is a public-surface change (`AnnexEOption`, `DEIDENTIFY_OPTIONS`, and the
+`deidentify()` option semantics) and is deliberately not part of the normative-overlay
+slice. Until it happens, activating `RetainLongitudinalTemporal` means the full-dates
+sub-option, which is what the collapse has always meant.
 
-## Resolution
+### Rows that are not a single tag
 
-**Decision:** `Innolitics-machine-readable`
+Four Table E.1-1 rows name a family rather than one attribute: `(50xx,xxxx)` Curve Data,
+`(60xx,3000)` Overlay Data, `(60xx,4000)` Overlay Comments, and `(gggg,eeee) where gggg is
+odd` Private Attributes. An exact-tag map cannot key them, and both the mirror path and
+this one skip them. They are **counted and printed on every run** instead of being dropped
+in silence. Private attributes are removed by `deidentify()` through a separate path
+(`isPrivateTag`); the three repeating-group rows are a known, stated gap that this
+generator does not close.
 
-**Rationale:** Innolitics ships `standard/confidentiality_profile_attributes.json`
-at the pinned SHA. The schema covers all 9 metadata-relevant PS3.15 Annex E option
-columns with 621 attribute entries and only action codes that fit our closed
-`AnnexEActionCode` union. The NEMA-DocBook fallback (parsing `part15.xml` directly)
-is therefore unnecessary in v1: it saves ~200 lines of XML-walker code, avoids any
-new devDep, and keeps the SHA pin compatible with plan 01-02's input.
+## Generator behavior
 
-**Generator input path:**
+`pnpm gen:annex-e` reads `vendor/innolitics/SHA.txt` for the mirror path and
+`vendor/nema/part15/SHA.txt` for the normative one, verifies the PS3.15 SHA-256 against the
+bytes on disk, reads the edition from the document's own `<subtitle>`, parses Table E.1-1,
+overlays, and writes `src/dictionary/generated/annex-e.ts`. Output is deterministic. CI
+gates that the committed artifact is byte-for-byte what the pinned inputs produce
+(`.github/workflows/dictionary-regen.yml`).
 
-- IF Innolitics: `vendor/innolitics/90571bc/confidentiality_profile_attributes.json`
-- IF NEMA fallback: _not taken_
+The parser fails loudly rather than emitting a thinner table: it requires a single header row whose
+15 column labels sit where the generator's column indices expect them, exactly 15 cells per body row,
+a tag cell it recognizes, an action code from Table E.1-1a in every non-empty action column, a
+non-empty Basic Profile cell, every `<tr>` in the table accounted for as a matched body row or a
+header row, and at least 600 concrete rows. The header check is the one that catches a column
+**reorder**: a cell count cannot, and a reorder would read one option's action code as another's.
 
-The generator (`scripts/generate-annex-e.ts`) hard-codes the Innolitics path based
-on this resolution. The path is dynamically resolvable from `vendor/innolitics/SHA.txt`
-(written by plan 01-02). The generator reads the SHA, computes the short SHA, and
-constructs the path. This keeps the two plans in lockstep when 01-02 re-pins.
-
-## Plan 03 generator behavior
-
-The generator (`scripts/generate-annex-e.ts`) reads `vendor/innolitics/SHA.txt`
-(committed by plan 01-02), derives the short SHA, then reads
-`vendor/innolitics/<short-sha>/confidentiality_profile_attributes.json`. It emits
-`src/dictionary/generated/annex-e.ts`. Future re-pinning is a single edit:
-`vendor/innolitics/SHA.txt` (plan 02 owns) is updated, the input directory is
-re-populated with the new SHA's JSONs (plan 02 procedure), then `pnpm gen:all`
-regenerates both Part-6 dictionary AND Annex E artifacts in lockstep.
-
-## Wave-2 parallelism note
-
-This plan (01-03) runs in parallel with plan 01-02 in separate worktrees. Plan 02
-is the canonical owner of `vendor/innolitics/`. This plan's discovery sub-task
-discovered the SHA independently. When both worktrees merge, the SHAs MUST match.
-Discovered: `90571bcc4e46b08bc815bd683e6c466308bcff9a` (HEAD of innolitics/dicom-standard
-at 2026-05-01 inspection). If plan 02 pins a different SHA at merge time, the
-orchestrator's stitching step reconciles by re-running `pnpm gen:annex-e` against
-plan 02's pinned SHA and committing the (byte-different) regenerated output. The
-discovery doc is preserved as a historical record.
+Re-pinning either input is documented in `vendor/nema/README.md` and
+`vendor/innolitics/README.md`; both end in `pnpm gen:all` plus a review of the printed
+overlay summary.

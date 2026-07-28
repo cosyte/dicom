@@ -97,6 +97,17 @@ warning on the report rather than a false sense of safety. Pixel cleaning is def
 `@cosyte/dicom-pixel`. Opt into any of the nine metadata-affecting Annex E Options (e.g. `RetainUIDs`,
 `RetainLongitudinalTemporal`, `CleanDescriptors`) via `deidentify(ds, { retain: [...] })`.
 
+The attribute-action table behind all of this is generated from **NEMA's PS3.15 2026c DocBook**, the
+normative publication of the standard, rather than from a third-party mirror of it. That matters
+because an attribute the table does not list is an attribute `deidentify()` keeps, silently: the
+current edition's patient attributes, including the `(0010,00xx)` preferred-name and pronoun block,
+the `(0010,004x)` gender-identity and sex-parameters attributes, and `EthnicGroupCodeSequence` /
+`EthnicGroups`, are all removed because the table is the edition's, not a snapshot of it. Four rows
+of Table E.1-1 name a family rather than a single tag (`(50xx,xxxx)` Curve Data, `(60xx,3000)` and
+`(60xx,4000)` Overlay Data and Comments, and the odd-group private-attribute row): private
+attributes are removed through their own path, and the three repeating-group rows are a stated gap
+rather than a silent one.
+
 ---
 
 ## 3. Read raw pixel data without decoding it

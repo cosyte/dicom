@@ -59,6 +59,33 @@
   live tags). **There is no staleness clock and must not be one** - a date gate fires the day it is
   written, demands an action nobody can take on demand, and reds unrelated PRs. "Has NEMA moved" is
   one content-comparing command in `vendor/nema/README.md`; CI gates byte-identical regen, offline.
+- **The Annex E action table is sourced from the normative PS3.15 DocBook, not from a mirror alone.**
+  `vendor/nema/part15/` pins `part15.xml` (**PS3.15 2026c**) by SHA-256, and
+  `scripts/generate-annex-e.ts` overlays Table E.1-1 **per field** on the Innolitics base, the same
+  authority rule the dictionary uses: PS3.15 wins on attribute name / Basic Profile code / the nine
+  option columns for any tag it publishes, PS3.15-only tags are added, mirror-only tags are **kept**.
+  Table: 652 entries, up from 617. The 35 additions were **not cosmetic**: the mirror snapshot was
+  2024b-era, and **32 of the 35 missing tags are marked `X` (remove)** by the current standard (the
+  other three are `(0040,B020)` `X/D`, `(0070,0006)` `D`, `(300A,0054)` `U`), among them
+  `(0010,0011)`-`(0010,0016)` (the preferred-name and pronoun block, including `(0010,0012)` a
+  patient's **preferred name**), `(0010,0041)`-`(0010,0047)` (gender identity, sex parameters for
+  clinical use), and `(0010,2161)`/`(0010,2162)`. Because `annexE()` returns `undefined` for a tag it
+  does not carry and `deidentify()` reads `undefined` as "not listed, keep", **every one of them
+  survived `deidentify()` verbatim and the report said nothing** - shipped that way at `0.0.3`.
+  `deid`'s `/dicom` adapter delegates here, so it had the same hole. **The lesson: a de-identifier's
+  action table lagging the dictionary is a silent PHI leak, not a currency nit. They advance together
+  or the gap only widens.** The pin is a **precondition** (re-hashed, refuses on mismatch); the
+  edition is read from the document's own `<subtitle>`; the parser fails loudly on a header row whose
+  15 labels are not where the column indices expect them (a cell count catches an inserted or dropped
+  column, **not a reorder**, which would read one option's code as another's), a body row that is not
+  15 cells, an unrecognized tag cell, an unknown action code, an empty Basic Profile cell, an
+  unaccounted `<tr>`, or under 600 rows. **No staleness clock, and there must not be one** - same
+  reasoning as PS3.6. Two deliberate exclusions, both **printed on every run** rather than assumed:
+  the **four family rows** Table E.1-1 states as a mask (`(50xx,xxxx)`, `(60xx,3000)`, `(60xx,4000)`,
+  and the odd-group private row) which an exact-tag map cannot key, and the **169 rows** where
+  PS3.15's two E.3.6 date columns diverge under the single collapsed `RetainLongitudinalTemporal`
+  (which carries the full-dates column). The mirror-only count prints every run too, so the "retires
+  rather than deletes" assumption stays observable.
 - **Em-dash brand gate armed.** `scripts/check-no-emdash.sh` (`pnpm check:no-emdash`) plus
   `.github/workflows/no-emdash.yml` enforce the founder directive banning `U+2014` outright
   (`knowledgebase/06-brand/voice-and-tone.md`, "No em dashes. Ever."). It scans **both** halves the

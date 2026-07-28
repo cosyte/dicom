@@ -117,6 +117,6 @@ jobs:
           if [ "$drift" -ne 0 ]; then
             echo "::error::Generated dictionary or Annex E artifact drifted from committed output."
             echo "Run 'pnpm gen:all' locally and commit the diff."
-            echo "Pinned inputs are under vendor/innolitics/<sha>/ and (if used) vendor/nema/<sha>/."
+            echo "Pinned inputs are under vendor/innolitics/<sha>/, vendor/nema/part06/<sha>/, and vendor/nema/part15/<sha>/."
             exit 1
           fi

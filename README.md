@@ -210,6 +210,8 @@ deidentify(parseDicom(buf), {
 
 This is **metadata-level** de-identification. Pixel cleaning is out of scope: when a file carries burned-in annotation this layer cannot remove, you get a `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED` warning rather than a false sense of safety (pixel cleaning is deferred to `@cosyte/dicom-pixel`).
 
+The action table comes from NEMA's PS3.15 2026c DocBook, the normative publication of the standard, rather than from a third-party mirror of it, so the current edition's patient attributes are removed rather than quietly kept. Three rows the standard states as a repeating-group mask (`(50xx,xxxx)` Curve Data, `(60xx,3000)` Overlay Data, `(60xx,4000)` Overlay Comments) are not matched; every single-tag row is.
+
 ### Bridge to FHIR / HL7 v2
 
 A common consulting ask is joining imaging to the rest of the record. The authoritative crosswalk is the FHIR [`ImagingStudy` "Mappings for DICOM"](https://build.fhir.org/imagingstudy-mappings.html) tab. The join keys a metadata parser must surface correctly:
