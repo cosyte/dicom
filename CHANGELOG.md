@@ -86,11 +86,13 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   Storage" that PS3.6 2026c Table A-1 gives it.
   One further name is corrected: `1.2.840.10008.1.2.6.1`, the retired RFC 2557 transfer syntax, read
   "RFC 2557 MIME Encapsulation" where PS3.6 prints "RFC 2557 MIME encapsulation".
-  Measured on this branch (`66fb3d7` plus this commit) against PS3.6 2026c: of the **261** UIDs
-  shared with Table A-1, **257 now match its `UID Name` character for character** and the remaining
-  4 are the deliberate transfer-syntax short forms tabulated in `vendor/innolitics/README.md`. There
-  are **zero** retirement-flag disagreements, and all **7** well-known frames of reference match
-  Table A-2 character for character. `uids.ts` changes on 175 lines in total.
+  Measured against PS3.6 2026c on the branch head: of the **261** UIDs shared with Table A-1,
+  **240 match the `UID Name` column byte for byte**; a further **17** differ only in that Table A-1
+  writes retirement into the name as a trailing " (Retired)" where this dictionary carries a
+  structured `retired` boolean, which gives **257** when those are read as matches and **zero**
+  retirement-flag disagreements; the remaining **4** are the deliberate transfer-syntax short forms
+  tabulated in `vendor/innolitics/README.md`; **0** are unexplained. All **7** well-known frames of
+  reference match Table A-2 byte for byte. `uids.ts` changes on 175 lines in total.
   Name only: no UID value, `type`, or `retired` flag changed. Transfer-syntax dispatch keys off the
   UID **value**, never the name, so no parse or de-identification behavior changes. The one place a
   name reaches a caller at runtime is the human-readable `snippet` on the fatal
@@ -123,12 +125,17 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   PS3.6 2024b while the current edition is PS3.6 2026c. The drift is now measured rather than
   assumed, against the NEMA DocBook source for 2026c, and every non-additive difference is named in
   that file. Figures on `86ab6c1` (`origin/main` at measurement time; this slice does not touch
-  `tags.ts` or `keywords.ts`): of 5,121 tags shared with PS3.6 2026c there are **zero VR
-  differences**, zero name differences and zero VM differences, with 2 keyword and 2
-  retirement-status differences, 188 tags the standard has gained, and 8 retired repeating-group
-  tags it has dropped. VR is what turns bytes into a value, so zero VR drift is the result that
-  matters for reading a real study. Nothing in the dictionary is hand-edited to close the gap: it is
-  generated, and the remaining differences are recorded for the next re-pin.
+  `tags.ts` or `keywords.ts`): all **5,129** committed tags are shared with PS3.6 2026c, and across
+  them there are **zero VR differences**, zero name differences and zero VM differences, with 2
+  keyword and 2 retirement-status differences. **Every tag this dictionary carries is still in
+  PS3.6 2026c**; the drift is otherwise purely additive, 180 tags the standard has gained. VR is
+  what turns bytes into a value, so zero VR drift is the result that matters for reading a real
+  study. Nothing in the dictionary is hand-edited to close the gap: it is generated, and the
+  remaining differences are recorded for the next re-pin. One method note lives with the
+  measurement, because getting it wrong is easy and was got wrong on the first run: DICOM tag values
+  are hexadecimal and their case is not semantic, so tag keys must be compared case-insensitively.
+  `tags.ts` writes them lowercase and PS3.6 prints them mixed, and a verbatim comparison
+  mis-classifies every repeating-group tag whose trailing hex digits are letters.
 
 - **Removed the six em dashes the new gate found (`EMDASH-CONFORMANCE`).** Four tracked files, none
   of them markdown: `.github/CODEOWNERS` (2), `.github/workflows/release.yml` (2),

@@ -12,12 +12,15 @@ on ten of the eleven names that do not end in "Storage". The eleventh,
 now pinned in the curated table to the name PS3.6 gives it. The retired RFC 2557 transfer syntax
 `1.2.840.10008.1.2.6.1` is also recased to match the standard.
 
-Of the 261 UIDs shared with PS3.6 2026c Table A-1, 257 now match its `UID Name` character for
-character and the other 4 are documented short forms; there are zero retirement-flag disagreements,
-and all 7 well-known frames of reference match Table A-2 character for character. Name only: no UID
-value, `type`, or `retired` flag changed. Transfer-syntax dispatch keys off the UID value, never the
-name, so no parse or de-identification behavior changes; the one runtime surface is the
-human-readable snippet on the fatal `UNSUPPORTED_TRANSFER_SYNTAX` error.
+Measured against PS3.6 2026c on the head of the branch that introduced this change: of the 261 UIDs
+shared with Table A-1, 240 match the `UID Name` column byte for byte; a further 17 differ only in
+that Table A-1 writes retirement into the name as a trailing " (Retired)" where this dictionary
+carries a structured `retired` boolean, which gives 257 when those are read as matches and zero
+retirement-flag disagreements; the remaining 4 are documented short forms; 0 are unexplained. All 7
+well-known frames of reference match Table A-2 byte for byte. Name only: no UID value, `type`, or
+`retired` flag changed. Transfer-syntax dispatch keys off the UID value, never the name, so no parse
+or de-identification behavior changes; the one runtime surface is the human-readable snippet on the
+fatal `UNSUPPORTED_TRANSFER_SYNTAX` error.
 
 The byte-identical regen gate could also go green while generating nothing, because it never
 cleaned its output directory: a stale orphan artifact was never rewritten and never diffed, and
@@ -28,5 +31,7 @@ chained into `gen:all`, so a failed regen leaves the working tree intact.
 
 The vendor pin is exactly current against upstream, but upstream last refreshed its data in April
 2024, so the tag tables are grounded in PS3.6 2024b against a current PS3.6 2026c. That drift is
-now measured and recorded in `vendor/innolitics/README.md` rather than assumed; of the 5,121 tags
-shared with 2026c there are zero VR differences.
+now measured and recorded in `vendor/innolitics/README.md` rather than assumed. Measured on
+`86ab6c1`, `origin/main` at the time and unaffected by this change: all 5,129 committed tags are
+still present in PS3.6 2026c, with zero VR differences across them, and the drift is otherwise
+purely additive.

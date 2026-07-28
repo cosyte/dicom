@@ -23,36 +23,44 @@ The pin was previously described only by a monthly re-pin policy and a retrieval
 
 Compared the committed `src/dictionary/generated/` against the NEMA DocBook source for the current edition (`https://dicom.nema.org/medical/dicom/current/source/docbook/part06/part06.xml`, `<subtitle>DICOM PS3.6 2026c - Data Dictionary</subtitle>`), Tables 6-1 / 7-1 / 8-1 / 9-1 for data elements and Tables A-1 / A-2 for UIDs.
 
+**Compare tag keys case-insensitively.** DICOM tag values are hexadecimal and their case is not semantic, but `tags.ts` writes them lowercase (`50xx200a`) while PS3.6 prints them mixed (`(50xx,200A)`). A verbatim comparison silently mis-classifies every repeating-group tag whose last hex digits are letters: the first run of this measurement did exactly that and reported 8 tags as dropped from the standard when all 8 are still in Table 6-1. Lowercase both sides before comparing.
+
 Element figures are taken on `86ab6c1` (`origin/main` at the time of measurement); this slice does not modify `tags.ts` or `keywords.ts`, so they hold unchanged on the current tree. UID figures are taken on the current tree, after the corrections described below.
 
 | Comparison | Result |
 | --- | --- |
 | Committed tag entries | 5,129 |
 | PS3.6 2026c element rows (Tables 6-1 + 7-1 + 8-1 + 9-1) | 5,309 |
-| Shared tags | 5,121 |
+| Shared tags | 5,129 |
 | **VR differences on shared tags** | **0** |
 | **Name differences on shared tags** | **0** |
 | **VM differences on shared tags** | **0** |
 | Keyword differences on shared tags | 2 |
 | Retirement-status differences on shared tags | 2 |
-| In PS3.6 2026c, absent here | 188 |
-| Here, absent from PS3.6 2026c | 8 |
+| In PS3.6 2026c, absent here | 180 |
+| Here, absent from PS3.6 2026c | 0 |
 
-**Zero VR differences is the load-bearing result.** VR is what decides how bytes become a value, so a wrong VR is the mechanism by which a stale dictionary would silently mis-read a real study. No shared tag has one. The drift that does exist is overwhelmingly additive: tags the standard has gained that this dictionary does not yet know, which the parser already handles as unknown rather than mis-decoding.
+**Zero VR differences is the load-bearing result.** VR is what decides how bytes become a value, so a wrong VR is the mechanism by which a stale dictionary would silently mis-read a real study. No shared tag has one. **Every tag this dictionary carries is still in PS3.6 2026c**, and the drift is otherwise purely additive: 180 tags the standard has gained that this dictionary does not yet know, which the parser already handles as unknown rather than mis-decoding.
 
-Every non-additive difference, named:
+Every non-additive difference, named. There are four, all on shared tags:
 
 - **(0010,2160) `EthnicGroup`** - retired in PS3.6 **2025a**; still marked `retired: false` here. PS3.6 2026c also adds **(0010,2161) `EthnicGroupCodeSequence`** (SQ) and **(0010,2162) `EthnicGroups`** (UC, VM 1-n) as its replacements, neither of which is present here. This is a real demographic-attribute change and the most clinically meaningful item in the list.
 - **(3004,0012) `DoseValue`** - marked `retired: true` here; **not retired** in PS3.6 2026c (its retirement column is empty; the `RET (2022d)` marker belongs to the preceding row, (3004,0010) `RTDoseROISequence`). An upstream data defect, not staleness. An RT dose element flagged retired when the standard still defines it.
 - **(003A,0320)** keyword `SummarizedFilterLookupTable`, PS3.6 says `SummarizedFilterLookupTableSequence`.
 - **(003A,0325)** keyword `AnalogFilterType`, PS3.6 says `AnalogFilterTypeCodeSequence`. Both are upstream keyword defects rather than edition drift: the `name` column already reads "... Sequence" in the vendor input, so only the keyword was truncated. Keyword is a public lookup surface (`byKeyword`), so both lookups miss.
-- The **8 tags present here and absent from PS3.6 2026c** are all retired repeating-group elements the standard has dropped from the registry entirely: `50xx200a`, `50xx200c`, `50xx200e`, `7fxx0010`, `7fxx0011`, `7fxx0020`, `7fxx0030`, `7fxx0040`. Keeping them is deliberate and harmless under this parser's Postel's-Law posture, since they only ever help read historical objects.
 
 None of the above is corrected by hand. The dictionary is generated, and a hand-edit would be erased by the next regen and would break the byte-identical gate. They are recorded here so the next re-pin can confirm which ones the new edition resolves.
 
 ### UIDs
 
-`uids.ts` merges `sops.json` with the curated PS3.6 table inside the generator. After the corrections in this slice, of the **261** UIDs shared with PS3.6 2026c Table A-1, **257 match its `UID Name` character for character** and the remaining 4 are the deliberate short forms tabulated below. There are **zero** retirement-flag disagreements: where Table A-1 marks retirement by appending "(Retired)" to the name, this dictionary carries a structured `retired` boolean instead, and the two agree on every shared UID. All **7** well-known frames of reference match Table A-2 character for character.
+`uids.ts` merges `sops.json` with the curated PS3.6 table inside the generator. After the corrections in this slice, of the **261** UIDs shared with PS3.6 2026c Table A-1:
+
+- **240** match the `UID Name` column byte for byte.
+- **17** differ only in that Table A-1 writes retirement into the name as a trailing " (Retired)" where this dictionary carries a structured `retired` boolean instead. Reading that suffix as the flag it encodes, the two agree on **every** shared UID: **zero** retirement-flag disagreements. Counting these as matches gives the **257** figure quoted elsewhere.
+- **4** are the deliberate short forms tabulated below.
+- **0** are unexplained.
+
+All **7** well-known frames of reference match Table A-2 byte for byte.
 
 The four deviations: PS3.6 appends a descriptive clause after a colon, and this dictionary carries the short form that every DICOM toolkit uses.
 
@@ -71,7 +79,7 @@ The old policy read "re-pin monthly, evaluated at minor releases". Nothing ran i
 
 - **Re-pin when upstream moves.** `git ls-remote` against `master` is the whole check, and it is one command. Today it returns this pin.
 - **Re-measure against PS3.6 when re-pinning, and whenever the drift above matters to a caller.** The method is recorded in this section and is reproducible from the NEMA DocBook URL. A date in a file is not a substitute for it.
-- **The durable fix is to stop depending on a dormant upstream.** `vendor/nema/`'s D-14 DocBook fallback already exists for exactly this case and would source PS3.6 directly. That is a real piece of work, not a re-pin, and it is the thing to schedule if the 188 missing tags or the retired `EthnicGroup` start mattering.
+- **The durable fix is to stop depending on a dormant upstream.** `vendor/nema/`'s D-14 DocBook fallback already exists for exactly this case and would source PS3.6 directly. That is a real piece of work, not a re-pin, and it is the thing to schedule if the 180 missing tags or the retired `EthnicGroup` start mattering.
 
 ## Files
 
