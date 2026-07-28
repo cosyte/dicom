@@ -134,8 +134,9 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   remaining differences are recorded for the next re-pin. One method note lives with the
   measurement, because getting it wrong is easy and was got wrong on the first run: DICOM tag values
   are hexadecimal and their case is not semantic, so tag keys must be compared case-insensitively.
-  `tags.ts` writes them lowercase and PS3.6 prints them mixed, and a verbatim comparison
-  mis-classifies every repeating-group tag whose trailing hex digits are letters.
+  PS3.6 prints them uniformly uppercase and `tags.ts` agrees on 1,540 of its 5,129 keys, but
+  `tags.ts` lowercases the 8 repeating-group keys whose trailing digits are hex letters and no
+  others, so a verbatim comparison mis-classifies exactly those 8.
 
 - **Removed the six em dashes the new gate found (`EMDASH-CONFORMANCE`).** Four tracked files, none
   of them markdown: `.github/CODEOWNERS` (2), `.github/workflows/release.yml` (2),

@@ -33,5 +33,9 @@ The vendor pin is exactly current against upstream, but upstream last refreshed 
 2024, so the tag tables are grounded in PS3.6 2024b against a current PS3.6 2026c. That drift is
 now measured and recorded in `vendor/innolitics/README.md` rather than assumed. Measured on
 `86ab6c1`, `origin/main` at the time and unaffected by this change: all 5,129 committed tags are
-still present in PS3.6 2026c, with zero VR differences across them, and the drift is otherwise
-purely additive.
+still present in PS3.6 2026c, with zero VR, zero name and zero VM differences across them, and 180
+tags the standard has gained. Four differences are not additive and are named in full in that file:
+`(0010,2160) EthnicGroup` is still marked current although PS3.6 retired it in 2025a, and its
+replacements `(0010,2161)` and `(0010,2162)` are absent; `(3004,0012) DoseValue` is marked retired
+although PS3.6 still defines it; and `(003A,0320)` and `(003A,0325)` carry truncated keywords, so
+both miss on the `byKeyword` lookup.
