@@ -18,6 +18,19 @@ import type { DicomParseWarning } from "../parser/warnings.js";
  * (deferred to `@cosyte/dicom-pixel`). When pixel data is present it always
  * warns rather than claiming the image is clean.
  *
+ * **`RetainLongitudinalTemporal` gives you the full-dates branch.** PS3.15
+ * §E.3.6 is *two* options, and Table E.1-1 gives them separate columns:
+ * `Rtn. Long. Full Dates` (keep dates and times as they are) and
+ * `Rtn. Long. Modif. Dates` (keep them only as modified/shifted values). One
+ * name here covers both, and it carries the **full-dates** column - the *less*
+ * protective branch. That is not a rounding difference: the two columns disagree
+ * on **169** rows, and on every one of them full-dates says `K` (keep the real
+ * value) where modified-dates says `C` (clean it). Activate it only when real
+ * dates are genuinely required; leave it off and the Basic Profile action
+ * applies, which removes or empties them. Date *shifting* is not implemented at
+ * this layer - a caller who needs the modified-dates behaviour shifts the values
+ * themselves after the call.
+ *
  * @example
  *   const retain: DeidentifyOption[] = ["RetainLongitudinalTemporal", "RetainSafePrivate"];
  */
@@ -88,6 +101,13 @@ export interface DeidentifiedAttribute {
   readonly applied: AppliedAction;
   /** Tag/index chain for an attribute inside a sequence; omitted at the root. */
   readonly contextPath?: readonly string[];
+  /**
+   * Present when the action came from a Table E.1-1 row that names a
+   * repeating-group family rather than this single tag: the mask that matched,
+   * e.g. `"60xx4000"` for Overlay Comments in any overlay plane. `tag` is always
+   * the concrete tag that was in the file. Absent for every exact-tag row.
+   */
+  readonly repeatingGroup?: string;
 }
 
 /**

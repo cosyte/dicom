@@ -80,12 +80,42 @@
   column, **not a reorder**, which would read one option's code as another's), a body row that is not
   15 cells, an unrecognized tag cell, an unknown action code, an empty Basic Profile cell, an
   unaccounted `<tr>`, or under 600 rows. **No staleness clock, and there must not be one** - same
-  reasoning as PS3.6. Two deliberate exclusions, both **printed on every run** rather than assumed:
-  the **four family rows** Table E.1-1 states as a mask (`(50xx,xxxx)`, `(60xx,3000)`, `(60xx,4000)`,
-  and the odd-group private row) which an exact-tag map cannot key, and the **169 rows** where
-  PS3.15's two E.3.6 date columns diverge under the single collapsed `RetainLongitudinalTemporal`
-  (which carries the full-dates column). The mirror-only count prints every run too, so the "retires
-  rather than deletes" assumption stays observable.
+  reasoning as PS3.6. The mirror-only count prints every run too, so the "retires rather than
+  deletes" assumption stays observable. One deliberate exclusion remains, **printed on every run**
+  rather than assumed: the **169 rows** where PS3.15's two E.3.6 date columns diverge under the
+  single collapsed `RetainLongitudinalTemporal` (which carries the full-dates column, the **less
+  protective** branch - `K` on all 169 where modified-dates says `C`; the JSDoc and troubleshooting
+  doc now say so, and splitting the option is a public-surface change deliberately not made).
+- **Table E.1-1's repeating-group rows are matched by mask, bounded by PS3.5 §7.6.** `(50xx,xxxx)`
+  Curve Data, `(60xx,3000)` Overlay Data and `(60xx,4000)` Overlay Comments are all marked **X** and
+  were all unreachable by an exact-tag matcher, so `(6000,4000)` free text came through
+  `deidentify()` verbatim with a **clean report** - shipped that way at `0.0.3`, and `deid`'s
+  `/dicom` adapter inherited it. `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED` never covered this: it
+  keys on `(7FE0,0010)` + `(0028,0301)`, the **image**, not the overlay planes. The generator now
+  emits the three rows as `ANNEX_E_REPEATING` pattern rules; `annexE()` consults them **on an
+  exact-tag miss only** (an exact row is the more specific statement and wins - the shadowing count
+  prints every run and is 0 today), and a match is **removed AND reported** with
+  `DeidentifiedAttribute.repeatingGroup` naming the mask. **The range is the load-bearing part and it
+  is not the mask's shape:** PS3.5 §7.6 bounds repeating groups to the **even** groups `6000`-`601E`,
+  and PS3.5-2004 §7.6 (which the current edition's note delegates to for curves) to the even
+  `5000`-`501E`. Sixteen groups per mask, not 256. `src/dictionary/repeating-groups.ts` is the single
+  home of that fact **on the de-identify path**, imported by both the generator and the runtime so
+  those two cannot drift. It is **not** the only mask matcher in the package and must not be unified
+  with the other one: `src/parser/element-header.ts`'s `matchRepeatingGroup` reads `x` as an
+  unbounded hex wildcard over the PS3.6 registry's ~88 masked entries and _will_ answer for
+  `(6020,4000)`. That is correct there and wrong here, because a too-wide **VR guess** only yields a
+  lenient decode of what would otherwise be `UN`, while a too-wide **removal** deletes data the
+  standard never marked. Postel's Law on the read path, the standard's bound on the de-identify path.
+  Over-broad is a **different** unsafe direction from under-broad, so both are tested: `(6020,4000)`
+  and `(6001,4000)` must NOT match on the de-identify path. **PS3.5 is not vendored** (PS3.6 and
+  PS3.15 are, SHA-pinned and re-hashed): the bound is transcribed with its citation, so the
+  generator's guard catches a new mask _prefix_, not a changed _bound_. Vendoring PS3.5 to close that
+  is its own slice. **The guard is worth more than the fix:** a masked row on a prefix
+  PS3.5 does not define (e.g. `(7Fxx,0010)`) now **fails the generator** instead of being printed and
+  dropped, which is precisely how these three rows went missing. Proven by mutation in
+  `test/scripts/generate-annex-e.test.ts`: the pre-remedy generator exits 0 on an injected `(7Fxx,0010)`
+  row, the post-remedy one exits 1; a second mutation moves the Overlay Comments code `X` -> `K` and
+  proves the emitted rule follows the document rather than a hard-coded `X`.
 - **Em-dash brand gate armed.** `scripts/check-no-emdash.sh` (`pnpm check:no-emdash`) plus
   `.github/workflows/no-emdash.yml` enforce the founder directive banning `U+2014` outright
   (`knowledgebase/06-brand/voice-and-tone.md`, "No em dashes. Ever."). It scans **both** halves the

@@ -91,13 +91,18 @@ Each is tracked as a future companion package, not a gap to be filled here:
 - **De-identification is metadata-only and fail-safe toward removal.** Conditional Annex E codes
   collapse to their most-protective branch (no IOD Type-1 analysis); private attributes are removed
   by default unless a profile marks a creator's tags safe.
-- **Three Annex E rows name a repeating group, and are not covered.** `(50xx,xxxx)` Curve Data,
-  `(60xx,3000)` Overlay Data, and `(60xx,4000)` Overlay Comments are stated by the standard as a
-  group mask rather than a single tag; `deidentify()` matches attributes by exact tag and does not
-  act on them. Everything else in Table E.1-1 that is a single tag is covered.
-- **`RetainLongitudinalTemporal` means the standard's full-dates option.** PS3.15 defines two
-  longitudinal-temporal options, full dates and modified dates; this package exposes one, and it
-  carries the full-dates column.
+- **Repeating-group rows are matched by mask, within the range the standard bounds them to.**
+  `(50xx,xxxx)` Curve Data, `(60xx,3000)` Overlay Data and `(60xx,4000)` Overlay Comments are stated
+  by the standard as a group mask rather than a single tag. `deidentify()` matches them in the
+  sixteen even groups PS3.5 defines (`6000`-`601E` for overlays, `5000`-`501E` for curves), removes
+  them, and records them in the report with a `repeatingGroup` field naming the mask that matched.
+  Even groups above the bound and odd groups are not overlay or curve groups and are left alone;
+  odd groups are private and go through the private-attribute path instead.
+- **`RetainLongitudinalTemporal` means the standard's full-dates option, the less protective one.**
+  PS3.15 defines two longitudinal-temporal options, full dates and modified dates. This package
+  exposes one name for both and it carries the **full-dates** column, so on the 169 attributes where
+  the two columns disagree you keep the real value where modified-dates would have cleaned it.
+  Activate it only when real dates are genuinely required; date shifting is not done at this layer.
 
 ## Scope (non-goals)
 
