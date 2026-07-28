@@ -107,15 +107,60 @@
   lenient decode of what would otherwise be `UN`, while a too-wide **removal** deletes data the
   standard never marked. Postel's Law on the read path, the standard's bound on the de-identify path.
   Over-broad is a **different** unsafe direction from under-broad, so both are tested: `(6020,4000)`
-  and `(6001,4000)` must NOT match on the de-identify path. **PS3.5 is not vendored** (PS3.6 and
-  PS3.15 are, SHA-pinned and re-hashed): the bound is transcribed with its citation, so the
-  generator's guard catches a new mask _prefix_, not a changed _bound_. Vendoring PS3.5 to close that
-  is its own slice. **The guard is worth more than the fix:** a masked row on a prefix
+  and `(6001,4000)` must NOT match on the de-identify path. **The guard is worth more than the fix:**
+  a masked row on a prefix
   PS3.5 does not define (e.g. `(7Fxx,0010)`) now **fails the generator** instead of being printed and
   dropped, which is precisely how these three rows went missing. Proven by mutation in
   `test/scripts/generate-annex-e.test.ts`: the pre-remedy generator exits 0 on an injected `(7Fxx,0010)`
   row, the post-remedy one exits 1; a second mutation moves the Overlay Comments code `X` -> `K` and
   proves the emitted rule follows the document rather than a hard-coded `X`.
+- **PS3.5 is vendored too, so the repeating-group bound is derived rather than transcribed.** This
+  closed the last asymmetry in the authority story: PS3.6 and PS3.15 were SHA-pinned and re-hashed
+  while the bound they are expanded by was a **quotation in a source file**, which meant the
+  generator's guard caught a new mask _prefix_ but never a changed _bound_. `vendor/nema/part05/`
+  pins `part05.xml` (**PS3.5 2026c**) and `vendor/nema/part05-2004/` pins `04_05pu.pdf`;
+  `scripts/generate-repeating-groups.ts` emits `src/dictionary/generated/repeating-groups.ts`, and
+  `src/dictionary/repeating-groups.ts` re-exports it, so the runtime, the Annex E generator and the
+  documents cannot drift. **Two documents because the bound is split across two editions,** and this
+  is the part to understand before touching it: the current edition states the **overlay** bound
+  (`6000`-`601E` even) normatively and excludes the odd `6001`-`601F`, but says **nothing** about the
+  **curve** bound - it retired curve encoding and _delegates_, in section 7.6's own Note, to
+  PS3.5-2004 at an explicit URL, which is where `5000`-`501E` even comes from. So the 2004 PDF is not
+  a convenience copy, it is the authority the edition in force names. **The overlay bound is stated
+  by both editions and the generator requires them to agree** - that cross-check is the real gate,
+  and the generator also **proves the delegation** (section 7.6 must link exactly the vendored 2004
+  URL) rather than assuming it, so an edition that re-states the bound inline or points elsewhere
+  fails loudly instead of being silently overridden by a 22-year-old PDF. `gen:repeating-groups` runs
+  **first** in `gen:all` because `generate-annex-e.ts` imports this module, but be precise about what
+  that buys: a **missing** artifact fails that generator at import, while a merely **stale** bound
+  leaves `annex-e.ts` byte-identical (measured), since the expansion happens at **runtime** in
+  `matchesRepeatingPattern` and the generator only uses the bound for a prefix guard and a printed
+  statistic. The ordering is right; the **regen gate**, not the ordering, is what catches a wrong bound.
+  Falsifiability is the point and is proven by mutation in
+  `test/scripts/generate-repeating-groups.test.ts`: moving the overlay bound in **either** edition
+  reds the cross-check, moving the **curve** bound in the 2004 edition moves the **emitted artifact**
+  (nothing contradicts it, so the byte-identical regen gate is what catches it), and removing the
+  delegation link stops the 2004 document being used at all. Each was confirmed non-vacuous by
+  disabling the guard and watching the test go red.
+  **▶ LOCATING A SPEC SECTION: NEVER FIRST-MATCH. Copy this rule, it generalises.** A heading appears
+  at least **twice** in a standards document: in the **table of contents** (dotted leader, page
+  number) and on the section itself. First-match reads the TOC. Measured here, not theorised: scoping
+  the 2004 read by first-match produced a **130-character** slice instead of the 1,364-character body
+  and the generator **exited 1**. It failed closed, which is the only reason this is a note rather
+  than a wrong de-identification bound; a first-match that landed on a section with _some_ matching
+  text would have failed **open** and silently. The rule instead is **collect every candidate
+  section, keep those containing the normative sentence, require exactly one** - which rejects the
+  TOC _by content_ rather than by a "skip the first hit" heuristic. Be exact about the second
+  half: it proves at most **one heading-delimited candidate** carries the sentence, which is what a
+  bare `.exec` silently assumes and does not check. It does **not** prove document-wide uniqueness -
+  a second occurrence inside the same slice, or one outside any `7.6`-to-`7.7` window, is invisible
+  to the count. (It happens to be unique here: one occurrence in 416,764 characters, measured.) Zero
+  and two candidates are both refusals. **Reading the 2004 PDF needs a PDF reader**: a
+  deliberately minimal one (Node `zlib` only, inflate the content streams, concatenate the text
+  operators' literal strings) lives in that generator. It recovers **one sentence**, checked against a
+  precise expected shape. **Do not grow it into a general PDF parser** - if it needs more, prefer
+  re-deriving the bound from a current normative source. **No staleness clock here either**, same
+  reasoning as PS3.6 and PS3.15.
 - **Em-dash brand gate armed.** `scripts/check-no-emdash.sh` (`pnpm check:no-emdash`) plus
   `.github/workflows/no-emdash.yml` enforce the founder directive banning `U+2014` outright
   (`knowledgebase/06-brand/voice-and-tone.md`, "No em dashes. Ever."). It scans **both** halves the

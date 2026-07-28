@@ -276,6 +276,33 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Changed
 
+- **The PS3.5 repeating-group bound is now derived from pinned normative documents rather than
+  transcribed (`DICOM-PS35-NOT-VENDORED`). No runtime impact: the emitted bound is identical and no
+  public API moves.** `deidentify()` expands PS3.15 Table E.1-1's `(50xx,xxxx)`, `(60xx,3000)` and
+  `(60xx,4000)` rows over the concrete groups PS3.5 section 7.6 admits, sixteen even groups per mask
+  (`5000`-`501E`, `6000`-`601E`), not 256. That bound is a safety limit in **both** directions, and it
+  was the last input here that lived as a **quotation in a source file** while PS3.6 and PS3.15 were
+  SHA-pinned and re-hashed before use, so the generator's guard could catch a new mask _prefix_ but
+  never a changed _bound_.
+  `vendor/nema/part05/` pins `part05.xml` (PS3.5 **2026c**) and `vendor/nema/part05-2004/` pins
+  `04_05pu.pdf`, both re-hashed as a precondition, and `scripts/generate-repeating-groups.ts` emits
+  `src/dictionary/generated/repeating-groups.ts`, which `src/dictionary/repeating-groups.ts`
+  re-exports. **Two documents, because the bound is split across two editions:** the current one
+  states the overlay bound normatively and excludes the odd `6001`-`601F`, but says nothing about the
+  curve bound, having retired curve encoding and delegated it to PS3.5-2004 by URL in section 7.6's
+  own Note. So the 2004 PDF is the authority the edition in force names, not a convenience copy. The
+  generator **proves that delegation** (section 7.6 must link exactly the vendored URL) instead of
+  assuming it, and because both editions state the overlay bound it **requires them to agree**.
+  `gen:repeating-groups` runs first in `gen:all`, since the Annex E generator expands family rows
+  through this bound.
+  **The values did not change; their falsifiability did.** Moving the overlay bound in either
+  vendored edition reds the cross-check, moving the curve bound in the 2004 edition moves the emitted
+  artifact (caught by the byte-identical regen gate), and removing the delegation link stops the 2004
+  document being used at all. Each was confirmed non-vacuous by disabling the guard and watching the
+  test fail. Reading a 2004 PDF needs a PDF reader; the one in that generator is deliberately minimal
+  (Node `zlib` only, one sentence recovered, matched against a precise expected shape) and is not to
+  be grown into a general parser. There is no staleness clock, for the same reasons as PS3.6 and
+  PS3.15.
 - **Recorded what the vendor pin is actually current against (`DICOM-DICT-CURRENCY`).**
   `vendor/innolitics/README.md` gains a measured Currency section and drops the "re-pin monthly"
   policy, which nothing ran and which measured the wrong thing. The pin is exactly current against

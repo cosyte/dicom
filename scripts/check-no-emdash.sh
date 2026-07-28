@@ -167,7 +167,8 @@ fail_with_hits() {
 # indistinguishable by code, while a binary match exits 0 with empty stdout.
 ERRLOG=$(mktemp)
 FILELIST=$(mktemp)
-trap 'rm -f "$ERRLOG" "$FILELIST"' EXIT
+SCANLIST=$(mktemp)
+trap 'rm -f "$ERRLOG" "$FILELIST" "$SCANLIST"' EXIT
 
 refuse_if_incomplete() {
   [ -s "$ERRLOG" ] || return 0
@@ -290,6 +291,11 @@ cd "$(git rev-parse --show-toplevel)"
 #   lands, a reviewer covers it, not this script. Do not widen the pattern to chase it,
 #   and do not re-add -I.
 #
+#   The vendored-document filter is a SECOND `grep -zvP` stage between the self-exclusion
+#   and `xargs`. It is unbound on the failure side by nature -- a pattern that matched
+#   everything would empty the list -- so it is followed by an explicit count check that
+#   refuses when nothing is left to scan, and the surviving/total counts are printed.
+#
 #   stderr is captured and any of it fails the run (see refuse_if_incomplete above).
 #
 # The one file the scan does not cover is this script, which has to name the encodings
@@ -303,12 +309,73 @@ if [ ! -s "$FILELIST" ]; then
   exit 1
 fi
 
-HITS=$(grep -zvxF 'scripts/check-no-emdash.sh' < "$FILELIST" |
-  sed -z 's|^|./|' |
+# ---- the one content exclusion: pinned third-party normative documents ----
+#
+# `vendor/nema/part05/<sha256>/part05.xml` (PS3.5 2026c) carries THREE em dashes, all
+# three inside `<title>` elements of ISO/IEC bibliography entries, quoting the literal
+# published titles of ISO standards ("Information technology - 8-bit single-byte coded
+# graphic character sets - Part 15: ..."). They are NEMA's bytes, not cosyte's prose.
+#
+# The rule's own remedy is unavailable here and would be wrong if it were: "rewrite the
+# sentence" cannot be applied to a normative standard we vendor VERBATIM, and editing one
+# byte of it breaks the SHA-256 pin that the de-identification generators re-hash as a
+# precondition. That pin is a safety property; the brand rule is a voice property. When
+# they collide on a file cosyte did not write, the pin wins and the scan yields.
+#
+# This is the same principle the KNOWN LIMIT above already states for legacy-charset
+# fixtures: "the ban is a rule about prose that people write, and fixture bytes are
+# grounded data, not brand copy."
+#
+# The exclusion is deliberately NARROW: `vendor/nema/<part>/<64-hex>/`, and nothing else.
+# That is the NEMA normative documents and only those. Every HAND-WRITTEN file under
+# `vendor/` stays in scope, which is where the only real violation in this tree was ever
+# found: `vendor/nema/SHA.txt` carried one and the port removed it. The Innolitics mirror
+# is NOT exempt either (it is a 7-char short-SHA directory and holds zero em dashes,
+# measured), so do not widen this to `vendor/` wholesale, and never use it to exempt
+# anything cosyte authors.
+#
+# THE 64-HEX REQUIREMENT IS THE GUARD, and an earlier draft of this rule got it wrong in a
+# way worth recording. Allowing any hash-SHAPED component of 7 or more hex characters
+# exempts `vendor/anything/deadbeef/`; tightening that to exactly 7, 40 or 64 still
+# exempts `vendor/cosyte/acceded/notes.md`, because `acceded` is a seven-letter English
+# word drawn entirely from [a-f] (so is `defaced`, `effaced`, `facade`, and any 7-digit
+# string). A full SHA-256 is not constructible as prose, and anchoring to `vendor/nema/`
+# means a new vendor root cannot quietly inherit the exemption.
+#
+# BE HONEST ABOUT WHAT THE SHAPE PROVES, because this gate sits in a repo whose whole
+# argument is the difference between an asserted fact and a derived one. Matching a
+# hash-SHAPED directory name does NOT verify that the file hashes to it, and nothing
+# here reads the sibling `SHA.txt`. What actually enforces that is the generators, which
+# re-hash their pinned inputs and refuse on a mismatch. This pattern is a path rule that
+# happens to select the vendored documents; it is not proof that they are vendored. So
+# the anchor plus the 64-hex requirement is the real guard. Measured today: exactly 4
+# files match, the four NEMA normative documents, and only `part05.xml` actually contains
+# the character.
+VENDOR_PINNED_DOC='^vendor/nema/[^/]+/[0-9a-f]{64}/'
+
+grep -zvxF 'scripts/check-no-emdash.sh' < "$FILELIST" |
+  grep -zvP "$VENDOR_PINNED_DOC" > "$SCANLIST" || true
+
+# Fail closed if the exclusion ate the whole list. Without this, a mistyped pattern that
+# matched everything would leave xargs -r with no files, produce no hits, and print OK
+# from a scan that read nothing: exactly the failure mode every other choice in this file
+# exists to prevent.
+TRACKED_N=$(tr -dc '\0' < "$FILELIST" | wc -c | tr -d ' ')
+SCAN_N=$(tr -dc '\0' < "$SCANLIST" | wc -c | tr -d ' ')
+if [ "$SCAN_N" -eq 0 ]; then
+  echo "ERROR: check-no-emdash - the exclusion filter removed every tracked file." >&2
+  echo "       Refusing to report green from a scan that read nothing." >&2
+  exit 1
+fi
+
+HITS=$(sed -z 's|^|./|' < "$SCANLIST" |
   xargs -0 -r grep -H -nP -e "$PATTERN" -- 2>>"$ERRLOG" || true)
 
 refuse_if_incomplete
 
 [ -n "$HITS" ] && fail_with_hits "the tracked files listed above" "$HITS"
 
-echo "check-no-emdash: OK (no em dashes in the tracked files; this script is excluded)"
+# Print what was skipped rather than asserting it in a comment, so an exclusion that
+# quietly grows shows up in the run that grows it.
+echo "check-no-emdash: OK (no em dashes in ${SCAN_N} of ${TRACKED_N} tracked files;" \
+     "$(( TRACKED_N - SCAN_N )) skipped: this script + pinned vendor documents)"

@@ -31,9 +31,7 @@ ones that there is "no implication of repeating semantics". Both bounds matter, 
 directions: reading `xx` as a hex wildcard would remove attributes the standard never marked, which
 is data loss on a call the caller asked to be conservative, while reading the mask as an exact tag
 matched nothing at all. Odd groups in the overlay range remain private attributes and go through the
-private-attribute path, as before. One honest caveat: PS3.5 is not among the standard documents this
-package vendors and hashes, so that bound is transcribed with its citations rather than re-read from
-a pinned file. The VR-resolution path used when reading a file keeps its own, deliberately wider,
+private-attribute path, as before. The VR-resolution path used when reading a file keeps its own, deliberately wider,
 mask matcher, because a too-wide VR guess only makes a decode lenient where it would otherwise be
 `UN`, while a too-wide removal deletes data.
 

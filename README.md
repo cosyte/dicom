@@ -212,7 +212,7 @@ This is **metadata-level** de-identification. Pixel cleaning is out of scope: wh
 
 The action table comes from NEMA's PS3.15 2026c DocBook, the normative publication of the standard, rather than from a third-party mirror of it, so the current edition's patient attributes are removed rather than quietly kept. That includes the three rows the standard states as a repeating-group mask rather than a single tag: `(50xx,xxxx)` Curve Data, `(60xx,3000)` Overlay Data and `(60xx,4000)` Overlay Comments are matched in every overlay or curve group the standard defines, removed, and named in the report with the mask that matched them. Overlay comments in particular are a common carrier for text typed onto a study, so a clean report on a file that still held them was worse than no report.
 
-The groups a mask covers are the sixteen even ones PS3.5 bounds it to (`6000`-`601E`, `5000`-`501E`), not any four hex digits. Reading `xx` as a wildcard would strip attributes the standard never marked, which is data loss on a call you asked to be conservative.
+The groups a mask covers are the sixteen even ones PS3.5 bounds it to (`6000`-`601E`, `5000`-`501E`), not any four hex digits. Reading `xx` as a wildcard would strip attributes the standard never marked, which is data loss on a call you asked to be conservative. That bound is read out of PS3.5 itself, pinned by SHA-256 the same way the action table is, rather than copied into the source by hand: the current edition states the overlay range, and the curve range comes from the 2004 edition its own note delegates to, with the two required to agree where they overlap.
 
 ### Bridge to FHIR / HL7 v2
 

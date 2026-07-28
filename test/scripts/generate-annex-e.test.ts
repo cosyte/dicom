@@ -231,6 +231,44 @@ describe("generate-annex-e", () => {
   );
 
   it(
+    "refuses when the file AT the pinned path is not the pinned bytes",
+    () => {
+      // The test above points SHA.txt at a hash nothing on disk hashes to, so the
+      // run dies at readFileSync ("cannot read") and the CONTENT re-hash never
+      // runs: delete the `actual !== pinnedSha` block and that test still passes.
+      // Here SHA.txt is untouched and the file opens normally, so only the re-hash
+      // can catch the swap. This table decides whether a patient identifier
+      // survives `deidentify()`, and "the input was swapped and nobody noticed" is
+      // the outcome the pin exists to make impossible, so the pin needs a test that
+      // fails when it is removed.
+      const pinned = readFileSync(NEMA_SHA_FILE, "utf8").trim().split(/\s+/)[0] ?? "";
+      const path = join(NEMA_ROOT, pinned, "part15.xml");
+      const original = readFileSync(path);
+      const before = readFileSync(ARTIFACT, "utf8");
+      try {
+        // Same length, one byte different: only the content changes.
+        const swapped = Buffer.from(original);
+        const last = swapped.length - 1;
+        swapped[last] = (swapped[last] ?? 0) ^ 0xff;
+        // Assert the mutation landed: on an empty buffer this would be a silent
+        // no-op and the test would pass having proved nothing.
+        expect(swapped.equals(original), "the mutation must change the document").toBe(false);
+        writeFileSync(path, swapped);
+        const r = runGenerator();
+        expect(r.code).not.toBe(0);
+        expect(r.stderr).toContain("pin mismatch");
+      } finally {
+        writeFileSync(path, original);
+      }
+      // This writes over the NORMATIVE DOCUMENT, not a pointer, so a short or failed
+      // restore leaves a corrupted standard on disk. Prove the restore by re-hashing.
+      expect(createHash("sha256").update(readFileSync(path)).digest("hex")).toBe(pinned);
+      expect(readFileSync(ARTIFACT, "utf8")).toBe(before);
+    },
+    GENERATOR_TIMEOUT_MS,
+  );
+
+  it(
     "refuses a SHA.txt that is not a 64-char hex SHA-256",
     () => {
       const original = readFileSync(NEMA_SHA_FILE, "utf8");
