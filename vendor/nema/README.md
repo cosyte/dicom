@@ -9,10 +9,12 @@ only the generated TypeScript under `src/dictionary/generated/` is imported by t
 
 ## Layout
 
-| Path                                   | Part   | Status                                                       |
-| -------------------------------------- | ------ | ------------------------------------------------------------ |
-| `part06/SHA.txt` + `part06/<sha256>/`  | PS3.6  | **Active.** Normative overlay for the data dictionary.        |
-| `part15/SHA.txt` + `part15/<sha256>/`  | PS3.15 | **Active.** Normative overlay for the Annex E action table.   |
+| Path                                              | Part        | Status                                                            |
+| ------------------------------------------------- | ----------- | ----------------------------------------------------------------- |
+| `part05/SHA.txt` + `part05/<sha256>/`             | PS3.5       | **Active.** Normative source for the repeating-group bound.       |
+| `part05-2004/SHA.txt` + `part05-2004/<sha256>/`   | PS3.5-2004  | **Active.** The retired curve bound, delegated to by the current edition. |
+| `part06/SHA.txt` + `part06/<sha256>/`             | PS3.6       | **Active.** Normative overlay for the data dictionary.            |
+| `part15/SHA.txt` + `part15/<sha256>/`             | PS3.15      | **Active.** Normative overlay for the Annex E action table.       |
 
 One directory per part, each with its own `SHA.txt` and its own `<sha256>/` tree, because each part
 is a separate document with a separate hash. PS3.15 used to be reserved as a flat
@@ -20,6 +22,142 @@ is a separate document with a separate hash. PS3.15 used to be reserved as a fla
 under `part15/` to match, and the whole `part15.xml` is vendored rather than an Annex E slice, so
 that the pin can be verified against the published document byte for byte. New parts go under
 `<part>/`.
+
+`part05-2004/` is the one directory that is not a current edition, and it is not an exception to the
+rule so much as a consequence of it: the edition in force retired curve encoding and **delegates**
+the curve bound to PS3.5-2004 by URL, so the 2004 document is the normative statement of that bound
+and vendoring only the current edition would leave half of it transcribed. It is a superseded
+edition on purpose, it is pinned exactly like the others, and the generator refuses to use it unless
+the current edition still points at it. It is also the only PDF here, because 2004 predates NEMA's
+DocBook sources.
+
+## PS3.5, Part 5: repeating-group bound
+
+Two documents, because the bound is stated across two editions.
+
+- **Source (current):** `https://dicom.nema.org/medical/dicom/current/source/docbook/part05/part05.xml`
+- **Edition:** PS3.5 **2026c** (read from the document's own
+  `<subtitle>DICOM PS3.5 2026c - Data Structures and Encoding</subtitle>`, not asserted here)
+- **Retrieved:** 2026-07-28
+- **SHA-256:** `4dfd7b8cbc7c368b7cf03e9c4b8a0773bed91266fcdb0bbf8ed634b7287cacca` (`part05/SHA.txt`)
+- **Committed at:** `part05/4dfd7b8c.../part05.xml`, 1,021,881 bytes, verbatim
+
+<!-- -->
+
+- **Source (retired curve bound):** `http://medical.nema.org/MEDICAL/Dicom/2004/printed/04_05pu.pdf`
+- **Edition:** PS3.5-2004, the edition the current section 7.6 Note links by that exact URL
+- **Retrieved:** 2026-07-28
+- **SHA-256:** `f045aabbbca747afbce425b390109840a89f2a981b7cfeb44d88bc219ad590c7` (`part05-2004/SHA.txt`)
+- **Committed at:** `part05-2004/f045aabb.../04_05pu.pdf`, 546,038 bytes, verbatim
+- **Copyright:** NEMA. Both vendored unmodified as build inputs; the generated bound is the derived
+  work.
+
+### What they are authoritative for
+
+**Section 7.6 (Repeating Groups), and only that section.** Which concrete group numbers a `50xx` or
+`60xx` mask covers, feeding `src/dictionary/generated/repeating-groups.ts` via
+`scripts/generate-repeating-groups.ts`.
+
+That is a de-identification safety bound in **both** directions, which is why it is pinned rather
+than transcribed. PS3.15 Table E.1-1 marks `(50xx,xxxx)`, `(60xx,3000)` and `(60xx,4000)` as `X`, and
+`deidentify()` removes every concrete tag a mask covers. Read `xx` as an unbounded hex wildcard and
+the call deletes attributes the standard never marked; read it too narrowly and a patient identifier
+survives a call whose entire contract is that it does not. Sixteen even groups per mask, not 256.
+
+The split between the two documents is exact:
+
+| Bound                              | Stated by                    |
+| ---------------------------------- | ---------------------------- |
+| Overlays, even `6000`-`601E`       | **both** editions            |
+| Curves, even `5000`-`501E`         | PS3.5-2004 only              |
+| Odd `6001`-`601F` excluded         | current edition (section 7.6 Note) |
+
+The current edition says, normatively, *"Repeating Groups shall only be allowed in the even numbered
+Groups 6000-601E"*, and of the odd ones that *"there is no implication of repeating semantics"*. It
+says nothing about the curve bound; it retired curve encoding and delegates to PS3.5-2004, which
+states *"Repeating Groups shall only be allowed in the even Groups (6000-601E,eeee) and even Groups
+(5000-501E,eeee) cases."*
+
+Because the overlay bound appears in **both**, the generator parses it from each independently and
+**requires them to agree**. That cross-check is the load-bearing gate: it is what makes a mutation of
+either document red, and it is what stops the 2004 PDF drifting away from the edition in force while
+still supplying the curve half. The generator also **proves the delegation** rather than assuming it,
+requiring section 7.6 to link exactly the URL of the document vendored under `part05-2004/`, so a
+future edition that re-states the bound inline or points elsewhere fails loudly instead of being
+silently overridden by a 22-year-old PDF.
+
+Deliberately **not** represented: anything else in Part 5. Transfer syntaxes, VR encoding and the
+private-creator rules of section 7.8.1 are implemented against the standard but not generated from
+this pin.
+
+### Reading a PDF
+
+`scripts/generate-repeating-groups.ts` carries a deliberately minimal PDF reader (Node's `zlib` only,
+no dependency): it inflates the Flate content streams and concatenates the literal strings the text
+operators show. It is **not** a general PDF parser and must not become one. It exists because the
+2004 edition predates DocBook, it recovers one sentence, and that sentence is matched against a
+precise expected shape rather than trusted. If it ever needs to grow, prefer re-deriving the bound
+from a current normative source over extending the reader.
+
+### Locating a section: never first-match, and here is why
+
+**Read this before vendoring a section of any spec, because the next person will hit the same
+collision.** A section heading appears at least **twice** in a typical standards document: once in
+the table of contents, with a dotted leader and a page number, and once on the section itself. Taking
+the first match reads the **table of contents**.
+
+That is not hypothetical. Scoping the 2004 read by first-match produced a **130-character** slice
+(the TOC entry for 7.6 followed immediately by the TOC entry for 7.7) instead of the 1,364-character
+body, and the generator **exited 1** saying it could not find the normative sentence. It failed
+closed, which is the only reason this is a paragraph in a README rather than a wrong de-identification
+bound. A first-match rule that happened to land on a section containing *some* matching text would
+have failed **open** and been silent.
+
+So the rule the generator uses, and the rule to copy:
+
+> **Collect every candidate section, keep the ones that actually contain the normative sentence, and
+> require exactly one.**
+
+It rejects the table of contents **by content** rather than by a "skip the first hit" or
+"ignore lines with dots" heuristic, and requiring exactly one additionally proves the sentence is
+**unique** in the document, which a bare `.exec` silently assumes. Zero candidates and two candidates
+are both refusals, and both are the right answer: one means the document changed shape, the other
+means the generator cannot know which statement is normative.
+
+### Verifying the pins
+
+Same shape as PS3.6 and PS3.15, comparing content rather than dates:
+
+```bash
+curl -fsSL https://dicom.nema.org/medical/dicom/current/source/docbook/part05/part05.xml \
+  | sha256sum | cut -d' ' -f1     # equal to vendor/nema/part05/SHA.txt?
+curl -fsSL http://medical.nema.org/MEDICAL/Dicom/2004/printed/04_05pu.pdf \
+  | sha256sum | cut -d' ' -f1     # equal to vendor/nema/part05-2004/SHA.txt?
+```
+
+The 2004 document is a frozen archive and is not expected to move; if it ever does, that is a fact
+worth understanding before re-pinning, not a routine bump.
+
+There is deliberately **no automated staleness check** here either, for exactly the reasons given
+below for PS3.6. The generator recomputes the SHA-256 of both files it reads and refuses to generate
+on a mismatch: the pin is a precondition, not a comment.
+
+### Re-pinning procedure
+
+Same five steps as PS3.6 below, with `part05` / `part05.xml` (or `part05-2004` / `04_05pu.pdf`)
+substituted, then `pnpm gen:repeating-groups`, then `pnpm test`. Commit the new `vendor/nema/part05*`
+tree and the regenerated `src/dictionary/generated/repeating-groups.ts` together; the regen gate
+requires lockstep.
+
+**Expect the cross-check to be the thing that fails on a bad re-pin**, and read it before overriding
+it: if the two editions stop agreeing on `6000`-`601E`, either one of the vendored documents is not
+what it claims to be, or the bound really moved. Both are decisions, not diffs.
+
+The bound is proved by mutation in `test/scripts/generate-repeating-groups.test.ts`: moving the
+overlay bound in either edition turns the run red on the cross-check, moving the curve bound in the
+2004 edition moves the **emitted artifact** (nothing contradicts it, so the regen gate is what
+catches the drift), and removing the delegation link stops the generator using the 2004 document at
+all.
 
 ## PS3.6, Part 6: Data Dictionary
 

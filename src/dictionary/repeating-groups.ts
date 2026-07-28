@@ -49,14 +49,28 @@
  * path, the standard's own bound on the de-identify path. Do not unify them
  * without deciding which failure you are choosing.
  *
- * The bound itself is transcribed from PS3.5, which this package does **not**
- * vendor (PS3.6 and PS3.15 are pinned by SHA-256 and re-hashed before use; PS3.5
- * is not). So the citations above are the audit trail for it, and the generator's
- * guard catches a new mask *prefix* rather than a changed *bound*. Vendoring
- * PS3.5 to close that is a real change and belongs in its own slice.
+ * **The bound is read out of PS3.5, not transcribed into this file.** Both
+ * editions quoted above are vendored under `vendor/nema/part05/` and
+ * `vendor/nema/part05-2004/`, pinned by SHA-256 and re-hashed before use exactly
+ * as PS3.6 and PS3.15 are, and `scripts/generate-repeating-groups.ts` derives
+ * {@link REPEATING_GROUP_RANGES} from them into
+ * `./generated/repeating-groups.js`. The quotations above are therefore
+ * documentation of what the generator reads, not the source of the numbers: edit
+ * them and nothing changes, mutate the vendored documents and the emitted bound
+ * moves with them. The overlay bound is stated by *both* editions and the
+ * generator requires them to agree, so a mutation of either document is red.
+ *
+ * The current edition does not state the curve bound at all: it retired curve
+ * encoding and delegates, in section 7.6's own Note, to PS3.5-2004 at an explicit
+ * URL. The generator proves that delegation (it requires the link to be present
+ * and to name the document vendored under `part05-2004/`) rather than assuming
+ * it, so an edition that re-states the bound inline, or points elsewhere, fails
+ * loudly instead of being silently overridden by a stale PDF.
  *
  * @module
  */
+
+import { REPEATING_GROUP_PREFIXES, REPEATING_GROUP_RANGES } from "./generated/repeating-groups.js";
 
 /** Inclusive bounds on the low byte of a repeating group number, even values only. */
 export interface RepeatingGroupRange {
@@ -70,27 +84,12 @@ export interface RepeatingGroupRange {
   readonly label: string;
 }
 
-/**
- * Every group-number mask PS3.5 §7.6 defines, keyed by the printed two-hex-digit
- * prefix. A mask on any other prefix is not a repeating group and must not be
- * expanded: `(7Fxx,0010)` Variable Pixel Data, for instance, is a retired
- * registry mask with no PS3.5 repeating-group semantics behind it.
- *
- * @example
- * ```ts
- * REPEATING_GROUP_RANGES["60"]?.lowMax; // 0x1e
- * REPEATING_GROUP_RANGES["7F"];         // undefined - not a repeating group
- * ```
- */
-export const REPEATING_GROUP_RANGES: Readonly<Record<string, RepeatingGroupRange>> = Object.freeze({
-  "50": Object.freeze({ prefix: 0x50, lowMin: 0x00, lowMax: 0x1e, label: "Curves (retired)" }),
-  "60": Object.freeze({ prefix: 0x60, lowMin: 0x00, lowMax: 0x1e, label: "Overlay Planes" }),
-});
-
-/** The printed prefixes {@link REPEATING_GROUP_RANGES} covers, e.g. `["50", "60"]`. */
-export const REPEATING_GROUP_PREFIXES: readonly string[] = Object.freeze(
-  Object.keys(REPEATING_GROUP_RANGES).sort(),
-);
+// Re-exported so this module stays the single import site for the bound on the
+// de-identify path. Both carry their JSDoc at the definition site, which is the
+// generated module: they are derived from the pinned PS3.5 editions rather than
+// written here, and documenting them here would put the prose one edit away from
+// the numbers it describes.
+export { REPEATING_GROUP_PREFIXES, REPEATING_GROUP_RANGES };
 
 /**
  * Expand one mask prefix to the concrete group numbers PS3.5 allows it to take.

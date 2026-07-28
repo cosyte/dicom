@@ -12,6 +12,7 @@ on:
       - "vendor/**"
       - "scripts/generate-dictionary.ts"
       - "scripts/generate-annex-e.ts"
+      - "scripts/generate-repeating-groups.ts"
       - "scripts/_annex-e-discovery.md"
       - "src/dictionary/generated/**"
       # `gen:all` and the generators' entry points live in package.json. Without
@@ -26,6 +27,7 @@ on:
       - "vendor/**"
       - "scripts/generate-dictionary.ts"
       - "scripts/generate-annex-e.ts"
+      - "scripts/generate-repeating-groups.ts"
       - "scripts/_annex-e-discovery.md"
       - "src/dictionary/generated/**"
       - "package.json"
@@ -95,7 +97,7 @@ jobs:
           fi
           echo "Clean OK: only the hand-written README.md remains."
 
-      - name: Regenerate dictionary + Annex E
+      - name: Regenerate repeating groups + dictionary + Annex E
         run: pnpm gen:all
 
       - name: Verify byte-identical regen
@@ -117,6 +119,6 @@ jobs:
           if [ "$drift" -ne 0 ]; then
             echo "::error::Generated dictionary or Annex E artifact drifted from committed output."
             echo "Run 'pnpm gen:all' locally and commit the diff."
-            echo "Pinned inputs are under vendor/innolitics/<sha>/, vendor/nema/part06/<sha>/, and vendor/nema/part15/<sha>/."
+            echo "Pinned inputs are under vendor/innolitics/<sha>/, vendor/nema/part05/<sha>/, vendor/nema/part05-2004/<sha>/, vendor/nema/part06/<sha>/, and vendor/nema/part15/<sha>/."
             exit 1
           fi

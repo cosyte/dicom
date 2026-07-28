@@ -9,7 +9,18 @@
 | `tags.ts`     | `scripts/generate-dictionary.ts` | **normative** `vendor/nema/part06/<sha>/part06.xml` (PS3.6 Tables 6-1/7-1/8-1/9-1), overlaid per field on `vendor/innolitics/<sha>/attributes.json` |
 | `keywords.ts` | `scripts/generate-dictionary.ts` | the same merged registry, inverted to keyword to tag                                                              |
 | `uids.ts`     | `scripts/generate-dictionary.ts` | `vendor/innolitics/<sha>/sops.json` + the curated table inside the generator. **Deliberately not overlaid** with PS3.6 Table A-1; see `vendor/nema/README.md` |
+| `repeating-groups.ts` | `scripts/generate-repeating-groups.ts` | **normative** `vendor/nema/part05/<sha>/part05.xml` (PS3.5 section 7.6) + `vendor/nema/part05-2004/<sha>/04_05pu.pdf` for the retired curve bound the current edition delegates to |
 | `annex-e.ts`  | `scripts/generate-annex-e.ts`    | **normative** `vendor/nema/part15/<sha>/part15.xml` (PS3.15 Table E.1-1), overlaid per field on `vendor/innolitics/<sha>/confidentiality_profile_attributes.json` |
+
+**`gen:repeating-groups` runs first in `gen:all`, because `scripts/generate-annex-e.ts` imports
+`src/dictionary/repeating-groups.ts`, which now reads its bound from `repeating-groups.ts` here.**
+Be precise about what that ordering does and does not buy, because the honest version is narrower
+than it first looks: a **missing** artifact fails the Annex E generator at import, which is the case
+the ordering exists for. A merely **stale** bound does *not* change `annex-e.ts` at all. Measured:
+setting the committed bound to `lowMax: 0x0e` and regenerating leaves the emitted Annex E artifact
+byte-identical, because the mask expansion is applied at **runtime** by `matchesRepeatingPattern`;
+the generator uses the bound only for a prefix guard and a printed statistic. So the order is right,
+but it is not what protects the Annex E table from a wrong bound. The regen gate is.
 
 For `tags.ts` and `annex-e.ts` the NEMA DocBook is the authority and the Innolitics mirror is only
 the base row: NEMA wins per field on every tag it publishes, its own additions are taken, and a
@@ -19,7 +30,7 @@ its pinned input and refuses to run if the bytes are not the pinned bytes.
 ## Re-generating
 
 ```bash
-pnpm gen:all                          # runs gen:dictionary + gen:annex-e in sequence
+pnpm gen:all                          # runs gen:repeating-groups, then gen:dictionary + gen:annex-e in sequence
 git diff src/dictionary/generated/    # MUST be empty for the inputs at the pinned SHAs
 ```
 
