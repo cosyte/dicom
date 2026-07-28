@@ -11,6 +11,33 @@
  * Reads:
  *   - vendor/innolitics/<short-sha>/attributes.json (where <short-sha> = first 7 chars of vendor/innolitics/SHA.txt)
  *   - vendor/innolitics/<short-sha>/sops.json
+ *   - vendor/nema/part06/<sha-256>/part06.xml (the PS3.6 DocBook, normative)
+ *
+ * Authority for the element registry (tags.ts / keywords.ts):
+ *   NEMA's PS3.6 DocBook is the normative publication of the Registry of DICOM
+ *   Data Elements. Innolitics' `attributes.json` is a convenient regenerated
+ *   mirror of it, and its regeneration cadence is not ours to control: at the
+ *   pinned revision it is grounded in PS3.6 2024b. So the DocBook is applied as
+ *   a **per-field overlay** over the Innolitics base:
+ *
+ *     - For a tag both sources carry, PS3.6 wins on every field it publishes:
+ *       name, keyword, VR, VM, retirement.
+ *     - A tag PS3.6 carries and Innolitics does not is ADDED from PS3.6.
+ *     - A tag Innolitics carries and PS3.6 does not is KEPT. PS3.6 retires
+ *       elements, it does not delete them, so a tag missing from the DocBook is
+ *       far more likely to be a parse gap here than a withdrawal there, and
+ *       dropping it would turn a decoded element into an unknown one. That is
+ *       the wrong direction to fail in. (Today the set is empty.)
+ *
+ *   The overlay is scoped to the element registry. UIDs stay on the
+ *   `sops.json` + CURATED_UIDS path deliberately: this dictionary's UID names
+ *   deviate from Table A-1 on purpose (four short forms every DICOM toolkit
+ *   uses, and retirement carried as a structured `retired` boolean rather than
+ *   a trailing " (Retired)" in the name), and a normative overlay would undo
+ *   both. See vendor/nema/README.md.
+ *
+ *   No entry is ever hand-corrected. A correction that cannot be derived from
+ *   fetched normative bytes does not get made here.
  *
  * UIDs: Innolitics' current revision ships `sops.json` (SOP Class UIDs) but not a
  * comprehensive UID table covering Transfer Syntaxes, Well-Known UIDs, etc. The
@@ -38,6 +65,8 @@ import { fileURLToPath } from "node:url";
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const VENDOR_ROOT = join(REPO_ROOT, "vendor", "innolitics");
 const SHA_FILE = join(VENDOR_ROOT, "SHA.txt");
+const NEMA_PART06_ROOT = join(REPO_ROOT, "vendor", "nema", "part06");
+const NEMA_SHA_FILE = join(NEMA_PART06_ROOT, "SHA.txt");
 const OUT_DIR = join(REPO_ROOT, "src", "dictionary", "generated");
 
 // -----------------------------------------------------------------------------
@@ -728,7 +757,9 @@ function escape(s: string): string {
  * concrete tag and are flagged via `repeatingGroup: true`.
  */
 function normalizeId(id: string): { tag: string; repeatingGroup: boolean } {
-  if (!/^[0-9a-fA-F]{8}$/.test(id) && !/^[0-9a-fxX]{8}$/.test(id)) {
+  // The `x` alternative admits A-F too: PS3.6 prints repeating-group tags with
+  // uppercase hex ((50xx,200A)), and only the mirror happens to be all-lowercase.
+  if (!/^[0-9a-fA-F]{8}$/.test(id) && !/^[0-9a-fA-FxX]{8}$/.test(id)) {
     throw new Error(`malformed id: ${id}`);
   }
   if (/[xX]/.test(id)) {
@@ -754,6 +785,299 @@ function parseVr(raw: string): string[] {
 }
 
 // -----------------------------------------------------------------------------
+// NEMA PS3.6 DocBook reader (normative source for the element registry).
+//
+// The four registry tables. Every one of them has the same six columns:
+// Tag | Name | Keyword | VR | VM | (retirement / dictionary marker).
+// -----------------------------------------------------------------------------
+
+// The character the founder directive bans (U+2014), built from its code point on
+// purpose. `scripts/check-no-emdash.sh` scans tracked files for the backslash-u
+// escape as well as for the literal byte, so a detector for the character cannot
+// spell it either way without reddening the gate that bans it. Do not "simplify"
+// this into a string literal. A numeric entity in a future PS3.6 edition would
+// decode to this character and land in a generated name, so the check is real.
+const EM_DASH = String.fromCodePoint(0x2014);
+
+const NEMA_REGISTRY_TABLES = ["table_6-1", "table_7-1", "table_8-1", "table_9-1"] as const;
+
+/** Lower bound on total registry rows. 2026c has 5,309; a parse that silently
+ *  matched a fraction of them must fail rather than quietly shrink the overlay. */
+const NEMA_MIN_ROWS = 5000;
+
+interface NormativeElement {
+  /** Emitted tag key: uppercase for concrete tags, lowercase for `x` families. */
+  readonly tag: string;
+  readonly repeatingGroup: boolean;
+  readonly name: string;
+  readonly keyword: string;
+  readonly vr: readonly string[];
+  readonly vm: string;
+  readonly retired: boolean;
+}
+
+function readNemaSha(): string {
+  const raw = readFileSync(NEMA_SHA_FILE, "utf8").trim().split(/\s+/)[0] ?? "";
+  if (!/^[0-9a-f]{64}$/i.test(raw)) {
+    throw new Error(
+      `vendor/nema/part06/SHA.txt must contain a 64-char hex SHA-256, got: ${JSON.stringify(raw)}`,
+    );
+  }
+  return raw.toLowerCase();
+}
+
+/**
+ * Read the pinned DocBook and prove it is the pinned bytes.
+ *
+ * The Innolitics inputs are hashed only for the provenance header; here the hash
+ * is a precondition. A dictionary is exactly the artifact where "the input was
+ * swapped and nobody noticed" is unacceptable, and the check costs one hash of a
+ * file already being read.
+ */
+function readNemaPart06(pinnedSha: string): string {
+  const path = join(NEMA_PART06_ROOT, pinnedSha, "part06.xml");
+  const buf = readFileSync(path);
+  const actual = sha256(buf);
+  if (actual !== pinnedSha) {
+    throw new Error(
+      `vendor/nema/part06 pin mismatch:\n  pinned:   ${pinnedSha}\n  on disk:  ${actual}\n` +
+        `  file:     ${path}\n` +
+        `Re-fetch the DocBook and update SHA.txt, or restore the pinned bytes.`,
+    );
+  }
+  return buf.toString("utf8");
+}
+
+/** Pull the edition string out of `<subtitle>DICOM PS3.6 2026c - Data Dictionary</subtitle>`. */
+function nemaEdition(xml: string): string {
+  const m = /<subtitle>\s*DICOM PS3\.6 ([0-9]{4}[a-z]?) - Data Dictionary\s*<\/subtitle>/.exec(xml);
+  if (!m?.[1]) {
+    throw new Error(
+      "part06.xml: cannot find the `<subtitle>DICOM PS3.6 <edition> - Data Dictionary</subtitle>` " +
+        "line. Refusing to generate from a document that does not identify itself as PS3.6.",
+    );
+  }
+  return m[1];
+}
+
+/** Slice out one `<table>...</table>` by `xml:id`, counting nesting rather than
+ *  taking the first closing tag. */
+function extractTable(xml: string, id: string): string {
+  const marker = `xml:id="${id}"`;
+  const at = xml.indexOf(marker);
+  if (at < 0) throw new Error(`part06.xml: no element carries ${marker}`);
+  const open = xml.lastIndexOf("<table", at);
+  if (open < 0) throw new Error(`part06.xml: ${marker} is not on a <table> element`);
+  // The marker must live in that opening tag, not in some later element the
+  // backward search happened to skip over. A wrong `open` slices a wrong table.
+  const openTag = xml.slice(open, xml.indexOf(">", open) + 1);
+  if (!openTag.includes(marker)) {
+    throw new Error(`part06.xml: ${marker} is not inside the nearest preceding <table ...>`);
+  }
+
+  const scan = /<table\b[^>]*?(\/?)>|<\/table>/g;
+  scan.lastIndex = open;
+  let depth = 0;
+  let m: RegExpExecArray | null;
+  while ((m = scan.exec(xml)) !== null) {
+    if (m[0] === "</table>") {
+      depth -= 1;
+      if (depth === 0) return xml.slice(open, m.index + m[0].length);
+    } else if (m[1] === "/") {
+      // Self-closing <table/> - not a container, and never seen in PS3.6.
+      if (m.index === open) throw new Error(`part06.xml: ${id} is a self-closing <table/>`);
+    } else {
+      depth += 1;
+    }
+  }
+  throw new Error(`part06.xml: unterminated <table> for ${id}`);
+}
+
+/** Decode the entity forms DocBook actually uses, and refuse any other. */
+function decodeEntities(s: string, where: string): string {
+  return s.replace(/&(#x[0-9a-fA-F]+|#[0-9]+|[a-zA-Z][a-zA-Z0-9]*);/g, (whole, body: string) => {
+    if (body.startsWith("#x") || body.startsWith("#X")) {
+      return String.fromCodePoint(Number.parseInt(body.slice(2), 16));
+    }
+    if (body.startsWith("#")) return String.fromCodePoint(Number.parseInt(body.slice(1), 10));
+    switch (body) {
+      case "amp":
+        return "&";
+      case "lt":
+        return "<";
+      case "gt":
+        return ">";
+      case "quot":
+        return '"';
+      case "apos":
+        return "'";
+      default:
+        throw new Error(`part06.xml (${where}): unrecognized entity ${whole}`);
+    }
+  });
+}
+
+/**
+ * Cell markup to text. PS3.6 wraps every cell in `<para>` and marks retired rows
+ * with `<emphasis role="italic">`; note references are empty `<xref/>` elements.
+ * The keyword column carries ZERO WIDTH SPACE (U+200B) as a line-break hint,
+ * 13,470 of them in 2026c, and leaving even one in would produce a keyword that
+ * looks right and never matches.
+ */
+function cellText(markup: string, where: string): string {
+  // Strip markup to a fixpoint rather than in one pass. A single pass can leave
+  // a residue that reassembles into another tag, which is why CodeQL treats a
+  // one-shot tag strip as incomplete sanitization. This is a build-time reader
+  // of SHA-256-pinned normative bytes and not an HTML sink, so the injection
+  // framing does not apply, but the underlying failure does: residue here would
+  // become a dictionary keyword. So strip until stable, then refuse anything
+  // still carrying markup. Measured on 2026c: identical output to the one-pass
+  // form across all 31,854 cells, and no cell legitimately holds `<` or `>`.
+  // The check runs BEFORE entity decoding, so a literal `&lt;` cannot trip it.
+  let withoutTags = markup;
+  for (;;) {
+    const next = withoutTags.replace(/<[^<>]*>/g, "");
+    if (next === withoutTags) break;
+    withoutTags = next;
+  }
+  if (/[<>]/.test(withoutTags)) {
+    throw new Error(
+      `part06.xml (${where}): cell still carries markup after stripping: ` +
+        JSON.stringify(withoutTags),
+    );
+  }
+  return decodeEntities(withoutTags, where)
+    .replace(/\u200B/gu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
+/** Same normalization as {@link normalizeId}, from a PS3.6 `(gggg,eeee)` cell. */
+function normalizeNemaTag(cell: string, where: string): { tag: string; repeatingGroup: boolean } {
+  const m = /^\(([0-9A-Fa-fxX]{4}),([0-9A-Fa-fxX]{4})\)$/.exec(cell);
+  if (!m) throw new Error(`part06.xml (${where}): malformed tag cell ${JSON.stringify(cell)}`);
+  return normalizeId(`${m[1]}${m[2]}`);
+}
+
+/**
+ * VR cell to VR list, strictly. `parseVr` silently drops tokens it does not
+ * recognize, which is tolerable for a mirror we are only reading for shape but
+ * not for the normative source: a dropped VR is exactly how a dictionary starts
+ * mis-reading bytes. An unknown token throws instead.
+ */
+function parseNemaVr(raw: string, where: string): string[] {
+  if (raw === "" || /^See Note/.test(raw)) return [];
+  const tokens = raw.split(/\s+or\s+/).map((t) => t.trim());
+  for (const t of tokens) {
+    if (!STANDARD_VRS.has(t)) {
+      throw new Error(`part06.xml (${where}): unknown VR token ${JSON.stringify(t)} in ${raw}`);
+    }
+  }
+  return tokens;
+}
+
+/**
+ * Parse the four registry tables into normative entries, keyed by lowercase tag
+ * so the merge never depends on the hex casing either side happens to print.
+ */
+function parseNemaRegistry(xml: string): Map<string, NormativeElement> {
+  const out = new Map<string, NormativeElement>();
+
+  for (const id of NEMA_REGISTRY_TABLES) {
+    const table = extractTable(xml, id);
+
+    // Collect EVERY `<tbody>` section. PS3.6 uses exactly one per table today,
+    // but the guard must not assume it: slicing to the first `</tbody>` and then
+    // counting `<tr>` opens on that already-truncated slice cannot see rows past
+    // it, so a table split across two bodies would drop the second in silence.
+    const bodies: string[] = [];
+    const bodyScan = /<tbody\b[^>]*>([\s\S]*?)<\/tbody>/g;
+    let bm: RegExpExecArray | null;
+    while ((bm = bodyScan.exec(table)) !== null) bodies.push(bm[1] ?? "");
+    if (bodies.length === 0) throw new Error(`part06.xml: ${id} has no <tbody>`);
+    const bodyOpens = (table.match(/<tbody\b/g) ?? []).length;
+    if (bodyOpens !== bodies.length) {
+      throw new Error(
+        `part06.xml: ${id} has ${bodyOpens} <tbody> opens but ${bodies.length} closed sections`,
+      );
+    }
+
+    const rows: string[] = [];
+    for (const body of bodies) {
+      rows.push(...(body.match(/<tr\b[^>]*>[\s\S]*?<\/tr>/g) ?? []));
+    }
+    if (rows.length === 0) throw new Error(`part06.xml: ${id} has no <tr> rows`);
+
+    // Every `<tr>` in the table must be accounted for as a body row we matched or
+    // a header row. That covers all three silent-drop shapes at once: a row the
+    // matcher does not recognize (a self-closing `<tr/>`), a row in a second
+    // `<tbody>`, and a row sitting outside any `<tbody>` at all.
+    const headRows = (table.match(/<thead\b[^>]*>[\s\S]*?<\/thead>/g) ?? []).reduce(
+      (n, head) => n + (head.match(/<tr\b/g) ?? []).length,
+      0,
+    );
+    const trOpens = (table.match(/<tr\b/g) ?? []).length;
+    if (trOpens !== rows.length + headRows) {
+      throw new Error(
+        `part06.xml: ${id} has ${trOpens} <tr> opens but matched ${rows.length} body rows ` +
+          `plus ${headRows} header rows`,
+      );
+    }
+
+    for (const row of rows) {
+      const cells = (row.match(/<td\b[^>]*?(?:\/>|>[\s\S]*?<\/td>)/g) ?? []).map((c) =>
+        cellText(c, id),
+      );
+      if (cells.length !== 6) {
+        throw new Error(
+          `part06.xml: ${id} row has ${cells.length} cells, expected 6 ` +
+            `(Tag | Name | Keyword | VR | VM | marker): ${JSON.stringify(cells)}`,
+        );
+      }
+      const [tagCell = "", name = "", keyword = "", vrCell = "", vm = "", marker = ""] = cells;
+      const { tag, repeatingGroup } = normalizeNemaTag(tagCell, id);
+
+      if (keyword !== "" && !/^[A-Za-z][A-Za-z0-9]*$/.test(keyword)) {
+        throw new Error(`part06.xml: ${id} ${tagCell} has a non-identifier keyword: ${keyword}`);
+      }
+      for (const [field, value] of [
+        ["name", name],
+        ["keyword", keyword],
+      ] as const) {
+        if (value.includes(EM_DASH)) {
+          throw new Error(
+            `part06.xml: ${id} ${tagCell} ${field} carries a banned em dash: ${value}`,
+          );
+        }
+      }
+
+      const key = tag.toLowerCase();
+      if (out.has(key)) throw new Error(`part06.xml: duplicate tag ${tagCell} in ${id}`);
+
+      out.set(key, {
+        tag,
+        repeatingGroup,
+        name,
+        keyword,
+        vr: parseNemaVr(vrCell, `${id} ${tagCell}`),
+        vm,
+        // The sixth column carries "RET", "RET (2025a)", or a dictionary marker
+        // ("DICOS", "DICONDE") that is NOT a retirement. Only RET retires.
+        retired: /^RET\b/.test(marker),
+      });
+    }
+  }
+
+  if (out.size < NEMA_MIN_ROWS) {
+    throw new Error(
+      `part06.xml: parsed only ${out.size} registry rows, expected at least ${NEMA_MIN_ROWS}. ` +
+        `The DocBook table shape has probably changed; fix the parser rather than lowering this.`,
+    );
+  }
+  return out;
+}
+
+// -----------------------------------------------------------------------------
 // Emitters
 // -----------------------------------------------------------------------------
 
@@ -761,6 +1085,7 @@ function emitHeader(
   generatorName: string,
   sources: ReadonlyArray<{ path: string; sha256: string }>,
   innoSha: string,
+  normative?: { edition: string; sha256: string },
 ): string {
   const lines: string[] = [
     "/* eslint-disable */",
@@ -768,15 +1093,24 @@ function emitHeader(
     "//",
     `// Generator: scripts/${generatorName}`,
     `// Innolitics dicom-standard SHA (pinned, full): ${innoSha}`,
-    "// Inputs (path → SHA-256):",
   ];
+  if (normative) {
+    lines.push(
+      `// Normative source: NEMA DICOM PS3.6 ${normative.edition} DocBook (Tables 6-1, 7-1, 8-1, 9-1).`,
+      `//   vendor/nema/part06/<sha>/part06.xml → ${normative.sha256}`,
+      "//   PS3.6 wins per field over the Innolitics mirror on every tag it publishes.",
+    );
+  }
+  lines.push("// Inputs (path → SHA-256):");
   for (const s of sources) {
     lines.push(`//   - ${s.path} → ${s.sha256}`);
   }
   lines.push(
     "//",
     "// Re-generate via `pnpm gen:dictionary`. CI gates byte-identical output.",
-    "// See vendor/innolitics/README.md for re-pinning procedure.",
+    normative
+      ? "// See vendor/innolitics/README.md and vendor/nema/README.md for re-pinning."
+      : "// See vendor/innolitics/README.md for re-pinning procedure.",
     "",
   );
   return lines.join("\n");
@@ -787,11 +1121,21 @@ interface BuiltEntry {
   readonly literal: string;
 }
 
+interface OverlayStats {
+  readonly shared: number;
+  readonly added: number;
+  readonly innoliticsOnly: readonly string[];
+  readonly overridden: Readonly<Record<"name" | "keyword" | "vr" | "vm" | "retired", number>>;
+  readonly vrOverrides: readonly string[];
+}
+
 function buildTagsTs(
   attrs: ReadonlyArray<InnoliticsAttribute>,
+  normative: ReadonlyMap<string, NormativeElement>,
   innoSha: string,
   attrSha: string,
-): { ts: string; tagCount: number; keywordCount: number } {
+  nema: { edition: string; sha256: string },
+): { ts: string; tagCount: number; keywordCount: number; stats: OverlayStats } {
   // Build entries keyed by tag (concrete or repeating-group placeholder).
   // Multiple attributes can share an id ONLY in retired shadow-cases - collapse
   // by preferring non-retired, then alphabetical keyword for stability.
@@ -816,28 +1160,99 @@ function buildTagsTs(
   const entries: BuiltEntry[] = [];
   const keywordPairs: Array<{ keyword: string; tag: string }> = [];
 
-  for (const [, a] of seen) {
-    const { tag, repeatingGroup } = normalizeId(a.id);
-    const vr = parseVr(a.valueRepresentation);
-    const retired = a.retired === "Y";
+  // Merge: Innolitics supplies the base row, PS3.6 overrides every field it
+  // publishes, and PS3.6-only tags are appended below.
+  const consumed = new Set<string>();
+  const innoliticsOnly: string[] = [];
+  const vrOverrides: string[] = [];
+  const overridden = { name: 0, keyword: 0, vr: 0, vm: 0, retired: 0 };
+  let shared = 0;
 
+  const emit = (
+    tag: string,
+    repeatingGroup: boolean,
+    keyword: string,
+    name: string,
+    vr: readonly string[],
+    vm: string,
+    retired: boolean,
+  ): void => {
     const fields: string[] = [
       `tag: ${escape(tag)}`,
-      `keyword: ${escape(a.keyword)}`,
-      `name: ${escape(a.name)}`,
+      `keyword: ${escape(keyword)}`,
+      `name: ${escape(name)}`,
       `vr: [${vr.map(escape).join(", ")}] as const`,
-      `vm: ${escape(a.valueMultiplicity)}`,
+      `vm: ${escape(vm)}`,
       `retired: ${retired}`,
     ];
     if (repeatingGroup) fields.push("repeatingGroup: true as const");
 
-    const literal = `{ ${fields.join(", ")} }`;
-    entries.push({ tagOrKey: tag, literal });
+    entries.push({ tagOrKey: tag, literal: `{ ${fields.join(", ")} }` });
 
     // Build reverse map only for concrete tags with non-empty keyword.
-    if (!repeatingGroup && a.keyword.length > 0) {
-      keywordPairs.push({ keyword: a.keyword, tag });
+    if (!repeatingGroup && keyword.length > 0) {
+      keywordPairs.push({ keyword, tag });
     }
+  };
+
+  for (const [, a] of seen) {
+    const { tag, repeatingGroup } = normalizeId(a.id);
+    const norm = normative.get(tag.toLowerCase());
+
+    if (!norm) {
+      innoliticsOnly.push(tag);
+      emit(
+        tag,
+        repeatingGroup,
+        a.keyword,
+        a.name,
+        parseVr(a.valueRepresentation),
+        a.valueMultiplicity,
+        a.retired === "Y",
+      );
+      continue;
+    }
+
+    consumed.add(tag.toLowerCase());
+    shared += 1;
+    const baseVr = parseVr(a.valueRepresentation);
+    if (a.name !== norm.name) overridden.name += 1;
+    if (a.keyword !== norm.keyword) overridden.keyword += 1;
+    if (baseVr.join("|") !== norm.vr.join("|")) {
+      overridden.vr += 1;
+      vrOverrides.push(`${tag}: [${baseVr.join(", ")}] -> [${norm.vr.join(", ")}]`);
+    }
+    if (a.valueMultiplicity !== norm.vm) overridden.vm += 1;
+    if ((a.retired === "Y") !== norm.retired) overridden.retired += 1;
+
+    emit(tag, repeatingGroup, norm.keyword, norm.name, norm.vr, norm.vm, norm.retired);
+  }
+
+  // PS3.6 tags the mirror has not caught up to yet.
+  let added = 0;
+  for (const [key, norm] of normative) {
+    if (consumed.has(key)) continue;
+    added += 1;
+    emit(norm.tag, norm.repeatingGroup, norm.keyword, norm.name, norm.vr, norm.vm, norm.retired);
+  }
+
+  const stats: OverlayStats = {
+    shared,
+    added,
+    innoliticsOnly: innoliticsOnly.sort((x, y) => (x < y ? -1 : x > y ? 1 : 0)),
+    overridden,
+    vrOverrides,
+  };
+
+  // A keyword must resolve to exactly one tag; the reverse map cannot represent
+  // a collision, and silently keeping the last one would break `byKeyword`.
+  const byKeyword = new Map<string, string>();
+  for (const p of keywordPairs) {
+    const prior = byKeyword.get(p.keyword);
+    if (prior !== undefined && prior !== p.tag) {
+      throw new Error(`keyword ${p.keyword} maps to both ${prior} and ${p.tag}`);
+    }
+    byKeyword.set(p.keyword, p.tag);
   }
 
   // Deterministic sort.
@@ -849,6 +1264,7 @@ function buildTagsTs(
       "generate-dictionary.ts",
       [{ path: "vendor/innolitics/<sha>/attributes.json", sha256: attrSha }],
       innoSha,
+      nema,
     ) +
     `import type { DictionaryEntry } from "../types.js";\n\n` +
     `export const TAGS: { readonly [tag: string]: DictionaryEntry } = {\n` +
@@ -860,6 +1276,7 @@ function buildTagsTs(
       "generate-dictionary.ts",
       [{ path: "vendor/innolitics/<sha>/attributes.json", sha256: attrSha }],
       innoSha,
+      nema,
     ) +
     `export const KEYWORDS: { readonly [keyword: string]: string } = {\n` +
     keywordPairs.map((p) => `  ${escape(p.keyword)}: ${escape(p.tag)},`).join("\n") +
@@ -870,7 +1287,7 @@ function buildTagsTs(
   // Keep clean by writing keywords inline here and returning both:
   writeFileSync(join(OUT_DIR, "keywords.ts"), keywordsTs, "utf8");
 
-  return { ts: tagsTs, tagCount: entries.length, keywordCount: keywordPairs.length };
+  return { ts: tagsTs, tagCount: entries.length, keywordCount: keywordPairs.length, stats };
 }
 
 function buildUidsTs(
@@ -973,11 +1390,42 @@ function main(): void {
     throw new Error(`sops.json sanity check failed: expected ≥ 100 entries, got ${sops.length}`);
   }
 
+  console.log("[gen:dictionary] resolving pinned NEMA PS3.6 DocBook...");
+  const nemaSha = readNemaSha();
+  const nemaXml = readNemaPart06(nemaSha);
+  const edition = nemaEdition(nemaXml);
+  console.log(`[gen:dictionary] PS3.6 edition: ${edition} (sha256 ${nemaSha.slice(0, 12)})`);
+  const normative = parseNemaRegistry(nemaXml);
+  console.log(`[gen:dictionary] normative registry rows: ${normative.size}`);
+
   mkdirSync(OUT_DIR, { recursive: true });
 
   console.log("[gen:dictionary] building tags + keywords...");
-  const { ts: tagsTs, tagCount, keywordCount } = buildTagsTs(attrs, full, attrSha);
+  const {
+    ts: tagsTs,
+    tagCount,
+    keywordCount,
+    stats,
+  } = buildTagsTs(attrs, normative, full, attrSha, { edition, sha256: nemaSha });
   writeFileSync(join(OUT_DIR, "tags.ts"), tagsTs, "utf8");
+
+  // Print the overlay, so a re-pin shows exactly what the normative source moved
+  // rather than burying it in a 5,000-line diff.
+  console.log(
+    `[gen:dictionary] overlay vs PS3.6 ${edition}: ${stats.shared} shared, ${stats.added} added, ` +
+      `${stats.innoliticsOnly.length} mirror-only kept`,
+  );
+  console.log(
+    `[gen:dictionary] fields overridden by PS3.6 - name: ${stats.overridden.name}, ` +
+      `keyword: ${stats.overridden.keyword}, vr: ${stats.overridden.vr}, ` +
+      `vm: ${stats.overridden.vm}, retired: ${stats.overridden.retired}`,
+  );
+  for (const line of stats.vrOverrides) {
+    console.log(`[gen:dictionary]   VR override ${line}`);
+  }
+  if (stats.innoliticsOnly.length > 0) {
+    console.log(`[gen:dictionary]   mirror-only: ${stats.innoliticsOnly.join(", ")}`);
+  }
 
   console.log("[gen:dictionary] building uids...");
   const { ts: uidsTs, uidCount } = buildUidsTs(sops, full, sopsSha);

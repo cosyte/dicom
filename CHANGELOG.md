@@ -6,6 +6,49 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Added
 
+- **The element registry is now generated from NEMA's PS3.6 DocBook, the normative publication**
+  (`DICOM-UPSTREAM-EDITION-LAG`). `vendor/nema/part06/` pins `part06.xml` (PS3.6 **2026c**) by
+  SHA-256, and `scripts/generate-dictionary.ts` applies it as a **per-field overlay** over the
+  Innolitics mirror: for a tag both sources carry, PS3.6 wins on name, keyword, VR, VM and
+  retirement; a tag PS3.6 carries and the mirror does not is added; a tag the mirror carries and
+  PS3.6 does not is **kept**, because PS3.6 retires elements rather than deleting them, so an absence
+  is far more likely to be a parse gap here than a withdrawal there and dropping the entry would turn
+  a decoded element into an unknown one (that set is empty today, and the generator prints its size).
+  The overlay is scoped to the four registry tables (6-1, 7-1, 8-1, 9-1). UIDs stay on the
+  `sops.json` + curated path deliberately: `uids.ts` carries the four short forms every DICOM toolkit
+  uses instead of PS3.6's "...: Default Transfer Syntax for ..." clauses, and retirement as a
+  structured `retired` boolean rather than a trailing " (Retired)" glued into the name, and an
+  overlay would undo both. PS3.15 Annex E is a different part and a different generator, unchanged.
+  This is the durable fix for the edition lag recorded in `vendor/innolitics/README.md`: the mirror's
+  pin is exactly current against its own upstream, but that upstream last refreshed its data on
+  2024-04-18, so the tables sat on PS3.6 2024b against a current 2026c and no re-pinning discipline
+  could have moved them. The registry no longer comes from a source whose regeneration cadence is not
+  ours.
+  **The pin is a precondition, not a comment.** The generator recomputes the SHA-256 of the file it
+  reads and refuses to generate on a mismatch, reads the edition from the document's own
+  `<subtitle>` rather than asserting it, and fails loudly rather than emitting a thinner dictionary
+  on a row that is not six cells, a malformed `(gggg,eeee)` tag cell, a non-identifier keyword, an
+  unrecognized VR token, or a total under 5,000 registry rows. Two traps in the DocBook are handled
+  explicitly and covered by tests: the keyword column carries **13,470 ZERO WIDTH SPACE** line-break
+  hints in 2026c, one of which left in produces a keyword that looks right and never matches; and the
+  sixth column carries `DICOS` and `DICONDE` dictionary markers alongside `RET (edition)`, so reading
+  it as a boolean would retire **391** live tags. Only a leading `RET` retires. Row accounting is
+  the part that had to be got right rather than merely asserted: every `<tr>` in a registry table
+  must resolve to a matched body row or a header row, which covers unrecognized row markup, a second
+  `<tbody>`, and a row outside any `<tbody>` in one check. Counting row opens inside the already
+  truncated first-`<tbody>` slice, as an earlier draft did, structurally cannot see the rows it
+  dropped: splitting Table 6-1 in two made that version read 207 rows instead of 5,309. Cell text
+  is likewise stripped of markup to a fixpoint and then refused if any `<` or `>` survives, rather
+  than stripped in a single pass that can leave a residue which reassembles into another tag.
+  Every run prints the overlay it applied (shared / added / mirror-only, and the fields overridden
+  broken out by field, **with every VR override listed individually**), so a future re-pin of either
+  source shows what moved instead of a 5,000-line diff. There is deliberately **no staleness clock**:
+  a date-based gate would fire the day it was written, demand an action nobody can take on demand
+  (NEMA publishes when NEMA publishes), red unrelated pull requests, and train people to bump a date
+  instead of re-deriving anything. "Has NEMA published a new edition" is one command against
+  _content_, documented in `vendor/nema/README.md`. What is gated in CI is unchanged and offline:
+  the committed dictionary must be byte-for-byte what the pinned inputs produce.
+
 - **Em-dash brand gate in CI (`EMDASH-CONFORMANCE`).** The founder directive of 2026-07-24
   (`knowledgebase/06-brand/voice-and-tone.md`, "No em dashes. Ever.") bans `U+2014` outright across
   every cosyte surface and names commit messages explicitly, and the meta-repo's
@@ -71,6 +114,31 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   file on disk.
 
 ### Fixed
+
+- **Three defects in the shipped data dictionary, all resolved from normative bytes**
+  (`DICOM-UPSTREAM-EDITION-LAG`). None is hand-corrected; each is what PS3.6 2026c prints, and each
+  is reproduced by every regen.
+  - **`(0010,2160)` `EthnicGroup` was marked current although PS3.6 retired it in 2025a**, and its
+    replacements were absent entirely. It is now `retired: true`, and `(0010,2161)`
+    `EthnicGroupCodeSequence` (`SQ`, VM 1) and `(0010,2162)` `EthnicGroups` (`UC`, VM 1-n) are
+    present. This is a real demographic-attribute change: an application reading only `EthnicGroup`
+    silently misses what current instances actually carry. Retired does not mean removed, so the
+    keyword still resolves and an older study still reads; the caller is told both what the tag is
+    and that it is no longer current.
+  - **`(3004,0012)` `DoseValue` was marked retired although PS3.6 defines it.** The `RET (2022d)`
+    marker belongs to the preceding row, `(3004,0010)` `RTDoseROISequence`, which remains retired.
+    `DoseValue` is now `retired: false`. A dose attribute wrongly flagged retired is the dangerous
+    direction of that error: it is the one that talks a caller out of reading a real RT dose.
+  - **`(003A,0320)` and `(003A,0325)` carried truncated keywords**, `SummarizedFilterLookupTable` and
+    `AnalogFilterType`, so `byKeyword` missed on the spelling PS3.6 publishes. They are now
+    `SummarizedFilterLookupTableSequence` and `AnalogFilterTypeCodeSequence`. The truncated forms are
+    **gone rather than kept as aliases**: they were never PS3.6 keywords, and carrying them would
+    preserve the defect under a nicer name.
+  - Alongside these, **180 tags PS3.6 has gained are now known**, so `Dictionary.lookup` names them
+    and Implicit VR parsing resolves their VR from the dictionary instead of falling back to `UN`.
+    The registry goes from **5,129 to 5,309** tags and `byKeyword` from **5,035 to 5,214** keywords.
+    Zero VR, name and VM differences existed on the 5,129 shared tags and zero tags were dropped, so
+    **no previously-decoded element decodes differently**; the change is corrections plus additions.
 
 - **174 SOP Class UID names in `UIDS` were wrong (`DICOM-DICT-CURRENCY`).** The dictionary generator
   appended `" Storage"` to every name it took from the vendor `sops.json`, but that field is already
