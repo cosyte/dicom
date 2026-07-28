@@ -3,7 +3,8 @@
 // PS3.15 Annex E action table -> committed TS module.
 //
 // Runs via `pnpm gen:annex-e` (devDep `tsx`). Writes:
-//   - src/dictionary/generated/annex-e.ts  (Tag -> AnnexEAction map)
+//   - src/dictionary/generated/annex-e.ts  (Tag -> AnnexEAction map, plus the
+//     repeating-group family rules an exact-tag map cannot key)
 //
 // Two inputs, and the normative one wins:
 //
@@ -33,6 +34,12 @@ import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import {
+  REPEATING_GROUP_PREFIXES,
+  REPEATING_GROUP_RANGES,
+  expandRepeatingGroups,
+} from "../src/dictionary/repeating-groups.js";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const INNOLITICS_ROOT = join(REPO_ROOT, "vendor", "innolitics");
@@ -263,15 +270,36 @@ const NEMA_HEADER_LABELS: readonly string[] = [
   "Clean Graph. Opt.",
 ];
 
+/** A Table E.1-1 row whose tag cell is a PS3.5 §7.6 repeating-group mask. */
+interface RepeatingEntry {
+  /** The printed mask flattened to 8 chars, e.g. `(60xx,4000)` -> `60xx4000`. */
+  readonly pattern: string;
+  /** The mask as PS3.15 prints it, for diagnostics. */
+  readonly printed: string;
+  readonly keyword: string;
+  readonly basicProfile: string;
+  readonly optionSet: ReadonlyArray<readonly [string, string]>;
+}
+
 interface NemaTable {
   readonly entries: readonly NormalizedEntry[];
-  /** Tag cells Table E.1-1 states as a family rather than one tag, kept verbatim
-   *  for reporting. An exact-tag map cannot represent them. */
-  readonly maskedTags: readonly string[];
+  /** Repeating-group family rows, expanded at runtime over the concrete groups
+   *  PS3.5 §7.6 allows. Emitted, not dropped. */
+  readonly repeating: readonly RepeatingEntry[];
+  /** The odd-group private-attribute family row(s), kept verbatim for reporting.
+   *  `deidentify()` removes private attributes through a separate path, so these
+   *  are deliberately not emitted as rules. */
+  readonly privateFamilyRows: readonly string[];
   /** Rows where the two E.3.6 date sub-options disagree, hence rows the collapse
    *  to `Rtn. Long. Full Dates` loses information about. */
   readonly dateOptionDivergence: number;
 }
+
+/** `(gggg,eeee) where gggg is odd` - the private-attribute family row. */
+const PRIVATE_FAMILY_ROW = /^\(gggg,eeee\) where gggg is odd$/;
+
+/** A masked group number plus a concrete or masked element, e.g. `(60xx,4000)`. */
+const REPEATING_FAMILY_ROW = /^\(([0-9A-Fa-f]{2})[xX]{2},([xX]{4}|[0-9A-Fa-f]{4})\)$/;
 
 function readNemaSha(): string {
   let raw: string;
@@ -438,13 +466,22 @@ function parseActionCell(raw: string, where: string): string | undefined {
 /**
  * Parse Table E.1-1 into normative entries.
  *
- * Tag cells that name a family rather than one attribute -- the repeating-group
- * `(50xx,xxxx)` / `(60xx,3000)` / `(60xx,4000)` rows and the "(gggg,eeee) where
- * gggg is odd" private-attribute row -- cannot be keys in an exact-tag map. They
- * are collected and printed rather than dropped in silence: private attributes
- * are removed by `deidentify()` through a separate path, and the repeating-group
- * rows are a known gap that this generator does not close. Any OTHER unparseable
- * tag cell is a parser bug and throws.
+ * Tag cells that name a family rather than one attribute cannot be keys in an
+ * exact-tag map, and there are exactly two kinds:
+ *
+ *   - The **repeating-group** rows -- `(50xx,xxxx)` Curve Data, `(60xx,3000)`
+ *     Overlay Data, `(60xx,4000)` Overlay Comments. These are parsed like any
+ *     other row and emitted as pattern rules; the concrete groups the mask covers
+ *     come from PS3.5 §7.6, not from the shape of the mask.
+ *   - The **private-attribute** row, `(gggg,eeee) where gggg is odd`. Not emitted:
+ *     `deidentify()` removes private attributes through its own path, ahead of any
+ *     Table E.1-1 lookup.
+ *
+ * A masked row on a group prefix PS3.5 does NOT define as a repeating group is a
+ * hard failure, not a printed note. That is the shape of the defect this rule
+ * closes: a family row nobody can expand, dropped in silence, leaves attributes
+ * the standard marks `X` in the file with the report saying nothing. Any other
+ * unparseable tag cell is a parser bug and throws too.
  */
 function parseNemaAnnexE(xml: string): NemaTable {
   const table = extractTable(xml, ANNEX_E_TABLE);
@@ -546,8 +583,10 @@ function parseNemaAnnexE(xml: string): NemaTable {
   }
 
   const entries: NormalizedEntry[] = [];
-  const maskedTags: string[] = [];
+  const repeating: RepeatingEntry[] = [];
+  const privateFamilyRows: string[] = [];
   const seen = new Set<string>();
+  const seenPatterns = new Set<string>();
   let dateOptionDivergence = 0;
 
   for (const row of rows) {
@@ -575,25 +614,8 @@ function parseNemaAnnexE(xml: string): NemaTable {
       fail("part15.xml: " + where + " attribute name carries a banned em dash: " + name);
     }
 
-    const concrete = /^\(([0-9A-Fa-f]{4}),([0-9A-Fa-f]{4})\)$/.exec(tagCell);
-    if (!concrete) {
-      // A family row, or a parser bug. Only the two shapes PS3.15 actually uses
-      // are tolerated; anything else means the tag column moved and the fix is
-      // the parser, not a wider regex.
-      const masked =
-        /^\([0-9A-Fa-fxX]{4},[0-9A-Fa-fxX]{4}\)$/.test(tagCell) ||
-        /^\(gggg,eeee\) where gggg is odd$/.test(tagCell);
-      if (!masked) {
-        fail("part15.xml: " + where + " has an unparseable tag cell " + JSON.stringify(tagCell));
-      }
-      maskedTags.push(tagCell + " [" + name + "]");
-      continue;
-    }
-
-    const tag = ((concrete[1] ?? "") + (concrete[2] ?? "")).toUpperCase();
-    if (seen.has(tag)) fail("part15.xml: duplicate tag " + tagCell + " in " + ANNEX_E_TABLE);
-    seen.add(tag);
-
+    // Every row's action columns are read the same way, family or not. A family
+    // row that skipped this would be a row whose codes nobody validated.
     const basicProfile = parseActionCell(cells[4] ?? "", where + " Basic Prof.");
     if (basicProfile === undefined) {
       fail("part15.xml: " + where + " has an empty Basic Prof. cell");
@@ -615,6 +637,55 @@ function parseNemaAnnexE(xml: string): NemaTable {
     const fullDates = parseActionCell(cells[10] ?? "", where + " Rtn. Long. Full Dates");
     if (modifiedDates !== fullDates) dateOptionDivergence += 1;
 
+    const concrete = /^\(([0-9A-Fa-f]{4}),([0-9A-Fa-f]{4})\)$/.exec(tagCell);
+    if (!concrete) {
+      // A family row, or a parser bug. The private row is recorded and not
+      // emitted; a repeating-group row is emitted as a pattern rule; anything
+      // else is refused.
+      if (PRIVATE_FAMILY_ROW.test(tagCell)) {
+        privateFamilyRows.push(tagCell + " [" + name + "]");
+        continue;
+      }
+      const masked = REPEATING_FAMILY_ROW.exec(tagCell);
+      if (!masked) {
+        fail("part15.xml: " + where + " has an unparseable tag cell " + JSON.stringify(tagCell));
+      }
+      const prefix = (masked[1] ?? "").toUpperCase();
+      if (REPEATING_GROUP_RANGES[prefix] === undefined) {
+        fail(
+          "part15.xml: " +
+            where +
+            " is a masked-group row on prefix " +
+            prefix +
+            "xx, which PS3.5 section 7.6 does not define as a repeating group " +
+            "(it defines " +
+            REPEATING_GROUP_PREFIXES.join("xx, ") +
+            "xx). There is no bound on which concrete groups the mask covers, so " +
+            "expanding it would remove attributes the standard never marked and " +
+            "dropping it would silently keep attributes the standard marks for " +
+            "removal. Add the prefix and its PS3.5 bound to " +
+            "src/dictionary/repeating-groups.ts rather than relaxing this check.",
+        );
+      }
+      const pattern = prefix + "xx" + (masked[2] ?? "").toUpperCase().replace(/X{4}/, "xxxx");
+      if (seenPatterns.has(pattern)) {
+        fail("part15.xml: duplicate family row " + tagCell + " in " + ANNEX_E_TABLE);
+      }
+      seenPatterns.add(pattern);
+      repeating.push({
+        pattern,
+        printed: tagCell,
+        keyword: name,
+        basicProfile,
+        optionSet: sortPairs(optionPairs),
+      });
+      continue;
+    }
+
+    const tag = ((concrete[1] ?? "") + (concrete[2] ?? "")).toUpperCase();
+    if (seen.has(tag)) fail("part15.xml: duplicate tag " + tagCell + " in " + ANNEX_E_TABLE);
+    seen.add(tag);
+
     entries.push({ tag, keyword: name, basicProfile, optionSet: sortPairs(optionPairs) });
   }
 
@@ -628,7 +699,8 @@ function parseNemaAnnexE(xml: string): NemaTable {
     );
   }
 
-  return { entries, maskedTags, dateOptionDivergence };
+  repeating.sort((a, b) => (a.pattern < b.pattern ? -1 : a.pattern > b.pattern ? 1 : 0));
+  return { entries, repeating, privateFamilyRows, dateOptionDivergence };
 }
 
 // ----------------------------------------------------------------------------
@@ -730,7 +802,20 @@ interface Provenance {
   readonly nemaSha: string;
 }
 
-function emit(entries: ReadonlyArray<NormalizedEntry>, p: Provenance): string {
+function renderOptionSetLiteral(pairs: ReadonlyArray<readonly [string, string]>): string {
+  const rendered = pairs.map(
+    ([k, v]) => '"' + escapeJsString(k) + '": "' + escapeJsString(v) + '"',
+  );
+  return rendered.length === 0
+    ? "Object.freeze({})"
+    : "Object.freeze({ " + rendered.join(", ") + " })";
+}
+
+function emit(
+  entries: ReadonlyArray<NormalizedEntry>,
+  repeating: ReadonlyArray<RepeatingEntry>,
+  p: Provenance,
+): string {
   const lines: string[] = [];
   lines.push("/* eslint-disable */");
   lines.push("// AUTO-GENERATED by scripts/generate-annex-e.ts -- DO NOT EDIT BY HAND.");
@@ -750,17 +835,10 @@ function emit(entries: ReadonlyArray<NormalizedEntry>, p: Provenance): string {
   lines.push("// CleanPixelData, E.3.2 CleanRecognizableVisual) are not represented per-attribute");
   lines.push("// here; they are enforced at the pixel-decode layer.");
   lines.push("");
-  lines.push('import type { AnnexEAction } from "../annex-e.js";');
+  lines.push('import type { AnnexEAction, AnnexERepeatingRule } from "../annex-e.js";');
   lines.push("");
   lines.push("export const ANNEX_E: Readonly<Record<string, AnnexEAction>> = Object.freeze({");
   for (const e of entries) {
-    const optionSetEntries = e.optionSet.map(
-      ([k, v]) => '"' + escapeJsString(k) + '": "' + escapeJsString(v) + '"',
-    );
-    const optionSetLiteral =
-      optionSetEntries.length === 0
-        ? "Object.freeze({})"
-        : "Object.freeze({ " + optionSetEntries.join(", ") + " })";
     lines.push(
       '  "' +
         e.tag +
@@ -771,11 +849,30 @@ function emit(entries: ReadonlyArray<NormalizedEntry>, p: Provenance): string {
         '", basicProfile: "' +
         escapeJsString(e.basicProfile) +
         '", optionSet: ' +
-        optionSetLiteral +
+        renderOptionSetLiteral(e.optionSet) +
         " }),",
     );
   }
   lines.push("});");
+  lines.push("");
+  lines.push("// Table E.1-1 rows whose tag cell is a PS3.5 section 7.6 repeating-group mask.");
+  lines.push("// An exact-tag map cannot key them; `annexE()` falls back to these patterns, and");
+  lines.push("// the concrete groups each mask covers are bounded by ../repeating-groups.js.");
+  lines.push("export const ANNEX_E_REPEATING: readonly AnnexERepeatingRule[] = Object.freeze([");
+  for (const r of repeating) {
+    lines.push(
+      '  Object.freeze({ pattern: "' +
+        escapeJsString(r.pattern) +
+        '", keyword: "' +
+        escapeJsString(r.keyword) +
+        '", basicProfile: "' +
+        escapeJsString(r.basicProfile) +
+        '", optionSet: ' +
+        renderOptionSetLiteral(r.optionSet) +
+        " }),",
+    );
+  }
+  lines.push("]);");
   lines.push("");
   return lines.join("\n");
 }
@@ -840,13 +937,61 @@ function main(): void {
   if (stats.mirrorOnly.length > 0) {
     console.log("[gen:annex-e]   mirror-only: " + stats.mirrorOnly.join(", "));
   }
-  // Both are assumptions this generator makes on purpose. Printed every run so
-  // they stay observable rather than assumed.
+  // Every assumption this generator makes on purpose, printed each run so it
+  // stays observable rather than asserted in a comment.
+  let expanded = 0;
+  for (const r of nema.repeating) {
+    expanded += expandRepeatingGroups(r.pattern.slice(0, 2)).length;
+  }
   console.log(
-    "[gen:annex-e] family tag rows not representable as exact tags: " +
-      String(nema.maskedTags.length),
+    "[gen:annex-e] repeating-group family rules: " +
+      String(nema.repeating.length) +
+      ", covering " +
+      String(expanded) +
+      " concrete group numbers (PS3.5 section 7.6)",
   );
-  for (const t of nema.maskedTags) {
+  for (const r of nema.repeating) {
+    const groups = expandRepeatingGroups(r.pattern.slice(0, 2));
+    const first = groups[0];
+    const last = groups[groups.length - 1];
+    console.log(
+      "[gen:annex-e]   repeating rule " +
+        r.printed +
+        " [" +
+        r.keyword +
+        "] basic=" +
+        r.basicProfile +
+        " " +
+        renderOptionSet(r.optionSet) +
+        " over groups " +
+        (first === undefined ? "?" : first.toString(16).toUpperCase()) +
+        "-" +
+        (last === undefined ? "?" : last.toString(16).toUpperCase()) +
+        " even (" +
+        String(groups.length) +
+        ")",
+    );
+  }
+  // A concrete row inside a mask's reach is not an error - the exact row is the
+  // more specific statement and `annexE()` prefers it - but it is a semantic
+  // change worth seeing in the run that introduces it. PS3.15 2026c has none.
+  const shadowed = entries.filter((e) =>
+    nema.repeating.some(
+      (r) =>
+        r.pattern.slice(0, 2) === e.tag.slice(0, 2) &&
+        (r.pattern.slice(4) === "xxxx" || r.pattern.slice(4) === e.tag.slice(4)),
+    ),
+  );
+  console.log(
+    "[gen:annex-e] exact rows shadowing a repeating-group rule (exact wins): " +
+      String(shadowed.length) +
+      (shadowed.length === 0 ? "" : " - " + shadowed.map((e) => e.tag).join(", ")),
+  );
+  console.log(
+    "[gen:annex-e] private-attribute family rows (removed by their own path, not emitted): " +
+      String(nema.privateFamilyRows.length),
+  );
+  for (const t of nema.privateFamilyRows) {
     console.log("[gen:annex-e]   family row " + t);
   }
   console.log(
@@ -860,7 +1005,7 @@ function main(): void {
   const outPath = join(outDir, "annex-e.ts");
   writeFileSync(
     outPath,
-    emit(entries, {
+    emit(entries, nema.repeating, {
       innoliticsSha: inno.full,
       innoliticsInputSha: sha256(innoBuf),
       nemaEdition: edition,
@@ -869,7 +1014,14 @@ function main(): void {
     "utf8",
   );
 
-  console.log("[gen:annex-e] done - wrote " + String(entries.length) + " entries to " + outPath);
+  console.log(
+    "[gen:annex-e] done - wrote " +
+      String(entries.length) +
+      " entries + " +
+      String(nema.repeating.length) +
+      " repeating-group rules to " +
+      outPath,
+  );
 }
 
 main();

@@ -10,7 +10,12 @@
 
 import { describe, expect, it } from "vitest";
 import { annexE } from "../../src/dictionary/annex-e.js";
-import { ANNEX_E } from "../../src/dictionary/generated/annex-e.js";
+import { ANNEX_E, ANNEX_E_REPEATING } from "../../src/dictionary/generated/annex-e.js";
+import {
+  REPEATING_GROUP_RANGES,
+  expandRepeatingGroups,
+  matchesRepeatingPattern,
+} from "../../src/dictionary/repeating-groups.js";
 
 describe("annexE (PS3.15 Annex E lookup)", () => {
   it("resolves Patient's Name (00100010) to a Basic-Profile Z action", () => {
@@ -187,6 +192,95 @@ describe("PS3.15 normative overlay (DICOM-ANNEX-E-DEID-LAG)", () => {
       for (const [option, code] of Object.entries(entry.optionSet)) {
         expect(codes.has(code as string), `${entry.tag} ${option} ${String(code)}`).toBe(true);
       }
+    }
+  });
+});
+
+describe("annexE (repeating-group family rows)", () => {
+  it("carries the three family rows Table E.1-1 states as a mask", () => {
+    expect(ANNEX_E_REPEATING.map((r) => r.pattern)).toEqual(["50xxxxxx", "60xx3000", "60xx4000"]);
+    for (const rule of ANNEX_E_REPEATING) {
+      expect(rule.basicProfile, rule.pattern).toBe("X");
+      expect(rule.optionSet.CleanGraphics, rule.pattern).toBe("C");
+    }
+  });
+
+  it("resolves Overlay Comments in every overlay plane, not just the first", () => {
+    for (const group of expandRepeatingGroups("60")) {
+      const tag = group.toString(16).toUpperCase().padStart(4, "0") + "4000";
+      const a = annexE(tag);
+      expect(a?.basicProfile, tag).toBe("X");
+      expect(a?.keyword, tag).toBe("Overlay Comments");
+      // The action is carried on the CONCRETE tag, so an audit trail names the
+      // element that was in the file rather than the mask that matched it.
+      expect(a?.tag, tag).toBe(tag);
+      expect(a?.repeatingGroup, tag).toBe("60xx4000");
+    }
+  });
+
+  it("resolves every element of a curve group under the fully masked row", () => {
+    for (const element of ["0005", "0010", "3000", "2500"]) {
+      const a = annexE(`501E${element}`);
+      expect(a?.basicProfile, element).toBe("X");
+      expect(a?.keyword, element).toBe("Curve Data");
+      expect(a?.repeatingGroup, element).toBe("50xxxxxx");
+    }
+  });
+
+  it("does not reach groups PS3.5 excludes from the mask", () => {
+    // Over-matching here removes attributes PS3.15 never marked. 6020 is an even
+    // group above the bound; 6001 is odd, hence private, hence someone else's.
+    for (const tag of ["60204000", "60FE4000", "60014000", "50204000"]) {
+      expect(annexE(tag), tag).toBeUndefined();
+    }
+  });
+
+  it("leaves non-family overlay attributes to the exact table", () => {
+    // (6000,0010) Overlay Rows is not a Table E.1-1 row at all: the standard
+    // marks the comments and the data, not the plane geometry.
+    expect(annexE("60000010")).toBeUndefined();
+    expect(annexE("60000022")).toBeUndefined();
+  });
+
+  it("marks exact-table hits as such, so the two sources stay distinguishable", () => {
+    expect(annexE("00100010")?.repeatingGroup).toBeUndefined();
+  });
+
+  it("publishes no exact row inside a mask's reach today", () => {
+    // Recorded rather than assumed. It is also the reason the precedence rule
+    // cannot be tested here at all: with the overlap set empty, inverting the
+    // resolution order changes no answer in this table. The discriminating test
+    // constructs an overlap, and lives in `annex-e-precedence.test.ts`.
+    const shadowed = Object.keys(ANNEX_E).filter((tag) =>
+      ANNEX_E_REPEATING.some((r) => r.pattern.slice(0, 2) === tag.slice(0, 2)),
+    );
+    expect(shadowed).toEqual([]);
+  });
+
+  it("returns the generated row itself for every tag the table carries", () => {
+    // A mask hit is a freshly constructed object carrying `repeatingGroup`; an
+    // exact hit is the frozen generated entry by identity. This says the 652
+    // published rows all come back untouched from the table. It does NOT prove
+    // the ordering - see the note above.
+    const tags = Object.keys(ANNEX_E);
+    expect(tags.length).toBeGreaterThan(600);
+    for (const tag of tags) {
+      const resolved = annexE(tag);
+      expect(resolved, tag).toBe(ANNEX_E[tag]);
+      expect(resolved?.repeatingGroup, tag).toBeUndefined();
+    }
+  });
+
+  it("answers from a mask only where the exact table is silent", () => {
+    const masked = "60004000";
+    expect(matchesRepeatingPattern("60xx4000", masked)).toBe(true);
+    expect(Object.keys(ANNEX_E)).not.toContain(masked);
+    expect(annexE(masked)?.repeatingGroup).toBe("60xx4000");
+  });
+
+  it("only emits rules on prefixes PS3.5 section 7.6 bounds", () => {
+    for (const rule of ANNEX_E_REPEATING) {
+      expect(REPEATING_GROUP_RANGES[rule.pattern.slice(0, 2)], rule.pattern).toBeDefined();
     }
   });
 });

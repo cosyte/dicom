@@ -617,3 +617,152 @@ describe("deidentify - PS3.15 2026c patient attributes (DICOM-ANNEX-E-DEID-LAG)"
     ).toBe(false);
   });
 });
+
+describe("deidentify - repeating-group family rows (PS3.15 Table E.1-1 masks)", () => {
+  /**
+   * Three Table E.1-1 rows name a repeating group rather than one tag, and an
+   * exact-tag matcher cannot key any of them. Overlay Comments in particular is a
+   * classic carrier for text a technologist typed onto the study, so the failure
+   * mode is a clean report on a file that still holds free text.
+   *
+   * Every string below is invented for this test. Overlay comments are exactly
+   * the field where a realistic identifier would be tempting; there is none here.
+   */
+  const OVERLAY_TEXT = "SYNTHETIC OVERLAY NOTE";
+  const CURVE_LABEL = "SYNTHETIC CURVE LABEL ";
+
+  it("removes and reports Overlay Comments in every plane the standard defines", () => {
+    // 6000 (first plane), 600A (a middle one) and 601E (the last) - the bound
+    // matters at both ends, so it is asserted at both ends.
+    const planes = ["6000", "600A", "601E"] as const;
+    const { dataset, report } = deidentify(
+      buildPhiDataset(
+        planes.map((g) => ({
+          tag: `${g}4000`,
+          vr: "LT" as const,
+          value: pad(`${OVERLAY_TEXT} ${g}`),
+        })),
+      ),
+    );
+    for (const g of planes) {
+      const tag = `${g}4000`;
+      expect(dataset.has(tag), tag).toBe(false);
+      const audited = report.attributes.find((a) => a.tag === tag);
+      expect(audited?.applied, tag).toBe("removed");
+      expect(audited?.action, tag).toBe("X");
+      expect(audited?.keyword, tag).toBe("Overlay Comments");
+      // The report says the match came from a mask, not from a single-tag row.
+      expect(audited?.repeatingGroup, tag).toBe("60xx4000");
+    }
+    // ...and the text is gone from the serialized bytes, not just the object model.
+    expect(serializeDicom(dataset).includes(Buffer.from(OVERLAY_TEXT, "latin1"))).toBe(false);
+  });
+
+  it("removes Overlay Data and Curve Data under the same rule", () => {
+    const { dataset, report } = deidentify(
+      buildPhiDataset([
+        { tag: "60003000", vr: "OW", value: Buffer.from([0x01, 0x02, 0x03, 0x04]) },
+        { tag: "50000022", vr: "LO", value: pad(CURVE_LABEL) },
+        { tag: "501E3000", vr: "OW", value: Buffer.from([0x05, 0x06, 0x07, 0x08]) },
+      ]),
+    );
+    for (const [tag, keyword, pattern] of [
+      ["60003000", "Overlay Data", "60xx3000"],
+      ["50000022", "Curve Data", "50xxxxxx"],
+      ["501E3000", "Curve Data", "50xxxxxx"],
+    ] as const) {
+      expect(dataset.has(tag), tag).toBe(false);
+      const audited = report.attributes.find((a) => a.tag === tag);
+      expect(audited?.applied, tag).toBe("removed");
+      expect(audited?.keyword, tag).toBe(keyword);
+      expect(audited?.repeatingGroup, tag).toBe(pattern);
+    }
+    expect(serializeDicom(dataset).includes(Buffer.from(CURVE_LABEL.trim(), "latin1"))).toBe(false);
+  });
+
+  it("does not remove even groups above the PS3.5 bound", () => {
+    // The opposite failure, and the reason `xx` is not read as a hex wildcard:
+    // over-matching is silent data loss on a call the caller believes is
+    // conservative. (6020,4000) is not an attribute PS3.15 marks.
+    const { dataset, report } = deidentify(
+      buildPhiDataset([{ tag: "60204000", vr: "LT", value: pad("NOT AN OVERLAY PLANE") }]),
+    );
+    expect(dataset.has("60204000")).toBe(true);
+    expect(report.attributes.some((a) => a.tag === "60204000")).toBe(false);
+  });
+
+  it("leaves overlay plane geometry alone - only the marked rows are acted on", () => {
+    // (6000,0010) Overlay Rows carries no identity and is not in Table E.1-1.
+    const { dataset } = deidentify(
+      buildPhiDataset([{ tag: "60000010", vr: "US", value: Buffer.from([0x00, 0x02]) }]),
+    );
+    expect(dataset.has("60000010")).toBe(true);
+  });
+
+  it("still routes odd overlay-range groups through the private path", () => {
+    // PS3.5: private groups 6001-601F carry no repeating semantics. They are
+    // private attributes, removed as such, and reported as such.
+    const { dataset, report } = deidentify(
+      buildPhiDataset([
+        { tag: "60010010", vr: "LO", value: pad("SYNTH CREATOR") },
+        { tag: "60011000", vr: "LT", value: pad("SYNTH PRIVATE NOTE") },
+      ]),
+    );
+    expect(dataset.has("60011000")).toBe(false);
+    expect(report.removedPrivateTags).toContain("60011000");
+    expect(report.attributes.some((a) => a.tag === "60011000")).toBe(false);
+  });
+
+  it("honours the CleanGraphics column on the family rows", () => {
+    // Table E.1-1 gives all three masks `C` under Clean Graph. Opt.; this layer
+    // cleans by conservative blanking, so the element stays and the text goes.
+    const { dataset, report } = deidentify(
+      buildPhiDataset([{ tag: "60004000", vr: "LT", value: pad(OVERLAY_TEXT) }]),
+      { retain: ["CleanGraphics"] },
+    );
+    expect(dataset.has("60004000")).toBe(true);
+    expect(dataset.get("60004000")?.rawBytes.length).toBe(0);
+    const audited = report.attributes.find((a) => a.tag === "60004000");
+    expect(audited?.action).toBe("C");
+    expect(audited?.applied).toBe("cleaned");
+    expect(serializeDicom(dataset).includes(Buffer.from(OVERLAY_TEXT, "latin1"))).toBe(false);
+  });
+
+  it("blanks Overlay Data under CleanGraphics, which this layer cannot truly clean", () => {
+    // (60xx,3000) is Type 1 in the PS3.3 C.9.2 Overlay Plane Module, so a `C`
+    // here leaves a zero-length Type-1 attribute. That is the package's standing
+    // "`C` is a conservative blank" limitation, not a bitmap edit: this is a
+    // metadata layer. The Basic Profile's own action for the same row is `X`,
+    // which leaves the identical incomplete Overlay Plane module, so the dangling
+    // module is the standard's outcome rather than this package's invention.
+    // Pinned so a future change to `C` handling has to face the consequence.
+    const { dataset, report } = deidentify(
+      buildPhiDataset([
+        { tag: "60000010", vr: "US", value: Buffer.from([0x00, 0x02]) },
+        { tag: "60003000", vr: "OW", value: Buffer.from([0x11, 0x22, 0x33, 0x44]) },
+      ]),
+      { retain: ["CleanGraphics"] },
+    );
+    expect(dataset.has("60003000")).toBe(true);
+    expect(dataset.get("60003000")?.rawBytes.length).toBe(0);
+    expect(report.attributes.find((a) => a.tag === "60003000")?.applied).toBe("cleaned");
+    expect(serializeDicom(dataset).includes(Buffer.from([0x11, 0x22, 0x33, 0x44]))).toBe(false);
+  });
+
+  it("reaches overlay comments nested inside a kept sequence", () => {
+    const { dataset, report } = deidentify(
+      buildPhiDataset([
+        {
+          tag: "00081115",
+          items: [{ elements: [{ tag: "60004000", vr: "LT", value: pad(OVERLAY_TEXT) }] }],
+        },
+      ]),
+    );
+    const audited = report.attributes.find(
+      (a) => a.tag === "60004000" && a.contextPath !== undefined,
+    );
+    expect(audited?.applied).toBe("removed");
+    expect(audited?.repeatingGroup).toBe("60xx4000");
+    expect(serializeDicom(dataset).includes(Buffer.from(OVERLAY_TEXT, "latin1"))).toBe(false);
+  });
+});

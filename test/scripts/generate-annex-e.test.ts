@@ -23,13 +23,15 @@
 
 import { beforeAll, describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const REPO_ROOT = process.cwd();
 const GENERATOR = join(REPO_ROOT, "scripts", "generate-annex-e.ts");
 const ARTIFACT = join(REPO_ROOT, "src", "dictionary", "generated", "annex-e.ts");
-const NEMA_SHA_FILE = join(REPO_ROOT, "vendor", "nema", "part15", "SHA.txt");
+const NEMA_ROOT = join(REPO_ROOT, "vendor", "nema", "part15");
+const NEMA_SHA_FILE = join(NEMA_ROOT, "SHA.txt");
 
 /** Spawning tsx and parsing 3.5 MB of DocBook does not fit the suite default. */
 const GENERATOR_TIMEOUT_MS = 120_000;
@@ -38,6 +40,50 @@ function runGenerator(): { code: number; stdout: string; stderr: string } {
   const tsxBin = join(REPO_ROOT, "node_modules", ".bin", "tsx");
   const r = spawnSync(tsxBin, [GENERATOR], { cwd: REPO_ROOT, encoding: "utf8", shell: false });
   return { code: r.status ?? -1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
+}
+
+/**
+ * Run the generator against a **mutated** DocBook, then put everything back.
+ *
+ * A rule that has only ever been shown to work on the input it was written for
+ * has not been shown to be a rule. These tests construct the input that would
+ * defeat it and assert the run goes red, which is the same proof the header-label
+ * check uses: the pin is re-hashed, so the mutant is committed to its own
+ * SHA-named directory with `SHA.txt` pointed at it, and both are removed after.
+ * The committed artifact is restored verbatim regardless of outcome.
+ */
+function withMutatedDocBook<T>(
+  mutate: (xml: string) => string,
+  fn: (r: { code: number; stdout: string; stderr: string }) => T,
+): T {
+  const originalSha = readFileSync(NEMA_SHA_FILE, "utf8");
+  const originalArtifact = readFileSync(ARTIFACT, "utf8");
+  const pinned = originalSha.trim().split(/\s+/)[0] ?? "";
+  const xml = readFileSync(join(NEMA_ROOT, pinned, "part15.xml"), "utf8");
+
+  const mutated = mutate(xml);
+  expect(mutated, "the mutation must actually change the document").not.toBe(xml);
+  const mutantSha = createHash("sha256").update(Buffer.from(mutated, "utf8")).digest("hex");
+  const mutantDir = join(NEMA_ROOT, mutantSha);
+  try {
+    mkdirSync(mutantDir, { recursive: true });
+    writeFileSync(join(mutantDir, "part15.xml"), mutated, "utf8");
+    writeFileSync(NEMA_SHA_FILE, `${mutantSha}\n`, "utf8");
+    return fn(runGenerator());
+  } finally {
+    writeFileSync(NEMA_SHA_FILE, originalSha, "utf8");
+    rmSync(mutantDir, { recursive: true, force: true });
+    writeFileSync(ARTIFACT, originalArtifact, "utf8");
+  }
+}
+
+/** The `(60xx,4000)` Overlay Comments row, verbatim, from a Table E.1-1 DocBook. */
+function overlayCommentsRow(xml: string): string {
+  const at = xml.indexOf("Overlay Comments");
+  expect(at, "part15.xml must carry an Overlay Comments row").toBeGreaterThan(-1);
+  const open = xml.lastIndexOf("<tr", at);
+  const close = xml.indexOf("</tr>", at) + "</tr>".length;
+  return xml.slice(open, close);
 }
 
 describe("generate-annex-e", () => {
@@ -74,17 +120,88 @@ describe("generate-annex-e", () => {
     );
   });
 
-  it("prints every family row it cannot key, rather than dropping them silently", () => {
-    expect(happy.stdout).toContain("family tag rows not representable as exact tags: 4");
-    for (const row of [
-      "(50xx,xxxx)",
-      "(60xx,3000)",
-      "(60xx,4000)",
-      "(gggg,eeee) where gggg is odd",
-    ]) {
-      expect(happy.stdout, row).toContain(row);
+  it("emits every repeating-group family row as a rule, and prints what it covers", () => {
+    expect(happy.stdout).toContain(
+      "repeating-group family rules: 3, covering 48 concrete group numbers (PS3.5 section 7.6)",
+    );
+    for (const row of ["(50xx,xxxx)", "(60xx,3000)", "(60xx,4000)"]) {
+      expect(happy.stdout, row).toContain(`repeating rule ${row}`);
     }
+    // The PS3.5 bound, printed rather than assumed: sixteen even groups per mask.
+    expect(happy.stdout).toContain("over groups 5000-501E even (16)");
+    expect(happy.stdout).toContain("over groups 6000-601E even (16)");
   });
+
+  it("prints the private-attribute family row it deliberately does not emit", () => {
+    expect(happy.stdout).toContain(
+      "private-attribute family rows (removed by their own path, not emitted): 1",
+    );
+    expect(happy.stdout).toContain("(gggg,eeee) where gggg is odd");
+  });
+
+  it("prints whether any exact row shadows a repeating-group rule", () => {
+    expect(happy.stdout).toContain("exact rows shadowing a repeating-group rule (exact wins): 0");
+  });
+
+  it(
+    "refuses a masked row on a group prefix PS3.5 does not define as a repeating group",
+    () => {
+      // The defect this rule closes, one edition ahead: a family row the matcher
+      // cannot expand. Before this check the generator printed it and carried on
+      // (exit 0), leaving attributes the standard marks X in the file with the
+      // report saying nothing. `(7Fxx,0010)` is a real PS3.6 registry mask with
+      // no PS3.5 section 7.6 repeating-group semantics behind it, so there is no
+      // bound on which concrete groups it covers and guessing one is not safe.
+      withMutatedDocBook(
+        (xml) => {
+          const row = overlayCommentsRow(xml);
+          const injected = row
+            .replace("(60xx,4000)", "(7Fxx,0010)")
+            .replace("Overlay Comments", "Variable Pixel Data");
+          return xml.replace(row, row + injected);
+        },
+        (r) => {
+          expect(r.code).not.toBe(0);
+          expect(r.stderr).toContain("7Fxx");
+          expect(r.stderr).toContain("PS3.5 section 7.6 does not define as a repeating group");
+        },
+      );
+    },
+    GENERATOR_TIMEOUT_MS,
+  );
+
+  it(
+    "reads each repeating rule's action code from the document rather than assuming X",
+    () => {
+      // The counterpart failure: a rule that matches the right tags but carries a
+      // hard-coded action would look identical today, when all three family rows
+      // happen to be X. Move one and the emitted rule must move with it.
+      withMutatedDocBook(
+        (xml) => {
+          const row = overlayCommentsRow(xml);
+          const at = row.indexOf(">X</para>");
+          expect(at, "the Overlay Comments Basic Prof. cell must read X").toBeGreaterThan(-1);
+          return xml.replace(
+            row,
+            row.slice(0, at) + ">K</para>" + row.slice(at + ">X</para>".length),
+          );
+        },
+        (r) => {
+          expect(r.stderr, r.stderr).toBe("");
+          expect(r.code).toBe(0);
+          const emitted = readFileSync(ARTIFACT, "utf8");
+          expect(emitted).toContain(
+            '{ pattern: "60xx4000", keyword: "Overlay Comments", basicProfile: "K"',
+          );
+        },
+      );
+      // ...and the committed artifact is back to the pinned document's answer.
+      expect(readFileSync(ARTIFACT, "utf8")).toContain(
+        '{ pattern: "60xx4000", keyword: "Overlay Comments", basicProfile: "X"',
+      );
+    },
+    GENERATOR_TIMEOUT_MS,
+  );
 
   it("prints how far the two E.3.6 date columns diverge under the collapse", () => {
     expect(happy.stdout).toMatch(

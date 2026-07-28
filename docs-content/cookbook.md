@@ -104,9 +104,18 @@ current edition's patient attributes, including the `(0010,00xx)` preferred-name
 the `(0010,004x)` gender-identity and sex-parameters attributes, and `EthnicGroupCodeSequence` /
 `EthnicGroups`, are all removed because the table is the edition's, not a snapshot of it. Four rows
 of Table E.1-1 name a family rather than a single tag (`(50xx,xxxx)` Curve Data, `(60xx,3000)` and
-`(60xx,4000)` Overlay Data and Comments, and the odd-group private-attribute row): private
-attributes are removed through their own path, and the three repeating-group rows are a stated gap
-rather than a silent one.
+`(60xx,4000)` Overlay Data and Comments, and the odd-group private-attribute row). All four are
+acted on: private attributes are removed through their own path, and the three repeating-group rows
+are matched by mask across the sixteen even groups PS3.5 bounds them to, removed, and reported with
+the mask that matched:
+
+```ts
+const { report } = deidentify(parseDicom(buf));
+report.attributes
+  .filter((a) => a.repeatingGroup !== undefined)
+  .forEach((a) => console.log(a.tag, a.keyword, a.repeatingGroup));
+// 60004000 Overlay Comments 60xx4000
+```
 
 ---
 

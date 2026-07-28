@@ -13,7 +13,7 @@
 // CleanPixelData, E.3.2 CleanRecognizableVisual) are not represented per-attribute
 // here; they are enforced at the pixel-decode layer.
 
-import type { AnnexEAction } from "../annex-e.js";
+import type { AnnexEAction, AnnexERepeatingRule } from "../annex-e.js";
 
 export const ANNEX_E: Readonly<Record<string, AnnexEAction>> = Object.freeze({
   "00001000": Object.freeze({ tag: "00001000", keyword: "Affected SOP Instance UID", basicProfile: "X", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
@@ -669,3 +669,12 @@ export const ANNEX_E: Readonly<Record<string, AnnexEAction>> = Object.freeze({
   "FFFAFFFA": Object.freeze({ tag: "FFFAFFFA", keyword: "Digital Signatures Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
   "FFFCFFFC": Object.freeze({ tag: "FFFCFFFC", keyword: "Data Set Trailing Padding", basicProfile: "X", optionSet: Object.freeze({}) }),
 });
+
+// Table E.1-1 rows whose tag cell is a PS3.5 section 7.6 repeating-group mask.
+// An exact-tag map cannot key them; `annexE()` falls back to these patterns, and
+// the concrete groups each mask covers are bounded by ../repeating-groups.js.
+export const ANNEX_E_REPEATING: readonly AnnexERepeatingRule[] = Object.freeze([
+  Object.freeze({ pattern: "50xxxxxx", keyword: "Curve Data", basicProfile: "X", optionSet: Object.freeze({ "CleanGraphics": "C" }) }),
+  Object.freeze({ pattern: "60xx3000", keyword: "Overlay Data", basicProfile: "X", optionSet: Object.freeze({ "CleanGraphics": "C" }) }),
+  Object.freeze({ pattern: "60xx4000", keyword: "Overlay Comments", basicProfile: "X", optionSet: Object.freeze({ "CleanGraphics": "C" }) }),
+]);

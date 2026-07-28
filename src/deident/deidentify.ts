@@ -13,6 +13,11 @@
  *   (see {@link resolveAction}), and applies it: `X` remove, `Z` zero-length, `D`
  *   VR-consistent dummy (falling back to `Z` where no safe dummy exists), `C`
  *   conservative blank, `U` deterministic consistent-UID remap, `K` keep.
+ * - Resolves the three Table E.1-1 rows the standard states as a repeating-group
+ *   mask (`(50xx,xxxx)` Curve Data, `(60xx,3000)` Overlay Data, `(60xx,4000)`
+ *   Overlay Comments) across the groups PS3.5 §7.6 bounds them to, on an
+ *   exact-tag miss. A match is removed *and* reported, with
+ *   `DeidentifiedAttribute.repeatingGroup` naming the mask.
  * - Recurses into kept sequences and **re-encodes** them so nested PHI is removed
  *   in the *serialized* bytes too - not just the object model (the Phase 5 writer
  *   blits `SQ` spans verbatim, so a rebuilt `items` array alone would not survive
@@ -340,7 +345,7 @@ function processElements(
       }
     }
 
-    out.attributes.push(auditAttribute(el.tag, action.keyword, resolved, applied, contextPath));
+    out.attributes.push(auditAttribute(el.tag, action, resolved, applied, contextPath));
   }
 
   return out;
@@ -393,18 +398,26 @@ function applySequenceAction(
       applied = "kept";
       break;
   }
-  out.attributes.push(auditAttribute(el.tag, action.keyword, resolved, applied, contextPath));
+  out.attributes.push(auditAttribute(el.tag, action, resolved, applied, contextPath));
 }
 
 function auditAttribute(
   tag: Tag,
-  keyword: string,
+  source: AnnexEAction,
   action: DeidentifiedAttribute["action"],
   applied: AppliedAction,
   contextPath: readonly string[],
 ): DeidentifiedAttribute {
-  const base = { tag, keyword, action, applied };
-  return contextPath.length > 0 ? { ...base, contextPath: [...contextPath] } : base;
+  return {
+    tag,
+    keyword: source.keyword,
+    action,
+    applied,
+    ...(contextPath.length > 0 ? { contextPath: [...contextPath] } : {}),
+    // Say when a removal came from a repeating-group mask rather than a
+    // single-tag row, so an audit can tell the two apart without re-deriving it.
+    ...(source.repeatingGroup !== undefined ? { repeatingGroup: source.repeatingGroup } : {}),
+  };
 }
 
 /** Rebuild File Meta, remapping the SOP Instance UID unless `RetainUIDs`. */

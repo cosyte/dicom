@@ -115,6 +115,45 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Fixed
 
+- **`deidentify()` never removed and never reported the repeating-group attributes PS3.15 marks `X`**
+  (`DICOM-REPEATING-GROUP-DEID-GAP`). Table E.1-1 states three of its rows as a group mask rather
+  than a single tag: `(50xx,xxxx)` Curve Data, `(60xx,3000)` Overlay Data and `(60xx,4000)` Overlay
+  Comments, all three marked **X** (remove). The matcher keyed attributes by exact tag, which cannot
+  express a mask, so all three rows were unreachable; `deidentify()` reads "not in the table" as
+  "not listed, keep", so a file carrying `(6000,4000)` free text came back with a **clean report and
+  the text still in it**. Overlay comments are a classic burned-in-identifier carrier, and
+  `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED` gives no coverage here: it keys on `(7FE0,0010)` +
+  `(0028,0301)`, which describe the image, not the overlay planes. This shipped at `0.0.3`, and
+  `deid`'s `/dicom` adapter delegates here, so it had the same hole.
+  The three rows are now generated from the pinned PS3.15 DocBook as pattern rules and consulted on
+  an exact-tag miss. A matched element is **removed and reported**: the report entry carries the
+  concrete tag, the family's attribute name, and a new `DeidentifiedAttribute.repeatingGroup` field
+  naming the mask that matched, so an audit distinguishes a mask hit from a single-tag hit. The
+  `CleanGraphics` column is honoured on these rows exactly as the table states it. **The exact-tag
+  table wins** over a mask that would also cover the tag, as the more specific statement the standard
+  makes about it; 2026c publishes no such overlap and the generator counts and prints it every run.
+  **The mask covers the groups PS3.5 bounds it to, not any four hex digits.** PS3.5 §7.6: repeating
+  groups "shall only be allowed in the even numbered Groups 6000-601E", and PS3.5-2004 §7.6, which
+  the current edition's note delegates to for curves, states "even Groups (5000-501E,eeee)". Sixteen
+  groups per mask, not 256, and the same section says of the odd ones that there is "no implication
+  of repeating semantics". Both bounds are load-bearing in opposite directions: a hex wildcard would
+  remove attributes the standard never marked (data loss on a call asked to be conservative), and an
+  exact tag matched nothing. Odd groups in the overlay range are private and still go through the
+  private-attribute path.
+  **The generator now refuses a masked row on a prefix PS3.5 does not define as a repeating group**,
+  rather than printing it and carrying on, which is what let these three rows go missing. Proven by
+  mutation rather than asserted: against a Table E.1-1 carrying an injected `(7Fxx,0010)` family row
+  the pre-remedy generator exits 0 and drops it, the post-remedy one exits 1 and names the prefix. A
+  second mutation moves the Overlay Comments Basic Profile code `X` -> `K` and asserts the emitted
+  rule moves with it, so the action codes are read from the document rather than assumed. Every run
+  prints the rules emitted, the concrete groups each covers, the private family row it does not
+  emit, and the shadowing count.
+- **`RetainLongitudinalTemporal` now documents which E.3.6 sub-option a caller actually gets.**
+  Behaviour is unchanged: PS3.15 §E.3.6 is two options and this package exposes one name carrying the
+  **full-dates** column, the less protective branch. It is `K` on all **169** rows where
+  modified-dates says `C`. The option's JSDoc and `docs-content/troubleshooting.md` now say so, and
+  say that date shifting is not performed at this layer. Splitting the option is a public-surface
+  change and is deliberately not made here.
 - **`deidentify()` retained 35 patient-identifying attributes and reported nothing**
   (`DICOM-ANNEX-E-DEID-LAG`). The PS3.15 Annex E action table came from a third-party mirror alone,
   pinned at a snapshot whose Table E.1-1 data is 2024b-era. Current PS3.15 publishes 652 concrete
