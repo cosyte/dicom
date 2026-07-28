@@ -58,6 +58,38 @@ committed, so lookups are in-memory and deterministic: no runtime network or fil
 UID (e.g. a transfer syntax) to its human-readable name. Unknown input returns `undefined`. The
 dictionary never throws.
 
+The element registry, 5,309 tags, comes from **NEMA's PS3.6 2026c DocBook**, the normative
+publication of the standard, rather than from a third-party mirror of it. That is what the `name`,
+`keyword`, `vr`, `vm`, and `retired` fields on an entry are: the values PS3.6 prints for that tag, in
+the edition named above. `retired` in particular is worth reading rather than ignoring, in both
+directions. `(0010,2160)` `EthnicGroup` is retired and its replacements `EthnicGroupCodeSequence`
+and `EthnicGroups` are what current instances carry; `(3004,0012)` `DoseValue` is **not** retired,
+whatever an older dictionary may tell you. A retired entry stays resolvable, because files in the
+wild outlive the editions that defined them; you are told what the tag is and that it is no longer
+current.
+
+```ts runnable
+import { Dictionary } from "@cosyte/dicom";
+
+// Retired in PS3.6 2025a, and still resolvable so an older study can be read.
+Dictionary.lookup("00102160")?.keyword; // => "EthnicGroup"
+Dictionary.lookup("00102160")?.retired; // => true
+
+// Its replacements, which current instances carry.
+Dictionary.byKeyword("EthnicGroupCodeSequence")?.tag; // => "00102161"
+Dictionary.byKeyword("EthnicGroups")?.vm; // => "1-n"
+
+// PS3.6 still defines this one. The RET marker belongs to (3004,0010).
+Dictionary.lookup("30040012")?.keyword; // => "DoseValue"
+Dictionary.lookup("30040012")?.retired; // => false
+Dictionary.lookup("30040010")?.retired; // => true
+```
+
+UID names are a separate table with a smaller, curated scope: SOP Classes plus transfer syntaxes and
+the other well-known UIDs, and it carries the short forms toolkits use (`Implicit VR Little Endian`,
+not PS3.6's longer `...: Default Transfer Syntax for DICOM`), with retirement as the `retired`
+boolean rather than a suffix in the name.
+
 ## Immutability
 
 A `Dataset` is immutable at the model boundary: `warnings` is frozen, and the element map is not

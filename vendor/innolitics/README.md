@@ -2,6 +2,8 @@
 
 This directory pins the Innolitics [`dicom-standard`](https://github.com/innolitics/dicom-standard) repository at a specific commit SHA. The committed JSON files are the **input** to `scripts/generate-dictionary.ts` (run via `pnpm gen:dictionary`) and `scripts/generate-annex-e.ts` (run via `pnpm gen:annex-e`). Runtime has zero dependency on these files: only the generated TypeScript modules under `src/dictionary/generated/` are imported by the library at runtime.
 
+> **This is a mirror, not the standard.** For the element registry (`tags.ts` / `keywords.ts`) it is now the *base* layer only: NEMA's PS3.6 DocBook, pinned in `vendor/nema/part06/`, is applied over it as a normative per-field overlay and wins wherever the two disagree. Read `vendor/nema/README.md` for the authority model. This directory remains the sole source for the PS3.15 Annex E action table and for the SOP Class UID names in `uids.ts`.
+
 ## Pinning
 
 - **SHA:** `90571bcc4e46b08bc815bd683e6c466308bcff9a` (see `SHA.txt`; short form `90571bc`, 7 chars)
@@ -18,6 +20,8 @@ The pin was previously described only by a monthly re-pin policy and a retrieval
 **1. Is the pin current against upstream? Yes, exactly.** `git ls-remote https://github.com/innolitics/dicom-standard.git` resolves both `HEAD` and `refs/heads/master` to `90571bcc4e46b08bc815bd683e6c466308bcff9a`, which is this pin. All four vendored files re-fetched from `raw.githubusercontent.com` at that SHA are byte-identical to the committed copies (SHA-256 verified). **There is nothing to re-pin to.** The retrieval date being old is not evidence of staleness here, and bumping it would have been the pure ceremony a date-based check invites.
 
 **2. Is upstream current against PS3.6? No, and that is the real exposure.** Upstream's `standard/attributes.json` last changed on **2024-04-18**, in a commit titled "Update standard to rev2024b". Its README advertises a GitHub Actions workflow that regenerates the JSON monthly, but that workflow has not landed a data change in over two years. So this dictionary is grounded in **PS3.6 2024b** while the current published edition is **PS3.6 2026c**. Pinning discipline cannot fix this; the upstream itself is the stale link.
+
+**3. So the fix was to stop taking the element registry from the mirror alone.** The measurement below is what the drift *was*, and it is kept because it is the evidence that motivated the change and the method for repeating it. Every non-additive difference it names, and all 180 additive ones, are now resolved from the normative PS3.6 DocBook rather than waiting on an upstream regeneration: see "Status of the measured drift" at the end of this section.
 
 ### Measured drift against PS3.6 2026c
 
@@ -49,7 +53,22 @@ Every non-additive difference, named. There are four, all on shared tags:
 - **(003A,0320)** keyword `SummarizedFilterLookupTable`, PS3.6 says `SummarizedFilterLookupTableSequence`.
 - **(003A,0325)** keyword `AnalogFilterType`, PS3.6 says `AnalogFilterTypeCodeSequence`. Both are upstream keyword defects rather than edition drift: the `name` column already reads "... Sequence" in the vendor input, so only the keyword was truncated. Keyword is a public lookup surface (`byKeyword`), so both lookups miss.
 
-None of the above is corrected by hand. The dictionary is generated, and a hand-edit would be erased by the next regen and would break the byte-identical gate. They are recorded here so the next re-pin can confirm which ones the new edition resolves.
+None of the above is corrected by hand. The dictionary is generated, and a hand-edit would be erased by the next regen and would break the byte-identical gate.
+
+### Status of the measured drift
+
+All of it is closed, and none of it by hand. `scripts/generate-dictionary.ts` now reads the pinned PS3.6 DocBook (`vendor/nema/part06/`) and overlays it per field on this mirror, so each correction is derived from fetched normative bytes and is reproduced by every regen:
+
+| Measured difference | Now |
+| --- | --- |
+| (0010,2160) `EthnicGroup` marked current | `retired: true`, from PS3.6's own `RET (2025a)` marker |
+| (0010,2161) / (0010,2162) absent | present, `SQ` VM 1 and `UC` VM 1-n |
+| (3004,0012) `DoseValue` marked retired | `retired: false`; the `RET (2022d)` marker stays on (3004,0010) where PS3.6 puts it |
+| (003A,0320) / (003A,0325) truncated keywords | `SummarizedFilterLookupTableSequence` / `AnalogFilterTypeCodeSequence` |
+| 180 tags gained by PS3.6, absent here | present |
+| 0 tags dropped | still 0; a mirror-only tag would be kept, not deleted, and the generator prints the count |
+
+The generator prints the overlay every run (shared / added / mirror-only, and the fields overridden broken out by field), so the next re-pin of *either* source shows exactly what moved instead of a 5,000-line diff. What this mirror is still solely responsible for is unchanged: the PS3.15 Annex E action table and the SOP Class UID names.
 
 ### UIDs
 
@@ -78,8 +97,8 @@ PS3.6 2026c Table A-1 has 468 rows and Table A-2 has 28; this dictionary carries
 The old policy read "re-pin monthly, evaluated at minor releases". Nothing ran it, nothing could fail if it lapsed, and it turned out to be measuring the wrong thing: the pin is exactly current and the data is two years old anyway. The honest replacement:
 
 - **Re-pin when upstream moves.** `git ls-remote` against `master` is the whole check, and it is one command. Today it returns this pin.
-- **Re-measure against PS3.6 when re-pinning, and whenever the drift above matters to a caller.** The method is recorded in this section and is reproducible from the NEMA DocBook URL. A date in a file is not a substitute for it.
-- **The durable fix is to stop depending on a dormant upstream.** `vendor/nema/`'s D-14 DocBook fallback already exists for exactly this case and would source PS3.6 directly. That is a real piece of work, not a re-pin, and it is the thing to schedule if the 180 missing tags or the retired `EthnicGroup` start mattering.
+- **Re-measure against PS3.6 when re-pinning.** The generator now does this for you on every run and prints the result, so the measurement is a build output rather than an errand.
+- **The durable fix was to stop depending on a dormant upstream for the semantics PS3.6 publishes,** and it is done: `vendor/nema/part06/` pins the DocBook and the element registry is overlaid from it. This mirror can now go quiet for another two years without the element registry drifting, because the element registry no longer comes from it. What still depends on this pin moving is the Annex E action table and the SOP Class UID names.
 
 ## Files
 

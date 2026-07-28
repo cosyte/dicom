@@ -42,6 +42,23 @@
   resolution (`image.frame(i)`, Per-Frame-else-Shared), coded triplets (`readCode`), and the
   value-layer `DicomValueError`. Builds on Phase 3 VR value decode (all 34 VRs via `Element.value`) +
   the `Dataset`/`Item` navigation API.
+- **The element registry is sourced from the normative PS3.6 DocBook, not from a mirror alone.**
+  `vendor/nema/part06/` pins `part06.xml` (**PS3.6 2026c**) by SHA-256, and
+  `scripts/generate-dictionary.ts` overlays it **per field** on the Innolitics base: PS3.6 wins on
+  name / keyword / VR / VM / retired for any tag it publishes, PS3.6-only tags are added, mirror-only
+  tags are **kept** (PS3.6 retires, it does not delete, so an absence is more likely a parse gap here
+  than a withdrawal there). Registry: 5,309 tags, 5,214 keywords. Scoped to Tables 6-1/7-1/8-1/9-1;
+  **UIDs are deliberately not overlaid** (the short forms and the structured `retired` boolean are
+  intentional deviations from Table A-1), and PS3.15 Annex E is a different part and generator.
+  The pin is a **precondition**: the generator re-hashes the file and refuses to run on a mismatch,
+  reads the edition from the document's own `<subtitle>`, and fails loudly on a row that is not six
+  cells, a malformed tag, a non-identifier keyword, an unknown VR token, or under 5,000 rows.
+  Two DocBook traps, both covered by tests: the keyword column carries 13,470 **ZERO WIDTH SPACE**
+  hints (one left in yields a keyword that looks right and never matches), and the sixth column
+  carries `DICOS`/`DICONDE` markers next to `RET (edition)` (reading it as a boolean would retire 391
+  live tags). **There is no staleness clock and must not be one** - a date gate fires the day it is
+  written, demands an action nobody can take on demand, and reds unrelated PRs. "Has NEMA moved" is
+  one content-comparing command in `vendor/nema/README.md`; CI gates byte-identical regen, offline.
 - **Em-dash brand gate armed.** `scripts/check-no-emdash.sh` (`pnpm check:no-emdash`) plus
   `.github/workflows/no-emdash.yml` enforce the founder directive banning `U+2014` outright
   (`knowledgebase/06-brand/voice-and-tone.md`, "No em dashes. Ever."). It scans **both** halves the

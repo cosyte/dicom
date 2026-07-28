@@ -149,6 +149,111 @@ describe("Dictionary.uid (DICT-06)", () => {
   });
 });
 
+/**
+ * The element registry is overlaid from the pinned NEMA PS3.6 DocBook, which is
+ * normative, on top of the Innolitics mirror, which is convenient. These are the
+ * differences that overlay resolves. They are asserted here rather than trusted,
+ * because every one of them is a value a caller reads to make a clinical or
+ * routing decision, and each was wrong in a different direction:
+ *
+ *   - a demographic attribute retired two editions ago and still marked current,
+ *     with its two replacements missing entirely;
+ *   - an RT dose attribute marked retired that the standard still defines
+ *     (the direction that talks a caller out of reading a real dose);
+ *   - two keywords truncated by the mirror, so the public `byKeyword` lookup
+ *     missed on the spelling PS3.6 actually publishes.
+ */
+describe("PS3.6 normative overlay (DICOM-UPSTREAM-EDITION-LAG)", () => {
+  it("marks (0010,2160) EthnicGroup retired, as PS3.6 2025a did", () => {
+    const e = Dictionary.lookup("00102160");
+    expect(e).toBeDefined();
+    expect(e?.keyword).toBe("EthnicGroup");
+    expect(e?.retired).toBe(true);
+    // Retired is not removed: the keyword still resolves, so a caller reading an
+    // older study is told what the tag is AND that it is no longer current.
+    expect(Dictionary.byKeyword("EthnicGroup")?.tag).toBe("00102160");
+  });
+
+  it("carries EthnicGroup's replacements (0010,2161) and (0010,2162)", () => {
+    const seq = Dictionary.lookup("00102161");
+    expect(seq?.keyword).toBe("EthnicGroupCodeSequence");
+    expect(seq?.vr).toEqual(["SQ"]);
+    expect(seq?.vm).toBe("1");
+    expect(seq?.retired).toBe(false);
+
+    const groups = Dictionary.lookup("00102162");
+    expect(groups?.keyword).toBe("EthnicGroups");
+    expect(groups?.vr).toEqual(["UC"]);
+    expect(groups?.vm).toBe("1-n");
+    expect(groups?.retired).toBe(false);
+  });
+
+  it("does NOT mark (3004,0012) DoseValue retired, because PS3.6 still defines it", () => {
+    const e = Dictionary.lookup("30040012");
+    expect(e).toBeDefined();
+    expect(e?.keyword).toBe("DoseValue");
+    expect(e?.vr).toEqual(["DS"]);
+    expect(e?.retired).toBe(false);
+  });
+
+  it("keeps (3004,0010) RTDoseROISequence retired, which is whose RET marker it was", () => {
+    const e = Dictionary.lookup("30040010");
+    expect(e?.keyword).toBe("RTDoseROISequence");
+    expect(e?.retired).toBe(true);
+  });
+
+  it("spells (003A,0320) and (003A,0325) the way PS3.6 does", () => {
+    expect(Dictionary.byKeyword("SummarizedFilterLookupTableSequence")?.tag).toBe("003A0320");
+    expect(Dictionary.byKeyword("AnalogFilterTypeCodeSequence")?.tag).toBe("003A0325");
+    // The truncated mirror spellings are gone rather than kept as aliases: they
+    // were never PS3.6 keywords, and carrying them would preserve the defect.
+    expect(Dictionary.byKeyword("SummarizedFilterLookupTable")).toBeUndefined();
+    expect(Dictionary.byKeyword("AnalogFilterType")).toBeUndefined();
+  });
+
+  it("does not treat the DICONDE / DICOS column markers as retirement", () => {
+    // Table 6-1's sixth column carries "RET (edition)" for retirement but also
+    // "DICOS" and "DICONDE", which name the dictionary a row belongs to and say
+    // nothing about retirement. Reading the cell as a boolean would retire 391
+    // live tags. Only a leading RET retires.
+    expect(Dictionary.lookup("00140028")?.keyword).toBe("ComponentManufacturer"); // DICONDE
+    expect(Dictionary.lookup("00140028")?.retired).toBe(false);
+    expect(Dictionary.lookup("40100001")?.keyword).toBe("LowEnergyDetectors"); // DICOS
+    expect(Dictionary.lookup("40100001")?.retired).toBe(false);
+  });
+
+  it("strips the ZERO WIDTH SPACE PS3.6 prints inside keywords", () => {
+    // PS3.6 2026c carries 13,470 U+200B line-break hints in the keyword column.
+    // One left in produces a keyword that looks right and never matches.
+    for (const kw of [
+      "PatientName",
+      "EthnicGroupCodeSequence",
+      "SummarizedFilterLookupTableSequence",
+    ]) {
+      const e = Dictionary.byKeyword(kw);
+      expect(e, kw).toBeDefined();
+      expect(e?.keyword).toBe(kw);
+      expect(/[\u200B\u00AD]/u.test(e?.keyword ?? "")).toBe(false);
+    }
+  });
+
+  it("still resolves the safety-critical attributes the parser depends on", () => {
+    // The overlay adds and corrects; it must not drop. Spot-check the tags the
+    // typed patient/study/series/image views read.
+    for (const [tag, keyword] of [
+      ["00100010", "PatientName"],
+      ["00100020", "PatientID"],
+      ["00080060", "Modality"],
+      ["0020000D", "StudyInstanceUID"],
+      ["0020000E", "SeriesInstanceUID"],
+      ["00080016", "SOPClassUID"],
+      ["7FE00010", "PixelData"],
+    ] as const) {
+      expect(Dictionary.lookup(tag)?.keyword, tag).toBe(keyword);
+    }
+  });
+});
+
 describe("Dictionary entries are immutable (CLAUDE.md immutability guardrail)", () => {
   it("returned DictionaryEntry is frozen", () => {
     const e = Dictionary.lookup("00100010");
