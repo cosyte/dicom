@@ -9,14 +9,17 @@ only the generated TypeScript under `src/dictionary/generated/` is imported by t
 
 ## Layout
 
-| Path                                   | Part  | Status                                                   |
-| -------------------------------------- | ----- | -------------------------------------------------------- |
-| `part06/SHA.txt` + `part06/<sha256>/`  | PS3.6 | **Active.** Normative overlay for the data dictionary.   |
-| `SHA.txt`                              | PS3.15| Reserved, inactive. Annex E fallback (see below).         |
+| Path                                   | Part   | Status                                                       |
+| -------------------------------------- | ------ | ------------------------------------------------------------ |
+| `part06/SHA.txt` + `part06/<sha256>/`  | PS3.6  | **Active.** Normative overlay for the data dictionary.        |
+| `part15/SHA.txt` + `part15/<sha256>/`  | PS3.15 | **Active.** Normative overlay for the Annex E action table.   |
 
-The PS3.15 pin keeps the flat `vendor/nema/<sha256>/part15-annex-e.xml` shape because
-`scripts/generate-annex-e.ts` already contracts for it. PS3.6 cannot share that file (two documents,
-two hashes), so it lives under `part06/`. New parts go under `<part>/`.
+One directory per part, each with its own `SHA.txt` and its own `<sha256>/` tree, because each part
+is a separate document with a separate hash. PS3.15 used to be reserved as a flat
+`vendor/nema/SHA.txt` + `vendor/nema/<sha256>/part15-annex-e.xml`; when it was activated it moved
+under `part15/` to match, and the whole `part15.xml` is vendored rather than an Annex E slice, so
+that the pin can be verified against the published document byte for byte. New parts go under
+`<part>/`.
 
 ## PS3.6, Part 6: Data Dictionary
 
@@ -50,7 +53,7 @@ Deliberately **not** overlaid:
   retirement carried as a structured `retired` boolean instead of a trailing " (Retired)" glued into
   the name. An overlay would undo both, and PS3.6 Table A-1 is a superset this package covers only
   in part by design. Measured agreement is tabulated in `vendor/innolitics/README.md`.
-- **PS3.15 Annex E.** A different part, a different generator, and a resolved input path.
+- **PS3.15 Annex E.** A different part and a different generator; see its own section below.
 
 ### Verifying the pin
 
@@ -115,11 +118,89 @@ what makes the keyword column usable at all. Six entries that predate this pin h
 and the Innolitics mirror, an independent parse of the same document, produces character-for-character
 the same names. Inserting a space would be hand-editing a generated table to taste.
 
-### PS3.15 Annex E fallback (reserved, inactive)
+## PS3.15, Part 15: Annex E de-identification action table
 
-`SHA.txt` at this level still reads `RESERVED`. The Annex E action table is generated from the
-Innolitics machine-readable input; see `scripts/_annex-e-discovery.md`. To activate the DocBook
-fallback, follow the procedure in `scripts/generate-annex-e.ts`: pin
-`https://dicom.nema.org/medical/dicom/current/source/docbook/part15/part15.xml` by SHA-256 into
-`SHA.txt`, commit it at `vendor/nema/<sha-256>/part15-annex-e.xml`, flip the discovery doc's
-`Decision:` line to `NEMA-DocBook-fallback`, and implement `parseNemaDocBook`.
+- **Source:** `https://dicom.nema.org/medical/dicom/current/source/docbook/part15/part15.xml`
+- **Edition:** PS3.15 **2026c** (read from the document's own
+  `<subtitle>DICOM PS3.15 2026c - Security and System Management Profiles</subtitle>`, not asserted
+  here)
+- **Retrieved:** 2026-07-28
+- **SHA-256:** `77d60b856faf4223ab40a398c53130fc0ee9490d0d811ee3536e6d25c02ac717` (`part15/SHA.txt`)
+- **Committed at:** `part15/77d60b85.../part15.xml`, 3,553,659 bytes, verbatim
+- **Copyright:** NEMA. Vendored unmodified as a build input; the generated action table is the
+  derived work.
+
+### What it is authoritative for
+
+**Table E.1-1** (Application Level Confidentiality Profile Attributes), and only that table. 656
+rows in 2026c, of which 652 name a single tag.
+
+This is the table `deidentify()` acts on, so the failure mode of a stale copy is not a wrong label:
+it is a patient identifier that survives a call whose entire contract is that it does not, with a
+clean return and an audit report that says nothing. The mirror snapshot this overlay replaced was
+missing 35 concrete attributes, **32 of them marked X** (remove) by the current standard and the
+other three `X/D`, `D` and `U`, including
+`(0010,0012)` Name to Use, a patient's preferred name.
+
+For a tag that appears in both PS3.15 and the Innolitics mirror, PS3.15 wins **per field** on
+everything it publishes: the attribute name, the Basic Profile action code, and all nine
+metadata-affecting option columns. A tag PS3.15 carries and the mirror does not is added. A tag the
+mirror carries and PS3.15 does not is kept, for the same reason as in PS3.6: the standard retires
+rather than deletes, so an absence is far more likely to be a parse gap here than a withdrawal
+there, and dropping the entry would turn an attribute the de-identifier acts on into one it silently
+keeps. That set is empty today, and the generator prints its size on every run.
+
+Deliberately **not** represented:
+
+- **The four family rows.** `(50xx,xxxx)`, `(60xx,3000)`, `(60xx,4000)`, and `(gggg,eeee) where gggg
+  is odd` state a mask rather than a tag, and an exact-tag map cannot key them. Private attributes
+  are handled by `deidentify()` through their own path; the three repeating-group rows are a stated
+  gap. All four are counted and printed on every run rather than dropped in silence.
+- **The second E.3.6 sub-option.** PS3.15 has two longitudinal-temporal options, full dates and
+  modified dates; `AnnexEOption` carries one, which takes the full-dates column. The two columns
+  diverge on 169 rows in 2026c, and that count prints on every run. See
+  `scripts/_annex-e-discovery.md`.
+
+### Verifying the pin
+
+Same shape as PS3.6, and it compares content rather than dates:
+
+```bash
+curl -fsSL https://dicom.nema.org/medical/dicom/current/source/docbook/part15/part15.xml \
+  | sha256sum | cut -d' ' -f1
+# equal to vendor/nema/part15/SHA.txt -> `current` is still the pinned edition
+# different                           -> NEMA published a new edition; re-pin (below)
+```
+
+Once 2026c is superseded, the archived edition URL becomes the stable one and must reproduce the pin
+byte for byte: `https://dicom.nema.org/medical/dicom/2026c/source/docbook/part15/part15.xml`.
+
+There is deliberately **no automated staleness check** here either, for exactly the reasons given
+above for PS3.6. The generator recomputes the SHA-256 of the file it reads and refuses to generate on
+a mismatch: the pin is a precondition, not a comment.
+
+### Re-pinning procedure
+
+1. Fetch and hash:
+   ```bash
+   curl -fsSL -o /tmp/part15.xml \
+     https://dicom.nema.org/medical/dicom/current/source/docbook/part15/part15.xml
+   NEMA_SHA=$(sha256sum /tmp/part15.xml | cut -d' ' -f1)
+   ```
+2. `mkdir -p "vendor/nema/part15/${NEMA_SHA}" && mv /tmp/part15.xml "vendor/nema/part15/${NEMA_SHA}/part15.xml"`
+3. `printf '%s\n' "${NEMA_SHA}" > vendor/nema/part15/SHA.txt`
+4. Delete the previous `vendor/nema/part15/<old-sha>/` directory in the same commit.
+5. `pnpm gen:annex-e`. It prints the edition it read and the overlay it applied: how many tags are
+   shared, added, and mirror-only, and **every action-code override individually**, because a changed
+   action code is the one difference that decides whether an identifier survives the call.
+6. Review `git diff src/dictionary/generated/annex-e.ts` against that summary, then `pnpm test`.
+7. Commit the new `vendor/nema/part15/` tree and the regenerated artifact together. The regen gate
+   requires lockstep.
+
+If the DocBook table shape changes, the generator fails loudly rather than emitting a thinner table:
+it requires a single header row whose 15 column labels sit where the generator's column indices
+expect them (a cell count catches an inserted or dropped column but not a REORDER, which would
+silently read one option's action code as another's), exactly 15 cells per body row, a tag cell it
+recognizes, an action code from Table E.1-1a in every non-empty action column, a non-empty Basic
+Profile cell, every `<tr>` in the table accounted for as a matched body row or a header row, and at
+least 600 concrete rows.

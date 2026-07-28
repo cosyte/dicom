@@ -542,3 +542,78 @@ describe("deidentify - PHI-free output", () => {
     expect(ds.get("00100010")?.rawBytes.toString("latin1").trim()).toBe(PHI.patientName);
   });
 });
+
+/**
+ * PS3.15 2026c attributes the action table used to be missing entirely.
+ *
+ * Until the normative overlay landed, the table came from a 2024b-era mirror
+ * snapshot with 617 concrete rows against the standard's 652. A tag with no
+ * Annex E entry is treated as "not listed, keep", so each of these patient
+ * attributes came through `deidentify()` verbatim, and the returned report,
+ * whose whole job is to say what was done, said nothing about them. A caller's
+ * only signal was a clean return.
+ *
+ * All values below are synthetic and exist only to be proven absent.
+ */
+describe("deidentify - PS3.15 2026c patient attributes (DICOM-ANNEX-E-DEID-LAG)", () => {
+  const LATE: ReadonlyArray<{ tag: Tag; vr: "LT" | "UT" | "UC" | "UR"; value: string }> = [
+    { tag: "00100012", vr: "LT", value: "PREFERRED-NAME-SYNTH" },
+    { tag: "00100013", vr: "UT", value: "NAME-COMMENT-SYNTH" },
+    { tag: "00100016", vr: "UT", value: "PRONOUN-COMMENT-SYNTH" },
+    { tag: "00100042", vr: "UT", value: "SPCU-COMMENT-SYNTH" },
+    { tag: "00100045", vr: "UT", value: "GENDER-COMMENT-SYNTH" },
+    { tag: "00100047", vr: "UR", value: "http://synthetic.invalid/spcu" },
+    { tag: "00102162", vr: "UC", value: "ETHNIC-GROUPS-SYNTH" },
+  ];
+
+  const withLate: BuildDicomOptions["elements"] = LATE.map((e) => ({
+    tag: e.tag,
+    vr: e.vr,
+    value: pad(e.value),
+  }));
+
+  it("removes each of them under the Basic Profile", () => {
+    const { dataset } = deidentify(buildPhiDataset(withLate));
+    for (const e of LATE) expect(dataset.has(e.tag), e.tag).toBe(false);
+  });
+
+  it("records each removal in the report rather than staying silent", () => {
+    const { report } = deidentify(buildPhiDataset(withLate));
+    for (const e of LATE) {
+      const audit = report.attributes.find((a) => a.tag === e.tag);
+      expect(audit, e.tag).toBeDefined();
+      expect(audit?.action, e.tag).toBe("X");
+      expect(audit?.applied, e.tag).toBe("removed");
+    }
+    // The audit names attributes, never their values.
+    const serialized = JSON.stringify(report.attributes);
+    for (const e of LATE) expect(serialized).not.toContain(e.value);
+  });
+
+  it("leaves none of their bytes in the serialized output", () => {
+    const { dataset } = deidentify(buildPhiDataset(withLate));
+    const out = serializeDicom(dataset);
+    for (const e of LATE) {
+      expect(out.includes(Buffer.from(e.value, "latin1")), e.tag).toBe(false);
+    }
+  });
+
+  it("keeps (0010,2161) Ethnic Group Code Sequence out of the output too", () => {
+    // The sequence form, so the SQ branch is exercised rather than the scalar one.
+    const { dataset, report } = deidentify(
+      buildPhiDataset([
+        {
+          tag: "00102161",
+          items: [
+            { elements: [{ tag: "00080104", vr: "LO", value: pad("ETHNIC-CODE-MEANING-SYNTH") }] },
+          ],
+        },
+      ]),
+    );
+    expect(dataset.has("00102161")).toBe(false);
+    expect(report.attributes.find((a) => a.tag === "00102161")?.applied).toBe("removed");
+    expect(
+      serializeDicom(dataset).includes(Buffer.from("ETHNIC-CODE-MEANING-SYNTH", "latin1")),
+    ).toBe(false);
+  });
+});
