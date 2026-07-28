@@ -104,8 +104,13 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   no-op wrote nothing, left every committed artifact untouched, and produced an empty `git diff`:
   permanently green. `package.json` also joins the workflow's `paths` filters, without which that
   second case never triggered the gate at all. Both now red, proved by seeding each defect and
-  watching the run fail. The clean also runs in `gen:all` itself (`pnpm gen:clean`) so a local regen
-  matches CI, but the gate does its own delete rather than trusting the script under test.
+  watching the run fail. The delete is `-mindepth 1` rather than `-type f`, so a stale symlink or
+  subdirectory cannot become an orphan the gate is blind to, and the step asserts that only
+  `README.md` survives instead of printing an expectation nothing checks. `pnpm gen:clean` exposes
+  the same delete for local use but is deliberately **not** chained into `gen:all`: the generators
+  throw on malformed or missing vendor input, which is the normal state part-way through a re-pin,
+  and a chained clean would leave the working tree empty and the build broken. The gate does its own
+  delete rather than trusting the script under test.
 
 ### Changed
 

@@ -23,7 +23,8 @@ The byte-identical regen gate could also go green while generating nothing, beca
 cleaned its output directory: a stale orphan artifact was never rewritten and never diffed, and
 gutting `gen:all` to a no-op left every committed artifact untouched and produced an empty diff.
 The gate now deletes the generated artifacts before regenerating, and `package.json` is inside its
-`paths` filter.
+`paths` filter. A new `pnpm gen:clean` exposes the same delete for local use; it is deliberately not
+chained into `gen:all`, so a failed regen leaves the working tree intact.
 
 The vendor pin is exactly current against upstream, but upstream last refreshed its data in April
 2024, so the tag tables are grounded in PS3.6 2024b against a current PS3.6 2026c. That drift is

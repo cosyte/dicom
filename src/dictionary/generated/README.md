@@ -14,12 +14,12 @@
 ## Re-generating
 
 ```bash
-pnpm gen:all                          # gen:clean, then gen:dictionary + gen:annex-e
+pnpm gen:all                          # runs gen:dictionary + gen:annex-e in sequence
 git diff src/dictionary/generated/    # MUST be empty for the inputs at the pinned SHAs
 ```
 
-`gen:all` starts with `pnpm gen:clean`, which deletes everything in this directory except this `README.md`. That is deliberate: without it, a **stale orphan** (an artifact a generator used to emit and no longer does) is never rewritten and never diffed, so it survives every regen and passes the CI gate indefinitely. Regenerating from an empty directory is what makes the gate measure the generators' actual output.
+`pnpm gen:clean` deletes everything in this directory except this hand-written `README.md`. It is **not** chained into `gen:all`, deliberately. The CI gate runs its own delete before `gen:all` and that is where the cleaning matters: without it, a **stale orphan** (an artifact a generator used to emit and no longer does) is never rewritten and never diffed, so it survives every regen and passes indefinitely, and gutting `gen:all` to a no-op writes nothing, leaves the committed artifacts untouched, and produces an empty `git diff` while generating nothing at all. The gate must not delegate that delete to `gen:all`, because `gen:all` is the thing under test.
 
-Two consequences worth knowing. A generator that fails part-way leaves this directory incomplete; `git checkout -- src/dictionary/generated/` restores it, and nothing is lost because every file here is reproducible from the pinned vendor inputs. And the CI gate performs its **own** delete rather than calling `gen:clean`, because `gen:all` is the thing under test: gutting it to a no-op would otherwise write nothing, leave the committed artifacts untouched, and produce an empty `git diff` while generating nothing at all.
+Keeping it out of `gen:all` also keeps a failed regen non-destructive. The generators throw on malformed or missing vendor input, which is exactly the state you are in part-way through the re-pinning procedure in `vendor/innolitics/README.md`; a `gen:clean` chained ahead of them would leave this directory empty and the build broken until `git checkout`. Run `pnpm gen:clean` by hand when you want to prove locally what CI proves, and `git checkout -- src/dictionary/generated/` restores everything, since every file here is reproducible from the pinned inputs.
 
 If the diff is non-empty after a fresh regen against unchanged inputs, the generator has non-determinism. File an issue. The byte-identical regen is a Phase 1 Plan 05 CI gate (DICT-05).

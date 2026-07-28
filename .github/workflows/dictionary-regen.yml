@@ -82,8 +82,18 @@ jobs:
       - name: Clean generated artifacts before regen
         run: |
           find src/dictionary/generated -mindepth 1 ! -name 'README.md' -delete
-          echo "Remaining (expected: README.md only):"
-          ls -A src/dictionary/generated
+
+          # Assert the precondition rather than printing it. A clean that
+          # silently under-deleted would otherwise hand the next step a
+          # directory it believes is empty, which is the same "green for the
+          # wrong reason" shape this step exists to remove.
+          remaining="$(find src/dictionary/generated -mindepth 1 ! -name 'README.md')"
+          if [ -n "$remaining" ]; then
+            echo "::error::Clean step left artifacts behind:"
+            echo "$remaining"
+            exit 1
+          fi
+          echo "Clean OK: only the hand-written README.md remains."
 
       - name: Regenerate dictionary + Annex E
         run: pnpm gen:all
