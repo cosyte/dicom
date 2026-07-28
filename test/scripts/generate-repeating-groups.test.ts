@@ -31,6 +31,18 @@
  * mid-mutation can still leave a repointed `SHA.txt` and a mutant directory
  * behind; all of it shows up in `git status`.
  *
+ * TWO SHAPES OF RESIDUAL, and the second is worse, so state it separately. The
+ * `withMutated*` helpers never touch the pinned file: they write a mutant into its
+ * own SHA-named directory and repoint `SHA.txt`, so the worst case is a dangling
+ * POINTER. The pin-content test below is different in kind: it writes over
+ * `vendor/nema/part05/<sha>/part05.xml` and `.../04_05pu.pdf` themselves, because
+ * corrupting the bytes at the pinned path is the only way to reach the content
+ * re-hash. Its worst case is therefore a CORRUPTED NORMATIVE DOCUMENT on disk. That
+ * is bounded three ways: the restore is in a `finally`, the restore is then proved
+ * by re-hashing against the pin, and any escape is loud everywhere it matters
+ * (`git status`, the next generator run, and the CI regen gate). Do not copy that
+ * test's shape for anything that does not specifically need to defeat the re-hash.
+ *
  * DISCLOSED RESIDUAL, because a known flake is worth more written down than found
  * twice. The curve-bound test below leaves `src/dictionary/generated/repeating-groups.ts`
  * holding `lowMax: 0x0e` for the few milliseconds between the generator writing it
@@ -402,6 +414,10 @@ describe("generate-repeating-groups", () => {
           const swapped = Buffer.from(original);
           const last = swapped.length - 1;
           swapped[last] = (swapped[last] ?? 0) ^ 0xff;
+          // Every other mutator here asserts the mutation landed; these must too.
+          // On an empty buffer `swapped[-1] ^= 0xff` is a silent no-op and the test
+          // would pass by proving nothing.
+          expect(swapped.equals(original), "the mutation must change the document").toBe(false);
           writeFileSync(path, swapped);
           const r = runGenerator();
           expect(r.code, path).not.toBe(0);
@@ -409,6 +425,10 @@ describe("generate-repeating-groups", () => {
         } finally {
           writeFileSync(path, original);
         }
+        // This test writes over the NORMATIVE DOCUMENT itself, not a pointer, so a
+        // short or failed restore leaves a corrupted standard on disk. Prove the
+        // restore rather than assume it: re-hash and compare to the pin.
+        expect(createHash("sha256").update(readFileSync(path)).digest("hex"), path).toBe(pinned);
         // Nothing was emitted from an input that failed its own precondition.
         expect(readFileSync(ARTIFACT, "utf8"), path).toBe(before);
       }

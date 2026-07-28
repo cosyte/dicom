@@ -415,7 +415,10 @@ function main(): void {
     );
   }
 
-  // The family label, read from the document rather than named here.
+  // The family label. Same honesty as the curve site below: `Overlay Planes` is a
+  // literal in the pattern, so the document is checked AGAINST it rather than asked
+  // for it. Enough for a display string, and an edition that renamed the family would
+  // fail here rather than mislabel it. The BOUND is what is read out of the document.
   const overlayLabelM =
     /Standard Data Elements with even Group Numbers ([0-9A-F]{4})-([0-9A-F]{4}) represent (Overlay Planes)\./.exec(
       sec76Text,
@@ -423,7 +426,7 @@ function main(): void {
   if (!overlayLabelM?.[3]) {
     fail(
       "part05.xml section 7.6: cannot find the sentence naming what the even Groups " +
-        "GGGG-GGGG represent. The label would otherwise be asserted here rather than read.",
+        "GGGG-GGGG represent, so the wording this generator expects no longer matches.",
     );
   }
   if (overlayLabelM[1] !== overlayShall[1] || overlayLabelM[2] !== overlayShall[2]) {

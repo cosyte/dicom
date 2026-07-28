@@ -150,8 +150,12 @@
   than a wrong de-identification bound; a first-match that landed on a section with _some_ matching
   text would have failed **open** and silently. The rule instead is **collect every candidate
   section, keep those containing the normative sentence, require exactly one** - which rejects the
-  TOC _by content_ rather than by a "skip the first hit" heuristic, and additionally proves the
-  sentence is **unique**, which a bare `.exec` silently assumes. Zero and two are both refusals. **Reading the 2004 PDF needs a PDF reader**: a
+  TOC _by content_ rather than by a "skip the first hit" heuristic. Be exact about the second
+  half: it proves at most **one heading-delimited candidate** carries the sentence, which is what a
+  bare `.exec` silently assumes and does not check. It does **not** prove document-wide uniqueness -
+  a second occurrence inside the same slice, or one outside any `7.6`-to-`7.7` window, is invisible
+  to the count. (It happens to be unique here: one occurrence in 416,764 characters, measured.) Zero
+  and two candidates are both refusals. **Reading the 2004 PDF needs a PDF reader**: a
   deliberately minimal one (Node `zlib` only, inflate the content streams, concatenate the text
   operators' literal strings) lives in that generator. It recovers **one sentence**, checked against a
   precise expected shape. **Do not grow it into a general PDF parser** - if it needs more, prefer

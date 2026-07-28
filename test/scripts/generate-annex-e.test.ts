@@ -250,6 +250,9 @@ describe("generate-annex-e", () => {
         const swapped = Buffer.from(original);
         const last = swapped.length - 1;
         swapped[last] = (swapped[last] ?? 0) ^ 0xff;
+        // Assert the mutation landed: on an empty buffer this would be a silent
+        // no-op and the test would pass having proved nothing.
+        expect(swapped.equals(original), "the mutation must change the document").toBe(false);
         writeFileSync(path, swapped);
         const r = runGenerator();
         expect(r.code).not.toBe(0);
@@ -257,6 +260,9 @@ describe("generate-annex-e", () => {
       } finally {
         writeFileSync(path, original);
       }
+      // This writes over the NORMATIVE DOCUMENT, not a pointer, so a short or failed
+      // restore leaves a corrupted standard on disk. Prove the restore by re-hashing.
+      expect(createHash("sha256").update(readFileSync(path)).digest("hex")).toBe(pinned);
       expect(readFileSync(ARTIFACT, "utf8")).toBe(before);
     },
     GENERATOR_TIMEOUT_MS,

@@ -326,12 +326,21 @@ fi
 # fixtures: "the ban is a rule about prose that people write, and fixture bytes are
 # grounded data, not brand copy."
 #
-# The exclusion is deliberately NARROW: only files inside a hash-named directory under
-# `vendor/`, where the directory name is a full SHA-256 (64), a full SHA-1 (40), or the
-# 7-char short SHA the Innolitics pin uses. Every HAND-WRITTEN file under `vendor/` stays
-# in scope, which is where the only real violation in this tree was ever found:
-# `vendor/nema/SHA.txt` carried one and the port removed it. Do not widen this to
-# `vendor/` wholesale, and do not use it to exempt anything cosyte authors.
+# The exclusion is deliberately NARROW: `vendor/nema/<part>/<64-hex>/`, and nothing else.
+# That is the NEMA normative documents and only those. Every HAND-WRITTEN file under
+# `vendor/` stays in scope, which is where the only real violation in this tree was ever
+# found: `vendor/nema/SHA.txt` carried one and the port removed it. The Innolitics mirror
+# is NOT exempt either (it is a 7-char short-SHA directory and holds zero em dashes,
+# measured), so do not widen this to `vendor/` wholesale, and never use it to exempt
+# anything cosyte authors.
+#
+# THE 64-HEX REQUIREMENT IS THE GUARD, and an earlier draft of this rule got it wrong in a
+# way worth recording. Allowing any hash-SHAPED component of 7 or more hex characters
+# exempts `vendor/anything/deadbeef/`; tightening that to exactly 7, 40 or 64 still
+# exempts `vendor/cosyte/acceded/notes.md`, because `acceded` is a seven-letter English
+# word drawn entirely from [a-f] (so is `defaced`, `effaced`, `facade`, and any 7-digit
+# string). A full SHA-256 is not constructible as prose, and anchoring to `vendor/nema/`
+# means a new vendor root cannot quietly inherit the exemption.
 #
 # BE HONEST ABOUT WHAT THE SHAPE PROVES, because this gate sits in a repo whose whole
 # argument is the difference between an asserted fact and a derived one. Matching a
@@ -339,10 +348,10 @@ fi
 # here reads the sibling `SHA.txt`. What actually enforces that is the generators, which
 # re-hash their pinned inputs and refuse on a mismatch. This pattern is a path rule that
 # happens to select the vendored documents; it is not proof that they are vendored. So
-# the length alternation above is the real guard: it is why an arbitrary directory like
-# `vendor/anything/deadbeef/` is NOT exempt. Measured today: exactly 8 files match, all
-# third-party pinned documents.
-VENDOR_PINNED_DOC='^vendor/(?:[^/]+/)+(?:[0-9a-f]{7}|[0-9a-f]{40}|[0-9a-f]{64})/'
+# the anchor plus the 64-hex requirement is the real guard. Measured today: exactly 4
+# files match, the four NEMA normative documents, and only `part05.xml` actually contains
+# the character.
+VENDOR_PINNED_DOC='^vendor/nema/[^/]+/[0-9a-f]{64}/'
 
 grep -zvxF 'scripts/check-no-emdash.sh' < "$FILELIST" |
   grep -zvP "$VENDOR_PINNED_DOC" > "$SCANLIST" || true

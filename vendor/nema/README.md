@@ -119,10 +119,13 @@ So the rule the generator uses, and the rule to copy:
 > require exactly one.**
 
 It rejects the table of contents **by content** rather than by a "skip the first hit" or
-"ignore lines with dots" heuristic, and requiring exactly one additionally proves the sentence is
-**unique** in the document, which a bare `.exec` silently assumes. Zero candidates and two candidates
-are both refusals, and both are the right answer: one means the document changed shape, the other
-means the generator cannot know which statement is normative.
+"ignore lines with dots" heuristic. Requiring exactly one proves at most **one heading-delimited
+candidate** carries the sentence, which is precisely the assumption a bare `.exec` makes and never
+checks. Do not overstate it: this does **not** prove document-wide uniqueness, because a second
+occurrence inside the same slice, or one outside any section window, is invisible to the count. (It
+is in fact unique here: one occurrence in 416,764 characters of extracted text, measured.) Zero
+candidates and two candidates are both refusals, and both are the right answer: zero means the
+document changed shape, two means the generator cannot know which statement is normative.
 
 ### Verifying the pins
 
