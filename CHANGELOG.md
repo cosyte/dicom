@@ -86,7 +86,10 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   `UID Name` exactly, with zero retirement-flag disagreements**, and the 7 well-known frames of
   reference match Table A-2 verbatim. Four transfer-syntax names remain a deliberate short-form
   deviation, listed in `vendor/innolitics/README.md`. Name only: no UID value, `type`, or `retired`
-  flag changed, and no parse or de-identification behavior depends on these strings.
+  flag changed. Transfer-syntax dispatch keys off the UID **value**, never the name, so no parse or
+  de-identification behavior changes. The one place a name reaches a caller at runtime is the
+  human-readable `snippet` on the fatal `UNSUPPORTED_TRANSFER_SYNTAX` error, which is improved by
+  the correction rather than altered in meaning.
 - **The byte-identical regen gate could go green while generating nothing (`DICOM-DICT-CURRENCY`).**
   Two ways, both fixed by making the gate delete `src/dictionary/generated/` (except the hand-written
   `README.md`) before running `pnpm gen:all`, so it measures what the generators produce instead of

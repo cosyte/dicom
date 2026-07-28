@@ -77,7 +77,7 @@
     "test:coverage": "vitest run --coverage",
     "gen:dictionary": "tsx scripts/generate-dictionary.ts",
     "gen:annex-e": "tsx scripts/generate-annex-e.ts",
-    "gen:clean": "find src/dictionary/generated -type f ! -name 'README.md' -delete",
+    "gen:clean": "find src/dictionary/generated -mindepth 1 ! -name 'README.md' -delete",
     "gen:all": "pnpm gen:clean && pnpm gen:dictionary && pnpm gen:annex-e",
     "check:no-emdash": "bash scripts/check-no-emdash.sh",
     "phi-scan": "tsx scripts/phi-scan.ts",

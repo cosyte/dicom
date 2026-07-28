@@ -14,8 +14,12 @@
 ## Re-generating
 
 ```bash
-pnpm gen:all                          # runs gen:dictionary + gen:annex-e in sequence
+pnpm gen:all                          # gen:clean, then gen:dictionary + gen:annex-e
 git diff src/dictionary/generated/    # MUST be empty for the inputs at the pinned SHAs
 ```
+
+`gen:all` starts with `pnpm gen:clean`, which deletes everything in this directory except this `README.md`. That is deliberate: without it, a **stale orphan** (an artifact a generator used to emit and no longer does) is never rewritten and never diffed, so it survives every regen and passes the CI gate indefinitely. Regenerating from an empty directory is what makes the gate measure the generators' actual output.
+
+Two consequences worth knowing. A generator that fails part-way leaves this directory incomplete; `git checkout -- src/dictionary/generated/` restores it, and nothing is lost because every file here is reproducible from the pinned vendor inputs. And the CI gate performs its **own** delete rather than calling `gen:clean`, because `gen:all` is the thing under test: gutting it to a no-op would otherwise write nothing, leave the committed artifacts untouched, and produce an empty `git diff` while generating nothing at all.
 
 If the diff is non-empty after a fresh regen against unchanged inputs, the generator has non-determinism. File an issue. The byte-identical regen is a Phase 1 Plan 05 CI gate (DICT-05).

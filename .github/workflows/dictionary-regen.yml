@@ -72,9 +72,16 @@ jobs:
       #
       # After the delete, both reappear as deletions in `git diff` and red the
       # run. README.md is hand-written, not generated, so it is preserved.
+      # `-mindepth 1` rather than `-type f`, so a stale symlink or a stale
+      # subdirectory is cleaned too and cannot become an orphan the gate is
+      # blind to. `-delete` unlinks a symlink itself and never follows it, so
+      # nothing outside this directory is reachable. It also implies `-depth`,
+      # so a subdirectory is emptied before it is removed. A missing directory
+      # makes `find` exit non-zero and reds the run, which is the safe way for
+      # this step to fail.
       - name: Clean generated artifacts before regen
         run: |
-          find src/dictionary/generated -type f ! -name 'README.md' -delete
+          find src/dictionary/generated -mindepth 1 ! -name 'README.md' -delete
           echo "Remaining (expected: README.md only):"
           ls -A src/dictionary/generated
 
