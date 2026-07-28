@@ -568,6 +568,21 @@ const CURATED_UIDS: readonly CuratedUid[] = [
     retired: false,
   },
 
+  // ---- SOP Classes whose sops.json name disagrees with PS3.6 Table A-1 ----
+  // Curated entries win on UID collision, so this is where a vendor-input name
+  // defect gets corrected against the standard rather than papered over with a
+  // blanket transform. One entry qualifies today: Innolitics' sops.json carries
+  // "Macular Grid Thickness and Volume Report" for this UID, identical to its
+  // `ciod` field and missing the "Storage" suffix that PS3.6 Table A-1 gives
+  // it. Every other sops.json name matches Table A-1 verbatim.
+  // Source: PS3.6 2026c, Annex A Table A-1 (UID Values), verified 2026-07-28.
+  {
+    uid: "1.2.840.10008.5.1.4.1.1.79.1",
+    name: "Macular Grid Thickness and Volume Report Storage",
+    type: "SOPClass",
+    retired: false,
+  },
+
   // ---- Query/Retrieve, MWL, Print, Storage Service Classes (canonical SOP Classes) ----
   {
     uid: "1.2.840.10008.5.1.4.1.2.1.1",
@@ -870,7 +885,15 @@ function buildUidsTs(
     if (!/^[0-9.]+$/.test(s.id)) {
       throw new Error(`Invalid UID in sops.json: ${s.id}`);
     }
-    merged.set(s.id, { uid: s.id, name: s.name + " Storage", type: "SOPClass", retired: false });
+    // `sops.json`'s `name` is already the full PS3.6 Table A-1 "UID Name", e.g.
+    // "CT Image Storage" and "Digital X-Ray Image Storage - For Presentation".
+    // Appending " Storage" here produced "CT Image Storage Storage" for the 164
+    // entries whose name already ends in "Storage", and an equally wrong
+    // "... - For Presentation Storage" / "Macular Grid Thickness and Volume
+    // Report Storage" for the other 11. Every one of the 175 was wrong. The
+    // sibling `ciod` field is the bare CIOD name ("Computed Radiography Image");
+    // `name` is not, and never needed a suffix.
+    merged.set(s.id, { uid: s.id, name: s.name, type: "SOPClass", retired: false });
   }
   for (const c of CURATED_UIDS) {
     if (!/^[0-9.]+$/.test(c.uid)) {

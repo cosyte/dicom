@@ -11,6 +11,68 @@ This directory pins the Innolitics [`dicom-standard`](https://github.com/innolit
 
 > **Short SHA convention:** This project uses the **first 7 characters** of the full 40-char SHA as the directory name. The convention is shared between plan 01-02 (Innolitics dictionary inputs) and plan 01-03 (Annex E inputs), so both generators read from the same `<short>/` directory.
 
+## Currency (measured 2026-07-28)
+
+The pin was previously described only by a monthly re-pin policy and a retrieval date, which says nothing about whether the dictionary agrees with the standard. It has now been measured. Two separate questions, two different answers.
+
+**1. Is the pin current against upstream? Yes, exactly.** `git ls-remote https://github.com/innolitics/dicom-standard.git` resolves both `HEAD` and `refs/heads/master` to `90571bcc4e46b08bc815bd683e6c466308bcff9a`, which is this pin. All four vendored files re-fetched from `raw.githubusercontent.com` at that SHA are byte-identical to the committed copies (SHA-256 verified). **There is nothing to re-pin to.** The retrieval date being old is not evidence of staleness here, and bumping it would have been the pure ceremony a date-based check invites.
+
+**2. Is upstream current against PS3.6? No, and that is the real exposure.** Upstream's `standard/attributes.json` last changed on **2024-04-18**, in a commit titled "Update standard to rev2024b". Its README advertises a GitHub Actions workflow that regenerates the JSON monthly, but that workflow has not landed a data change in over two years. So this dictionary is grounded in **PS3.6 2024b** while the current published edition is **PS3.6 2026c**. Pinning discipline cannot fix this; the upstream itself is the stale link.
+
+### Measured drift against PS3.6 2026c
+
+Compared the committed `src/dictionary/generated/` against the NEMA DocBook source for the current edition (`https://dicom.nema.org/medical/dicom/current/source/docbook/part06/part06.xml`, `<subtitle>DICOM PS3.6 2026c - Data Dictionary</subtitle>`), Tables 6-1 / 7-1 / 8-1 / 9-1 for data elements and Tables A-1 / A-2 for UIDs.
+
+Element figures are taken on `86ab6c1` (`origin/main` at the time of measurement); this slice does not modify `tags.ts` or `keywords.ts`, so they hold unchanged on the current tree. UID figures are taken on the current tree, after the corrections described below.
+
+| Comparison | Result |
+| --- | --- |
+| Committed tag entries | 5,129 |
+| PS3.6 2026c element rows (Tables 6-1 + 7-1 + 8-1 + 9-1) | 5,309 |
+| Shared tags | 5,121 |
+| **VR differences on shared tags** | **0** |
+| **Name differences on shared tags** | **0** |
+| **VM differences on shared tags** | **0** |
+| Keyword differences on shared tags | 2 |
+| Retirement-status differences on shared tags | 2 |
+| In PS3.6 2026c, absent here | 188 |
+| Here, absent from PS3.6 2026c | 8 |
+
+**Zero VR differences is the load-bearing result.** VR is what decides how bytes become a value, so a wrong VR is the mechanism by which a stale dictionary would silently mis-read a real study. No shared tag has one. The drift that does exist is overwhelmingly additive: tags the standard has gained that this dictionary does not yet know, which the parser already handles as unknown rather than mis-decoding.
+
+Every non-additive difference, named:
+
+- **(0010,2160) `EthnicGroup`** - retired in PS3.6 **2025a**; still marked `retired: false` here. PS3.6 2026c also adds **(0010,2161) `EthnicGroupCodeSequence`** (SQ) and **(0010,2162) `EthnicGroups`** (UC, VM 1-n) as its replacements, neither of which is present here. This is a real demographic-attribute change and the most clinically meaningful item in the list.
+- **(3004,0012) `DoseValue`** - marked `retired: true` here; **not retired** in PS3.6 2026c (its retirement column is empty; the `RET (2022d)` marker belongs to the preceding row, (3004,0010) `RTDoseROISequence`). An upstream data defect, not staleness. An RT dose element flagged retired when the standard still defines it.
+- **(003A,0320)** keyword `SummarizedFilterLookupTable`, PS3.6 says `SummarizedFilterLookupTableSequence`.
+- **(003A,0325)** keyword `AnalogFilterType`, PS3.6 says `AnalogFilterTypeCodeSequence`. Both are upstream keyword defects rather than edition drift: the `name` column already reads "... Sequence" in the vendor input, so only the keyword was truncated. Keyword is a public lookup surface (`byKeyword`), so both lookups miss.
+- The **8 tags present here and absent from PS3.6 2026c** are all retired repeating-group elements the standard has dropped from the registry entirely: `50xx200a`, `50xx200c`, `50xx200e`, `7fxx0010`, `7fxx0011`, `7fxx0020`, `7fxx0030`, `7fxx0040`. Keeping them is deliberate and harmless under this parser's Postel's-Law posture, since they only ever help read historical objects.
+
+None of the above is corrected by hand. The dictionary is generated, and a hand-edit would be erased by the next regen and would break the byte-identical gate. They are recorded here so the next re-pin can confirm which ones the new edition resolves.
+
+### UIDs
+
+`uids.ts` merges `sops.json` with the curated PS3.6 table inside the generator. After the corrections in this slice, **all 261 UIDs shared with PS3.6 2026c Table A-1 match its `UID Name` exactly**, and there are **zero** retirement-flag disagreements. The 7 well-known frames of reference match Table A-2 verbatim.
+
+Four transfer-syntax names are a deliberate, documented deviation: PS3.6 appends a descriptive clause after a colon, and this dictionary carries the short form that every DICOM toolkit uses.
+
+| UID | Here | PS3.6 2026c Table A-1 |
+| --- | --- | --- |
+| `1.2.840.10008.1.2` | Implicit VR Little Endian | Implicit VR Little Endian: Default Transfer Syntax for DICOM |
+| `1.2.840.10008.1.2.4.50` | JPEG Baseline (Process 1) | JPEG Baseline (Process 1): Default Transfer Syntax for Lossy JPEG 8 Bit Image Compression |
+| `1.2.840.10008.1.2.4.51` | JPEG Extended (Process 2 & 4) | JPEG Extended (Process 2 & 4): Default Transfer Syntax for Lossy JPEG 12 Bit Image Compression (Process 4 only) |
+| `1.2.840.10008.1.2.4.70` | JPEG Lossless, Non-Hierarchical, First-Order Prediction (Process 14 [Selection Value 1]) | ... : Default Transfer Syntax for Lossless JPEG Image Compression |
+
+PS3.6 2026c Table A-1 has 468 rows and Table A-2 has 28; this dictionary carries 268 UIDs in total, so coverage of the UID registry is partial by construction (SOP Classes plus a curated set), not a regression.
+
+### Re-pin policy
+
+The old policy read "re-pin monthly, evaluated at minor releases". Nothing ran it, nothing could fail if it lapsed, and it turned out to be measuring the wrong thing: the pin is exactly current and the data is two years old anyway. The honest replacement:
+
+- **Re-pin when upstream moves.** `git ls-remote` against `master` is the whole check, and it is one command. Today it returns this pin.
+- **Re-measure against PS3.6 when re-pinning, and whenever the drift above matters to a caller.** The method is recorded in this section and is reproducible from the NEMA DocBook URL. A date in a file is not a substitute for it.
+- **The durable fix is to stop depending on a dormant upstream.** `vendor/nema/`'s D-14 DocBook fallback already exists for exactly this case and would source PS3.6 directly. That is a real piece of work, not a re-pin, and it is the thing to schedule if the 188 missing tags or the retired `EthnicGroup` start mattering.
+
 ## Files
 
 | Path                                          | Purpose                                                                                            | Owner   |
@@ -24,7 +86,7 @@ This directory pins the Innolitics [`dicom-standard`](https://github.com/innolit
 
 ## Re-pinning procedure
 
-Per D-13: re-pin monthly, evaluated at minor releases. To bump:
+D-13 originally said "re-pin monthly, evaluated at minor releases"; see "Currency" above for why that is now stated as "re-pin when upstream moves, and re-measure against PS3.6 when you do". To bump:
 
 1. Resolve the new SHA: `INNOLITICS_SHA=$(git ls-remote https://github.com/innolitics/dicom-standard.git HEAD | awk '{print $1}')`.
 2. Create new directory `<short>/` (first 7 chars of the SHA), then fetch the input files from `raw.githubusercontent.com`:

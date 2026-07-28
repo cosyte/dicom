@@ -14,6 +14,9 @@ on:
       - "scripts/generate-annex-e.ts"
       - "scripts/_annex-e-discovery.md"
       - "src/dictionary/generated/**"
+      # `gen:all` and the generators' entry points live in package.json. Without
+      # this, gutting `gen:all` to a no-op never triggers the gate at all.
+      - "package.json"
       # The gate re-runs when the gate itself changes. Without this, a broken
       # workflow file cannot be proven fixed by the PR that fixes it.
       - ".github/workflows/dictionary-regen.yml"
@@ -25,6 +28,7 @@ on:
       - "scripts/generate-annex-e.ts"
       - "scripts/_annex-e-discovery.md"
       - "src/dictionary/generated/**"
+      - "package.json"
       - ".github/workflows/dictionary-regen.yml"
 
 permissions:
@@ -53,6 +57,26 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # Delete the committed artifacts BEFORE regenerating, so the gate measures
+      # what the generators actually produce rather than what happens to be on
+      # disk. The gate must do this itself, not delegate it to `gen:all`, which
+      # is the thing under test. Two ways the gate went green for the wrong
+      # reason without it:
+      #
+      #   1. A stale orphan - an artifact a generator used to emit and no longer
+      #      does - was never rewritten and never diffed, so it passed forever.
+      #   2. Gutting `gen:all` to a no-op wrote nothing, left every committed
+      #      artifact untouched, and produced an empty `git diff`: permanently
+      #      green while generating nothing at all.
+      #
+      # After the delete, both reappear as deletions in `git diff` and red the
+      # run. README.md is hand-written, not generated, so it is preserved.
+      - name: Clean generated artifacts before regen
+        run: |
+          find src/dictionary/generated -type f ! -name 'README.md' -delete
+          echo "Remaining (expected: README.md only):"
+          ls -A src/dictionary/generated
 
       - name: Regenerate dictionary + Annex E
         run: pnpm gen:all

@@ -70,7 +70,51 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   synthetic, base64-encoded Part 10 objects (invented patient, fake UIDs); no real PHI, no `.dcm`
   file on disk.
 
+### Fixed
+
+- **175 SOP Class UID names in `UIDS` were wrong (`DICOM-DICT-CURRENCY`).** The dictionary generator
+  appended `" Storage"` to every name it took from the vendor `sops.json`, but that field is already
+  the full PS3.6 Table A-1 UID Name. The result was a doubled suffix on the 164 names that already
+  ended in "Storage", so `UIDS["1.2.840.10008.5.1.4.1.1.2"].name` read **"CT Image Storage Storage"**,
+  and an equally wrong tail on the other 11 ("Digital X-Ray Image Storage - For Presentation Storage",
+  "Macular Grid Thickness and Volume Report Storage"). All 175 shipped in `0.0.1` through `0.0.3`.
+  The suffix is gone and the names now come through verbatim. One entry needed the opposite
+  treatment and got it through the curated table rather than a blanket rule:
+  `1.2.840.10008.5.1.4.1.1.79.1` is the single UID whose vendor name genuinely lacks the suffix, and
+  PS3.6 2026c Table A-1 calls it "Macular Grid Thickness and Volume Report Storage".
+  Measured on this branch against PS3.6 2026c: **all 261 UIDs shared with Table A-1 now match its
+  `UID Name` exactly, with zero retirement-flag disagreements**, and the 7 well-known frames of
+  reference match Table A-2 verbatim. Four transfer-syntax names remain a deliberate short-form
+  deviation, listed in `vendor/innolitics/README.md`. Name only: no UID value, `type`, or `retired`
+  flag changed, and no parse or de-identification behavior depends on these strings.
+- **The byte-identical regen gate could go green while generating nothing (`DICOM-DICT-CURRENCY`).**
+  Two ways, both fixed by making the gate delete `src/dictionary/generated/` (except the hand-written
+  `README.md`) before running `pnpm gen:all`, so it measures what the generators produce instead of
+  what happens to be on disk. A stale orphan, an artifact a generator used to emit and no longer
+  does, was never rewritten and never diffed, so it passed indefinitely. And gutting `gen:all` to a
+  no-op wrote nothing, left every committed artifact untouched, and produced an empty `git diff`:
+  permanently green. `package.json` also joins the workflow's `paths` filters, without which that
+  second case never triggered the gate at all. Both now red, proved by seeding each defect and
+  watching the run fail. The clean also runs in `gen:all` itself (`pnpm gen:clean`) so a local regen
+  matches CI, but the gate does its own delete rather than trusting the script under test.
+
 ### Changed
+
+- **Recorded what the vendor pin is actually current against (`DICOM-DICT-CURRENCY`).**
+  `vendor/innolitics/README.md` gains a measured Currency section and drops the "re-pin monthly"
+  policy, which nothing ran and which measured the wrong thing. The pin is exactly current against
+  upstream: `git ls-remote` resolves `master` to the pinned SHA and all four vendored files are
+  byte-identical to upstream at it. Upstream itself is the stale link, having last changed
+  `attributes.json` on 2024-04-18 ("Update standard to rev2024b"), so the tag tables are grounded in
+  PS3.6 2024b while the current edition is PS3.6 2026c. The drift is now measured rather than
+  assumed, against the NEMA DocBook source for 2026c, and every non-additive difference is named in
+  that file. Figures on `86ab6c1` (`origin/main` at measurement time; this slice does not touch
+  `tags.ts` or `keywords.ts`): of 5,121 tags shared with PS3.6 2026c there are **zero VR
+  differences**, zero name differences and zero VM differences, with 2 keyword and 2
+  retirement-status differences, 188 tags the standard has gained, and 8 retired repeating-group
+  tags it has dropped. VR is what turns bytes into a value, so zero VR drift is the result that
+  matters for reading a real study. Nothing in the dictionary is hand-edited to close the gap: it is
+  generated, and the remaining differences are recorded for the next re-pin.
 
 - **Removed the six em dashes the new gate found (`EMDASH-CONFORMANCE`).** Four tracked files, none
   of them markdown: `.github/CODEOWNERS` (2), `.github/workflows/release.yml` (2),
