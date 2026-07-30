@@ -53,17 +53,16 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   deflates the dataset stream rather than the pixels, and the corrected text says so rather than
   calling every compressed syntax unreadable. This mattered most in the "index a folder of studies"
   recipe, whose closing line promised that "nothing here throws on a quirky file" while a real
-  archive is full of pixel-compressed objects. That recipe now names all three Tier-3 conditions a
-  folder walk actually meets (`UNSUPPORTED_TRANSFER_SYNTAX`, `NOT_DICOM_PART_10` for a non-DICOM
-  file in the folder, `EMPTY_INPUT` for a zero-byte one) and says to catch `DicomParseError` per
-  file and skip. The non-goals entry no longer implies a compressed object is read structurally
-  either.
+  archive is full of pixel-compressed objects. That recipe now names all four Tier-3 conditions a
+  folder walk meets (`UNSUPPORTED_TRANSFER_SYNTAX`, `INVALID_FILE_META` for a truncated or
+  partly-copied file, `NOT_DICOM_PART_10` for a non-DICOM file in the folder, `EMPTY_INPUT` for a
+  zero-byte one) and says to catch `DicomParseError` per file and skip. The non-goals entry no
+  longer implies a compressed object is read structurally either.
 - **`README.md` counted four typed errors where five are exported.** The Error Handling section
   introduced "four typed errors" and then documented `DicomParseError`, `DicomValueError`,
   `DicomSerializeError`, `ProfileDefinitionError` and `DeidentifyError`. The count is now five. The
-  same paragraph said warnings are "never thrown", which is false in two ways: `{ strict: true }`
-  promotes every Tier-2 warning to a thrown `DicomParseError`, and a profile's `escalate` list
-  promotes the codes it names. Both are now stated.
+  same paragraph said warnings are "never thrown", which a profile's `escalate` list contradicts. It
+  now says warnings are data unless you ask otherwise, and names `escalate` as the route that asks.
 - **`docs-content/` stated the published version as `0.0.1`, two published releases stale.**
   `installation.md`'s status note and `troubleshooting.md`'s scope entry both named `0.0.1` while
   npm served `0.0.4`. Neither quotes a version any more. Both send the reader to the registry, which

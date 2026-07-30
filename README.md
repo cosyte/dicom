@@ -148,7 +148,7 @@ async function indexFile(path: string) {
 }
 ```
 
-A quirky object is tolerated rather than rejected, and absent fields come back `undefined`. Check `ds.warnings` to log what was tolerated. A folder walk **does** still need a `try`/`catch`, because the four Tier-3 conditions throw: on a real archive that is mostly `UNSUPPORTED_TRANSFER_SYNTAX` (a pixel-compressed object, which this parser does not read), plus `NOT_DICOM_PART_10` for whatever non-DICOM file wandered into the folder and `EMPTY_INPUT` for a zero-byte one. All four throw the one class, so catch `DicomParseError` per file and skip.
+A quirky object is tolerated rather than rejected, and absent fields come back `undefined`. Check `ds.warnings` to log what was tolerated. A folder walk **does** still need a `try`/`catch`, because all four Tier-3 conditions throw and a real archive meets all four: `UNSUPPORTED_TRANSFER_SYNTAX` for a pixel-compressed object, which this parser does not read; `INVALID_FILE_META` for a truncated or partly-copied file; `NOT_DICOM_PART_10` for whatever non-DICOM file wandered into the folder; and `EMPTY_INPUT` for a zero-byte one. They all throw the one class, so catch `DicomParseError` per file and skip.
 
 ### Build routing keys
 
@@ -321,7 +321,7 @@ The 4 Tier-3 fatal codes (`NOT_DICOM_PART_10`, `INVALID_FILE_META`, `UNSUPPORTED
 
 ## Error Handling
 
-The library throws five typed errors, all exported from the package barrel. Warnings are data rather than throws unless you ask otherwise: `parseDicom(buf, { strict: true })` promotes **every** Tier-2 warning to a thrown `DicomParseError`, and a profile's `escalate` list promotes only the codes it names.
+The library throws five typed errors, all exported from the package barrel. Warnings are data rather than throws unless you ask otherwise: a profile's `escalate` list promotes only the codes it names.
 
 ### `DicomParseError`
 

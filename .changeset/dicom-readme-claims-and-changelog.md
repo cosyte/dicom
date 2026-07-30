@@ -2,7 +2,7 @@
 "@cosyte/dicom": patch
 ---
 
-**The README documented an API that does not exist: `ds.get` takes a tag and never a keyword, and a compressed object is refused rather than read structurally.**
+**The README documented an API that does not exist: `ds.get` takes a tag and never a keyword, and a pixel-compressed object is refused rather than read structurally.**
 
 `README.md` also now opens with the cosyte social banner for this package (`ASSETS-P8`), as a plain
 markdown image above the H1, matching `hl7`, `x12` and `ccda`. The alt text is content rather than
@@ -29,13 +29,12 @@ records what each released version contained.
   synthetic object in `1.2.840.10008.1.2.4.50` and catching the throw. Deflated Explicit VR LE is the
   one compressed syntax in the supported set, because it deflates the dataset stream rather than the
   pixels. The "index a folder of studies" recipe promised that nothing there throws on a quirky file;
-  it now names the Tier-3 conditions a folder walk meets and says to catch `DicomParseError` per file
-  and skip.
+  it now names all four Tier-3 conditions a folder walk meets and says to catch `DicomParseError` per
+  file and skip.
 - **Error count.** The Error Handling section said "four typed errors" and then documented five
   (`DicomParseError`, `DicomValueError`, `DicomSerializeError`, `ProfileDefinitionError`,
-  `DeidentifyError`). It also said warnings are never thrown, which is false in two ways:
-  `{ strict: true }` promotes every Tier-2 warning to a thrown `DicomParseError`, and a profile's
-  `escalate` list promotes the codes it names.
+  `DeidentifyError`). It also said warnings are never thrown, which a profile's `escalate` list
+  contradicts.
 - **Published version.** `docs-content/installation.md` and `docs-content/troubleshooting.md` both
   stated the published version as `0.0.1` while npm served `0.0.4`. Neither quotes a version any
   more.
