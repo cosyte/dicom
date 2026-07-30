@@ -24,7 +24,8 @@ disagreement with the dictionary is flagged (`DICOM_VR_MISMATCH`), never silentl
 ## Reaching elements
 
 `ds.get(tag)` returns the `Element` at a tag (or `undefined`); `ds.has(tag)` tests presence;
-`ds.getAll(tag)` returns every element at a repeating tag. All three take the **tag** form. `get`
+`ds.getAll(tag)` is the always-array complement of `get`, and because a `Dataset` holds at most one
+element per tag it returns 0 or 1. All three take the **tag** form. `get`
 does **not** take a keyword. Resolve a keyword to its tag through the generated dictionary:
 
 ```ts runnable

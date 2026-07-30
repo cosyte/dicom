@@ -1,3 +1,5 @@
+![@cosyte/dicom: read a real-world, vendor-quirky DICOM Part 10 file and pull the metadata you need in one line](https://cosyte.com/social/cosyte-banner-dicom-1200x300.png)
+
 # @cosyte/dicom
 
 > Read a real-world, vendor-quirky DICOM Part 10 file and pull the metadata you need in one line, without having read the DICOM standard.
@@ -26,7 +28,7 @@ import { parseDicom } from "@cosyte/dicom";
 
 const ds = parseDicom(await readFile("study.dcm"));
 
-ds.get("PatientName")?.value; // PN value: structured, never flattened
+ds.get("00100010")?.value; // (0010,0010) Patient's Name: structured PN, never flattened
 ds.study.instanceUid; // "1.2.840.…": the global study anchor
 ds.image.rescaleSlope; // number | undefined: undefined means "absent", never 1
 ```
@@ -38,7 +40,7 @@ That's the pitch: no config, no schema upload, no spec lookup. The parser accept
 ## Features
 
 - **One-line metadata extraction**: `ds.patient`, `ds.study`, `ds.series`, `ds.image`: typed, fail-safe views over the safety-critical attributes. No `(group,element)` tags to memorise.
-- **Two access patterns**: named views, or structural `ds.get("PatientName")` / `ds.get("(0010,0010)")` by keyword or tag, plus `ds.elements()` to walk everything.
+- **Two access patterns**: named views, or structural `ds.get("00100010")` by 8-character `(group,element)` tag (resolve a keyword to its tag with `Dictionary.byKeyword`), plus `ds.elements()` to walk everything.
 - **Lazy typed value decode**: `element.value` decodes raw bytes into a discriminated `DicomValue` across all 34 VRs (numbers, `bigint`s, person names, dates/times, sequences, raw `binary`), honoring `(0008,0005)` Specific Character Set through nested items.
 - **Real-world tolerance, Postel's Law**: a lenient reader emits 24 stable warning codes for what it tolerated; only 4 truly-structural conditions are fatal. The serializer always writes spec-clean Part 10.
 - **Source/vendor profile system**: `defineProfile()` + 5 built-ins (`ge`, `siemens`, `philips`, `strict`, `lenient`) that only ever _tighten or annotate_ a parse, resolving vendor private tags by the file's live Private Creator string, never a wrong decode.
@@ -87,15 +89,20 @@ s.instanceUid; // "1.2.840.…" Study Instance UID (0020,000D)
 s.accessionNumber; // ties the study to the HIS order (0008,0050)
 ```
 
-### By keyword or tag
+### By tag
 
-`get` reaches any element by keyword **or** by `(group,element)` tag through the same path; `has`, `getAll` (for repeating tags), and `elements()` round out structural access.
+`get`, `has` and `getAll` take the **8-character `(group,element)` tag** (case-insensitive) and only that: `"00080060"`, not `"Modality"` and not `"(0008,0060)"`. A keyword resolves to its tag through the dictionary first. `getAll` is the always-array complement of `get` (a dataset holds at most one element per tag, so it returns 0 or 1), and `elements()` walks everything.
 
 ```ts
-ds.get("Modality"); // by keyword
-ds.get("(0008,0060)"); // same element, by tag
-ds.has("PixelData"); // boolean
+import { Dictionary } from "@cosyte/dicom";
+
+ds.get("00080060"); // Modality (0008,0060)
+ds.has("7FE00010"); // boolean: is Pixel Data present
 ds.elements(); // readonly Element[]: walk everything
+
+// Prefer keywords? Resolve one to its tag, then get by tag.
+const tag = Dictionary.byKeyword("Modality")?.tag; // "00080060"
+ds.get(tag ?? "");
 ```
 
 ### Typed values
@@ -103,10 +110,10 @@ ds.elements(); // readonly Element[]: walk everything
 `get` returns an `Element`; its `.value` lazily decodes the raw bytes into a discriminated `DicomValue` and caches the result.
 
 ```ts
-const rows = ds.get("Rows")?.value; // US
+const rows = ds.get("00280010")?.value; // Rows, a US
 if (rows?.kind === "numbers") rows.values[0]; // 512
 
-const name = ds.get("PatientName")?.value; // PN
+const name = ds.get("00100010")?.value; // Patient's Name, a PN
 if (name?.kind === "personName") name.values[0]?.alphabetic.givenName; // "Jane"
 ```
 
@@ -141,7 +148,7 @@ async function indexFile(path: string) {
 }
 ```
 
-Nothing here throws on a quirky file; absent fields come back `undefined`. Check `ds.warnings` if you want to log what was tolerated.
+A quirky object is tolerated rather than rejected, and absent fields come back `undefined`. Check `ds.warnings` to log what was tolerated. A folder walk **does** still need a `try`/`catch`, because all four Tier-3 conditions throw and a real archive meets all four: `UNSUPPORTED_TRANSFER_SYNTAX` for a pixel-compressed object, which this parser does not read; `INVALID_FILE_META` for a truncated or partly-copied file; `NOT_DICOM_PART_10` for whatever non-DICOM file wandered into the folder; and `EMPTY_INPUT` for a zero-byte one. They all throw the one class, so catch `DicomParseError` per file and skip.
 
 ### Build routing keys
 
@@ -173,7 +180,7 @@ img.photometricInterpretation; // (0028,0004) never defaulted to MONOCHROME2
 img.pixelSpacing; // (0028,0030) patient-plane mm, distinct from imagerPixelSpacing
 ```
 
-> **Vendor note.** Philips writes private rescale tags `(2005,1409/140A/140B)` that shadow the standard `(0028,1052/1053)`; using the standard tags alone can yield non-quantitative values. This parser **preserves** the private tags so you can prefer them. Reach them with `ds.get("(2005,1409)")` (optionally under `profiles.philips`).
+> **Vendor note.** Philips writes private rescale tags `(2005,1409/140A/140B)` that shadow the standard `(0028,1052/1053)`; using the standard tags alone can yield non-quantitative values. This parser **preserves** the private tags so you can prefer them. Reach them with `ds.get("20051409")` (optionally under `profiles.philips`).
 
 For Enhanced multi-frame objects, `image.frame(i)` resolves each frame's functional-group macros Per-Frame-else-Shared (PS3.3 C.7.6.16). It throws a `DicomValueError` (carrying only structural facts, never PHI) for an out-of-range frame or a required geometry macro missing from both groups.
 
@@ -314,7 +321,7 @@ The 4 Tier-3 fatal codes (`NOT_DICOM_PART_10`, `INVALID_FILE_META`, `UNSUPPORTED
 
 ## Error Handling
 
-The library throws four typed errors, all exported from the package barrel; warnings are data, never thrown.
+The library throws five typed errors, all exported from the package barrel. Warnings are data rather than throws unless you ask otherwise: a profile's `escalate` list promotes only the codes it names.
 
 ### `DicomParseError`
 
@@ -350,13 +357,13 @@ Thrown by `serializeDicom` for `MISSING_TRANSFER_SYNTAX` (the dataset names no t
 
 `@cosyte/dicom` is metadata-first by design. Even at v1-complete, do **not** rely on it for:
 
-- **Pixel data.** No decode/decompression of _any_ transfer syntax (JPEG / JPEG-LS / JPEG2000 / RLE / HTJ2K); no rendering; no measurements. Encapsulated pixel data is exposed as raw fragments. → `@cosyte/dicom-pixel`.
+- **Pixel data.** No decode/decompression, no rendering, no measurements: Pixel Data is exposed as raw bytes. And v1 does not read a **compressed object at all**, not even structurally: a transfer syntax outside the four listed below is the fatal `UNSUPPORTED_TRANSFER_SYNTAX`, so JPEG / JPEG-LS / JPEG2000 / RLE / HTJ2K objects do not parse. → `@cosyte/dicom-pixel`.
 - **Burned-in PHI.** v1 **warns** it cannot remove burned-in annotation; a "de-identified" output is **metadata-de-identified only**.
 - **Networking & web.** No DIMSE (C-STORE/FIND/MOVE, MWL, MPPS); no DICOMweb (QIDO/WADO/STOW). → `@cosyte/dicom-net`, `@cosyte/dicomweb`.
 - **Transcoding.** No transfer-syntax conversion. The serializer re-emits in the dataset's source syntax only.
 - **Terminology resolution.** Coded values are surfaced (designator + canonical source) but not validated against SNOMED/LOINC/etc.
 
-Supported transfer syntaxes (structure for all; **pixels never decoded**): Implicit VR LE `1.2.840.10008.1.2`, Explicit VR LE `…1.2.1`, Deflated Explicit VR LE `…1.2.1.99`, Explicit VR BE `…1.2.2` (retired, legacy-only), and any compressed syntax at the structural level (fragments preserved).
+Supported transfer syntaxes, and **exactly** these four (**pixels never decoded** in any of them): Implicit VR LE `1.2.840.10008.1.2`, Explicit VR LE `…1.2.1`, Deflated Explicit VR LE `…1.2.1.99`, Explicit VR BE `…1.2.2` (retired, legacy-only). Any other UID, which includes every pixel-compressed syntax (JPEG, JPEG-LS, JPEG2000, RLE, HTJ2K), is rejected by `parseDicom` with the fatal `UNSUPPORTED_TRANSFER_SYNTAX` rather than read structurally. Deflated is the one compressed syntax in the supported set: it deflates the whole dataset stream rather than the pixels, and it is inflated on parse.
 
 ---
 
