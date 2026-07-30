@@ -12,8 +12,9 @@ without configuration, and it takes **zero runtime dependencies**: the byte-leve
 work is done in-house (the package budget allows up to three ADR-justified deps; none are currently
 taken).
 
-> **Status:** pre-alpha (`0.0.x`), published on npm at `0.0.1` and public. The install command below
-> is live; expect the surface to keep moving until first alpha.
+> **Status:** pre-alpha, public, and published on npm on the `0.0.x`-until-first-alpha ladder. The
+> install command below is live; expect the surface to keep moving until first alpha. For the
+> current version, read `npm view @cosyte/dicom version` rather than a number written in a doc.
 
 ## Prerequisites
 

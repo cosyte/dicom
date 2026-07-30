@@ -6,6 +6,67 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Added
 
+- **`README.md` now opens with the cosyte social banner for this package** (`ASSETS-P8`). A plain
+  markdown image above the H1, matching `hl7`, `x12` and `ccda`: no `<img>`, no `<picture>`, no link
+  wrapper. The tile is self-grounded by design and deliberately does not depend on `<picture>`
+  surviving npm's markdown sanitizer, which is still unverified. The alt text is content rather than
+  decoration, because it is what a screen reader reads on the npm page: it names the package and
+  states its purpose in the package's own voice. The image URL was re-verified with `curl -I` as
+  `200 image/png`, 19,456 bytes, before this landed, rather than taken from the `live` flag in
+  `assets/published-urls.json`, which that file's own `$comment` describes as a declaration made
+  from another repo's evidence rather than a fact checked here.
+
+### Changed
+
+- **`CHANGELOG.md` now records what each released version contained.** Every entry in this file sat
+  under `[Unreleased]` while npm served `0.0.1`, `0.0.3` and `0.0.4`, and `CHANGELOG.md` is in
+  `package.json#files`, so the file shipped inside the tarball telling a consumer that the version
+  they had installed was unreleased. That is a false claim on a distributed surface rather than
+  untidy bookkeeping. No entry's substance is rewritten: each is moved to the version that actually
+  shipped it, reconstructed from the tags, the GitHub releases, and the changesets each
+  "Version Packages" commit consumed. `0.0.2` gets no heading because it was never published: it was
+  version-bumped on 2026-07-27 and the publish that followed did not run, so its four changesets
+  reached npm inside `0.0.3` and are recorded there. That is also why npm's version list skips
+  `0.0.2`.
+
+### Fixed
+
+- **`README.md` documented an element-access API that does not exist.** `Dataset.get` / `has` /
+  `getAll` take the 8-character `(group,element)` tag (`"00080060"`, case-insensitive) and nothing
+  else, but the README's quickstart, feature list, access-pattern section, typed-value examples and
+  Philips vendor note all showed `ds.get("Modality")` and `ds.get("(0008,0060)")`. Both forms return
+  `undefined`, and because the `Tag` type is `string` the compiler catches neither: the first line a
+  reader copied out of the quickstart silently produced nothing. Measured against the built package
+  rather than read off the source. The identical defect was found and corrected in
+  `docs-content/intro.md` before `0.0.3` (see below) and the README was not swept with it, which is
+  the reason to state the rule once here: `get` takes a tag, and a keyword is resolved to its tag
+  through `Dictionary.byKeyword(...)?.tag` first. Every example is corrected and the section is
+  retitled from "By keyword or tag" to "By tag".
+- **`README.md` claimed compressed transfer syntaxes were readable at the structural level.** It
+  said the supported set was the four v1 syntaxes "and any compressed syntax at the structural level
+  (fragments preserved)". The dispatch table holds exactly four entries and any other Transfer
+  Syntax UID is the fatal `UNSUPPORTED_TRANSFER_SYNTAX`, so a JPEG, JPEG-LS, JPEG2000, RLE or HTJ2K
+  object does not parse at all. Confirmed by parsing a synthetic object in `1.2.840.10008.1.2.4.50`
+  and catching the throw. This mattered most in the "index a folder of studies" recipe, whose
+  closing line promised that "nothing here throws on a quirky file" while a real archive is full of
+  compressed objects; that recipe now says to catch `DicomParseError` per file and skip. The
+  non-goals entry no longer implies a compressed object is read structurally either.
+- **`README.md` counted four typed errors where five are exported.** The Error Handling section
+  introduced "four typed errors" and then documented `DicomParseError`, `DicomValueError`,
+  `DicomSerializeError`, `ProfileDefinitionError` and `DeidentifyError`. The count is now five. The
+  same paragraph said warnings are "never thrown", which a profile's `escalate` list contradicts;
+  it now says so.
+- **`docs-content/` stated the published version as `0.0.1`, three releases stale.**
+  `installation.md`'s status note and `troubleshooting.md`'s scope entry both named `0.0.1` while
+  npm served `0.0.4`. Neither quotes a version any more. Both send the reader to the registry, which
+  is the only thing that cannot go stale, by naming the command that reads it.
+  `troubleshooting.md` also stopped sending readers to `CLAUDE.md`, an internal file that does not
+  ship in the tarball.
+
+## [0.0.4] - 2026-07-30
+
+### Added
+
 - **The element registry is now generated from NEMA's PS3.6 DocBook, the normative publication**
   (`DICOM-UPSTREAM-EDITION-LAG`). `vendor/nema/part06/` pins `part06.xml` (PS3.6 **2026c**) by
   SHA-256, and `scripts/generate-dictionary.ts` applies it as a **per-field overlay** over the
@@ -49,69 +110,56 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   _content_, documented in `vendor/nema/README.md`. What is gated in CI is unchanged and offline:
   the committed dictionary must be byte-for-byte what the pinned inputs produce.
 
-- **Em-dash brand gate in CI (`EMDASH-CONFORMANCE`).** The founder directive of 2026-07-24
-  (`knowledgebase/06-brand/voice-and-tone.md`, "No em dashes. Ever.") bans `U+2014` outright across
-  every cosyte surface and names commit messages explicitly, and the meta-repo's
-  `documentation/conventions.md` has stated for weeks that the rule is CI-gated. It now actually is,
-  here: `scripts/check-no-emdash.sh` (`pnpm check:no-emdash`) plus a dedicated
-  `.github/workflows/no-emdash.yml` job that scans **both** halves the rule covers, the tracked files
-  **and** the PR title, body, and commit messages. The workflow carries the non-default `edited`
-  pull-request trigger, which is load-bearing: this repo squash-merges under
-  `squash_merge_commit_title: COMMIT_OR_PR_TITLE` and `squash_merge_commit_message: COMMIT_MESSAGES`
-  (read off the repo, not assumed), so the subject that lands on `main` is the PR title, or the lone
-  commit's subject when the branch has exactly one, and the body is the branch commit messages.
-  Without `edited` a title changed after the last push would never be re-checked. The PR body does
-  **not** land; the gate scans it anyway, as deliberate over-strictness on a surface that costs
-  nothing to cover. It is a separate workflow rather than a job in `ci.yml` because that trigger
-  would otherwise re-run the whole Node 22 + 24 matrix on every typo fix, and because the shared
-  `cosyte/.github` pipeline runs no arbitrary repo script.
-  **This one did change content, unlike the earlier ports.** An ecosystem survey had measured
-  markdown only (0 of 25 `.md` files) and read dicom as already clean. Measuring all 178 tracked
-  files found six live em dashes in four non-markdown files, all removed here (see Changed, below).
-  Measure every tracked file, because that is what the scan covers.
-  The script is the **text-only** variant, taken from `ncpdp` (PR #34, `39212bb`) rather than from
-  the older `knowledgebase` copy, so it carries `ncpdp`'s two fixes to the shared shape instead of
-  inheriting the holes: a tracked file named `-` was read by `grep` as standard input (which `xargs`
-  points at `/dev/null`) and so was never opened, and `-d skip` silently passed a tracked symlink to
-  a directory. Both are re-proved here rather than taken on faith: with the `./` path prefix removed
-  the gate prints OK and exits 0 over a live em dash in a file named `-`, and with `-d skip` restored
-  it goes green over an unread symlink.
-  It deliberately omits `grep -I`, and in this repo that is the most load-bearing flag choice in the
-  file. `src/dataset/vr/charset.ts` holds a functional NUL byte inside `/[\x00 ]+$/u`, the regex that
-  strips DICOM's own padding, so grep classifies it binary. It carries no em dash today and scans
-  green, which is the whole answer to the belief that this port was blocked: the red would come from
-  a match, never from the NUL. **If it ever gains one, the gate reds.** Measured with GNU grep 3.8:
-  grep exits 0, writes nothing to stdout, and writes `binary file matches` to stderr, so the hit
-  never reaches the hit list and the stderr capture fails the run instead. With `-I` added, the same
-  edit goes green, which is why `-I` stays out. The failure message names that case explicitly rather
-  than blaming an I/O error that did not happen.
-  A gate that prints OK when it did not read its input is worse than no gate, so nine routes by which
-  a dead or blind scan could still report green are each checked red, not assumed: a corrupt git
-  index, an unreadable tracked file, a tracked file named `-q`, a C-quoted non-ASCII path, a
-  mis-encoded text file, an empty tracked-file list, a tracked file named `-`, a tracked symlink to a
-  directory, and the NUL-bearing source file gaining an em dash.
-  Known limits are documented in the script header and inherited knowingly from the shared shape
-  rather than patched in this copy alone: encoded-form matching is literal (so `&#x2014` without the
-  semicolon, and lowercase `%e2%80%94`, pass), stderr capture binds to the scanning `grep` rather
-  than to the filters ahead of it, an em dash encoded in a non-UTF-8 charset is not matched (a live
-  possibility here, given `(0008,0005)` Specific Character Set fixtures), and the scan reads file
-  **contents** only, so a tracked path that itself carries an em dash passes. Tooling only: no
-  runtime, public-API, or parse-behavior change.
-- **`docs-content/` now covers the full canonical Diátaxis spine** (`DOCS-CONTENT-P6`). Beyond the
-  existing Overview (`intro`), the sidebar gains **Installation** and **Quickstart** (tutorials),
-  five **Core Concepts** notes (the object model, the tolerance/warning model, the typed value
-  layer, the safety-critical views, and the source-profile system), a **Guides** cookbook (four
-  recipes: re-serialize, de-identify, read raw pixel data, triage warnings), and a
-  **Troubleshooting & known limitations** reference. Every documented capability is grounded in the
-  package's actually-shipped surface; the metadata-first boundary is stated explicitly, with the
-  permanent non-goals named in Troubleshooting (**no pixel decode, no DIMSE networking, no
-  DICOMweb**, no pixel-level de-identification).
-- **Doc/code-agreement gate (`test/docs-content.test.ts`).** Every ` ```ts runnable ` snippet in
-  `docs-content/` is extracted, compiled, and executed against the **built** package via
-  `docSnippetSuite()` from `@cosyte/vitest-config/snippets`, with its inline `// =>` assertions
-  checked, so a documented example can never silently drift from the code. All examples use
-  synthetic, base64-encoded Part 10 objects (invented patient, fake UIDs); no real PHI, no `.dcm`
-  file on disk.
+### Changed
+
+- **The PS3.5 repeating-group bound is now derived from pinned normative documents rather than
+  transcribed (`DICOM-PS35-NOT-VENDORED`). No runtime impact: the emitted bound is identical and no
+  public API moves.** `deidentify()` expands PS3.15 Table E.1-1's `(50xx,xxxx)`, `(60xx,3000)` and
+  `(60xx,4000)` rows over the concrete groups PS3.5 section 7.6 admits, sixteen even groups per mask
+  (`5000`-`501E`, `6000`-`601E`), not 256. That bound is a safety limit in **both** directions, and it
+  was the last input here that lived as a **quotation in a source file** while PS3.6 and PS3.15 were
+  SHA-pinned and re-hashed before use, so the generator's guard could catch a new mask _prefix_ but
+  never a changed _bound_.
+  `vendor/nema/part05/` pins `part05.xml` (PS3.5 **2026c**) and `vendor/nema/part05-2004/` pins
+  `04_05pu.pdf`, both re-hashed as a precondition, and `scripts/generate-repeating-groups.ts` emits
+  `src/dictionary/generated/repeating-groups.ts`, which `src/dictionary/repeating-groups.ts`
+  re-exports. **Two documents, because the bound is split across two editions:** the current one
+  states the overlay bound normatively and excludes the odd `6001`-`601F`, but says nothing about the
+  curve bound, having retired curve encoding and delegated it to PS3.5-2004 by URL in section 7.6's
+  own Note. So the 2004 PDF is the authority the edition in force names, not a convenience copy. The
+  generator **proves that delegation** (section 7.6 must link exactly the vendored URL) instead of
+  assuming it, and because both editions state the overlay bound it **requires them to agree**.
+  `gen:repeating-groups` runs first in `gen:all`, since the Annex E generator expands family rows
+  through this bound.
+  **The values did not change; their falsifiability did.** Moving the overlay bound in either
+  vendored edition reds the cross-check, moving the curve bound in the 2004 edition moves the emitted
+  artifact (caught by the byte-identical regen gate), and removing the delegation link stops the 2004
+  document being used at all. Each was confirmed non-vacuous by disabling the guard and watching the
+  test fail. Reading a 2004 PDF needs a PDF reader; the one in that generator is deliberately minimal
+  (Node `zlib` only, one sentence recovered, matched against a precise expected shape) and is not to
+  be grown into a general parser. There is no staleness clock, for the same reasons as PS3.6 and
+  PS3.15.
+- **Recorded what the vendor pin is actually current against (`DICOM-DICT-CURRENCY`).**
+  `vendor/innolitics/README.md` gains a measured Currency section and drops the "re-pin monthly"
+  policy, which nothing ran and which measured the wrong thing. The pin is exactly current against
+  upstream: `git ls-remote` resolves `master` to the pinned SHA and all four vendored files are
+  byte-identical to upstream at it. Upstream itself is the stale link, having last changed
+  `attributes.json` on 2024-04-18 ("Update standard to rev2024b"), so the tag tables are grounded in
+  PS3.6 2024b while the current edition is PS3.6 2026c. The drift is now measured rather than
+  assumed, against the NEMA DocBook source for 2026c, and every non-additive difference is named in
+  that file. Figures on `86ab6c1` (`origin/main` at measurement time; this slice does not touch
+  `tags.ts` or `keywords.ts`): all **5,129** committed tags are shared with PS3.6 2026c, and across
+  them there are **zero VR differences**, zero name differences and zero VM differences, with 2
+  keyword and 2 retirement-status differences. **Every tag this dictionary carries is still in
+  PS3.6 2026c**; the drift is otherwise purely additive, 180 tags the standard has gained. VR is
+  what turns bytes into a value, so zero VR drift is the result that matters for reading a real
+  study. Nothing in the dictionary is hand-edited to close the gap: it is generated, and the
+  remaining differences are recorded for the next re-pin. One method note lives with the
+  measurement, because getting it wrong is easy and was got wrong on the first run: DICOM tag values
+  are hexadecimal and their case is not semantic, so tag keys must be compared case-insensitively.
+  PS3.6 prints them uniformly uppercase and `tags.ts` agrees on 1,540 of its 5,129 keys, but
+  `tags.ts` lowercases the 8 repeating-group keys whose trailing digits are hex letters and no
+  others, so a verbatim comparison mis-classifies exactly those 8.
 
 ### Fixed
 
@@ -274,56 +322,84 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   and a chained clean would leave the working tree empty and the build broken. The gate does its own
   delete rather than trusting the script under test.
 
-### Changed
+## [0.0.3] - 2026-07-27
 
-- **The PS3.5 repeating-group bound is now derived from pinned normative documents rather than
-  transcribed (`DICOM-PS35-NOT-VENDORED`). No runtime impact: the emitted bound is identical and no
-  public API moves.** `deidentify()` expands PS3.15 Table E.1-1's `(50xx,xxxx)`, `(60xx,3000)` and
-  `(60xx,4000)` rows over the concrete groups PS3.5 section 7.6 admits, sixteen even groups per mask
-  (`5000`-`501E`, `6000`-`601E`), not 256. That bound is a safety limit in **both** directions, and it
-  was the last input here that lived as a **quotation in a source file** while PS3.6 and PS3.15 were
-  SHA-pinned and re-hashed before use, so the generator's guard could catch a new mask _prefix_ but
-  never a changed _bound_.
-  `vendor/nema/part05/` pins `part05.xml` (PS3.5 **2026c**) and `vendor/nema/part05-2004/` pins
-  `04_05pu.pdf`, both re-hashed as a precondition, and `scripts/generate-repeating-groups.ts` emits
-  `src/dictionary/generated/repeating-groups.ts`, which `src/dictionary/repeating-groups.ts`
-  re-exports. **Two documents, because the bound is split across two editions:** the current one
-  states the overlay bound normatively and excludes the odd `6001`-`601F`, but says nothing about the
-  curve bound, having retired curve encoding and delegated it to PS3.5-2004 by URL in section 7.6's
-  own Note. So the 2004 PDF is the authority the edition in force names, not a convenience copy. The
-  generator **proves that delegation** (section 7.6 must link exactly the vendored URL) instead of
-  assuming it, and because both editions state the overlay bound it **requires them to agree**.
-  `gen:repeating-groups` runs first in `gen:all`, since the Annex E generator expands family rows
-  through this bound.
-  **The values did not change; their falsifiability did.** Moving the overlay bound in either
-  vendored edition reds the cross-check, moving the curve bound in the 2004 edition moves the emitted
-  artifact (caught by the byte-identical regen gate), and removing the delegation link stops the 2004
-  document being used at all. Each was confirmed non-vacuous by disabling the guard and watching the
-  test fail. Reading a 2004 PDF needs a PDF reader; the one in that generator is deliberately minimal
-  (Node `zlib` only, one sentence recovered, matched against a precise expected shape) and is not to
-  be grown into a general parser. There is no staleness clock, for the same reasons as PS3.6 and
-  PS3.15.
-- **Recorded what the vendor pin is actually current against (`DICOM-DICT-CURRENCY`).**
-  `vendor/innolitics/README.md` gains a measured Currency section and drops the "re-pin monthly"
-  policy, which nothing ran and which measured the wrong thing. The pin is exactly current against
-  upstream: `git ls-remote` resolves `master` to the pinned SHA and all four vendored files are
-  byte-identical to upstream at it. Upstream itself is the stale link, having last changed
-  `attributes.json` on 2024-04-18 ("Update standard to rev2024b"), so the tag tables are grounded in
-  PS3.6 2024b while the current edition is PS3.6 2026c. The drift is now measured rather than
-  assumed, against the NEMA DocBook source for 2026c, and every non-additive difference is named in
-  that file. Figures on `86ab6c1` (`origin/main` at measurement time; this slice does not touch
-  `tags.ts` or `keywords.ts`): all **5,129** committed tags are shared with PS3.6 2026c, and across
-  them there are **zero VR differences**, zero name differences and zero VM differences, with 2
-  keyword and 2 retirement-status differences. **Every tag this dictionary carries is still in
-  PS3.6 2026c**; the drift is otherwise purely additive, 180 tags the standard has gained. VR is
-  what turns bytes into a value, so zero VR drift is the result that matters for reading a real
-  study. Nothing in the dictionary is hand-edited to close the gap: it is generated, and the
-  remaining differences are recorded for the next re-pin. One method note lives with the
-  measurement, because getting it wrong is easy and was got wrong on the first run: DICOM tag values
-  are hexadecimal and their case is not semantic, so tag keys must be compared case-insensitively.
-  PS3.6 prints them uniformly uppercase and `tags.ts` agrees on 1,540 of its 5,129 keys, but
-  `tags.ts` lowercases the 8 repeating-group keys whose trailing digits are hex letters and no
-  others, so a verbatim comparison mis-classifies exactly those 8.
+This release carries two version bumps' worth of change. `0.0.2` was bumped on the same day and
+never published, so the four changesets it consumed reached npm here, in `0.0.3`, together with
+the regen-gate repair below.
+
+### Added
+
+- **Em-dash brand gate in CI (`EMDASH-CONFORMANCE`).** The founder directive of 2026-07-24
+  (`knowledgebase/06-brand/voice-and-tone.md`, "No em dashes. Ever.") bans `U+2014` outright across
+  every cosyte surface and names commit messages explicitly, and the meta-repo's
+  `documentation/conventions.md` has stated for weeks that the rule is CI-gated. It now actually is,
+  here: `scripts/check-no-emdash.sh` (`pnpm check:no-emdash`) plus a dedicated
+  `.github/workflows/no-emdash.yml` job that scans **both** halves the rule covers, the tracked files
+  **and** the PR title, body, and commit messages. The workflow carries the non-default `edited`
+  pull-request trigger, which is load-bearing: this repo squash-merges under
+  `squash_merge_commit_title: COMMIT_OR_PR_TITLE` and `squash_merge_commit_message: COMMIT_MESSAGES`
+  (read off the repo, not assumed), so the subject that lands on `main` is the PR title, or the lone
+  commit's subject when the branch has exactly one, and the body is the branch commit messages.
+  Without `edited` a title changed after the last push would never be re-checked. The PR body does
+  **not** land; the gate scans it anyway, as deliberate over-strictness on a surface that costs
+  nothing to cover. It is a separate workflow rather than a job in `ci.yml` because that trigger
+  would otherwise re-run the whole Node 22 + 24 matrix on every typo fix, and because the shared
+  `cosyte/.github` pipeline runs no arbitrary repo script.
+  **This one did change content, unlike the earlier ports.** An ecosystem survey had measured
+  markdown only (0 of 25 `.md` files) and read dicom as already clean. Measuring all 178 tracked
+  files found six live em dashes in four non-markdown files, all removed here (see Changed, below).
+  Measure every tracked file, because that is what the scan covers.
+  The script is the **text-only** variant, taken from `ncpdp` (PR #34, `39212bb`) rather than from
+  the older `knowledgebase` copy, so it carries `ncpdp`'s two fixes to the shared shape instead of
+  inheriting the holes: a tracked file named `-` was read by `grep` as standard input (which `xargs`
+  points at `/dev/null`) and so was never opened, and `-d skip` silently passed a tracked symlink to
+  a directory. Both are re-proved here rather than taken on faith: with the `./` path prefix removed
+  the gate prints OK and exits 0 over a live em dash in a file named `-`, and with `-d skip` restored
+  it goes green over an unread symlink.
+  It deliberately omits `grep -I`, and in this repo that is the most load-bearing flag choice in the
+  file. `src/dataset/vr/charset.ts` holds a functional NUL byte inside `/[\x00 ]+$/u`, the regex that
+  strips DICOM's own padding, so grep classifies it binary. It carries no em dash today and scans
+  green, which is the whole answer to the belief that this port was blocked: the red would come from
+  a match, never from the NUL. **If it ever gains one, the gate reds.** Measured with GNU grep 3.8:
+  grep exits 0, writes nothing to stdout, and writes `binary file matches` to stderr, so the hit
+  never reaches the hit list and the stderr capture fails the run instead. With `-I` added, the same
+  edit goes green, which is why `-I` stays out. The failure message names that case explicitly rather
+  than blaming an I/O error that did not happen.
+  A gate that prints OK when it did not read its input is worse than no gate, so nine routes by which
+  a dead or blind scan could still report green are each checked red, not assumed: a corrupt git
+  index, an unreadable tracked file, a tracked file named `-q`, a C-quoted non-ASCII path, a
+  mis-encoded text file, an empty tracked-file list, a tracked file named `-`, a tracked symlink to a
+  directory, and the NUL-bearing source file gaining an em dash.
+  Known limits are documented in the script header and inherited knowingly from the shared shape
+  rather than patched in this copy alone: encoded-form matching is literal (so `&#x2014` without the
+  semicolon, and lowercase `%e2%80%94`, pass), stderr capture binds to the scanning `grep` rather
+  than to the filters ahead of it, an em dash encoded in a non-UTF-8 charset is not matched (a live
+  possibility here, given `(0008,0005)` Specific Character Set fixtures), and the scan reads file
+  **contents** only, so a tracked path that itself carries an em dash passes. Tooling only: no
+  runtime, public-API, or parse-behavior change.
+- **`docs-content/` now covers the full canonical Diátaxis spine** (`DOCS-CONTENT-P6`). Beyond the
+  existing Overview (`intro`), the sidebar gains **Installation** and **Quickstart** (tutorials),
+  five **Core Concepts** notes (the object model, the tolerance/warning model, the typed value
+  layer, the safety-critical views, and the source-profile system), a **Guides** cookbook (four
+  recipes: re-serialize, de-identify, read raw pixel data, triage warnings), and a
+  **Troubleshooting & known limitations** reference. Every documented capability is grounded in the
+  package's actually-shipped surface; the metadata-first boundary is stated explicitly, with the
+  permanent non-goals named in Troubleshooting (**no pixel decode, no DIMSE networking, no
+  DICOMweb**, no pixel-level de-identification).
+- **Doc/code-agreement gate (`test/docs-content.test.ts`).** Every ` ```ts runnable ` snippet in
+  `docs-content/` is extracted, compiled, and executed against the **built** package via
+  `docSnippetSuite()` from `@cosyte/vitest-config/snippets`, with its inline `// =>` assertions
+  checked, so a documented example can never silently drift from the code. All examples use
+  synthetic, base64-encoded Part 10 objects (invented patient, fake UIDs); no real PHI, no `.dcm`
+  file on disk.
+- **Trademark notice (`TRADEMARKS.md`).** This package names third-party systems to describe what it
+  interoperates with; the notice records that cosyte is not affiliated with, endorsed by, or
+  sponsored by any of them, that every reference is descriptive, and that the built-in profiles are
+  authored from public sources only. Added to `files` so it ships inside the published tarball, not
+  just on GitHub. Documentation only: no runtime or API change.
+
+### Changed
 
 - **Removed the six em dashes the new gate found (`EMDASH-CONFORMANCE`).** Four tracked files, none
   of them markdown: `.github/CODEOWNERS` (2), `.github/workflows/release.yml` (2),
@@ -379,7 +455,8 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   therefore "a no-op until that flag is removed". `package.json` carries no `private` field, the repo
   is public, and the package ships on npm at `0.0.1`, so the comment described the release pipeline as
   inert when it is live. Documentation only, no behavior change, but a misleading note on a workflow
-  that really does publish is worth more than a stale one elsewhere.
+  that really does publish is worth more than a stale one elsewhere. (`0.0.1` was the published
+  version on that date.)
 
 - **Corrected stale publish-status language in `docs-content/` (`README-ORG-SWEEP`).**
   `installation.md` claimed the package was "not yet published to npm" and that the install command
@@ -387,56 +464,12 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   published … not on npm; the first provenance publish is gated on the coordinated public launch"
   non-goal. `@cosyte/dicom` is published on npm at `0.0.1` and public. Both now state the truth
   (published, public, still pre-alpha on the `0.0.x`-until-first-alpha ladder), and the troubleshooting
-  bullet becomes an honest pin-your-version pre-alpha caveat rather than a stale non-goal.
+  bullet becomes an honest pin-your-version pre-alpha caveat rather than a stale non-goal. (`0.0.1`
+  was the published version on that date; `npm view @cosyte/dicom version` is the current one.)
 
-- **`private: true` removed: `@cosyte/dicom` can publish.** The flag dated to the very first
-  scaffold commit and was never explained; `changeset publish` silently skips a private package, so
-  this repo was the one parser that could not reach npm even once its pipeline worked. It also
-  contradicted the `publishConfig: { access: "public" }` in the same file. Removed as part of the
-  coordinated public launch (`PUB-FLIP`).
-
-- **The release can actually bump the version.** `package.json` had no `version` script, so the
-  shared pipeline's `pnpm run version` failed with `Command "version" not found` and the release
-  aborted before opening a "Version Packages" PR. Adds `scripts/sync-version.mjs` (the `hl7`
-  reference, retargeted at `src/version.ts`) and the `version` script that runs it after
-  `changeset version`, so the bump and the `VERSION` constant land in the same commit.
-- **`VERSION` is no longer typed as a string literal.** It was declared `export const VERSION =
-"0.0.0"`, giving it the literal type `"0.0.0"`, so the exported type would change on every
-  release, making each version bump a breaking type change. Now annotated `: string`, matching the
-  `hl7` reference. Type-only; the runtime value is unchanged. Done now because the package is
-  unpublished. After the first publish this would itself be a breaking change.
-
-- **The Release workflow can actually start.** `.github/workflows/release.yml` calls the shared
-  `cosyte/.github` pipeline, which requests `contents`/`id-token`/`pull-requests: write`, but declared
-  no `permissions:` of its own, so it inherited the repo default of `contents: read`. A called
-  workflow may only downgrade the caller's `GITHUB_TOKEN`, never escalate it, so GitHub rejected the
-  workflow at startup (~1s, no jobs, no logs). Every Release run from June 2026 until now failed this
-  way, unnoticed, because a `startup_failure` produces no logs to read. The caller job now declares
-  the three scopes explicitly. CI-only: no runtime or API change.
-
-### Security
-
-- **Dev-dependency advisory remediation (no runtime impact: the published
-  artifact is unchanged).** Added scoped `pnpm.overrides` pinning two
-  transitive **dev/build-time** packages to their patched releases: `esbuild`
-  (`>=0.27.3 <0.28.1` → `0.28.1`; GHSA dev-server path-traversal, not
-  reachable here: the library builds via `tsup`/`vitest` and never runs
-  `esbuild serve`) and the `@changesets/parse` copy of `js-yaml`
-  (`>=4.0.0 <4.2.0` → `4.2.0`; GHSA-h67p-54hq-rp68 merge-key DoS). The
-  `js-yaml@3.14.2` pulled by `read-yaml-file@1.1.0` (via
-  `@manypkg/get-packages` → `@changesets/cli`) is **intentionally left**: it
-  calls `yaml.safeLoad`, removed/throwing in js-yaml 4, so it cannot be
-  force-upgraded without breaking the release tooling, and it only parses
-  trusted local repo YAML at release time. This is the shared canonical
-  override block, enforced suite-wide by the `@cosyte/config` drift check.
+## [0.0.1] - 2026-07-17
 
 ### Added
-
-- **Trademark notice (`TRADEMARKS.md`).** This package names third-party systems to describe what it
-  interoperates with; the notice records that cosyte is not affiliated with, endorsed by, or
-  sponsored by any of them, that every reference is descriptive, and that the built-in profiles are
-  authored from public sources only. Added to `files` so it ships inside the published tarball, not
-  just on GitHub. Documentation only: no runtime or API change.
 
 - **Lossless File Meta round-trip.** The parser now retains non-modeled
   `(0002,xxxx)` File Meta elements (e.g. `(0002,0017)`/`(0002,0018)`
@@ -519,28 +552,6 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   built only from the code + the offending Transfer Syntax UID (structural facts), never a decoded
   value, so it is always safe to log. New public exports: `serializeDicom`, `DicomSerializeError`,
   `SERIALIZE_ERROR_CODES`, `SerializeErrorCode`.
-
-### Known limitations
-
-- **File Meta round-trip is over the modeled surface, not byte-exact.** Only the typed `FileMeta`
-  fields round-trip; any other `(0002,xxxx)` element a source file carried (e.g. `(0002,0100)` Private
-  Information Creator UID) is dropped at _parse_ time (the Phase 2 `FileMeta` view does not model it)
-  and so cannot be re-emitted. The preamble is normalized to zeros and odd-length values are padded
-  even. The output stays spec-clean but is not a byte-identical copy of a non-conformant input.
-
-### Tests
-
-- **Enhanced multi-frame coverage (DICOM-COV).** Closed the Per-Frame-else-Shared branch gaps left by
-  the Phase 4 functional-group resolver (`functional-groups.ts`: ~53% → 100% branch): both optional
-  macros (Pixel Value Transformation `(0028,9145)`, Frame VOI LUT `(0028,9132)`), Pixel Measures
-  `spacingBetweenSlices`, shared-only resolution (no Per-Frame Functional Groups Sequence), the
-  lenient inner-attribute-absence paths (a macro item present but its attributes omitted ⇒ typed-absent,
-  never coerced), and all three `MISSING_REQUIRED_FUNCTIONAL_GROUP` throws (Pixel Measures / Plane
-  Position / Plane Orientation). Synthetic fixtures only; no public-surface change. Per-directory
-  coverage now sits genuinely ≥ 90 on every gated directory (global branches 93.2%).
-
-### Added
-
 - **Safety-critical domain helpers (Phase 4).** New `Dataset` accessors `patient` / `study` /
   `series` / `image` return typed, fail-safe views over the DICOM §4 safety-critical attributes
   (memoized on first access). `patient` surfaces the `{id, issuerOfId, issuerQualifiers}` identity
@@ -605,3 +616,68 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 - CI/release workflows reduced to thin callers of the reusable `cosyte/.github` pipelines
   (`ci.yml` runs the shared PHI scan; `release.yml` targets `@cosyte/dicom`). The repo-specific
   byte-identical dictionary-regen workflow is kept and bumped to Node 22.
+
+### Fixed
+
+- **`private: true` removed: `@cosyte/dicom` can publish.** The flag dated to the very first
+  scaffold commit and was never explained; `changeset publish` silently skips a private package, so
+  this repo was the one parser that could not reach npm even once its pipeline worked. It also
+  contradicted the `publishConfig: { access: "public" }` in the same file. Removed as part of the
+  coordinated public launch (`PUB-FLIP`).
+
+- **The release can actually bump the version.** `package.json` had no `version` script, so the
+  shared pipeline's `pnpm run version` failed with `Command "version" not found` and the release
+  aborted before opening a "Version Packages" PR. Adds `scripts/sync-version.mjs` (the `hl7`
+  reference, retargeted at `src/version.ts`) and the `version` script that runs it after
+  `changeset version`, so the bump and the `VERSION` constant land in the same commit.
+- **`VERSION` is no longer typed as a string literal.** It was declared `export const VERSION =
+"0.0.0"`, giving it the literal type `"0.0.0"`, so the exported type would change on every
+  release, making each version bump a breaking type change. Now annotated `: string`, matching the
+  `hl7` reference. Type-only; the runtime value is unchanged. Done now because the package is
+  unpublished. After the first publish this would itself be a breaking change.
+
+- **The Release workflow can actually start.** `.github/workflows/release.yml` calls the shared
+  `cosyte/.github` pipeline, which requests `contents`/`id-token`/`pull-requests: write`, but declared
+  no `permissions:` of its own, so it inherited the repo default of `contents: read`. A called
+  workflow may only downgrade the caller's `GITHUB_TOKEN`, never escalate it, so GitHub rejected the
+  workflow at startup (~1s, no jobs, no logs). Every Release run from June 2026 until now failed this
+  way, unnoticed, because a `startup_failure` produces no logs to read. The caller job now declares
+  the three scopes explicitly. CI-only: no runtime or API change.
+
+### Security
+
+- **Dev-dependency advisory remediation (no runtime impact: the published
+  artifact is unchanged).** Added scoped `pnpm.overrides` pinning two
+  transitive **dev/build-time** packages to their patched releases: `esbuild`
+  (`>=0.27.3 <0.28.1` → `0.28.1`; GHSA dev-server path-traversal, not
+  reachable here: the library builds via `tsup`/`vitest` and never runs
+  `esbuild serve`) and the `@changesets/parse` copy of `js-yaml`
+  (`>=4.0.0 <4.2.0` → `4.2.0`; GHSA-h67p-54hq-rp68 merge-key DoS). The
+  `js-yaml@3.14.2` pulled by `read-yaml-file@1.1.0` (via
+  `@manypkg/get-packages` → `@changesets/cli`) is **intentionally left**: it
+  calls `yaml.safeLoad`, removed/throwing in js-yaml 4, so it cannot be
+  force-upgraded without breaking the release tooling, and it only parses
+  trusted local repo YAML at release time. This is the shared canonical
+  override block, enforced suite-wide by the `@cosyte/config` drift check.
+
+### Tests
+
+- **Enhanced multi-frame coverage (DICOM-COV).** Closed the Per-Frame-else-Shared branch gaps left by
+  the Phase 4 functional-group resolver (`functional-groups.ts`: ~53% → 100% branch): both optional
+  macros (Pixel Value Transformation `(0028,9145)`, Frame VOI LUT `(0028,9132)`), Pixel Measures
+  `spacingBetweenSlices`, shared-only resolution (no Per-Frame Functional Groups Sequence), the
+  lenient inner-attribute-absence paths (a macro item present but its attributes omitted ⇒ typed-absent,
+  never coerced), and all three `MISSING_REQUIRED_FUNCTIONAL_GROUP` throws (Pixel Measures / Plane
+  Position / Plane Orientation). Synthetic fixtures only; no public-surface change. Per-directory
+  coverage now sits genuinely ≥ 90 on every gated directory (global branches 93.2%).
+
+### Known limitations
+
+- **File Meta round-trip is over the modeled surface, not byte-exact.** Only the typed `FileMeta`
+  fields round-trip; any other `(0002,xxxx)` element a source file carried (e.g. `(0002,0100)` Private
+  Information Creator UID) is dropped at _parse_ time (the Phase 2 `FileMeta` view does not model it)
+  and so cannot be re-emitted. The preamble is normalized to zeros and odd-length values are padded
+  even. The output stays spec-clean but is not a byte-identical copy of a non-conformant input.
+  **Superseded within this same release** by the lossless File Meta round-trip above, which landed
+  after the serializer and before `0.0.1` was cut: as published, `0.0.1` preserves and re-emits non-modeled
+  `(0002,xxxx)` elements. The entry is kept because it is what the serializer shipped with.
