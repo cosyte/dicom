@@ -13,8 +13,8 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   decoration, because it is what a screen reader reads on the npm page: it names the package and
   states its purpose in the package's own voice. The image URL was re-verified with `curl -I` as
   `200 image/png`, 19,456 bytes, before this landed, rather than taken from the `live` flag in
-  `assets/published-urls.json`, which that file's own `$comment` describes as a declaration made
-  from another repo's evidence rather than a fact checked here.
+  `assets/published-urls.json`, whose own `$fields.status` note says to read `live` for what it is:
+  a declaration made on evidence from another repo, never a fact checked there.
 
 ### Changed
 
@@ -41,22 +41,30 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   `docs-content/intro.md` before `0.0.3` (see below) and the README was not swept with it, which is
   the reason to state the rule once here: `get` takes a tag, and a keyword is resolved to its tag
   through `Dictionary.byKeyword(...)?.tag` first. Every example is corrected and the section is
-  retitled from "By keyword or tag" to "By tag".
+  retitled from "By keyword or tag" to "By tag". `docs-content/spec-notes-model.md` carried a
+  neighbouring defect and is corrected with it: it said `getAll` "returns every element at a
+  repeating tag", where a `Dataset` holds at most one element per tag, so it returns 0 or 1.
 - **`README.md` claimed compressed transfer syntaxes were readable at the structural level.** It
   said the supported set was the four v1 syntaxes "and any compressed syntax at the structural level
   (fragments preserved)". The dispatch table holds exactly four entries and any other Transfer
   Syntax UID is the fatal `UNSUPPORTED_TRANSFER_SYNTAX`, so a JPEG, JPEG-LS, JPEG2000, RLE or HTJ2K
   object does not parse at all. Confirmed by parsing a synthetic object in `1.2.840.10008.1.2.4.50`
-  and catching the throw. This mattered most in the "index a folder of studies" recipe, whose
-  closing line promised that "nothing here throws on a quirky file" while a real archive is full of
-  compressed objects; that recipe now says to catch `DicomParseError` per file and skip. The
-  non-goals entry no longer implies a compressed object is read structurally either.
+  and catching the throw. Deflated Explicit VR LE is the one compressed syntax that is supported: it
+  deflates the dataset stream rather than the pixels, and the corrected text says so rather than
+  calling every compressed syntax unreadable. This mattered most in the "index a folder of studies"
+  recipe, whose closing line promised that "nothing here throws on a quirky file" while a real
+  archive is full of pixel-compressed objects. That recipe now names all three Tier-3 conditions a
+  folder walk actually meets (`UNSUPPORTED_TRANSFER_SYNTAX`, `NOT_DICOM_PART_10` for a non-DICOM
+  file in the folder, `EMPTY_INPUT` for a zero-byte one) and says to catch `DicomParseError` per
+  file and skip. The non-goals entry no longer implies a compressed object is read structurally
+  either.
 - **`README.md` counted four typed errors where five are exported.** The Error Handling section
   introduced "four typed errors" and then documented `DicomParseError`, `DicomValueError`,
   `DicomSerializeError`, `ProfileDefinitionError` and `DeidentifyError`. The count is now five. The
-  same paragraph said warnings are "never thrown", which a profile's `escalate` list contradicts;
-  it now says so.
-- **`docs-content/` stated the published version as `0.0.1`, three releases stale.**
+  same paragraph said warnings are "never thrown", which is false in two ways: `{ strict: true }`
+  promotes every Tier-2 warning to a thrown `DicomParseError`, and a profile's `escalate` list
+  promotes the codes it names. Both are now stated.
+- **`docs-content/` stated the published version as `0.0.1`, two published releases stale.**
   `installation.md`'s status note and `troubleshooting.md`'s scope entry both named `0.0.1` while
   npm served `0.0.4`. Neither quotes a version any more. Both send the reader to the registry, which
   is the only thing that cannot go stale, by naming the command that reads it.

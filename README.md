@@ -148,7 +148,7 @@ async function indexFile(path: string) {
 }
 ```
 
-Nothing here throws on a quirky file; absent fields come back `undefined`. Check `ds.warnings` if you want to log what was tolerated. One thing a folder walk **does** have to handle: an object in a transfer syntax outside the four v1 syntaxes (any compressed one, so most real archives contain them) throws `UNSUPPORTED_TRANSFER_SYNTAX`. Catch `DicomParseError` per file and skip.
+A quirky object is tolerated rather than rejected, and absent fields come back `undefined`. Check `ds.warnings` to log what was tolerated. A folder walk **does** still need a `try`/`catch`, because the four Tier-3 conditions throw: on a real archive that is mostly `UNSUPPORTED_TRANSFER_SYNTAX` (a pixel-compressed object, which this parser does not read), plus `NOT_DICOM_PART_10` for whatever non-DICOM file wandered into the folder and `EMPTY_INPUT` for a zero-byte one. All four throw the one class, so catch `DicomParseError` per file and skip.
 
 ### Build routing keys
 
@@ -321,7 +321,7 @@ The 4 Tier-3 fatal codes (`NOT_DICOM_PART_10`, `INVALID_FILE_META`, `UNSUPPORTED
 
 ## Error Handling
 
-The library throws five typed errors, all exported from the package barrel; warnings are data rather than throws, unless a profile's `escalate` list promotes one.
+The library throws five typed errors, all exported from the package barrel. Warnings are data rather than throws unless you ask otherwise: `parseDicom(buf, { strict: true })` promotes **every** Tier-2 warning to a thrown `DicomParseError`, and a profile's `escalate` list promotes only the codes it names.
 
 ### `DicomParseError`
 
@@ -363,7 +363,7 @@ Thrown by `serializeDicom` for `MISSING_TRANSFER_SYNTAX` (the dataset names no t
 - **Transcoding.** No transfer-syntax conversion. The serializer re-emits in the dataset's source syntax only.
 - **Terminology resolution.** Coded values are surfaced (designator + canonical source) but not validated against SNOMED/LOINC/etc.
 
-Supported transfer syntaxes, and **exactly** these four (**pixels never decoded** in any of them): Implicit VR LE `1.2.840.10008.1.2`, Explicit VR LE `…1.2.1`, Deflated Explicit VR LE `…1.2.1.99`, Explicit VR BE `…1.2.2` (retired, legacy-only). Any other UID, which includes every compressed syntax, is rejected by `parseDicom` with the fatal `UNSUPPORTED_TRANSFER_SYNTAX` rather than read structurally.
+Supported transfer syntaxes, and **exactly** these four (**pixels never decoded** in any of them): Implicit VR LE `1.2.840.10008.1.2`, Explicit VR LE `…1.2.1`, Deflated Explicit VR LE `…1.2.1.99`, Explicit VR BE `…1.2.2` (retired, legacy-only). Any other UID, which includes every pixel-compressed syntax (JPEG, JPEG-LS, JPEG2000, RLE, HTJ2K), is rejected by `parseDicom` with the fatal `UNSUPPORTED_TRANSFER_SYNTAX` rather than read structurally. Deflated is the one compressed syntax in the supported set: it deflates the whole dataset stream rather than the pixels, and it is inflated on parse.
 
 ---
 
