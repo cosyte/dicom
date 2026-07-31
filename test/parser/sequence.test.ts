@@ -222,7 +222,7 @@ describe("tryParseUnAsSQ - CP-246 fallback (D-30)", () => {
     const seqBody = Buffer.concat([buildItemHeader(0, true), buildSeqDelim(true)]);
     const ctx = makeContext(seqBody);
     const emit = makeEmit(ctx);
-    const result = tryParseUnAsSQ(seqBody, 0, 0xffffffff, ctx, emit, parseImplicitLE);
+    const result = tryParseUnAsSQ(seqBody, 0, 0xffffffff, ctx, emit, parseImplicitLE, "00091000");
     expect(result.success).toBe(true);
     // CP-246 success emits DICOM_UN_PARSED_AS_SQ.
     expect(ctx.warnings.some((w) => w.code === WARNING_CODES.DICOM_UN_PARSED_AS_SQ)).toBe(true);
@@ -239,7 +239,15 @@ describe("tryParseUnAsSQ - CP-246 fallback (D-30)", () => {
     const ctx = makeContext(garbage);
     const emit = makeEmit(ctx);
     const before = ctx.warnings.length;
-    const result = tryParseUnAsSQ(garbage, 0, garbage.length, ctx, emit, parseImplicitLE);
+    const result = tryParseUnAsSQ(
+      garbage,
+      0,
+      garbage.length,
+      ctx,
+      emit,
+      parseImplicitLE,
+      "00091000",
+    );
     expect(result.success).toBe(false);
     expect(result.items.length).toBe(0);
     // No warning emitted on the failure path.

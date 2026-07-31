@@ -305,6 +305,7 @@ export function tryParseUnAsSQ(
   ctx: ParseContext,
   emit: (w: DicomParseWarning) => void,
   implicitLeInner: InnerParser,
+  tag: Tag,
 ): { success: boolean; items: readonly Item[]; endOffset: number } {
   // Save state for rollback (T-02-04-03 mitigation).
   const savedDepth = ctx.nestingDepth;
@@ -322,7 +323,7 @@ export function tryParseUnAsSQ(
       innerStrategy: implicitLeInner,
     };
     const result = parseSequence(slice, 0, ctx, emit, opts);
-    emit(unParsedAsSQ({ byteOffset: valueStart }));
+    emit(unParsedAsSQ({ byteOffset: valueStart }, tag));
     return {
       success: true,
       items: result.items,

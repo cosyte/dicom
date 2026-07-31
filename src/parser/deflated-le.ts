@@ -40,6 +40,7 @@ import { inflateRawSync } from "node:zlib";
 
 import type { Element } from "../dataset/element.js";
 import type { Tag } from "../dictionary/types.js";
+import { makeEmitter } from "./emit.js";
 import { buildSnippet, DicomParseError, FATAL_CODES } from "./errors.js";
 import { parseExplicitLE } from "./explicit-le.js";
 import type { ParseContext } from "./types.js";
@@ -145,12 +146,20 @@ export function parseDeflatedLEWithCap(
   // `deflated: true` per D-27, then forwards to the outer chokepoint
   // (which preserves strict-mode escalation + onWarning callback +
   // ds.warnings push semantics).
+  //
+  // It builds a chokepoint over `innerCtx` rather than forwarding to the outer
+  // one, and that is not cosmetic: `makeEmitter` closes over `ctx.buffer` to cut
+  // the strict-mode snippet, so forwarding meant slicing the COMPRESSED source
+  // at an offset that indexes the INFLATED stream. The snippet was confidently
+  // wrong. `innerCtx` shares the outer `warnings` array, `onWarning` and
+  // `strict`, so every other semantic is unchanged.
+  const innerChokepoint = makeEmitter(innerCtx);
   const innerEmit = (w: DicomParseWarning): void => {
     const wrapped: DicomParseWarning = {
       ...w,
       position: { ...w.position, deflated: true },
     };
-    emit(wrapped);
+    innerChokepoint(wrapped);
   };
 
   const result = parseExplicitLE(inflated, 0, innerCtx, innerEmit);

@@ -388,8 +388,7 @@ export function readExplicitElementHeader(
     const reserved1 = cursor.buffer[cursor.position + 1];
     cursor.position += 2;
     if ((reserved0 ?? 0) !== 0x00 || (reserved1 ?? 0) !== 0x00) {
-      const observed = ((reserved0 ?? 0) << 8) | (reserved1 ?? 0);
-      emit(nonzeroReservedBytes({ byteOffset: headerStart }, tag, observed));
+      emit(nonzeroReservedBytes({ byteOffset: headerStart }, tag, reserved0 ?? 0, reserved1 ?? 0));
     }
     length = cursor.readUInt32();
     headerLength = 12;

@@ -312,6 +312,86 @@ describe("deidentify - private attributes", () => {
     const { dataset } = deidentify(buildPhiDataset(withPrivate), { retain: ["RetainSafePrivate"] });
     expect(dataset.has("00091001")).toBe(false);
   });
+
+  // PS3.5 §7.5 makes each Sequence Item its own Data Set, and §7.8.1 scopes a
+  // Private Creator's block reservation to the Data Set it appears in. So the
+  // same block number names different vendors at the root and inside an item,
+  // and resolving one against the other is unsafe in both directions. Both were
+  // real: a first version of the creator re-derivation read the ROOT's
+  // reservation for every depth.
+  describe("RetainSafePrivate scopes block reservations per Data Set (PS3.5 §7.8.1)", () => {
+    const profile = defineProfile({
+      name: "acme",
+      privateTags: {
+        "ACME PRIVATE 01": { "0009XX01": { vr: "LO", keyword: "AcmeThing", name: "Acme Thing" } },
+      },
+    });
+
+    /** A root reservation, and an item that re-reserves the SAME block for someone else. */
+    function shadowedBlock(): ReturnType<typeof parseDicom> {
+      return parseDicom(
+        buildDicom({
+          transferSyntax: TS_EXPLICIT_LE,
+          elements: [
+            { tag: "00090010", vr: "LO", value: pad("ACME PRIVATE 01") },
+            { tag: "00091001", vr: "LO", value: pad("acme-safe") },
+            {
+              tag: "00081115",
+              items: [
+                {
+                  elements: [
+                    { tag: "00090010", vr: "LO", value: pad("OTHER VENDOR") },
+                    { tag: "00091001", vr: "LO", value: pad("NOT-VOUCHED-FOR") },
+                  ],
+                },
+              ],
+            },
+          ],
+        }),
+      );
+    }
+
+    it("does not retain an item's private element on the ROOT's reservation", () => {
+      const { dataset } = deidentify(shadowedBlock(), {
+        retain: ["RetainSafePrivate"],
+        profile,
+      });
+      const item = dataset.get("00081115")?.items?.[0];
+      expect(item?.has("00091001")).toBe(false);
+      // And it is gone from the bytes, which is the promise that matters.
+      expect(serializeDicom(dataset).includes(Buffer.from("NOT-VOUCHED-FOR", "latin1"))).toBe(
+        false,
+      );
+      // The root's own vouched element is unaffected.
+      expect(dataset.has("00091001")).toBe(true);
+    });
+
+    it("retains a private element reserved inside the item it is used in", () => {
+      const ds = parseDicom(
+        buildDicom({
+          transferSyntax: TS_EXPLICIT_LE,
+          elements: [
+            {
+              tag: "00081115",
+              items: [
+                {
+                  elements: [
+                    { tag: "00090010", vr: "LO", value: pad("ACME PRIVATE 01") },
+                    { tag: "00091001", vr: "LO", value: pad("acme-safe") },
+                  ],
+                },
+              ],
+            },
+          ],
+        }),
+      );
+      const { dataset, report } = deidentify(ds, { retain: ["RetainSafePrivate"], profile });
+      const item = dataset.get("00081115")?.items?.[0];
+      expect(item?.has("00091001")).toBe(true);
+      expect(item?.has("00090010")).toBe(true);
+      expect(report.removedPrivateTags).not.toContain("00091001");
+    });
+  });
 });
 
 describe("deidentify - nested sequences", () => {

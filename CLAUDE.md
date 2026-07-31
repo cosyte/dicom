@@ -187,7 +187,18 @@
   passes. Four doc claims said the reverse of the source (warnings "PHI-free by construction",
   `DicomParseError` retaining "no raw input snippet" when `snippet` is 16 source bytes) and are
   corrected; the `DeidentifyReport` is value-free **apart from `uidMap`**, whose keys are the file's
-  own source UIDs.
+  own source UIDs. **The gate does not make the diagnostic surface PHI-free and must not be described
+  that way**: `snippet` is still 16 raw bytes as hex, deliberately (D-10), and hex is a re-encoding
+  the runner cannot match, so no slot can ever go red on it.
+  **Private block reservations are scoped per Data Set, and the refuter caught this the hard way.**
+  PS3.5 §7.5 makes each Sequence Item its own Data Set and §7.8.1 scopes a Private Creator's
+  reservation to the Data Set it appears in, so the same block number names different vendors at the
+  root and inside an item. The first version of the `RetainSafePrivate` creator re-derivation built
+  one map from `ds.elements()` and used it at every depth: it **retained an item's private element on
+  the root's reservation and wrote the PHI into the serialized output**, and dropped one correctly
+  reserved inside the item it was used in. `processElements` now derives the map at every depth it
+  recurses to, and `test/deident/deidentify.test.ts` has both directions (each confirmed to red
+  against the root-scoped version).
 - **Em-dash brand gate armed.** `scripts/check-no-emdash.sh` (`pnpm check:no-emdash`) plus
   `.github/workflows/no-emdash.yml` enforce the founder directive banning `U+2014` outright
   (`knowledgebase/06-brand/voice-and-tone.md`, "No em dashes. Ever."). It scans **both** halves the

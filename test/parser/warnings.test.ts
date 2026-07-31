@@ -130,13 +130,16 @@ describe("warning factories (D-12 - one named factory per active-emit code)", ()
   });
 
   it("nonzeroReservedBytes reports the reserved bytes as a number, not a hex echo", () => {
-    const w = nonzeroReservedBytes(pos, "7FE00010", 0x00ff);
+    const w = nonzeroReservedBytes(pos, "7FE00010", 0x00, 0xff);
     expect(w.code).toBe(WARNING_CODES.DICOM_NONZERO_RESERVED_BYTES);
-    expect(w.message).toContain("255");
+    // Reported in wire order as two numbers: composing them into one 16-bit
+    // value would have to pick an endianness the reserved field does not have.
+    expect(w.message).toContain("first byte 0");
+    expect(w.message).toContain("second byte 255");
   });
 
   it("unParsedAsSQ", () => {
-    const w = unParsedAsSQ(pos);
+    const w = unParsedAsSQ(pos, "0040A730");
     expect(w.code).toBe(WARNING_CODES.DICOM_UN_PARSED_AS_SQ);
   });
 

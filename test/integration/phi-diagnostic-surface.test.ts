@@ -43,11 +43,23 @@
  *
  * ## Codes deliberately not slotted
  *
- * `DICOM_PIXEL_DATA_LENGTH_MISMATCH` is declared in `WARNING_CODES` and has no
- * emit site anywhere in `src/` (its factory is dead code this build never
- * reaches), so no input can carry a marker through it. It is named here rather
- * than silently omitted, because "the table skipped it" and "the code cannot
- * fire" are different facts and only the second is safe.
+ * **Two** codes are declared in `WARNING_CODES` with no emit site anywhere in
+ * `src/`, so no input can carry a marker through either:
+ * `DICOM_PIXEL_DATA_LENGTH_MISMATCH` (whose factory exists and is unreachable)
+ * and `DICOM_CHARSET_AMBIGUOUS_SEPARATOR` (which has no factory at all). They
+ * are named here rather than silently omitted, because "the table skipped it"
+ * and "the code cannot fire" are different facts and only the second is safe.
+ *
+ * ## What this table does NOT cover, stated because a gate believed to cover
+ * more than it does is the failure it exists to prevent
+ *
+ * **`DicomParseError.snippet` is 16 raw source bytes rendered as hex**, on every
+ * Tier-3 fatal and on every strict-mode escalation. The runner walks it, but it
+ * matches verbatim echoes and hex is a re-encoding, so no slot here can go red
+ * on it. That is a deliberate, documented design (D-10) and the docs now name it
+ * as PHI rather than denying it exists; it is not something this table proves
+ * away. The fatal slots below exist to prove the *message* is clean, not the
+ * snippet.
  *
  * @module
  */
@@ -469,16 +481,69 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     plant: cp246Fixture,
     expectCode: WARNING_CODES.DICOM_UN_PARSED_AS_SQ,
   },
+  // The other three transfer syntaxes, and encapsulated pixel data. Explicit VR
+  // Big Endian byte-swaps, Deflated inflates through zlib and re-emits every
+  // inner warning through a second chokepoint, and encapsulated fragments take
+  // a different descent entirely: each is a distinct path to the same
+  // diagnostics, and none of them was reachable from the table's first draft.
+  {
+    name: "(0010,0020) PatientID [LO] under Explicit VR Big Endian, odd length",
+    plant: (m) =>
+      buildDicom({
+        transferSyntax: "1.2.840.10008.1.2.2",
+        elements: [{ tag: "00100020", vr: "LO" as VR, value: Buffer.from(`${m}X`, "latin1") }],
+      }),
+    expectCode: WARNING_CODES.DICOM_ODD_LENGTH_VALUE_PADDED,
+  },
+  {
+    name: "(0010,0020) PatientID [LO] under Deflated Explicit VR LE, odd length",
+    plant: (m) =>
+      buildDicom({
+        transferSyntax: "1.2.840.10008.1.2.1.99",
+        elements: [{ tag: "00100020", vr: "LO" as VR, value: Buffer.from(`${m}X`, "latin1") }],
+      }),
+    expectCode: WARNING_CODES.DICOM_ODD_LENGTH_VALUE_PADDED,
+  },
+  {
+    name: "(7FE0,0010) encapsulated pixel data fragment, beside the empty basic offset table",
+    plant: (m) =>
+      buildDicom({
+        transferSyntax: TS_EXPLICIT_LE,
+        elements: [
+          {
+            tag: "7FE00010",
+            undefinedLength: true,
+            encapsulatedPixelData: true,
+            encapsulatedFragments: [Buffer.alloc(0), val(m)],
+            items: [],
+          },
+        ],
+      }),
+    expectCode: WARNING_CODES.DICOM_EMPTY_ITEM_IN_SEQUENCE,
+  },
+  {
+    name: "a truncated File Meta group, reaching the INVALID_FILE_META fatal",
+    plant: (m) => {
+      const whole = buildDicom({
+        transferSyntax: TS_EXPLICIT_LE,
+        implementationVersionName: m,
+        elements: [FILLER],
+      });
+      return whole.subarray(0, whole.length - 4);
+    },
+    expectCode: "INVALID_FILE_META",
+  },
   // ---------------------------------------------------------------------
-  // File Meta typed fields. These four reach no diagnostic at all: File Meta
-  // is projected by `parseFileMeta` with no VR decode and no validation, so
-  // there is no code for `expectCode` to name and `null` is the honest answer
-  // rather than a shortcut. Their reach is proven a stronger way instead, by
-  // `markerReachesTheModelVerbatim` below, which asserts the planted marker is
-  // literally the value of the model field: a probe that lands ON the surface
-  // under test cannot have been ignored. They stay in the table because the
-  // runner still sweeps every diagnostic and every model identifier for them,
-  // which is what proves a File Meta value never reaches either.
+  // File Meta typed fields. All four reach no diagnostic at all: File Meta is
+  // projected by `parseFileMeta` with no VR decode and no validation, so there
+  // is no code for `expectCode` to name and `null` is the honest answer rather
+  // than a shortcut. Their reach is proven a stronger way instead, by
+  // `markerReachesTheModelVerbatim` below, which asserts for each of the four
+  // that the planted marker is literally the value of the model field: a probe
+  // that lands ON the surface under test cannot have been ignored. They stay in
+  // the table because the runner still sweeps every diagnostic and every model
+  // identifier for them, which is what proves a File Meta value never reaches
+  // either.
   // ---------------------------------------------------------------------
   {
     name: "(0002,0002) MediaStorageSOPClassUID [UI]",
@@ -612,6 +677,12 @@ const DEID_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     plant: burnedInFixture,
     expectCode: WARNING_CODES.DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED,
   },
+  // The three slots below name no code, and unlike the File Meta four they
+  // cannot: the attributes they plant into are deleted by Annex E, so there is
+  // nothing left to warn about. That also means they cannot go red here, and
+  // saying so is the point. What actually proves those removals is the
+  // "de-identified bytes" block at the end of this file, which serializes the
+  // result and searches the bytes; these slots add only the report sweep.
   {
     name: "deidentify: (0010,0010) PatientName [PN], an attribute Annex E removes",
     plant: (m) =>
@@ -706,6 +777,7 @@ describe("PHI: the probes reach what they claim to", () => {
     expect(fm?.mediaStorageSOPClassUID).toBe(m);
     expect(fm?.mediaStorageSOPInstanceUID).toBe(m);
     expect(fm?.implementationClassUID).toBe(m);
+    expect(fm?.sourceApplicationEntityTitle).toBe(m);
 
     // CS: lower case is not in the `CS` repertoire, and nothing folds or rejects
     // it on the way in. The element's own bytes still hold the marker verbatim,

@@ -43,14 +43,26 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
     own `rawBytes`, as a value, where value discipline applies.
 
   `RetainSafePrivate` is unaffected in either direction: `deidentify()` now re-derives the block
-  reservation from the dataset's own creator elements, so passing a `Profile` at de-identification
-  works whether or not one was passed at parse.
+  reservation from the creator elements of **each Data Set** it walks, so passing a `Profile` at
+  de-identification works whether or not one was passed at parse. Per Data Set is load-bearing, not a
+  detail: PS3.5 §7.5 makes each Sequence Item its own Data Set and §7.8.1 scopes a reservation to the
+  Data Set the creator appears in, so the same block number names different vendors at the root and
+  inside an item. Resolving one against the other retained an item's private element on the root's
+  reservation and wrote its value into the serialized output.
 
 ### Fixed
 
 - **`DICOM_UN_PARSED_AS_SQ` printed the literal string `UN` where its message promised a tag.** The
-  descent primitive is handed a byte range and never knew the tag. The message now identifies the
-  element by byte offset, which is what it always actually had.
+  descent primitive is handed a byte range rather than a tag, but both call sites hold one, so it is
+  threaded through rather than dropped.
+- **A warning raised inside a Deflated dataset cut its strict-mode snippet from the wrong buffer.**
+  The inner descent forwarded to the outer emission chokepoint, which closes over the **compressed**
+  source, while the forwarded `position.byteOffset` indexes the **inflated** stream. The result was a
+  confidently wrong 16 bytes. The descent now builds its own chokepoint over the inflated buffer; it
+  shares the outer `warnings` array, `onWarning` and `strict`, so nothing else changes.
+- **`DICOM_NONZERO_RESERVED_BYTES` reported the two reserved bytes as one 16-bit number**, which had
+  to pick an endianness the reserved field does not have: it read unambiguously and was wrong under
+  one of the two Explicit VR syntaxes. They are now reported separately, in wire order.
 
 - **`README.md` documented an element-access API that does not exist.** `Dataset.get` / `has` /
   `getAll` take the 8-character `(group,element)` tag (`"00080060"`, case-insensitive) and nothing
@@ -119,11 +131,18 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Added
 
-- **A slot table that enumerates every consumer-controlled position in the format**
+- **A slot table of consumer-controlled positions in the format**
   (`test/integration/phi-diagnostic-surface.test.ts`), bound to `assertNoDiagnosticPhiLeak` from
   `@cosyte/test-utils` (pin bumped to `^0.0.2`; a caret on a `0.0.x` resolves to that version exactly,
   so the old pin would have tested against a kit without the runner and passed). Twenty-eight slots,
-  one test each, plus the de-identify surface and the serialized "safe to share" bytes.
+  one test each, across all four transfer syntaxes and encapsulated pixel data, plus the de-identify
+  surface and the serialized "safe to share" bytes.
+
+  **It does not make the diagnostic surface PHI-free, and the difference matters.**
+  `DicomParseError.snippet` is 16 raw source bytes as hex on every fatal and every strict-mode
+  escalation. That is deliberate and long-standing (D-10), the docs name it as PHI, and no slot here
+  can go red on it: the runner matches verbatim echoes, and hex is a re-encoding. What the table
+  proves is that no _message_, position, thrown value or model identifier carries a planted byte.
 
   **It was run red on the base commit and named seven leaking slots**, which is the point of it. The
   suite it joins could not have done that: `test/property/_arbitraries.ts` blocks the leaking path

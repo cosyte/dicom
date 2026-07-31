@@ -97,8 +97,6 @@ interface DeidentifyContext {
   readonly profile: Profile | undefined;
   readonly encoding: BodyEncoding;
   readonly littleEndian: boolean;
-  /** Block key -> Private Creator, re-derived from this dataset's own creator elements. */
-  readonly creators: ReadonlyMap<string, string>;
 }
 
 /** Validate caller-supplied options; throws {@link DeidentifyError} on misconfig. */
@@ -261,17 +259,27 @@ interface ProcessResult {
 }
 
 /**
- * Map every private block this run can see to the creator that reserved it,
- * read from the `(gggg,00EE)` elements themselves rather than from
- * `Element.privateCreator`.
+ * Map the private blocks reserved **in one Data Set** to the creators that
+ * reserved them, read from that Data Set's own `(gggg,00EE)` elements rather
+ * than from `Element.privateCreator`.
  *
  * `Element.privateCreator` is membership-bounded against the profile that was
  * active **at parse time** (`src/parser/tokens.ts`), and a caller may perfectly
- * reasonably parse without a profile and pass one here. Reading the creator
- * elements re-derives the block reservation from the dataset in front of us, so
- * `RetainSafePrivate` behaves identically whether the profile arrived at parse
- * or at de-identification. The decoded string never leaves this map: it is a
- * lookup key, not a value on any surface.
+ * reasonably parse without a profile and pass one here. Re-deriving the
+ * reservation from the elements in front of us makes `RetainSafePrivate` behave
+ * identically whether the profile arrived at parse or at de-identification. The
+ * decoded string never leaves this map: it is a lookup key, not a value on any
+ * surface.
+ *
+ * **Per Data Set, not per run, and the difference is a PHI defect.** PS3.5 §7.5
+ * makes each Sequence Item its own Data Set and §7.8.1 scopes a block
+ * reservation to the Data Set the creator appears in, so the same block number
+ * means different vendors at the root and inside an item. Resolving an
+ * item-scoped private element against the root's reservation retains an element
+ * no profile ever vouched for and writes it into the serialized output, and
+ * drops one that was correctly reserved inside the item it is used in. Both
+ * were reproduced before this was scoped; `processElements` therefore derives
+ * this at every depth it recurses to.
  */
 function creatorsInScope(source: readonly Element[]): ReadonlyMap<string, string> {
   const byBlock = new Map<string, string>();
@@ -289,13 +297,21 @@ function creatorFor(tag: Tag, creators: ReadonlyMap<string, string>): string | u
   return creators.get(`${String(group)}:${String((element >> 8) & 0xff)}`);
 }
 
-/** Decide whether to keep a private element under `RetainSafePrivate` + a profile. */
-function keepsPrivate(el: Element, ctx: DeidentifyContext): boolean {
+/**
+ * Decide whether to keep a private element under `RetainSafePrivate` + a
+ * profile. `creators` is the reservation map of the Data Set this element lives
+ * in, never an enclosing one.
+ */
+function keepsPrivate(
+  el: Element,
+  ctx: DeidentifyContext,
+  creators: ReadonlyMap<string, string>,
+): boolean {
   if (!ctx.active.has("RetainSafePrivate") || ctx.profile === undefined) return false;
   if (isPrivateCreatorElement(el.tag)) {
     return ctx.profile.privateDictionary.has(decodeCreator(el));
   }
-  const creator = creatorFor(el.tag, ctx.creators);
+  const creator = creatorFor(el.tag, creators);
   if (creator === undefined) return false;
   return resolvePrivateTag(ctx.profile, el.tag, creator) !== undefined;
 }
@@ -314,10 +330,12 @@ function processElements(
     attributes: [],
     removedPrivateTags: [],
   };
+  // Derived here, at every depth: `source` is exactly one Data Set.
+  const creators = creatorsInScope(source);
 
   for (const el of source) {
     if (isPrivateTag(el.tag)) {
-      if (keepsPrivate(el, ctx)) out.elements.set(el.tag, el);
+      if (keepsPrivate(el, ctx, creators)) out.elements.set(el.tag, el);
       else out.removedPrivateTags.push(el.tag);
       continue;
     }
@@ -520,7 +538,6 @@ export function deidentify(
     profile: options.profile,
     encoding,
     littleEndian,
-    creators: creatorsInScope(ds.elements()),
   };
 
   const { elements, attributes, removedPrivateTags } = processElements(ds.elements(), ctx, []);

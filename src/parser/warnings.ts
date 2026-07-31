@@ -162,9 +162,9 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   DICOM_GROUP_LENGTH_IN_DATASET:
     "Retired Group Length element ({tag}) encountered in dataset; preserved as-is.",
   DICOM_NONZERO_RESERVED_BYTES:
-    "Element ({tag}) has non-zero reserved bytes between VR and length (16-bit value {n}); ignoring.",
+    "Element ({tag}) has non-zero reserved bytes between VR and length (first byte {n}, second byte {n2}); ignoring.",
   DICOM_UN_PARSED_AS_SQ:
-    "An element declared VR=UN with undefined length; descended as Implicit VR LE sequence per CP-246.",
+    "Element ({tag}) declared VR=UN with undefined length; descended as Implicit VR LE sequence per CP-246.",
   DICOM_EMPTY_ITEM_IN_SEQUENCE: "Sequence ({tag}) contains an empty item (length=0); tolerated.",
   DICOM_PIXEL_DATA_LENGTH_MISMATCH:
     "(7FE0,0010) PixelData declared length {n} does not match computed {n2} bytes.",
@@ -397,21 +397,29 @@ export function groupLengthInDataset(position: DicomPosition, tag: Tag): DicomPa
  * VR long-form header has non-zero bytes in its 2-byte reserved field
  * (between VR and the 4-byte length per D-22).
  *
- * The two bytes are reported as the **number** they encode rather than as a
- * hex echo of the bytes themselves: an input-derived number is the prescribed
- * shape here, and a re-rendered slice of input is not, however short.
+ * The two bytes are reported as the **numbers** they are, in wire order, rather
+ * than as a hex echo of the bytes: an input-derived number is the prescribed
+ * shape here, and a re-rendered slice of input is not, however short. They are
+ * reported separately because composing them into one 16-bit value would have
+ * to pick an endianness, and the reserved field has none: the message would then
+ * read unambiguously and be wrong under one of the two transfer syntaxes.
  *
  * @example
  * ```ts
- * const w = nonzeroReservedBytes({ byteOffset: 500 }, "7FE00010", 0x00ff);
+ * const w = nonzeroReservedBytes({ byteOffset: 500 }, "7FE00010", 0x00, 0xff);
  * ```
  */
 export function nonzeroReservedBytes(
   position: DicomPosition,
   tag: Tag,
-  reserved: number,
+  first: number,
+  second: number,
 ): DicomParseWarning {
-  return build(WARNING_CODES.DICOM_NONZERO_RESERVED_BYTES, position, { tag, n: reserved });
+  return build(WARNING_CODES.DICOM_NONZERO_RESERVED_BYTES, position, {
+    tag,
+    n: first,
+    n2: second,
+  });
 }
 
 /**
@@ -419,17 +427,18 @@ export function nonzeroReservedBytes(
  * with undefined length is successfully descended as an Implicit VR LE
  * sequence (CP-246 fallback per D-30).
  *
- * The element is identified by `position.byteOffset` alone: the descent
- * primitive is handed a byte range rather than a tag, and the earlier message
- * papered over that by printing the literal string `"UN"` in its tag slot.
+ * The earlier message printed the literal string `"UN"` in its tag slot,
+ * because the descent primitive is handed a byte range rather than a tag. The
+ * tag is not unavailable, though: both call sites hold it, so it is threaded
+ * through rather than dropped.
  *
  * @example
  * ```ts
- * const w = unParsedAsSQ({ byteOffset: 600 });
+ * const w = unParsedAsSQ({ byteOffset: 600 }, "0040A730");
  * ```
  */
-export function unParsedAsSQ(position: DicomPosition): DicomParseWarning {
-  return build(WARNING_CODES.DICOM_UN_PARSED_AS_SQ, position);
+export function unParsedAsSQ(position: DicomPosition, tag: Tag): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_UN_PARSED_AS_SQ, position, { tag });
 }
 
 /**

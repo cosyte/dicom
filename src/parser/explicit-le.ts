@@ -259,6 +259,7 @@ export function _parseExplicit(
         ctx,
         emit,
         parseImplicitLE,
+        tag,
       );
       if (cp246.success) {
         cursor.position = cp246.endOffset;
