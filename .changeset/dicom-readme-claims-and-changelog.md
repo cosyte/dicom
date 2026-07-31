@@ -4,10 +4,16 @@
 
 **The README documented an API that does not exist: `ds.get` takes a tag and never a keyword, and a pixel-compressed object is refused rather than read structurally.**
 
-`README.md` also now opens with the cosyte social banner for this package (`ASSETS-P8`), as a plain
-markdown image above the H1, matching `hl7`, `x12` and `ccda`. The alt text is content rather than
-decoration, because it is what a screen reader reads on the npm page. The image URL was re-verified
-with `curl -I` as `200 image/png`, 19,456 bytes, rather than taken from the `live` flag in
+`README.md` also now opens with the shared Cosyte lockup above the H1, in a `<picture>` block that
+follows the reader's color scheme. This entry first described a per-package banner as a plain
+markdown image, and that intermediate state is not recorded here, because it reached no version a
+consumer can install: both changes land in the same release. **The reason it gave is corrected
+rather than reversed in silence.** The plain markdown image was chosen expressly because whether
+npm's markdown sanitizer preserves a `<picture>` was unverified. It has since been measured on a
+published package page, so the constraint that motivated the earlier shape no longer holds. The
+companion changeset carries the full account. The alt text is content rather than decoration,
+because it is what a screen reader reads on the npm page, and both tile URLs were rechecked with
+`curl -I` as `200 image/png` rather than taken from the `live` flag in
 `assets/published-urls.json`, whose own `$fields.status` note says to read `live` for what it is: a
 declaration made on evidence from another repo, never a fact checked there.
 
