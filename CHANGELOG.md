@@ -6,15 +6,26 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Added
 
-- **`README.md` now opens with the cosyte social banner for this package** (`ASSETS-P8`). A plain
-  markdown image above the H1, matching `hl7`, `x12` and `ccda`: no `<img>`, no `<picture>`, no link
-  wrapper. The tile is self-grounded by design and deliberately does not depend on `<picture>`
-  surviving npm's markdown sanitizer, which is still unverified. The alt text is content rather than
-  decoration, because it is what a screen reader reads on the npm page: it names the package and
-  states its purpose in the package's own voice. The image URL was re-verified with `curl -I` as
-  `200 image/png`, 19,456 bytes, before this landed, rather than taken from the `live` flag in
-  `assets/published-urls.json`, whose own `$fields.status` note says to read `live` for what it is:
-  a declaration made on evidence from another repo, never a fact checked there.
+- **`README.md` now opens with the shared Cosyte lockup, which follows the reader's color scheme**
+  (`ASSETS-P8`). A `<picture>` block above the H1 carries the dark-ground org tile behind a
+  `prefers-color-scheme: dark` media query and the light-ground tile as the inner `<img>`, so the
+  mark sits on a ground that matches the page it is read on. It replaces the per-package banner,
+  which baked the package name and the one-line tagline into pixels while the two lines directly
+  beneath it repeated both: the lockup reads "Cosyte" where the H1 reads `@cosyte/dicom`, so the
+  duplication goes and the heading stays. The alt text is content rather than decoration, because it
+  is what a screen reader reads on the npm page, and it describes the mark itself rather than
+  repeating the heading below it.
+
+  **One stated reason is corrected rather than dropped.** The per-package banner was chosen as a
+  plain markdown image, with no `<img>` and no `<picture>`, expressly because whether npm's markdown
+  sanitizer preserves a `<picture>` was unverified. It has since been measured on a published
+  package page: the `<img>` is hoisted out of its `<picture>` by npm's anchor wrapper, so the light
+  cut renders there, and npmjs.com has no dark mode, so that is the correct cut. A renderer that
+  strips `<source>` still renders the inner `<img>`, so the worst case is a light-ground mark on a
+  dark page, never a missing or broken image. Both tile URLs were rechecked with `curl -I` as
+  `200 image/png`, 10513 and 10455 bytes, before this landed, rather than taken from the `live` flag
+  in `assets/published-urls.json`, whose own `$fields.status` note says to read `live` for what it
+  is: a declaration made on evidence from another repo, never a fact checked there.
 
 ### Changed
 

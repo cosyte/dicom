@@ -1,4 +1,7 @@
-![@cosyte/dicom: read a real-world, vendor-quirky DICOM Part 10 file and pull the metadata you need in one line](https://cosyte.com/social/cosyte-banner-dicom-1200x300.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://cosyte.com/tile/cosyte-lockup-tile-on-dark-1200x300.png">
+  <img alt="Cosyte: a plus mark set in two overlapping rounded squares, one solid and one outlined, beside the Cosyte wordmark" src="https://cosyte.com/tile/cosyte-lockup-tile-on-light-1200x300.png">
+</picture>
 
 # @cosyte/dicom
 
