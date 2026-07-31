@@ -59,7 +59,8 @@ need a record of what was done, without mutating the original.
 
 `deidentify(ds)` applies the PS3.15 Annex E **Basic Application Level Confidentiality Profile**
 (replacing, emptying, or removing every attribute the standard lists as identifying) and returns a
-fresh `Dataset` plus a **value-free** `DeidentifyReport`. It is a **pure function**: your input
+fresh `Dataset` plus a `DeidentifyReport` that is **value-free apart from `uidMap`**, whose keys are
+the source UIDs the file carried. It is a **pure function**: your input
 dataset is never mutated.
 
 ```ts runnable
@@ -83,7 +84,7 @@ dataset.get("00100010")?.value.kind; // => "empty"
 // UIDs are remapped to deterministic 2.25 replacements that stay consistent across files.
 dataset.study.instanceUid?.startsWith("2.25."); // => true
 
-// The report lists what was acted on: value-free, safe to log.
+// The report lists what was acted on: safe to log, except report.uidMap.
 report.attributes.length > 0; // => true
 report.warnings.length; // => 0
 
@@ -162,8 +163,10 @@ the raw fragments, still undecoded.
 a vendor quirk.
 
 Every recoverable deviation collects on `ds.warnings` with a stable code and a byte offset; only the
-four fatal conditions throw. The messages are PHI-free by construction, so the whole array is safe to
-log.
+four fatal conditions throw. Each message is looked up in a frozen registry keyed by the code, with
+only structural substitutions (a tag, a VR, a number), so the whole array is safe to log. A thrown
+`DicomParseError` is not: it carries a 16-byte hex `snippet` of the source. See
+[Troubleshooting](./troubleshooting#keeping-phi-out-of-logs).
 
 ```ts runnable
 import { parseDicom, WARNING_CODES } from "@cosyte/dicom";
@@ -180,7 +183,7 @@ const ds = parseDicom(buf);
 ds.series.modality; // => "CT"
 ds.warnings.some((w) => w.code === WARNING_CODES.DICOM_MISSING_PREAMBLE); // => true
 
-// Every warning carries a stable code and a byte offset: safe to log, no PHI.
+// Every warning carries a stable code and a byte offset, and a registry message.
 ds.warnings.every((w) => typeof w.code === "string"); // => true
 ```
 

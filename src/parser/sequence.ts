@@ -322,7 +322,7 @@ export function tryParseUnAsSQ(
       innerStrategy: implicitLeInner,
     };
     const result = parseSequence(slice, 0, ctx, emit, opts);
-    emit(unParsedAsSQ({ byteOffset: valueStart }, "UN"));
+    emit(unParsedAsSQ({ byteOffset: valueStart }));
     return {
       success: true,
       items: result.items,

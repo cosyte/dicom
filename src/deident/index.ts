@@ -3,7 +3,8 @@
  *
  * `deidentify(ds, options?)` applies the Basic Application Level Confidentiality
  * Profile plus the metadata-affecting Annex E Options, returning a fresh
- * de-identified {@link Dataset} and a value-free {@link DeidentifyReport}.
+ * de-identified {@link Dataset} and a {@link DeidentifyReport} that is value-free
+ * apart from `uidMap`, whose keys are the file's own source UIDs.
  *
  * @module
  */

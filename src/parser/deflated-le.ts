@@ -122,9 +122,14 @@ export function parseDeflatedLEWithCap(
         buildSnippet(buffer, datasetStart),
       );
     }
+    // `message` is zlib's, and it is deliberately not forwarded. It is an
+    // `err.message` from a library handed the sender's bytes, which is the one
+    // shape of third-party string this parser cannot vouch for; the zlib error
+    // `code` is a closed set and says the same thing safely.
+    const zlibCode = typeof code === "string" && code.length > 0 ? code : "unknown";
     throw new DicomParseError(
       FATAL_CODES.INVALID_FILE_META,
-      `Failed to inflate Deflated TS payload: ${message}`,
+      `Failed to inflate Deflated TS payload (zlib error code: ${zlibCode}).`,
       datasetStart,
       buildSnippet(buffer, datasetStart),
     );

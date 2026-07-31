@@ -111,9 +111,15 @@ export interface DeidentifiedAttribute {
 }
 
 /**
- * The audit trail returned alongside the de-identified dataset. Contains no
- * decoded values - only tags, keywords, action codes, and the UID map (whose
- * keys/values are UIDs, not patient data).
+ * The audit trail returned alongside the de-identified dataset.
+ *
+ * Every field except one is composed from static tables: tags, Part 6 keywords,
+ * Annex E action codes, structural `TAG[index]` sequence paths, and registry
+ * warning messages. **`uidMap` is the exception, and it is not value-free.** Its
+ * keys are the source UIDs read out of the file, kept so a caller can make UID
+ * replacement consistent across a study or an archive. A Study or SOP Instance
+ * UID is a unique identifying number, so treat `uidMap` as PHI: the rest of the
+ * report is safe to log, and that field is not.
  *
  * @example
  * ```ts
@@ -128,7 +134,11 @@ export interface DeidentifyReport {
   readonly attributes: readonly DeidentifiedAttribute[];
   /** Private tags removed under the Basic Profile (kept ones are omitted). */
   readonly removedPrivateTags: readonly Tag[];
-  /** Source UID → replacement UID, for cross-file consistency. */
+  /**
+   * Source UID → replacement UID, for cross-file consistency. The **keys are
+   * document values**, not composed identifiers: this is the one field of the
+   * report that carries PHI.
+   */
   readonly uidMap: ReadonlyMap<string, string>;
   /** Safety warnings - notably burned-in-pixel annotation that cannot be cleaned. */
   readonly warnings: readonly DicomParseWarning[];

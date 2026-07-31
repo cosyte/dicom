@@ -58,13 +58,12 @@ import { PHI_MARKER_UNIT, assertNoDiagnosticPhiLeak } from "@cosyte/test-utils";
 import type { DiagnosticSlot } from "@cosyte/test-utils";
 import { describe, expect, it } from "vitest";
 
-import { Dataset } from "../../src/dataset/dataset.js";
-import type { Element } from "../../src/dataset/element.js";
+import { type Dataset } from "../../src/dataset/dataset.js";
 import { deidentify } from "../../src/deident/index.js";
 import type { DeidentifyReport } from "../../src/deident/types.js";
 import type { Tag, VR } from "../../src/dictionary/types.js";
 import { parseDicom } from "../../src/parser/index.js";
-import { WARNING_CODES } from "../../src/parser/warnings.js";
+import { WARNING_CODES, WARNING_MESSAGES } from "../../src/parser/warnings.js";
 import { defineProfile } from "../../src/profiles/index.js";
 import { serializeDicom } from "../../src/serialize/serialize.js";
 import { buildDicom } from "../helpers/build-dicom.js";
@@ -97,7 +96,7 @@ const FILLER = { tag: "00080060" as Tag, vr: "CS" as VR, value: val("CT") };
 function nonzeroReservedFixture(marker: string): Buffer {
   const buf = buildDicom({
     transferSyntax: TS_EXPLICIT_LE,
-    elements: [{ tag: "00181020" as Tag, vr: "OB" as VR, value: val(marker) }],
+    elements: [{ tag: "00181020", vr: "OB" as VR, value: val(marker) }],
   });
   const obIdx = buf.lastIndexOf(Buffer.from("OB", "ascii"));
   if (obIdx <= 0 || obIdx + 3 >= buf.length) {
@@ -151,7 +150,13 @@ function cp246Fixture(marker: string): Buffer {
     Buffer.from([0x02, 0x00, 0x00, 0x00, 0x55, 0x4c, 0x04, 0x00]),
     fmGroupLenValue,
   ]);
-  return Buffer.concat([Buffer.alloc(128, 0x00), Buffer.from("DICM", "ascii"), fmGroupLen, fmTs, unElement]);
+  return Buffer.concat([
+    Buffer.alloc(128, 0x00),
+    Buffer.from("DICM", "ascii"),
+    fmGroupLen,
+    fmTs,
+    unElement,
+  ]);
 }
 
 // ---------------------------------------------------------------------------
@@ -190,7 +195,7 @@ function allDiagnostics(parsed: { readonly dataset: Dataset }): readonly unknown
  * assembled by intuition is how the sibling slice shipped an unbounded field
  * past two rounds of review. The full field-by-field accounting, including which
  * fields are deliberately absent because the model legitimately carries them as
- * data, is in `docs-content/spec-notes-safety.md`.
+ * data, is in `docs-content/spec-notes-tolerance.md`.
  *
  * Present: `Element.tag`, `Element.vr`, `Element.privateCreator`,
  * `Element.specificCharacterSet[]`, `FileMeta.transferSyntaxUID`,
@@ -237,7 +242,7 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
         skipTransferSyntaxUID: true,
-        fileMetaExtraElements: [{ tag: "00020010" as Tag, vr: "UI" as VR, value: val(m) }],
+        fileMetaExtraElements: [{ tag: "00020010", vr: "UI", value: val(m) }],
         elements: [],
       }),
     expectCode: "UNSUPPORTED_TRANSFER_SYNTAX",
@@ -247,7 +252,7 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     plant: (m) =>
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
-        elements: [{ tag: "00080005" as Tag, vr: "CS" as VR, value: val(m) }, FILLER],
+        elements: [{ tag: "00080005", vr: "CS" as VR, value: val(m) }, FILLER],
       }),
     expectCode: WARNING_CODES.DICOM_UNSUPPORTED_CHARSET,
   },
@@ -256,10 +261,7 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     plant: (m) =>
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
-        elements: [
-          { tag: "00080005" as Tag, vr: "CS" as VR, value: val(`ISO_IR 100\\${m}`) },
-          FILLER,
-        ],
+        elements: [{ tag: "00080005", vr: "CS" as VR, value: val(`ISO_IR 100\\${m}`) }, FILLER],
       }),
     expectCode: WARNING_CODES.DICOM_UNSUPPORTED_CHARSET,
   },
@@ -268,10 +270,7 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     plant: (m) =>
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
-        elements: [
-          { tag: "00080005" as Tag, vr: "CS" as VR, value: val(`${m}\\ISO_IR 100`) },
-          FILLER,
-        ],
+        elements: [{ tag: "00080005", vr: "CS" as VR, value: val(`${m}\\ISO_IR 100`) }, FILLER],
       }),
     expectCode: WARNING_CODES.DICOM_UNSUPPORTED_CHARSET,
   },
@@ -281,8 +280,8 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
       buildDicom({
         transferSyntax: TS_IMPLICIT_LE,
         elements: [
-          { tag: "00090010" as Tag, vr: "LO" as VR, value: val(m) },
-          { tag: "00091001" as Tag, vr: "UN" as VR, value: val("X") },
+          { tag: "00090010", vr: "LO" as VR, value: val(m) },
+          { tag: "00091001", vr: "UN" as VR, value: val("X") },
         ],
       }),
     expectCode: WARNING_CODES.DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR,
@@ -292,7 +291,7 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     plant: (m) =>
       buildDicom({
         transferSyntax: TS_IMPLICIT_LE,
-        elements: [{ tag: "00091001" as Tag, vr: "UN" as VR, value: val(m) }],
+        elements: [{ tag: "00091001", vr: "UN" as VR, value: val(m) }],
       }),
     expectCode: WARNING_CODES.DICOM_PRIVATE_TAG_NO_CREATOR,
   },
@@ -301,7 +300,7 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     plant: (m) =>
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
-        elements: [{ tag: "00100010" as Tag, vr: "LO" as VR, value: val(m) }],
+        elements: [{ tag: "00100010", vr: "LO" as VR, value: val(m) }],
       }),
     expectCode: WARNING_CODES.DICOM_VR_MISMATCH,
   },
@@ -310,9 +309,7 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     plant: (m) =>
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
-        elements: [
-          { tag: "00100020" as Tag, vr: "LO" as VR, value: Buffer.from(`${m}X`, "latin1") },
-        ],
+        elements: [{ tag: "00100020", vr: "LO" as VR, value: Buffer.from(`${m}X`, "latin1") }],
       }),
     expectCode: WARNING_CODES.DICOM_ODD_LENGTH_VALUE_PADDED,
   },
@@ -321,9 +318,7 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     plant: (m) =>
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
-        elements: [
-          { tag: "00080018" as Tag, vr: "UI" as VR, value: Buffer.from(`${m}  `, "latin1") },
-        ],
+        elements: [{ tag: "00080018", vr: "UI" as VR, value: Buffer.from(`${m}  `, "latin1") }],
       }),
     expectCode: WARNING_CODES.DICOM_UI_TRAILING_SPACE,
   },
@@ -332,9 +327,7 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     plant: (m) =>
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
-        elements: [
-          { tag: "00080060" as Tag, vr: "CS" as VR, value: Buffer.from(`${m}\xe9 `, "latin1") },
-        ],
+        elements: [{ tag: "00080060", vr: "CS" as VR, value: Buffer.from(`${m}\xe9 `, "latin1") }],
       }),
     expectCode: WARNING_CODES.DICOM_NON_ASCII_IN_ASCII_VR,
   },
@@ -343,7 +336,7 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     plant: (m) =>
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
-        elements: [{ tag: "00200013" as Tag, vr: "IS" as VR, value: val(m) }],
+        elements: [{ tag: "00200013", vr: "IS" as VR, value: val(m) }],
       }),
     expectCode: WARNING_CODES.DICOM_IS_NONINTEGER_VALUE,
   },
@@ -352,7 +345,7 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     plant: (m) =>
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
-        elements: [{ tag: "00080020" as Tag, vr: "DA" as VR, value: val(m) }],
+        elements: [{ tag: "00080020", vr: "DA" as VR, value: val(m) }],
       }),
     expectCode: WARNING_CODES.DICOM_DA_LEGACY_FORMAT,
   },
@@ -361,9 +354,7 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     plant: (m) =>
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
-        elements: [
-          { tag: "0040A120" as Tag, vr: "DT" as VR, value: val(`20240101120000+${m}`) },
-        ],
+        elements: [{ tag: "0040A120", vr: "DT" as VR, value: val(`20240101120000+${m}`) }],
       }),
     expectCode: WARNING_CODES.DICOM_DT_NONSTANDARD_OFFSET,
   },
@@ -374,7 +365,7 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
         transferSyntax: TS_EXPLICIT_LE,
         elements: [
           {
-            tag: "00081030" as Tag,
+            tag: "00081030",
             vr: "LO" as VR,
             value: even(Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(m, "latin1")])),
           },
@@ -387,9 +378,7 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     plant: (m) =>
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
-        elements: [
-          { tag: "00100020" as Tag, vr: "LO" as VR, value: Buffer.from(`${m}\0\0`, "latin1") },
-        ],
+        elements: [{ tag: "00100020", vr: "LO" as VR, value: Buffer.from(`${m}\0\0`, "latin1") }],
       }),
     expectCode: WARNING_CODES.DICOM_TRAILING_NULL_IN_TEXT_VR,
   },
@@ -400,9 +389,9 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
         transferSyntax: TS_EXPLICIT_LE,
         elements: [
           {
-            tag: "0040A730" as Tag,
+            tag: "0040A730",
             undefinedLength: true,
-            items: [{ elements: [{ tag: "00100010" as Tag, vr: "PN" as VR, value: val(m) }] }],
+            items: [{ elements: [{ tag: "00100010", vr: "PN" as VR, value: val(m) }] }],
           },
         ],
       }),
@@ -415,11 +404,11 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
         transferSyntax: TS_EXPLICIT_LE,
         elements: [
           {
-            tag: "0040A730" as Tag,
+            tag: "0040A730",
             undefinedLength: true,
             items: [
               { elements: [] },
-              { elements: [{ tag: "00100010" as Tag, vr: "PN" as VR, value: val(m) }] },
+              { elements: [{ tag: "00100010", vr: "PN" as VR, value: val(m) }] },
             ],
           },
         ],
@@ -432,8 +421,8 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
         elements: [
-          { tag: "00080000" as Tag, vr: "UL" as VR, value: Buffer.from([4, 0, 0, 0]) },
-          { tag: "00100020" as Tag, vr: "LO" as VR, value: val(m) },
+          { tag: "00080000", vr: "UL" as VR, value: Buffer.from([4, 0, 0, 0]) },
+          { tag: "00100020", vr: "LO" as VR, value: val(m) },
         ],
       }),
     expectCode: WARNING_CODES.DICOM_GROUP_LENGTH_IN_DATASET,
@@ -449,7 +438,7 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
         skipPreamble: true,
-        elements: [{ tag: "00100020" as Tag, vr: "LO" as VR, value: val(m) }],
+        elements: [{ tag: "00100020", vr: "LO" as VR, value: val(m) }],
       }),
     expectCode: WARNING_CODES.DICOM_MISSING_PREAMBLE,
   },
@@ -526,7 +515,7 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     plant: (m) =>
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
-        fileMetaExtraElements: [{ tag: "00020016" as Tag, vr: "AE" as VR, value: val(m) }],
+        fileMetaExtraElements: [{ tag: "00020016", vr: "AE", value: val(m) }],
         elements: [FILLER],
       }),
     expectCode: null,
@@ -548,8 +537,8 @@ const PROFILE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
       buildDicom({
         transferSyntax: TS_IMPLICIT_LE,
         elements: [
-          { tag: "00090010" as Tag, vr: "LO" as VR, value: val(m) },
-          { tag: "00091001" as Tag, vr: "UN" as VR, value: val("X") },
+          { tag: "00090010", vr: "LO" as VR, value: val(m) },
+          { tag: "00091001", vr: "UN" as VR, value: val("X") },
         ],
       }),
     expectCode: WARNING_CODES.DICOM_PRIVATE_CREATOR_UNKNOWN,
@@ -602,8 +591,8 @@ function burnedInFixture(marker: string): Buffer {
   return buildDicom({
     transferSyntax: TS_EXPLICIT_LE,
     elements: [
-      { tag: "00280301" as Tag, vr: "CS" as VR, value: val(marker) },
-      { tag: "7FE00010" as Tag, vr: "OW" as VR, value: val("\0\0") },
+      { tag: "00280301", vr: "CS" as VR, value: val(marker) },
+      { tag: "7FE00010", vr: "OW" as VR, value: val("\0\0") },
     ],
   });
 }
@@ -614,7 +603,7 @@ const DEID_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     plant: (m) =>
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
-        elements: [{ tag: "00080005" as Tag, vr: "CS" as VR, value: val(m) }, FILLER],
+        elements: [{ tag: "00080005", vr: "CS" as VR, value: val(m) }, FILLER],
       }),
     expectCode: WARNING_CODES.DICOM_UNSUPPORTED_CHARSET,
   },
@@ -628,7 +617,7 @@ const DEID_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     plant: (m) =>
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
-        elements: [{ tag: "00100010" as Tag, vr: "PN" as VR, value: val(m) }],
+        elements: [{ tag: "00100010", vr: "PN" as VR, value: val(m) }],
       }),
     expectCode: null,
   },
@@ -647,7 +636,7 @@ const DEID_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     plant: (m) =>
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
-        elements: [{ tag: "60004000" as Tag, vr: "LT" as VR, value: val(m) }],
+        elements: [{ tag: "60004000", vr: "LT" as VR, value: val(m) }],
       }),
     expectCode: null,
   },
@@ -710,7 +699,7 @@ describe("PHI: the probes reach what they claim to", () => {
         mediaStorageSOPClassUID: m,
         mediaStorageSOPInstanceUID: m,
         implementationClassUID: m,
-        fileMetaExtraElements: [{ tag: "00020016" as Tag, vr: "AE" as VR, value: val(m) }],
+        fileMetaExtraElements: [{ tag: "00020016", vr: "AE", value: val(m) }],
         elements: [FILLER],
       }),
     ).fileMeta;
@@ -718,14 +707,70 @@ describe("PHI: the probes reach what they claim to", () => {
     expect(fm?.mediaStorageSOPInstanceUID).toBe(m);
     expect(fm?.implementationClassUID).toBe(m);
 
-    // CS: lower case is not in the `CS` repertoire and is not folded on parse.
+    // CS: lower case is not in the `CS` repertoire, and nothing folds or rejects
+    // it on the way in. The element's own bytes still hold the marker verbatim,
+    // which is what proves the probe reached the branch; what the branch then
+    // puts on the model is the bound.
     const cs = parseDicom(
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
-        elements: [{ tag: "00080005" as Tag, vr: "CS" as VR, value: val(`ISO_IR 100\\${m}`) }, FILLER],
+        elements: [{ tag: "00080005", vr: "CS" as VR, value: val(`ISO_IR 100\\${m}`) }, FILLER],
       }),
     );
-    expect(cs.get("00080060")?.specificCharacterSet).toContain(m);
+    expect(cs.get("00080005")?.rawBytes.toString("latin1")).toContain(m);
+    expect(cs.get("00080060")?.specificCharacterSet).toStrictEqual(["ISO_IR 100", "<withheld>"]);
+    expect(cs.warnings.map((w) => w.code)).toContain(WARNING_CODES.DICOM_UNSUPPORTED_CHARSET);
+
+    // The private-creator bound, both directions: withheld with no profile,
+    // verbatim when the active profile's overlay names the creator.
+    const privateFile = (creator: string): Buffer =>
+      buildDicom({
+        transferSyntax: TS_IMPLICIT_LE,
+        elements: [
+          { tag: "00090010", vr: "LO" as VR, value: val(creator) },
+          { tag: "00091001", vr: "UN" as VR, value: val("X") },
+        ],
+      });
+    expect(parseDicom(privateFile(m)).get("00091001")?.privateCreator).toBe("<withheld>");
+    expect(
+      parseDicom(privateFile("PROBE KNOWN 01"), { profile: PROBE_PROFILE }).get("00091001")
+        ?.privateCreator,
+    ).toBe("PROBE KNOWN 01");
+    expect(
+      parseDicom(privateFile(m), { profile: PROBE_PROFILE }).get("00091001")?.privateCreator,
+    ).toBe("<withheld>");
+  });
+
+  it("every warning message is exactly its registry entry with structural tokens filled in", () => {
+    // The `transform` property, copied deliberately: it is the one design in the
+    // audited set that could not be defeated by a cleverer plant, because it
+    // compares the message to the registry rather than searching it for a
+    // marker. Any interpolation of anything else, from any slot, breaks the
+    // shape match regardless of what was planted.
+    const templates = Object.values(WARNING_MESSAGES).map((template) => {
+      const escaped = template.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+      const pattern = escaped
+        .replace(/\\\{tag\\\}/gu, "(?:[0-9A-F]{8}|<withheld>)")
+        .replace(/\\\{vr2?\\\}/gu, "(?:[A-Z]{2}|<withheld>)")
+        .replace(/\\\{n2?\\\}/gu, "\\d+");
+      return new RegExp(`^${pattern}$`, "u");
+    });
+
+    for (const slot of [...PARSE_SLOTS, ...PROFILE_SLOTS]) {
+      let parsed: { readonly dataset: Dataset };
+      try {
+        parsed = { dataset: parseDicom(slot.plant(PHI_MARKER_UNIT), { profile: PROBE_PROFILE }) };
+      } catch {
+        continue; // a fatal has no warnings to compare
+      }
+      for (const diagnostic of allDiagnostics(parsed)) {
+        const { message } = diagnostic as { readonly message: string };
+        expect(
+          templates.some((t) => t.test(message)),
+          `no registry template matches ${JSON.stringify(message)}`,
+        ).toBe(true);
+      }
+    }
   });
 
   it("the sweep can actually fail: a deliberately leaking parser is caught", () => {
@@ -753,8 +798,8 @@ describe("PHI: the de-identified bytes", () => {
     const raw = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
       elements: [
-        { tag: "00100010" as Tag, vr: "PN" as VR, value: val(m) },
-        { tag: "00101001" as Tag, vr: "PN" as VR, value: val(m) },
+        { tag: "00100010", vr: "PN" as VR, value: val(m) },
+        { tag: "00101001", vr: "PN" as VR, value: val(m) },
         FILLER,
       ],
     });
@@ -766,8 +811,8 @@ describe("PHI: the de-identified bytes", () => {
     const raw = buildDicom({
       transferSyntax: TS_IMPLICIT_LE,
       elements: [
-        { tag: "00090010" as Tag, vr: "LO" as VR, value: val(m) },
-        { tag: "00091001" as Tag, vr: "UN" as VR, value: val(m) },
+        { tag: "00090010", vr: "LO" as VR, value: val(m) },
+        { tag: "00091001", vr: "UN" as VR, value: val(m) },
         FILLER,
       ],
     });
@@ -778,7 +823,7 @@ describe("PHI: the de-identified bytes", () => {
   it("an overlay comment matched only by the repeating-group mask is gone too", () => {
     const raw = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
-      elements: [{ tag: "60004000" as Tag, vr: "LT" as VR, value: val(m) }, FILLER],
+      elements: [{ tag: "60004000", vr: "LT" as VR, value: val(m) }, FILLER],
     });
     const { dataset } = deidentify(parseDicom(raw));
     expect(serializeDicom(dataset).includes(Buffer.from(m, "latin1"))).toBe(false);
@@ -789,8 +834,8 @@ describe("PHI: the de-identified bytes", () => {
       transferSyntax: TS_EXPLICIT_LE,
       elements: [
         {
-          tag: "00081115" as Tag,
-          items: [{ elements: [{ tag: "00100010" as Tag, vr: "PN" as VR, value: val(m) }] }],
+          tag: "00081115",
+          items: [{ elements: [{ tag: "00100010", vr: "PN" as VR, value: val(m) }] }],
         },
         FILLER,
       ],

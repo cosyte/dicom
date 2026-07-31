@@ -150,7 +150,8 @@ const acmeStrict = defineProfile({
 
 Before sharing a file, strip the identifying metadata. `deidentify()` applies the PS3.15 Annex E
 **Basic Application Level Confidentiality Profile** (replacing, emptying, or removing every attribute
-the standard lists as identifying) and returns a fresh dataset plus a value-free report of what it did.
+the standard lists as identifying) and returns a fresh dataset plus a report of what it did, value-free
+apart from the source UIDs in `report.uidMap`.
 
 ```ts
 import { parseDicom, deidentify, serializeDicom } from "@cosyte/dicom";

@@ -5,7 +5,8 @@
  * nine *metadata-affecting* Annex E Options, driven by the generated Table E.1-1
  * action map ({@link annexE}). It is a **pure** function: the input {@link Dataset}
  * is never mutated; a fresh `Dataset` (with a rebuilt element map and File Meta)
- * is returned alongside a value-free {@link DeidentifyReport}.
+ * is returned alongside a {@link DeidentifyReport} that is value-free except for
+ * `uidMap`, whose keys are the file's own source UIDs.
  *
  * **What it does**
  * - Resolves each attribute's action (basic profile, overridden by an active
@@ -96,6 +97,8 @@ interface DeidentifyContext {
   readonly profile: Profile | undefined;
   readonly encoding: BodyEncoding;
   readonly littleEndian: boolean;
+  /** Block key -> Private Creator, re-derived from this dataset's own creator elements. */
+  readonly creators: ReadonlyMap<string, string>;
 }
 
 /** Validate caller-supplied options; throws {@link DeidentifyError} on misconfig. */
@@ -257,13 +260,42 @@ interface ProcessResult {
   readonly removedPrivateTags: Tag[];
 }
 
+/**
+ * Map every private block this run can see to the creator that reserved it,
+ * read from the `(gggg,00EE)` elements themselves rather than from
+ * `Element.privateCreator`.
+ *
+ * `Element.privateCreator` is membership-bounded against the profile that was
+ * active **at parse time** (`src/parser/tokens.ts`), and a caller may perfectly
+ * reasonably parse without a profile and pass one here. Reading the creator
+ * elements re-derives the block reservation from the dataset in front of us, so
+ * `RetainSafePrivate` behaves identically whether the profile arrived at parse
+ * or at de-identification. The decoded string never leaves this map: it is a
+ * lookup key, not a value on any surface.
+ */
+function creatorsInScope(source: readonly Element[]): ReadonlyMap<string, string> {
+  const byBlock = new Map<string, string>();
+  for (const el of source) {
+    if (!isPrivateTag(el.tag) || !isPrivateCreatorElement(el.tag)) continue;
+    const { group, element } = splitTag(el.tag);
+    byBlock.set(`${String(group)}:${String(element & 0xff)}`, decodeCreator(el));
+  }
+  return byBlock;
+}
+
+/** The creator that reserved a private data element's block, per PS3.5 section 7.8. */
+function creatorFor(tag: Tag, creators: ReadonlyMap<string, string>): string | undefined {
+  const { group, element } = splitTag(tag);
+  return creators.get(`${String(group)}:${String((element >> 8) & 0xff)}`);
+}
+
 /** Decide whether to keep a private element under `RetainSafePrivate` + a profile. */
 function keepsPrivate(el: Element, ctx: DeidentifyContext): boolean {
   if (!ctx.active.has("RetainSafePrivate") || ctx.profile === undefined) return false;
   if (isPrivateCreatorElement(el.tag)) {
     return ctx.profile.privateDictionary.has(decodeCreator(el));
   }
-  const creator = el.privateCreator;
+  const creator = creatorFor(el.tag, ctx.creators);
   if (creator === undefined) return false;
   return resolvePrivateTag(ctx.profile, el.tag, creator) !== undefined;
 }
@@ -457,8 +489,10 @@ function hasUncleanedBurnedIn(ds: Dataset): boolean {
  * De-identify a {@link Dataset} per PS3.15 Annex E - the Basic Application Level
  * Confidentiality Profile, plus any Retain/Clean Options passed in `retain`.
  *
- * Pure: `ds` is never mutated. Returns a fresh dataset and a value-free
- * {@link DeidentifyReport} (tags, keywords, action codes, the UID map, warnings).
+ * Pure: `ds` is never mutated. Returns a fresh dataset and a
+ * {@link DeidentifyReport} of tags, keywords, action codes, warnings and the UID
+ * map. Everything in it is composed from static tables except `uidMap`, whose
+ * keys are the source UIDs the file carried: treat that field as PHI.
  *
  * @throws {@link DeidentifyError} (`INVALID_OPTIONS`) for an unknown Retain option
  *   or a malformed `uidRoot`.
@@ -486,6 +520,7 @@ export function deidentify(
     profile: options.profile,
     encoding,
     littleEndian,
+    creators: creatorsInScope(ds.elements()),
   };
 
   const { elements, attributes, removedPrivateTags } = processElements(ds.elements(), ctx, []);

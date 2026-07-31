@@ -112,9 +112,13 @@ export function serializeDicom(ds: Dataset): Buffer {
   }
   const encoding = BODY_ENCODING[tsUid];
   if (encoding === undefined) {
+    // Not interpolated, for the same reason the reader does not interpolate it:
+    // a caller can hand the writer any `Dataset`, so `transferSyntaxUID` is a
+    // consumer-controlled string on this path and this message is an
+    // `err.message`.
     throw new DicomSerializeError(
       SERIALIZE_ERROR_CODES.UNSUPPORTED_TRANSFER_SYNTAX,
-      `Transfer Syntax UID "${tsUid}" is not supported by the @cosyte/dicom v1 writer.`,
+      `The Dataset's File Meta Transfer Syntax UID is not supported by the @cosyte/dicom v1 writer (supported: ${Object.keys(BODY_ENCODING).join(", ")}).`,
     );
   }
 

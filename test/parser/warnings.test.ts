@@ -129,14 +129,14 @@ describe("warning factories (D-12 - one named factory per active-emit code)", ()
     expect(w.code).toBe(WARNING_CODES.DICOM_GROUP_LENGTH_IN_DATASET);
   });
 
-  it("nonzeroReservedBytes", () => {
-    const w = nonzeroReservedBytes(pos, "7FE00010", "00ff");
+  it("nonzeroReservedBytes reports the reserved bytes as a number, not a hex echo", () => {
+    const w = nonzeroReservedBytes(pos, "7FE00010", 0x00ff);
     expect(w.code).toBe(WARNING_CODES.DICOM_NONZERO_RESERVED_BYTES);
-    expect(w.message).toContain("00ff");
+    expect(w.message).toContain("255");
   });
 
   it("unParsedAsSQ", () => {
-    const w = unParsedAsSQ(pos, "0040A730");
+    const w = unParsedAsSQ(pos);
     expect(w.code).toBe(WARNING_CODES.DICOM_UN_PARSED_AS_SQ);
   });
 

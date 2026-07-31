@@ -36,6 +36,13 @@ import type { OnWarningCallback, ParseContext, ParseOptions } from "./types.js";
 import type { DicomParseWarning } from "./warnings.js";
 
 /**
+ * The four v1 Transfer Syntax UIDs, as a constant for the unsupported-syntax
+ * message. A literal list is what lets that message stay useful without echoing
+ * the UID the file actually carried.
+ */
+const SUPPORTED_TRANSFER_SYNTAXES = Object.keys(TRANSFER_SYNTAX_PARSERS).join(", ");
+
+/**
  * Parse a DICOM Part 10 buffer into a structural {@link Dataset}.
  *
  * Lenient by default - recoverable deviations (missing preamble, File Meta
@@ -129,10 +136,18 @@ export function parseDicom(
   const tsUid = fileMeta.transferSyntaxUID;
   const strategy = TRANSFER_SYNTAX_PARSERS[tsUid];
   if (strategy === undefined) {
+    // The UID itself is NEVER interpolated. `(0002,0010)` is a `UI` a sender
+    // authored, this branch is reached precisely when it is not one of the four
+    // this build supports, and the message ends up in `err.message` and
+    // `err.stack`. What names it instead comes from a closed set the parser
+    // controls: the registry's own name for the UID when PS3.6 publishes one
+    // (so `JPEG Baseline (Process 1)` still reads usefully), and nothing at all
+    // when it does not.
     const tsName = dictionaryUid(tsUid)?.name ?? "";
+    const named = tsName.length > 0 ? `Transfer Syntax ${tsName}` : "The Transfer Syntax UID";
     throw new DicomParseError(
       FATAL_CODES.UNSUPPORTED_TRANSFER_SYNTAX,
-      `Transfer Syntax UID "${tsUid}" is not supported by @cosyte/dicom v1.`,
+      `${named} in (0002,0010) is not supported by @cosyte/dicom v1 (supported: ${SUPPORTED_TRANSFER_SYNTAXES}).`,
       fileMetaEnd,
       tsName.length > 0 ? tsName : buildSnippet(buffer, fileMetaEnd),
     );

@@ -18,7 +18,9 @@
  * @module
  */
 
-import type { VR } from "../dictionary/types.js";
+import type { Tag, VR } from "../dictionary/types.js";
+import { BE_VR_STRIDE } from "./endian.js";
+import { WITHHELD } from "./tokens.js";
 import type { DicomPosition } from "./types.js";
 
 /**
@@ -120,21 +122,154 @@ export interface DicomParseWarning {
 }
 
 /**
+ * The frozen message registry: one entry per {@link WarningCode}, and the only
+ * place a warning's prose exists.
+ *
+ * **This is the whole PHI control, and it is structural rather than a
+ * discipline.** The audited defect across the `@cosyte/*` parsers had exactly
+ * one distinguishing property: *does the warning factory take a value parameter
+ * at all?* Everything that leaked did; `astm`, `transform` and `fhir`, the three
+ * that were genuinely prevented, do not. So no factory below accepts a string
+ * read out of the document. A template's only substitutions are
+ * {@link WarningTokens}, whose fields are a `Tag`, a `VR` and numbers - each
+ * either composed by this parser or checked against a closed set before it is
+ * rendered, so a document byte has no path into a message even if a future call
+ * site passes one by mistake.
+ *
+ * A token a check refuses renders as {@link WITHHELD} rather than being echoed
+ * or dropped, so a message never silently loses a field it claims to carry.
+ *
+ * Two codes are declared and never emitted by this build:
+ * `DICOM_CHARSET_AMBIGUOUS_SEPARATOR` and `DICOM_PIXEL_DATA_LENGTH_MISMATCH`.
+ * They still carry a registry entry so the record stays total over
+ * `WarningCode`, which is what makes "every message comes from here" checkable
+ * by the type system rather than by reading.
+ */
+export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.freeze({
+  DICOM_MISSING_PREAMBLE: "No DICM magic at offset 128; falling back to offset-0 dataset.",
+  DICOM_FILE_META_GROUP_LENGTH_MISSING:
+    "(0002,0000) FileMetaInformationGroupLength missing; scanning forward to first non-(0002,xxxx) element.",
+  DICOM_FILE_META_GROUP_LENGTH_MISMATCH:
+    "(0002,0000) FileMetaInformationGroupLength declared {n} bytes; actual File Meta group size is {n2} bytes. Trusting actual.",
+  DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR:
+    "Element ({tag}) uses undefined length (0xFFFFFFFF) under an Explicit VR transfer syntax.",
+  DICOM_ODD_LENGTH_VALUE_PADDED:
+    "Element ({tag}) has odd declared length {n}; cursor advanced by one padding byte to maintain alignment.",
+  DICOM_VR_MISMATCH:
+    "Element ({tag}) on-wire VR is {vr2}; dictionary lists {vr}. Trusting on-wire VR.",
+  DICOM_PRIVATE_TAG_NO_CREATOR:
+    "Private element ({tag}) has no Private Creator registered for its block; treating as VR=UN.",
+  DICOM_GROUP_LENGTH_IN_DATASET:
+    "Retired Group Length element ({tag}) encountered in dataset; preserved as-is.",
+  DICOM_NONZERO_RESERVED_BYTES:
+    "Element ({tag}) has non-zero reserved bytes between VR and length (16-bit value {n}); ignoring.",
+  DICOM_UN_PARSED_AS_SQ:
+    "An element declared VR=UN with undefined length; descended as Implicit VR LE sequence per CP-246.",
+  DICOM_EMPTY_ITEM_IN_SEQUENCE: "Sequence ({tag}) contains an empty item (length=0); tolerated.",
+  DICOM_PIXEL_DATA_LENGTH_MISMATCH:
+    "(7FE0,0010) PixelData declared length {n} does not match computed {n2} bytes.",
+  DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR:
+    "Private element ({tag}) under Implicit VR LE has no VR override; falling back to UN.",
+  DICOM_PRIVATE_CREATOR_UNKNOWN:
+    "Private element ({tag}) has a Private Creator the active profile's private dictionary does not name; falling back to UN. The creator string is not reproduced here - read the (gggg,00EE) element if you need it.",
+  DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED:
+    "Pixel Data is present and Burned In Annotation is not 'NO'; this metadata-only de-identifier cannot inspect or clean pixels. Recognizable text may remain burned into the image.",
+  DICOM_BOM_IN_TEXT_VR: "Element ({tag}) {vr} value begins with a UTF-8 BOM; stripped on decode.",
+  DICOM_TRAILING_NULL_IN_TEXT_VR:
+    "Element ({tag}) {vr} value has a trailing NULL pad where SPACE is expected; trimmed.",
+  DICOM_UI_TRAILING_SPACE:
+    "Element ({tag}) UI value is SPACE-padded; UI requires NULL padding (PS3.5 §6.2). Trimmed.",
+  DICOM_NON_ASCII_IN_ASCII_VR:
+    "Element ({tag}) {vr} is an ASCII-only VR but contains non-ASCII bytes; decoded as Latin-1 best-effort.",
+  DICOM_IS_NONINTEGER_VALUE:
+    "Element ({tag}) IS value is not a base-10 integer; surfaced as null with raw bytes preserved.",
+  DICOM_DA_LEGACY_FORMAT:
+    "Element ({tag}) DA value is not in canonical YYYYMMDD form; decoded best-effort, raw preserved.",
+  DICOM_DT_NONSTANDARD_OFFSET:
+    "Element ({tag}) DT value has a non-standard UTC offset; decoded best-effort, raw preserved.",
+  DICOM_UNSUPPORTED_CHARSET:
+    "(0008,0005) Specific Character Set value {n} names a defined term this build does not support; decoding text as UTF-8 best-effort. The term is not reproduced here - read the element if you need it.",
+  DICOM_CHARSET_AMBIGUOUS_SEPARATOR:
+    "(0008,0005) Specific Character Set value {n} is ambiguous under the active code extensions; decoding text as UTF-8 best-effort.",
+});
+
+/**
+ * The substitutions a registry template may take. Every field is structural by
+ * construction, and the type is the enforcement: there is no `string` field, so
+ * a decoded value cannot be passed to a factory even by accident.
+ *
+ * @internal
+ */
+interface WarningTokens {
+  /** An 8-hex-char tag this parser composed from the element header's four bytes. */
+  readonly tag?: Tag;
+  /** A VR, checked against the closed 34-VR set before rendering. */
+  readonly vr?: VR;
+  /** A second VR, for the code that reports a dictionary/on-wire divergence. */
+  readonly vr2?: VR;
+  /** An input-derived count, length, index or byte value. */
+  readonly n?: number;
+  /** A second such number. */
+  readonly n2?: number;
+}
+
+/** The 34 VRs PS3.5 section 6.2 defines, as the closed set `{vr}` is checked against. */
+const KNOWN_VRS: ReadonlySet<string> = new Set<string>(Object.keys(BE_VR_STRIDE));
+
+/** An 8-hex-char tag as this parser composes it: uppercase, exactly four bytes. */
+const TAG_SHAPE = /^[0-9A-F]{8}$/u;
+
+/**
+ * Render a tag token. A tag reaching a factory is always composed here (two
+ * `uint16` reads, hex-padded, upper-cased), so the check can never fire on
+ * correct code; it is the guard that keeps that true if a future call site
+ * passes something else, which is precisely how `unParsedAsSQ` came to be
+ * passing the string `"UN"` in the tag slot.
+ */
+function renderTag(tag: Tag | undefined): string {
+  return tag !== undefined && TAG_SHAPE.test(tag) ? tag : WITHHELD;
+}
+
+/**
+ * Render a VR token. Under Explicit VR the on-wire VR is two bytes a sender
+ * chose, so it is checked against the closed set rather than trusted: two bytes
+ * cannot carry much, but "cannot carry much" is not a bound.
+ */
+function renderVr(vr: VR | undefined): string {
+  return vr !== undefined && KNOWN_VRS.has(vr) ? vr : WITHHELD;
+}
+
+/**
+ * The single construction point for every Tier-2 warning: look the message up
+ * in {@link WARNING_MESSAGES} and substitute only checked structural tokens.
+ *
+ * @internal
+ */
+function build(
+  code: WarningCode,
+  position: DicomPosition,
+  tokens: WarningTokens = {},
+): DicomParseWarning {
+  const message = WARNING_MESSAGES[code]
+    .replace("{tag}", renderTag(tokens.tag))
+    .replace("{vr2}", renderVr(tokens.vr2))
+    .replace("{vr}", renderVr(tokens.vr))
+    .replace("{n2}", String(tokens.n2 ?? 0))
+    .replace("{n}", String(tokens.n ?? 0));
+  return { code, message, position };
+}
+
+/**
  * Build a `DICOM_MISSING_PREAMBLE` warning. Emitted once per parse when no
  * `DICM` magic is present at offset 128 and `stripPreamble` is `"tolerate"`.
  *
  * @example
  * ```ts
- * import { missingPreamble } from "@cosyte/dicom";
  * const w = missingPreamble({ byteOffset: 0 });
  * ```
  */
 export function missingPreamble(position: DicomPosition): DicomParseWarning {
-  return {
-    code: WARNING_CODES.DICOM_MISSING_PREAMBLE,
-    message: "No DICM magic at offset 128; falling back to offset-0 dataset.",
-    position,
-  };
+  return build(WARNING_CODES.DICOM_MISSING_PREAMBLE, position);
 }
 
 /**
@@ -145,17 +280,11 @@ export function missingPreamble(position: DicomPosition): DicomParseWarning {
  *
  * @example
  * ```ts
- * import { fileMetaGroupLengthMissing } from "@cosyte/dicom";
  * const w = fileMetaGroupLengthMissing({ byteOffset: 132, fileMeta: true });
  * ```
  */
 export function fileMetaGroupLengthMissing(position: DicomPosition): DicomParseWarning {
-  return {
-    code: WARNING_CODES.DICOM_FILE_META_GROUP_LENGTH_MISSING,
-    message:
-      "(0002,0000) FileMetaInformationGroupLength missing; scanning forward to first non-(0002,xxxx) element.",
-    position,
-  };
+  return build(WARNING_CODES.DICOM_FILE_META_GROUP_LENGTH_MISSING, position);
 }
 
 /**
@@ -165,7 +294,6 @@ export function fileMetaGroupLengthMissing(position: DicomPosition): DicomParseW
  *
  * @example
  * ```ts
- * import { fileMetaGroupLengthMismatch } from "@cosyte/dicom";
  * const w = fileMetaGroupLengthMismatch({ byteOffset: 132, fileMeta: true }, 200, 208);
  * ```
  */
@@ -174,11 +302,10 @@ export function fileMetaGroupLengthMismatch(
   declared: number,
   actual: number,
 ): DicomParseWarning {
-  return {
-    code: WARNING_CODES.DICOM_FILE_META_GROUP_LENGTH_MISMATCH,
-    message: `(0002,0000) FileMetaInformationGroupLength declared ${String(declared)} bytes; actual File Meta group size is ${String(actual)} bytes. Trusting actual.`,
-    position,
-  };
+  return build(WARNING_CODES.DICOM_FILE_META_GROUP_LENGTH_MISMATCH, position, {
+    n: declared,
+    n2: actual,
+  });
 }
 
 /**
@@ -189,19 +316,11 @@ export function fileMetaGroupLengthMismatch(
  *
  * @example
  * ```ts
- * import { undefinedLengthInExplicitVR } from "@cosyte/dicom";
  * const w = undefinedLengthInExplicitVR({ byteOffset: 512 }, "0040A730");
  * ```
  */
-export function undefinedLengthInExplicitVR(
-  position: DicomPosition,
-  tag: string,
-): DicomParseWarning {
-  return {
-    code: WARNING_CODES.DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR,
-    message: `Element (${tag}) uses undefined length (0xFFFFFFFF) under an Explicit VR transfer syntax.`,
-    position,
-  };
+export function undefinedLengthInExplicitVR(position: DicomPosition, tag: Tag): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR, position, { tag });
 }
 
 /**
@@ -211,20 +330,18 @@ export function undefinedLengthInExplicitVR(
  *
  * @example
  * ```ts
- * import { oddLengthValuePadded } from "@cosyte/dicom";
  * const w = oddLengthValuePadded({ byteOffset: 240 }, "00100010", 9);
  * ```
  */
 export function oddLengthValuePadded(
   position: DicomPosition,
-  tag: string,
+  tag: Tag,
   declaredLength: number,
 ): DicomParseWarning {
-  return {
-    code: WARNING_CODES.DICOM_ODD_LENGTH_VALUE_PADDED,
-    message: `Element (${tag}) has odd declared length ${String(declaredLength)}; cursor advanced by one padding byte to maintain alignment.`,
-    position,
-  };
+  return build(WARNING_CODES.DICOM_ODD_LENGTH_VALUE_PADDED, position, {
+    tag,
+    n: declaredLength,
+  });
 }
 
 /**
@@ -234,21 +351,16 @@ export function oddLengthValuePadded(
  *
  * @example
  * ```ts
- * import { vrMismatch } from "@cosyte/dicom";
  * const w = vrMismatch({ byteOffset: 300 }, "00100010", "PN", "LO");
  * ```
  */
 export function vrMismatch(
   position: DicomPosition,
-  tag: string,
+  tag: Tag,
   dictVR: VR,
   fileVR: VR,
 ): DicomParseWarning {
-  return {
-    code: WARNING_CODES.DICOM_VR_MISMATCH,
-    message: `Element (${tag}) on-wire VR is ${fileVR}; dictionary lists ${dictVR}. Trusting on-wire VR.`,
-    position,
-  };
+  return build(WARNING_CODES.DICOM_VR_MISMATCH, position, { tag, vr: dictVR, vr2: fileVR });
 }
 
 /**
@@ -258,16 +370,11 @@ export function vrMismatch(
  *
  * @example
  * ```ts
- * import { privateTagNoCreator } from "@cosyte/dicom";
  * const w = privateTagNoCreator({ byteOffset: 800 }, "00191020");
  * ```
  */
-export function privateTagNoCreator(position: DicomPosition, tag: string): DicomParseWarning {
-  return {
-    code: WARNING_CODES.DICOM_PRIVATE_TAG_NO_CREATOR,
-    message: `Private element (${tag}) has no Private Creator registered for its block; treating as VR=UN.`,
-    position,
-  };
+export function privateTagNoCreator(position: DicomPosition, tag: Tag): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_PRIVATE_TAG_NO_CREATOR, position, { tag });
 }
 
 /**
@@ -278,16 +385,11 @@ export function privateTagNoCreator(position: DicomPosition, tag: string): Dicom
  *
  * @example
  * ```ts
- * import { groupLengthInDataset } from "@cosyte/dicom";
  * const w = groupLengthInDataset({ byteOffset: 400 }, "00080000");
  * ```
  */
-export function groupLengthInDataset(position: DicomPosition, tag: string): DicomParseWarning {
-  return {
-    code: WARNING_CODES.DICOM_GROUP_LENGTH_IN_DATASET,
-    message: `Retired Group Length element (${tag}) encountered in dataset; preserved as-is.`,
-    position,
-  };
+export function groupLengthInDataset(position: DicomPosition, tag: Tag): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_GROUP_LENGTH_IN_DATASET, position, { tag });
 }
 
 /**
@@ -295,22 +397,21 @@ export function groupLengthInDataset(position: DicomPosition, tag: string): Dico
  * VR long-form header has non-zero bytes in its 2-byte reserved field
  * (between VR and the 4-byte length per D-22).
  *
+ * The two bytes are reported as the **number** they encode rather than as a
+ * hex echo of the bytes themselves: an input-derived number is the prescribed
+ * shape here, and a re-rendered slice of input is not, however short.
+ *
  * @example
  * ```ts
- * import { nonzeroReservedBytes } from "@cosyte/dicom";
- * const w = nonzeroReservedBytes({ byteOffset: 500 }, "7FE00010", "00ff");
+ * const w = nonzeroReservedBytes({ byteOffset: 500 }, "7FE00010", 0x00ff);
  * ```
  */
 export function nonzeroReservedBytes(
   position: DicomPosition,
-  tag: string,
-  observed: string,
+  tag: Tag,
+  reserved: number,
 ): DicomParseWarning {
-  return {
-    code: WARNING_CODES.DICOM_NONZERO_RESERVED_BYTES,
-    message: `Element (${tag}) has non-zero reserved bytes (${observed}) between VR and length; ignoring.`,
-    position,
-  };
+  return build(WARNING_CODES.DICOM_NONZERO_RESERVED_BYTES, position, { tag, n: reserved });
 }
 
 /**
@@ -318,18 +419,17 @@ export function nonzeroReservedBytes(
  * with undefined length is successfully descended as an Implicit VR LE
  * sequence (CP-246 fallback per D-30).
  *
+ * The element is identified by `position.byteOffset` alone: the descent
+ * primitive is handed a byte range rather than a tag, and the earlier message
+ * papered over that by printing the literal string `"UN"` in its tag slot.
+ *
  * @example
  * ```ts
- * import { unParsedAsSQ } from "@cosyte/dicom";
- * const w = unParsedAsSQ({ byteOffset: 600 }, "0040A730");
+ * const w = unParsedAsSQ({ byteOffset: 600 });
  * ```
  */
-export function unParsedAsSQ(position: DicomPosition, tag: string): DicomParseWarning {
-  return {
-    code: WARNING_CODES.DICOM_UN_PARSED_AS_SQ,
-    message: `Element (${tag}) declared VR=UN with undefined length; descended as Implicit VR LE sequence per CP-246.`,
-    position,
-  };
+export function unParsedAsSQ(position: DicomPosition): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_UN_PARSED_AS_SQ, position);
 }
 
 /**
@@ -339,27 +439,24 @@ export function unParsedAsSQ(position: DicomPosition, tag: string): DicomParseWa
  *
  * @example
  * ```ts
- * import { emptyItemInSequence } from "@cosyte/dicom";
  * const w = emptyItemInSequence({ byteOffset: 700 }, "0040A730");
  * ```
  */
-export function emptyItemInSequence(position: DicomPosition, tag: string): DicomParseWarning {
-  return {
-    code: WARNING_CODES.DICOM_EMPTY_ITEM_IN_SEQUENCE,
-    message: `Sequence (${tag}) contains an empty item (length=0); tolerated.`,
-    position,
-  };
+export function emptyItemInSequence(position: DicomPosition, tag: Tag): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_EMPTY_ITEM_IN_SEQUENCE, position, { tag });
 }
 
 /**
- * Build a `DICOM_PIXEL_DATA_LENGTH_MISMATCH` warning. Emitted when a
- * defined-length `(7FE0,0010)` element's declared length does not match
- * `rows × columns × samplesPerPixel × bitsAllocated/8 × numberOfFrames`
- * (D-32). Phase 2 emits this in a small post-pass after structural parsing.
+ * Build a `DICOM_PIXEL_DATA_LENGTH_MISMATCH` warning for a defined-length
+ * `(7FE0,0010)` element whose declared length does not match
+ * `rows × columns × samplesPerPixel × bitsAllocated/8 × numberOfFrames` (D-32).
+ *
+ * @remarks
+ * Declared but **not emitted** by this build: no call site exists in `src/`.
+ * Kept so the code and its shape stay stable for the phase that activates it.
  *
  * @example
  * ```ts
- * import { pixelDataLengthMismatch } from "@cosyte/dicom";
  * const w = pixelDataLengthMismatch({ byteOffset: 1024 }, 524288, 524300);
  * ```
  */
@@ -368,11 +465,10 @@ export function pixelDataLengthMismatch(
   declared: number,
   computed: number,
 ): DicomParseWarning {
-  return {
-    code: WARNING_CODES.DICOM_PIXEL_DATA_LENGTH_MISMATCH,
-    message: `(7FE0,0010) PixelData declared length ${String(declared)} does not match computed ${String(computed)} bytes.`,
-    position,
-  };
+  return build(WARNING_CODES.DICOM_PIXEL_DATA_LENGTH_MISMATCH, position, {
+    n: declared,
+    n2: computed,
+  });
 }
 
 /**
@@ -383,19 +479,14 @@ export function pixelDataLengthMismatch(
  *
  * @example
  * ```ts
- * import { implicitVRForPrivateTagWithoutVR } from "@cosyte/dicom";
  * const w = implicitVRForPrivateTagWithoutVR({ byteOffset: 900 }, "00191020");
  * ```
  */
 export function implicitVRForPrivateTagWithoutVR(
   position: DicomPosition,
-  tag: string,
+  tag: Tag,
 ): DicomParseWarning {
-  return {
-    code: WARNING_CODES.DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR,
-    message: `Private element (${tag}) under Implicit VR LE has no VR override; falling back to UN.`,
-    position,
-  };
+  return build(WARNING_CODES.DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR, position, { tag });
 }
 
 /**
@@ -403,25 +494,20 @@ export function implicitVRForPrivateTagWithoutVR(
  * under Implicit VR LE when a parse-time {@link Profile} is active and a
  * private data element carries a registered Private Creator that the profile's
  * private-dictionary overlay does not recognize - the element degrades to the
- * generic `UN` fallback rather than risking a wrong decode. The `creator`
- * string is a vendor schema identifier (e.g. `"ACME PRIVATE 01"`), not PHI.
+ * generic `UN` fallback rather than risking a wrong decode.
+ *
+ * The creator string is **not** a parameter. It reads as a vendor schema
+ * identifier and usually is one, but it is an `LO` a sender authored, and this
+ * warning fires precisely when no closed set vouches for it. `position` and the
+ * element tag say where to look; the bytes stay on the `(gggg,00EE)` element.
  *
  * @example
  * ```ts
- * import { privateCreatorUnknown } from "@cosyte/dicom";
- * const w = privateCreatorUnknown({ byteOffset: 900 }, "00191020", "ACME PRIVATE 01");
+ * const w = privateCreatorUnknown({ byteOffset: 900 }, "00191020");
  * ```
  */
-export function privateCreatorUnknown(
-  position: DicomPosition,
-  tag: string,
-  creator: string,
-): DicomParseWarning {
-  return {
-    code: WARNING_CODES.DICOM_PRIVATE_CREATOR_UNKNOWN,
-    message: `Private element (${tag}) creator "${creator}" is not in the active profile's private dictionary; falling back to UN.`,
-    position,
-  };
+export function privateCreatorUnknown(position: DicomPosition, tag: Tag): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_PRIVATE_CREATOR_UNKNOWN, position, { tag });
 }
 
 /**
@@ -430,29 +516,19 @@ export function privateCreatorUnknown(
  * `(0028,0301)` Burned In Annotation is absent or its value is not `"NO"` - the
  * metadata-only de-identifier cannot inspect or clean pixels (that is deferred to
  * `@cosyte/dicom-pixel`), so it warns rather than silently implying the image is
- * clean (PS3.15 §E.3.1 / §E.3.2 are out of scope here). The message carries no
- * pixel content - only the structural fact.
+ * clean (PS3.15 §E.3.1 / §E.3.2 are out of scope here).
  *
  * @example
  * ```ts
- * import { burnedInAnnotationNotRemoved } from "@cosyte/dicom";
  * const w = burnedInAnnotationNotRemoved({ byteOffset: 4096, fileMeta: false });
  * ```
  */
 export function burnedInAnnotationNotRemoved(position: DicomPosition): DicomParseWarning {
-  return {
-    code: WARNING_CODES.DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED,
-    message:
-      "Pixel Data is present and Burned In Annotation is not 'NO'; this metadata-only de-identifier cannot inspect or clean pixels. Recognizable text may remain burned into the image.",
-    position,
-  };
+  return build(WARNING_CODES.DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED, position);
 }
 
 // ---------------------------------------------------------------------------
 // Phase 3 VR-decode-time factories (D-08 / D-42).
-//
-// PHI discipline: these messages NEVER include a decoded value (no PN, no
-// date/time, no text content) - only the tag, VR, and structural facts.
 // ---------------------------------------------------------------------------
 
 /**
@@ -462,16 +538,11 @@ export function burnedInAnnotationNotRemoved(position: DicomPosition): DicomPars
  *
  * @example
  * ```ts
- * import { bomInTextVR } from "@cosyte/dicom";
  * const w = bomInTextVR({ byteOffset: 320 }, "00081030", "LO");
  * ```
  */
-export function bomInTextVR(position: DicomPosition, tag: string, vr: VR): DicomParseWarning {
-  return {
-    code: WARNING_CODES.DICOM_BOM_IN_TEXT_VR,
-    message: `Element (${tag}) ${vr} value begins with a UTF-8 BOM; stripped on decode.`,
-    position,
-  };
+export function bomInTextVR(position: DicomPosition, tag: Tag, vr: VR): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_BOM_IN_TEXT_VR, position, { tag, vr });
 }
 
 /**
@@ -481,20 +552,11 @@ export function bomInTextVR(position: DicomPosition, tag: string, vr: VR): Dicom
  *
  * @example
  * ```ts
- * import { trailingNullInTextVR } from "@cosyte/dicom";
  * const w = trailingNullInTextVR({ byteOffset: 320 }, "00080060", "CS");
  * ```
  */
-export function trailingNullInTextVR(
-  position: DicomPosition,
-  tag: string,
-  vr: VR,
-): DicomParseWarning {
-  return {
-    code: WARNING_CODES.DICOM_TRAILING_NULL_IN_TEXT_VR,
-    message: `Element (${tag}) ${vr} value has a trailing NULL pad where SPACE is expected; trimmed.`,
-    position,
-  };
+export function trailingNullInTextVR(position: DicomPosition, tag: Tag, vr: VR): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_TRAILING_NULL_IN_TEXT_VR, position, { tag, vr });
 }
 
 /**
@@ -504,16 +566,11 @@ export function trailingNullInTextVR(
  *
  * @example
  * ```ts
- * import { uiTrailingSpace } from "@cosyte/dicom";
  * const w = uiTrailingSpace({ byteOffset: 132 }, "00080016");
  * ```
  */
-export function uiTrailingSpace(position: DicomPosition, tag: string): DicomParseWarning {
-  return {
-    code: WARNING_CODES.DICOM_UI_TRAILING_SPACE,
-    message: `Element (${tag}) UI value is SPACE-padded; UI requires NULL padding (PS3.5 §6.2). Trimmed.`,
-    position,
-  };
+export function uiTrailingSpace(position: DicomPosition, tag: Tag): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_UI_TRAILING_SPACE, position, { tag });
 }
 
 /**
@@ -524,16 +581,11 @@ export function uiTrailingSpace(position: DicomPosition, tag: string): DicomPars
  *
  * @example
  * ```ts
- * import { nonAsciiInAsciiVR } from "@cosyte/dicom";
  * const w = nonAsciiInAsciiVR({ byteOffset: 200 }, "00080060", "CS");
  * ```
  */
-export function nonAsciiInAsciiVR(position: DicomPosition, tag: string, vr: VR): DicomParseWarning {
-  return {
-    code: WARNING_CODES.DICOM_NON_ASCII_IN_ASCII_VR,
-    message: `Element (${tag}) ${vr} is an ASCII-only VR but contains non-ASCII bytes; decoded as Latin-1 best-effort.`,
-    position,
-  };
+export function nonAsciiInAsciiVR(position: DicomPosition, tag: Tag, vr: VR): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_NON_ASCII_IN_ASCII_VR, position, { tag, vr });
 }
 
 /**
@@ -544,55 +596,39 @@ export function nonAsciiInAsciiVR(position: DicomPosition, tag: string, vr: VR):
  *
  * @example
  * ```ts
- * import { isNonintegerValue } from "@cosyte/dicom";
  * const w = isNonintegerValue({ byteOffset: 240 }, "00200013");
  * ```
  */
-export function isNonintegerValue(position: DicomPosition, tag: string): DicomParseWarning {
-  return {
-    code: WARNING_CODES.DICOM_IS_NONINTEGER_VALUE,
-    message: `Element (${tag}) IS value is not a base-10 integer; surfaced as null with raw bytes preserved.`,
-    position,
-  };
+export function isNonintegerValue(position: DicomPosition, tag: Tag): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_IS_NONINTEGER_VALUE, position, { tag });
 }
 
 /**
  * Build a `DICOM_DA_LEGACY_FORMAT` warning. Emitted when a `DA` value uses
  * a tolerated non-`YYYYMMDD` form (retired dotted `YYYY.MM.DD`, or a
  * partial/empty date) - decoded best-effort, raw preserved, never thrown.
- * The legacy string itself is NEVER included (PHI discipline).
  *
  * @example
  * ```ts
- * import { daLegacyFormat } from "@cosyte/dicom";
  * const w = daLegacyFormat({ byteOffset: 260 }, "00080020");
  * ```
  */
-export function daLegacyFormat(position: DicomPosition, tag: string): DicomParseWarning {
-  return {
-    code: WARNING_CODES.DICOM_DA_LEGACY_FORMAT,
-    message: `Element (${tag}) DA value is not in canonical YYYYMMDD form; decoded best-effort, raw preserved.`,
-    position,
-  };
+export function daLegacyFormat(position: DicomPosition, tag: Tag): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DA_LEGACY_FORMAT, position, { tag });
 }
 
 /**
  * Build a `DICOM_DT_NONSTANDARD_OFFSET` warning. Emitted when a `DT` value
  * carries a malformed or out-of-range UTC offset suffix - decoded
- * best-effort, raw preserved, never thrown. The value is NEVER included.
+ * best-effort, raw preserved, never thrown.
  *
  * @example
  * ```ts
- * import { dtNonstandardOffset } from "@cosyte/dicom";
  * const w = dtNonstandardOffset({ byteOffset: 280 }, "0040A120");
  * ```
  */
-export function dtNonstandardOffset(position: DicomPosition, tag: string): DicomParseWarning {
-  return {
-    code: WARNING_CODES.DICOM_DT_NONSTANDARD_OFFSET,
-    message: `Element (${tag}) DT value has a non-standard UTC offset; decoded best-effort, raw preserved.`,
-    position,
-  };
+export function dtNonstandardOffset(position: DicomPosition, tag: Tag): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DT_NONSTANDARD_OFFSET, position, { tag });
 }
 
 /**
@@ -600,16 +636,18 @@ export function dtNonstandardOffset(position: DicomPosition, tag: string): Dicom
  * Specific Character Set names a defined term this build cannot map to a
  * decoder - text is decoded best-effort as UTF-8 and raw bytes preserved.
  *
+ * The term is **not** a parameter, and this is the site that leaked: a
+ * `(0008,0005)` value is multi-valued on the backslash, every component is a
+ * string a sender authored, and the warning fires precisely when PS3.3's closed
+ * table does not recognize one - so there is no spelling left to vouch for it.
+ * The **1-based value index** says which component instead, which is enough to
+ * find it and carries nothing.
+ *
  * @example
  * ```ts
- * import { unsupportedCharset } from "@cosyte/dicom";
- * const w = unsupportedCharset({ byteOffset: 180, fileMeta: false }, "ISO_IR 9999");
+ * const w = unsupportedCharset({ byteOffset: 180, fileMeta: false }, 2);
  * ```
  */
-export function unsupportedCharset(position: DicomPosition, term: string): DicomParseWarning {
-  return {
-    code: WARNING_CODES.DICOM_UNSUPPORTED_CHARSET,
-    message: `Specific Character Set term "${term}" is not supported; decoding text as UTF-8 best-effort.`,
-    position,
-  };
+export function unsupportedCharset(position: DicomPosition, valueIndex: number): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_UNSUPPORTED_CHARSET, position, { n: valueIndex });
 }

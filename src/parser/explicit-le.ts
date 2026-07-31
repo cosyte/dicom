@@ -42,6 +42,7 @@ import {
   readExplicitElementHeader,
   registerPrivateCreator,
   resolvePrivateCreator,
+  safeModelCreator,
 } from "./element-header.js";
 import { buildSnippet, DicomParseError, FATAL_CODES } from "./errors.js";
 import { parseImplicitLE } from "./implicit-le.js";
@@ -200,7 +201,7 @@ export function _parseExplicit(
       const rawBytes = ctx.copyValues
         ? copyValueBytes(buffer.subarray(headerStart, cursor.position))
         : buffer.subarray(headerStart, cursor.position);
-      const privateCreator = resolvePrivateCreator(tag, ctx);
+      const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
       elements.set(
         tag,
         new Element({
@@ -264,7 +265,7 @@ export function _parseExplicit(
         const rawBytes = ctx.copyValues
           ? copyValueBytes(buffer.subarray(headerStart, cursor.position))
           : buffer.subarray(headerStart, cursor.position);
-        const privateCreator = resolvePrivateCreator(tag, ctx);
+        const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
         elements.set(
           tag,
           new Element({
@@ -289,7 +290,7 @@ export function _parseExplicit(
       // input as the UN value (best-effort, documented in D-30 + plan
       // 02-04 task 2 behavior section). The cursor advances to
       // end-of-buffer so the dataset loop terminates cleanly.
-      const privateCreator = resolvePrivateCreator(tag, ctx);
+      const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
       const fallbackEnd = buffer.length;
       const fallbackBytes = ctx.copyValues
         ? copyValueBytes(buffer.subarray(headerStart, fallbackEnd))
@@ -351,7 +352,7 @@ export function _parseExplicit(
     // (0008,0005) Specific Character Set governs subsequent text decode.
     applySpecificCharacterSet(tag, valueSlice, ctx, emit, position);
 
-    const privateCreator = resolvePrivateCreator(tag, ctx);
+    const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
     const finalVr: VR = vr; // Postel: trust on-wire VR (warning already emitted on mismatch).
     elements.set(
       tag,
