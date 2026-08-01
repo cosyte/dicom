@@ -505,7 +505,19 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     expectCode: WARNING_CODES.DICOM_ODD_LENGTH_VALUE_PADDED,
   },
   {
-    name: "(7FE0,0010) encapsulated pixel data fragment, beside the empty basic offset table",
+    // `expectCode` is `null` here on purpose, and the reason is worth more than
+    // the slot. A fragment carrying the marker raises no warning at all; the
+    // only code this fixture produces is `DICOM_EMPTY_ITEM_IN_SEQUENCE`, and it
+    // comes from the **empty Basic Offset Table** item, not from the fragment
+    // the marker is in. Naming it would satisfy the runner while proving
+    // nothing about the marker's own path, which is the substitution
+    // `expectCode` exists to prevent. It would also test-lock a warning that
+    // looks wrong on its own terms: PS3.5 section A.4 makes an empty Basic
+    // Offset Table the conformant encoding, so flagging it as an empty item is
+    // arguably a defect, and pinning it here would make fixing it harder. Reach
+    // is proven instead by `markerReachesTheModelVerbatim`, which asserts the
+    // fragment bytes arrive on the element.
+    name: "(7FE0,0010) encapsulated pixel data fragment",
     plant: (m) =>
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
@@ -519,17 +531,24 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
           },
         ],
       }),
-    expectCode: WARNING_CODES.DICOM_EMPTY_ITEM_IN_SEQUENCE,
+    expectCode: null,
   },
   {
-    name: "a truncated File Meta group, reaching the INVALID_FILE_META fatal",
+    // Cut mid-value of the element carrying the marker, so the failure and the
+    // planted bytes are in the same place. The fatal comes from the dataset
+    // reader running past the buffer end; the File Meta group is intact. An
+    // earlier draft of this slot was named for a truncated File Meta group and
+    // did not have one.
+    name: "(0010,0020) PatientID [LO] in a file cut mid-value, reaching a Tier-3 fatal",
     plant: (m) => {
       const whole = buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
-        implementationVersionName: m,
-        elements: [FILLER],
+        elements: [FILLER, { tag: "00100020", vr: "LO", value: val(m) }],
       });
-      return whole.subarray(0, whole.length - 4);
+      // Six bytes, not a fraction of the value: the long probe's value is 32 KiB
+      // and the short probe's is eight, so a proportional cut would delete the
+      // element outright in one case and the whole file in the other.
+      return whole.subarray(0, whole.length - 6);
     },
     expectCode: "INVALID_FILE_META",
   },
@@ -789,6 +808,24 @@ describe("PHI: the probes reach what they claim to", () => {
         elements: [{ tag: "00080005", vr: "CS" as VR, value: val(`ISO_IR 100\\${m}`) }, FILLER],
       }),
     );
+    // Encapsulated pixel data: the fragment bytes arrive on the element, which
+    // is the reach the `expectCode: null` fragment slot relies on.
+    const encapsulated = parseDicom(
+      buildDicom({
+        transferSyntax: TS_EXPLICIT_LE,
+        elements: [
+          {
+            tag: "7FE00010",
+            undefinedLength: true,
+            encapsulatedPixelData: true,
+            encapsulatedFragments: [Buffer.alloc(0), val(m)],
+            items: [],
+          },
+        ],
+      }),
+    );
+    expect(encapsulated.get("7FE00010")?.rawBytes.toString("latin1")).toContain(m);
+
     expect(cs.get("00080005")?.rawBytes.toString("latin1")).toContain(m);
     expect(cs.get("00080060")?.specificCharacterSet).toStrictEqual(["ISO_IR 100", "<withheld>"]);
     expect(cs.warnings.map((w) => w.code)).toContain(WARNING_CODES.DICOM_UNSUPPORTED_CHARSET);

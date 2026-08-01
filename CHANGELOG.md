@@ -44,7 +44,12 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
   `RetainSafePrivate` is unaffected in either direction: `deidentify()` now re-derives the block
   reservation from the creator elements of **each Data Set** it walks, so passing a `Profile` at
-  de-identification works whether or not one was passed at parse. Per Data Set is load-bearing, not a
+  de-identification works whether or not one was passed at parse. **One behaviour does change against
+  0.0.5:** a private data element inside a sequence item whose creator is declared only at the root is
+  now removed rather than retained, because the item has no reservation of its own. That is the
+  conformant reading and the fail-safe direction, but a sender that declares a creator once at the
+  root and writes private data into Per-Frame Functional Groups items will lose those elements under
+  `RetainSafePrivate`. Declare the creator in the Data Set that uses it. Per Data Set is load-bearing, not a
   detail: PS3.5 §7.5 makes each Sequence Item its own Data Set and §7.8.1 scopes a reservation to the
   Data Set the creator appears in, so the same block number names different vendors at the root and
   inside an item. Resolving one against the other retained an item's private element on the root's
@@ -59,7 +64,11 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   The inner descent forwarded to the outer emission chokepoint, which closes over the **compressed**
   source, while the forwarded `position.byteOffset` indexes the **inflated** stream. The result was a
   confidently wrong 16 bytes. The descent now builds its own chokepoint over the inflated buffer; it
-  shares the outer `warnings` array, `onWarning` and `strict`, so nothing else changes.
+  shares the outer `warnings` array, `onWarning` and `strict`, so warning accumulation, callback
+  ordering and profile posture are unchanged. **One thing does change and it is worth saying plainly:
+  the snippet on that path now carries the real inflated bytes**, where before it carried whatever
+  happened to sit at that offset in the compressed source. It was accidentally uninformative and is
+  now correctly PHI, under the same `snippet`-is-raw-input contract every other path already has.
 - **`DICOM_NONZERO_RESERVED_BYTES` reported the two reserved bytes as one 16-bit number**, which had
   to pick an endianness the reserved field does not have: it read unambiguously and was wrong under
   one of the two Explicit VR syntaxes. They are now reported separately, in wire order.

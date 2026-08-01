@@ -198,7 +198,14 @@
   the root's reservation and wrote the PHI into the serialized output**, and dropped one correctly
   reserved inside the item it was used in. `processElements` now derives the map at every depth it
   recurses to, and `test/deident/deidentify.test.ts` has both directions (each confirmed to red
-  against the root-scoped version).
+  against the root-scoped version) plus a third: an item's private element whose creator is declared
+  **only at the root** is now removed, because the item has no reservation of its own. That is the
+  conformant reading and fail-safe, and it is a **behaviour change against `0.0.5`** for any sender
+  that declares a creator once at the root and writes private data into Per-Frame Functional Groups
+  items. **The parser's own `ctx.creators` is still one map for the whole parse**, which is the same
+  defect class on the read path and feeds `resolveImplicitVR`, where a wrong answer is a wrong VR.
+  It reproduces identically on `0.0.5` and no wrong decode was constructed from it, so it was left
+  alone rather than folded in: it is its own item, not a rider on this one.
 - **Em-dash brand gate armed.** `scripts/check-no-emdash.sh` (`pnpm check:no-emdash`) plus
   `.github/workflows/no-emdash.yml` enforce the founder directive banning `U+2014` outright
   (`knowledgebase/06-brand/voice-and-tone.md`, "No em dashes. Ever."). It scans **both** halves the

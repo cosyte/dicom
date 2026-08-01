@@ -86,7 +86,8 @@ dictionary's _name_ for the UID when PS3.6 publishes one, which is a constant, n
 
 A downstream package that reads this model and builds its own diagnostics from it needs to know which
 strings are identifiers this parser composed and which are bytes the sender wrote. These are
-identifiers, and each is bounded:
+identifiers, with the bound each one actually has. One of them is a length rather than a membership
+test, and its row says so:
 
 | Field                                                                                                  | Bound                                                                                                                                                                                                                                                                         |
 | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
