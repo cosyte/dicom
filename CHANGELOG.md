@@ -6,6 +6,36 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Security
 
+- **A defined-length sequence under Implicit VR Little Endian was never opened, so PHI nested inside
+  one survived `deidentify()` into serialized output while the report said it had been removed**
+  (`DICOM-IMPLICIT-SQ-NOT-DESCENDED`, pre-existing and live on the published `0.0.5`). The
+  Implicit VR LE parser delegated to the sequence parser **only** in the undefined-length
+  (`0xFFFFFFFF`) branch, so `Element.items` was `undefined` for every defined-length sequence under
+  that transfer syntax. Nothing that walks items could see inside one, and `deidentify()` recurses
+  into a kept sequence only when its items exist: a `(0010,0010)` Patient's Name in a defined-length
+  item reached `serializeDicom()` output verbatim, with the `DeidentifyReport` naming only the root
+  attribute. **The report therefore asserted a scrub it had not performed**, which is the worse half
+  of the defect: an incomplete audit that reads as a complete one is what a caller trusts before
+  sharing an object. The identical fixture under Explicit VR LE scrubbed clean, because that path
+  already descended both length forms.
+
+  PS3.5 2026c states the obligation twice, about two different length fields, and the one this broke
+  is section **7.5.2** "Delimitation of The Sequence of Items", which governs the `SQ` element's own
+  length: "The encoder of a Sequence of Items may choose either one of the two ways of encoding. Both
+  ways of encoding shall be supported by decoders of the Sequence of Items." Section 7.5.1 "Item
+  Encoding Rules" says the same of each Item's length field. The two choices are independent, so both
+  are now descended in every combination. The de-identified output of the
+  Implicit VR LE fixture and its Explicit VR LE twin are now the same report, attribute for
+  attribute and context path for context path.
+
+  **Three smaller consequences of a sequence now being read**, each the descent working rather than a
+  separate decision: `Element.vm` is the item count instead of the scalar placeholder `1`;
+  `Element.value` yields the real items instead of an empty sequence; and warnings raised **inside**
+  a defined-length sequence, which previously could not exist because its bytes were never parsed,
+  now appear on `ds.warnings` - so under `{ strict: true }` a file whose nested content was always
+  non-conformant now throws. The sequence element itself no longer carries `specificCharacterSet`,
+  matching every other sequence element in the package; items still inherit the enclosing charset.
+
 - **A warning message no longer echoes anything the file said** (`PHI-WARNING-MESSAGE-LEAK`). Three
   diagnostics reproduced consumer-controlled bytes verbatim, and one of them carried onto the dataset
   `deidentify()` labels safe to share:
@@ -56,6 +86,35 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   reservation and wrote its value into the serialized output.
 
 ### Fixed
+
+- **A malformed defined-length sequence degrades instead of failing the object, and says so.** Under
+  Implicit VR Little Endian there is no VR on the wire: `SQ` is this parser's inference from PS3.6,
+  not something the sender wrote. So an element whose defined-length value turns out not to be an
+  `(FFFE,E000)` item stream keeps its declared byte range on `Element.rawBytes`, leaves the rest of
+  the object readable, and raises the new Tier-2 `DICOM_SQ_NOT_DESCENDED` warning. The undefined-length
+  form keeps its existing Tier-3 fatal, and that asymmetry is deliberate: a defined length leaves a
+  complete alternative reading of the value, and an undefined one leaves none. **The warning exists
+  because silence is the defect above**: an undescended sequence is invisible to `deidentify()`, so a
+  caller has to be told the audit did not reach inside it. It is not the whole story, though: see the
+  next entry for the shape that stays silent.
+
+- **Only one of the two un-auditable shapes warns, and the docs now say which.** `deidentify()`
+  recurses on `Element.items`, so a sequence the parser could not open is kept verbatim and appears
+  nowhere in the report. The refusal added above raises `DICOM_SQ_NOT_DESCENDED`; an undefined-length
+  `UN` value the CP-246 descent could not read as a sequence raises **nothing** and keeps `vr ===
+"UN"`. That silence is `PRE-EXISTING` and unchanged. The reliable check is `el.items === undefined`
+  on the element, not `ds.warnings`.
+
+- **Residual, pre-existing and now reachable from one more shape.** A refused descent drops its
+  warnings from `ds.warnings`, but an `onWarning` callback has already been handed them: the emit
+  chokepoint delivers to the callback before the rollback can undo the push. The two disagree for
+  exactly those warnings, and `ds.warnings` is the accurate record. Unchanged from the CP-246 path,
+  disclosed rather than fixed (buffering emissions is a larger change than this slice).
+
+- **A test named "explicit-length SQ also descends" proved nothing, and that is how this shipped.**
+  Its two assertions were the VR, which dictionary resolution answers whether or not anything
+  descends, and `vm === 1`, which was the **scalar placeholder** every non-sequence element already
+  carried. Both were green against a parser that never opened the sequence. It now asserts the items.
 
 - **A private block reserved in one Data Set resolved the Implicit VR of a private element in
   another, so the same bytes decoded as a different value than the file declared**
@@ -190,10 +249,14 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Added
 
+- **`DICOM_SQ_NOT_DESCENDED`**, a Tier-2 warning code (25 total, was 24). Public surface: the locked
+  `WARNING_CODES` snapshot was updated deliberately, and a profile may `escalate` or `suppress` it
+  like any other code.
+
 - **A slot table of consumer-controlled positions in the format**
   (`test/integration/phi-diagnostic-surface.test.ts`), bound to `assertNoDiagnosticPhiLeak` from
   `@cosyte/test-utils` (pin bumped to `^0.0.2`; a caret on a `0.0.x` resolves to that version exactly,
-  so the old pin would have tested against a kit without the runner and passed). Twenty-eight slots,
+  so the old pin would have tested against a kit without the runner and passed). Thirty-eight slots,
   one test each, across all four transfer syntaxes and encapsulated pixel data, plus the de-identify
   surface and the serialized "safe to share" bytes.
 

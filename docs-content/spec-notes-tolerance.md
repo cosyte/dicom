@@ -17,7 +17,7 @@ always emits spec-clean Part 10). A recoverable quirk is **never** a silent chan
 
 - **Recoverable deviations → a warning.** The parser recovers, keeps the data, and appends a
   `DicomParseWarning` to `ds.warnings` carrying a **stable code** and the **byte offset** where it
-  occurred. There are 24 such codes today (e.g. `DICOM_ODD_LENGTH_VALUE_PADDED`,
+  occurred. There are 25 such codes today (e.g. `DICOM_ODD_LENGTH_VALUE_PADDED`,
   `DICOM_MISSING_PREAMBLE`, `DICOM_VR_MISMATCH`, `DICOM_FILE_META_GROUP_LENGTH_MISMATCH`).
 - **Unrecoverable structural corruption → a throw.** Only **four** Tier-3 conditions throw a typed
   `DicomParseError`: `NOT_DICOM_PART_10`, `INVALID_FILE_META`, `UNSUPPORTED_TRANSFER_SYNTAX`, and

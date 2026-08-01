@@ -16,6 +16,21 @@
  * tags whose resolved VR is `SQ` - the parser delegates SQ descent to
  * `parseSequence` (`./sequence.js`).
  *
+ * **Both sequence-delimitation forms are descended, and only one of them used to
+ * be** (`DICOM-IMPLICIT-SQ-NOT-DESCENDED`). PS3.5 section **7.5.2**
+ * "Delimitation of The Sequence of Items" lets an encoder delimit a sequence
+ * either by a defined length or by undefined length plus a Sequence Delimitation
+ * Item, and then requires that "Both ways of encoding shall be supported by
+ * decoders of the Sequence of Items." (Section 7.5.1 "Item Encoding Rules" says
+ * the same of each Item's own length field; the two choices are independent.)
+ * Only the `0xFFFFFFFF` branch called `parseSequence`, so `Element.items` was
+ * `undefined` for every defined-length sequence under this transfer syntax - a
+ * PHI defect rather than a navigation gap, because `deidentify()` recurses only
+ * into a sequence whose items exist.
+ * The two branches differ in one respect that is deliberate: a defined length
+ * leaves a complete alternative reading if the descent fails, so it degrades
+ * through `tryParseDefinedLengthSQ`, while undefined length has none and throws.
+ *
  * As of plan 02-04, `parseImplicitLE` accepts an optional `stopOnItemDelim`
  * flag and returns `endOffset` - both required by the InnerParser contract
  * the SQ parser invokes for undefined-length item bodies (D-28).
@@ -43,7 +58,7 @@ import {
   safeModelCreator,
 } from "./element-header.js";
 import { buildSnippet, DicomParseError, FATAL_CODES } from "./errors.js";
-import { parseSequence, tryParseUnAsSQ } from "./sequence.js";
+import { parseSequence, tryParseDefinedLengthSQ, tryParseUnAsSQ } from "./sequence.js";
 import type { ParseContext } from "./types.js";
 import { groupLengthInDataset, type DicomParseWarning } from "./warnings.js";
 
@@ -222,6 +237,59 @@ export function parseImplicitLE(
       ? copyValueBytes(buffer.subarray(valueStart, valueEnd))
       : buffer.subarray(valueStart, valueEnd);
     cursor.position = valueEnd;
+
+    // Defined-length SQ. PS3.5 section 7.5.2 gives an encoder two ways to delimit
+    // a Sequence of Items - a defined length, or undefined length with a Sequence
+    // Delimitation Item - and then says: "The encoder of a Sequence of Items may
+    // choose either one of the two ways of encoding. Both ways of encoding shall
+    // be supported by decoders of the Sequence of Items." This branch is the
+    // defined-length half; only the undefined-length half existed, so
+    // `Element.items` was
+    // `undefined` for every defined-length sequence under this transfer syntax
+    // and nothing that walks items could see inside one. That is a PHI defect
+    // and not a navigation gap: `deidentify()` recurses into a kept sequence
+    // only when `items` is materialized, so nested attributes it is required to
+    // remove reached `serializeDicom()` output while the report named only what
+    // the walk did reach.
+    //
+    // `rawBytes` stays VALUE-ONLY here, unlike the undefined-length branch
+    // above. `isFullSpanElement` keys exactly this shape off the encoding: a
+    // defined-length SQ is full-span under Explicit VR and value-only under
+    // Implicit VR, and the writer reconstructs the header from the value. A
+    // full-span slice would make it emit the header twice.
+    if (vr === "SQ") {
+      const seq = tryParseDefinedLengthSQ(
+        buffer,
+        valueStart,
+        length,
+        ctx,
+        emit,
+        parseImplicitLE,
+        tag,
+      );
+      if (seq.success) {
+        const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
+        elements.set(
+          tag,
+          new Element({
+            tag,
+            vr,
+            vm: seq.items.length,
+            length,
+            rawBytes: valueSlice,
+            byteOffset: headerStart,
+            littleEndian: true,
+            items: seq.items,
+            ...(privateCreator !== undefined ? { privateCreator } : {}),
+          }),
+        );
+        continue;
+      }
+      // Descent refused: `tryParseDefinedLengthSQ` has already rolled the parser
+      // back and emitted `DICOM_SQ_NOT_DESCENDED`. Fall through to the scalar
+      // construction below, which is byte-for-byte the pre-fix behaviour - the
+      // element keeps its declared value span with no `items`.
+    }
 
     // TOL-10: group-length elements in non-File-Meta groups.
     if (element === 0x0000 && group !== 0x0002) {

@@ -44,9 +44,15 @@
  * - A private data element kept under `RetainSafePrivate` is kept *verbatim* - if
  *   it is itself a sequence carrying standard PHI attributes, that nested content
  *   is not recursed. The profile vouches the element is safe; nest accordingly.
- * - A sequence whose `items` the parser did not materialize (e.g. an
- *   undefined-length `UN` value stored as an opaque span) is kept verbatim rather
- *   than recursed, so any nested listed attributes are not de-identified.
+ * - A sequence whose `items` the parser did not materialize is kept verbatim
+ *   rather than recursed, so any nested listed attributes are not de-identified.
+ *   That is now a **narrow and announced** set: an undefined-length `UN` value the
+ *   CP-246 descent could not read as a sequence, and a defined-length Implicit VR
+ *   LE value whose resolved `SQ` turned out not to be an item stream - the latter
+ *   carrying `DICOM_SQ_NOT_DESCENDED` on `ds.warnings`. It used to include
+ *   **every** defined-length sequence under Implicit VR LE, silently
+ *   (`DICOM-IMPLICIT-SQ-NOT-DESCENDED`, fixed after `0.0.5`). Check
+ *   `ds.warnings` before treating a report as complete.
  *
  * @module
  */

@@ -54,6 +54,7 @@ export const WARNING_CODES = {
   DICOM_ODD_LENGTH_VALUE_PADDED: "DICOM_ODD_LENGTH_VALUE_PADDED",
   DICOM_PIXEL_DATA_LENGTH_MISMATCH: "DICOM_PIXEL_DATA_LENGTH_MISMATCH",
   DICOM_PRIVATE_TAG_NO_CREATOR: "DICOM_PRIVATE_TAG_NO_CREATOR",
+  DICOM_SQ_NOT_DESCENDED: "DICOM_SQ_NOT_DESCENDED",
   DICOM_UN_PARSED_AS_SQ: "DICOM_UN_PARSED_AS_SQ",
   DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR: "DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR",
   DICOM_VR_MISMATCH: "DICOM_VR_MISMATCH",
@@ -163,6 +164,8 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
     "Retired Group Length element ({tag}) encountered in dataset; preserved as-is.",
   DICOM_NONZERO_RESERVED_BYTES:
     "Element ({tag}) has non-zero reserved bytes between VR and length (first byte {n}, second byte {n2}); ignoring.",
+  DICOM_SQ_NOT_DESCENDED:
+    "Element ({tag}) resolved to VR=SQ from the dictionary but its defined-length value is not a valid item stream; kept as opaque bytes and NOT descended, so nothing nested inside it is visible to navigation or de-identification.",
   DICOM_UN_PARSED_AS_SQ:
     "Element ({tag}) has VR=UN with undefined length; descended as Implicit VR LE sequence per CP-246.",
   DICOM_EMPTY_ITEM_IN_SEQUENCE: "Sequence ({tag}) contains an empty item (length=0); tolerated.",
@@ -446,6 +449,35 @@ export function nonzeroReservedBytes(
  */
 export function unParsedAsSQ(position: DicomPosition, tag: Tag): DicomParseWarning {
   return build(WARNING_CODES.DICOM_UN_PARSED_AS_SQ, position, { tag });
+}
+
+/**
+ * Build a `DICOM_SQ_NOT_DESCENDED` warning. Emitted when a **defined-length**
+ * element whose VR was resolved to `SQ` from the dictionary under Implicit VR LE
+ * turns out not to hold a valid `(FFFE,E000)` item stream, so the parser keeps
+ * the declared byte range as an opaque value instead of descending it.
+ *
+ * The asymmetry against Explicit VR is the reason this is a warning rather than
+ * the Tier-3 fatal that path raises. Under Explicit VR the sender wrote `SQ` on
+ * the wire, so bytes that are not items are a contradiction in the file. Under
+ * Implicit VR LE there is no VR on the wire at all: `SQ` is this parser's
+ * inference from PS3.6, and a defined length leaves a complete alternative
+ * reading (the value is exactly `length` bytes) that undefined length does not.
+ * Failing the whole object over an inference the file never made would lose
+ * patient, study and modality to recover nothing.
+ *
+ * It is a warning rather than silence for the opposite reason: an undescended
+ * sequence is invisible to `deidentify()`, which recurses only into a sequence
+ * whose `items` the parser materialized. A caller that is about to share the
+ * file needs to be told the audit did not reach inside this element.
+ *
+ * @example
+ * ```ts
+ * const w = sqNotDescended({ byteOffset: 320 }, "00081115");
+ * ```
+ */
+export function sqNotDescended(position: DicomPosition, tag: Tag): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_SQ_NOT_DESCENDED, position, { tag });
 }
 
 /**
