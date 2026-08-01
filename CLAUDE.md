@@ -290,10 +290,39 @@
   **`rawBytes` stays VALUE-ONLY for this shape** and that is load-bearing: `isFullSpanElement` keys
   exactly this case off the encoding (a defined-length SQ is full-span under Explicit VR and
   value-only under Implicit VR), so a full-span slice would make the writer emit the header twice.
+  **▶ THE REFUTER REFUTED PASS 1, AND THE FINDING GENERALISES TO EVERY DESCENT PRIMITIVE HERE:
+  HAND IT A SLICE, NOT THE WHOLE BUFFER.** The first version passed `parseSequence` the whole buffer
+  plus `explicitLength`. `parseSequence` computes `endLimit` from that length but bounds each item's
+  value read against **`buffer.length`**, so an item that **over-declares** its own length read
+  straight past the sequence and swallowed the next root element - while `parseImplicitLE` resumed at
+  the declared end, so the same bytes were **read twice**: a root `(0008,0060)` Modality reported as a
+  per-item attribute AND still at the root, then written twice by `deidentify()`'s re-encode. Silent,
+  and silent under `{ strict: true }` too. PS3.5 section 7.5.2 makes the Value Length the exact extent
+  of the item stream, so a byte past it is not the sequence's to read. `tryParseUnAsSQ` already
+  sliced; the new primitive now does the same. **The fixture that catches it has to over-declare by
+  EXACTLY the trailing element's size** - over-declaring past the end of the buffer only trips the
+  truncation guard that already existed, which is why a first draft of the regression test passed
+  against the broken code.
+  **▶ AND THE SECOND FINDING: A DOC CLAIM THE CODE DID NOT MAKE.** The README and troubleshooting
+  page were written saying both un-auditable shapes "announce themselves". **False:** a failed CP-246
+  `UN` descent emits **nothing** (`tryParseUnAsSQ` rolls back and returns without an `emit`, and the
+  Explicit VR fallback builds the `UN` element silently) - measured `warnings=[]`, `vr=UN`,
+  `items=undefined`. The silence is pre-existing; **the claim was new, so the remedy was to correct
+  the claim, not to grow a guard.** The honest test for a consumer is `el.items === undefined`, not
+  `ds.warnings`.
   **Residual, pre-existing on the CP-246 path, now reachable from one more shape:** a refused descent
   pops its warnings off `ctx.warnings`, but `makeEmitter` hands them to `onWarning` **before** the
   push it is undoing (D-03 ordering), so a streaming consumer sees warnings `ds.warnings` does not.
   Disclosed, not fixed - buffering emissions is a larger change than the leak it would tidy.
+  **Residual, PRE-EXISTING and filed rather than fixed here:** the same unbounded item read
+  mis-structures **Explicit VR LE** on `main` and on published `0.0.5` (the root element vanishes from
+  the root and exists only inside the item, and the element ships a `length` shorter than its
+  `rawBytes`). Bounding `parseSequence` itself would close both, but on the Explicit VR path there is
+  no fallback, so it would convert a file that parses today into a whole-object `INVALID_FILE_META` -
+  precisely the trap `#49` paid for. It needs its own slice, with that loss measured.
+  Also minor: a refusal raised **inside** a defined-length item carries an item-slice-relative
+  `byteOffset` (`parseSequence` already hands the inner parser an `itemSlice`). The refusal this
+  slice's own primitive emits is absolute.
 - **Em-dash brand gate armed.** `scripts/check-no-emdash.sh` (`pnpm check:no-emdash`) plus
   `.github/workflows/no-emdash.yml` enforce the founder directive banning `U+2014` outright
   (`knowledgebase/06-brand/voice-and-tone.md`, "No em dashes. Ever."). It scans **both** halves the

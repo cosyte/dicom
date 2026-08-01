@@ -42,15 +42,15 @@ warning you triage, not an exception you catch.
 
 ## Common symptoms
 
-| Symptom                                                               | Likely cause                                          | What to do                                                                                                                                             |
-| --------------------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `ds.get("PatientName")` is `undefined`                                | `get` takes the **tag** form, not a keyword           | Use the tag (`ds.get("00100010")`), or resolve a keyword with `Dictionary.byKeyword("PatientName")?.tag`.                                              |
-| `ds.image.rescaleSlope` is `undefined`                                | Rescale Slope was absent                              | This is by design. It is **not** defaulted to `1`. Apply a fallback deliberately in your own code if the modality warrants it.                         |
-| `ds.image.signed` is `undefined`                                      | Pixel Representation `(0028,0103)` was absent         | Signedness is unknown, never guessed. Do not assume unsigned.                                                                                          |
-| A `DICOM_VR_MISMATCH` warning                                         | The on-wire Explicit VR disagreed with the dictionary | The **on-wire** VR is used (Postel's Law: on the read path the sender's own declaration wins) and the deviation recorded; check the sender's encoding. |
-| A `DICOM_PRIVATE_CREATOR_UNKNOWN` warning                             | A private tag's creator is not in the active profile  | The element degrades to `UN`; add the creator via a [profile](./spec-notes-profiles) to resolve it.                                                    |
-| `ds.get(tag)?.value` is `{ kind: "binary" }` for Pixel Data           | Pixel data is exposed raw, never decoded              | Expected. Decoding pixels is out of scope (see below).                                                                                                 |
-| A `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED` warning after `deidentify` | The object may carry burned-in PHI in the pixels      | Metadata de-id cannot clean pixels; route to a pixel-cleaning step before sharing.                                                                     |
+| Symptom                                                               | Likely cause                                                                                                                    | What to do                                                                                                                                                                                                                        |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ds.get("PatientName")` is `undefined`                                | `get` takes the **tag** form, not a keyword                                                                                     | Use the tag (`ds.get("00100010")`), or resolve a keyword with `Dictionary.byKeyword("PatientName")?.tag`.                                                                                                                         |
+| `ds.image.rescaleSlope` is `undefined`                                | Rescale Slope was absent                                                                                                        | This is by design. It is **not** defaulted to `1`. Apply a fallback deliberately in your own code if the modality warrants it.                                                                                                    |
+| `ds.image.signed` is `undefined`                                      | Pixel Representation `(0028,0103)` was absent                                                                                   | Signedness is unknown, never guessed. Do not assume unsigned.                                                                                                                                                                     |
+| A `DICOM_VR_MISMATCH` warning                                         | The on-wire Explicit VR disagreed with the dictionary                                                                           | The **on-wire** VR is used (Postel's Law: on the read path the sender's own declaration wins) and the deviation recorded; check the sender's encoding.                                                                            |
+| A `DICOM_PRIVATE_CREATOR_UNKNOWN` warning                             | A private tag's creator is not in the active profile                                                                            | The element degrades to `UN`; add the creator via a [profile](./spec-notes-profiles) to resolve it.                                                                                                                               |
+| `ds.get(tag)?.value` is `{ kind: "binary" }` for Pixel Data           | Pixel data is exposed raw, never decoded                                                                                        | Expected. Decoding pixels is out of scope (see below).                                                                                                                                                                            |
+| A `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED` warning after `deidentify` | The object may carry burned-in PHI in the pixels                                                                                | Metadata de-id cannot clean pixels; route to a pixel-cleaning step before sharing.                                                                                                                                                |
 | A `DICOM_SQ_NOT_DESCENDED` warning                                    | A defined-length Implicit VR LE element resolved to `SQ` from the dictionary, but its value is not an `(FFFE,E000)` item stream | The bytes are kept intact on `Element.rawBytes` and the rest of the object parses, but `Element.items` is absent, so `deidentify()` does **not** audit inside it. Treat the object as un-scrubbed in that element before sharing. |
 
 ## Keeping PHI out of logs
@@ -111,13 +111,15 @@ Each is tracked as a future companion package, not a gap to be filled here:
 - **De-identification is metadata-only and fail-safe toward removal.** Conditional Annex E codes
   collapse to their most-protective branch (no IOD Type-1 analysis); private attributes are removed
   by default unless a profile marks a creator's tags safe.
-- **`deidentify()` audits only sequences the parser opened, and every sequence it could not open
-  says so.** Recursion is driven by `Element.items`, so a sequence stored as an opaque span is kept
-  verbatim and its contents appear nowhere in the report. Two shapes reach that state: an
-  undefined-length `UN` value the CP-246 descent could not read as a sequence, and a defined-length
-  Implicit VR LE value whose dictionary-resolved `SQ` is not an item stream
-  (`DICOM_SQ_NOT_DESCENDED`). Read `ds.warnings` before treating a `DeidentifyReport` as complete: a
-  report is a record of what was reached, not a proof that everything was.
+- **`deidentify()` audits only sequences the parser opened, and one of the two ways it can fail to
+  open one is silent.** Recursion is driven by `Element.items`, so a sequence stored as an opaque
+  span is kept verbatim and its contents appear nowhere in the report. A defined-length Implicit VR
+  LE value whose dictionary-resolved `SQ` is not an item stream raises `DICOM_SQ_NOT_DESCENDED`. An
+  undefined-length `UN` value the CP-246 descent could not read as a sequence raises **nothing**: it
+  keeps `vr === "UN"`, and the absence is visible only as `items === undefined`. So `ds.warnings` is
+  worth reading but does not cover both cases, and the reliable test is `el.items === undefined` on
+  the `SQ` or `UN` element itself. A report is a record of what was reached, not a proof that
+  everything was.
 - **Repeating-group rows are matched by mask, within the range the standard bounds them to.**
   `(50xx,xxxx)` Curve Data, `(60xx,3000)` Overlay Data and `(60xx,4000)` Overlay Comments are stated
   by the standard as a group mask rather than a single tag. `deidentify()` matches them in the

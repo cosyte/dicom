@@ -38,11 +38,13 @@ throw, so a file whose nested content was always non-conformant now says so. The
 longer carries `specificCharacterSet`, matching every other sequence element in the package; items
 still inherit the enclosing character set as before.
 
-Read `ds.warnings` before treating a `DeidentifyReport` as complete. Recursion is driven by
-`Element.items`, so a sequence the parser could not open is kept verbatim and its contents appear
-nowhere in the report. That set is now narrow and every member of it announces itself, but it is not
-empty: an undefined-length `UN` value the CP-246 descent could not read as a sequence reaches the
-same state.
+Do not treat a `DeidentifyReport` as complete without checking that the sequences you care about
+were opened. Recursion is driven by `Element.items`, so a sequence the parser could not open is kept
+verbatim and its contents appear nowhere in the report. That set is now narrow, but it is not empty
+and **only one of its two members warns**: the refusal above raises `DICOM_SQ_NOT_DESCENDED`, while
+an undefined-length `UN` value the CP-246 descent could not read as a sequence raises nothing at all
+and keeps `vr === "UN"`. That silence is unchanged from `0.0.5`. The test that covers both is
+`el.items === undefined` on the element itself, not `ds.warnings`.
 
 One residual, pre-existing on the CP-246 path and now reachable from one more shape: a refused
 descent drops its warnings from `ds.warnings`, but an `onWarning` callback has already been handed

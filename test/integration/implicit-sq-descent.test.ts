@@ -318,3 +318,113 @@ describe("DICOM-IMPLICIT-SQ-NOT-DESCENDED - a failed descent loses nothing", () 
     expect(serializeDicom(parseDicom(buf)).includes(carrierSpan(buf))).toBe(true);
   });
 });
+
+describe("DICOM-IMPLICIT-SQ-NOT-DESCENDED - the descent cannot read past the declared length", () => {
+  /**
+   * An SQ whose declared Value Length ends **before** its item claims to. PS3.5
+   * section 7.5.2 makes the sequence's own length the exact extent of the item
+   * stream, so the bytes after it belong to the enclosing Data Set and nothing
+   * inside the sequence may read them.
+   *
+   * This is a real vendor artifact: a value edited without recomputing the outer
+   * lengths. It is also the sharpest test of the descent's bound, because the
+   * caller resumes at the **declared** end regardless. An unbounded descent
+   * therefore reads the swallowed element twice: once as a per-item attribute and
+   * once at the root. `(0008,0060)` Modality is the element it swallows here, so
+   * the mis-read is a safety-critical attribute reported in the wrong Data Set.
+   */
+  function underDeclaredSqFixture(): Buffer {
+    const itemBody = Buffer.concat([
+      // (0008,0008) ImageType, Implicit VR LE: tag + 4-byte length + value.
+      Buffer.from([0x08, 0x00, 0x08, 0x00, 0x04, 0x00, 0x00, 0x00]),
+      Buffer.from("ORIG", "ascii"),
+    ]);
+    const modality = Buffer.concat([
+      Buffer.from([0x08, 0x00, 0x60, 0x00, 0x02, 0x00, 0x00, 0x00]),
+      Buffer.from("CT", "ascii"),
+    ]);
+
+    const itemHeader = Buffer.alloc(8);
+    itemHeader.writeUInt16LE(0xfffe, 0);
+    itemHeader.writeUInt16LE(0xe000, 2);
+    // The item over-declares by EXACTLY the trailing root element's size. That
+    // precision is what makes this the right fixture: over-declaring past the end
+    // of the buffer merely trips the truncation guard, which the pre-remedy code
+    // already had. Landing exactly on the last byte slips past every bound that
+    // was checked and swallows a whole, well-formed root element instead.
+    itemHeader.writeUInt32LE(itemBody.length + modality.length, 4);
+    const sqValue = Buffer.concat([itemHeader, itemBody]);
+
+    const sqElement = Buffer.alloc(8);
+    sqElement.writeUInt16LE(0x0008, 0);
+    sqElement.writeUInt16LE(0x1115, 2);
+    sqElement.writeUInt32LE(sqValue.length, 4); // honest sequence length
+
+    return Buffer.concat([
+      Buffer.alloc(128, 0x00),
+      Buffer.from("DICM", "ascii"),
+      // (0002,0000) group length + (0002,0010) TS UID, Explicit VR LE.
+      (() => {
+        const ts = Buffer.concat([
+          Buffer.from([0x02, 0x00, 0x10, 0x00]),
+          Buffer.from("UI", "ascii"),
+          (() => {
+            const l = Buffer.alloc(2);
+            l.writeUInt16LE(18, 0);
+            return l;
+          })(),
+          Buffer.from(`${IMPLICIT_LE}\0`, "ascii"),
+        ]);
+        const gl = Buffer.concat([
+          Buffer.from([0x02, 0x00, 0x00, 0x00]),
+          Buffer.from("UL", "ascii"),
+          Buffer.from([0x04, 0x00]),
+          (() => {
+            const v = Buffer.alloc(4);
+            v.writeUInt32LE(ts.length, 0);
+            return v;
+          })(),
+        ]);
+        return Buffer.concat([gl, ts]);
+      })(),
+      sqElement,
+      sqValue,
+      modality,
+    ]);
+  }
+
+  it("does not pull a following root element into a sequence item", () => {
+    const ds = parseDicom(underDeclaredSqFixture());
+    const sq = ds.get(CARRIER);
+
+    // The root keeps its own Modality, read exactly once and at the root.
+    expect(ds.get("00080060")?.rawBytes.toString("latin1")).toBe("CT");
+    // ...and no item may claim it. An unbounded descent reported it as a
+    // per-item attribute AND left it at the root, silently, with no warning
+    // even under `{ strict: true }`.
+    expect(sq?.items?.[0]?.has("00080060") ?? false).toBe(false);
+  });
+
+  it("refuses the descent and says so, rather than reading past the sequence", () => {
+    const ds = parseDicom(underDeclaredSqFixture());
+    expect(ds.get(CARRIER)?.items).toBeUndefined();
+    expect(ds.warnings.map((w) => w.code)).toContain(WARNING_CODES.DICOM_SQ_NOT_DESCENDED);
+  });
+
+  it("does not emit the swallowed element twice", () => {
+    // The doubling is only visible through `deidentify()`, and the reason is
+    // worth stating: the parser stores the sequence's `rawBytes` as its declared
+    // span, so a plain re-serialize writes the swallowed element once no matter
+    // what `items` holds. `rebuildSequence` re-encodes from `items`, so a
+    // mis-attributed element is written inside the sequence there AND again at
+    // the root. The de-identify path is the one that ships as "safe to share".
+    const { dataset } = deidentify(parseDicom(underDeclaredSqFixture()));
+    const out = serializeDicom(dataset);
+    const modalityBytes = Buffer.from([0x08, 0x00, 0x60, 0x00, 0x02, 0x00, 0x00, 0x00, 0x43, 0x54]);
+    let count = 0;
+    for (let i = out.indexOf(modalityBytes); i !== -1; i = out.indexOf(modalityBytes, i + 1)) {
+      count += 1;
+    }
+    expect(count).toBe(1);
+  });
+});

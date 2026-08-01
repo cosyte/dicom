@@ -356,6 +356,27 @@ function isStrictEscalation(err: unknown): boolean {
  * private-block reservations, so a failed descent cannot leak an item's
  * `(0008,0005)` or an item's Private Creator into the parent.
  *
+ * **The descent is handed a SLICE, not the whole buffer, and that bound is the
+ * load-bearing part rather than a tidiness.** PS3.5 section 7.5.2 makes the SQ's
+ * Value Length the exact extent of the item stream ("This length shall include
+ * the total length resulting from the sequence of zero or more items conveyed by
+ * this Data Element"), so a byte past it belongs to the enclosing Data Set and
+ * nothing inside may read it. `parseSequence` computes `endLimit` from the
+ * declared length but bounds each item's value read against `buffer.length`, so
+ * an item that **over-declares** its own length would otherwise reach past the
+ * sequence and swallow the next root element - which the caller then reads a
+ * second time, because it resumes at the declared end. The result is a root
+ * attribute silently reported as a per-item one AND emitted twice: a confident,
+ * wrong structural read with no warning, not even under `{ strict: true }`.
+ * Slicing makes that over-read fail the bounds check inside the slice instead, so
+ * it lands on the announced refusal path below. `tryParseUnAsSQ` already had this
+ * shape; this is the same bound, for the same reason.
+ *
+ * One consequence, shared with `tryParseUnAsSQ` and worth knowing before reading
+ * an offset out of a warning: positions raised *inside* the descent are relative
+ * to the slice. The refusal warning this function emits is not - it is built from
+ * the caller's absolute `valueStart`.
+ *
  * @param buffer The buffer holding the SQ value.
  * @param valueStart Offset of the SQ value's first byte.
  * @param valueLength The SQ element's declared (defined) length.
@@ -378,7 +399,10 @@ export function tryParseDefinedLengthSQ(
   const savedWarningsLen = ctx.warnings.length;
 
   try {
-    const result = parseSequence(buffer, valueStart, ctx, emit, {
+    // The slice is the bound: nothing in the descent may read past the declared
+    // Value Length (PS3.5 section 7.5.2). See the note above.
+    const slice = buffer.subarray(valueStart, valueStart + valueLength);
+    const result = parseSequence(slice, 0, ctx, emit, {
       explicitLength: valueLength,
       littleEndian: true,
       innerStrategy: implicitLeInner,

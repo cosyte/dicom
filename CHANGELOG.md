@@ -98,6 +98,13 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   caller has to be told the audit did not reach inside it. Read `ds.warnings` before treating a
   `DeidentifyReport` as complete.
 
+- **Only one of the two un-auditable shapes warns, and the docs now say which.** `deidentify()`
+  recurses on `Element.items`, so a sequence the parser could not open is kept verbatim and appears
+  nowhere in the report. The refusal added above raises `DICOM_SQ_NOT_DESCENDED`; an undefined-length
+  `UN` value the CP-246 descent could not read as a sequence raises **nothing** and keeps `vr ===
+"UN"`. That silence is `PRE-EXISTING` and unchanged. The reliable check is `el.items === undefined`
+  on the element, not `ds.warnings`.
+
 - **Residual, pre-existing and now reachable from one more shape.** A refused descent drops its
   warnings from `ds.warnings`, but an `onWarning` callback has already been handed them: the emit
   chokepoint delivers to the callback before the rollback can undo the push. The two disagree for
