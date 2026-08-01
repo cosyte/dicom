@@ -161,6 +161,51 @@
   precise expected shape. **Do not grow it into a general PDF parser** - if it needs more, prefer
   re-deriving the bound from a current normative source. **No staleness clock here either**, same
   reasoning as PS3.6 and PS3.15.
+- **Diagnostics are built from a frozen registry, not from the document** (`PHI-WARNING-MESSAGE-LEAK`).
+  Every Tier-2 message is looked up in `WARNING_MESSAGES` keyed by the code; factories take a position
+  and structural constants only (a tag this parser composed, a VR checked against the closed 34-VR
+  set, input-derived numbers). **There is no string parameter for a value to travel through**, which
+  is the single property separating the `@cosyte/*` parsers that leak from the ones that do not. Three
+  sites did interpolate one: `DICOM_UNSUPPORTED_CHARSET` echoed the `(0008,0005)` term, which is
+  multi-valued **on the backslash** and which `deidentify()` then carried onto the dataset it labels
+  safe to share; `DICOM_PRIVATE_CREATOR_UNKNOWN` echoed the Private Creator; and the
+  `UNSUPPORTED_TRANSFER_SYNTAX` fatal echoed the UID into `err.message`, with the writer doing the
+  same. **The bound also has to reach the model, and this is the part to keep:** `hl7` fixed its
+  messages, verified green, and `deid` still leaked, because `Segment.type` stayed unbounded on the
+  model. So `Element.specificCharacterSet` and `Element.privateCreator` bound on **membership** (in
+  PS3.3's closed term table, and in the active `Profile`'s overlay) rather than on shape, because
+  DICOM offers no shape to test: `LO` admits 64 characters of anything, and a defined term is refused
+  precisely when the closed table does not name it. **With no profile, `Element.privateCreator` reads
+  `<withheld>`**; the raw creator remains available as the `(gggg,00EE)` element's own bytes.
+  `deidentify()` re-derives block reservations from the dataset's creator elements so
+  `RetainSafePrivate` is unaffected. The gate is `test/integration/phi-diagnostic-surface.test.ts`, a
+  28-slot table bound to `assertNoDiagnosticPhiLeak`; **it was run red on the base commit and named
+  seven leaking slots.** The suite it joined could not have: `test/property/_arbitraries.ts` excludes
+  the backslash from `TEXT_ALPHABET` by design and never generates `(0008,0005)` or a Private Creator
+  at all. **`@cosyte/test-utils` must stay pinned `^0.0.2` or higher** - a caret on a `0.0.x` resolves
+  to that version exactly, so a `^0.0.1` pin silently tests against a kit with no such runner and
+  passes. Four doc claims said the reverse of the source (warnings "PHI-free by construction",
+  `DicomParseError` retaining "no raw input snippet" when `snippet` is 16 source bytes) and are
+  corrected; the `DeidentifyReport` is value-free **apart from `uidMap`**, whose keys are the file's
+  own source UIDs. **The gate does not make the diagnostic surface PHI-free and must not be described
+  that way**: `snippet` is still 16 raw bytes as hex, deliberately (D-10), and hex is a re-encoding
+  the runner cannot match, so no slot can ever go red on it.
+  **Private block reservations are scoped per Data Set, and the refuter caught this the hard way.**
+  PS3.5 §7.5 makes each Sequence Item its own Data Set and §7.8.1 scopes a Private Creator's
+  reservation to the Data Set it appears in, so the same block number names different vendors at the
+  root and inside an item. The first version of the `RetainSafePrivate` creator re-derivation built
+  one map from `ds.elements()` and used it at every depth: it **retained an item's private element on
+  the root's reservation and wrote the PHI into the serialized output**, and dropped one correctly
+  reserved inside the item it was used in. `processElements` now derives the map at every depth it
+  recurses to, and `test/deident/deidentify.test.ts` has both directions (each confirmed to red
+  against the root-scoped version) plus a third: an item's private element whose creator is declared
+  **only at the root** is now removed, because the item has no reservation of its own. That is the
+  conformant reading and fail-safe, and it is a **behaviour change against `0.0.5`** for any sender
+  that declares a creator once at the root and writes private data into Per-Frame Functional Groups
+  items. **The parser's own `ctx.creators` is still one map for the whole parse**, which is the same
+  defect class on the read path and feeds `resolveImplicitVR`, where a wrong answer is a wrong VR.
+  It reproduces identically on `0.0.5` and no wrong decode was constructed from it, so it was left
+  alone rather than folded in: it is its own item, not a rider on this one.
 - **Em-dash brand gate armed.** `scripts/check-no-emdash.sh` (`pnpm check:no-emdash`) plus
   `.github/workflows/no-emdash.yml` enforce the founder directive banning `U+2014` outright
   (`knowledgebase/06-brand/voice-and-tone.md`, "No em dashes. Ever."). It scans **both** halves the

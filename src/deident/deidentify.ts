@@ -5,7 +5,8 @@
  * nine *metadata-affecting* Annex E Options, driven by the generated Table E.1-1
  * action map ({@link annexE}). It is a **pure** function: the input {@link Dataset}
  * is never mutated; a fresh `Dataset` (with a rebuilt element map and File Meta)
- * is returned alongside a value-free {@link DeidentifyReport}.
+ * is returned alongside a {@link DeidentifyReport} that is value-free except for
+ * `uidMap`, whose keys are the file's own source UIDs.
  *
  * **What it does**
  * - Resolves each attribute's action (basic profile, overridden by an active
@@ -257,13 +258,60 @@ interface ProcessResult {
   readonly removedPrivateTags: Tag[];
 }
 
-/** Decide whether to keep a private element under `RetainSafePrivate` + a profile. */
-function keepsPrivate(el: Element, ctx: DeidentifyContext): boolean {
+/**
+ * Map the private blocks reserved **in one Data Set** to the creators that
+ * reserved them, read from that Data Set's own `(gggg,00EE)` elements rather
+ * than from `Element.privateCreator`.
+ *
+ * `Element.privateCreator` is membership-bounded against the profile that was
+ * active **at parse time** (`src/parser/tokens.ts`), and a caller may perfectly
+ * reasonably parse without a profile and pass one here. Re-deriving the
+ * reservation from the elements in front of us makes `RetainSafePrivate` behave
+ * identically whether the profile arrived at parse or at de-identification. The
+ * decoded string never leaves this map: it is a lookup key, not a value on any
+ * surface.
+ *
+ * **Per Data Set, not per run, and the difference is a PHI defect.** PS3.5 §7.5
+ * makes each Sequence Item its own Data Set and §7.8.1 scopes a block
+ * reservation to the Data Set the creator appears in, so the same block number
+ * means different vendors at the root and inside an item. Resolving an
+ * item-scoped private element against the root's reservation retains an element
+ * no profile ever vouched for and writes it into the serialized output, and
+ * drops one that was correctly reserved inside the item it is used in. Both
+ * were reproduced before this was scoped; `processElements` therefore derives
+ * this at every depth it recurses to.
+ */
+function creatorsInScope(source: readonly Element[]): ReadonlyMap<string, string> {
+  const byBlock = new Map<string, string>();
+  for (const el of source) {
+    if (!isPrivateTag(el.tag) || !isPrivateCreatorElement(el.tag)) continue;
+    const { group, element } = splitTag(el.tag);
+    byBlock.set(`${String(group)}:${String(element & 0xff)}`, decodeCreator(el));
+  }
+  return byBlock;
+}
+
+/** The creator that reserved a private data element's block, per PS3.5 section 7.8. */
+function creatorFor(tag: Tag, creators: ReadonlyMap<string, string>): string | undefined {
+  const { group, element } = splitTag(tag);
+  return creators.get(`${String(group)}:${String((element >> 8) & 0xff)}`);
+}
+
+/**
+ * Decide whether to keep a private element under `RetainSafePrivate` + a
+ * profile. `creators` is the reservation map of the Data Set this element lives
+ * in, never an enclosing one.
+ */
+function keepsPrivate(
+  el: Element,
+  ctx: DeidentifyContext,
+  creators: ReadonlyMap<string, string>,
+): boolean {
   if (!ctx.active.has("RetainSafePrivate") || ctx.profile === undefined) return false;
   if (isPrivateCreatorElement(el.tag)) {
     return ctx.profile.privateDictionary.has(decodeCreator(el));
   }
-  const creator = el.privateCreator;
+  const creator = creatorFor(el.tag, creators);
   if (creator === undefined) return false;
   return resolvePrivateTag(ctx.profile, el.tag, creator) !== undefined;
 }
@@ -282,10 +330,12 @@ function processElements(
     attributes: [],
     removedPrivateTags: [],
   };
+  // Derived here, at every depth: `source` is exactly one Data Set.
+  const creators = creatorsInScope(source);
 
   for (const el of source) {
     if (isPrivateTag(el.tag)) {
-      if (keepsPrivate(el, ctx)) out.elements.set(el.tag, el);
+      if (keepsPrivate(el, ctx, creators)) out.elements.set(el.tag, el);
       else out.removedPrivateTags.push(el.tag);
       continue;
     }
@@ -457,8 +507,10 @@ function hasUncleanedBurnedIn(ds: Dataset): boolean {
  * De-identify a {@link Dataset} per PS3.15 Annex E - the Basic Application Level
  * Confidentiality Profile, plus any Retain/Clean Options passed in `retain`.
  *
- * Pure: `ds` is never mutated. Returns a fresh dataset and a value-free
- * {@link DeidentifyReport} (tags, keywords, action codes, the UID map, warnings).
+ * Pure: `ds` is never mutated. Returns a fresh dataset and a
+ * {@link DeidentifyReport} of tags, keywords, action codes, warnings and the UID
+ * map. Everything in it is composed from static tables except `uidMap`, whose
+ * keys are the source UIDs the file carried: treat that field as PHI.
  *
  * @throws {@link DeidentifyError} (`INVALID_OPTIONS`) for an unknown Retain option
  *   or a malformed `uidRoot`.

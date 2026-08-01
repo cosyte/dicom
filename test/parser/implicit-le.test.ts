@@ -140,7 +140,7 @@ describe("parseImplicitLE - TOL-09 + Case 4a private-tag-no-creator", () => {
 });
 
 describe("parseImplicitLE - D-33 / D-34 private-creator block-reservation", () => {
-  it("creator at (0019,0010)='ACME' covers (0019,1000): privateCreator='ACME', vr='UN', no NO_CREATOR warning", () => {
+  it("creator at (0019,0010)='ACME' covers (0019,1000): privateCreator withheld with no profile, vr='UN', no NO_CREATOR warning", () => {
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2",
       elements: [
@@ -151,7 +151,12 @@ describe("parseImplicitLE - D-33 / D-34 private-creator block-reservation", () =
     const ds = parseDicom(buf);
     const el = elementsOf(ds).get("00191000");
     expect(el).toBeDefined();
-    expect(el?.privateCreator).toBe("ACME");
+    // The block IS resolved - that is what the absent NO_CREATOR warning below
+    // proves - but the creator string reaching the MODEL is membership-bounded
+    // against the active profile, and there is none here. An unvouched creator
+    // on a public field named like an identifier is the shape `@cosyte/deid`
+    // leaked through on the `hl7` side; see `src/parser/tokens.ts`.
+    expect(el?.privateCreator).toBe("<withheld>");
     expect(el?.vr).toBe("UN");
     const codes = ds.warnings.map((w) => w.code);
     expect(codes).not.toContain(WARNING_CODES.DICOM_PRIVATE_TAG_NO_CREATOR);

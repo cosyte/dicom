@@ -47,7 +47,7 @@ That's the pitch: no config, no schema upload, no spec lookup. The parser accept
 - **Lazy typed value decode**: `element.value` decodes raw bytes into a discriminated `DicomValue` across all 34 VRs (numbers, `bigint`s, person names, dates/times, sequences, raw `binary`), honoring `(0008,0005)` Specific Character Set through nested items.
 - **Real-world tolerance, Postel's Law**: a lenient reader emits 24 stable warning codes for what it tolerated; only 4 truly-structural conditions are fatal. The serializer always writes spec-clean Part 10.
 - **Source/vendor profile system**: `defineProfile()` + 5 built-ins (`ge`, `siemens`, `philips`, `strict`, `lenient`) that only ever _tighten or annotate_ a parse, resolving vendor private tags by the file's live Private Creator string, never a wrong decode.
-- **Metadata-level de-identification**: `deidentify()` applies the PS3.15 Annex E Basic Profile + the nine metadata Options, returning a fresh dataset and a value-free audit report.
+- **Metadata-level de-identification**: `deidentify()` applies the PS3.15 Annex E Basic Profile + the nine metadata Options, returning a fresh dataset and an audit report that is value-free apart from the source UIDs in `report.uidMap`.
 - **Spec-clean serializer**: `serializeDicom(ds)` round-trips a dataset back to Part 10 bytes in its source transfer syntax (no transcode), with correct File Meta group length, even-length padding, byte-exact sequence passthrough, and lossless File Meta: non-modeled `(0002,xxxx)` elements are preserved and re-emitted in tag order.
 - **Strict TypeScript, dual ESM + CJS, Node ≥ 22**: `noUncheckedIndexedAccess`, no `any`, JSDoc + `@example` on every public export feeding your editor's IntelliSense. Zero runtime dependencies today.
 
@@ -197,7 +197,7 @@ if (img.isEnhancedMultiFrame) {
 
 ### De-identify before sharing
 
-`deidentify()` applies the PS3.15 Annex E Basic Application Level Confidentiality Profile (replacing, emptying, or removing every attribute the standard lists as identifying) and returns a fresh dataset plus a value-free report.
+`deidentify()` applies the PS3.15 Annex E Basic Application Level Confidentiality Profile (replacing, emptying, or removing every attribute the standard lists as identifying) and returns a fresh dataset plus a report that is value-free apart from the source UIDs in `report.uidMap`.
 
 ```ts
 import { parseDicom, deidentify, serializeDicom } from "@cosyte/dicom";
@@ -303,7 +303,7 @@ At an RSNA-era interoperability test, ~80% of real-world patient CDs failed stri
 | 2    | Warning        | Recoverable deviation          | `DICOM_MISSING_PREAMBLE` |
 | 3    | Fatal (always) | Unrecoverable structural error | `NOT_DICOM_PART_10`      |
 
-Tier-2 warnings are plain data on `ds.warnings`. Each carries a stable string `code`, a PHI-free `message`, and a `position` with the byte offset where it occurred, so you can react programmatically:
+Tier-2 warnings are plain data on `ds.warnings`. Each carries a stable string `code`, a `message` looked up from a frozen registry (never composed from the document), and a `position` with the byte offset where it occurred, so you can react programmatically:
 
 ```ts
 import { parseDicom, WARNING_CODES } from "@cosyte/dicom";
@@ -328,7 +328,7 @@ The library throws five typed errors, all exported from the package barrel. Warn
 
 ### `DicomParseError`
 
-Thrown by `parseDicom` on one of the 4 Tier-3 fatal codes. Carries the byte position and a PHI-free message.
+Thrown by `parseDicom` on one of the 4 Tier-3 fatal codes. Carries the byte position, a registry-composed message, and a 16-byte hex `snippet` of the source. The snippet is raw input: treat it as PHI and redact it at your own boundary.
 
 ```ts
 import { parseDicom, DicomParseError, FATAL_CODES } from "@cosyte/dicom";

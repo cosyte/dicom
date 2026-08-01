@@ -319,7 +319,7 @@ describe("parseExplicitLE - encapsulated pixel data (D-31)", () => {
 });
 
 describe("parseExplicitLE - private-creator block-reservation", () => {
-  it("Element.privateCreator populated for (0019,1000) when (0019,0010)='ACME'", () => {
+  it("Element.privateCreator is withheld for (0019,1000) when no profile vouches for 'ACME'", () => {
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
       elements: [
@@ -329,7 +329,7 @@ describe("parseExplicitLE - private-creator block-reservation", () => {
     });
     const ds = parseDicom(buf);
     const el = elementsOf(ds).get("00191000");
-    expect(el?.privateCreator).toBe("ACME");
+    expect(el?.privateCreator).toBe("<withheld>");
     // Off-by-0x1000 trap: (0019,2000) does NOT resolve to ACME.
     // (Not built in this fixture - verified in element-header.test.ts.)
   });

@@ -40,6 +40,7 @@ import { inflateRawSync } from "node:zlib";
 
 import type { Element } from "../dataset/element.js";
 import type { Tag } from "../dictionary/types.js";
+import { makeEmitter } from "./emit.js";
 import { buildSnippet, DicomParseError, FATAL_CODES } from "./errors.js";
 import { parseExplicitLE } from "./explicit-le.js";
 import type { ParseContext } from "./types.js";
@@ -122,9 +123,14 @@ export function parseDeflatedLEWithCap(
         buildSnippet(buffer, datasetStart),
       );
     }
+    // `message` is zlib's, and it is deliberately not forwarded. It is an
+    // `err.message` from a library handed the sender's bytes, which is the one
+    // shape of third-party string this parser cannot vouch for; the zlib error
+    // `code` is a closed set and says the same thing safely.
+    const zlibCode = typeof code === "string" && code.length > 0 ? code : "unknown";
     throw new DicomParseError(
       FATAL_CODES.INVALID_FILE_META,
-      `Failed to inflate Deflated TS payload: ${message}`,
+      `Failed to inflate Deflated TS payload (zlib error code: ${zlibCode}).`,
       datasetStart,
       buildSnippet(buffer, datasetStart),
     );
@@ -140,12 +146,20 @@ export function parseDeflatedLEWithCap(
   // `deflated: true` per D-27, then forwards to the outer chokepoint
   // (which preserves strict-mode escalation + onWarning callback +
   // ds.warnings push semantics).
+  //
+  // It builds a chokepoint over `innerCtx` rather than forwarding to the outer
+  // one, and that is not cosmetic: `makeEmitter` closes over `ctx.buffer` to cut
+  // the strict-mode snippet, so forwarding meant slicing the COMPRESSED source
+  // at an offset that indexes the INFLATED stream. The snippet was confidently
+  // wrong. `innerCtx` shares the outer `warnings` array, `onWarning` and
+  // `strict`, so every other semantic is unchanged.
+  const innerChokepoint = makeEmitter(innerCtx);
   const innerEmit = (w: DicomParseWarning): void => {
     const wrapped: DicomParseWarning = {
       ...w,
       position: { ...w.position, deflated: true },
     };
-    emit(wrapped);
+    innerChokepoint(wrapped);
   };
 
   const result = parseExplicitLE(inflated, 0, innerCtx, innerEmit);

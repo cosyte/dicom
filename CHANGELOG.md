@@ -4,43 +4,74 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ## [Unreleased]
 
-### Added
+### Security
 
-- **`README.md` now opens with the shared Cosyte lockup, which follows the reader's color scheme**
-  (`ASSETS-P8`). A `<picture>` block above the H1 carries the dark-ground org tile behind a
-  `prefers-color-scheme: dark` media query and the light-ground tile as the inner `<img>`, so the
-  mark sits on a ground that matches the page it is read on. It replaces the per-package banner,
-  which baked the package name and the one-line tagline into pixels while the two lines directly
-  beneath it repeated both: the lockup reads "Cosyte" where the H1 reads `@cosyte/dicom`, so the
-  duplication goes and the heading stays. The alt text is content rather than decoration, because it
-  is what a screen reader reads on the npm page, and it describes the mark itself rather than
-  repeating the heading below it.
+- **A warning message no longer echoes anything the file said** (`PHI-WARNING-MESSAGE-LEAK`). Three
+  diagnostics reproduced consumer-controlled bytes verbatim, and one of them carried onto the dataset
+  `deidentify()` labels safe to share:
+  - `DICOM_UNSUPPORTED_CHARSET` interpolated the `(0008,0005)` term. That value is **multi-valued on
+    the backslash**, so any component of it, at any position, reached the message whole. It is the
+    measured leak, and `deidentify()` copies `Dataset.warnings` across, so it rode onto the shared
+    artifact.
+  - `DICOM_PRIVATE_CREATOR_UNKNOWN` interpolated the Private Creator string, which is an `LO` a
+    sender authored and which this warning fires on precisely because nothing vouches for it.
+  - The `UNSUPPORTED_TRANSFER_SYNTAX` fatal interpolated the `(0002,0010)` UID into `err.message`,
+    and so into `err.stack` and into whatever an error reporter ships off-box. The writer's
+    equivalent did the same for a `Dataset` a caller built.
 
-  **One stated reason is corrected rather than dropped.** The per-package banner was chosen as a
-  plain markdown image, with no `<img>` and no `<picture>`, expressly because whether npm's markdown
-  sanitizer preserves a `<picture>` was unverified. It has since been measured on a published
-  package page: the `<img>` is hoisted out of its `<picture>` by npm's anchor wrapper, so the light
-  cut renders there, and npmjs.com has no dark mode, so that is the correct cut. A renderer that
-  strips `<source>` still renders the inner `<img>`, so the worst case is a light-ground mark on a
-  dark page, never a missing or broken image. Both tile URLs were rechecked with `curl -I` as
-  `200 image/png`, 10513 and 10455 bytes, before this landed, rather than taken from the `live` flag
-  in `assets/published-urls.json`, whose own `$fields.status` note says to read `live` for what it
-  is: a declaration made on evidence from another repo, never a fact checked there.
+  Every message now comes from a **frozen registry** keyed by the warning code. Factories take a
+  position and structural constants only: a tag this parser composed, a VR checked against the closed
+  34-VR set, and input-derived numbers. There is no string parameter to pass a value through, which
+  is the property that distinguishes every `@cosyte/*` parser that does not leak from every one that
+  did. A token failing its check renders `<withheld>` rather than being echoed.
 
-### Changed
+  Where a token has to be named, it comes from a closed set this package controls: the unsupported
+  transfer syntax reads as the dictionary's own label for the UID (`JPEG Baseline (Process 1)`) when
+  PS3.6 publishes one, `DICOM_UNSUPPORTED_CHARSET` names the **1-based value index** of the offending
+  component rather than the component, and the inflate failure reports zlib's error _code_ instead of
+  forwarding zlib's message.
 
-- **`CHANGELOG.md` now records what each released version contained.** Every entry in this file sat
-  under `[Unreleased]` while npm served `0.0.1`, `0.0.3` and `0.0.4`, and `CHANGELOG.md` is in
-  `package.json#files`, so the file shipped inside the tarball telling a consumer that the version
-  they had installed was unreleased. That is a false claim on a distributed surface rather than
-  untidy bookkeeping. No entry's substance is rewritten: each is moved to the version that actually
-  shipped it, reconstructed from the tags, the GitHub releases, and the changesets each
-  "Version Packages" commit consumed. `0.0.2` gets no heading because it was never published: it was
-  version-bumped on 2026-07-27 and the publish that followed did not run, so its four changesets
-  reached npm inside `0.0.3` and are recorded there. That is also why npm's version list skips
-  `0.0.2`.
+- **Two model fields are bounded, because a diagnostic fix does not protect a downstream package.**
+  `@cosyte/hl7` bounded its messages, went green, and `@cosyte/deid` still leaked off `Segment.type`.
+  The same two shapes here now bound on **membership**, not shape, because DICOM offers no shape to
+  test (`src/parser/tokens.ts` argues why):
+  - `Element.specificCharacterSet` holds only terms PS3.3's closed table names; anything else reads
+    `<withheld>`. Decoding is unchanged: an unmappable term was already skipped.
+  - `Element.privateCreator` holds only creators the active `Profile`'s overlay names. **With no
+    profile, nothing is recognized and the field reads `<withheld>`** - a real reduction in what it
+    tells a caller, and deliberate. The raw creator is still available as the `(gggg,00EE)` element's
+    own `rawBytes`, as a value, where value discipline applies.
+
+  `RetainSafePrivate` is unaffected in either direction: `deidentify()` now re-derives the block
+  reservation from the creator elements of **each Data Set** it walks, so passing a `Profile` at
+  de-identification works whether or not one was passed at parse. **One behaviour does change against
+  0.0.5:** a private data element inside a sequence item whose creator is declared only at the root is
+  now removed rather than retained, because the item has no reservation of its own. That is the
+  conformant reading and the fail-safe direction, but a sender that declares a creator once at the
+  root and writes private data into Per-Frame Functional Groups items will lose those elements under
+  `RetainSafePrivate`. Declare the creator in the Data Set that uses it. Per Data Set is load-bearing, not a
+  detail: PS3.5 §7.5 makes each Sequence Item its own Data Set and §7.8.1 scopes a reservation to the
+  Data Set the creator appears in, so the same block number names different vendors at the root and
+  inside an item. Resolving one against the other retained an item's private element on the root's
+  reservation and wrote its value into the serialized output.
 
 ### Fixed
+
+- **`DICOM_UN_PARSED_AS_SQ` printed the literal string `UN` where its message promised a tag.** The
+  descent primitive is handed a byte range rather than a tag, but both call sites hold one, so it is
+  threaded through rather than dropped.
+- **A warning raised inside a Deflated dataset cut its strict-mode snippet from the wrong buffer.**
+  The inner descent forwarded to the outer emission chokepoint, which closes over the **compressed**
+  source, while the forwarded `position.byteOffset` indexes the **inflated** stream. The result was a
+  confidently wrong 16 bytes. The descent now builds its own chokepoint over the inflated buffer; it
+  shares the outer `warnings` array, `onWarning` and `strict`, so warning accumulation, callback
+  ordering and profile posture are unchanged. **One thing does change and it is worth saying plainly:
+  the snippet on that path now carries the real inflated bytes**, where before it carried whatever
+  happened to sit at that offset in the compressed source. It was accidentally uninformative and is
+  now correctly PHI, under the same `snippet`-is-raw-input contract every other path already has.
+- **`DICOM_NONZERO_RESERVED_BYTES` reported the two reserved bytes as one 16-bit number**, which had
+  to pick an endianness the reserved field does not have: it read unambiguously and was wrong under
+  one of the two Explicit VR syntaxes. They are now reported separately, in wire order.
 
 - **`README.md` documented an element-access API that does not exist.** `Dataset.get` / `has` /
   `getAll` take the 8-character `(group,element)` tag (`"00080060"`, case-insensitive) and nothing
@@ -80,6 +111,81 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   is the only thing that cannot go stale, by naming the command that reads it.
   `troubleshooting.md` also stopped sending readers to `CLAUDE.md`, an internal file that does not
   ship in the tarball.
+
+### Changed
+
+- **Four documentation claims stated the reverse of the source and are corrected.**
+  `spec-notes-tolerance.md`, `troubleshooting.md`, `cookbook.md` and `README.md` all said warnings and
+  errors were "PHI-free by construction" while three factories interpolated values, and two of them
+  added that a `DicomParseError` "retains no raw input snippet" while `DicomParseError.snippet`
+  carries up to 16 bytes of the source as hex and its own JSDoc says so. The messages are now safe and
+  the docs say why; the snippet is documented as the PHI it is. `troubleshooting.md` also records that
+  **value-decode warnings never reach `ds.warnings`** at all (decode is lazy, so they ride on
+  `el.value.warnings`), so a logger reading only the dataset array sees none of them.
+- **The `DeidentifyReport` is no longer described as value-free without qualification.** It is, apart
+  from `uidMap`, whose **keys are the source UIDs read out of the file** and kept so replacement stays
+  consistent across a study. A Study or SOP Instance UID is a unique identifying number; that field is
+  PHI and the rest of the report is not.
+
+- **`CHANGELOG.md` now records what each released version contained.** Every entry in this file sat
+  under `[Unreleased]` while npm served `0.0.1`, `0.0.3` and `0.0.4`, and `CHANGELOG.md` is in
+  `package.json#files`, so the file shipped inside the tarball telling a consumer that the version
+  they had installed was unreleased. That is a false claim on a distributed surface rather than
+  untidy bookkeeping. No entry's substance is rewritten: each is moved to the version that actually
+  shipped it, reconstructed from the tags, the GitHub releases, and the changesets each
+  "Version Packages" commit consumed. `0.0.2` gets no heading because it was never published: it was
+  version-bumped on 2026-07-27 and the publish that followed did not run, so its four changesets
+  reached npm inside `0.0.3` and are recorded there. That is also why npm's version list skips
+  `0.0.2`.
+
+### Added
+
+- **A slot table of consumer-controlled positions in the format**
+  (`test/integration/phi-diagnostic-surface.test.ts`), bound to `assertNoDiagnosticPhiLeak` from
+  `@cosyte/test-utils` (pin bumped to `^0.0.2`; a caret on a `0.0.x` resolves to that version exactly,
+  so the old pin would have tested against a kit without the runner and passed). Twenty-eight slots,
+  one test each, across all four transfer syntaxes and encapsulated pixel data, plus the de-identify
+  surface and the serialized "safe to share" bytes.
+
+  **It does not make the diagnostic surface PHI-free, and the difference matters.**
+  `DicomParseError.snippet` is 16 raw source bytes as hex on every fatal and every strict-mode
+  escalation. That is deliberate and long-standing (D-10), the docs name it as PHI, and no slot here
+  can go red on it: the runner matches verbatim echoes, and hex is a re-encoding. What the table
+  proves is that no _message_, position, thrown value or model identifier carries a planted byte.
+
+  **It was run red on the base commit and named seven leaking slots**, which is the point of it. The
+  suite it joins could not have done that: `test/property/_arbitraries.ts` blocks the leaking path
+  three independent ways, and the sharpest is that its `TEXT_ALPHABET` excludes the backslash "so a
+  single-valued element stays single-valued" - the exact byte `(0008,0005)` splits on before the
+  leaking branch. It also never generates `(0008,0005)` or a Private Creator element at all.
+
+  Two things the table pins that a marker search alone would not. Every slot names the diagnostic
+  **code** it must reach, so a probe that was quietly normalized away cannot pass as evidence; the
+  marker is invalid in `UI` and `CS`, the two VRs most worth probing here, and what makes it reach
+  those branches anyway is that this parser validates no VR character set on read. And one test
+  compares every emitted message against the **registry template** rather than searching it for the
+  marker, so any interpolation of anything at all breaks it, whatever was planted.
+
+- **`README.md` now opens with the shared Cosyte lockup, which follows the reader's color scheme**
+  (`ASSETS-P8`). A `<picture>` block above the H1 carries the dark-ground org tile behind a
+  `prefers-color-scheme: dark` media query and the light-ground tile as the inner `<img>`, so the
+  mark sits on a ground that matches the page it is read on. It replaces the per-package banner,
+  which baked the package name and the one-line tagline into pixels while the two lines directly
+  beneath it repeated both: the lockup reads "Cosyte" where the H1 reads `@cosyte/dicom`, so the
+  duplication goes and the heading stays. The alt text is content rather than decoration, because it
+  is what a screen reader reads on the npm page, and it describes the mark itself rather than
+  repeating the heading below it.
+
+  **One stated reason is corrected rather than dropped.** The per-package banner was chosen as a
+  plain markdown image, with no `<img>` and no `<picture>`, expressly because whether npm's markdown
+  sanitizer preserves a `<picture>` was unverified. It has since been measured on a published
+  package page: the `<img>` is hoisted out of its `<picture>` by npm's anchor wrapper, so the light
+  cut renders there, and npmjs.com has no dark mode, so that is the correct cut. A renderer that
+  strips `<source>` still renders the inner `<img>`, so the worst case is a light-ground mark on a
+  dark page, never a missing or broken image. Both tile URLs were rechecked with `curl -I` as
+  `200 image/png`, 10513 and 10455 bytes, before this landed, rather than taken from the `live` flag
+  in `assets/published-urls.json`, whose own `$fields.status` note says to read `live` for what it
+  is: a declaration made on evidence from another repo, never a fact checked there.
 
 ## [0.0.4] - 2026-07-30
 

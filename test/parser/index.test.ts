@@ -102,7 +102,14 @@ describe("parseDicom - FM-04 + D-20 UNSUPPORTED_TRANSFER_SYNTAX", () => {
     } catch (err) {
       if (!(err instanceof DicomParseError)) throw err;
       expect(err.code).toBe("UNSUPPORTED_TRANSFER_SYNTAX");
-      expect(err.message).toContain("1.2.840.10008.1.2.4.50");
+      // The UID is NOT echoed. It is a `UI` a sender authored and this branch is
+      // reached precisely when it is not one this build knows, so the message
+      // names it only from the closed set the parser controls: the dictionary's
+      // own label for the UID. This test previously asserted the opposite and
+      // pinned the echo in place.
+      expect(err.message).not.toContain("1.2.840.10008.1.2.4.50");
+      expect(err.message).toContain("JPEG Baseline");
+      expect(err.message).toContain("(0002,0010)");
       // Human-readable name comes from Dictionary.uid (D-20). The known v1 dictionary
       // labels this UID "JPEG Baseline (Process 1)" or similar - non-empty when known.
       expect(err.snippet.length).toBeGreaterThan(0);

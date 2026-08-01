@@ -28,12 +28,12 @@ parseDicom(Buffer.from("plainly not a DICOM object, just ASCII bytes", "ascii"))
 // throws DicomParseError (NOT_DICOM_PART_10)
 ```
 
-| Fatal code (throws) | Meaning |
-|---|---|
-| `NOT_DICOM_PART_10` | No preamble/`DICM` and no recoverable File Meta: not a Part 10 object. |
-| `INVALID_FILE_META` | The File Meta group is present but structurally unreadable. |
-| `UNSUPPORTED_TRANSFER_SYNTAX` | The transfer syntax UID is not one of the four v1 syntaxes. |
-| `EMPTY_INPUT` | Zero-length input. |
+| Fatal code (throws)           | Meaning                                                                |
+| ----------------------------- | ---------------------------------------------------------------------- |
+| `NOT_DICOM_PART_10`           | No preamble/`DICM` and no recoverable File Meta: not a Part 10 object. |
+| `INVALID_FILE_META`           | The File Meta group is present but structurally unreadable.            |
+| `UNSUPPORTED_TRANSFER_SYNTAX` | The transfer syntax UID is not one of the four v1 syntaxes.            |
+| `EMPTY_INPUT`                 | Zero-length input.                                                     |
 
 Narrow on the caught error via `err instanceof DicomParseError` and `err.code === FATAL_CODES.*` (see
 [Tolerance & the warning model](./spec-notes-tolerance)). Everything a real-world archive does short
@@ -42,23 +42,42 @@ warning you triage, not an exception you catch.
 
 ## Common symptoms
 
-| Symptom | Likely cause | What to do |
-|---|---|---|
-| `ds.get("PatientName")` is `undefined` | `get` takes the **tag** form, not a keyword | Use the tag (`ds.get("00100010")`), or resolve a keyword with `Dictionary.byKeyword("PatientName")?.tag`. |
-| `ds.image.rescaleSlope` is `undefined` | Rescale Slope was absent | This is by design. It is **not** defaulted to `1`. Apply a fallback deliberately in your own code if the modality warrants it. |
-| `ds.image.signed` is `undefined` | Pixel Representation `(0028,0103)` was absent | Signedness is unknown, never guessed. Do not assume unsigned. |
-| A `DICOM_VR_MISMATCH` warning | The on-wire Explicit VR disagreed with the dictionary | The dictionary VR is used and the deviation recorded; check the sender's encoding. |
-| A `DICOM_PRIVATE_CREATOR_UNKNOWN` warning | A private tag's creator is not in the active profile | The element degrades to `UN`; add the creator via a [profile](./spec-notes-profiles) to resolve it. |
-| `ds.get(tag)?.value` is `{ kind: "binary" }` for Pixel Data | Pixel data is exposed raw, never decoded | Expected. Decoding pixels is out of scope (see below). |
-| A `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED` warning after `deidentify` | The object may carry burned-in PHI in the pixels | Metadata de-id cannot clean pixels; route to a pixel-cleaning step before sharing. |
+| Symptom                                                               | Likely cause                                          | What to do                                                                                                                                             |
+| --------------------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ds.get("PatientName")` is `undefined`                                | `get` takes the **tag** form, not a keyword           | Use the tag (`ds.get("00100010")`), or resolve a keyword with `Dictionary.byKeyword("PatientName")?.tag`.                                              |
+| `ds.image.rescaleSlope` is `undefined`                                | Rescale Slope was absent                              | This is by design. It is **not** defaulted to `1`. Apply a fallback deliberately in your own code if the modality warrants it.                         |
+| `ds.image.signed` is `undefined`                                      | Pixel Representation `(0028,0103)` was absent         | Signedness is unknown, never guessed. Do not assume unsigned.                                                                                          |
+| A `DICOM_VR_MISMATCH` warning                                         | The on-wire Explicit VR disagreed with the dictionary | The **on-wire** VR is used (Postel's Law: on the read path the sender's own declaration wins) and the deviation recorded; check the sender's encoding. |
+| A `DICOM_PRIVATE_CREATOR_UNKNOWN` warning                             | A private tag's creator is not in the active profile  | The element degrades to `UN`; add the creator via a [profile](./spec-notes-profiles) to resolve it.                                                    |
+| `ds.get(tag)?.value` is `{ kind: "binary" }` for Pixel Data           | Pixel data is exposed raw, never decoded              | Expected. Decoding pixels is out of scope (see below).                                                                                                 |
+| A `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED` warning after `deidentify` | The object may carry burned-in PHI in the pixels      | Metadata de-id cannot clean pixels; route to a pixel-cleaning step before sharing.                                                                     |
 
 ## Keeping PHI out of logs
 
-Every warning and error is **PHI-free by construction**. It carries the stable code and a structural
-position (attribute tag, byte offset, sequence path), never a patient name, an identifier, a date, or
-pixel content. You can log the full `ds.warnings` array, and the `DeidentifyReport`, without leaking.
-A `DicomParseError` deliberately retains **no raw input snippet**. Keep the same discipline in your
-own code: log `w.code` and `w.position`, not the element value.
+A Tier-2 **warning** is safe to log whole. Its `message` comes from a frozen registry keyed by the
+code, and the only things substituted into it are structural: a tag, a VR checked against the closed
+34-VR set, and input-derived numbers. No warning factory accepts a string read out of the document,
+so `ds.warnings` holds codes, positions and registry prose, not patient data.
+
+Two things that array does **not** cover:
+
+- **A `DicomParseError` carries a `snippet`**: up to 16 bytes of the source as hex. Those are raw
+  input bytes and the library does not redact them. Log `err.code`, `err.byteOffset` and
+  `err.message`; treat `err.snippet` as PHI.
+- **Value-decode deviations do not appear on `ds.warnings`.** Decode is lazy, so a `DA` in a legacy
+  format or a `UI` with the wrong pad surfaces on the decoded value's own `warnings`
+  (`el.value.warnings`), never folded into the frozen dataset array. Those messages are built from
+  the same registry and are equally safe, but a logger that only reads `ds.warnings` will not see
+  them at all.
+
+A `DeidentifyReport` is safe to log **except for `uidMap`**, whose keys are the source UIDs read out
+of the file. They are there so UID replacement stays consistent across a study, and a study UID is a
+unique identifier: the rest of the report (tags, keywords, action codes, sequence context paths) is
+composed from static tables and carries nothing.
+
+The field-by-field split between identifiers and values is in
+[Tolerance](./spec-notes-tolerance#the-model-fields-that-are-bounded-and-the-ones-that-are-values).
+Keep the same discipline in your own code: log `w.code` and `w.position`, not the element value.
 
 ## What's not yet parsed, and what is out of scope
 

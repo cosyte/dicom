@@ -35,6 +35,7 @@ import {
   type DicomParseWarning,
 } from "./warnings.js";
 import { resolvePrivateTag } from "../profiles/lookup.js";
+import { safePrivateCreator } from "./tokens.js";
 
 /** The `(0008,0005)` Specific Character Set tag. */
 const SPECIFIC_CHARACTER_SET_TAG: Tag = "00080005";
@@ -55,10 +56,14 @@ export function applySpecificCharacterSet(
   position: DicomPosition,
 ): void {
   if (tag !== SPECIFIC_CHARACTER_SET_TAG) return;
+  // `parseSpecificCharacterSet` already withholds any component PS3.3's closed
+  // table does not name, so an unsupported term is `WITHHELD` here rather than
+  // the sender's bytes. The warning names the 1-based value index, never the
+  // component itself.
   const terms = parseSpecificCharacterSet(value);
-  for (const term of terms) {
-    if (!isKnownCharsetTerm(term)) emit(unsupportedCharset(position, term));
-  }
+  terms.forEach((term, index) => {
+    if (!isKnownCharsetTerm(term)) emit(unsupportedCharset(position, index + 1));
+  });
   ctx.currentCharset = terms;
 }
 
@@ -159,7 +164,7 @@ export function resolveImplicitVR(
       const def = resolvePrivateTag(ctx.profile, tag, creator);
       if (def !== undefined) return def.vr;
       if (!ctx.profile.privateDictionary.has(creator)) {
-        emit(privateCreatorUnknown(position, tag, creator));
+        emit(privateCreatorUnknown(position, tag));
       }
     }
     emit(implicitVRForPrivateTagWithoutVR(position, tag));
@@ -214,6 +219,28 @@ export function resolvePrivateCreator(tag: Tag, ctx: ParseContext): string | und
   const blockId = (element >> 8) & 0xff;
   if (blockId < 0x10 || blockId > 0xff) return undefined;
   return ctx.creators.get(group)?.get(blockId);
+}
+
+/**
+ * Bound a resolved Private Creator for the **model**, which is a different
+ * question from resolving it for the parser.
+ *
+ * {@link resolvePrivateCreator} returns the sender's bytes because the parser
+ * needs them as a lookup key into a profile's overlay. `Element.privateCreator`
+ * is a public field that presents itself as an identifier, and an identifier a
+ * downstream package will interpolate into diagnostics of its own: that is the
+ * exact shape by which `@cosyte/hl7` bounded its messages, went green, and left
+ * `@cosyte/deid` still leaking off `Segment.type`. So what reaches the model is
+ * membership-bounded (see `./tokens.ts` for why membership rather than shape),
+ * while the raw string stays internal to the lookup.
+ *
+ * @internal
+ */
+export function safeModelCreator(
+  creator: string | undefined,
+  ctx: ParseContext,
+): string | undefined {
+  return creator === undefined ? undefined : safePrivateCreator(creator, ctx.profile);
 }
 
 /**
@@ -361,10 +388,7 @@ export function readExplicitElementHeader(
     const reserved1 = cursor.buffer[cursor.position + 1];
     cursor.position += 2;
     if ((reserved0 ?? 0) !== 0x00 || (reserved1 ?? 0) !== 0x00) {
-      const observed =
-        (reserved0 ?? 0).toString(16).padStart(2, "0") +
-        (reserved1 ?? 0).toString(16).padStart(2, "0");
-      emit(nonzeroReservedBytes({ byteOffset: headerStart }, tag, observed));
+      emit(nonzeroReservedBytes({ byteOffset: headerStart }, tag, reserved0 ?? 0, reserved1 ?? 0));
     }
     length = cursor.readUInt32();
     headerLength = 12;

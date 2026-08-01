@@ -40,6 +40,7 @@ import {
   registerPrivateCreator,
   resolveImplicitVR,
   resolvePrivateCreator,
+  safeModelCreator,
 } from "./element-header.js";
 import { buildSnippet, DicomParseError, FATAL_CODES } from "./errors.js";
 import { parseSequence } from "./sequence.js";
@@ -131,7 +132,7 @@ export function parseImplicitLE(
         const rawBytes = ctx.copyValues
           ? copyValueBytes(buffer.subarray(valueRawStart, cursor.position))
           : buffer.subarray(valueRawStart, cursor.position);
-        const privateCreator = resolvePrivateCreator(tag, ctx);
+        const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
         elements.set(
           tag,
           new Element({
@@ -186,7 +187,7 @@ export function parseImplicitLE(
     // (0008,0005) Specific Character Set governs subsequent text decode.
     applySpecificCharacterSet(tag, valueSlice, ctx, emit, position);
 
-    const privateCreator = resolvePrivateCreator(tag, ctx);
+    const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
     elements.set(
       tag,
       new Element({
