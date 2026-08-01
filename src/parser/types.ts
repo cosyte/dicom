@@ -208,11 +208,22 @@ export interface ParseContext {
   readonly onWarning?: OnWarningCallback;
   readonly warnings: DicomParseWarning[];
   /**
-   * Group → block-id (low byte `0x10..0xFF`) → creator string. Populated as
-   * Private Creator elements `(gggg,00XX)` are seen during parse. Phase 2's
-   * private-creator stack tracking lives here (D-33).
+   * Group → block-id (low byte `0x10..0xFF`) → creator string for **the Data
+   * Set currently being parsed**. Populated as Private Creator elements
+   * `(gggg,00XX)` are seen during parse. Phase 2's private-creator stack
+   * tracking lives here (D-33).
+   *
+   * **Mutable, and per Data Set rather than per parse.** PS3.5 section 7.5.1
+   * says "Each Item Value shall contain a DICOM Data Set composed of Data
+   * Elements", and section 7.8.1's block reservation is a statement about the
+   * Data Set the Private Creator Data Element appears in. `parseSequence`
+   * therefore swaps a fresh map in for each Sequence Item and restores the
+   * enclosing Data Set's map on the way out, exactly as it already does for
+   * {@link ParseContext.currentCharset}. One map for the whole parse resolves
+   * a block number to whichever creator was seen last at any depth, and that
+   * feeds `resolveImplicitVR`: the failure is a wrong VR, a mis-decoded value.
    */
-  readonly creators: Map<number, Map<number, string>>;
+  creators: Map<number, Map<number, string>>;
   /**
    * Sequence-encoding stack - the top entry determines FFFE-marker semantics
    * per D-28. Initial stack is `["Root"]`.

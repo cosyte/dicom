@@ -43,7 +43,7 @@ import {
   safeModelCreator,
 } from "./element-header.js";
 import { buildSnippet, DicomParseError, FATAL_CODES } from "./errors.js";
-import { parseSequence } from "./sequence.js";
+import { parseSequence, tryParseUnAsSQ } from "./sequence.js";
 import type { ParseContext } from "./types.js";
 import { groupLengthInDataset, type DicomParseWarning } from "./warnings.js";
 
@@ -148,6 +148,55 @@ export function parseImplicitLE(
           }),
         );
         continue;
+      }
+      // CP-246 fallback (D-30), the Implicit-VR-LE half of the same rule
+      // `_parseExplicit` already applies: `UN` at undefined length is the
+      // shape a sequence takes when the reader could not name its VR, and
+      // under this transfer syntax that is exactly what a private element
+      // resolves to when its Data Set never claimed the block (PS3.5 section
+      // 7.8.1 scoping, see `resolvePrivateCreator`). Descending it keeps a
+      // structurally valid file readable instead of failing the WHOLE parse
+      // over vendor context the reader lacks: section 7.5.1 requires decoders
+      // to support both item encodings, and the repo's own rule is that a
+      // Tier-3 fatal is for unrecoverable structural corruption only.
+      //
+      // The descent restores parser state and drops its warnings on failure,
+      // so a `UN` that is genuinely not a sequence still reaches the throw
+      // below with the base behaviour unchanged.
+      if (vr === "UN") {
+        const cp246 = tryParseUnAsSQ(
+          buffer,
+          cursor.position,
+          0xffffffff,
+          ctx,
+          emit,
+          parseImplicitLE,
+          tag,
+        );
+        if (cp246.success) {
+          const valueRawStart = headerStart;
+          cursor.position = cp246.endOffset;
+          const rawBytes = ctx.copyValues
+            ? copyValueBytes(buffer.subarray(valueRawStart, cursor.position))
+            : buffer.subarray(valueRawStart, cursor.position);
+          const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
+          elements.set(
+            tag,
+            new Element({
+              tag,
+              vr: "SQ", // Promoted, exactly as the Explicit-VR path promotes it.
+              vm: cp246.items.length,
+              length: 0xffffffff,
+              rawBytes,
+              byteOffset: headerStart,
+              cp246Promoted: true,
+              littleEndian: true,
+              items: cp246.items,
+              ...(privateCreator !== undefined ? { privateCreator } : {}),
+            }),
+          );
+          continue;
+        }
       }
       throw new DicomParseError(
         FATAL_CODES.INVALID_FILE_META,

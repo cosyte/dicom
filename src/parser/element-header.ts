@@ -205,6 +205,15 @@ export function resolveImplicitVR(
  * creator slots themselves (`(gggg,0010..00FF)`), or when no creator is
  * registered for the element's block.
  *
+ * **The lookup is scoped to one Data Set.** `ctx.creators` holds the
+ * reservations of the Data Set currently being parsed and nothing else -
+ * `parseSequence` swaps a fresh map in per Sequence Item, so a block claimed
+ * at the root does not answer for an element inside an item, an item's claim
+ * does not answer for a sibling item, and neither survives back out to the
+ * enclosing Data Set. A private element in a Data Set that never claimed its
+ * block therefore resolves to `undefined` here and degrades to `UN` plus
+ * `DICOM_PRIVATE_TAG_NO_CREATOR`, rather than borrowing a neighbour's VR.
+ *
  * @internal
  */
 export function resolvePrivateCreator(tag: Tag, ctx: ParseContext): string | undefined {
@@ -247,6 +256,11 @@ export function safeModelCreator(
  * Register a Private Creator declaration `(gggg,00XX) VR=LO` into
  * `ctx.creators`. Called by per-TS parser strategies when a creator
  * element is read.
+ *
+ * The registration lands in the map for the Data Set being parsed right now,
+ * which inside a Sequence Item is that item's own map (see
+ * {@link resolvePrivateCreator}), so a creator declared in an item is scoped
+ * to it.
  *
  * Trims trailing ASCII space (`0x20`) and NUL (`0x00`) padding from the
  * decoded creator string per PS3.5 LO conventions. Empty creator strings

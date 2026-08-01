@@ -57,6 +57,56 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Fixed
 
+- **A private block reserved in one Data Set resolved the Implicit VR of a private element in
+  another, so the same bytes decoded as a different value than the file declared**
+  (`DICOM-PARSE-CREATORS-SCOPE`). The parser kept **one** private-creator reservation map for the
+  whole file, so a block number claimed by different vendors at the root and inside a Sequence Item
+  resolved to whichever creator was read **last**, wherever it sat. That map feeds Implicit-VR
+  resolution, which is why this is a wrong decode and not a mislabelling: in a file where an item
+  claims block `0x11` and the root afterwards writes `(0029,1101)` without claiming it, the root
+  element took the **item's** vendor, and with a `Profile` naming that creator's element byte as `SS`
+  the bytes `FF FF` read as **`-1`** rather than as raw bytes. No warning fired. Reservations are now
+  scoped to the Data Set the Private Creator Data Element appears in, at every depth the parser
+  recurses to: an item does not inherit the enclosing Data Set's blocks, an item's own do not reach a
+  sibling item, and none of them survive back out to the enclosing Data Set once the sequence closes.
+
+  PS3.5 2026c section 7.5.1 is the basis: "Each Item Value shall contain a DICOM Data Set composed of
+  Data Elements", closing by delegating to section 7.8 for "rules for incorporating Private Data
+  Elements into Sequence Items", where a Private Creator Data Element "shall be used to reserve a
+  block of Elements with Group Number gggg". Its first Note states the nesting case outright: each
+  item needs to claim the corresponding private block of Elements. Both documents are the vendored,
+  SHA-pinned copies under `vendor/nema/part05/`.
+
+  **Three behaviour changes against `0.0.5`, all confined to files that mix private data with
+  sequences.** (1) A private data element in a Sequence Item whose block is claimed only in an
+  enclosing Data Set now resolves to `UN` plus `DICOM_PRIVATE_TAG_NO_CREATOR`, where it previously
+  took the enclosing claim's VR. The bytes stay on `Element.rawBytes`; what is withheld is a typed
+  decode the file never licensed. Declare the creator in the Data Set that uses it. (2)
+  `Element.privateCreator` is `undefined` on those elements rather than naming a vendor from another
+  Data Set - and that half applies under **every** transfer syntax, including the Explicit VR ones
+  where the VR is on the wire and only the attribution was wrong. (3) **Under `{ strict: true }` the
+  same file now throws**, because `DICOM_PRIVATE_TAG_NO_CREATOR` is a Tier-2 warning and strict
+  promotes Tier-2 warnings to a thrown `DicomParseError`. Nothing about strict changed; the warning
+  is simply now emitted where the standard says the reservation does not reach. The default lenient
+  parse keeps the file and records the warning.
+
+- **An undefined-length `UN` under Implicit VR LE is descended as a sequence instead of failing the
+  whole parse.** `parseImplicitLE` treated any resolved VR other than `SQ` at length `0xFFFFFFFF` as
+  unrecoverable structural corruption, so one private element the reader could not attribute cost the
+  entire object: no patient, no study, no modality, a thrown `INVALID_FILE_META`. It now takes the
+  same CP-246 route the Explicit VR path already took for exactly this shape (`VR=UN` plus undefined
+  length), promoting the element to `SQ` with a `DICOM_UN_PARSED_AS_SQ` warning when the bytes really
+  are items. PS3.5 section 7.5.1 requires decoders to support both item encodings, and losing vendor
+  context is not corruption. Bytes that are genuinely not a sequence still throw exactly as before:
+  the descent restores parser state and drops its warnings on failure. This matters most alongside
+  the scoping fix above, which is what can now turn a profile-resolved `SQ` into a `UN`.
+  `DICOM_UN_PARSED_AS_SQ`'s message now says the element _has_ `VR=UN` rather than _declared_ it,
+  because on this new path nothing was declared: the `UN` is what VR resolution returned.
+
+  This is the read-path half of the defect whose de-identify half shipped above. The harm differs
+  and that is why they are separate: there, an out-of-scope reservation **retained** a private
+  element and wrote it into serialized output; here it hands correct bytes the wrong meaning.
+
 - **`DICOM_UN_PARSED_AS_SQ` printed the literal string `UN` where its message promised a tag.** The
   descent primitive is handed a byte range rather than a tag, but both call sites hold one, so it is
   threaded through rather than dropped.
