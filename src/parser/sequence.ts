@@ -61,7 +61,12 @@ import { ByteCursor } from "./byte-cursor.js";
 import { buildSnippet, DicomParseError, FATAL_CODES } from "./errors.js";
 import { WARNING_CODES } from "./warnings.js";
 import type { ParseContext } from "./types.js";
-import { emptyItemInSequence, unParsedAsSQ, type DicomParseWarning } from "./warnings.js";
+import {
+  emptyItemInSequence,
+  sqNotDescended,
+  unParsedAsSQ,
+  type DicomParseWarning,
+} from "./warnings.js";
 
 const ITEM_TAG: Tag = "FFFEE000";
 // `(FFFE,E00D)` ItemDelim is consumed by the inner-strategy via the
@@ -316,6 +321,87 @@ export function parseSequence(
 }
 
 /**
+ * `true` when a caught `DicomParseError` is a strict-mode escalation of a Tier-2
+ * warning rather than a Tier-3 structural fatal.
+ *
+ * The distinction is what makes a rollback safe: a Tier-3 fatal thrown mid-descent
+ * means the bytes are not what we guessed and the caller may fall back, while a
+ * strict-mode escalation is the caller's own `{ strict: true }` contract being
+ * honoured at the `emit` chokepoint (D-36) and must propagate untouched. Swallowing
+ * one would make `strict` silently weaker inside a sequence than outside it.
+ */
+function isStrictEscalation(err: unknown): boolean {
+  if (!(err instanceof DicomParseError)) return false;
+  return (Object.values(WARNING_CODES) as readonly string[]).includes(err.code);
+}
+
+/**
+ * Attempt an SQ descent over a **defined-length** value under Implicit VR LE,
+ * rolling back cleanly if the bytes are not an item stream.
+ *
+ * Implicit VR LE carries no VR on the wire, so `SQ` here is resolved from PS3.6
+ * (see `resolveImplicitVR`) rather than declared by the sender. That is the whole
+ * reason this primitive exists instead of a bare `parseSequence` call: an
+ * inference that turns out wrong must not cost the caller the object. On failure
+ * the parser state is restored, every warning the failed descent emitted is
+ * dropped (they describe bytes we are no longer interpreting as elements), and
+ * `success: false` tells the caller to keep the declared byte range as an opaque
+ * value - exactly what the pre-descent parser did for every defined-length SQ.
+ *
+ * The undefined-length form gets no such fallback and must not: without a
+ * declared length there is no other way to find the end of the value, which is
+ * why `parseImplicitLE` still throws there.
+ *
+ * `parseSequence`'s own `finally` restores the enclosing Data Set's charset and
+ * private-block reservations, so a failed descent cannot leak an item's
+ * `(0008,0005)` or an item's Private Creator into the parent.
+ *
+ * @param buffer The buffer holding the SQ value.
+ * @param valueStart Offset of the SQ value's first byte.
+ * @param valueLength The SQ element's declared (defined) length.
+ * @param implicitLeInner The Implicit VR LE parser, passed in by the caller to
+ *                        break the circular import.
+ *
+ * @internal
+ */
+export function tryParseDefinedLengthSQ(
+  buffer: Buffer,
+  valueStart: number,
+  valueLength: number,
+  ctx: ParseContext,
+  emit: (w: DicomParseWarning) => void,
+  implicitLeInner: InnerParser,
+  tag: Tag,
+): { success: boolean; items: readonly Item[] } {
+  const savedDepth = ctx.nestingDepth;
+  const savedStackLen = ctx.encodingContextStack.length;
+  const savedWarningsLen = ctx.warnings.length;
+
+  try {
+    const result = parseSequence(buffer, valueStart, ctx, emit, {
+      explicitLength: valueLength,
+      littleEndian: true,
+      innerStrategy: implicitLeInner,
+    });
+    return { success: true, items: result.items };
+  } catch (err) {
+    if (isStrictEscalation(err)) throw err;
+    ctx.nestingDepth = savedDepth;
+    while (ctx.encodingContextStack.length > savedStackLen) {
+      ctx.encodingContextStack.pop();
+    }
+    while (ctx.warnings.length > savedWarningsLen) {
+      ctx.warnings.pop();
+    }
+    // Emitted AFTER the rollback so it is the one warning that survives, and
+    // emitted at all because a silently undescended sequence is invisible to
+    // `deidentify()` - which is the defect this whole path exists to close.
+    emit(sqNotDescended({ byteOffset: valueStart }, tag));
+    return { success: false, items: [] };
+  }
+}
+
+/**
  * CP-246 fallback per D-30. When an element has `VR=UN` AND
  * `length=0xFFFFFFFF`, attempt to descend the bytes as Implicit VR LE SQ
  * items. On any failure, restore parser state (warnings, nestingDepth,
@@ -375,11 +461,8 @@ export function tryParseUnAsSQ(
     // true. Those throws must propagate. Tier-3 structural fatals
     // (`FatalCode`) thrown mid-descent indicate the bytes don't actually
     // form a valid SQ - fall back to UN-as-bytes as designed.
-    if (err instanceof DicomParseError) {
-      const warningCodeValues = Object.values(WARNING_CODES) as readonly string[];
-      if (warningCodeValues.includes(err.code)) {
-        throw err;
-      }
+    if (isStrictEscalation(err)) {
+      throw err;
     }
     // Restore state - drop any warnings emitted during the failed descent.
     ctx.nestingDepth = savedDepth;

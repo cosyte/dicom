@@ -179,7 +179,7 @@
   `<withheld>`**; the raw creator remains available as the `(gggg,00EE)` element's own bytes.
   `deidentify()` re-derives block reservations from the dataset's creator elements so
   `RetainSafePrivate` is unaffected. The gate is `test/integration/phi-diagnostic-surface.test.ts`, a
-  28-slot table bound to `assertNoDiagnosticPhiLeak`; **it was run red on the base commit and named
+  38-slot table bound to `assertNoDiagnosticPhiLeak`; **it was run red on the base commit and named
   seven leaking slots.** The suite it joined could not have: `test/property/_arbitraries.ts` excludes
   the backslash from `TEXT_ALPHABET` by design and never generates `(0008,0005)` or a Private Creator
   at all. **`@cosyte/test-utils` must stay pinned `^0.0.2` or higher** - a caret on a `0.0.x` resolves
@@ -246,17 +246,54 @@
   disclosed instead:** under `{ strict: true }` the new warning is promoted to a throw, so a file
   whose items borrow an enclosing block parses lenient and throws strict. That is strict doing its
   job on a warning that is now correctly emitted, and the release note says so.
-  **▶ Found in passing, PRE-EXISTING at `0.0.5`, NOT fixed here, and it is a live PHI leak rather
-  than a navigation gap: a DEFINED-LENGTH `SQ` under Implicit VR LE is never descended.**
-  `src/parser/implicit-le.ts` calls `parseSequence` only in the `length === 0xFFFFFFFF` branch, so a
-  defined-length sequence is stored as raw bytes with `Element.items` **`undefined`** - measured
-  against Explicit VR LE, which parses the same fixture into 1 item. Nothing that walks items sees
-  inside one, so **a `(0010,0010)` Patient's Name nested in a defined-length item survives
-  `deidentify()` into `serializeDicom()` output with a clean-looking `DeidentifyReport`** that names
-  only the root attribute. Same class as the two leaks recorded above as shipped at `0.0.3`. PS3.5
-  section 7.5.1: "The encoder of a Data Set may choose either one of the two ways of encoding. Both
-  ways of encoding shall be supported by decoders of Data Sets." It is why this slice's Implicit-VR
-  fixtures use the undefined-length form, and it wants its own slice ahead of further parser work.
+- **Both of PS3.5's sequence-delimitation forms are descended under Implicit VR LE, and only one of
+  them used to be** (`DICOM-IMPLICIT-SQ-NOT-DESCENDED`, found by `#49`'s refuter, pre-existing and live on the
+  published `0.0.5`). `src/parser/implicit-le.ts` called `parseSequence` **only** in the
+  `length === 0xFFFFFFFF` branch, so a defined-length sequence was stored as raw bytes with
+  `Element.items` **`undefined`**. **That is a PHI defect, not a navigation gap**, and the mechanism
+  is the one to carry forward: `deidentify()` recurses into a kept sequence **only when its items
+  exist**, so a `(0010,0010)` Patient's Name nested in a defined-length item reached
+  `serializeDicom()` output verbatim while the `DeidentifyReport` named only the root attribute.
+  **The report asserting a scrub it had not performed is the worse half** - an incomplete audit that
+  reads as a complete one is exactly what a caller trusts before sharing. Same class as the two leaks
+  shipped at `0.0.3`.
+  **▶ CITE 7.5.2 FOR THIS, NOT 7.5.1, AND THE ITEM ITSELF GOT IT WRONG.** PS3.5 2026c states the
+  obligation **twice, about two different length fields**, and both sentences are unique in the
+  document (measured). Section **7.5.2 "Delimitation of The Sequence of Items"** governs the `SQ`
+  element's OWN length, which is the field this defect defaulted on: "The encoder of a Sequence of
+  Items may choose either one of the two ways of encoding. Both ways of encoding shall be supported
+  by decoders of the Sequence of Items." Section **7.5.1 "Item Encoding Rules"** says the same of
+  each `(FFFE,E000)` Item's length field, and is the right cite for the nested-form cases only. The
+  backlog item and this file's own earlier note both quoted 7.5.1's sentence for a 7.5.2 defect;
+  read from the pin rather than carrying a quotation forward.
+  The gate is `test/integration/implicit-sq-descent.test.ts`, **8 of its 11 tests run red against
+  `src/` at `d90105f`**, and the shape to copy is the **control**: the identical fixture under
+  Explicit VR LE, whose parser already descended both forms, is compared **report against report**
+  rather than against a hand-written expectation - same attributes, same actions, same context paths.
+  The three that stay green on base are the deliberate no-loss controls.
+  **▶ THE TEST THAT LET THIS SHIP WAS NAMED FOR THE THING IT DID NOT CHECK, AND THAT IS THE REUSABLE
+  PART.** `test/parser/implicit-le.test.ts` had "explicit-length SQ also descends" asserting
+  `vr === "SQ"`, which dictionary resolution answers whether or not anything descends, and
+  `vm === 1`, which was the **Phase 2 scalar placeholder** every non-sequence element already carried.
+  Both were green against a parser that never opened the sequence. A test that asserts only values a
+  broken implementation also produces is worse than no test: it occupies the slot.
+  **▶ A FAILED DESCENT DEGRADES RATHER THAN FAILING THE OBJECT, and the asymmetry against Explicit VR
+  is deliberate.** Implicit VR LE has no VR on the wire, so `SQ` is **this parser's inference from
+  PS3.6**, not something the sender wrote, and a defined length leaves a complete alternative reading
+  of the value. So `tryParseDefinedLengthSQ` rolls the parser back, drops the failed descent's
+  warnings, keeps the declared span on `Element.rawBytes`, and raises the new Tier-2
+  `DICOM_SQ_NOT_DESCENDED` (**25 codes, was 24**; the locked `WARNING_CODES` snapshot was updated
+  deliberately). The **undefined-length** form keeps its Tier-3 fatal, because there is no other way
+  to find the end of the value. It warns rather than degrading in silence because silence is the
+  defect above. Under `{ strict: true }` the new warning promotes to a throw, so such a file parses
+  lenient and throws strict - disclosed in the release note, no code remedy, same shape as `#49`'s.
+  **`rawBytes` stays VALUE-ONLY for this shape** and that is load-bearing: `isFullSpanElement` keys
+  exactly this case off the encoding (a defined-length SQ is full-span under Explicit VR and
+  value-only under Implicit VR), so a full-span slice would make the writer emit the header twice.
+  **Residual, pre-existing on the CP-246 path, now reachable from one more shape:** a refused descent
+  pops its warnings off `ctx.warnings`, but `makeEmitter` hands them to `onWarning` **before** the
+  push it is undoing (D-03 ordering), so a streaming consumer sees warnings `ds.warnings` does not.
+  Disclosed, not fixed - buffering emissions is a larger change than the leak it would tidy.
 - **Em-dash brand gate armed.** `scripts/check-no-emdash.sh` (`pnpm check:no-emdash`) plus
   `.github/workflows/no-emdash.yml` enforce the founder directive banning `U+2014` outright
   (`knowledgebase/06-brand/voice-and-tone.md`, "No em dashes. Ever."). It scans **both** halves the

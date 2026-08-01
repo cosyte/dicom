@@ -19,7 +19,7 @@ import {
 
 describe("WARNING_CODES (D-08)", () => {
   it("has at least 24 codes (D-08 - full TOL-03 catalog enumeration)", () => {
-    // CONTEXT.md D-08 enumerates 24 unique codes: 13 actively-emitted + 7
+    // 25 today. CONTEXT.md D-08 enumerated 24 unique codes: 13 actively-emitted + 7
     // VR-decode-time (Phase 3) + 2 charset (Phase 4) + 2 reserved
     // (Phase 6 PRIVATE_CREATOR_UNKNOWN + Phase 7 BURNED_IN_ANNOTATION_NOT_REMOVED).
     // The plan's ≥25 verification grep counts lines containing "DICOM_" across

@@ -51,6 +51,7 @@ warning you triage, not an exception you catch.
 | A `DICOM_PRIVATE_CREATOR_UNKNOWN` warning                             | A private tag's creator is not in the active profile  | The element degrades to `UN`; add the creator via a [profile](./spec-notes-profiles) to resolve it.                                                    |
 | `ds.get(tag)?.value` is `{ kind: "binary" }` for Pixel Data           | Pixel data is exposed raw, never decoded              | Expected. Decoding pixels is out of scope (see below).                                                                                                 |
 | A `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED` warning after `deidentify` | The object may carry burned-in PHI in the pixels      | Metadata de-id cannot clean pixels; route to a pixel-cleaning step before sharing.                                                                     |
+| A `DICOM_SQ_NOT_DESCENDED` warning                                    | A defined-length Implicit VR LE element resolved to `SQ` from the dictionary, but its value is not an `(FFFE,E000)` item stream | The bytes are kept intact on `Element.rawBytes` and the rest of the object parses, but `Element.items` is absent, so `deidentify()` does **not** audit inside it. Treat the object as un-scrubbed in that element before sharing. |
 
 ## Keeping PHI out of logs
 
@@ -110,6 +111,13 @@ Each is tracked as a future companion package, not a gap to be filled here:
 - **De-identification is metadata-only and fail-safe toward removal.** Conditional Annex E codes
   collapse to their most-protective branch (no IOD Type-1 analysis); private attributes are removed
   by default unless a profile marks a creator's tags safe.
+- **`deidentify()` audits only sequences the parser opened, and every sequence it could not open
+  says so.** Recursion is driven by `Element.items`, so a sequence stored as an opaque span is kept
+  verbatim and its contents appear nowhere in the report. Two shapes reach that state: an
+  undefined-length `UN` value the CP-246 descent could not read as a sequence, and a defined-length
+  Implicit VR LE value whose dictionary-resolved `SQ` is not an item stream
+  (`DICOM_SQ_NOT_DESCENDED`). Read `ds.warnings` before treating a `DeidentifyReport` as complete: a
+  report is a record of what was reached, not a proof that everything was.
 - **Repeating-group rows are matched by mask, within the range the standard bounds them to.**
   `(50xx,xxxx)` Curve Data, `(60xx,3000)` Overlay Data and `(60xx,4000)` Overlay Comments are stated
   by the standard as a group mask rather than a single tag. `deidentify()` matches them in the

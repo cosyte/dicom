@@ -428,6 +428,20 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     expectCode: WARNING_CODES.DICOM_EMPTY_ITEM_IN_SEQUENCE,
   },
   {
+    // The marker IS the undescended value. Under Implicit VR LE `(0008,1115)`
+    // resolves to `SQ` from PS3.6, so a defined-length value that is not an item
+    // stream refuses the descent and warns - and the bytes it refused are the
+    // planted ones, which is the only shape that proves the refusal path cannot
+    // echo them.
+    name: "(0008,1115) ReferencedSeriesSequence, defined length, value is not an item stream",
+    plant: (m) =>
+      buildDicom({
+        transferSyntax: TS_IMPLICIT_LE,
+        elements: [{ tag: "00081115", vr: "SQ" as VR, value: val(m) }],
+      }),
+    expectCode: WARNING_CODES.DICOM_SQ_NOT_DESCENDED,
+  },
+  {
     name: "(0010,0020) PatientID [LO] beside a retired (0008,0000) group length",
     plant: (m) =>
       buildDicom({

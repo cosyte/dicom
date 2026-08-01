@@ -210,6 +210,13 @@ describe("parseImplicitLE - undefined-length SQ descent (D-21 + parseSequence)",
   });
 
   it("explicit-length SQ also descends (defined item body, no SeqDelim)", () => {
+    // This test was VACUOUS until `DICOM-IMPLICIT-SQ-NOT-DESCENDED`, and how it
+    // passed is worth more than the case it covers. Its two assertions were
+    // `vr === "SQ"`, which `resolveImplicitVR` answers from PS3.6 whether or not
+    // anything descends, and `vm === 1`, which was the Phase 2 SCALAR
+    // PLACEHOLDER - the literal `vm: 1` every non-SQ element gets. So a test
+    // named "also descends" went green against a parser that never opened the
+    // sequence. Assert the items, which is the only thing "descends" means.
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2",
       elements: [
@@ -224,6 +231,8 @@ describe("parseImplicitLE - undefined-length SQ descent (D-21 + parseSequence)",
     const ds = parseDicom(buf);
     const el = elementsOf(ds).get("0040A730");
     expect(el?.vr).toBe("SQ");
+    expect(el?.items).toHaveLength(1);
+    expect(el?.items?.[0]?.get("00080100")?.rawBytes.toString("latin1")).toBe("ABCD");
     expect(el?.vm).toBe(1);
   });
 
