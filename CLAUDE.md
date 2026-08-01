@@ -320,9 +320,13 @@
   `rawBytes`). Bounding `parseSequence` itself would close both, but on the Explicit VR path there is
   no fallback, so it would convert a file that parses today into a whole-object `INVALID_FILE_META` -
   precisely the trap `#49` paid for. It needs its own slice, with that loss measured.
-  Also minor: a refusal raised **inside** a defined-length item carries an item-slice-relative
-  `byteOffset` (`parseSequence` already hands the inner parser an `itemSlice`). The refusal this
-  slice's own primitive emits is absolute.
+  Also minor, and the second refuter pass caught the wording: **everything raised inside a descent is
+  slice-relative, and that covers `Element.byteOffset` on a nested element, not just a warning's
+  `position`.** Defined-length items always were (`parseSequence` hands the inner parser an
+  `itemSlice`), so the two _item_ forms now agree; they still disagree with the undefined-length
+  _sequence_ branch, which passes the whole buffer. `Element.byteOffset` documents no
+  frame-of-reference contract either way. The refusal this slice's own primitive emits is the
+  exception and is absolute.
 - **Em-dash brand gate armed.** `scripts/check-no-emdash.sh` (`pnpm check:no-emdash`) plus
   `.github/workflows/no-emdash.yml` enforce the founder directive banning `U+2014` outright
   (`knowledgebase/06-brand/voice-and-tone.md`, "No em dashes. Ever."). It scans **both** halves the

@@ -373,9 +373,15 @@ function isStrictEscalation(err: unknown): boolean {
  * shape; this is the same bound, for the same reason.
  *
  * One consequence, shared with `tryParseUnAsSQ` and worth knowing before reading
- * an offset out of a warning: positions raised *inside* the descent are relative
- * to the slice. The refusal warning this function emits is not - it is built from
- * the caller's absolute `valueStart`.
+ * any offset that came out of a descent: positions raised *inside* one are
+ * relative to the slice, and that covers `Element.byteOffset` on a nested element
+ * as well as a nested warning's `position`. Defined-length items were always
+ * slice-relative (`parseSequence` hands the inner parser an `itemSlice`), so this
+ * makes the two item forms agree with each other; it does leave them disagreeing
+ * with the undefined-length *sequence* branch in `parseImplicitLE`, which still
+ * passes the whole buffer. `Element.byteOffset` carries no documented
+ * frame-of-reference contract either way. The refusal warning this function emits
+ * is the exception and is absolute: it is built from the caller's `valueStart`.
  *
  * @param buffer The buffer holding the SQ value.
  * @param valueStart Offset of the SQ value's first byte.

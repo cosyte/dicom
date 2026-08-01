@@ -95,8 +95,8 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   form keeps its existing Tier-3 fatal, and that asymmetry is deliberate: a defined length leaves a
   complete alternative reading of the value, and an undefined one leaves none. **The warning exists
   because silence is the defect above**: an undescended sequence is invisible to `deidentify()`, so a
-  caller has to be told the audit did not reach inside it. Read `ds.warnings` before treating a
-  `DeidentifyReport` as complete.
+  caller has to be told the audit did not reach inside it. It is not the whole story, though: see the
+  next entry for the shape that stays silent.
 
 - **Only one of the two un-auditable shapes warns, and the docs now say which.** `deidentify()`
   recurses on `Element.items`, so a sequence the parser could not open is kept verbatim and appears
