@@ -37,6 +37,19 @@ default:
   object's _live_ private-creator string (canonical `"GGGGxxLL"` key, PS3.5 §7.8.1), never a
   hard-coded block number. A creator the profile does not recognize degrades to `UN` plus a
   `DICOM_PRIVATE_CREATOR_UNKNOWN` warning: never a wrong decode.
+
+  The lookup is **scoped to one Data Set**. PS3.5 §7.8.1 reserves a private block for the Data Set
+  its Private Creator element sits in, and §7.5.1 makes every Sequence Item a Data Set of its own,
+  so a block claimed at the root does not resolve an element inside an item, an item's claim does
+  not resolve one in a sibling item, and neither survives back out to the enclosing Data Set. A
+  private element whose block was never claimed in its own Data Set reads `UN` plus
+  `DICOM_PRIVATE_TAG_NO_CREATOR`, with `Element.privateCreator` left `undefined`: the bytes are
+  still on `Element.rawBytes`, and the profile's typed decode is withheld rather than borrowed from
+  a neighbouring Data Set. If you write private data into sequence items, declare the creator in
+  each item that uses it. Under `{ strict: true }` that warning is promoted to a thrown
+  `DicomParseError` like any other Tier-2 code, so a file whose items borrow an enclosing block
+  parses under the lenient default and throws under `strict`.
+
 - **Escalations**: chosen Tier-2 warning codes promoted to a thrown `DicomParseError`, a stricter
   posture for known-unsafe deviations from a trusted sender.
 - **Suppressions**: benign, high-volume warning codes silenced for a known-quirky source.

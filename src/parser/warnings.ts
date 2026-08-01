@@ -164,7 +164,7 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   DICOM_NONZERO_RESERVED_BYTES:
     "Element ({tag}) has non-zero reserved bytes between VR and length (first byte {n}, second byte {n2}); ignoring.",
   DICOM_UN_PARSED_AS_SQ:
-    "Element ({tag}) declared VR=UN with undefined length; descended as Implicit VR LE sequence per CP-246.",
+    "Element ({tag}) has VR=UN with undefined length; descended as Implicit VR LE sequence per CP-246.",
   DICOM_EMPTY_ITEM_IN_SEQUENCE: "Sequence ({tag}) contains an empty item (length=0); tolerated.",
   DICOM_PIXEL_DATA_LENGTH_MISMATCH:
     "(7FE0,0010) PixelData declared length {n} does not match computed {n2} bytes.",
@@ -426,6 +426,13 @@ export function nonzeroReservedBytes(
  * Build a `DICOM_UN_PARSED_AS_SQ` warning. Emitted when a `VR=UN` element
  * with undefined length is successfully descended as an Implicit VR LE
  * sequence (CP-246 fallback per D-30).
+ *
+ * The message says the element *has* `VR=UN` rather than *declared* it, and
+ * that distinction is load-bearing on one of the two paths that raise this: an
+ * Explicit VR syntax carries `UN` on the wire, but under Implicit VR LE the
+ * `UN` is *resolved*, often because the element's Data Set never claimed the
+ * private block (PS3.5 section 7.8.1). Saying "declared" there would tell a
+ * consumer the sender wrote something it did not.
  *
  * The earlier message printed the literal string `"UN"` in its tag slot,
  * because the descent primitive is handed a byte range rather than a tag. The

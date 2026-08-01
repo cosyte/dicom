@@ -202,10 +202,61 @@
   **only at the root** is now removed, because the item has no reservation of its own. That is the
   conformant reading and fail-safe, and it is a **behaviour change against `0.0.5`** for any sender
   that declares a creator once at the root and writes private data into Per-Frame Functional Groups
-  items. **The parser's own `ctx.creators` is still one map for the whole parse**, which is the same
-  defect class on the read path and feeds `resolveImplicitVR`, where a wrong answer is a wrong VR.
-  It reproduces identically on `0.0.5` and no wrong decode was constructed from it, so it was left
-  alone rather than folded in: it is its own item, not a rider on this one.
+  items.
+- **The parser scopes reservations per Data Set too, and the wrong decode was constructed**
+  (`DICOM-PARSE-CREATORS-SCOPE`, the read-path half of the item above). `ctx.creators` was **one map
+  for the whole parse**, so a block number claimed by different vendors at the root and inside a
+  Sequence Item resolved to whichever creator was read **last**, wherever it sat. That map feeds
+  `resolveImplicitVR`, so unlike the de-identify half the failure is **a wrong VR, a mis-decoded
+  value**, not an over-retention: with an item claiming block `0x11` and the root afterwards writing
+  `(0029,1101)` without claiming it, the root element took the item's vendor and `FF FF` read as a
+  signed **`-1`** instead of raw bytes, silently. `parseSequence` now swaps in a **fresh, empty** map
+  per Sequence Item and restores the enclosing Data Set's on the way out, alongside the charset
+  save/restore that was already there. Note the asymmetry, because it is the easy thing to get
+  wrong: **items inherit charset, they do NOT inherit reservations.** All three structural parsers
+  and the CP-246 descent route through `parseSequence`, so one place covers every transfer syntax.
+  **Do not "simplify" the map back onto the context as a `readonly` field** - the swap is what scopes
+  it, and it is why `ParseContext.creators` is deliberately mutable.
+  The gate is `test/integration/private-creator-scope.test.ts`, and the shape to copy is that the
+  two vendors' overlays **disagree on the VR of the same element byte** (`US` vs `SS`) over the bytes
+  `FF FF`, so a mis-scoped reservation is observable as `65535` versus `-1` rather than as a label:
+  **8 of its 12 tests were run red against the whole of `src/` at the base commit**, one of them on
+  `expected 'SS' not to be 'SS'` at the root. Re-measure that figure if you add a test rather than
+  carrying it forward: it read `6 of 9` after the first draft and the remedy below made it stale. All three directions are covered (root does not reach into an item, an item does not
+  escape to the root, an item does not reach a sibling item) plus a two-level nesting case and an
+  Explicit VR case where only `Element.privateCreator` is wrong because the VR is on the wire.
+  **A Data Set that never claimed the block now gets `UN` plus `DICOM_PRIVATE_TAG_NO_CREATOR`**,
+  which is a **behaviour change against `0.0.5`** and the fail-safe direction on a read path: the
+  bytes are untouched on `Element.rawBytes`, and what is withheld is a typed decode the file never
+  licensed. PS3.5 2026c section 7.5.1 grounds it ("Each Item Value shall contain a DICOM Data Set
+  composed of Data Elements", closing by delegating to section 7.8 for Sequence Items), with section
+  7.8.1 Note 1 saying the nesting case outright: each item needs to claim the corresponding private
+  block of Elements. Cited as a Note, so informative, and read from the vendored pin.
+  **▶ THE PART THAT ALMOST SHIPPED WRONG, AND THE REUSABLE LESSON: A FAIL-SAFE DEGRADE IS NOT
+  AUTOMATICALLY A SMALL ONE. MEASURE WHAT ELSE READS THE FIELD YOU DEGRADED.** The refuter refuted
+  pass 1 on it. `parseImplicitLE` treated **any** resolved VR other than `SQ` at length `0xFFFFFFFF`
+  as a Tier-3 fatal, so degrading a profile-resolved `SQ` to `UN` turned a file that parsed into
+  `INVALID_FILE_META` and lost **the whole object** - patient, study, modality - not just the private
+  block. Two shipped artifacts had already been written asserting the opposite ("Nothing is lost").
+  The remedy is the **Explicit-VR path's own CP-246 rule applied on the Implicit-VR path**: `UN` at
+  undefined length attempts `tryParseUnAsSQ`, promotes to `SQ` with `DICOM_UN_PARSED_AS_SQ` on
+  success, and falls through to the identical throw on failure, because that primitive already
+  restores state and drops its warnings. Proven non-vacuous by stashing `implicit-le.ts` alone and
+  watching the descent test red with that exact fatal. **The second face has no code remedy and is
+  disclosed instead:** under `{ strict: true }` the new warning is promoted to a throw, so a file
+  whose items borrow an enclosing block parses lenient and throws strict. That is strict doing its
+  job on a warning that is now correctly emitted, and the release note says so.
+  **▶ Found in passing, PRE-EXISTING at `0.0.5`, NOT fixed here, and it is a live PHI leak rather
+  than a navigation gap: a DEFINED-LENGTH `SQ` under Implicit VR LE is never descended.**
+  `src/parser/implicit-le.ts` calls `parseSequence` only in the `length === 0xFFFFFFFF` branch, so a
+  defined-length sequence is stored as raw bytes with `Element.items` **`undefined`** - measured
+  against Explicit VR LE, which parses the same fixture into 1 item. Nothing that walks items sees
+  inside one, so **a `(0010,0010)` Patient's Name nested in a defined-length item survives
+  `deidentify()` into `serializeDicom()` output with a clean-looking `DeidentifyReport`** that names
+  only the root attribute. Same class as the two leaks recorded above as shipped at `0.0.3`. PS3.5
+  section 7.5.1: "The encoder of a Data Set may choose either one of the two ways of encoding. Both
+  ways of encoding shall be supported by decoders of Data Sets." It is why this slice's Implicit-VR
+  fixtures use the undefined-length form, and it wants its own slice ahead of further parser work.
 - **Em-dash brand gate armed.** `scripts/check-no-emdash.sh` (`pnpm check:no-emdash`) plus
   `.github/workflows/no-emdash.yml` enforce the founder directive banning `U+2014` outright
   (`knowledgebase/06-brand/voice-and-tone.md`, "No em dashes. Ever."). It scans **both** halves the

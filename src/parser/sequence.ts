@@ -14,11 +14,15 @@
  *     warning fires from the per-TS strategy, NOT from inside parseSequence
  *     because Implicit-LE-undefined-length-SQ is the spec-default form for
  *     that TS).
- *   - D-30 - CP-246 fallback: when `VR=UN` AND `length=0xFFFFFFFF` under
- *     Explicit VR, attempt SQ descent using **Implicit VR LE inner
- *     encoding**. On success → promote element to `VR=SQ` + emit
- *     `DICOM_UN_PARSED_AS_SQ`. On failure → restore state + NO warning.
- *     Implemented as `tryParseUnAsSQ`.
+ *   - D-30 - CP-246 fallback: when `VR=UN` AND `length=0xFFFFFFFF`, attempt
+ *     SQ descent using **Implicit VR LE inner encoding**. On success →
+ *     promote element to `VR=SQ` + emit `DICOM_UN_PARSED_AS_SQ`. On failure →
+ *     restore state + NO warning. Implemented as `tryParseUnAsSQ`, and called
+ *     from **both** the Explicit VR strategies (where `UN` is declared on the
+ *     wire) and `parseImplicitLE` (where `UN` is what VR resolution returned,
+ *     typically for a private element whose Data Set claimed no block). Under
+ *     Implicit VR LE the alternative is a Tier-3 fatal on the whole object,
+ *     which PS3.5 section 7.5.1 does not license for a readable Data Set.
  *   - D-31 - Encapsulated pixel data (`(7FE0,0010) VR=OB length=0xFFFFFFFF`):
  *     each FFFE,E000 item is a fragment (Phase 2 records the structure as
  *     empty Items; Phase 4 surfaces fragments + Basic Offset Table via
@@ -168,6 +172,35 @@ export function parseSequence(
     }
   };
 
+  // Private block reservations are scoped to one Data Set, and an Item is one.
+  // PS3.5 section 7.5.1: "Each Item Value shall contain a DICOM Data Set
+  // composed of Data Elements", and it closes by delegating to section 7.8 for
+  // "rules for incorporating Private Data Elements into Sequence Items". There,
+  // a Private Creator Data Element `(gggg,0010-00FF)` "shall be used to reserve
+  // a block of Elements with Group Number gggg", and Note 1 spells the nesting
+  // case out: a private Sequence Data Element may carry repeated Private Data
+  // Elements in separate items, and "Each item needs to claim the corresponding
+  // private block of Elements".
+  //
+  // So an Item starts with NO reservations, not with the enclosing Data Set's:
+  // it does not inherit them, its own must not leak to a sibling item, and they
+  // must not leak back to the parent once the sequence closes. Unlike charset,
+  // which items DO inherit, this is a fresh empty map per item.
+  //
+  // The direction of the failure is what makes this a parser defect and not a
+  // tidiness one: the map feeds `resolveImplicitVR`, so a creator resolved from
+  // the wrong Data Set yields the wrong VR for the same bytes - a value decoded
+  // as something the file does not say. Degrading to UN plus
+  // `DICOM_PRIVATE_TAG_NO_CREATOR` is the fail-safe direction and the one an
+  // unclaimed block gets, matching how `deidentify()` scopes the same rule.
+  const parentCreators = ctx.creators;
+  const restoreParentCreators = (): void => {
+    ctx.creators = parentCreators;
+  };
+  const beginItemCreatorScope = (): void => {
+    ctx.creators = new Map<number, Map<number, string>>();
+  };
+
   try {
     const cursor = new ByteCursor(buffer, opts.littleEndian, valueStart);
     const items: Item[] = [];
@@ -243,8 +276,10 @@ export function parseSequence(
       }
 
       // Reset to the parent charset before each item so an item's own
-      // (0008,0005) cannot leak to its siblings.
+      // (0008,0005) cannot leak to its siblings, and give the item an empty
+      // reservation map of its own for the same reason (PS3.5 section 7.8.1).
       restoreParentCharset();
+      beginItemCreatorScope();
       if (itemLength === UNDEFINED_LENGTH) {
         // Undefined-length item - call innerStrategy with stopOnItemDelim;
         // it returns the post-ItemDelim offset.
@@ -276,14 +311,19 @@ export function parseSequence(
     ctx.nestingDepth -= 1;
     ctx.encodingContextStack.pop();
     restoreParentCharset();
+    restoreParentCreators();
   }
 }
 
 /**
- * CP-246 fallback per D-30. When an Explicit-VR element has `VR=UN` AND
+ * CP-246 fallback per D-30. When an element has `VR=UN` AND
  * `length=0xFFFFFFFF`, attempt to descend the bytes as Implicit VR LE SQ
  * items. On any failure, restore parser state (warnings, nestingDepth,
  * encodingContextStack) and signal failure to the caller.
+ *
+ * Called from every structural strategy, not only the Explicit VR ones: under
+ * Implicit VR LE the `UN` is *resolved* rather than declared, which is what a
+ * private element gets when its own Data Set never claimed the block.
  *
  * On success, emits `DICOM_UN_PARSED_AS_SQ` and returns the items array
  * + the post-descent endOffset (relative to the OUTER buffer's
