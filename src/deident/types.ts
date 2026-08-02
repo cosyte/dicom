@@ -246,7 +246,8 @@ export interface UnauditableSequenceFinding {
  * finding rather than an inconsistency.
  *
  * `byteOffset` locates the element instead - a position this parser counted.
- * Every field here is therefore structural, and this finding is safe to log.
+ * Nothing here renders a document byte: an offset the parser counted, a decoded
+ * length, and the structural `contextPath`. Safe to log.
  *
  * @example
  * ```ts
@@ -264,7 +265,18 @@ export interface UndefinedVrFinding {
    * a fabricated header's tag bytes are part of some element's value.
    */
   readonly byteOffset: number;
-  /** Byte length of the value field that was dropped. Structural, never a value. */
+  /**
+   * Byte length of the value field that was dropped.
+   *
+   * **An input-derived count, and on this finding specifically that is not a
+   * formality.** For the sibling findings the length came from a header the
+   * sender wrote; here the two length bytes can themselves be value bytes, like
+   * the tag bytes. What is published is the *number* they decode to, never the
+   * bytes - the same footing as every `{n}` in the warning registry, which is
+   * documented there as "an input-derived count". A number is not a rendering,
+   * and the reach is at most a character or so, but do not describe this field
+   * as "structural, never a value" the way its siblings are described.
+   */
   readonly byteLength: number;
   /** Tag/index chain when the carrier is inside a sequence item; omitted at the root. */
   readonly contextPath?: readonly string[];
@@ -330,8 +342,8 @@ export interface DeidentifyReport {
    * file **cannot** - there the VR comes from the dictionary. The edition is not
    * pedantry: §6.2 exists precisely to say how a *future* VR will be encoded, so
    * a file conformant to a later edition using a newly defined VR would trip
-   * this. It would also fail to parse here long before reaching `deidentify()`,
-   * because this build reads an unrecognized VR short-form. A non-empty array
+   * this. (What such a file does on the parse path varies by shape and is
+   * deliberately not summarized here.) A non-empty array
    * means the source desynchronized the reader, usually by under-declaring a
    * Value Length somewhere earlier. See {@link UndefinedVrFinding}.
    *

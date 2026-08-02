@@ -52,9 +52,9 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   **The root cause is a parse behaviour this slice does not touch, and it is disclosed rather than
   implied fixed.** §6.2's note says informatively that an unrecognized VR may be handled "by applying
   the rules stated in [§7.1.2]" - i.e. read long-form, value copied unchanged. This parser reads it
-  **short-form**, so a §6.2-conformant future-VR element is a fatal parse here, on both trees.
-  Emptying at the de-identify boundary is compensation, not conformance. `PRE-EXISTING`, its own
-  slice.
+  **short-form**. Emptying at the de-identify boundary is therefore compensation, not conformance.
+  `PRE-EXISTING`, its own slice. No claim is made here about what a §6.2-conformant future-VR file
+  does on either tree.
 
   **Still leaking, measured, and now priced:** the 11 remaining cells are the over-declare swallow
   into a **binary** carrier at `delta=18`. The one candidate remedy was built and measured - it

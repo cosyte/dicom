@@ -78,10 +78,15 @@
   §6.2's **note** (informative) says an implementation "may choose to ignore VRs not recognized by
   applying the rules stated in [§7.1.2]" and that such an element's value "may be copied unchanged"
   - i.e. the standard treats it as a real Data Element with a real Value, read **long-form**. This
-    parser reads an unrecognized VR **short-form**, so a §6.2-conformant _future-VR_ element (long
-    form, reserved bytes, 32-bit VL) is a **fatal parse on both trees** (`INVALID_FILE_META`).
-    Emptying at the de-identify boundary is **compensation, not conformance**. `PRE-EXISTING`. Do not
-    quote the note as support for this rule; the "shall" in §6.2's body is what supports it.
+    parser reads an unrecognized VR **short-form**. Emptying at the de-identify boundary is therefore
+    **compensation, not conformance**. `PRE-EXISTING`. Do not quote the note as support for this rule;
+    the "shall" in §6.2's body is what supports it.
+    **DO NOT SUMMARIZE WHAT A §6.2-CONFORMANT FUTURE-VR FILE DOES HERE WITHOUT MEASURING EACH
+    SHAPE.** Pass 2 refuted exactly that sentence: a long-form future-VR element with **VL = 0**
+    parses fine on both trees (and then desynchronizes the reader, which this slice's rule catches);
+    a non-empty one throws. One clause covering both was wrong. **Re-wording a disclosure twice is
+    the signal to delete it rather than try a third time** - that is why it is gone rather than
+    fixed.
     **▶ COST, PUBLISHED: 23 cells lose a marker from de-identified output, 15 of which were NOT
     leaking.** On a file conformant to **PS3.5 2026c** it is **zero** - the
     `DICOM-DEIDENT-OVER-REDACTION` trade does not recur here, because no such Explicit VR file and no

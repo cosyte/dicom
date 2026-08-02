@@ -214,7 +214,12 @@ describe("DICOM-CARRIER-LEAF-LEAKS: an on-wire VR that is not a VR", () => {
     expect(w?.message).not.toContain(NAME_DERIVED_TAG);
     expect(w?.message).not.toContain("THSO");
     expect(w?.message).not.toContain(PATIENT_ID);
-    expect(w?.message).not.toContain("E ");
+    // THIS fixture's fabricated VR bytes, read off the parse rather than copied
+    // from the benign fixture - they are `"N "` here, not the `"E "` that
+    // `CARRIER_VALUE` produces, and asserting the wrong pair proves nothing.
+    const fabricatedVr = parseDicom(raw).get(NAME_DERIVED_TAG)?.vr;
+    expect(fabricatedVr).toBe("N ");
+    expect(w?.message).not.toContain(fabricatedVr);
     // Still locatable: the byte offset is a position the parser counted.
     expect(w?.message).toContain(String(w?.position.byteOffset));
   });
