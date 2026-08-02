@@ -50,28 +50,60 @@
   **▶ THE RECORD IS CAPPED AT 64 PER RUN, THE EMPTYING NEVER IS, AND THE AMPLIFICATION IS WORSE
   THAN `#54`'s.** An undefined-VR element is short-form, so the cheapest one an input can encode is
   an **8-byte header with a zero-length value**: 1 MiB is 131,072 of them. Budget on
-  `DeidentifyContext`, not `ProcessResult` (which is per Data Set). The warning omits the VR bytes -
-  they are input, emitted once per element. Its `byteLength` maxes at **65,534**, and that number is
+  `DeidentifyContext`, not `ProcessResult` (which is per Data Set). The warning omits the tag and
+  the VR - both are input, emitted once per element. Its `byteLength` maxes at **65,534**, and that number is
   itself the §6.2 contradiction the rule rests on.
+  **▶ 🩺 THE GATE'S BLOCKER, AND IT IS THE ONE TO REMEMBER: THE DIAGNOSTIC REPUBLISHED THE PHI IT
+  WAS RAISED ABOUT.** The first draft put `el.tag` into `report.undefinedVrElements[].tag` **and**
+  into the warning message, under its own written claim "Both fields are structural... Safe to log",
+  with a `console.warn` example shipped in the JSDoc. But the condition that raises this code is
+  precisely that **the header was fabricated out of the middle of a value** - so those four tag
+  bytes are document content. Measured by the refuter on an `ST` carrier holding
+  `"MR BRAIN SMITHSON"`: the tag renders `48544F53`, i.e. `"THSO"` in wire order, four letters of
+  the surname. **`renderTag` validates a tag's SHAPE and therefore cannot refuse one**, unlike
+  `renderVr` which checks a closed set - so `WarningTokens`' "structural by construction" property
+  holds for every other factory in the package and had to be kept **at the call site** here. Remedy:
+  no tag on either channel; `byteOffset` identifies the element and is a count the parser kept.
+  **And the test was vacuous by fixture**: the carrier value was the benign `"CARRIER-VALUE"`, whose
+  leftover bytes are `"VALU"`, so `expect(message).not.toContain(PATIENT_ID)` could not fail either
+  way. The tests now run on a name-bearing payload and a mutation control (re-adding the tag) turns
+  three of them red. **The lesson generalizes past this code: when a diagnostic's trigger IS "these
+  bytes are not what they claim to be", the fields naming the element are input.**
   New surface: `UndefinedVrFinding`, `DeidentifyReport.undefinedVrElements`,
   `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` (**28 Tier-2 codes, was 27**),
   `MAX_UNDEFINED_VR_FINDINGS`. `isScannableCarrier` **lost** its "VR not one of the 34" disjunct: the
   new rule empties such an element before the scan is reached, and conditioning the answer on a
   tiling run was the defect - an undefined-VR element whose bytes did not tile was kept.
-  **▶ COST, PUBLISHED: 23 cells lose a marker from de-identified output, 15 of which were NOT
-  leaking.** On a conformant file it is **zero** - the `DICOM-DEIDENT-OVER-REDACTION` trade does not
-  recur here, because no conformant Explicit VR file and no Implicit VR file can produce one.
-  **▶ 🩺 STILL LEAKING, AND NOW PRICED RATHER THAN JUST DISCLOSED: the 11 at `delta=18`.** The
-  over-declare swallow into `OB`/`OW`/`US`/`UN`, silent, `LO`/`ST` controls at 0. **The obvious
-  remedy was BUILT AND MEASURED, not argued about**: dropping the repertoire conjunct for binary VRs
-  takes 11 → 0 **and empties all 5 conformant binary tiling controls** - a de-identifier deleting a
-  legal `OB`/`UN` value because 8 of its bytes read as a zero-length `(0010,0020)`. That is a
-  product call of the `DICOM-DEIDENT-OVER-REDACTION` shape, not a bug fix, and it needs its own
-  item. The grid gained `LEGIT_TILING_CARRIERS` + a `conformant tiling control emptied` counter to
-  make it a number. **Stride-0 VRs only**: `buildDicom` byte-swaps `OW`/`US` under Explicit BE, and
-  a first draft that included them read **9** emptied rows where the honest number is **6** - a
-  fixture artifact reported as a finding is the failure mode, and it was caught by asking why a
-  binary row moved.
+  **▶ 🩺 THE ROOT CAUSE IS A PARSE BEHAVIOUR THIS SLICE DOES NOT TOUCH, AND IT IS ITS OWN ITEM.**
+  §6.2's **note** (informative) says an implementation "may choose to ignore VRs not recognized by
+  applying the rules stated in [§7.1.2]" and that such an element's value "may be copied unchanged"
+  - i.e. the standard treats it as a real Data Element with a real Value, read **long-form**. This
+    parser reads an unrecognized VR **short-form**, so a §6.2-conformant _future-VR_ element (long
+    form, reserved bytes, 32-bit VL) is a **fatal parse on both trees** (`INVALID_FILE_META`).
+    Emptying at the de-identify boundary is **compensation, not conformance**. `PRE-EXISTING`. Do not
+    quote the note as support for this rule; the "shall" in §6.2's body is what supports it.
+    **▶ COST, PUBLISHED: 23 cells lose a marker from de-identified output, 15 of which were NOT
+    leaking.** On a file conformant to **PS3.5 2026c** it is **zero** - the
+    `DICOM-DEIDENT-OVER-REDACTION` trade does not recur here, because no such Explicit VR file and no
+    Implicit VR file can produce one. Say the edition: §6.2 exists to describe a _future_ VR.
+    **▶ 🩺 STILL LEAKING, AND NOW PRICED RATHER THAN JUST DISCLOSED: the 11 at `delta=18`.** The
+    over-declare swallow into `OB`/`OW`/`US`/`UN`, silent, `LO`/`ST` controls at 0. **The obvious
+    remedy was BUILT AND MEASURED, not argued about**: dropping the repertoire conjunct for binary VRs
+    takes 11 → 0 **and empties all 5 conformant binary tiling controls** - a de-identifier deleting a
+    legal `OB`/`UN` value because 8 of its bytes read as a zero-length `(0010,0020)`. That is a
+    product call of the `DICOM-DEIDENT-OVER-REDACTION` shape, not a bug fix, and it needs its own
+    item. The grid gained `LEGIT_TILING_CARRIERS` + a `conformant tiling control emptied` counter to
+    make it a number. **Stride-0 VRs only**: `buildDicom` byte-swaps `OW`/`US` under Explicit BE, and
+    a first draft that included them read **9** emptied rows where the honest number is **6** - a
+    fixture artifact reported as a finding is the failure mode, and it was caught by asking why a
+    binary row moved.
+    **Other disclosed residuals, all `PRE-EXISTING` and none fixed here:** an **odd-group** fabricated
+    tag reaches `report.removedPrivateTags` on **both** trees (measured `["4D535449"]` = `"SMIT"`), so
+    the "value-free apart from `uidMap`" claim on the report was already imprecise before this slice -
+    the even-group half and the log-message channel were this slice's to fix and are fixed, that one
+    is not. And an emptied undefined-VR element is **re-emitted** as a short-form element with an
+    undefined VR, violating the same §6.2 sentence, inside output stamped `PatientIdentityRemoved=YES`
+    (base emitted the same shape with a value attached, so not introduced).
 - **De-identification refuses to keep a sequence it could not walk**
   (`DICOM-DEIDENT-RAWBYTES-PASSTHROUGH`, closed after `0.0.6`). **This was the larger half of the
   2,127 and it was never the same defect as the entry below.** A defined-length Implicit VR LE value

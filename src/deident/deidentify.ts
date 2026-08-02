@@ -499,14 +499,17 @@ function emptyUndefinedVrElement(
   // independently and not the file.
   if (ctx.budget.undefinedVrElements >= MAX_UNDEFINED_VR_FINDINGS) return;
   ctx.budget.undefinedVrElements += 1;
+  // NO TAG on either channel, and this is the one refusal in the module that is
+  // about the diagnostic rather than the data. `el.tag` here was composed from
+  // four bytes the reader found mid-value, so it is document content, not a
+  // structural field - see `UndefinedVrFinding`. The byte offset identifies the
+  // element and is a position this parser counted.
   out.undefinedVrElements.push({
-    tag: el.tag,
+    byteOffset: el.byteOffset,
     byteLength: el.rawBytes.length,
     ...(contextPath.length > 0 ? { contextPath: [...contextPath] } : {}),
   });
-  out.warnings.push(
-    undefinedVrNotAuditable({ byteOffset: el.byteOffset }, el.tag, el.rawBytes.length),
-  );
+  out.warnings.push(undefinedVrNotAuditable({ byteOffset: el.byteOffset }, el.rawBytes.length));
 }
 
 /**

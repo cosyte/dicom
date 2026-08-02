@@ -233,21 +233,37 @@ export interface UnauditableSequenceFinding {
  * and the CP-246 shape - never reaches here. That is the line the sibling
  * `SQ`-with-no-items rule could not draw.
  *
- * Both fields are structural: no decoded value, and **not the VR bytes either**,
- * which are input. Safe to log.
+ * ## Why this finding names no tag, when every sibling finding does
+ *
+ * Because when this fires, **the tag is content**. The paragraph above is the
+ * whole argument: the four tag bytes and the two VR bytes were read out of the
+ * middle of some element's Value Field, so reporting the "tag" would republish
+ * four bytes of the document. Measured on a synthetic `ST` carrier holding
+ * `"MR BRAIN SMITHSON"`, the fabricated tag is `48544F53` - four bytes of the
+ * surname. {@link EmbeddedAttributeFinding} and
+ * {@link UnauditableSequenceFinding} may carry a tag because theirs came from a
+ * header the sender really wrote; this one may not, and the asymmetry is the
+ * finding rather than an inconsistency.
+ *
+ * `byteOffset` locates the element instead - a position this parser counted.
+ * Every field here is therefore structural, and this finding is safe to log.
  *
  * @example
  * ```ts
  * import { deidentify, parseDicom } from "@cosyte/dicom";
  * const { report } = deidentify(parseDicom(buf));
  * for (const u of report.undefinedVrElements) {
- *   console.warn(`${u.tag}: ${String(u.byteLength)} bytes dropped, VR is not a VR`);
+ *   console.warn(`offset ${String(u.byteOffset)}: ${String(u.byteLength)} bytes dropped`);
  * }
  * ```
  */
 export interface UndefinedVrFinding {
-  /** The element that was emptied. Composed from the header's four tag bytes. */
-  readonly tag: Tag;
+  /**
+   * Byte offset of the emptied element's header. **This is how the element is
+   * identified, and there is deliberately no `tag` field** - see the note above:
+   * a fabricated header's tag bytes are part of some element's value.
+   */
+  readonly byteOffset: number;
   /** Byte length of the value field that was dropped. Structural, never a value. */
   readonly byteLength: number;
   /** Tag/index chain when the carrier is inside a sequence item; omitted at the root. */
@@ -309,9 +325,13 @@ export interface DeidentifyReport {
    * Elements emptied because their on-wire VR is not one of the 34 PS3.5 §6.2
    * defines, so their bytes are not a Value Field this library decoded and
    * PS3.15 §E.1.1's obligation over what is inside them could not be discharged.
-   * Empty on a well-formed file: an Explicit VR sender that writes a defined VR
-   * never produces one, and an Implicit VR LE file **cannot** - there the VR
-   * comes from the dictionary, so it is always one of the 34. A non-empty array
+   * Empty on a file conformant to **PS3.5 2026c**: a sender that writes one of
+   * the 34 VRs that edition defines never produces one, and an Implicit VR LE
+   * file **cannot** - there the VR comes from the dictionary. The edition is not
+   * pedantry: §6.2 exists precisely to say how a *future* VR will be encoded, so
+   * a file conformant to a later edition using a newly defined VR would trip
+   * this. It would also fail to parse here long before reaching `deidentify()`,
+   * because this build reads an unrecognized VR short-form. A non-empty array
    * means the source desynchronized the reader, usually by under-declaring a
    * Value Length somewhere earlier. See {@link UndefinedVrFinding}.
    *
@@ -320,6 +340,11 @@ export interface DeidentifyReport {
    * carry over a hundred thousand such elements, so this array and its matching
    * warnings stop at `MAX_UNDEFINED_VR_FINDINGS`. Every one of them is still
    * emptied; an array exactly that long means "at least this many".
+   *
+   * **A finding here names a byte offset, not a tag** - uniquely among the
+   * report's findings, and for a reason worth reading in
+   * {@link UndefinedVrFinding}: the tag of a fabricated header is itself part of
+   * some element's value.
    *
    * Unlike its sibling this list has **no carve-out**, and the reason is
    * structural rather than a promise: `keepOrEmpty` is the **only** path that

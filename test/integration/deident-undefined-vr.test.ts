@@ -80,6 +80,24 @@ const FABRICATED_TAG: Tag = "4156554C";
 /** The carrier payload whose 6-byte tail becomes {@link FABRICATED_TAG}'s header. */
 const CARRIER_VALUE = "CARRIER-VALUE";
 
+/**
+ * A carrier payload whose 6-byte tail is **a patient's surname**, so the header
+ * the under-declare fabricates is made of exactly the bytes a diagnostic must
+ * not republish. Under-declared by 6, the leftover bytes are `"THSON "`, giving
+ * the fabricated tag `48544F53` - four letters of the name.
+ *
+ * The benign {@link CARRIER_VALUE} above cannot express that: its leftover bytes
+ * are `"VALUE "`, so a diagnostic that echoed them would still look clean. A
+ * fixture that cannot show the leak measures nothing - the vacuity class this
+ * repo has now been caught by twice, and the reason the first version of this
+ * file shipped a PHI echo past its own `not.toContain` assertion.
+ */
+const NAME_CARRIER_VALUE = "MR BRAIN SMITHSON";
+/** The surname whose bytes {@link NAME_CARRIER_VALUE} puts into the fabricated header. */
+const SURNAME = "SMITHSON";
+/** What the fabricated tag renders as for {@link NAME_CARRIER_VALUE}: `"THSO"` in wire order. */
+const NAME_DERIVED_TAG = "48544F53";
+
 function ascii(text: string): Buffer {
   const buf = Buffer.from(text, "latin1");
   return buf.length % 2 === 0 ? buf : Buffer.concat([buf, Buffer.from([0x20])]);
@@ -90,14 +108,19 @@ function ascii(text: string): Buffer {
  * the reader so that the `(0010,0020)` that follows is read as the value of a
  * fabricated element instead of as itself.
  */
-function underDeclare(carrier: Tag, vr: VR, transferSyntax = TS_EXPLICIT_LE): Buffer {
+function underDeclare(
+  carrier: Tag,
+  vr: VR,
+  transferSyntax = TS_EXPLICIT_LE,
+  payload = CARRIER_VALUE,
+): Buffer {
   return buildDicom({
     transferSyntax,
     mediaStorageSOPClassUID: "1.2.840.10008.5.1.4.1.1.2",
     mediaStorageSOPInstanceUID: "1.2.826.0.1.3680043.10.1338.1",
     elements: [
       { tag: "00100010", vr: "PN" as VR, value: ascii(ROOT_NAME) },
-      { tag: carrier, vr, value: ascii(CARRIER_VALUE), declaredLengthDelta: -6 },
+      { tag: carrier, vr, value: ascii(payload), declaredLengthDelta: -6 },
       { tag: PATIENT_ID_TAG, vr: "LO" as VR, value: ascii(PATIENT_ID) },
     ],
   });
@@ -137,22 +160,63 @@ describe("DICOM-CARRIER-LEAF-LEAKS: an on-wire VR that is not a VR", () => {
     expect(dataset.get(FABRICATED_TAG)?.rawBytes).toHaveLength(0);
   });
 
-  it("reports the carrier and the bytes dropped, and no value", () => {
-    const { report } = deidentify(parseDicom(underDeclare(LO_CARRIER, "LO")));
-    expect(report.undefinedVrElements).toEqual([{ tag: FABRICATED_TAG, byteLength: 16 }]);
+  it("reports the byte offset and the bytes dropped, and NO tag", () => {
+    const ds = parseDicom(underDeclare(LO_CARRIER, "LO"));
+    const offset = ds.get(FABRICATED_TAG)?.byteOffset;
+    expect(offset).toBeGreaterThan(0);
+    const { report } = deidentify(ds);
+    expect(report.undefinedVrElements).toEqual([{ byteOffset: offset, byteLength: 16 }]);
   });
 
-  it("warns with a message that names neither the value nor the VR bytes", () => {
-    const { report } = deidentify(parseDicom(underDeclare(LO_CARRIER, "LO")));
+  // -------------------------------------------------------------------------
+  // The diagnostic must not republish the bytes it was raised about.
+  //
+  // These run on NAME_CARRIER_VALUE, whose leftover bytes ARE the surname. On
+  // the benign payload the same assertions pass against an implementation that
+  // echoes the tag - which is exactly what the first version of this file did,
+  // shipping a PHI echo straight past its own `not.toContain`. A fixture that
+  // cannot express the leak measures nothing.
+  // -------------------------------------------------------------------------
+
+  it("the fabricated tag really is made of the patient's surname", () => {
+    // The precondition. Without it the two tests below are decoration.
+    const ds = parseDicom(underDeclare(ST_CARRIER, "ST", TS_EXPLICIT_LE, NAME_CARRIER_VALUE));
+    expect(ds.get(NAME_DERIVED_TAG as Tag)).toBeDefined();
+    // The tag's two 16-bit halves are written little-endian, so the four bytes
+    // on the wire are "THSO" - four letters out of the middle of the surname.
+    const group = Buffer.from(NAME_DERIVED_TAG.slice(0, 4), "hex").reverse().toString("latin1");
+    const element = Buffer.from(NAME_DERIVED_TAG.slice(4), "hex").reverse().toString("latin1");
+    expect(SURNAME).toContain(group + element);
+  });
+
+  it("puts no part of the surname in report.undefinedVrElements", () => {
+    const { report } = deidentify(
+      parseDicom(underDeclare(ST_CARRIER, "ST", TS_EXPLICIT_LE, NAME_CARRIER_VALUE)),
+    );
+    expect(report.undefinedVrElements).toHaveLength(1);
+    // Whatever fields the finding grows, none may render as those bytes.
+    const rendered = JSON.stringify(report.undefinedVrElements);
+    expect(rendered).not.toContain(NAME_DERIVED_TAG);
+    expect(rendered).not.toContain("THSO");
+  });
+
+  it("warns with a message that names no tag, no VR and no value", () => {
+    const raw = underDeclare(ST_CARRIER, "ST", TS_EXPLICIT_LE, NAME_CARRIER_VALUE);
+    const { report } = deidentify(parseDicom(raw));
     const w = report.warnings.find(
       (x) => x.code === WARNING_CODES.DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE,
     );
     expect(w).toBeDefined();
-    expect(w?.message).toContain(FABRICATED_TAG);
+    // Every other warning in this package names its element by tag. This one may
+    // not: the tag is four bytes of the surname, and `renderTag` validates a
+    // tag's SHAPE so it cannot refuse one - the withholding has to happen at the
+    // call site, which is what this pins.
+    expect(w?.message).not.toContain(NAME_DERIVED_TAG);
+    expect(w?.message).not.toContain("THSO");
     expect(w?.message).not.toContain(PATIENT_ID);
-    // The VR field is two bytes the sender chose. Echoing them back into a log
-    // line that is emitted once per element is the thing `#48` bound.
     expect(w?.message).not.toContain("E ");
+    // Still locatable: the byte offset is a position the parser counted.
+    expect(w?.message).toContain(String(w?.position.byteOffset));
   });
 
   // -------------------------------------------------------------------------
@@ -253,7 +317,9 @@ describe("DICOM-CARRIER-LEAF-LEAKS: an on-wire VR that is not a VR", () => {
       retain: ["RetainSafePrivate"],
       profile,
     });
-    expect(report.undefinedVrElements).toEqual([{ tag: "00091001", byteLength: 10 }]);
+    expect(report.undefinedVrElements).toEqual([
+      { byteOffset: parsed.get("00091001")?.byteOffset, byteLength: 10 },
+    ]);
     expect(dataset.get("00091001")?.rawBytes).toHaveLength(0);
     expect(serializeDicom(dataset).toString("latin1")).not.toContain(PATIENT_ID);
   });

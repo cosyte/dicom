@@ -30,8 +30,14 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   its bytes are not a Value Field this library decoded under any VR and PS3.15 2026c §E.1.1's
   obligation cannot be discharged inside them. Read from the vendored SHA-pinned documents, pins
   re-derived, each sentence unique in its document. Such an element is **emptied**,
-  `report.undefinedVrElements` names the tag and the byte length dropped, and the new
-  `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` is raised. The test is a set-membership check on
+  `report.undefinedVrElements` names the **byte offset** and the byte length dropped, and the new
+  `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` is raised. **The finding names no tag, uniquely among
+  the report's findings**: the condition that raises it is that the header was fabricated out of the
+  middle of some element's value, so its four tag bytes are document content - on a synthetic `ST`
+  carrier holding `"MR BRAIN SMITHSON"` the tag renders as `48544F53`, four letters of the surname.
+  `renderTag` shape-checks a tag and cannot refuse one, so the withholding happens at the call site.
+  An undefined-VR carrier whose bytes happened to tile was reported in `report.embeddedAttributes`
+  before and now reports here instead. The test is a set-membership check on
   `el.vr`: O(1), **no scan**. The record is **capped at 64 across the run** and the emptying never is
   - an undefined-VR element costs an attacker only an 8-byte header, so 1 MiB is 131,072 of them.
 
@@ -41,7 +47,14 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   LE at all, where the VR comes from the dictionary; 0 Implicit VR LE cells moved.
 
   **Cost, published rather than described:** 23 grid cells lose a marker from de-identified output,
-  **15 of which were not leaking**. On a conformant file the cost is zero.
+  **15 of which were not leaking**. On a file conformant to PS3.5 2026c the cost is zero.
+
+  **The root cause is a parse behaviour this slice does not touch, and it is disclosed rather than
+  implied fixed.** §6.2's note says informatively that an unrecognized VR may be handled "by applying
+  the rules stated in [§7.1.2]" - i.e. read long-form, value copied unchanged. This parser reads it
+  **short-form**, so a §6.2-conformant future-VR element is a fatal parse here, on both trees.
+  Emptying at the de-identify boundary is compensation, not conformance. `PRE-EXISTING`, its own
+  slice.
 
   **Still leaking, measured, and now priced:** the 11 remaining cells are the over-declare swallow
   into a **binary** carrier at `delta=18`. The one candidate remedy was built and measured - it
