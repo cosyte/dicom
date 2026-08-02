@@ -75,6 +75,7 @@ export const WARNING_CODES = {
   // === Reserved by later phases (declared, not emitted in Phase 2) ===
   DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED: "DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED", // reserved by Phase 7 - not emitted in Phase 2
   DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED: "DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED", // emitted by deidentify(), never by the parser
+  DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE: "DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE", // emitted by deidentify(), never by the parser
   DICOM_PRIVATE_CREATOR_UNKNOWN: "DICOM_PRIVATE_CREATOR_UNKNOWN", // reserved by Phase 6 - not emitted in Phase 2
 } as const;
 
@@ -166,7 +167,7 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   DICOM_NONZERO_RESERVED_BYTES:
     "Element ({tag}) has non-zero reserved bytes between VR and length (first byte {n}, second byte {n2}); ignoring.",
   DICOM_SQ_NOT_DESCENDED:
-    "Element ({tag}) resolved to VR=SQ from the dictionary but its defined-length value is not a valid item stream; kept as opaque bytes and NOT descended, so nothing nested inside it is visible to navigation or de-identification.",
+    "Element ({tag}) resolved to VR=SQ from the dictionary but its defined-length value is not a valid item stream; kept as opaque bytes and NOT descended, so nothing nested inside it is visible to navigation. deidentify() cannot audit such a value and empties the element rather than keeping it.",
   DICOM_UN_PARSED_AS_SQ:
     "Element ({tag}) has VR=UN with undefined length; descended as Implicit VR LE sequence per CP-246.",
   DICOM_EMPTY_ITEM_IN_SEQUENCE: "Sequence ({tag}) contains an empty item (length=0); tolerated.",
@@ -180,6 +181,8 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
     "Pixel Data is present and Burned In Annotation is not 'NO'; this metadata-only de-identifier cannot inspect or clean pixels. Recognizable text may remain burned into the image.",
   DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED:
     "Element ({tag}) {vr} was kept by the action table, but its value ends with {n} whole Data Element(s) - an over-declared Value Length swallowed what followed it. Emptied rather than kept, because the action table cannot see an attribute encoded inside a value. Read report.embeddedAttributes for the tags that were hidden there.",
+  DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE:
+    "Element ({tag}) is VR=SQ but the parser did not materialize its items, so its {n} value bytes are an item stream this run cannot walk. PS3.5 section 7.5.1 makes those bytes Data Sets composed of Data Elements, and PS3.15 section E.1.1 obliges a de-identifier to reach the listed Attributes inside them; keeping them verbatim would ship un-audited Data Elements out of a dataset marked Patient Identity Removed. Emptied to a zero-item Sequence. Read report.unauditableSequences for the tags, and ds.warnings for why the parse refused.",
   DICOM_BOM_IN_TEXT_VR: "Element ({tag}) {vr} value begins with a UTF-8 BOM; stripped on decode.",
   DICOM_TRAILING_NULL_IN_TEXT_VR:
     "Element ({tag}) {vr} value has a trailing NULL pad where SPACE is expected; trimmed.",
@@ -472,7 +475,12 @@ export function unParsedAsSQ(position: DicomPosition, tag: Tag): DicomParseWarni
  * It is a warning rather than silence for the opposite reason: an undescended
  * sequence is invisible to `deidentify()`, which recurses only into a sequence
  * whose `items` the parser materialized. A caller that is about to share the
- * file needs to be told the audit did not reach inside this element.
+ * file needs to be told the audit did not reach inside this element - and
+ * `deidentify()` needs to be told too, which is why it now **empties** such an
+ * element rather than passing its bytes through
+ * (`DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE`). The warning is what makes the
+ * lost content attributable to the sender's own encoding rather than a
+ * silent drop.
  *
  * @example
  * ```ts
@@ -602,6 +610,46 @@ export function embeddedAttributeRemoved(
     tag,
     vr,
     n: count,
+  });
+}
+
+/**
+ * Build a `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` warning. Emitted by
+ * `deidentify()` - never by the parser - when an `SQ` element the run was about
+ * to **keep** carries no materialized `items`, so its value is an item stream
+ * the de-identifier cannot walk.
+ *
+ * The shape that reaches it is announced by the parser first: a defined-length
+ * Implicit VR LE value whose dictionary-resolved `SQ` was not a valid item
+ * stream (`DICOM_SQ_NOT_DESCENDED`). PS3.5 section 7.5.1 says those bytes are
+ * "a DICOM Data Set composed of Data Elements" and PS3.15 section E.1.1 obliges
+ * the de-identifier to protect the listed Attributes "whether contained in the
+ * top level Data Set or embedded in an Item of a Sequence of Items". Unable to
+ * enumerate them, it empties the carrier.
+ *
+ * **It does NOT cover the CP-246 `UN` shape, and that is a deliberate line.** An
+ * undefined-length `UN` whose descent was refused keeps `vr === "UN"`, and every
+ * ordinary `UN` element also has `items === undefined`, so the same test applied
+ * there would empty every unknown-VR element in every file. Distinguishing a
+ * refused descent from a plain `UN` needs a mark the parser does not currently
+ * set. Measured, still leaking, and disclosed rather than guessed at.
+ *
+ * `tag` is this parser's own composed structural field and `n` is the value's
+ * byte length; no decoded value travels through the message.
+ *
+ * @example
+ * ```ts
+ * const w = sequenceNotAuditable({ byteOffset: 320 }, "00081115", 48);
+ * ```
+ */
+export function sequenceNotAuditable(
+  position: DicomPosition,
+  tag: Tag,
+  byteLength: number,
+): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE, position, {
+    tag,
+    n: byteLength,
   });
 }
 

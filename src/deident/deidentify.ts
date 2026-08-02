@@ -44,15 +44,26 @@
  * - A private data element kept under `RetainSafePrivate` is kept *verbatim* - if
  *   it is itself a sequence carrying standard PHI attributes, that nested content
  *   is not recursed. The profile vouches the element is safe; nest accordingly.
- * - A sequence whose `items` the parser did not materialize is kept verbatim
- *   rather than recursed, so any nested listed attributes are not de-identified.
- *   That is now a **narrow and announced** set: an undefined-length `UN` value the
- *   CP-246 descent could not read as a sequence, and a defined-length Implicit VR
- *   LE value whose resolved `SQ` turned out not to be an item stream - the latter
- *   carrying `DICOM_SQ_NOT_DESCENDED` on `ds.warnings`. It used to include
- *   **every** defined-length sequence under Implicit VR LE, silently
- *   (`DICOM-IMPLICIT-SQ-NOT-DESCENDED`, fixed after `0.0.5`). Check
- *   `ds.warnings` before treating a report as complete.
+ * - An `SQ` whose `items` the parser did not materialize is **emptied**, not kept:
+ *   its value is by PS3.5 §7.5.1 a stream of Data Sets, and a run that cannot
+ *   enumerate them cannot discharge §E.1.1's obligation inside them, so the
+ *   fail-safe answer is to drop the carrier and say so
+ *   (`DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` + `report.unauditableSequences`).
+ *   That costs content, and the trade is deliberate: it used to be *kept
+ *   verbatim*, which wrote the sender's own un-audited Data Elements - measured,
+ *   `(0010,0020)` Patient IDs among them - into output stamped
+ *   `(0012,0062) PatientIdentityRemoved = YES`
+ *   (`DICOM-DEIDENT-RAWBYTES-PASSTHROUGH`, live through `0.0.6`).
+ * - Two things are still kept verbatim, deliberately. A **private** `SQ`
+ *   retained under `RetainSafePrivate` + a {@link Profile}, where the profile has
+ *   vouched for the element by creator and tag - the pre-existing "kept
+ *   verbatim" limitation above, unchanged. And an undefined-length **`UN`** whose
+ *   CP-246 descent was refused: it keeps `vr === "UN"`, and since every ordinary
+ *   `UN` element also has no items, the test above cannot be applied there
+ *   without emptying every unknown-VR element in every file. That one is
+ *   measured and **still leaks** (`PRE-EXISTING`); the reliable consumer-side
+ *   test remains `el.items === undefined` on a `UN` element you are trusting a
+ *   report about.
  *
  * @module
  */
@@ -68,7 +79,11 @@ import { Item } from "../dataset/item.js";
 import { isPrivateTag, splitTag } from "../dataset/tag.js";
 import type { Profile } from "../parser/types.js";
 import type { DicomParseWarning } from "../parser/warnings.js";
-import { burnedInAnnotationNotRemoved, embeddedAttributeRemoved } from "../parser/warnings.js";
+import {
+  burnedInAnnotationNotRemoved,
+  embeddedAttributeRemoved,
+  sequenceNotAuditable,
+} from "../parser/warnings.js";
 import { resolvePrivateTag } from "../profiles/lookup.js";
 import { type BodyEncoding, encodeDatasetElement } from "../serialize/element.js";
 import { dummyBytes, remapUidBytes, resolveAction, uidValueMultiplicity } from "./actions.js";
@@ -83,6 +98,7 @@ import {
   type DeidentifyReport,
   type DeidentifyResult,
   type EmbeddedAttributeFinding,
+  type UnauditableSequenceFinding,
 } from "./types.js";
 import { makeUidRemapper, type UidRemapper } from "./uid.js";
 
@@ -265,6 +281,7 @@ interface ProcessResult {
   readonly attributes: DeidentifiedAttribute[];
   readonly removedPrivateTags: Tag[];
   readonly embeddedAttributes: EmbeddedAttributeFinding[];
+  readonly unauditableSequences: UnauditableSequenceFinding[];
   readonly warnings: DicomParseWarning[];
 }
 
@@ -316,6 +333,82 @@ function keepOrEmpty(
     embeddedAttributeRemoved({ byteOffset: el.byteOffset }, el.tag, el.vr, hidden.length),
   );
   return false;
+}
+
+/**
+ * `true` when `el` is an `SQ` the de-identifier **cannot audit**: the parser did
+ * not materialize its items, so there is no item stream to walk.
+ *
+ * This is a fact the parser recorded on the element, not an inference from its
+ * bytes. Both routes here are already announced on `Dataset.warnings` - a
+ * defined-length Implicit VR LE value whose dictionary-resolved `SQ` was not a
+ * valid item stream (`DICOM_SQ_NOT_DESCENDED`), and an undefined-length `UN`
+ * whose CP-246 descent was refused. `items: []` is a *materialized empty*
+ * sequence and is deliberately not this: nothing is hidden in zero items.
+ */
+function isUnauditableSequence(el: Element): boolean {
+  return el.vr === "SQ" && el.items === undefined;
+}
+
+/**
+ * Empty an `SQ` whose item stream this run cannot walk, and record why.
+ *
+ * ## Why emptying, and not keeping
+ *
+ * PS3.5 2026c §7.5.1 "Item Encoding Rules": "Each Item Value shall contain a
+ * DICOM Data Set composed of Data Elements." An `SQ` element's value is
+ * therefore never an opaque blob the way an `OB` value legitimately is - it is
+ * Data Elements, and PS3.15 2026c §E.1.1 "De-identifier" obliges an
+ * implementation claiming the Basic Application Level Confidentiality Profile to
+ * "protect or retain all instances of the Attributes listed in [Table E.1-1],
+ * whether contained in the top level Data Set or embedded in an Item of a
+ * Sequence of Items". With no items materialized, that obligation cannot be
+ * discharged attribute by attribute, so it falls on the carrier. §E.1.1 makes
+ * the same escalation itself for a SOP Instance UID inside a Sequence - "the
+ * enclosing Attribute in the top-level Data Set must be encrypted in its
+ * entirety" - and while that sentence is about the encrypt-and-replace mechanism
+ * for SOP Instance UIDs rather than about Table E.1-1 in general, it is the
+ * standard's own statement that an unreachable nested instance is answered at
+ * the enclosing attribute.
+ *
+ * ## Why this is not a guess, and costs nothing to compute
+ *
+ * The sibling defect in `./embedded.ts` has to *prove* a value is not what its
+ * VR says, because an over-declaring string element and a well-formed one are
+ * byte-identical. Here there is nothing to prove: the parser already refused the
+ * reading and said so on `Dataset.warnings`, and this function reads that
+ * refusal off the element (`items === undefined`) rather than re-deriving it.
+ * So there is **no scan** - no per-offset loop, no cost that grows with an
+ * attacker-chosen value length, and none of the quadratic surface a
+ * content test would reintroduce. Re-parsing the bytes here to recover the items
+ * would be the opposite trade: it is the try-then-fallback shape that has been
+ * refused on this family before, and it would let a value the parser could not
+ * read decide how long de-identification takes.
+ *
+ * ## What it costs
+ *
+ * Content. A sequence the sender encoded in a way this parser could not read is
+ * dropped from the de-identified output, and the report and warning say so
+ * rather than leaving a caller to diff the bytes. That is the fail-safe
+ * direction: the alternative, measured on the grid at `0.0.6`, was writing the
+ * sender's own `(0010,0020)` Patient ID into output stamped
+ * `(0012,0062) PatientIdentityRemoved = YES` with a clean report.
+ */
+function emptyUnauditableSequence(
+  el: Element,
+  ctx: DeidentifyContext,
+  contextPath: readonly string[],
+  out: ProcessResult,
+): void {
+  out.elements.set(el.tag, rebuildSequence(el, [], ctx.encoding));
+  out.unauditableSequences.push({
+    tag: el.tag,
+    byteLength: el.rawBytes.length,
+    ...(contextPath.length > 0 ? { contextPath: [...contextPath] } : {}),
+  });
+  out.warnings.push(
+    sequenceNotAuditable({ byteOffset: el.byteOffset }, el.tag, el.rawBytes.length),
+  );
 }
 
 /**
@@ -390,6 +483,7 @@ function processElements(
     attributes: [],
     removedPrivateTags: [],
     embeddedAttributes: [],
+    unauditableSequences: [],
     warnings: [],
   };
   // Derived here, at every depth: `source` is exactly one Data Set.
@@ -405,9 +499,12 @@ function processElements(
     const action = annexE(el.tag);
     if (action === undefined) {
       // Not in Table E.1-1: unaffected (keep). Still recurse into sequences so
-      // nested attributes that *are* listed get de-identified.
-      if (el.vr === "SQ" && el.items !== undefined) {
-        out.elements.set(el.tag, descendSequence(el, ctx, contextPath, out));
+      // nested attributes that *are* listed get de-identified - and refuse to
+      // keep one whose items were never materialized, because "not listed" is a
+      // statement about this tag, not about the Data Sets inside its value.
+      if (el.vr === "SQ") {
+        if (isUnauditableSequence(el)) emptyUnauditableSequence(el, ctx, contextPath, out);
+        else out.elements.set(el.tag, descendSequence(el, ctx, contextPath, out));
       } else {
         keepOrEmpty(el, ctx, contextPath, out);
       }
@@ -480,13 +577,24 @@ function descendSequence(
     out.attributes.push(...inner.attributes);
     out.removedPrivateTags.push(...inner.removedPrivateTags);
     out.embeddedAttributes.push(...inner.embeddedAttributes);
+    out.unauditableSequences.push(...inner.unauditableSequences);
     out.warnings.push(...inner.warnings);
     newItems.push(new Item({ index, warnings: [], elements: inner.elements }));
   });
   return rebuildSequence(el, newItems, ctx.encoding);
 }
 
-/** Apply a resolved action to an `SQ` element (X remove · Z/D empty · else recurse). */
+/**
+ * Apply a resolved action to an `SQ` element (X remove · Z/D empty · else recurse).
+ *
+ * `C`, `U` and `K` all mean "keep this sequence and clean what is inside it",
+ * which is only answerable when the items exist. When they do not, the branch is
+ * the same fail-safe empty as the unlisted case - and, just as importantly, the
+ * audit says `emptied`. It used to say `kept` while `descendSequence` quietly
+ * rebuilt the element from `el.items ?? []` and produced a zero-item sequence: a
+ * report claiming an attribute was retained when its content was dropped is the
+ * same class of false audit as one claiming a scrub it did not perform.
+ */
 function applySequenceAction(
   el: Element,
   resolved: ReturnType<typeof resolveAction>,
@@ -506,13 +614,23 @@ function applySequenceAction(
       applied = "emptied";
       break;
     case "C":
-      out.elements.set(el.tag, descendSequence(el, ctx, contextPath, out));
-      applied = "cleaned";
+      if (isUnauditableSequence(el)) {
+        emptyUnauditableSequence(el, ctx, contextPath, out);
+        applied = "emptied";
+      } else {
+        out.elements.set(el.tag, descendSequence(el, ctx, contextPath, out));
+        applied = "cleaned";
+      }
       break;
     case "U":
     case "K":
-      out.elements.set(el.tag, descendSequence(el, ctx, contextPath, out));
-      applied = "kept";
+      if (isUnauditableSequence(el)) {
+        emptyUnauditableSequence(el, ctx, contextPath, out);
+        applied = "emptied";
+      } else {
+        out.elements.set(el.tag, descendSequence(el, ctx, contextPath, out));
+        applied = "kept";
+      }
       break;
   }
   out.attributes.push(auditAttribute(el.tag, action, resolved, applied, contextPath));
@@ -608,7 +726,8 @@ export function deidentify(
   };
 
   const processed = processElements(ds.elements(), ctx, []);
-  const { elements, attributes, removedPrivateTags, embeddedAttributes } = processed;
+  const { elements, attributes, removedPrivateTags, embeddedAttributes, unauditableSequences } =
+    processed;
 
   // Required de-identification metadata (PS3.15 §E.1.1), inserted last.
   elements.set(
@@ -639,6 +758,7 @@ export function deidentify(
     attributes,
     removedPrivateTags,
     embeddedAttributes,
+    unauditableSequences,
     uidMap: remap.cache,
     warnings,
     retained: [...active],

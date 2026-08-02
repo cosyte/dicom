@@ -147,6 +147,52 @@ export interface EmbeddedAttributeFinding {
 }
 
 /**
+ * One `SQ` element that was emptied because the parser never materialized its
+ * items, so the de-identifier had no Data Sets to walk.
+ *
+ * PS3.5 2026c §7.5.1 "Item Encoding Rules" states that "Each Item Value shall
+ * contain a DICOM Data Set composed of Data Elements", so an `SQ` element's
+ * value is never opaque bytes - it is Data Elements this run is obliged to
+ * reach. PS3.15 2026c §E.1.1 "De-identifier" states that obligation directly:
+ * an implementation claiming the Basic Application Level Confidentiality
+ * Profile "shall protect or retain all instances of the Attributes listed in
+ * [Table E.1-1], whether contained in the top level Data Set or embedded in an
+ * Item of a Sequence of Items". When the item stream cannot be enumerated the
+ * obligation cannot be discharged element by element, so it falls on the
+ * enclosing attribute - the escalation §E.1.1 itself uses for a SOP Instance
+ * UID inside a Sequence, where "the enclosing Attribute in the top-level Data
+ * Set must be encrypted in its entirety". (That sentence is written about the
+ * encrypt-and-replace mechanism for SOP Instance UIDs, not about Table E.1-1
+ * generally; it is cited here as the standard's own precedent for escalating to
+ * the carrier, not as a rule about this case.)
+ *
+ * Both fields are structural: `tag` is the carrier's and `byteLength` is the
+ * declared size of the value that was dropped. No decoded value appears here,
+ * so this is safe to log.
+ *
+ * The parser always announces the underlying refusal first, on
+ * `Dataset.warnings`: `DICOM_SQ_NOT_DESCENDED` for a defined-length Implicit VR
+ * LE value whose dictionary-resolved `SQ` was not a valid item stream.
+ *
+ * @example
+ * ```ts
+ * import { deidentify, parseDicom } from "@cosyte/dicom";
+ * const { report } = deidentify(parseDicom(buf));
+ * for (const s of report.unauditableSequences) {
+ *   console.warn(`${s.tag}: ${String(s.byteLength)} bytes dropped, item stream unreadable`);
+ * }
+ * ```
+ */
+export interface UnauditableSequenceFinding {
+  /** The `SQ` element that was emptied. */
+  readonly tag: Tag;
+  /** Byte length of the value field that was dropped. Structural, never a value. */
+  readonly byteLength: number;
+  /** Tag/index chain when the carrier is inside a sequence item; omitted at the root. */
+  readonly contextPath?: readonly string[];
+}
+
+/**
  * The audit trail returned alongside the de-identified dataset.
  *
  * Every field except one is composed from static tables: tags, Part 6 keywords,
@@ -178,6 +224,15 @@ export interface DeidentifyReport {
    * an audit line. See {@link EmbeddedAttributeFinding}.
    */
   readonly embeddedAttributes: readonly EmbeddedAttributeFinding[];
+  /**
+   * `SQ` elements emptied because the parser did not materialize their items, so
+   * the run had no Data Sets to walk and could not discharge PS3.15 §E.1.1's
+   * obligation inside them. Empty on a well-formed file; a non-empty array means
+   * content was dropped from the de-identified output, and the matching
+   * `DICOM_SQ_NOT_DESCENDED` entry on `Dataset.warnings` says why the parse
+   * refused. See {@link UnauditableSequenceFinding}.
+   */
+  readonly unauditableSequences: readonly UnauditableSequenceFinding[];
   /**
    * Source UID → replacement UID, for cross-file consistency. The **keys are
    * document values**, not composed identifiers: this is the one field of the

@@ -207,6 +207,7 @@ const safe = serializeDicom(dataset); // safe to share: input dataset never muta
 
 report.attributes.length; // count of attributes acted on (each carries tag/keyword/action, no values)
 report.warnings; // e.g. DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED
+report.unauditableSequences; // SQ elements emptied because their items could not be walked
 ```
 
 UIDs are remapped to deterministic `2.25` replacements that stay consistent across files, so a de-identified study still hangs together. Opt into any of the nine metadata-affecting Annex E Options to keep specific classes of attribute:
@@ -362,7 +363,7 @@ Thrown by `serializeDicom` for `MISSING_TRANSFER_SYNTAX` (the dataset names no t
 
 - **Pixel data.** No decode/decompression, no rendering, no measurements: Pixel Data is exposed as raw bytes. And v1 does not read a **compressed object at all**, not even structurally: a transfer syntax outside the four listed below is the fatal `UNSUPPORTED_TRANSFER_SYNTAX`, so JPEG / JPEG-LS / JPEG2000 / RLE / HTJ2K objects do not parse. → `@cosyte/dicom-pixel`.
 - **Burned-in PHI.** v1 **warns** it cannot remove burned-in annotation; a "de-identified" output is **metadata-de-identified only**.
-- **A sequence the parser could not open.** `deidentify()` recurses only into a sequence whose items the parser materialized, so anything nested inside one it could not read is neither cleaned nor listed in the report. Two shapes reach that state and **only one of them warns**: a defined-length Implicit VR LE value whose dictionary-resolved `SQ` is not an item stream raises `DICOM_SQ_NOT_DESCENDED`, while an undefined-length `UN` value the CP-246 descent could not read as a sequence is **silent** (it keeps `vr === "UN"` and raises nothing). So `ds.warnings` is worth reading but is not sufficient: the reliable test is `el.items === undefined` on an `SQ` or `UN` element you are trusting the report about.
+- **A sequence the parser could not open: content is dropped, not passed through.** `deidentify()` recurses only into a sequence whose items the parser materialized. An `SQ` element with no items is now **emptied**: its bytes are Data Sets by PS3.5 §7.5.1 and PS3.15 §E.1.1 obliges the de-identifier to reach the listed attributes inside them, so a run that cannot enumerate them must not ship them. `report.unauditableSequences` names the carrier and the byte length that was dropped, and `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` is raised. Expect **data loss** on such a file: that is the fail-safe direction, and the accompanying `DICOM_SQ_NOT_DESCENDED` on `ds.warnings` says the sender's encoding is why. **The `UN` shape is not covered and still leaks**: an undefined-length `UN` the CP-246 descent could not read as a sequence keeps `vr === "UN"`, and every ordinary `UN` element also has no items, so the same rule there would empty every unknown-VR element in every file. For a `UN` element you are trusting a report about, the reliable test remains `el.items === undefined`.
 - **Networking & web.** No DIMSE (C-STORE/FIND/MOVE, MWL, MPPS); no DICOMweb (QIDO/WADO/STOW). → `@cosyte/dicom-net`, `@cosyte/dicomweb`.
 - **Transcoding.** No transfer-syntax conversion. The serializer re-emits in the dataset's source syntax only.
 - **Terminology resolution.** Coded values are surfaced (designator + canonical source) but not validated against SNOMED/LOINC/etc.

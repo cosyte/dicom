@@ -51,7 +51,8 @@ warning you triage, not an exception you catch.
 | A `DICOM_PRIVATE_CREATOR_UNKNOWN` warning                                                                      | A private tag's creator is not in the active profile                                                                            | The element degrades to `UN`; add the creator via a [profile](./spec-notes-profiles) to resolve it.                                                                                                                                                                          |
 | `ds.get(tag)?.value` is `{ kind: "binary" }` for Pixel Data                                                    | Pixel data is exposed raw, never decoded                                                                                        | Expected. Decoding pixels is out of scope (see below).                                                                                                                                                                                                                       |
 | A `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED` warning after `deidentify`                                          | The object may carry burned-in PHI in the pixels                                                                                | Metadata de-id cannot clean pixels; route to a pixel-cleaning step before sharing.                                                                                                                                                                                           |
-| A `DICOM_SQ_NOT_DESCENDED` warning                                                                             | A defined-length Implicit VR LE element resolved to `SQ` from the dictionary, but its value is not an `(FFFE,E000)` item stream | The bytes are kept intact on `Element.rawBytes` and the rest of the object parses, but `Element.items` is absent, so `deidentify()` does **not** audit inside it. Treat the object as un-scrubbed in that element before sharing.                                            |
+| A `DICOM_SQ_NOT_DESCENDED` warning                                                                             | A defined-length Implicit VR LE element resolved to `SQ` from the dictionary, but its value is not an `(FFFE,E000)` item stream | The bytes are kept intact on `Element.rawBytes` and the rest of the object parses, but `Element.items` is absent, so nothing can navigate inside it. `deidentify()` therefore **empties** that element rather than shipping bytes it cannot audit - see the next row.        |
+| A `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` warning after `deidentify`, and a sequence you expected is now empty  | That `SQ` element reached `deidentify()` with no items, so its item stream could not be walked                                  | Fail-safe by design: PS3.15 §E.1.1 obliges a de-identifier to reach listed attributes inside a Sequence of Items, and a run that cannot enumerate them must not pass them through. `report.unauditableSequences` names the tag and the byte length dropped. Fix the sender.  |
 | A `DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED` warning after `deidentify`, and a value you expected is now empty | The sender over-declared that element's Value Length, so the element that followed it was absorbed into its value               | The carrier is emptied rather than kept, because an attribute encoded inside a value is invisible to the PS3.15 action table. `report.embeddedAttributes` names the carrier and the tags that were hiding in it. The file is malformed at source - raise it with the sender. |
 
 ## Keeping PHI out of logs
@@ -131,15 +132,23 @@ Each is tracked as a future companion package, not a gap to be filled here:
   value there. Treat a file that raised this warning as a file whose _sender_ is malformed: other
   attributes in it may be carrying the same defect where it cannot be seen.
 
-- **`deidentify()` audits only sequences the parser opened, and one of the two ways it can fail to
-  open one is silent.** Recursion is driven by `Element.items`, so a sequence stored as an opaque
-  span is kept verbatim and its contents appear nowhere in the report. A defined-length Implicit VR
-  LE value whose dictionary-resolved `SQ` is not an item stream raises `DICOM_SQ_NOT_DESCENDED`. An
-  undefined-length `UN` value the CP-246 descent could not read as a sequence raises **nothing**: it
-  keeps `vr === "UN"`, and the absence is visible only as `items === undefined`. So `ds.warnings` is
-  worth reading but does not cover both cases, and the reliable test is `el.items === undefined` on
-  the `SQ` or `UN` element itself. A report is a record of what was reached, not a proof that
-  everything was.
+- **A sequence `deidentify()` could not open is emptied, not kept, so expect data loss on a
+  malformed file.** Recursion is driven by `Element.items`. An `SQ` element that has none is
+  un-auditable: PS3.5 §7.5.1 says its value is "a DICOM Data Set composed of Data Elements", and
+  PS3.15 §E.1.1 obliges an implementation claiming the Basic Profile to protect the listed
+  attributes "whether contained in the top level Data Set or embedded in an Item of a Sequence of
+  Items". A run that cannot enumerate them cannot discharge that, so it discharges it on the
+  carrier: the element is replaced with a zero-item sequence, `report.unauditableSequences` records
+  the tag and the byte length dropped, and `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` is raised. The
+  accompanying `DICOM_SQ_NOT_DESCENDED` on `ds.warnings` is why the parse refused. Raise it with
+  the sender rather than working around it here. Before this, those bytes were written into
+  de-identified output verbatim, identifiers and all, with a clean report.
+  **The `UN` shape is not covered and still leaks.** An undefined-length `UN` value the CP-246
+  descent could not read as a sequence keeps `vr === "UN"` and raises nothing beyond a possible
+  `DICOM_VR_MISMATCH`. The rule above cannot be extended to it, because every ordinary `UN` element
+  also has `items === undefined` and applying it there would empty every unknown-VR element in every
+  file. So for a `UN` element the reliable test is still `el.items === undefined`, and a report is a
+  record of what was reached, not a proof that everything was.
 - **Repeating-group rows are matched by mask, within the range the standard bounds them to.**
   `(50xx,xxxx)` Curve Data, `(60xx,3000)` Overlay Data and `(60xx,4000)` Overlay Comments are stated
   by the standard as a group mask rather than a single tag. `deidentify()` matches them in the

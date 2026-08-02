@@ -15,20 +15,45 @@
  * What it measured on `244a372` (published `0.0.6`), and what the
  * `DICOM-OVERDECLARE-SWALLOWS-INTO-VALUE` remedy did to it:
  *
- * | | base `244a372` | after |
- * |---|---|---|
- * | cells that parse | 6,348 | 6,348 |
- * | cells leaking a source value through `deidentify()` | **2,127** | **1,155** |
- * | ...of those, Explicit VR LE + BE | 877 | **0** |
- * | ...of those, Implicit VR LE (`DICOM_SQ_NOT_DESCENDED`) | 1,250 | 1,155 |
- * | cells whose *parse* differs at all | - | **0** |
+ * | | base `244a372` | after `#53` | after `DICOM-DEIDENT-RAWBYTES-PASSTHROUGH` |
+ * |---|---|---|---|
+ * | cells that parse | 6,348 | 6,348 | 6,348 |
+ * | sequence-sweep cells leaking a source value | **2,127** | **1,155** | **0** |
+ * | ...of those, Explicit VR LE + BE | 877 | **0** | **0** |
+ * | ...of those, Implicit VR LE (`DICOM_SQ_NOT_DESCENDED`) | 1,250 | 1,155 | **0** |
+ * | cells whose *parse* differs at all | - | 0 | **0** |
  *
- * The last row is the point of the slice: the remedy is at the de-identify
+ * The last row is the point of both slices: each remedy is at the de-identify
  * boundary and touches no parser file, so the reading, the warnings on both
  * channels, `{ strict: true }`, and which marker values survive are byte-
- * identical on all 76,293 cells. The residual 1,155 are the separate
- * `DICOM-DEIDENT-RAWBYTES-PASSTHROUGH` item - an undescended sequence kept as
- * opaque bytes - which this slice deliberately does not touch.
+ * identical on every cell. It is a **printed count** (`cells differing in any
+ * PARSE respect`) rather than an inference from `changed`, because `changed`
+ * and `structural` both move for a de-identify-only difference and are
+ * therefore the wrong numbers to quote for that claim.
+ *
+ * ## The leaf-carrier rows, and what they cost to add
+ *
+ * `DICOM-DEIDENT-RAWBYTES-PASSTHROUGH` also added {@link LEAF_CARRIERS} - the
+ * over-declaring **leaf element**, which the sequence sweep never expressed
+ * because its over-declaring role is always an `SQ` or a string VR. That left
+ * `#53`'s disclosed binary-VR residual **stated but unmeasured**, and unmeasured
+ * residuals are how a leak survives a slice that reads green. It measures
+ * **19 leaking cells, identical on both trees** - `PRE-EXISTING`, and two
+ * distinct mechanisms rather than one:
+ *
+ *  - **11 cells at `delta=18`** - the over-declare swallow into `OB` / `OW` /
+ *    `US` / `UN`, silent (`warnings: []`), with the `LO` and `ST` controls on
+ *    the identical fixture at **0**. That contrast is the row's whole value: it
+ *    shows the carrier's VR is the only difference, so it is `#53`'s residual
+ *    exactly, not a new defect.
+ *  - **8 cells at `delta=-6`** - an *under*-declare, which is not a swallow at
+ *    all. The leftover value bytes are read as a Data Element header, and
+ *    `(0010,0020)`'s value lands inside a manufactured element with an
+ *    unknown on-wire VR (measured: tag `(4156,554C)`, VR `"E "`), which no
+ *    action-table row and no repertoire test can reach. This one hits the
+ *    string carriers too, and was not disclosed anywhere before this sweep.
+ *
+ * Neither is fixed here. Both are now a number.
  *
  * `parseDefinedLengthSQInPlace` decides between two length fields that describe
  * the same bytes. A remedy there is a claim about **which field to trust**, and
@@ -109,7 +134,14 @@
  *    appearing in de-identified output, or an attribute vanishing from the
  *    report, is the harm this whole slice exists to close.
  *  - **0 cells that lose a marker value** (`lostValue`). This is the widened
- *    grid's own gate, and the one the original grid could not express.
+ *    grid's own gate, and the one the original grid could not express. Note what
+ *    it is measured over: the **parsed object**. It cannot see a de-identify
+ *    boundary remedy dropping content, which is why
+ *    `de-identified OUTPUT lost a marker` exists next to it and is a **cost, not
+ *    a gate**. `DICOM-DEIDENT-RAWBYTES-PASSTHROUGH` reads **2,448** there: 1,155
+ *    where the dropped bytes were leaking a source identifier, and **1,293 where
+ *    they were not** and the drop buys only the guarantee. Quoting the first
+ *    number without the second would be quoting the benefit without the price.
  *  - **0 cells where the root `(0010,0020)` changes value** (`rootIdChanged`). A
  *    confidently wrong patient identifier is worse than the mis-structure this
  *    slice set out to fix, and worse than base's fail-safe refusal.
@@ -117,8 +149,11 @@
  *    A warning raised for a reading that is then discarded costs a
  *    `{ strict: true }` caller the object over bytes the parser read exactly as
  *    before.
- *  - **0 Implicit VR LE cells changed.** That path is the control; this slice is
- *    Explicit-VR-only.
+ *  - **0 cells changed on whichever syntax the slice does not touch.** That was
+ *    Implicit VR LE for the Explicit-VR sequence-bound work; it is Explicit VR
+ *    for `DICOM-DEIDENT-RAWBYTES-PASSTHROUGH`, whose 2,448 changed cells are all
+ *    Implicit VR LE. The `--diff` output prints both halves and calls neither a
+ *    gate, because which one is the control is a property of the slice.
  *
  * ## The one mismatch that is NOT this slice's
  *
@@ -167,6 +202,40 @@ const TRAILING_VALUE = "ID-000123";
 /** The two Patient ID values in the collision shapes; confusing them is the blocker. */
 const ROOT_ID = "MRN-11111";
 const ITEM_ID = "MRN-99999";
+
+/**
+ * The over-declaring **leaf carrier** sweep, added for
+ * `DICOM-DEIDENT-RAWBYTES-PASSTHROUGH`.
+ *
+ * The sequence sweep above always puts an `SQ` or a string VR in the
+ * over-declaring role, so the residual `#53` disclosed - a swallow into a
+ * **binary** VR, which no content test can decide because arbitrary bytes are
+ * what those VRs are for - was **stated but never measured**. These rows give it
+ * a number, next to two string-VR controls that `#53`'s remedy does cover, so the
+ * table reads as a comparison rather than an assertion.
+ *
+ * Each entry is a `(tag, vr)` pair chosen so the tag's **dictionary** VR is the
+ * one named, which is what makes the row mean the same thing under Implicit VR
+ * LE (no VR on the wire; PS3.6 decides) as under the two Explicit syntaxes. The
+ * one deliberate exception is `UN`: the registry publishes no single-VR `UN`
+ * standard tag, so that row writes `UN` on the wire over an `LO` tag. Under
+ * Explicit VR that is a genuine `UN` carrier (the parser trusts the on-wire VR
+ * and warns `DICOM_VR_MISMATCH`); under Implicit VR LE the written VR is
+ * discarded and it is a second `LO` control. The cell records the tree, so which
+ * one happened is never inferred.
+ *
+ * Every carrier tag is absent from Table E.1-1 and not private, so the action
+ * table resolves "keep" and the swallowed `(0010,0020)` is the only thing at
+ * stake.
+ */
+const LEAF_CARRIERS = [
+  { label: "OB", tag: "40101006", vr: "OB" },
+  { label: "OW", tag: "00281201", vr: "OW" },
+  { label: "US", tag: "20100120", vr: "US" },
+  { label: "UN-over-LO", tag: "30020003", vr: "UN" },
+  { label: "LO-control", tag: "20000050", vr: "LO" },
+  { label: "ST-control", tag: "20100010", vr: "ST" },
+] as const;
 
 const ITEM_TAG = "00080008" as const;
 const ITEM_VALUE = "ORIGINAL";
@@ -324,6 +393,35 @@ function fixture(
   });
 }
 
+/**
+ * One over-declaring leaf carrier followed by the root `(0010,0020)` it can
+ * swallow. `delta` is the lie in the carrier's own Value Length field; `18` is
+ * the trailing element's on-wire size under every syntax here (8-byte header +
+ * 10-byte padded `LO` value), so that is the silent cell.
+ */
+function carrierFixture(
+  ts: string,
+  carrier: (typeof LEAF_CARRIERS)[number],
+  delta: number,
+): Buffer {
+  const elements = [
+    { tag: "00100010", vr: "PN", value: ascii(ROOT_NAME) },
+    {
+      tag: carrier.tag,
+      vr: carrier.vr,
+      value: ascii("CARRIER-VALUE"),
+      declaredLengthDelta: delta,
+    },
+    { tag: TRAILING, vr: "LO", value: ascii(TRAILING_VALUE) },
+  ] as never as Elements;
+  return buildDicom({
+    transferSyntax: ts,
+    mediaStorageSOPClassUID: "1.2.840.10008.5.1.4.1.1.2",
+    mediaStorageSOPInstanceUID: "1.2.826.0.1.3680043.10.1338.1",
+    elements,
+  });
+}
+
 interface Treeish {
   elements(): readonly unknown[];
 }
@@ -385,6 +483,12 @@ function cell(buf: Buffer): Record<string, unknown> {
       out["report"] = report.attributes.map((a) => `${a.tag}:${a.action}:${a.contextPath ?? ""}`);
       const bytes = serializeDicom(dataset as never).toString("latin1");
       out["phiLeak"] = PHI_STRINGS.filter((p) => bytes.includes(p));
+      // What survives INTO THE DE-IDENTIFIED OUTPUT, which is a different
+      // question from `seen` (what survives the parse). The grid could not
+      // express it before, so a remedy that empties a carrier read as free:
+      // `lostValue` compares parse trees, and no remedy at the de-identify
+      // boundary can move it. This is the column that prices one.
+      out["deidSeen"] = MARKERS.filter((m) => bytes.includes(m));
     } catch (err) {
       out["deidErr"] = codeOf(err);
     }
@@ -430,6 +534,25 @@ function sweep(): { results: Snapshot; built: number; unbuildable: number } {
       }
     }
   }
+
+  // The leaf-carrier rows. Keyed with a `carrier|` prefix so they never mix
+  // with the sequence sweep's `<ts>|<shape>|...` keys, and so `--diff` can
+  // report the two populations separately.
+  for (const ts of SYNTAXES) {
+    for (const carrier of LEAF_CARRIERS) {
+      for (const delta of DELTAS) {
+        let buf: Buffer;
+        try {
+          buf = carrierFixture(ts, carrier, delta);
+        } catch {
+          unbuildable++;
+          continue;
+        }
+        results[`carrier|${ts}|${carrier.label}|${String(delta)}`] = cell(buf);
+        built++;
+      }
+    }
+  }
   return { results, built, unbuildable };
 }
 
@@ -451,6 +574,28 @@ function pairs(report: unknown): string[] {
 function lost(a: unknown, b: unknown): number {
   const bs = new Set(Array.isArray(b) ? (b as string[]) : []);
   return (Array.isArray(a) ? (a as string[]) : []).filter((v) => !bs.has(v)).length;
+}
+
+/**
+ * Every field of a cell that is a statement about the **parse**, and none that
+ * is a statement about `deidentify()`.
+ *
+ * A remedy at the de-identify boundary claims it cannot change a reading. That
+ * claim used to be checked by eyeballing "changed" against "PHI regressions",
+ * which conflates the two: a de-identify-only change still counts as `changed`
+ * and as `structural`, so both are the wrong number to quote for it. This makes
+ * "0 cells differ in any parse respect" a printed count.
+ */
+function parseView(cell: Record<string, unknown>): string {
+  return JSON.stringify({
+    lenient: cell["lenient"],
+    tree: cell["tree"],
+    warn: cell["warn"],
+    streamed: cell["streamed"],
+    seen: cell["seen"],
+    rootId: cell["rootId"],
+    strict: cell["strict"],
+  });
 }
 
 function diff(basePath: string, newPath: string): void {
@@ -477,6 +622,14 @@ function diff(basePath: string, newPath: string): void {
   let onWarningMismatchExplicitBase = 0;
   let onWarningMismatchImplicitBase = 0;
   let gainedValue = 0;
+  let parseChanged = 0;
+  let leakBase = 0;
+  let leakNext = 0;
+  let leakCarrierBase = 0;
+  let leakCarrierNext = 0;
+  let deidLostValue = 0;
+  const parseChangedKeys: string[] = [];
+  const leakNextKeys: string[] = [];
   const lostValueKeys: string[] = [];
   const rootIdKeys: string[] = [];
   const strictUnchangedKeys: string[] = [];
@@ -541,14 +694,47 @@ function diff(basePath: string, newPath: string): void {
       else onWarningMismatchExplicitBase++;
     }
     if (lost(n["seen"], b["seen"]) > 0) gainedValue++;
+
+    if (parseView(b) !== parseView(n)) {
+      parseChanged++;
+      parseChangedKeys.push(k);
+    }
+    const isCarrier = k.startsWith("carrier|");
+    if (Array.isArray(b["phiLeak"]) && (b["phiLeak"] as unknown[]).length > 0) {
+      leakBase++;
+      if (isCarrier) leakCarrierBase++;
+    }
+    if (Array.isArray(n["phiLeak"]) && (n["phiLeak"] as unknown[]).length > 0) {
+      leakNext++;
+      if (isCarrier) leakCarrierNext++;
+      if (leakNextKeys.length < 8) leakNextKeys.push(k);
+    }
+    // The price of a de-identify-boundary remedy, which `lostValue` above
+    // structurally cannot see: a marker the de-identified OUTPUT carried on base
+    // and does not carry now. Not a defect - the whole point of emptying an
+    // un-auditable carrier - but a cost that has to be a number, not a phrase.
+    if (lost(b["deidSeen"], n["deidSeen"]) > 0) deidLostValue++;
   }
 
   const say = (label: string, v: number): void => {
     process.stdout.write(`${label.padEnd(46)}${String(v)}\n`);
   };
   say("cells compared", keys.length);
+  say("LEAKING a source value: base", leakBase);
+  say("LEAKING a source value: new (want 0)", leakNext);
+  say("  ...of base's, leaf-carrier rows", leakCarrierBase);
+  say("  ...of new's, leaf-carrier rows", leakCarrierNext);
+  say("cells differing in any PARSE respect", parseChanged);
+  say("de-identified OUTPUT lost a marker (cost)", deidLostValue);
   say("changed", changed);
-  say("  of which Implicit VR LE (control, want 0)", implicitChanged);
+  // NOT a gate. Which syntax is the control depends on which slice you are
+  // measuring: it was Implicit VR LE for the Explicit-only sequence-bound work,
+  // and Explicit VR for `DICOM-DEIDENT-RAWBYTES-PASSTHROUGH`, whose whole
+  // population is Implicit. Read it against the slice, and use
+  // "cells differing in any PARSE respect" for the claim that a reading is
+  // untouched - that one means the same thing whoever is running it.
+  say("  of which Implicit VR LE", implicitChanged);
+  say("  of which Explicit VR (LE + BE)", changed - implicitChanged);
   say("recovered: fatal on base, parses now", recoveredFatal);
   say("NEW lenient fatals (want 0)", newLenientFatal);
   say("fatal on both trees", fatalBoth);
@@ -568,6 +754,8 @@ function diff(basePath: string, newPath: string): void {
   say("  same on base, Implicit VR LE", onWarningMismatchImplicitBase);
 
   for (const [label, ks] of [
+    ["parse-changed", parseChangedKeys],
+    ["still-leaking", leakNextKeys],
     ["lost-value", lostValueKeys],
     ["root-id-changed", rootIdKeys],
     ["strict-on-unchanged", strictUnchangedKeys],
