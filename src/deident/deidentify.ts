@@ -364,10 +364,14 @@ function keepOrEmpty(
  * not materialize its items, so there is no item stream to walk.
  *
  * This is a fact the parser recorded on the element, not an inference from its
- * bytes. **Exactly one route reaches it**, and it is announced on
- * `Dataset.warnings`: a defined-length Implicit VR LE value whose
- * dictionary-resolved `SQ` was not a valid item stream
- * (`DICOM_SQ_NOT_DESCENDED`). `items: []` is a *materialized empty* sequence and
+ * bytes. **Exactly one route in this parser reaches it**: a defined-length
+ * Implicit VR LE value whose dictionary-resolved `SQ` was not a valid item
+ * stream, which raises `DICOM_SQ_NOT_DESCENDED`. Do not promote that to "it is
+ * always announced on `Dataset.warnings`" - a {@link Profile} carrying
+ * `suppress: ["DICOM_SQ_NOT_DESCENDED"]` leaves `ds.warnings` empty while the
+ * element still arrives here, and `Element` is publicly constructible, so this
+ * is a statement about the parser and not about every `Dataset`. The
+ * de-identify channel reports it either way. `items: []` is a *materialized empty* sequence and
  * is deliberately not this: nothing is hidden in zero items.
  *
  * **An undefined-length `UN` whose CP-246 descent was refused is NOT a route

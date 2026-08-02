@@ -167,7 +167,7 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   DICOM_NONZERO_RESERVED_BYTES:
     "Element ({tag}) has non-zero reserved bytes between VR and length (first byte {n}, second byte {n2}); ignoring.",
   DICOM_SQ_NOT_DESCENDED:
-    "Element ({tag}) resolved to VR=SQ from the dictionary but its defined-length value is not a valid item stream; kept as opaque bytes and NOT descended, so nothing nested inside it is visible to navigation. deidentify() cannot audit such a value: it empties the element unless RetainSafePrivate plus a profile has vouched for it, in which case the bytes are kept unaudited.",
+    "Element ({tag}) resolved to VR=SQ from the dictionary but its defined-length value is not a valid item stream; kept as opaque bytes and NOT descended, so nothing nested inside it is visible to navigation, and deidentify() cannot audit it. See DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE.",
   DICOM_UN_PARSED_AS_SQ:
     "Element ({tag}) has VR=UN with undefined length; descended as Implicit VR LE sequence per CP-246.",
   DICOM_EMPTY_ITEM_IN_SEQUENCE: "Sequence ({tag}) contains an empty item (length=0); tolerated.",
@@ -489,6 +489,13 @@ export function unParsedAsSQ(position: DicomPosition, tag: Tag): DicomParseWarni
  * refusal is raised for a *conformant* file whose sequences nest deeper than
  * this library's own `NESTING_DEPTH_LIMIT` - PS3.5 sets no nesting bound, so
  * that limit is ours, not the standard's.
+ *
+ * **`ds.warnings` is uncapped, and this message is emitted once per refused
+ * element**, so a crafted file multiplies its length by an element count the
+ * input chooses. That unboundedness is pre-existing and shared with every other
+ * parser warning; the length is why this text is kept terse and defers the
+ * reasoning to `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` and the docs instead of
+ * restating it.
  *
  * @example
  * ```ts

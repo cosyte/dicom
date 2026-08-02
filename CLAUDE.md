@@ -48,7 +48,10 @@
   `DeidentifyContext` and is **deliberately mutable**: `processElements` builds a fresh result per
   Data Set and merges upward, so a per-result cap bounds each item independently and not the file.
   The registry message was also cut from ~620 to ~150 characters, because a per-element string is
-  multiplied by that same count.
+  multiplied by that same count. **`ds.warnings` itself stays uncapped** (pre-existing, shared with
+  every parser warning, and no parser file is touched here), which is why `DICOM_SQ_NOT_DESCENDED`'s
+  text is kept terse rather than restating the reasoning: pass 2 measured the slice's first draft
+  growing it 225 -> 371 characters against an uncapped per-element emission.
   **▶ THREE CLAIMS THIS SLICE SHIPPED WERE FALSE AND THE REFUTER CAUGHT ALL THREE. THE FIX IS ALWAYS
   TO CORRECT THE CLAIM, NEVER TO WIDEN THE GUARD** (`#50`'s rule). (1) `isUnauditableSequence`'s own
   JSDoc named the CP-246 `UN` shape as a covered "route" while three other artifacts in the same
