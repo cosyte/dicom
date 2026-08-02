@@ -81,12 +81,12 @@
     parser reads an unrecognized VR **short-form**. Emptying at the de-identify boundary is therefore
     **compensation, not conformance**. `PRE-EXISTING`. Do not quote the note as support for this rule;
     the "shall" in §6.2's body is what supports it.
-    **DO NOT SUMMARIZE WHAT A §6.2-CONFORMANT FUTURE-VR FILE DOES HERE WITHOUT MEASURING EACH
-    SHAPE.** Pass 2 refuted exactly that sentence: a long-form future-VR element with **VL = 0**
-    parses fine on both trees (and then desynchronizes the reader, which this slice's rule catches);
-    a non-empty one throws. One clause covering both was wrong. **Re-wording a disclosure twice is
-    the signal to delete it rather than try a third time** - that is why it is gone rather than
-    fixed.
+    **DO NOT SUMMARIZE WHAT A §6.2-CONFORMANT FUTURE-VR FILE DOES HERE. THREE PASSES TRIED AND ALL
+    THREE SUMMARIES WERE WRONG** - including one written _into the warning against writing one_,
+    which pass 3 then refuted by measuring the very shape it named. Passes 2 and 3 disagree on what a
+    long-form future-VR element does, which is the finding: the behaviour is shape-specific and no
+    one-clause rule covers it. **Re-wording a disclosure twice is the signal to delete it rather
+    than try a third time**, so it is gone rather than fixed. Measure the shape in front of you.
     **▶ COST, PUBLISHED: 23 cells lose a marker from de-identified output, 15 of which were NOT
     leaking.** On a file conformant to **PS3.5 2026c** it is **zero** - the
     `DICOM-DEIDENT-OVER-REDACTION` trade does not recur here, because no such Explicit VR file and no

@@ -199,7 +199,7 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   // The byte offset locates the element instead, and is a position this parser
   // counted rather than anything the document said.
   DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE:
-    "An element at byte offset {n2} carries an on-wire VR that is not one of the 34 PS3.5 6.2 defines, so its {n} value bytes are not a Value Field this library decoded; emptied (PS3.15 E.1.1). Its tag and VR are withheld: when this fires they are themselves fragments of some element's value. See report.undefinedVrElements.",
+    "An element at byte offset {n2} carries an on-wire VR that is not one of the 34 PS3.5 6.2 defines, so its {n} value bytes are not a Value Field this library decoded; emptied (PS3.15 E.1.1). Its tag and VR are withheld: an earlier under-declared length can make them fragments of some element's value. See report.undefinedVrElements.",
   DICOM_BOM_IN_TEXT_VR: "Element ({tag}) {vr} value begins with a UTF-8 BOM; stripped on decode.",
   DICOM_TRAILING_NULL_IN_TEXT_VR:
     "Element ({tag}) {vr} value has a trailing NULL pad where SPACE is expected; trimmed.",

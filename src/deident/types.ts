@@ -235,10 +235,13 @@ export interface UnauditableSequenceFinding {
  *
  * ## Why this finding names no tag, when every sibling finding does
  *
- * Because when this fires, **the tag is content**. The paragraph above is the
- * whole argument: the four tag bytes and the two VR bytes were read out of the
- * middle of some element's Value Field, so reporting the "tag" would republish
- * four bytes of the document. Measured on a synthetic `ST` carrier holding
+ * Because the tag **may be content**, and nothing here can tell. The paragraph
+ * above is the whole argument: when an under-declare desynchronized the reader,
+ * the four tag bytes and the two VR bytes were read out of the middle of some
+ * element's Value Field, so reporting the "tag" would republish four bytes of
+ * the document. An unrecognized VR written honestly, at a correct length, raises
+ * this same code and has an ordinary tag - **and the two are indistinguishable
+ * here**, so the tag is withheld on both routes rather than on a guess. Measured on a synthetic `ST` carrier holding
  * `"MR BRAIN SMITHSON"`, the fabricated tag is `48544F53` - four bytes of the
  * surname. {@link EmbeddedAttributeFinding} and
  * {@link UnauditableSequenceFinding} may carry a tag because theirs came from a
@@ -341,9 +344,10 @@ export interface DeidentifyReport {
    * the 34 VRs that edition defines never produces one, and an Implicit VR LE
    * file **cannot** - there the VR comes from the dictionary. The edition is not
    * pedantry: §6.2 exists precisely to say how a *future* VR will be encoded, so
-   * a file conformant to a later edition using a newly defined VR would trip
-   * this. (What such a file does on the parse path varies by shape and is
-   * deliberately not summarized here.) A non-empty array
+   * a file conformant to a later edition using a newly defined VR is the
+   * population that sentence exists for. (What such a file does on this
+   * library's parse path is not summarized here - it was measured and the
+   * shapes disagree.) A non-empty array
    * means the source desynchronized the reader, usually by under-declaring a
    * Value Length somewhere earlier. See {@link UndefinedVrFinding}.
    *

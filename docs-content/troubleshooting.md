@@ -143,10 +143,12 @@ Each is tracked as a future companion package, not a gap to be filled here:
   `report.undefinedVrElements` records it, and `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` is raised.
   The record is capped at 64 entries; the emptying is not.
   **The finding names a byte offset and no tag, uniquely among the report's findings, and that is
-  deliberate.** The condition that raises it is that the element's header was fabricated out of the
-  middle of some element's value - so the "tag" is four bytes of document content. On a synthetic
-  `ST` carrier holding `"MR BRAIN SMITHSON"` it renders as `48544F53`, four letters of the surname.
-  The byte offset locates the element instead and is a position the parser counted.
+  deliberate.** The header _may_ have been fabricated out of the middle of some element's value, in
+  which case the "tag" is four bytes of document content: on a synthetic `ST` carrier holding
+  `"MR BRAIN SMITHSON"` it renders as `48544F53`, four letters of the surname. An unrecognized VR
+  written honestly at a correct length raises the same code with an ordinary tag, and **nothing
+  here can tell the two apart**, so the tag is withheld on both routes rather than on a guess. The
+  byte offset locates the element instead and is a position the parser counted.
   **Where these come from:** an **under**-declared Value Length upstream. The reader finishes the
   short value early, reads the remainder of the value that was actually encoded as the next Data
   Element header, and the element that genuinely followed is consumed as the fabricated element's

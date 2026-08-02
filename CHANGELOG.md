@@ -32,9 +32,11 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   re-derived, each sentence unique in its document. Such an element is **emptied**,
   `report.undefinedVrElements` names the **byte offset** and the byte length dropped, and the new
   `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` is raised. **The finding names no tag, uniquely among
-  the report's findings**: the condition that raises it is that the header was fabricated out of the
-  middle of some element's value, so its four tag bytes are document content - on a synthetic `ST`
-  carrier holding `"MR BRAIN SMITHSON"` the tag renders as `48544F53`, four letters of the surname.
+  the report's findings**: the header _may_ have been fabricated out of the middle of some element's
+  value, in which case its four tag bytes are document content - on a synthetic `ST` carrier holding
+  `"MR BRAIN SMITHSON"` the tag renders as `48544F53`, four letters of the surname. An honestly
+  written unrecognized VR raises the same code with an ordinary tag, and the two are
+  indistinguishable here, so the tag is withheld either way.
   `renderTag` shape-checks a tag and cannot refuse one, so the withholding happens at the call site.
   An undefined-VR carrier whose bytes happened to tile was reported in `report.embeddedAttributes`
   before and now reports here instead. The test is a set-membership check on
