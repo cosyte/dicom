@@ -52,6 +52,7 @@ warning you triage, not an exception you catch.
 | `ds.get(tag)?.value` is `{ kind: "binary" }` for Pixel Data           | Pixel data is exposed raw, never decoded                                                                                        | Expected. Decoding pixels is out of scope (see below).                                                                                                                                                                            |
 | A `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED` warning after `deidentify` | The object may carry burned-in PHI in the pixels                                                                                | Metadata de-id cannot clean pixels; route to a pixel-cleaning step before sharing.                                                                                                                                                |
 | A `DICOM_SQ_NOT_DESCENDED` warning                                    | A defined-length Implicit VR LE element resolved to `SQ` from the dictionary, but its value is not an `(FFFE,E000)` item stream | The bytes are kept intact on `Element.rawBytes` and the rest of the object parses, but `Element.items` is absent, so `deidentify()` does **not** audit inside it. Treat the object as un-scrubbed in that element before sharing. |
+| A `DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED` warning after `deidentify`, and a value you expected is now empty | The sender over-declared that element's Value Length, so the element that followed it was absorbed into its value | The carrier is emptied rather than kept, because an attribute encoded inside a value is invisible to the PS3.15 action table. `report.embeddedAttributes` names the carrier and the tags that were hiding in it. The file is malformed at source - raise it with the sender. |
 
 ## Keeping PHI out of logs
 
@@ -111,6 +112,20 @@ Each is tracked as a future companion package, not a gap to be filled here:
 - **De-identification is metadata-only and fail-safe toward removal.** Conditional Annex E codes
   collapse to their most-protective branch (no IOD Type-1 analysis); private attributes are removed
   by default unless a profile marks a creator's tags safe.
+- **An element that over-declares its own Value Length hides the next element inside its value, and
+  `deidentify()` empties rather than keeps it.** PS3.5 defines Value Length as the length of *that*
+  element's Value Field; a sender that writes a larger number produces a file whose reading is
+  self-consistent and in which the following element has been absorbed, header and all. Nothing on
+  the wire says which length lied, so `parseDicom` reads it exactly as written and this is **not**
+  recoverable at parse time. What `deidentify()` does is narrower and fail-safe: before keeping a
+  value, it checks whether the value's tail decodes - in the file's own transfer syntax - as whole
+  Data Elements ending exactly at the end of the value, at least one of which this run would have
+  acted on, and containing a byte the carrier's VR cannot legally hold. If so the value is emptied,
+  `report.embeddedAttributes` records the carrier and the tags found inside it, and
+  `DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED` is raised. **Carriers are string VRs only**: a swallow
+  into `OB`, `OW`, `UN` or another binary VR is indistinguishable from legitimate content and is a
+  stated residual, not something this covers.
+
 - **`deidentify()` audits only sequences the parser opened, and one of the two ways it can fail to
   open one is silent.** Recursion is driven by `Element.items`, so a sequence stored as an opaque
   span is kept verbatim and its contents appear nowhere in the report. A defined-length Implicit VR

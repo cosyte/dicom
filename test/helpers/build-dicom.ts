@@ -106,6 +106,18 @@ export interface BuildDicomElement {
    * regardless of TS).
    */
   readonly value: Buffer;
+  /**
+   * **Malformed-fixture knob.** Added to the length actually written into the
+   * element's length field, leaving `value` untouched. `0`/omitted emits a
+   * well-formed element.
+   *
+   * Use it only to construct a length field that disagrees with the bytes
+   * present - the class of input `DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ` is
+   * about. A test asserting tolerant behaviour on such a file has to be able to
+   * build one, and hand-assembling raw buffers in the test hides which byte is
+   * the lie.
+   */
+  readonly declaredLengthDelta?: number;
 }
 
 /**
@@ -116,6 +128,25 @@ export interface BuildDicomSqItem {
   readonly elements: readonly (BuildDicomElement | BuildDicomSqElement)[];
   /** When true, item is encoded with undefined length + FFFE,E00D ItemDelim. */
   readonly undefinedLength?: boolean;
+  /**
+   * **Malformed-fixture knob**, defined-length items only. Added to the length
+   * written into the `(FFFE,E000)` Item's length field, leaving the item body
+   * untouched.
+   *
+   * A positive delta is the shape that made an item read past the end its
+   * enclosing `SQ` declared and swallow the element that follows the sequence.
+   * The precision matters: over-declaring **past the end of the buffer** only
+   * trips the truncation guard that already existed, so a fixture built that way
+   * is green against the defect. Over-declare by exactly the size of the element
+   * that follows.
+   */
+  readonly declaredLengthDelta?: number;
+  /**
+   * **Malformed-fixture knob**, undefined-length items only. Omits the
+   * `(FFFE,E00D)` Item Delimitation Item that terminates the item, so nothing
+   * inside the value says where the item ends.
+   */
+  readonly omitItemDelim?: boolean;
 }
 
 /**
@@ -129,6 +160,14 @@ export interface BuildDicomSqElement {
   /** When true, the SQ value uses undefined length + FFFE,E0DD SeqDelim. */
   readonly undefinedLength?: boolean;
   readonly items: readonly BuildDicomSqItem[];
+  /**
+   * **Malformed-fixture knob**, defined-length sequences only. Added to the
+   * length written into the `SQ` element's own length field, leaving the item
+   * stream untouched. PS3.5 2026c section 7.5.2 makes that field the exact
+   * extent of the item stream, so a non-zero delta is a sequence lying about
+   * where it ends.
+   */
+  readonly declaredLengthDelta?: number;
   /** Default `false`. When true, fragments are emitted as raw Buffer items. */
   readonly encapsulatedPixelData?: boolean;
   /** Required when `encapsulatedPixelData === true` - fragment byte streams. */
@@ -267,8 +306,9 @@ export function buildDicom(opts: BuildDicomOptions): Buffer {
 // Encoders
 // ---------------------------------------------------------------------------
 
-function buildExplicitLeElement(tag: Tag, vr: VR, value: Buffer): Buffer {
+function buildExplicitLeElement(tag: Tag, vr: VR, value: Buffer, delta = 0): Buffer {
   const { group, element } = splitTag(tag);
+  const declared = value.length + delta;
   const groupBuf = Buffer.alloc(2);
   groupBuf.writeUInt16LE(group, 0);
   const elementBuf = Buffer.alloc(2);
@@ -277,22 +317,22 @@ function buildExplicitLeElement(tag: Tag, vr: VR, value: Buffer): Buffer {
   if (LONG_FORM_VRS.has(vr)) {
     const reserved = Buffer.from([0x00, 0x00]);
     const lengthBuf = Buffer.alloc(4);
-    lengthBuf.writeUInt32LE(value.length, 0);
+    lengthBuf.writeUInt32LE(declared, 0);
     return Buffer.concat([groupBuf, elementBuf, vrBuf, reserved, lengthBuf, value]);
   }
   const lengthBuf = Buffer.alloc(2);
-  lengthBuf.writeUInt16LE(value.length, 0);
+  lengthBuf.writeUInt16LE(declared, 0);
   return Buffer.concat([groupBuf, elementBuf, vrBuf, lengthBuf, value]);
 }
 
-function buildImplicitLeElement(tag: Tag, value: Buffer): Buffer {
+function buildImplicitLeElement(tag: Tag, value: Buffer, delta = 0): Buffer {
   const { group, element } = splitTag(tag);
   const groupBuf = Buffer.alloc(2);
   groupBuf.writeUInt16LE(group, 0);
   const elementBuf = Buffer.alloc(2);
   elementBuf.writeUInt16LE(element, 0);
   const lengthBuf = Buffer.alloc(4);
-  lengthBuf.writeUInt32LE(value.length, 0);
+  lengthBuf.writeUInt32LE(value.length + delta, 0);
   return Buffer.concat([groupBuf, elementBuf, lengthBuf, value]);
 }
 
@@ -317,7 +357,7 @@ function swapBytes(src: Buffer, stride: 0 | 2 | 4 | 8): Buffer {
   return out;
 }
 
-function buildExplicitBeElement(tag: Tag, vr: VR, value: Buffer): Buffer {
+function buildExplicitBeElement(tag: Tag, vr: VR, value: Buffer, delta = 0): Buffer {
   const { group, element } = splitTag(tag);
   const groupBuf = Buffer.alloc(2);
   groupBuf.writeUInt16BE(group, 0);
@@ -330,14 +370,15 @@ function buildExplicitBeElement(tag: Tag, vr: VR, value: Buffer): Buffer {
   // of group/element 16-bit halves, each emitted BE - total swap count is
   // value.length/2.
   const swapped = swapBytes(value, BE_VR_STRIDE_LOCAL[vr]);
+  const declared = swapped.length + delta;
   if (LONG_FORM_VRS.has(vr)) {
     const reserved = Buffer.from([0x00, 0x00]);
     const lengthBuf = Buffer.alloc(4);
-    lengthBuf.writeUInt32BE(swapped.length, 0);
+    lengthBuf.writeUInt32BE(declared, 0);
     return Buffer.concat([groupBuf, elementBuf, vrBuf, reserved, lengthBuf, swapped]);
   }
   const lengthBuf = Buffer.alloc(2);
-  lengthBuf.writeUInt16BE(swapped.length, 0);
+  lengthBuf.writeUInt16BE(declared, 0);
   return Buffer.concat([groupBuf, elementBuf, vrBuf, lengthBuf, swapped]);
 }
 
@@ -419,10 +460,11 @@ function encodeSqItem(item: BuildDicomSqItem, ts: string): Buffer {
     return Buffer.concat([
       buildItemHeader(UNDEFINED_LENGTH, littleEndian),
       innerBody,
-      buildItemDelim(littleEndian),
+      ...(item.omitItemDelim === true ? [] : [buildItemDelim(littleEndian)]),
     ]);
   }
-  return Buffer.concat([buildItemHeader(innerBody.length, littleEndian), innerBody]);
+  const declared = innerBody.length + (item.declaredLengthDelta ?? 0);
+  return Buffer.concat([buildItemHeader(declared, littleEndian), innerBody]);
 }
 
 /** Encode an SQ element (header + items + optional SeqDelim). */
@@ -455,7 +497,14 @@ function encodeSqElement(sq: BuildDicomSqElement, ts: string): Buffer {
   }
   const body = Buffer.concat(itemBufs);
   const vr: VR = sq.explicitVr ?? "SQ";
-  return encodeSqHeader(sq.tag, vr, ts, body, /* undefinedLength */ false);
+  return encodeSqHeader(
+    sq.tag,
+    vr,
+    ts,
+    body,
+    /* undefinedLength */ false,
+    sq.declaredLengthDelta ?? 0,
+  );
 }
 
 /**
@@ -473,9 +522,10 @@ function encodeSqHeader(
   ts: string,
   body: Buffer,
   undefinedLength: boolean,
+  declaredLengthDelta = 0,
 ): Buffer {
   const { group, element } = splitTag(tag);
-  const length = undefinedLength ? UNDEFINED_LENGTH : body.length;
+  const length = undefinedLength ? UNDEFINED_LENGTH : body.length + declaredLengthDelta;
 
   if (ts === "1.2.840.10008.1.2") {
     // Implicit VR LE - no on-wire VR field.
@@ -514,9 +564,10 @@ function encodeAnyElement(el: BuildDicomElement | BuildDicomSqElement, ts: strin
 }
 
 function encodeElement(el: BuildDicomElement, ts: string): Buffer {
-  if (ts === "1.2.840.10008.1.2") return buildImplicitLeElement(el.tag, el.value);
-  if (ts === "1.2.840.10008.1.2.1") return buildExplicitLeElement(el.tag, el.vr, el.value);
-  if (ts === "1.2.840.10008.1.2.2") return buildExplicitBeElement(el.tag, el.vr, el.value);
+  const delta = el.declaredLengthDelta ?? 0;
+  if (ts === "1.2.840.10008.1.2") return buildImplicitLeElement(el.tag, el.value, delta);
+  if (ts === "1.2.840.10008.1.2.1") return buildExplicitLeElement(el.tag, el.vr, el.value, delta);
+  if (ts === "1.2.840.10008.1.2.2") return buildExplicitBeElement(el.tag, el.vr, el.value, delta);
   // TS-04 (Deflated Explicit VR LE) is handled at the buildDicom level:
   // dataset elements are encoded as Explicit VR LE, then the entire
   // dataset is deflated. encodeElement is never reached for TS-04.

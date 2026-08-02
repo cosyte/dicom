@@ -74,6 +74,7 @@ export const WARNING_CODES = {
 
   // === Reserved by later phases (declared, not emitted in Phase 2) ===
   DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED: "DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED", // reserved by Phase 7 - not emitted in Phase 2
+  DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED: "DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED", // emitted by deidentify(), never by the parser
   DICOM_PRIVATE_CREATOR_UNKNOWN: "DICOM_PRIVATE_CREATOR_UNKNOWN", // reserved by Phase 6 - not emitted in Phase 2
 } as const;
 
@@ -177,6 +178,8 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
     "Private element ({tag}) has a Private Creator the active profile's private dictionary does not name; falling back to UN. The creator string is not reproduced here - read the (gggg,00EE) element if you need it.",
   DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED:
     "Pixel Data is present and Burned In Annotation is not 'NO'; this metadata-only de-identifier cannot inspect or clean pixels. Recognizable text may remain burned into the image.",
+  DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED:
+    "Element ({tag}) {vr} was kept by the action table, but its value ends with {n} whole Data Element(s) - an over-declared Value Length swallowed what followed it. Emptied rather than kept, because the action table cannot see an attribute encoded inside a value. Read report.embeddedAttributes for the tags that were hidden there.",
   DICOM_BOM_IN_TEXT_VR: "Element ({tag}) {vr} value begins with a UTF-8 BOM; stripped on decode.",
   DICOM_TRAILING_NULL_IN_TEXT_VR:
     "Element ({tag}) {vr} value has a trailing NULL pad where SPACE is expected; trimmed.",
@@ -573,6 +576,33 @@ export function privateCreatorUnknown(position: DicomPosition, tag: Tag): DicomP
  */
 export function burnedInAnnotationNotRemoved(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED, position);
+}
+
+/**
+ * Build a `DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED` warning. Emitted by
+ * `deidentify()` - never by the parser - when a value the action table resolved
+ * to *keep* ends with a complete run of Data Elements that the run would have
+ * acted on had they been parsed as attributes (PS3.15 §E.1, §E.3.5).
+ *
+ * The carrier's tag and VR are this parser's own composed structural fields, and
+ * `n` is a count; the hidden tags travel on the report, not through a message.
+ *
+ * @example
+ * ```ts
+ * const w = embeddedAttributeRemoved({ byteOffset: 320 }, "00080008", "CS", 1);
+ * ```
+ */
+export function embeddedAttributeRemoved(
+  position: DicomPosition,
+  tag: Tag,
+  vr: VR,
+  count: number,
+): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED, position, {
+    tag,
+    vr,
+    n: count,
+  });
 }
 
 // ---------------------------------------------------------------------------

@@ -6,6 +6,51 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Security
 
+- **An element that over-declared its own Value Length swallowed the next element into its value,
+  where the PS3.15 Annex E action table cannot see it, and `deidentify()` wrote the identifier into
+  its output with a clean report** (`DICOM-OVERDECLARE-SWALLOWS-INTO-VALUE`, pre-existing and live
+  on the published `0.0.6`). **No sequence is involved.** PS3.5 2026c defines Value Length as "The
+  length of the Value Field of the Data Element" - that element's own value. A sender that writes a
+  larger number produces a file that is not detectably broken: the reader consumes the declared
+  count, the bytes it over-consumes are the following element header and all, every subsequent
+  offset still lines up, and nothing on the wire says which length field lied. After the swallow
+  there is no `(0010,0020)` in the object for Table E.1-1 to match, only bytes inside some other
+  attribute's value, so de-identification passed over PHI it never recognised as an attribute.
+  Measured on the committed grid at `244a372`: **877 of the 6,348 cells that parse** wrote a source
+  value into de-identified output this way, on Explicit VR LE and Explicit VR BE, **871 of them with
+  no warning on either channel and no throw under `{ strict: true }`**.
+
+  **`parseDicom` is unchanged, deliberately.** The two readings - "the length is right and the value
+  is odd" and "the length lied and the next element was absorbed" - produce identical bytes, so a
+  parser cannot choose between them and this release does not pretend to. `deidentify()` answers a
+  strictly narrower question, and only about values it was about to **keep**: does this value's tail
+  decode, in the file's own transfer syntax, as a complete run of Data Elements ending exactly at the
+  end of the value, at least one of which this run would have acted on, and containing a byte the
+  carrier's VR cannot legally hold? All three have to hold. If they do, the value is **emptied**
+  rather than kept, a new `DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED` warning appears on
+  `report.warnings`, and the new `report.embeddedAttributes` names the carrier, its VR and the tags
+  that were hiding inside it. PS3.15 §E.1 requires a de-identifier to "protect or retain all
+  instances of the Attributes listed in [Table E.1-1]"; §E.3.5 is the standard's own statement that
+  identifying information embedded **inside a string attribute's value** is in scope for removal.
+  Emptying is the fail-safe direction; keeping is not.
+
+  **What this does not cover, stated rather than implied.** Carriers are **string VRs only**. A
+  swallow into `OB`, `OW`, `UN` or any other binary VR is indistinguishable by content from a
+  legitimate value - arbitrary bytes are what those VRs are for - and scanning them would trade a
+  measured guarantee for a coin-flip that deletes real pixel and lookup-table data. A sequence the
+  parser declined to descend and kept as opaque bytes is a **different** defect with a different
+  remedy and is untouched here (1,155 grid cells, all Implicit VR LE, all carrying
+  `DICOM_SQ_NOT_DESCENDED`). And nothing here recovers the correct reading of a malformed file: the
+  carrier's parsed value still holds the absorbed bytes, and `ds.get("00100020")` still returns
+  nothing. This closes the leak, not the mis-read.
+
+  **Measured, on the same 76,293-cell grid, against `244a372`:** 2,127 leaking cells → 1,155; every
+  Explicit VR cell → **0**; and **0 cells whose parse differs in any respect** - reading, both
+  warning channels, `{ strict: true }`, and which values survive anywhere in the object are
+  byte-identical, because no parser file is touched. 0 new fatals, 0 lost values, 0 reports that lose
+  an attribute. `scripts/measure-sq-bound-grid.ts`, previously only on an unmerged branch, is
+  committed so every figure above is one command away.
+
 - **A defined-length sequence under Implicit VR Little Endian was never opened, so PHI nested inside
   one survived `deidentify()` into serialized output while the report said it had been removed**
   (`DICOM-IMPLICIT-SQ-NOT-DESCENDED`, pre-existing and live on the published `0.0.5`). The
