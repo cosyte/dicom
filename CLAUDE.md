@@ -63,6 +63,12 @@
   is not the token: **the slice asserted "linear" in three artifacts and cited `#51` as the reason to
   believe it, with a cost test whose fixture produced exactly one candidate.** A cost claim needs an
   adversarial fixture, not a big one.
+  **▶ DISCLOSED BY THE PASSING GRADE, NOT FIXED, AND IT IS THE SAME DISCIPLINE `#48` ESTABLISHED:**
+  `report.embeddedAttributes[].hidden` is **unbounded**. A 1 MiB Implicit VR carrier of chained
+  8-byte zero-length elements yields **131,072 tag strings** and ~270 ms in `deidentify()` against
+  1-2 ms to parse the same file. Linear, so not the CPU-DoS class above - but `49b6397` bound every
+  _other_ consumer-controlled diagnostic and this new one missed the cap. Take it before the next
+  `deident` slice.
   **▶ STILL OPEN, MEASURED, AND ITS OWN ITEM:** 1,155 grid cells still leak, and **within the grid**
   they are all Implicit VR LE carrying `DICOM_SQ_NOT_DESCENDED` - the `rawBytes` passthrough of a
   sequence the parser declined to descend (`DICOM-DEIDENT-RAWBYTES-PASSTHROUGH`). Read that as a

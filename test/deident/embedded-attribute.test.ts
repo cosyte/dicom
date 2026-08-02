@@ -322,9 +322,11 @@ describe("deidentify: an over-declared Value Length that swallowed the next elem
     expect(findEmbeddedAttributes(value, "CS", "explicitLE", () => true)).toBeUndefined();
   });
 
-  it("scans a large value in linear time rather than per-offset", () => {
-    // The sibling sequence slice was refused twice for a remedy whose cost was
-    // exponential in nesting depth. This one decodes each even offset once.
+  it("decodes each even offset of a large value once", () => {
+    // Exercises the backward memo pass only: a value of 0x41 produces **zero**
+    // tiling candidates, so it says nothing about the forward loop. The
+    // adversarial fixture that does - every even offset a candidate, which is
+    // where a quadratic hid for one round - is in `embedded-detector.test.ts`.
     const value = Buffer.alloc(1 << 19, 0x41);
     const started = performance.now();
     expect(findEmbeddedAttributes(value, "UT", "explicitLE", () => true)).toBeUndefined();
