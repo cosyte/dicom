@@ -68,10 +68,11 @@ import { Item } from "../dataset/item.js";
 import { isPrivateTag, splitTag } from "../dataset/tag.js";
 import type { Profile } from "../parser/types.js";
 import type { DicomParseWarning } from "../parser/warnings.js";
-import { burnedInAnnotationNotRemoved } from "../parser/warnings.js";
+import { burnedInAnnotationNotRemoved, embeddedAttributeRemoved } from "../parser/warnings.js";
 import { resolvePrivateTag } from "../profiles/lookup.js";
 import { type BodyEncoding, encodeDatasetElement } from "../serialize/element.js";
 import { dummyBytes, remapUidBytes, resolveAction, uidValueMultiplicity } from "./actions.js";
+import { findEmbeddedAttributes } from "./embedded.js";
 import {
   DEIDENTIFY_OPTIONS,
   DeidentifyError,
@@ -81,6 +82,7 @@ import {
   type DeidentifyOptions,
   type DeidentifyReport,
   type DeidentifyResult,
+  type EmbeddedAttributeFinding,
 } from "./types.js";
 import { makeUidRemapper, type UidRemapper } from "./uid.js";
 
@@ -262,6 +264,58 @@ interface ProcessResult {
   readonly elements: Map<Tag, Element>;
   readonly attributes: DeidentifiedAttribute[];
   readonly removedPrivateTags: Tag[];
+  readonly embeddedAttributes: EmbeddedAttributeFinding[];
+  readonly warnings: DicomParseWarning[];
+}
+
+/**
+ * `true` when this run would act on `tag` - the same resolution the Basic
+ * Profile and the active Retain Options go through, so the embedded-attribute
+ * scan can never disagree with the action table it is protecting.
+ *
+ * A private tag is always actionable. A private data element found inside
+ * another element's value carries no reachable `(gggg,00EE)` reservation, so no
+ * profile can vouch for it even with `RetainSafePrivate` active, and the Basic
+ * Profile removes private attributes by default.
+ */
+function actsOnTag(tag: Tag, ctx: DeidentifyContext): boolean {
+  if (isPrivateTag(tag)) return true;
+  const action = annexE(tag);
+  if (action === undefined) return false;
+  return resolveAction(effectiveCode(action, ctx.active)) !== "K";
+}
+
+/**
+ * Keep `el`'s value - unless whole Data Elements are encoded inside it.
+ *
+ * This is the one place a value the action table resolved to *keep* is checked
+ * against its own bytes. See `./embedded.ts` for what is and is not claimed; the
+ * short version is that an over-declared Value Length swallows the element that
+ * follows it into this element's value, where Table E.1-1 cannot see it, and the
+ * fail-safe answer is to empty rather than keep.
+ */
+function keepOrEmpty(
+  el: Element,
+  ctx: DeidentifyContext,
+  contextPath: readonly string[],
+  out: ProcessResult,
+): boolean {
+  const hidden = findEmbeddedAttributes(el.rawBytes, el.vr, ctx.encoding, (t) => actsOnTag(t, ctx));
+  if (hidden === undefined) {
+    out.elements.set(el.tag, el);
+    return true;
+  }
+  out.elements.set(el.tag, freshScalar(el, Buffer.alloc(0), 0));
+  out.embeddedAttributes.push({
+    tag: el.tag,
+    vr: el.vr,
+    hidden,
+    ...(contextPath.length > 0 ? { contextPath: [...contextPath] } : {}),
+  });
+  out.warnings.push(
+    embeddedAttributeRemoved({ byteOffset: el.byteOffset }, el.tag, el.vr, hidden.length),
+  );
+  return false;
 }
 
 /**
@@ -335,13 +389,15 @@ function processElements(
     elements: new Map<Tag, Element>(),
     attributes: [],
     removedPrivateTags: [],
+    embeddedAttributes: [],
+    warnings: [],
   };
   // Derived here, at every depth: `source` is exactly one Data Set.
   const creators = creatorsInScope(source);
 
   for (const el of source) {
     if (isPrivateTag(el.tag)) {
-      if (keepsPrivate(el, ctx, creators)) out.elements.set(el.tag, el);
+      if (keepsPrivate(el, ctx, creators)) keepOrEmpty(el, ctx, contextPath, out);
       else out.removedPrivateTags.push(el.tag);
       continue;
     }
@@ -353,7 +409,7 @@ function processElements(
       if (el.vr === "SQ" && el.items !== undefined) {
         out.elements.set(el.tag, descendSequence(el, ctx, contextPath, out));
       } else {
-        out.elements.set(el.tag, el);
+        keepOrEmpty(el, ctx, contextPath, out);
       }
       continue;
     }
@@ -368,8 +424,11 @@ function processElements(
     let applied: AppliedAction;
     switch (resolved) {
       case "K":
-        out.elements.set(el.tag, el);
-        applied = "kept";
+        // A `K` whose value turned out to carry whole Data Elements is emptied,
+        // and the audit says `emptied` rather than `kept`: a report that claims
+        // an attribute was retained when its value was dropped is worse than no
+        // report.
+        applied = keepOrEmpty(el, ctx, contextPath, out) ? "kept" : "emptied";
         break;
       case "X":
         applied = "removed";
@@ -420,6 +479,8 @@ function descendSequence(
     const inner = processElements(item.elements(), ctx, childPath);
     out.attributes.push(...inner.attributes);
     out.removedPrivateTags.push(...inner.removedPrivateTags);
+    out.embeddedAttributes.push(...inner.embeddedAttributes);
+    out.warnings.push(...inner.warnings);
     newItems.push(new Item({ index, warnings: [], elements: inner.elements }));
   });
   return rebuildSequence(el, newItems, ctx.encoding);
@@ -546,7 +607,8 @@ export function deidentify(
     littleEndian,
   };
 
-  const { elements, attributes, removedPrivateTags } = processElements(ds.elements(), ctx, []);
+  const processed = processElements(ds.elements(), ctx, []);
+  const { elements, attributes, removedPrivateTags, embeddedAttributes } = processed;
 
   // Required de-identification metadata (PS3.15 §E.1.1), inserted last.
   elements.set(
@@ -559,7 +621,7 @@ export function deidentify(
     insertedScalar(TAG_DEIDENTIFICATION_METHOD, "LO", Buffer.from(method, "latin1"), littleEndian),
   );
 
-  const warnings: DicomParseWarning[] = [];
+  const warnings: DicomParseWarning[] = [...processed.warnings];
   if (hasUncleanedBurnedIn(ds)) {
     const offset = ds.get(TAG_PIXEL_DATA)?.byteOffset ?? 0;
     warnings.push(burnedInAnnotationNotRemoved({ byteOffset: offset, fileMeta: false }));
@@ -576,6 +638,7 @@ export function deidentify(
   const report: DeidentifyReport = {
     attributes,
     removedPrivateTags,
+    embeddedAttributes,
     uidMap: remap.cache,
     warnings,
     retained: [...active],

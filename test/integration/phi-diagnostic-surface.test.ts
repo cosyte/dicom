@@ -182,7 +182,7 @@ function cp246Fixture(marker: string): Buffer {
  * `Dataset.warnings` is the structural-parse array. The second is easy to miss:
  * VR decode is lazy and post-parse, so a decode-time deviation cannot be folded
  * into the frozen `Dataset.warnings` and rides on `Element.value.warnings`
- * instead (`src/dataset/vr/types.ts`). Seven of the twenty-four codes live only
+ * instead (`src/dataset/vr/types.ts`). Seven of the twenty-six codes live only
  * there. Reading `.value` here is what forces the lazy decode, so a selector
  * that only walked `ds.warnings` would report green for the entire Phase 3
  * decode surface.
@@ -681,7 +681,39 @@ function deidIdentifiers(parsed: DeidSurface): readonly string[] {
     if (attr.repeatingGroup !== undefined) out.push(attr.repeatingGroup);
   }
   out.push(...parsed.report.removedPrivateTags, ...parsed.report.retained);
+  // `embeddedAttributes` is composed the same way and is swept the same way. Its
+  // `hidden` tags come from four bytes that were sitting *inside a value*, which
+  // is exactly the position this table exists to distrust: if a swallowed
+  // element's tag bytes were ever echoed as anything but a composed 8-hex-char
+  // tag, this is where it would show.
+  for (const found of parsed.report.embeddedAttributes) {
+    out.push(found.tag, found.vr, ...found.hidden, ...(found.contextPath ?? []));
+  }
   return out;
+}
+
+/**
+ * A root-level element whose Value Length over-declares by exactly the on-wire
+ * size of the `(0010,0020)` Patient ID that follows it, so the Patient ID is
+ * swallowed into the `(0008,0008)` value and `deidentify` empties the carrier
+ * rather than keeping it. **No sequence is involved**, which is the whole point
+ * of the shape: the marker is inside another attribute's value, at the root.
+ */
+function swallowedAttributeFixture(marker: string): Buffer {
+  const value = val(marker);
+  return buildDicom({
+    transferSyntax: TS_EXPLICIT_LE,
+    elements: [
+      {
+        tag: "00080008",
+        vr: "CS",
+        value: val("ORIGINAL"),
+        // 8-byte Explicit VR LE short-form header + the value that follows.
+        declaredLengthDelta: 8 + value.length,
+      },
+      { tag: "00100020", vr: "LO", value },
+    ],
+  });
 }
 
 /** Pixel Data present with a Burned In Annotation value that is not `"NO"`. */
@@ -709,6 +741,11 @@ const DEID_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     name: "deidentify: (0028,0301) BurnedInAnnotation [CS]",
     plant: burnedInFixture,
     expectCode: WARNING_CODES.DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED,
+  },
+  {
+    name: "deidentify: (0010,0020) PatientID [LO] swallowed into a kept (0008,0008) [CS] value",
+    plant: swallowedAttributeFixture,
+    expectCode: WARNING_CODES.DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED,
   },
   // The three slots below name no code, and unlike the File Meta four they
   // cannot: the attributes they plant into are deleted by Annex E, so there is

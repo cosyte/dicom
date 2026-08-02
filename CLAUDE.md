@@ -10,6 +10,74 @@
 
 ## Status
 
+- **De-identification refuses to keep a value that has whole Data Elements inside it**
+  (`DICOM-OVERDECLARE-SWALLOWS-INTO-VALUE`, closed after `0.0.6`). **This was the biggest PHI defect
+  in the package and no sequence was involved in it.** PS3.5 defines Value Length as the length of
+  _that_ element's Value Field; a sender that over-declares it produces a file whose reading is
+  self-consistent and whose **next element has been absorbed into the previous one's value, header
+  and all**. After that there is no `(0010,0020)` for Table E.1-1 to match, so `deidentify()` wrote
+  the identifier into its output with a clean report. Measured on `scripts/measure-sq-bound-grid.ts`
+  at `244a372`: **877 of 6,348 parsing cells**, 871 of them with no warning on either channel and no
+  throw under `{ strict: true }`.
+  **▶ THE PARSER IS UNTOUCHED ON PURPOSE, AND THAT IS THE REUSABLE PART.** An over-declaring element
+  and a well-formed one with an odd value are **byte-identical**; intent is not on the wire, so no
+  bound can choose between them - the same permanent fact about the format that killed one of the
+  two sanctioned cut-backs on `#51`. So the remedy is at the **de-identify boundary**, where PS3.15
+  actually places the obligation (§E.1 "all instances"; §E.3.5 for identifying information embedded
+  inside a string attribute). Consequence worth keeping: **0 of 76,293 grid cells differ in any
+  parse respect** - reading, both warning channels, `{ strict: true }`, marker survival - because no
+  parser file is touched. A fix that cannot regress a reading is a different risk class from one that
+  re-chooses a bound, and this family has now been refused four times for re-choosing bounds.
+  **▶ THREE CONJUNCTS, AND EACH HAS A CONTROL TEST THAT DROPS EXACTLY ONE.** `src/deident/embedded.ts`
+  empties a kept value only when its tail (1) tiles **exactly** to the end of the value as complete
+  Data Elements, (2) contains a tag **this run** would act on - resolved through the same
+  `resolveAction` the options resolve through, so `RetainUIDs` narrows it automatically - and (3)
+  contains a byte the carrier VR's repertoire cannot hold. The third is what turns "these bytes
+  happen to decode as an element" into "this is provably not a conformant value".
+  New surface: `EmbeddedAttributeFinding`, `DeidentifyReport.embeddedAttributes`, and
+  `DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED` (**26 Tier-2 codes, was 25**; snapshot updated deliberately).
+  **▶ THE REPERTOIRE CLAUSE IS §6.1.3 + TABLE 6.1-1, NOT §6.1.2.1, AND THE PER-VR RULE IS TABLE
+  6.2-1 - THE REFUTER RE-DERIVED BOTH AND THE FIRST ROUND HAD THEM WRONG.** §6.1.2.1 is "Default
+  Character Repertoire", two sentences about the ISO-IR 6 graphic set; it says nothing about control
+  characters. §6.1.3 and Table 6.1-1 permit exactly five C0 controls in DICOM text, and **Table 6.2-1
+  decides which of the five each VR may hold, in three tiers**: all five for `LT`/`ST`/`UT`, **ESC
+  only** for `LO`/`SH`/`UC`/`PN` ("shall not have Control Characters except ESC"), none for the rest.
+  Grouping `UC` with `LT`/`ST`/`UT` was **fail-open** on a text VR, and treating ESC as evidence in
+  `LO`/`SH`/`PN` was **fail-closed on exactly the attributes that carry names** - ESC is how ISO 2022
+  code extension is invoked under `(0008,0005)`. Both directions are now pinned by tests whose fixture
+  is a run whose only non-graphic byte is the control character under test, so the tier is the only
+  thing that can decide them. **A per-VR table transcribed from memory is not a citation.**
+  **▶ CARRIERS ARE STRING VRs ONLY, AND THAT RESIDUAL IS LIVE, NOT THEORETICAL.** The identical
+  over-declare into an `OB` / `OW` / `UN` / `US` carrier still writes the Patient ID into
+  de-identified output with **no warning and no report entry** - measured by the refuter on hand-built
+  files, identical on base. Arbitrary bytes are what those VRs are for, so no content test can decide
+  it. **The grid never puts a binary VR in the over-declaring role, so this residual is disclosed but
+  UNMEASURED and has no backlog item yet.**
+  **▶ THE COST BUG THE FIRST ROUND SHIPPED, BECAUSE IT IS THE SAME CLASS `#51` DIED ON TWICE.** The
+  backward memo pass was linear, but the forward loop re-scanned the tail **once per candidate
+  offset**, and `(FFFE,xxxx)` bytes make **every** even offset a candidate: 256 KiB of attacker-chosen
+  value took **22.5 s** in `deidentify()` against 2-4 ms to parse the same file, 257 s at the 1 MiB
+  cap. `MAX_SCAN_BYTES` caps it **per element, not per file**. The remedy is one token - `return`
+  instead of `continue`, valid because the repertoire test is **monotone in the offset** (a later
+  candidate's region is a subset of an earlier one's) - and it is byte-identical in output. The lesson
+  is not the token: **the slice asserted "linear" in three artifacts and cited `#51` as the reason to
+  believe it, with a cost test whose fixture produced exactly one candidate.** A cost claim needs an
+  adversarial fixture, not a big one.
+  **▶ DISCLOSED BY THE PASSING GRADE, NOT FIXED, AND IT IS THE SAME DISCIPLINE `#48` ESTABLISHED:**
+  `report.embeddedAttributes[].hidden` is **unbounded**. A 1 MiB Implicit VR carrier of chained
+  8-byte zero-length elements yields **131,072 tag strings** and ~270 ms in `deidentify()` against
+  1-2 ms to parse the same file. Linear, so not the CPU-DoS class above - but `49b6397` bound every
+  _other_ consumer-controlled diagnostic and this new one missed the cap. Take it before the next
+  `deident` slice.
+  **▶ STILL OPEN, MEASURED, AND ITS OWN ITEM:** 1,155 grid cells still leak, and **within the grid**
+  they are all Implicit VR LE carrying `DICOM_SQ_NOT_DESCENDED` - the `rawBytes` passthrough of a
+  sequence the parser declined to descend (`DICOM-DEIDENT-RAWBYTES-PASSTHROUGH`). Read that as a
+  statement about the grid, **not** as an exhaustive account of what still leaks: the binary-carrier
+  residual above is outside anything the grid sweeps.
+  **▶ `scripts/measure-sq-bound-grid.ts` IS NOW ON `main`.** It was written on the refused `#51`
+  branch, which made this repo's own "re-run the grid before changing this code" unactionable. Cherry
+  -picked with the `declaredLengthDelta` / `omitItemDelim` knobs in `test/helpers/build-dicom.ts` that
+  it needs. 76,293 cells; `--diff` prints every number the artifacts state.
 - **Phase 7 of 8 complete** (580 tests passing, 1 todo). Metadata-level de-identification live:
   `deidentify(ds, options?)` applies the PS3.15 Annex E Basic Application Level Confidentiality Profile
   plus the nine metadata-affecting Options, driven by the generated Table E.1-1 action map. Pure

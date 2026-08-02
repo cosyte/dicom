@@ -22,4 +22,5 @@ export {
   type DeidentifyOptions,
   type DeidentifyReport,
   type DeidentifyResult,
+  type EmbeddedAttributeFinding,
 } from "./types.js";

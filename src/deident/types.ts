@@ -6,7 +6,7 @@
  */
 
 import type { AnnexEActionCode, AnnexEOption } from "../dictionary/annex-e.js";
-import type { Tag } from "../dictionary/types.js";
+import type { Tag, VR } from "../dictionary/types.js";
 import type { Profile } from "../parser/types.js";
 import type { DicomParseWarning } from "../parser/warnings.js";
 
@@ -111,6 +111,42 @@ export interface DeidentifiedAttribute {
 }
 
 /**
+ * One value that was emptied because a Data Element was found **inside** it.
+ *
+ * PS3.5 defines Value Length as the length of that element's own Value Field. A
+ * sender that over-declares it produces a file whose reading is self-consistent
+ * and whose next element has been absorbed into the previous one's value - and
+ * Table E.1-1 is keyed by tag, so an absorbed `(0010,0020)` is not an attribute
+ * any longer and no action fires on it. `deidentify` therefore refuses to keep a
+ * value whose tail decodes as whole Data Elements it would have acted on
+ * (PS3.15 §E.1 "all instances"; §E.3.5 is the standard's own precedent for
+ * removing identifying information embedded inside a string attribute).
+ *
+ * Every field is structural: `tag` and `vr` are the carrier's, and `hidden`
+ * holds tags composed from four bytes each. No decoded value appears here, so
+ * this is safe to log.
+ *
+ * @example
+ * ```ts
+ * import { deidentify, parseDicom } from "@cosyte/dicom";
+ * const { report } = deidentify(parseDicom(buf));
+ * for (const e of report.embeddedAttributes) {
+ *   console.warn(`${e.tag} hid ${e.hidden.join(", ")} in its value`);
+ * }
+ * ```
+ */
+export interface EmbeddedAttributeFinding {
+  /** The carrier - the element whose over-declared value held the others. */
+  readonly tag: Tag;
+  /** The carrier's VR. Always one of the string VRs; binary VRs are not scanned. */
+  readonly vr: VR;
+  /** The tags of the Data Elements found inside the carrier's value, in wire order. */
+  readonly hidden: readonly Tag[];
+  /** Tag/index chain when the carrier is inside a sequence item; omitted at the root. */
+  readonly contextPath?: readonly string[];
+}
+
+/**
  * The audit trail returned alongside the de-identified dataset.
  *
  * Every field except one is composed from static tables: tags, Part 6 keywords,
@@ -134,6 +170,14 @@ export interface DeidentifyReport {
   readonly attributes: readonly DeidentifiedAttribute[];
   /** Private tags removed under the Basic Profile (kept ones are omitted). */
   readonly removedPrivateTags: readonly Tag[];
+  /**
+   * Values emptied because whole Data Elements were encoded inside them by an
+   * over-declared Value Length. Empty on a well-formed file; a non-empty array
+   * means the *source* was malformed in a way that hid attributes from the
+   * action table, so treat it as a data-quality alarm on the sender as well as
+   * an audit line. See {@link EmbeddedAttributeFinding}.
+   */
+  readonly embeddedAttributes: readonly EmbeddedAttributeFinding[];
   /**
    * Source UID → replacement UID, for cross-file consistency. The **keys are
    * document values**, not composed identifiers: this is the one field of the
