@@ -32,18 +32,42 @@
   empties a kept value only when its tail (1) tiles **exactly** to the end of the value as complete
   Data Elements, (2) contains a tag **this run** would act on - resolved through the same
   `resolveAction` the options resolve through, so `RetainUIDs` narrows it automatically - and (3)
-  contains a byte the carrier VR's repertoire cannot hold (PS3.5 §6.1.2.1). The third is what turns
-  "these bytes happen to decode as an element" into "this is provably not a conformant value".
+  contains a byte the carrier VR's repertoire cannot hold. The third is what turns "these bytes
+  happen to decode as an element" into "this is provably not a conformant value".
   New surface: `EmbeddedAttributeFinding`, `DeidentifyReport.embeddedAttributes`, and
   `DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED` (**26 Tier-2 codes, was 25**; snapshot updated deliberately).
-  **▶ CARRIERS ARE STRING VRs ONLY, AND THAT RESIDUAL IS PINNED BY A TEST.** A swallow into `OB` /
-  `OW` / `UN` is indistinguishable by content from legitimate data; scanning binary VRs would trade a
-  measured guarantee for a coin-flip that deletes pixel and LUT data. The scan is **linear** (one
-  backward memoised pass over even offsets), which is the trap `#51` was refused on twice.
-  **▶ STILL OPEN, MEASURED, AND ITS OWN ITEM:** 1,155 grid cells still leak, **all** Implicit VR LE,
-  **all** carrying `DICOM_SQ_NOT_DESCENDED` - the `rawBytes` passthrough of a sequence the parser
-  declined to descend (`DICOM-DEIDENT-RAWBYTES-PASSTHROUGH`). Same harm, different mechanism, not
-  folded in here.
+  **▶ THE REPERTOIRE CLAUSE IS §6.1.3 + TABLE 6.1-1, NOT §6.1.2.1, AND THE PER-VR RULE IS TABLE
+  6.2-1 - THE REFUTER RE-DERIVED BOTH AND THE FIRST ROUND HAD THEM WRONG.** §6.1.2.1 is "Default
+  Character Repertoire", two sentences about the ISO-IR 6 graphic set; it says nothing about control
+  characters. §6.1.3 and Table 6.1-1 permit exactly five C0 controls in DICOM text, and **Table 6.2-1
+  decides which of the five each VR may hold, in three tiers**: all five for `LT`/`ST`/`UT`, **ESC
+  only** for `LO`/`SH`/`UC`/`PN` ("shall not have Control Characters except ESC"), none for the rest.
+  Grouping `UC` with `LT`/`ST`/`UT` was **fail-open** on a text VR, and treating ESC as evidence in
+  `LO`/`SH`/`PN` was **fail-closed on exactly the attributes that carry names** - ESC is how ISO 2022
+  code extension is invoked under `(0008,0005)`. Both directions are now pinned by tests whose fixture
+  is a run whose only non-graphic byte is the control character under test, so the tier is the only
+  thing that can decide them. **A per-VR table transcribed from memory is not a citation.**
+  **▶ CARRIERS ARE STRING VRs ONLY, AND THAT RESIDUAL IS LIVE, NOT THEORETICAL.** The identical
+  over-declare into an `OB` / `OW` / `UN` / `US` carrier still writes the Patient ID into
+  de-identified output with **no warning and no report entry** - measured by the refuter on hand-built
+  files, identical on base. Arbitrary bytes are what those VRs are for, so no content test can decide
+  it. **The grid never puts a binary VR in the over-declaring role, so this residual is disclosed but
+  UNMEASURED and has no backlog item yet.**
+  **▶ THE COST BUG THE FIRST ROUND SHIPPED, BECAUSE IT IS THE SAME CLASS `#51` DIED ON TWICE.** The
+  backward memo pass was linear, but the forward loop re-scanned the tail **once per candidate
+  offset**, and `(FFFE,xxxx)` bytes make **every** even offset a candidate: 256 KiB of attacker-chosen
+  value took **22.5 s** in `deidentify()` against 2-4 ms to parse the same file, 257 s at the 1 MiB
+  cap. `MAX_SCAN_BYTES` caps it **per element, not per file**. The remedy is one token - `return`
+  instead of `continue`, valid because the repertoire test is **monotone in the offset** (a later
+  candidate's region is a subset of an earlier one's) - and it is byte-identical in output. The lesson
+  is not the token: **the slice asserted "linear" in three artifacts and cited `#51` as the reason to
+  believe it, with a cost test whose fixture produced exactly one candidate.** A cost claim needs an
+  adversarial fixture, not a big one.
+  **▶ STILL OPEN, MEASURED, AND ITS OWN ITEM:** 1,155 grid cells still leak, and **within the grid**
+  they are all Implicit VR LE carrying `DICOM_SQ_NOT_DESCENDED` - the `rawBytes` passthrough of a
+  sequence the parser declined to descend (`DICOM-DEIDENT-RAWBYTES-PASSTHROUGH`). Read that as a
+  statement about the grid, **not** as an exhaustive account of what still leaks: the binary-carrier
+  residual above is outside anything the grid sweeps.
   **▶ `scripts/measure-sq-bound-grid.ts` IS NOW ON `main`.** It was written on the refused `#51`
   branch, which made this repo's own "re-run the grid before changing this code" unactionable. Cherry
   -picked with the `declaredLengthDelta` / `omitItemDelim` knobs in `test/helpers/build-dicom.ts` that

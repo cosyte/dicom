@@ -26,7 +26,8 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   strictly narrower question, and only about values it was about to **keep**: does this value's tail
   decode, in the file's own transfer syntax, as a complete run of Data Elements ending exactly at the
   end of the value, at least one of which this run would have acted on, and containing a byte the
-  carrier's VR cannot legally hold? All three have to hold. If they do, the value is **emptied**
+  carrier's VR cannot legally hold (PS3.5 §6.1.3 and Table 6.1-1 permit five C0 control characters in
+  DICOM text; **Table 6.2-1 decides which of the five each VR may hold**, in three tiers)? All three have to hold. If they do, the value is **emptied**
   rather than kept, a new `DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED` warning appears on
   `report.warnings`, and the new `report.embeddedAttributes` names the carrier, its VR and the tags
   that were hiding inside it. PS3.15 §E.1 requires a de-identifier to "protect or retain all
@@ -34,10 +35,14 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   identifying information embedded **inside a string attribute's value** is in scope for removal.
   Emptying is the fail-safe direction; keeping is not.
 
-  **What this does not cover, stated rather than implied.** Carriers are **string VRs only**. A
-  swallow into `OB`, `OW`, `UN` or any other binary VR is indistinguishable by content from a
-  legitimate value - arbitrary bytes are what those VRs are for - and scanning them would trade a
-  measured guarantee for a coin-flip that deletes real pixel and lookup-table data. A sequence the
+  **What this does not cover, stated rather than implied.** Carriers are **string VRs only**, and the
+  residual is live rather than theoretical: the identical over-declare into an `OB`, `OW`, `UN` or
+  `US` carrier still writes the identifier into de-identified output, with **no warning and no report
+  entry**, exactly as before. Arbitrary bytes are what those VRs are for, so no content test can tell
+  a swallow from a legitimate value there, and scanning them would trade a measured guarantee for a
+  coin-flip that deletes real pixel and lookup-table data. The committed grid never puts a binary VR
+  in the over-declaring role, so this residual is **disclosed but unmeasured** and needs its own
+  item. A sequence the
   parser declined to descend and kept as opaque bytes is a **different** defect with a different
   remedy and is untouched here (1,155 grid cells, all Implicit VR LE, all carrying
   `DICOM_SQ_NOT_DESCENDED`). And nothing here recovers the correct reading of a malformed file: the

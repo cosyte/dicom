@@ -61,31 +61,49 @@
  *    exactly the way they narrow the Basic Profile - one authority, not two.
  *  - **A byte outside the carrier VR's repertoire** turns "these bytes happen to
  *    decode as an element" into "these bytes are provably not a conformant value
- *    of this VR". PS3.5 §6.1.2.1 admits no control characters in the string VRs
- *    at all, and only ESC/CR/LF/FF/TAB in `LT`/`ST`/`UT`/`UC`; a Data Element
+ *    of this VR". PS3.5 §6.1.3 and Table 6.1-1 permit exactly **five** C0
+ *    control characters anywhere in DICOM text (TAB, LF, FF, CR, ESC), and
+ *    **Table 6.2-1 decides which of the five each VR may actually hold** - the
+ *    per-VR statement is the governing one and the three tiers are transcribed
+ *    in {@link CONTROL_TOLERANT_VRS} / {@link ESC_ONLY_VRS}. A Data Element
  *    header carries tag and length bytes that are overwhelmingly outside that.
  *    Without this conjunct a long uppercase `LO` value could in principle tile;
  *    with it, a false positive additionally requires the carrier to already be
  *    non-conformant.
  *
  * **Carriers are string VRs only** ({@link SCANNABLE_CARRIER_VRS}), which is
- * where the third conjunct has meaning. A swallow into `OB`, `OW`, `UN` or any
- * other binary VR is undetectable by content - arbitrary bytes are exactly what
- * those VRs are for - and is a stated residual, not something quietly covered.
- * `SQ` is also out of scope here: a sequence the parser declined to descend
- * keeps its item stream as opaque bytes, which is a different defect with a
- * different remedy (`DICOM-DEIDENT-RAWBYTES-PASSTHROUGH`), and folding it in
- * would make this module answer a question it has not measured.
+ * where the third conjunct has meaning. A swallow into `OB`, `OW`, `UN`, `US`
+ * or any other binary VR is undetectable by content - arbitrary bytes are
+ * exactly what those VRs are for - and **it leaks exactly as it did before this
+ * module existed**: the identifier reaches de-identified output, with no warning
+ * and no report entry. That is a live, disclosed residual with no remedy here,
+ * not something quietly covered, and it is pinned by a test rather than left to
+ * this paragraph. `SQ` is out of scope for the same style of reason: a sequence
+ * the parser declined to descend keeps its item stream as opaque bytes, which is
+ * a different defect with a different remedy
+ * (`DICOM-DEIDENT-RAWBYTES-PASSTHROUGH`), and folding it in would make this
+ * module answer a question it has not measured.
  *
  * ## Cost
  *
- * Linear in the value's length. `tiles[]`/`hit[]` are computed by one backward
- * pass over even offsets, each doing one constant-time header decode, so a
- * pathological value cannot buy super-linear work - the trap the sibling
- * sequence slice was refuted on twice. Values longer than
- * {@link MAX_SCAN_BYTES} are scanned over their trailing window only; a swallow
- * lives at the tail by construction, and the bound is what keeps the memo arrays
- * from following an attacker-chosen length.
+ * Linear in the value's length, and the second loop is where that was **not**
+ * true for one round. `tiles[]`/`hit[]` are computed by a single backward pass
+ * over even offsets, each doing one constant-time header decode. The forward
+ * loop then does **at most one** repertoire scan, because the repertoire test is
+ * monotone in the offset: the region it examines is `window.subarray(off)`, so a
+ * later candidate's region is a *subset* of an earlier one's, and if the lowest
+ * candidate shows no violating byte no later one can either. Continuing past
+ * that point instead of returning would re-scan the tail once per candidate -
+ * and `(FFFE,xxxx)` bytes make **every** even offset a candidate, which is a
+ * quadratic value an attacker composes in a few hundred bytes. That is the same
+ * CPU-DoS class the sibling sequence slice was refused on twice, and it is the
+ * reason `findEmbeddedAttributes` returns rather than continues.
+ *
+ * Values longer than {@link MAX_SCAN_BYTES} are scanned over their trailing
+ * window only; a swallow lives at the tail by construction, and the bound is
+ * what keeps the memo arrays from following an attacker-chosen length. Note the
+ * cap is **per element**, so it bounds one call and not a whole file - the
+ * linearity above is what actually keeps a file affordable.
  *
  * @module
  */
@@ -137,11 +155,17 @@ export const SCANNABLE_CARRIER_VRS: ReadonlySet<VR> = new Set<VR>([
 ]);
 
 /**
- * The VRs PS3.5 §6.1.2.1 lets carry the five formatting control characters
- * (ESC, TAB, CR, LF, FF). Every other string VR admits none at all.
+ * The five C0 control characters PS3.5 §6.1.3 and Table 6.1-1 permit anywhere in
+ * DICOM text: "only a subset of five Control Characters from the C0 set shall be
+ * used in DICOM for the encoding of Control Characters in text strings".
+ *
+ * That clause bounds the whole standard. **Which of the five a given VR may
+ * hold is decided per VR by Table 6.2-1**, and the two tiers below transcribe
+ * it. Getting that split wrong is unsafe in both directions - too tolerant lets
+ * a header byte pass as legitimate content, too strict makes a conformant value
+ * look like evidence of a swallow - so it is written out rather than
+ * approximated by a single set.
  */
-const CONTROL_TOLERANT_VRS: ReadonlySet<VR> = new Set<VR>(["LT", "ST", "UT", "UC"]);
-
 const ALLOWED_CONTROL_BYTES: ReadonlySet<number> = new Set<number>([
   0x09, // TAB
   0x0a, // LF
@@ -149,6 +173,31 @@ const ALLOWED_CONTROL_BYTES: ReadonlySet<number> = new Set<number>([
   0x0d, // CR
   0x1b, // ESC
 ]);
+
+/**
+ * The three VRs Table 6.2-1 lets carry all five. Verbatim, for `LT`, `ST` and
+ * `UT` alike: "It may contain the Graphic Character set and the Control
+ * Characters, TAB, CR, LF, FF, and ESC."
+ *
+ * `UC` is deliberately **not** here, and that is the correction worth keeping:
+ * its own row reads "The string shall not have Control Characters except for
+ * ESC", so admitting TAB/CR/LF/FF for it would be fail-open on a text VR.
+ */
+const CONTROL_TOLERANT_VRS: ReadonlySet<VR> = new Set<VR>(["LT", "ST", "UT"]);
+
+/**
+ * The VRs Table 6.2-1 permits `ESC` in and nothing else - `LO`, `SH`, `UC` and
+ * `PN` each say "shall not have Control Characters except ESC", `PN`'s row
+ * adding "when used for escape sequences". `ESC` is how ISO 2022 code extension
+ * is invoked under `(0008,0005)`, so a conformant Japanese or Korean patient
+ * name legitimately contains it: treating it as evidence of a swallow would put
+ * a false positive on precisely the attributes that carry names.
+ *
+ * Every remaining VR in {@link SCANNABLE_CARRIER_VRS} admits no control
+ * character at all (`AE`'s row: "and all control characters"; `CS`, `DA`, `DS`,
+ * `DT`, `IS`, `TM`, `UI`, `AS`, `UR` are restricted to narrow graphic subsets).
+ */
+const ESC_ONLY_VRS: ReadonlySet<VR> = new Set<VR>(["LO", "SH", "UC", "PN"]);
 
 /**
  * Trailing window scanned on an over-long value. A swallow ends at the end of
@@ -255,10 +304,14 @@ function isScannableCarrier(vr: VR): boolean {
  */
 function hasByteOutsideRepertoire(region: Buffer, carrierVr: VR): boolean {
   if (!KNOWN_VRS.has(carrierVr)) return true;
-  const tolerant = CONTROL_TOLERANT_VRS.has(carrierVr);
+  const allFive = CONTROL_TOLERANT_VRS.has(carrierVr);
+  const escOnly = ESC_ONLY_VRS.has(carrierVr);
   for (const byte of region) {
+    // 0x7F (DELETE) is neither a graphic character nor one of the five C0
+    // controls Table 6.1-1 admits, so it is out of every VR's repertoire.
     if (byte >= 0x20 && byte !== 0x7f) continue;
-    if (tolerant && ALLOWED_CONTROL_BYTES.has(byte)) continue;
+    if (allFive && ALLOWED_CONTROL_BYTES.has(byte)) continue;
+    if (escOnly && byte === 0x1b) continue;
     return true;
   }
   return false;
@@ -323,7 +376,15 @@ export function findEmbeddedAttributes(
 
   for (let off = 0; off + MIN_HEADER <= n; off += 2) {
     if (hit[off >> 1] !== 1) continue;
-    if (!hasByteOutsideRepertoire(window.subarray(off), carrierVr)) continue;
+    // At most one repertoire scan per call, and `return` rather than `continue`
+    // is what makes that true. The region examined is `window.subarray(off)`, so
+    // every later candidate's region is a subset of this one's: if the lowest
+    // candidate holds no byte outside the repertoire, none of the later ones can
+    // either. Continuing would re-scan the tail once per candidate, and a value
+    // whose every even offset is a candidate - trivially built out of
+    // `(FFFE,xxxx)` marker bytes - would then cost O(n^2) on the de-identify
+    // path. Same CPU-DoS class the sibling sequence slice was refused on twice.
+    if (!hasByteOutsideRepertoire(window.subarray(off), carrierVr)) return undefined;
     const tags: Tag[] = [];
     let pos = off;
     while (pos < n) {
