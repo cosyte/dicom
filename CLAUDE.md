@@ -10,6 +10,72 @@
 
 ## Status
 
+- **De-identification refuses to keep a sequence it could not walk**
+  (`DICOM-DEIDENT-RAWBYTES-PASSTHROUGH`, closed after `0.0.6`). **This was the larger half of the
+  2,127 and it was never the same defect as the entry below.** A defined-length Implicit VR LE value
+  that PS3.6 resolves to `SQ` but that is not a valid item stream is refused by the parser
+  (`items: undefined`, `DICOM_SQ_NOT_DESCENDED`, declared span kept on `rawBytes`) - correct for a
+  parser, unsafe for a de-identifier, which recursed only into sequences with items and so re-emitted
+  the span verbatim. Measured on `scripts/measure-sq-bound-grid.ts` at `d1031f5`: **1,155 of 6,348
+  parsing cells**, all Implicit VR LE, all carrying exactly `["DICOM_SQ_NOT_DESCENDED"]`. Now **0**.
+  **▶ THE TRIGGER IS THE PARSER'S RECORDED REFUSAL, NOT A CONTENT TEST, AND THAT IS THE REUSABLE
+  PART.** `deidentify()` reads `el.vr === "SQ" && el.items === undefined` and empties. There is **no
+  scan**, so there is no per-offset loop and no cost that follows an attacker-chosen value length -
+  the exact surface the entry below shipped quadratic for one round. Grounded in PS3.5 2026c §7.5.1
+  ("Each Item Value shall contain a DICOM Data Set composed of Data Elements", so an `SQ` value is
+  never legitimately opaque) and PS3.15 2026c §**E.1.1** ("whether contained in the top level Data
+  Set or embedded in an Item of a Sequence of Items"). **Cite E.1.1, not E.1** - E.1 is the parent
+  section; both sentences live in E.1.1 "De-identifier", each unique in the document, read from the
+  re-derived pins. §E.1.1's own SOP-Instance-UID escalation ("the enclosing Attribute in the
+  top-level Data Set must be encrypted in its entirety") is the standard's precedent for answering at
+  the carrier, and is **about the encrypt-and-replace mechanism**, so cite it as precedent and not as
+  a rule about Table E.1-1.
+  **▶ IT COSTS CONTENT AND THE COST IS A PUBLISHED NUMBER, NOT A PHRASE.** 2,448 grid cells lose a
+  value from de-identified output; **1,293 of them were not leaking anything** and pay only for the
+  guarantee. The grid could not express this before - `lostValue` compares _parse_ trees, so no
+  de-identify-boundary remedy can ever move it. A `deidSeen` column and a printed
+  `cells differing in any PARSE respect` were added, the latter because `changed`/`structural` both
+  move for a de-identify-only difference and are the wrong numbers to quote for "the reading is
+  untouched".
+  New surface: `UnauditableSequenceFinding`, `DeidentifyReport.unauditableSequences`,
+  `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` (**27 Tier-2 codes, was 26**). A listed `SQ` kept by a Retain
+  Option now audits as `emptied`, not `kept` - it produced an empty sequence anyway while claiming
+  retention.
+  **▶ THE RECORD IS CAPPED AT 64 PER RUN AND THE ACTION NEVER IS, AND THE CAP HAS TO BE RUN-SCOPED.**
+  `#48` bound every consumer-controlled diagnostic; `#53` then shipped a new unbounded one, and the
+  refuter measured this slice's first draft at **58,255 findings and 36 MB of warnings from a 1 MiB
+  input** because element count is attacker-chosen exactly as a value length is. The budget lives on
+  `DeidentifyContext` and is **deliberately mutable**: `processElements` builds a fresh result per
+  Data Set and merges upward, so a per-result cap bounds each item independently and not the file.
+  The registry message was also cut from ~620 to ~150 characters, because a per-element string is
+  multiplied by that same count. **`ds.warnings` itself stays uncapped** (pre-existing, shared with
+  every parser warning, and no parser file is touched here), which is why `DICOM_SQ_NOT_DESCENDED`'s
+  text is kept terse rather than restating the reasoning: pass 2 measured the slice's first draft
+  growing it 225 -> 371 characters against an uncapped per-element emission.
+  **▶ THREE CLAIMS THIS SLICE SHIPPED WERE FALSE AND THE REFUTER CAUGHT ALL THREE. THE FIX IS ALWAYS
+  TO CORRECT THE CLAIM, NEVER TO WIDEN THE GUARD** (`#50`'s rule). (1) `isUnauditableSequence`'s own
+  JSDoc named the CP-246 `UN` shape as a covered "route" while three other artifacts in the same
+  commit said it still leaks. (2) The `DICOM_SQ_NOT_DESCENDED` message and the README/troubleshooting
+  rows said `deidentify()` empties such an element, **unconditionally** - but `keepsPrivate` decides
+  first, so a private `SQ` vouched for by `RetainSafePrivate` + a `Profile` is kept verbatim and
+  **measurably still leaks**. (3) "the sender's encoding is why" is false for a **conformant** file
+  nested past `NESTING_DEPTH_LIMIT` (64), which is this library's bound, not PS3.5's. Both carve-outs
+  are now pinned by tests so the claims and the code cannot drift apart again.
+  **▶ THE BINARY-VR RESIDUAL IS NO LONGER UNMEASURED, AND THE SWEEP FOUND A SECOND MECHANISM.** The
+  grid gained an over-declaring **leaf** carrier (`LEAF_CARRIERS` in the grid script): **19 leaking cells,
+  identical on both trees**, `PRE-EXISTING`. **11 at `delta=18`** are the disclosed swallow into
+  `OB`/`OW`/`US`/`UN`, silent, with the `LO`/`ST` controls on the identical fixture at **0** - that
+  contrast is what proves it is the carrier's VR and not a new defect. **8 at `delta=-6` are a
+  different thing entirely**: an _under_-declare, where the leftover value bytes are read as a Data
+  Element header and the identifier lands inside a manufactured element with an unknown on-wire VR
+  (measured: tag `(4156,554C)`, VR `"E "`). That one hits **string** carriers too and was disclosed
+  nowhere before. Neither is fixed here.
+  **▶ STILL LEAKING, MEASURED, AND IT CANNOT BE CLOSED BY WIDENING THIS RULE:** an undefined-length
+  `UN` whose CP-246 descent was refused keeps `vr === "UN"`, and **every ordinary `UN` element also
+  has `items === undefined`**, so the same test there would empty every unknown-VR element in every
+  file. It needs a parser-set mark, i.e. its own slice. Measured on a hand-built file: identifier in
+  the output, no report entry, only `DICOM_VR_MISMATCH`. A **private** `SQ` under `RetainSafePrivate`
+  - a `Profile` is still kept verbatim, deliberately - the profile vouched for it.
 - **De-identification refuses to keep a value that has whole Data Elements inside it**
   (`DICOM-OVERDECLARE-SWALLOWS-INTO-VALUE`, closed after `0.0.6`). **This was the biggest PHI defect
   in the package and no sequence was involved in it.** PS3.5 defines Value Length as the length of
@@ -52,7 +118,7 @@
   de-identified output with **no warning and no report entry** - measured by the refuter on hand-built
   files, identical on base. Arbitrary bytes are what those VRs are for, so no content test can decide
   it. **The grid never puts a binary VR in the over-declaring role, so this residual is disclosed but
-  UNMEASURED and has no backlog item yet.**
+  UNMEASURED and has no backlog item yet.** (Measured by the entry above: 19 grid cells.)
   **▶ THE COST BUG THE FIRST ROUND SHIPPED, BECAUSE IT IS THE SAME CLASS `#51` DIED ON TWICE.** The
   backward memo pass was linear, but the forward loop re-scanned the tail **once per candidate
   offset**, and `(FFFE,xxxx)` bytes make **every** even offset a candidate: 256 KiB of attacker-chosen

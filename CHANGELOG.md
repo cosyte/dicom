@@ -6,6 +6,73 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Security
 
+- **A sequence the parser could not open was passed through `deidentify()` as raw bytes, so a
+  `(0010,0020)` Patient ID inside it reached de-identified output next to the
+  `(0012,0062) PatientIdentityRemoved = YES` this library writes** (`DICOM-DEIDENT-RAWBYTES-PASSTHROUGH`,
+  pre-existing and live on the published `0.0.6`). It is the larger half of the 2,127 leaking grid
+  cells the previous entry decomposed: **1,155 of the 6,348 cells that parse**, all Implicit VR LE,
+  all carrying exactly `["DICOM_SQ_NOT_DESCENDED"]`. Re-measured before anything was changed, with a
+  negative control (reverting the previous entry's call site restored exactly 2,127) so the harness
+  is known live rather than assumed.
+
+  When an element resolves to `SQ` from PS3.6 under Implicit VR LE and its defined-length value is
+  not a valid `(FFFE,E000)` item stream, the parser refuses the descent and keeps the declared span
+  on `Element.rawBytes` with `Element.items` undefined. That is right for a parser. It was not safe
+  for `deidentify()`, which recurses only into a sequence whose items exist: for a carrier such as
+  `(0008,1115)` with no Table E.1-1 row, the action table resolved "keep" and the span was re-emitted
+  verbatim, with the report naming nothing.
+
+  **The remedy reads the parser's recorded refusal, not the bytes.** PS3.5 2026c §7.5.1 "Item
+  Encoding Rules" states "Each Item Value shall contain a DICOM Data Set composed of Data Elements",
+  so an `SQ` value is never legitimately opaque the way an `OB` value is; PS3.15 2026c §E.1.1
+  "De-identifier" obliges an implementation claiming the Basic Profile to "protect or retain all
+  instances of the Attributes listed in [Table E.1-1], whether contained in the top level Data Set or
+  embedded in an Item of a Sequence of Items". Unable to enumerate the items, the obligation falls on
+  the carrier, which is the escalation §E.1.1 itself makes for a SOP Instance UID inside a Sequence.
+  Both sentences read from the vendored SHA-pinned documents, pins re-derived, each unique in its
+  document. A **standard** `SQ` with no items is therefore **emptied**,
+  `report.unauditableSequences` names the tag and the byte length dropped, and the new
+  `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` is raised. That record is **capped at 64 across the run**
+  (element count is attacker-chosen too, and `#48` bound every other consumer-controlled
+  diagnostic); the **emptying is never capped**, so an array exactly 64 long means "at least 64". A
+  listed sequence kept by a Retain Option takes the same branch and its audit line now reads
+  `emptied` rather than `kept` - previously it produced an empty sequence anyway while claiming the
+  attribute was retained.
+
+  **It costs content, and the number is published rather than described:** 2,448 grid cells lose a
+  value from their de-identified output, of which **1,293 were not leaking anything** and pay purely
+  for the guarantee. The accompanying `DICOM_SQ_NOT_DESCENDED` says why the parse refused, which is
+  _usually_ a sender defect - but **not always**: a conformant file nested deeper than this
+  library's own `NESTING_DEPTH_LIMIT` of 64 (ours; PS3.5 sets no nesting bound) is refused the same
+  way and loses that sequence too. Because the trigger is `items === undefined` rather than a
+  content test there is no scan, so no cost follows an attacker-chosen value length; the cost tests
+  use a carrier where **every even offset** is a tiling candidate and assert that property rather
+  than describing it, as a **forward tripwire** - this path never traverses those bytes.
+
+  **New surface:** `UnauditableSequenceFinding`, `DeidentifyReport.unauditableSequences`, and
+  `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` (**27 Tier-2 codes, was 26**; snapshot updated
+  deliberately). `DICOM_SQ_NOT_DESCENDED`'s message changed, since it said nested content was
+  invisible to de-identification.
+
+  **Not covered, and one of these is measured here for the first time.** An undefined-length `UN`
+  whose CP-246 descent was refused keeps `vr === "UN"`, and the rule cannot be extended to it because
+  every ordinary `UN` element also has no items - measured on a hand-built file, the identifier still
+  reaches output with no report entry. A **private** `SQ` under `RetainSafePrivate` plus a `Profile`
+  is still kept verbatim, deliberately - `keepsPrivate` decides first, so it never reaches this rule,
+  and measured on a synthetic vendor block the identifier does still reach output. Both carve-outs
+  are pinned by tests. And the **binary-VR carrier** residual the previous entry
+  disclosed but could not measure now has a number: the grid gained an over-declaring **leaf**
+  carrier dimension and finds **19 leaking cells, identical on both trees** - 11 at `delta=18` (the
+  swallow into `OB`/`OW`/`US`/`UN`, silent, with `LO`/`ST` controls on the identical fixture at 0)
+  and 8 at `delta=-6` (an _under_-declare, where leftover bytes are read as a Data Element header and
+  the identifier lands in a manufactured element with an unknown on-wire VR; this one hits string
+  carriers too and was not previously disclosed anywhere).
+
+  **Measured, on the now 76,599-cell grid against `d1031f5`:** sequence-sweep leaks 1,155 → **0**;
+  **0 cells differing in any parse respect**, now a printed count rather than an inference from
+  `changed`, because no parser file is touched; 0 new fatals, 0 lost parse values, 0 reports that
+  lose an attribute, 0 new strict fatals.
+
 - **An element that over-declared its own Value Length swallowed the next element into its value,
   where the PS3.15 Annex E action table cannot see it, and `deidentify()` wrote the identifier into
   its output with a clean report** (`DICOM-OVERDECLARE-SWALLOWS-INTO-VALUE`, pre-existing and live
@@ -42,7 +109,8 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   a swallow from a legitimate value there, and scanning them would trade a measured guarantee for a
   coin-flip that deletes real pixel and lookup-table data. The committed grid never puts a binary VR
   in the over-declaring role, so this residual is **disclosed but unmeasured** and needs its own
-  item. A sequence the
+  item. (It was measured later in this same release cycle, by the entry above: **19 grid cells**,
+  once the grid gained an over-declaring leaf carrier.) A sequence the
   parser declined to descend and kept as opaque bytes is a **different** defect with a different
   remedy and is untouched here (1,155 grid cells, all Implicit VR LE, all carrying
   `DICOM_SQ_NOT_DESCENDED`). And nothing here recovers the correct reading of a malformed file: the
