@@ -76,6 +76,7 @@ export const WARNING_CODES = {
   DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED: "DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED", // reserved by Phase 7 - not emitted in Phase 2
   DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED: "DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE: "DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE", // emitted by deidentify(), never by the parser
+  DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE: "DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE", // emitted by deidentify(), never by the parser
   DICOM_PRIVATE_CREATOR_UNKNOWN: "DICOM_PRIVATE_CREATOR_UNKNOWN", // reserved by Phase 6 - not emitted in Phase 2
 } as const;
 
@@ -186,6 +187,11 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   // reasoning belongs in the docs, not in a string repeated thousands of times.
   DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE:
     "Element ({tag}) is VR=SQ with no parsed items, so its {n} value bytes could not be audited (PS3.15 E.1.1); emptied. See report.unauditableSequences.",
+  // Deliberately short for the same reason as the code above: one per element,
+  // and the element count is chosen by the input. The VR bytes are NOT echoed -
+  // they are attacker-chosen input, and {vr} would render them WITHHELD anyway.
+  DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE:
+    "Element ({tag}) carries an on-wire VR that is not one of the 34 PS3.5 6.2 defines, so its {n} value bytes are not a Value Field this library decoded; emptied (PS3.15 E.1.1). See report.undefinedVrElements.",
   DICOM_BOM_IN_TEXT_VR: "Element ({tag}) {vr} value begins with a UTF-8 BOM; stripped on decode.",
   DICOM_TRAILING_NULL_IN_TEXT_VR:
     "Element ({tag}) {vr} value has a trailing NULL pad where SPACE is expected; trimmed.",
@@ -663,6 +669,42 @@ export function sequenceNotAuditable(
   byteLength: number,
 ): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE, position, {
+    tag,
+    n: byteLength,
+  });
+}
+
+/**
+ * Build a `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` warning. Emitted by
+ * `deidentify()` - never by the parser - when an element the run was about to
+ * **keep** carries an on-wire VR that is not one of the 34 PS3.5 section 6.2
+ * defines.
+ *
+ * PS3.5 2026c section 6.2 requires that "All new VRs defined in future versions
+ * of DICOM shall be of the same Data Element Structure as defined in [section
+ * 7.1.2] with reserved bytes after the VR and a 32-bit unsigned integer VL". An
+ * unrecognized VR is therefore, by the standard's own rule, long-form - while
+ * this parser reads it short-form, because it trusts the two on-wire bytes
+ * (Postel's Law) and only `LONG_FORM_VRS` takes the long layout. So the bytes
+ * this element carries are not a Value Field this library decoded under any VR,
+ * and PS3.15 section E.1.1's obligation over what is inside them cannot be
+ * discharged attribute by attribute. Emptying is the fail-safe answer.
+ *
+ * **The VR bytes are deliberately absent from the message.** They are two bytes
+ * the sender chose, `{vr}` renders anything outside the closed 34-VR set as
+ * WITHHELD, and a message repeated per element is no place to echo input.
+ *
+ * @example
+ * ```ts
+ * const w = undefinedVrNotAuditable({ byteOffset: 320 }, "4156554C", 16);
+ * ```
+ */
+export function undefinedVrNotAuditable(
+  position: DicomPosition,
+  tag: Tag,
+  byteLength: number,
+): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE, position, {
     tag,
     n: byteLength,
   });

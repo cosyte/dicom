@@ -10,6 +10,68 @@
 
 ## Status
 
+- **De-identification refuses to keep an element whose VR is not a VR**
+  (`DICOM-CARRIER-LEAF-LEAKS` mechanism 2, closed after `0.0.6`). **The leaf-carrier 19 was two
+  defects, and this is the half nobody knew about.** Re-derived on
+  `scripts/measure-sq-bound-grid.ts` at `35adc2d` before anything changed - **19 leaking cells, 11
+  at `delta=18` and 8 at `delta=-6`** - with the negative control run first (the grid against
+  `d1031f5`'s `src/` restored **1,174** and reproduced `#54`'s 2,448-cell cost) and a second control
+  confirming the harness fails outright when relocated to another package. Now **11**.
+  **▶ IT IS THE _UNDER_-DECLARE, AND IT IS NOT A SWALLOW.** An over-declared length absorbs the
+  following element into this one's value (`#53`). An under-declared one **desynchronizes the
+  reader**: it finishes the short value early, reads the leftover bytes of the value that was
+  actually encoded as the next Data Element header, and the element that genuinely followed becomes
+  that fabricated element's value. Tag, VR and length are all fragments of somebody's value.
+  Measured: a 14-byte carrier under-declaring by 6 yields `(4156,554C)` VR `"E "` holding the
+  Patient ID in full, `warnings: []`, no throw under `{strict: true}`, clean report. **It reaches
+  STRING carriers too** - 6 of the 8 cells were Explicit VR LE, two of them the `LO`/`ST` controls -
+  so it is not bounded by the binary-VR story that frames the other half.
+  **▶ THE TRIGGER IS A RECORDED FIELD, NOT A SCAN, AND THE CLAUSE IS §6.2 NOT §7.1.2.** PS3.5 2026c
+  §6.2 "Value Representation (VR)": "All new VRs defined in future versions of DICOM **shall** be of
+  the same Data Element Structure as defined in [§7.1.2] with reserved bytes after the VR and a
+  32-bit unsigned integer VL". So an unrecognized VR is long-form by the standard's own rule, while
+  this parser reads it **short-form** (Postel; only `LONG_FORM_VRS` takes the long layout) - its
+  length came from the wrong two bytes and its value spans the wrong bytes. Nothing about the
+  content has to be argued. `hasUndefinedVr` is `!KNOWN_VRS.has(el.vr)`: O(1), no per-offset loop.
+  **The §6.2 sentence about treating an unrecognized VR as `UN` is in a `<note>` and is
+  informative** - cite the "shall" above it, not that. Pins re-derived (`part05`
+  `4dfd7b8c…`); each sentence occurs exactly once.
+  **▶ NO CARVE-OUT, AND STRUCTURALLY SO - THIS IS THE `#54` REPEAT CLASS AVOIDED.** `#54` was
+  refuted for claiming its emptying was unconditional when `keepsPrivate` decided first. Here
+  `keepOrEmpty` is the **only** path that writes a source value out unchanged, and the test sits at
+  its top; every other outcome (`X`/`Z`/`D`/`C`/`U`, private-by-default removal) already replaced the
+  value. So `RetainSafePrivate` + a `Profile` does **not** exempt it, and that is pinned by a test
+  rather than asserted in prose.
+  **▶ `UN` IS UNTOUCHED AND THAT IS THE WHOLE LINE.** `UN` is one of the 34, so this never fires on
+  an ordinary unknown-VR element, a private element with no creator, or the CP-246 `UN`. Under
+  **Implicit VR LE it cannot fire at all** (the VR comes from the dictionary) - 0 Implicit cells
+  moved, a free control. Widening it to "unknown to the dictionary" is the sweep that would empty
+  every `UN` in every file.
+  **▶ THE RECORD IS CAPPED AT 64 PER RUN, THE EMPTYING NEVER IS, AND THE AMPLIFICATION IS WORSE
+  THAN `#54`'s.** An undefined-VR element is short-form, so the cheapest one an input can encode is
+  an **8-byte header with a zero-length value**: 1 MiB is 131,072 of them. Budget on
+  `DeidentifyContext`, not `ProcessResult` (which is per Data Set). The warning omits the VR bytes -
+  they are input, emitted once per element. Its `byteLength` maxes at **65,534**, and that number is
+  itself the §6.2 contradiction the rule rests on.
+  New surface: `UndefinedVrFinding`, `DeidentifyReport.undefinedVrElements`,
+  `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` (**28 Tier-2 codes, was 27**),
+  `MAX_UNDEFINED_VR_FINDINGS`. `isScannableCarrier` **lost** its "VR not one of the 34" disjunct: the
+  new rule empties such an element before the scan is reached, and conditioning the answer on a
+  tiling run was the defect - an undefined-VR element whose bytes did not tile was kept.
+  **▶ COST, PUBLISHED: 23 cells lose a marker from de-identified output, 15 of which were NOT
+  leaking.** On a conformant file it is **zero** - the `DICOM-DEIDENT-OVER-REDACTION` trade does not
+  recur here, because no conformant Explicit VR file and no Implicit VR file can produce one.
+  **▶ 🩺 STILL LEAKING, AND NOW PRICED RATHER THAN JUST DISCLOSED: the 11 at `delta=18`.** The
+  over-declare swallow into `OB`/`OW`/`US`/`UN`, silent, `LO`/`ST` controls at 0. **The obvious
+  remedy was BUILT AND MEASURED, not argued about**: dropping the repertoire conjunct for binary VRs
+  takes 11 → 0 **and empties all 5 conformant binary tiling controls** - a de-identifier deleting a
+  legal `OB`/`UN` value because 8 of its bytes read as a zero-length `(0010,0020)`. That is a
+  product call of the `DICOM-DEIDENT-OVER-REDACTION` shape, not a bug fix, and it needs its own
+  item. The grid gained `LEGIT_TILING_CARRIERS` + a `conformant tiling control emptied` counter to
+  make it a number. **Stride-0 VRs only**: `buildDicom` byte-swaps `OW`/`US` under Explicit BE, and
+  a first draft that included them read **9** emptied rows where the honest number is **6** - a
+  fixture artifact reported as a finding is the failure mode, and it was caught by asking why a
+  binary row moved.
 - **De-identification refuses to keep a sequence it could not walk**
   (`DICOM-DEIDENT-RAWBYTES-PASSTHROUGH`, closed after `0.0.6`). **This was the larger half of the
   2,127 and it was never the same defect as the entry below.** A defined-length Implicit VR LE value

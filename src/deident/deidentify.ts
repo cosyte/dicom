@@ -65,6 +65,22 @@
  *   measured and **still leaks** (`PRE-EXISTING`); the reliable consumer-side
  *   test remains `el.items === undefined` on a `UN` element you are trusting a
  *   report about.
+ * - An element whose **on-wire VR is not one of the 34** PS3.5 §6.2 defines is
+ *   **emptied**, not kept (`DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` +
+ *   `report.undefinedVrElements`). Such an element is what an *under*-declared
+ *   Value Length upstream produces: the reader desynchronizes, reads leftover
+ *   value bytes as a Data Element header, and the element that genuinely
+ *   followed becomes its "value" - measured carrying a `(0010,0020)` Patient ID
+ *   in full. §6.2 requires every undefined VR to be long-form, and this parser
+ *   reads it short-form, so those bytes are not a Value Field this library
+ *   decoded under any VR. See {@link hasUndefinedVr}. **Unlike the `SQ` rule
+ *   above this one has no carve-out** - it sits in `keepOrEmpty`, the only path
+ *   that keeps a value verbatim, so `RetainSafePrivate` does not exempt it.
+ * - **Still leaking, measured, and its own decision:** the over-declare swallow
+ *   into a **binary** carrier (`OB`/`OW`/`US`/`UN`), 11 grid cells at
+ *   `35adc2d`. No content test can decide it - arbitrary bytes are what those
+ *   VRs are for - and the one candidate remedy empties conformant binary values.
+ *   See `./embedded.ts`.
  *
  * @module
  */
@@ -73,6 +89,7 @@ import { Buffer } from "node:buffer";
 
 import { annexE, type AnnexEAction, type AnnexEActionCode } from "../dictionary/annex-e.js";
 import type { Tag, VR } from "../dictionary/types.js";
+import { BE_VR_STRIDE } from "../parser/endian.js";
 import { Dataset, type DatasetInit } from "../dataset/dataset.js";
 import { Element, type ElementInit } from "../dataset/element.js";
 import type { FileMeta } from "../dataset/file-meta.js";
@@ -84,6 +101,7 @@ import {
   burnedInAnnotationNotRemoved,
   embeddedAttributeRemoved,
   sequenceNotAuditable,
+  undefinedVrNotAuditable,
 } from "../parser/warnings.js";
 import { resolvePrivateTag } from "../profiles/lookup.js";
 import { type BodyEncoding, encodeDatasetElement } from "../serialize/element.js";
@@ -100,6 +118,7 @@ import {
   type DeidentifyResult,
   type EmbeddedAttributeFinding,
   type UnauditableSequenceFinding,
+  type UndefinedVrFinding,
 } from "./types.js";
 import { makeUidRemapper, type UidRemapper } from "./uid.js";
 
@@ -131,6 +150,29 @@ const BODY_ENCODING: Readonly<Record<string, BodyEncoding>> = {
  */
 export const MAX_UNAUDITABLE_SEQUENCE_FINDINGS = 64;
 
+/**
+ * Cap on how many undefined-VR elements one run will *describe*
+ * ({@link DeidentifyReport.undefinedVrElements} and the matching warnings).
+ *
+ * The amplification here is worse than its sibling's, not better: an element
+ * whose VR is not one of the 34 is read short-form, so the cheapest one an input
+ * can encode is an **8-byte** header with a zero-length value. A 1 MiB file is
+ * therefore 131,072 of them, and an uncapped record would answer with 131,072
+ * findings and 131,072 warning strings.
+ *
+ * It is a bound on the **record**, never on the action - every such element is
+ * emptied whether or not it is listed. A report whose array is exactly this long
+ * means "at least this many"; treat it as truncated.
+ */
+export const MAX_UNDEFINED_VR_FINDINGS = 64;
+
+/**
+ * The 34 VRs PS3.5 2026c section 6.2 defines, as a closed set to test an element's
+ * recorded on-wire VR against. Keyed off the serializer's own stride table so
+ * the set cannot drift from the one the rest of the package uses.
+ */
+const KNOWN_VRS: ReadonlySet<string> = new Set<string>(Object.keys(BE_VR_STRIDE));
+
 interface DeidentifyContext {
   readonly active: ReadonlySet<DeidentifyOption>;
   readonly remap: UidRemapper;
@@ -144,7 +186,7 @@ interface DeidentifyContext {
    * bound each item independently and not the run - which is exactly the
    * amplification the cap exists to stop.
    */
-  readonly budget: { unauditableSequences: number };
+  readonly budget: { unauditableSequences: number; undefinedVrElements: number };
 }
 
 /** Validate caller-supplied options; throws {@link DeidentifyError} on misconfig. */
@@ -306,6 +348,7 @@ interface ProcessResult {
   readonly removedPrivateTags: Tag[];
   readonly embeddedAttributes: EmbeddedAttributeFinding[];
   readonly unauditableSequences: UnauditableSequenceFinding[];
+  readonly undefinedVrElements: UndefinedVrFinding[];
   readonly warnings: DicomParseWarning[];
 }
 
@@ -327,13 +370,76 @@ function actsOnTag(tag: Tag, ctx: DeidentifyContext): boolean {
 }
 
 /**
- * Keep `el`'s value - unless whole Data Elements are encoded inside it.
+ * `true` when `el`'s **on-wire VR is not one of the 34** PS3.5 2026c section 6.2
+ * defines, so this library never decoded its bytes as a Value Field at all.
  *
- * This is the one place a value the action table resolved to *keep* is checked
- * against its own bytes. See `./embedded.ts` for what is and is not claimed; the
- * short version is that an over-declared Value Length swallows the element that
- * follows it into this element's value, where Table E.1-1 cannot see it, and the
- * fail-safe answer is to empty rather than keep.
+ * Like the `SQ`-with-no-items test below, this reads a field the parser already
+ * recorded rather than inspecting the value: a set membership check, O(1), no
+ * per-offset loop and no cost that follows an attacker-chosen value length.
+ *
+ * ## Why an unrecognized VR is not a value
+ *
+ * PS3.5 section 6.2 fixes the structure of every VR that does not exist yet:
+ * "All new VRs defined in future versions of DICOM shall be of the same Data
+ * Element Structure as defined in [section 7.1.2] with reserved bytes after the
+ * VR and a 32-bit unsigned integer VL (i.e., following the format for VRs such
+ * as OB or UT)". This parser reads an unrecognized VR **short-form** - it trusts
+ * the two on-wire bytes (Postel's Law, `explicit-le.ts`) and only
+ * `LONG_FORM_VRS` takes the long layout - so its length field is read from the
+ * wrong two bytes and its "value" spans the wrong bytes, by the standard's own
+ * structure rule. Nothing about the content has to be argued.
+ *
+ * ## Where these come from, and what they carry
+ *
+ * The routine producer is an **under**-declared Value Length upstream: the
+ * reader finishes the short value early and reads the remainder of the value
+ * that was actually encoded as the next Data Element header, so tag, VR and
+ * length are all fragments of somebody's value - and the element that genuinely
+ * followed is swallowed as this fabricated element's value. Measured on
+ * `scripts/measure-sq-bound-grid.ts` at `35adc2d`: a carrier under-declaring by
+ * 6 yields `(4156,554C)` with VR bytes `"E "` holding the source `(0010,0020)`
+ * Patient ID, on **8** grid cells, silently, and on **string** carriers as
+ * readily as binary ones - the carrier's own VR is not what decides it.
+ *
+ * ## What it deliberately does not cover
+ *
+ * **`UN` is one of the 34**, so this never fires on an ordinary unknown-VR
+ * element: not the Implicit VR fallback for an unpublished tag, not a private
+ * element with no reachable creator, and not the CP-246 `UN` whose descent was
+ * refused. That last one is still leaking and still needs a parser-set mark; it
+ * is not admitted here by relaxing this test, because relaxing it to "unknown to
+ * the dictionary" is exactly the sweep that would empty every `UN` in every file.
+ *
+ * It also cannot fire on **Implicit VR LE at all**: there the VR is resolved
+ * from the dictionary, so it is always one of the 34. Implicit VR LE is this
+ * rule's control population, not an omission.
+ */
+function hasUndefinedVr(el: Element): boolean {
+  return !KNOWN_VRS.has(el.vr);
+}
+
+/**
+ * Keep `el`'s value - unless its VR is not a VR, or whole Data Elements are
+ * encoded inside it.
+ *
+ * **This function is the only path in this module that writes a source value
+ * into de-identified output unchanged**, which is what makes the two refusals
+ * below unconditional rather than a promise: every other outcome (`X` remove,
+ * `Z`/`C` empty, `D` dummy, `U` remap, and a private tag the Basic Profile
+ * drops) has already replaced the value by the time it would matter. A private
+ * element a {@link Profile} vouches for under `RetainSafePrivate` does route
+ * here, so it is covered too - which is the carve-out its `SQ` sibling has and
+ * this does not.
+ *
+ * Order matters and is not arbitrary. The undefined-VR test comes first because
+ * it is the cheaper and the stronger of the two: it settles the element from a
+ * recorded field, whereas `findEmbeddedAttributes` has to walk the value to
+ * *prove* it is not what its VR says. Running the scan first would cost a walk
+ * to reach the same emptying. See `./embedded.ts` for what that scan does and
+ * does not claim; the short version is that an over-declared Value Length
+ * swallows the element that follows it into this element's value, where
+ * Table E.1-1 cannot see it, and the fail-safe answer is to empty rather
+ * than keep.
  */
 function keepOrEmpty(
   el: Element,
@@ -341,6 +447,10 @@ function keepOrEmpty(
   contextPath: readonly string[],
   out: ProcessResult,
 ): boolean {
+  if (hasUndefinedVr(el)) {
+    emptyUndefinedVrElement(el, ctx, contextPath, out);
+    return false;
+  }
   const hidden = findEmbeddedAttributes(el.rawBytes, el.vr, ctx.encoding, (t) => actsOnTag(t, ctx));
   if (hidden === undefined) {
     out.elements.set(el.tag, el);
@@ -357,6 +467,46 @@ function keepOrEmpty(
     embeddedAttributeRemoved({ byteOffset: el.byteOffset }, el.tag, el.vr, hidden.length),
   );
   return false;
+}
+
+/**
+ * Empty an element whose on-wire VR is not one of the 34, and record why.
+ *
+ * `freshScalar` rather than `rebuildSequence`: the element is not an `SQ` (`SQ`
+ * is one of the 34), so what is written back is a zero-length scalar carrying
+ * the same tag. The attribute keeps existing and the report says it was emptied
+ * - a report claiming retention over a value that was dropped is the false-audit
+ * class this module has been refused for before.
+ *
+ * See {@link hasUndefinedVr} for why emptying is the only answer available, and
+ * {@link MAX_UNDEFINED_VR_FINDINGS} for why the record is capped and the action
+ * is not.
+ */
+function emptyUndefinedVrElement(
+  el: Element,
+  ctx: DeidentifyContext,
+  contextPath: readonly string[],
+  out: ProcessResult,
+): void {
+  // The ACTION is never capped. Whatever the count, every element whose VR is
+  // not a VR is emptied - a bound on how much we are willing to *say* must never
+  // become a bound on what we are willing to *remove*.
+  out.elements.set(el.tag, freshScalar(el, Buffer.alloc(0), 0));
+
+  // The RECORD is capped, against a budget that spans the whole run rather than
+  // this one Data Set: `processElements` builds a fresh `ProcessResult` per Data
+  // Set and merges upward, so a per-result cap would bound each sequence item
+  // independently and not the file.
+  if (ctx.budget.undefinedVrElements >= MAX_UNDEFINED_VR_FINDINGS) return;
+  ctx.budget.undefinedVrElements += 1;
+  out.undefinedVrElements.push({
+    tag: el.tag,
+    byteLength: el.rawBytes.length,
+    ...(contextPath.length > 0 ? { contextPath: [...contextPath] } : {}),
+  });
+  out.warnings.push(
+    undefinedVrNotAuditable({ byteOffset: el.byteOffset }, el.tag, el.rawBytes.length),
+  );
 }
 
 /**
@@ -535,6 +685,7 @@ function processElements(
     removedPrivateTags: [],
     embeddedAttributes: [],
     unauditableSequences: [],
+    undefinedVrElements: [],
     warnings: [],
   };
   // Derived here, at every depth: `source` is exactly one Data Set.
@@ -629,6 +780,7 @@ function descendSequence(
     out.removedPrivateTags.push(...inner.removedPrivateTags);
     out.embeddedAttributes.push(...inner.embeddedAttributes);
     out.unauditableSequences.push(...inner.unauditableSequences);
+    out.undefinedVrElements.push(...inner.undefinedVrElements);
     out.warnings.push(...inner.warnings);
     newItems.push(new Item({ index, warnings: [], elements: inner.elements }));
   });
@@ -774,12 +926,18 @@ export function deidentify(
     profile: options.profile,
     encoding,
     littleEndian,
-    budget: { unauditableSequences: 0 },
+    budget: { unauditableSequences: 0, undefinedVrElements: 0 },
   };
 
   const processed = processElements(ds.elements(), ctx, []);
-  const { elements, attributes, removedPrivateTags, embeddedAttributes, unauditableSequences } =
-    processed;
+  const {
+    elements,
+    attributes,
+    removedPrivateTags,
+    embeddedAttributes,
+    unauditableSequences,
+    undefinedVrElements,
+  } = processed;
 
   // Required de-identification metadata (PS3.15 §E.1.1), inserted last.
   elements.set(
@@ -811,6 +969,7 @@ export function deidentify(
     removedPrivateTags,
     embeddedAttributes,
     unauditableSequences,
+    undefinedVrElements,
     uidMap: remap.cache,
     warnings,
     retained: [...active],
