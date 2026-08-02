@@ -78,7 +78,20 @@
  * module existed**: the identifier reaches de-identified output, with no warning
  * and no report entry. That is a live, disclosed residual with no remedy here,
  * not something quietly covered, and it is pinned by a test rather than left to
- * this paragraph. `SQ` is out of scope for the same style of reason: a sequence
+ * this paragraph. Measured on the grid at `35adc2d`: **11 cells**, at `delta=18`
+ * on `OB`/`OW`/`US`/`UN`, with the `LO`/`ST` controls on the identical fixture
+ * at 0. The obvious remedy - drop the third conjunct for binary VRs and scan on
+ * the other two - was measured too, and it takes those 11 to 0 while emptying
+ * **all 5** of the grid's conformant binary tiling controls: a de-identifier
+ * deleting a legal `OB`/`UN` value because 8 of its bytes happened to read as a
+ * zero-length `(0010,0020)`. That is a product call, not a bug fix.
+ *
+ * An element whose **on-wire VR is not one of the 34** is a different matter and
+ * is no longer this module's problem: `deidentify()` empties it before the scan
+ * is reached (`hasUndefinedVr` in `./deidentify.ts`). It used to be a second
+ * scannable-carrier case here with the repertoire conjunct waived, which left
+ * one whose bytes did not tile still kept - 8 grid cells, measured. `SQ` is out
+ * of scope for the same style of reason: a sequence
  * the parser declined to descend keeps its item stream as opaque bytes, which is
  * a different defect with a different remedy
  * (`DICOM-DEIDENT-RAWBYTES-PASSTHROUGH`), and folding it in would make this
@@ -278,32 +291,29 @@ function decodeAt(value: Buffer, off: number, encoding: BodyEncoding): Decoded |
 }
 
 /**
- * `true` when this carrier's value is worth scanning at all.
+ * `true` when this carrier's value is worth scanning at all: a **string VR**
+ * ({@link SCANNABLE_CARRIER_VRS}), where a Data Element header's bytes are
+ * provably outside the value's Default Character Repertoire.
  *
- * Two disjoint cases, and the second is not an afterthought:
- *
- *  - a **string VR** ({@link SCANNABLE_CARRIER_VRS}), where a Data Element
- *    header's bytes are provably outside the value's Default Character
- *    Repertoire; and
- *  - a VR that is **not one of the 34 PS3.5 §6.2 defines at all**. Under an
- *    Explicit VR syntax the VR field is two bytes the sender chose, and this
- *    parser trusts them (Postel's Law on the read path, `DICOM_VR_MISMATCH` for
- *    a standard tag). An element *under*-declaring its length desynchronizes the
- *    reader, and the fabricated element that follows routinely carries two bytes
- *    of somebody's value in the VR field. Such an element is not a Data Element,
- *    has no repertoire to violate, and has no legitimate content to protect - so
- *    the repertoire conjunct is waived for it and the tiling test stands alone.
+ * **A carrier whose VR is not one of the 34 PS3.5 §6.2 defines used to be a
+ * second case here, with the repertoire conjunct waived. It is not, any more,
+ * and the guard did not shrink** - it moved somewhere strictly stronger.
+ * `deidentify()` now empties such an element outright (`hasUndefinedVr` in
+ * `./deidentify.ts`, `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE`), because a VR
+ * that is not a VR means these bytes were never decoded as a Value Field at all
+ * - PS3.5 §6.2 requires every undefined VR to be long-form, and this parser
+ * reads it short-form. That answer needs no tiling run to be true, so
+ * conditioning it on one only meant an undefined-VR element whose bytes happened
+ * *not* to tile was kept. Measured, that was 8 grid cells writing a source
+ * Patient ID into de-identified output. Everything this branch caught, the new
+ * rule catches first; it never reaches here.
  */
 function isScannableCarrier(vr: VR): boolean {
-  return SCANNABLE_CARRIER_VRS.has(vr) || !KNOWN_VRS.has(vr);
+  return SCANNABLE_CARRIER_VRS.has(vr);
 }
 
-/**
- * True when `region` holds a byte the carrier VR's repertoire cannot contain.
- * Vacuously true for a VR PS3.5 does not define - see {@link isScannableCarrier}.
- */
+/** True when `region` holds a byte the carrier VR's repertoire cannot contain. */
 function hasByteOutsideRepertoire(region: Buffer, carrierVr: VR): boolean {
-  if (!KNOWN_VRS.has(carrierVr)) return true;
   const allFive = CONTROL_TOLERANT_VRS.has(carrierVr);
   const escOnly = ESC_ONLY_VRS.has(carrierVr);
   for (const byte of region) {

@@ -6,6 +6,64 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Security
 
+- **An element whose on-wire VR is not one of the 34 PS3.5 §6.2 defines was kept verbatim by
+  `deidentify()`, carrying a source `(0010,0020)` Patient ID into de-identified output next to the
+  `(0012,0062) PatientIdentityRemoved = YES` this library writes** (`DICOM-CARRIER-LEAF-LEAKS`,
+  mechanism 2; pre-existing, live on the published `0.0.6`, identical on both trees). Re-derived on
+  `scripts/measure-sq-bound-grid.ts` at `35adc2d` before anything changed: **19 leaking cells → 11**.
+  Negative control first - the grid run against `d1031f5`'s `src/` restored **1,174** leaking cells
+  and reproduced `#54`'s published 2,448-cell cost - plus a second control confirming the harness
+  fails outright when pointed at another package.
+
+  **This is the _under_-declare, not the swallow the entry below closed.** An under-declared Value
+  Length desynchronizes the reader: it finishes the short value early, reads the leftover bytes of
+  the value that was actually encoded as the next Data Element header, and consumes the element that
+  genuinely followed as that fabricated element's "value". Measured: a 14-byte carrier
+  under-declaring by 6 yields tag `(4156,554C)` with the VR bytes `"E "`, holding the Patient ID in
+  full, **silently** and with a clean report. It reaches **string** carriers as readily as binary
+  ones, so it is not bounded by the binary-VR story that frames the residual below.
+
+  **The remedy reads a field the parser already recorded, not the bytes.** PS3.5 2026c §6.2: "All
+  new VRs defined in future versions of DICOM shall be of the same Data Element Structure as defined
+  in [§7.1.2] with reserved bytes after the VR and a 32-bit unsigned integer VL". An unrecognized VR
+  is long-form by that rule while this parser reads it short-form (Postel's Law on the read path), so
+  its bytes are not a Value Field this library decoded under any VR and PS3.15 2026c §E.1.1's
+  obligation cannot be discharged inside them. Read from the vendored SHA-pinned documents, pins
+  re-derived, each sentence unique in its document. Such an element is **emptied**,
+  `report.undefinedVrElements` names the **byte offset** and the byte length dropped, and the new
+  `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` is raised. **The finding names no tag, uniquely among
+  the report's findings**: the header _may_ have been fabricated out of the middle of some element's
+  value, in which case its four tag bytes are document content - on a synthetic `ST` carrier holding
+  `"MR BRAIN SMITHSON"` the tag renders as `48544F53`, four letters of the surname. An honestly
+  written unrecognized VR raises the same code with an ordinary tag, and the two are
+  indistinguishable here, so the tag is withheld either way.
+  `renderTag` shape-checks a tag and cannot refuse one, so the withholding happens at the call site.
+  An undefined-VR carrier whose bytes happened to tile was reported in `report.embeddedAttributes`
+  before and now reports here instead. The test is a set-membership check on
+  `el.vr`: O(1), **no scan**. The record is **capped at 64 across the run** and the emptying never is
+  - an undefined-VR element costs an attacker only an 8-byte header, so 1 MiB is 131,072 of them.
+
+  **No carve-out, and structurally so:** `keepOrEmpty` is the only path that keeps a source value
+  verbatim and the test sits at its top, so `RetainSafePrivate` does not exempt an element - pinned
+  by a test. **`UN` is untouched**, being one of the 34, and the rule cannot fire under Implicit VR
+  LE at all, where the VR comes from the dictionary; 0 Implicit VR LE cells moved.
+
+  **Cost, published rather than described:** 23 grid cells lose a marker from de-identified output,
+  **15 of which were not leaking**. On a file conformant to PS3.5 2026c the cost is zero.
+
+  **The root cause is a parse behaviour this slice does not touch, and it is disclosed rather than
+  implied fixed.** §6.2's note says informatively that an unrecognized VR may be handled "by applying
+  the rules stated in [§7.1.2]" - i.e. read long-form, value copied unchanged. This parser reads it
+  **short-form**. Emptying at the de-identify boundary is therefore compensation, not conformance.
+  `PRE-EXISTING`, its own slice. No claim is made here about what a §6.2-conformant future-VR file
+  does on either tree.
+
+  **Still leaking, measured, and now priced:** the 11 remaining cells are the over-declare swallow
+  into a **binary** carrier at `delta=18`. The one candidate remedy was built and measured - it
+  takes 11 to 0 and empties **all 5** conformant binary tiling controls, i.e. deletes a legal
+  `OB`/`UN` value because 8 of its bytes read as a zero-length `(0010,0020)`. That is a product
+  decision, not a bug fix, and it has its own item.
+
 - **A sequence the parser could not open was passed through `deidentify()` as raw bytes, so a
   `(0010,0020)` Patient ID inside it reached de-identified output next to the
   `(0012,0062) PatientIdentityRemoved = YES` this library writes** (`DICOM-DEIDENT-RAWBYTES-PASSTHROUGH`,
@@ -366,6 +424,18 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   `0.0.2`.
 
 ### Added
+
+- **`UndefinedVrFinding`, `DeidentifyReport.undefinedVrElements` and
+  `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE`** (**28 Tier-2 codes, was 27**; the locked
+  `WARNING_CODES` snapshot was updated deliberately). `MAX_UNDEFINED_VR_FINDINGS` (64) caps the
+  record, never the emptying.
+
+- **A conformant-tiling control family in `scripts/measure-sq-bound-grid.ts`**
+  (`LEGIT_TILING_CARRIERS`) plus the `conformant tiling control emptied` counters in `--diff`. It
+  exists to price the remaining binary-carrier leak, which `LEAKING` structurally cannot: a rule that
+  empties every binary value whose tail tiles reads as `11 → 0` there and says nothing about what it
+  destroyed. Restricted to stride-0 VRs, because `buildDicom` byte-swaps `OW`/`US` values under
+  Explicit VR BE - a first draft included them and read 9 emptied rows where the honest number was 6.
 
 - **`DICOM_SQ_NOT_DESCENDED`**, a Tier-2 warning code (25 total, was 24). Public surface: the locked
   `WARNING_CODES` snapshot was updated deliberately, and a profile may `escalate` or `suppress` it

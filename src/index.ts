@@ -105,4 +105,5 @@ export type {
   DeidentifyResult,
   EmbeddedAttributeFinding,
   UnauditableSequenceFinding,
+  UndefinedVrFinding,
 } from "./deident/index.js";

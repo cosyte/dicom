@@ -24,4 +24,5 @@ export {
   type DeidentifyResult,
   type EmbeddedAttributeFinding,
   type UnauditableSequenceFinding,
+  type UndefinedVrFinding,
 } from "./types.js";

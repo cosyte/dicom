@@ -37,7 +37,7 @@
  * over-declaring **leaf element**, which the sequence sweep never expressed
  * because its over-declaring role is always an `SQ` or a string VR. That left
  * `#53`'s disclosed binary-VR residual **stated but unmeasured**, and unmeasured
- * residuals are how a leak survives a slice that reads green. It measures
+ * residuals are how a leak survives a slice that reads green. It measured
  * **19 leaking cells, identical on both trees** - `PRE-EXISTING`, and two
  * distinct mechanisms rather than one:
  *
@@ -45,15 +45,27 @@
  *    `US` / `UN`, silent (`warnings: []`), with the `LO` and `ST` controls on
  *    the identical fixture at **0**. That contrast is the row's whole value: it
  *    shows the carrier's VR is the only difference, so it is `#53`'s residual
- *    exactly, not a new defect.
+ *    exactly, not a new defect. **Still leaking**, and see
+ *    {@link legitTilingFixture} for what the one candidate remedy costs.
  *  - **8 cells at `delta=-6`** - an *under*-declare, which is not a swallow at
  *    all. The leftover value bytes are read as a Data Element header, and
  *    `(0010,0020)`'s value lands inside a manufactured element with an
  *    unknown on-wire VR (measured: tag `(4156,554C)`, VR `"E "`), which no
  *    action-table row and no repertoire test can reach. This one hits the
- *    string carriers too, and was not disclosed anywhere before this sweep.
+ *    string carriers too, and was not disclosed anywhere before that sweep.
+ *    **Closed by `DICOM-CARRIER-LEAF-LEAKS`**, which empties any element whose
+ *    on-wire VR is not one of the 34: `19 -> 11`, with 0 cells differing in any
+ *    parse respect and 0 Implicit VR LE cells touched at all.
  *
- * Neither is fixed here. Both are now a number.
+ * ## The conformant tiling controls
+ *
+ * `DICOM-CARRIER-LEAF-LEAKS` added {@link LEGIT_TILING_CARRIERS}, a family that
+ * lies about nothing. Its whole job is to price the remedy for the 11 cells
+ * above, because `LEAKING` alone cannot: a rule that empties every binary value
+ * whose tail tiles reads as `11 -> 0` there and says nothing about what it
+ * destroyed. Measured, that rule takes `conformant tiling control emptied` from
+ * **7 to 12** - every binary row - which is the number the decision needs and
+ * the reason it is a product call rather than a fix.
  *
  * `parseDefinedLengthSQInPlace` decides between two length fields that describe
  * the same bytes. A remedy there is a claim about **which field to trust**, and
@@ -237,10 +249,35 @@ const LEAF_CARRIERS = [
   { label: "ST-control", tag: "20100010", vr: "ST" },
 ] as const;
 
+/**
+ * The carriers the conformant-tiling control family sweeps: the {@link
+ * LEAF_CARRIERS} entries whose Big Endian byte-stride is **0**, so the value
+ * bytes the fixture writes are the value bytes on the wire under every syntax.
+ * See {@link legitTilingFixture} for why the stride-2 ones cannot be in it.
+ *
+ * `OB` and `UN` are the binary side; `LO` and `ST` are the string controls that
+ * the shipped three-conjunct rule is expected to empty. Note `UN-over-LO` flips
+ * sides by syntax - a real `UN` carrier under Explicit VR, a second `LO` control
+ * under Implicit VR LE, where the on-wire VR is discarded - and the cell records
+ * the tree, so which one happened is never inferred.
+ */
+const LEGIT_TILING_CARRIERS = LEAF_CARRIERS.filter(
+  (c) => c.vr === "OB" || c.vr === "UN" || c.vr === "LO" || c.vr === "ST",
+);
+
 const ITEM_TAG = "00080008" as const;
 const ITEM_VALUE = "ORIGINAL";
 const SECOND_TAG = "00080060" as const;
 const SECOND_VALUE = "CT";
+
+/**
+ * The marker a {@link legitTilingFixture} carrier holds, and the whole reason
+ * that family exists: it is **legitimate content**, not an identifier, so it is
+ * absent from {@link PHI_STRINGS} and present in {@link MARKERS}. Losing it is
+ * therefore recorded as a *cost* (`de-identified OUTPUT lost a marker`) and
+ * never as a leak.
+ */
+const LEGIT_VALUE = "LUT-DATA";
 
 /** A source value reaching de-identified output is a PHI regression, not a structural nit. */
 const PHI_STRINGS = [ROOT_NAME, TRAILING_VALUE, ROOT_ID, ITEM_ID];
@@ -251,7 +288,15 @@ const PHI_STRINGS = [ROOT_NAME, TRAILING_VALUE, ROOT_ID, ITEM_ID];
  * ended up in - which is the only way to check "nothing is dropped" without
  * hand-writing an expectation per shape.
  */
-const MARKERS = [ROOT_NAME, TRAILING_VALUE, ROOT_ID, ITEM_ID, ITEM_VALUE, SECOND_VALUE];
+const MARKERS = [
+  ROOT_NAME,
+  TRAILING_VALUE,
+  ROOT_ID,
+  ITEM_ID,
+  ITEM_VALUE,
+  SECOND_VALUE,
+  LEGIT_VALUE,
+];
 
 function ascii(s: string): Buffer {
   return Buffer.from(s.length % 2 === 0 ? s : `${s} `, "ascii");
@@ -422,6 +467,94 @@ function carrierFixture(
   });
 }
 
+/**
+ * The on-wire bytes of a **complete, zero-length `(0010,0020)` Data Element** in
+ * `ts` - the smallest run that satisfies two of the three conjuncts in
+ * `src/deident/embedded.ts`: it tiles exactly, and `(0010,0020)` is a tag every
+ * run acts on.
+ */
+function zeroLengthPatientIdElement(ts: string): Buffer {
+  const b = Buffer.alloc(8);
+  if (ts === IMPLICIT_LE) {
+    // Tag + 4-byte length. No VR on the wire.
+    b.writeUInt16LE(0x0010, 0);
+    b.writeUInt16LE(0x0020, 2);
+    b.writeUInt32LE(0, 4);
+    return b;
+  }
+  const be = ts === EXPLICIT_BE;
+  if (be) {
+    b.writeUInt16BE(0x0010, 0);
+    b.writeUInt16BE(0x0020, 2);
+  } else {
+    b.writeUInt16LE(0x0010, 0);
+    b.writeUInt16LE(0x0020, 2);
+  }
+  b.write("LO", 4, "latin1");
+  if (be) b.writeUInt16BE(0, 6);
+  else b.writeUInt16LE(0, 6);
+  return b;
+}
+
+/**
+ * A carrier that **does not lie about anything** whose value nonetheless ends in
+ * a complete Data Element run naming an actionable tag.
+ *
+ * ## What this family is for
+ *
+ * It prices the only remedy anyone has proposed for the 11 cells still leaking
+ * at `delta=18` - the over-declare swallow into a **binary** carrier, where
+ * `src/deident/embedded.ts`'s third conjunct ("a byte the carrier VR's
+ * repertoire cannot hold") has nothing to say, because arbitrary bytes are
+ * exactly what `OB` / `OW` / `US` / `UN` are for. Dropping that conjunct for
+ * binary VRs and scanning on the remaining two is the obvious move. These rows
+ * are what it would cost.
+ *
+ * `declaredLengthDelta` is **0** here: the file is conformant, every length
+ * field is honest, and {@link LEGIT_VALUE} is ordinary content the carrier is
+ * entitled to hold. The only thing "wrong" with it is that eight of its bytes
+ * happen to read as a zero-length `(0010,0020)`. For an `OW` palette LUT or an
+ * `OB` blob that is a coincidence with probability nobody controls; for the
+ * `LO`/`ST` controls the same bytes are **provably** non-conformant (they carry
+ * `0x00` and `0x10`), which is why the shipped three-conjunct rule may empty
+ * those and must not empty the binary ones.
+ *
+ * So: a row that loses {@link LEGIT_VALUE} on a **binary** carrier here is a
+ * de-identifier destroying a conformant value it had no evidence against. The
+ * same row on a **string** carrier is the shipped rule working as designed.
+ * Reading the two side by side is the point; a single number could not say it.
+ *
+ * ## Why only the stride-0 carriers
+ *
+ * {@link LEGIT_TILING_CARRIERS} is deliberately not all of {@link LEAF_CARRIERS}:
+ * `OW` and `US` have a Big Endian byte-stride of 2, so `buildDicom` swaps every
+ * 2-byte pair of the value on emit. The crafted Data Element bytes below would
+ * reach the wire re-ordered and would not tile at all, and {@link LEGIT_VALUE}
+ * would not appear as a substring of the output either - a **`false` on such a
+ * row would be an artifact of the fixture, not a decision the de-identifier
+ * made.** The first draft of this family included them and read 9 emptied rows
+ * where the honest number is 6. `OB`, `UN`, `LO` and `ST` are stride 0, so the
+ * bytes written here are the bytes on the wire under all three syntaxes, and
+ * every row means the same thing.
+ */
+function legitTilingFixture(ts: string, carrier: (typeof LEGIT_TILING_CARRIERS)[number]): Buffer {
+  const elements = [
+    { tag: "00100010", vr: "PN", value: ascii(ROOT_NAME) },
+    {
+      tag: carrier.tag,
+      vr: carrier.vr,
+      value: Buffer.concat([ascii(LEGIT_VALUE), zeroLengthPatientIdElement(ts)]),
+    },
+    { tag: TRAILING, vr: "LO", value: ascii(TRAILING_VALUE) },
+  ] as never as Elements;
+  return buildDicom({
+    transferSyntax: ts,
+    mediaStorageSOPClassUID: "1.2.840.10008.5.1.4.1.1.2",
+    mediaStorageSOPInstanceUID: "1.2.826.0.1.3680043.10.1338.1",
+    elements,
+  });
+}
+
 interface Treeish {
   elements(): readonly unknown[];
 }
@@ -553,6 +686,24 @@ function sweep(): { results: Snapshot; built: number; unbuildable: number } {
       }
     }
   }
+
+  // The conformant tiling controls. Own key prefix so `--diff` never mixes them
+  // with the over/under-declaring rows above: these lie about nothing, and the
+  // only column that matters on them is whether the de-identified OUTPUT still
+  // carries `LEGIT_VALUE`.
+  for (const ts of SYNTAXES) {
+    for (const carrier of LEGIT_TILING_CARRIERS) {
+      let buf: Buffer;
+      try {
+        buf = legitTilingFixture(ts, carrier);
+      } catch {
+        unbuildable++;
+        continue;
+      }
+      results[`legit|${ts}|${carrier.label}`] = cell(buf);
+      built++;
+    }
+  }
   return { results, built, unbuildable };
 }
 
@@ -628,6 +779,14 @@ function diff(basePath: string, newPath: string): void {
   let leakCarrierBase = 0;
   let leakCarrierNext = 0;
   let deidLostValue = 0;
+  // The conformant tiling controls: how many of them no longer carry their
+  // legitimate value in de-identified output. Reported for BOTH trees, because
+  // the number that matters is the level, not the movement - a remedy that
+  // empties conformant binary values reads as `0 -> n` here and as nothing at
+  // all in `LEAKING`.
+  let legitLostBase = 0;
+  let legitLostNext = 0;
+  const legitLostNextKeys: string[] = [];
   const parseChangedKeys: string[] = [];
   const leakNextKeys: string[] = [];
   const lostValueKeys: string[] = [];
@@ -714,6 +873,16 @@ function diff(basePath: string, newPath: string): void {
     // and does not carry now. Not a defect - the whole point of emptying an
     // un-auditable carrier - but a cost that has to be a number, not a phrase.
     if (lost(b["deidSeen"], n["deidSeen"]) > 0) deidLostValue++;
+
+    if (k.startsWith("legit|")) {
+      const held = (c: Record<string, unknown>): boolean =>
+        Array.isArray(c["deidSeen"]) && (c["deidSeen"] as string[]).includes(LEGIT_VALUE);
+      if (!held(b)) legitLostBase++;
+      if (!held(n)) {
+        legitLostNext++;
+        legitLostNextKeys.push(k);
+      }
+    }
   }
 
   const say = (label: string, v: number): void => {
@@ -726,6 +895,8 @@ function diff(basePath: string, newPath: string): void {
   say("  ...of new's, leaf-carrier rows", leakCarrierNext);
   say("cells differing in any PARSE respect", parseChanged);
   say("de-identified OUTPUT lost a marker (cost)", deidLostValue);
+  say("conformant tiling control emptied: base", legitLostBase);
+  say("conformant tiling control emptied: new", legitLostNext);
   say("changed", changed);
   // NOT a gate. Which syntax is the control depends on which slice you are
   // measuring: it was Implicit VR LE for the Explicit-only sequence-bound work,
@@ -756,6 +927,7 @@ function diff(basePath: string, newPath: string): void {
   for (const [label, ks] of [
     ["parse-changed", parseChangedKeys],
     ["still-leaking", leakNextKeys],
+    ["conformant-emptied", legitLostNextKeys],
     ["lost-value", lostValueKeys],
     ["root-id-changed", rootIdKeys],
     ["strict-on-unchanged", strictUnchangedKeys],

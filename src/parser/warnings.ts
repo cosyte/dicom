@@ -76,6 +76,7 @@ export const WARNING_CODES = {
   DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED: "DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED", // reserved by Phase 7 - not emitted in Phase 2
   DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED: "DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE: "DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE", // emitted by deidentify(), never by the parser
+  DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE: "DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE", // emitted by deidentify(), never by the parser
   DICOM_PRIVATE_CREATOR_UNKNOWN: "DICOM_PRIVATE_CREATOR_UNKNOWN", // reserved by Phase 6 - not emitted in Phase 2
 } as const;
 
@@ -186,6 +187,19 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   // reasoning belongs in the docs, not in a string repeated thousands of times.
   DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE:
     "Element ({tag}) is VR=SQ with no parsed items, so its {n} value bytes could not be audited (PS3.15 E.1.1); emptied. See report.unauditableSequences.",
+  // Deliberately short for the same reason as the code above: one per element,
+  // and the element count is chosen by the input.
+  //
+  // NEITHER THE TAG NOR THE VR IS ECHOED, and that is specific to this code
+  // rather than caution. Every other factory's {tag} is composed from a real
+  // Data Element header; the condition that raises THIS one is that the header
+  // was fabricated from bytes inside some element's value, so its four tag bytes
+  // and its two VR bytes are document content. `renderTag` shape-checks a tag
+  // and cannot refuse one, so the withholding has to happen at the call site.
+  // The byte offset locates the element instead, and is a position this parser
+  // counted rather than anything the document said.
+  DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE:
+    "An element at byte offset {n2} carries an on-wire VR that is not one of the 34 PS3.5 6.2 defines, so its {n} value bytes are not a Value Field this library decoded; emptied (PS3.15 E.1.1). Its tag and VR are withheld: an earlier under-declared length can make them fragments of some element's value. See report.undefinedVrElements.",
   DICOM_BOM_IN_TEXT_VR: "Element ({tag}) {vr} value begins with a UTF-8 BOM; stripped on decode.",
   DICOM_TRAILING_NULL_IN_TEXT_VR:
     "Element ({tag}) {vr} value has a trailing NULL pad where SPACE is expected; trimmed.",
@@ -665,6 +679,52 @@ export function sequenceNotAuditable(
   return build(WARNING_CODES.DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE, position, {
     tag,
     n: byteLength,
+  });
+}
+
+/**
+ * Build a `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` warning. Emitted by
+ * `deidentify()` - never by the parser - when an element the run was about to
+ * **keep** carries an on-wire VR that is not one of the 34 PS3.5 section 6.2
+ * defines.
+ *
+ * PS3.5 2026c section 6.2 requires that "All new VRs defined in future versions
+ * of DICOM shall be of the same Data Element Structure as defined in [section
+ * 7.1.2] with reserved bytes after the VR and a 32-bit unsigned integer VL". An
+ * unrecognized VR is therefore, by the standard's own rule, long-form - while
+ * this parser reads it short-form, because it trusts the two on-wire bytes
+ * (Postel's Law) and only `LONG_FORM_VRS` takes the long layout. So the bytes
+ * this element carries are not a Value Field this library decoded under any VR,
+ * and PS3.15 section E.1.1's obligation over what is inside them cannot be
+ * discharged attribute by attribute. Emptying is the fail-safe answer.
+ *
+ * **Neither the tag nor the VR is passed in, and that is the point.** Every
+ * other factory in this file names the element by tag because the tag came from
+ * a real Data Element header. The condition that raises *this* code is that the
+ * header did not: an under-declared Value Length upstream leaves the reader
+ * mid-value, so the four tag bytes and the two VR bytes are content out of some
+ * element's Value Field. Measured on a synthetic `ST` carrier holding
+ * `"MR BRAIN SMITHSON"`, the fabricated tag renders as `48544F53` - four bytes
+ * of the surname. `renderTag` validates a tag's *shape* and so cannot refuse
+ * one, unlike `renderVr`, which means this factory is the one place the
+ * "structural by construction" property of {@link WarningTokens} has to be kept
+ * by not passing the field at all.
+ *
+ * `byteOffset` locates the element in its place: a count this parser kept, not
+ * anything the document said.
+ *
+ * @example
+ * ```ts
+ * const w = undefinedVrNotAuditable({ byteOffset: 320 }, 16);
+ * ```
+ */
+export function undefinedVrNotAuditable(
+  position: DicomPosition,
+  byteLength: number,
+): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE, position, {
+    n: byteLength,
+    n2: position.byteOffset,
   });
 }
 

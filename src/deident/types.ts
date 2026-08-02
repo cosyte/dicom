@@ -193,6 +193,99 @@ export interface UnauditableSequenceFinding {
 }
 
 /**
+ * One element that was emptied because its **on-wire VR is not one of the 34
+ * PS3.5 section 6.2 defines**, so nothing this library did to its bytes counts
+ * as decoding a Value Field.
+ *
+ * ## Why such an element exists at all
+ *
+ * Under an Explicit VR Transfer Syntax the VR is two bytes the sender wrote, and
+ * this parser trusts them (Postel's Law on the read path). The routine way two
+ * arbitrary bytes end up in a VR field is an **under**-declared Value Length
+ * upstream: the reader finishes the short value, and the leftover bytes of the
+ * value that was actually encoded are read as the next Data Element header. Tag,
+ * VR and length are then all fragments of somebody's value, and the element that
+ * genuinely followed is consumed as this fabricated element's "value".
+ *
+ * Measured on `scripts/measure-sq-bound-grid.ts`: a carrier under-declaring by 6
+ * produces `(4156,554C)` with the VR bytes `"E "`, whose value holds the source
+ * `(0010,0020)` Patient ID in full. It reaches **string** carriers exactly as it
+ * reaches binary ones, because the carrier's own VR is not what decides it.
+ *
+ * ## Why emptying, and why it is not a guess
+ *
+ * PS3.5 2026c section 6.2 requires every VR not yet defined to use the long-form
+ * Data Element Structure - "with reserved bytes after the VR and a 32-bit
+ * unsigned integer VL" - so an unrecognized VR read short-form, which is what
+ * this parser does, is by the standard's own structure rule not a reading of a
+ * Value Field. There is nothing to prove about the content: the test is a
+ * membership check against the closed 34-VR set on a field the parser already
+ * recorded, so there is no scan, no per-offset loop, and no cost that follows an
+ * attacker-chosen value length.
+ *
+ * PS3.15 2026c section E.1.1 obliges an implementation claiming the Basic
+ * Application Level Confidentiality Profile to "protect or retain all instances
+ * of the Attributes listed in [Table E.1-1]". Those instances cannot be reached
+ * inside bytes that were never a value, so the obligation falls on the carrier.
+ *
+ * **`UN` is not this.** `UN` is one of the 34, so an ordinary unknown-VR element
+ * - the Implicit VR fallback for a tag this build's dictionary does not publish,
+ * and the CP-246 shape - never reaches here. That is the line the sibling
+ * `SQ`-with-no-items rule could not draw.
+ *
+ * ## Why this finding names no tag, when every sibling finding does
+ *
+ * Because the tag **may be content**, and nothing here can tell. The paragraph
+ * above is the whole argument: when an under-declare desynchronized the reader,
+ * the four tag bytes and the two VR bytes were read out of the middle of some
+ * element's Value Field, so reporting the "tag" would republish four bytes of
+ * the document. An unrecognized VR written honestly, at a correct length, raises
+ * this same code and has an ordinary tag - **and the two are indistinguishable
+ * here**, so the tag is withheld on both routes rather than on a guess. Measured on a synthetic `ST` carrier holding
+ * `"MR BRAIN SMITHSON"`, the fabricated tag is `48544F53` - four bytes of the
+ * surname. {@link EmbeddedAttributeFinding} and
+ * {@link UnauditableSequenceFinding} may carry a tag because theirs came from a
+ * header the sender really wrote; this one may not, and the asymmetry is the
+ * finding rather than an inconsistency.
+ *
+ * `byteOffset` locates the element instead - a position this parser counted.
+ * Nothing here renders a document byte: an offset the parser counted, a decoded
+ * length, and the structural `contextPath`. Safe to log.
+ *
+ * @example
+ * ```ts
+ * import { deidentify, parseDicom } from "@cosyte/dicom";
+ * const { report } = deidentify(parseDicom(buf));
+ * for (const u of report.undefinedVrElements) {
+ *   console.warn(`offset ${String(u.byteOffset)}: ${String(u.byteLength)} bytes dropped`);
+ * }
+ * ```
+ */
+export interface UndefinedVrFinding {
+  /**
+   * Byte offset of the emptied element's header. **This is how the element is
+   * identified, and there is deliberately no `tag` field** - see the note above:
+   * a fabricated header's tag bytes are part of some element's value.
+   */
+  readonly byteOffset: number;
+  /**
+   * Byte length of the value field that was dropped.
+   *
+   * **An input-derived count, and on this finding specifically that is not a
+   * formality.** For the sibling findings the length came from a header the
+   * sender wrote; here the two length bytes can themselves be value bytes, like
+   * the tag bytes. What is published is the *number* they decode to, never the
+   * bytes - the same footing as every `{n}` in the warning registry, which is
+   * documented there as "an input-derived count". A number is not a rendering,
+   * and the reach is at most a character or so, but do not describe this field
+   * as "structural, never a value" the way its siblings are described.
+   */
+  readonly byteLength: number;
+  /** Tag/index chain when the carrier is inside a sequence item; omitted at the root. */
+  readonly contextPath?: readonly string[];
+}
+
+/**
  * The audit trail returned alongside the de-identified dataset.
  *
  * Every field except one is composed from static tables: tags, Part 6 keywords,
@@ -243,6 +336,42 @@ export interface DeidentifyReport {
    * verbatim and never appears here.
    */
   readonly unauditableSequences: readonly UnauditableSequenceFinding[];
+  /**
+   * Elements emptied because their on-wire VR is not one of the 34 PS3.5 §6.2
+   * defines, so their bytes are not a Value Field this library decoded and
+   * PS3.15 §E.1.1's obligation over what is inside them could not be discharged.
+   * Empty on a file conformant to **PS3.5 2026c**: a sender that writes one of
+   * the 34 VRs that edition defines never produces one, and an Implicit VR LE
+   * file **cannot** - there the VR comes from the dictionary. The edition is not
+   * pedantry: §6.2 exists precisely to say how a *future* VR will be encoded, so
+   * a file conformant to a later edition using a newly defined VR is the
+   * population that sentence exists for. (What such a file does on this
+   * library's parse path is not summarized here - it was measured and the
+   * shapes disagree.) A non-empty array
+   * means the source desynchronized the reader, usually by under-declaring a
+   * Value Length somewhere earlier. See {@link UndefinedVrFinding}.
+   *
+   * **Capped, and the cap is on the record only**, exactly as
+   * {@link DeidentifyReport.unauditableSequences} is: a crafted 1 MiB input can
+   * carry over a hundred thousand such elements, so this array and its matching
+   * warnings stop at `MAX_UNDEFINED_VR_FINDINGS`. Every one of them is still
+   * emptied; an array exactly that long means "at least this many".
+   *
+   * **A finding here names a byte offset, not a tag** - uniquely among the
+   * report's findings, and for a reason worth reading in
+   * {@link UndefinedVrFinding}: the tag of a fabricated header is itself part of
+   * some element's value.
+   *
+   * Unlike its sibling this list has **no carve-out**, and the reason is
+   * structural rather than a promise: `keepOrEmpty` is the **only** path that
+   * writes a source value into de-identified output unchanged, and the test sits
+   * at the top of it. Every other outcome - `X` remove, `Z`/`C` empty, `D` dummy,
+   * `U` remap, and a private tag the Basic Profile drops - already replaces the
+   * value. So a `RetainSafePrivate` element a {@link Profile} vouches for still
+   * reaches this test and is still emptied, which is where the sibling
+   * `SQ`-with-no-items rule has a real carve-out and this one does not.
+   */
+  readonly undefinedVrElements: readonly UndefinedVrFinding[];
   /**
    * Source UID → replacement UID, for cross-file consistency. The **keys are
    * document values**, not composed identifiers: this is the one field of the
