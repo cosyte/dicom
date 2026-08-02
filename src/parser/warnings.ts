@@ -167,7 +167,7 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   DICOM_NONZERO_RESERVED_BYTES:
     "Element ({tag}) has non-zero reserved bytes between VR and length (first byte {n}, second byte {n2}); ignoring.",
   DICOM_SQ_NOT_DESCENDED:
-    "Element ({tag}) resolved to VR=SQ from the dictionary but its defined-length value is not a valid item stream; kept as opaque bytes and NOT descended, so nothing nested inside it is visible to navigation. deidentify() cannot audit such a value and empties the element rather than keeping it.",
+    "Element ({tag}) resolved to VR=SQ from the dictionary but its defined-length value is not a valid item stream; kept as opaque bytes and NOT descended, so nothing nested inside it is visible to navigation. deidentify() cannot audit such a value: it empties the element unless RetainSafePrivate plus a profile has vouched for it, in which case the bytes are kept unaudited.",
   DICOM_UN_PARSED_AS_SQ:
     "Element ({tag}) has VR=UN with undefined length; descended as Implicit VR LE sequence per CP-246.",
   DICOM_EMPTY_ITEM_IN_SEQUENCE: "Sequence ({tag}) contains an empty item (length=0); tolerated.",
@@ -181,8 +181,11 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
     "Pixel Data is present and Burned In Annotation is not 'NO'; this metadata-only de-identifier cannot inspect or clean pixels. Recognizable text may remain burned into the image.",
   DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED:
     "Element ({tag}) {vr} was kept by the action table, but its value ends with {n} whole Data Element(s) - an over-declared Value Length swallowed what followed it. Emptied rather than kept, because the action table cannot see an attribute encoded inside a value. Read report.embeddedAttributes for the tags that were hidden there.",
+  // Deliberately short. One of these is raised per un-auditable element, so a
+  // long message is multiplied by an element count the input controls; the
+  // reasoning belongs in the docs, not in a string repeated thousands of times.
   DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE:
-    "Element ({tag}) is VR=SQ but the parser did not materialize its items, so its {n} value bytes are an item stream this run cannot walk. PS3.5 section 7.5.1 makes those bytes Data Sets composed of Data Elements, and PS3.15 section E.1.1 obliges a de-identifier to reach the listed Attributes inside them; keeping them verbatim would ship un-audited Data Elements out of a dataset marked Patient Identity Removed. Emptied to a zero-item Sequence. Read report.unauditableSequences for the tags, and ds.warnings for why the parse refused.",
+    "Element ({tag}) is VR=SQ with no parsed items, so its {n} value bytes could not be audited (PS3.15 E.1.1); emptied. See report.unauditableSequences.",
   DICOM_BOM_IN_TEXT_VR: "Element ({tag}) {vr} value begins with a UTF-8 BOM; stripped on decode.",
   DICOM_TRAILING_NULL_IN_TEXT_VR:
     "Element ({tag}) {vr} value has a trailing NULL pad where SPACE is expected; trimmed.",
@@ -478,9 +481,14 @@ export function unParsedAsSQ(position: DicomPosition, tag: Tag): DicomParseWarni
  * file needs to be told the audit did not reach inside this element - and
  * `deidentify()` needs to be told too, which is why it now **empties** such an
  * element rather than passing its bytes through
- * (`DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE`). The warning is what makes the
- * lost content attributable to the sender's own encoding rather than a
+ * (`DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE`), unless `RetainSafePrivate` plus a
+ * profile has vouched for it. The warning is what stops that emptying being a
  * silent drop.
+ *
+ * **Do not read it as "the sender is at fault".** It usually is, but the same
+ * refusal is raised for a *conformant* file whose sequences nest deeper than
+ * this library's own `NESTING_DEPTH_LIMIT` - PS3.5 sets no nesting bound, so
+ * that limit is ours, not the standard's.
  *
  * @example
  * ```ts

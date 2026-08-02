@@ -41,6 +41,23 @@
   `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` (**27 Tier-2 codes, was 26**). A listed `SQ` kept by a Retain
   Option now audits as `emptied`, not `kept` - it produced an empty sequence anyway while claiming
   retention.
+  **▶ THE RECORD IS CAPPED AT 64 PER RUN AND THE ACTION NEVER IS, AND THE CAP HAS TO BE RUN-SCOPED.**
+  `#48` bound every consumer-controlled diagnostic; `#53` then shipped a new unbounded one, and the
+  refuter measured this slice's first draft at **58,255 findings and 36 MB of warnings from a 1 MiB
+  input** because element count is attacker-chosen exactly as a value length is. The budget lives on
+  `DeidentifyContext` and is **deliberately mutable**: `processElements` builds a fresh result per
+  Data Set and merges upward, so a per-result cap bounds each item independently and not the file.
+  The registry message was also cut from ~620 to ~150 characters, because a per-element string is
+  multiplied by that same count.
+  **▶ THREE CLAIMS THIS SLICE SHIPPED WERE FALSE AND THE REFUTER CAUGHT ALL THREE. THE FIX IS ALWAYS
+  TO CORRECT THE CLAIM, NEVER TO WIDEN THE GUARD** (`#50`'s rule). (1) `isUnauditableSequence`'s own
+  JSDoc named the CP-246 `UN` shape as a covered "route" while three other artifacts in the same
+  commit said it still leaks. (2) The `DICOM_SQ_NOT_DESCENDED` message and the README/troubleshooting
+  rows said `deidentify()` empties such an element, **unconditionally** - but `keepsPrivate` decides
+  first, so a private `SQ` vouched for by `RetainSafePrivate` + a `Profile` is kept verbatim and
+  **measurably still leaks**. (3) "the sender's encoding is why" is false for a **conformant** file
+  nested past `NESTING_DEPTH_LIMIT` (64), which is this library's bound, not PS3.5's. Both carve-outs
+  are now pinned by tests so the claims and the code cannot drift apart again.
   **▶ THE BINARY-VR RESIDUAL IS NO LONGER UNMEASURED, AND THE SWEEP FOUND A SECOND MECHANISM.** The
   grid gained an over-declaring **leaf** carrier (`LEAF_CARRIERS` in the grid script): **19 leaking cells,
   identical on both trees**, `PRE-EXISTING`. **11 at `delta=18`** are the disclosed swallow into

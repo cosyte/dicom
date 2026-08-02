@@ -60,7 +60,14 @@ import { Buffer } from "node:buffer";
 
 import { describe, expect, it } from "vitest";
 
-import { WARNING_CODES, deidentify, parseDicom, serializeDicom } from "../../src/index.js";
+import {
+  WARNING_CODES,
+  defineProfile,
+  deidentify,
+  parseDicom,
+  serializeDicom,
+} from "../../src/index.js";
+import { MAX_UNAUDITABLE_SEQUENCE_FINDINGS } from "../../src/deident/deidentify.js";
 import { buildDicom } from "../helpers/build-dicom.js";
 
 const IMPLICIT_LE = "1.2.840.10008.1.2";
@@ -341,6 +348,53 @@ describe("DICOM-DEIDENT-RAWBYTES-PASSTHROUGH: the no-loss controls", () => {
   });
 });
 
+describe("DICOM-DEIDENT-RAWBYTES-PASSTHROUGH: what the rule does NOT reach", () => {
+  it("a private SQ vouched for by RetainSafePrivate is kept verbatim, and still leaks", () => {
+    // `keepsPrivate` decides before this rule is consulted, so a profile that
+    // names the element by creator and tag keeps its bytes unaudited. That is
+    // the pre-existing, deliberate `RetainSafePrivate` posture (the profile is
+    // the vouching authority, and no content test can second-guess it), but it
+    // means the surrounding claims must not say "an SQ with no items is
+    // emptied" without the carve-out. Pinned here so the claim and the code
+    // cannot drift apart again.
+    const profile = defineProfile({
+      name: "acme-test",
+      description: "Synthetic vendor block whose private element is an SQ.",
+      privateTags: {
+        ACME: {
+          "0009XX01": { vr: "SQ", keyword: "AcmePrivateSequence", name: "Acme Private Seq" },
+        },
+      },
+    });
+    const buf = buildDicom({
+      transferSyntax: IMPLICIT_LE,
+      mediaStorageSOPClassUID: "1.2.840.10008.5.1.4.1.1.2",
+      mediaStorageSOPInstanceUID: "1.2.826.0.1.3680043.10.1338.1",
+      elements: [
+        { tag: "00090010", vr: "LO", value: ascii("ACME") },
+        {
+          tag: "00091001",
+          vr: "UN",
+          value: Buffer.concat([Buffer.from("JUNK", "ascii"), ascii(PATIENT_ID)]),
+        },
+      ] as never as Elements,
+    });
+    const ds = parseDicom(buf, { profile });
+    expect(ds.get("00091001")?.vr).toBe("SQ");
+    expect(ds.get("00091001")?.items).toBeUndefined();
+
+    const { dataset, report } = deidentify(ds, { retain: ["RetainSafePrivate"], profile });
+    // The carve-out, stated as an assertion: no finding, and the bytes survive.
+    expect(report.unauditableSequences).toEqual([]);
+    expect(serializeDicom(dataset).toString("latin1")).toContain(PATIENT_ID);
+
+    // ...and without the vouching option the same element is removed as a
+    // private attribute, which is what makes the exemption the profile's doing.
+    const plain = deidentify(parseDicom(buf, { profile }));
+    expect(serializeDicom(plain.dataset).toString("latin1")).not.toContain(PATIENT_ID);
+  });
+});
+
 describe("DICOM-DEIDENT-RAWBYTES-PASSTHROUGH: cost, on a fixture that can actually blow up", () => {
   it("the cost fixture is maximally adversarial: EVERY even offset is a candidate", () => {
     // `#53` shipped a cost claim backed by a fixture that produced exactly one
@@ -357,10 +411,13 @@ describe("DICOM-DEIDENT-RAWBYTES-PASSTHROUGH: cost, on a fixture that can actual
   });
 
   it("deidentify() does not follow an attacker-chosen value length", () => {
-    // A quadratic re-scan of this shape measured 22.5 s at 256 KiB and ~257 s at
-    // 1 MiB. This remedy performs no scan at all - it reads `items === undefined`
-    // and a `.length` - so the ceiling has roughly three orders of magnitude of
-    // headroom and still fails loudly if a content test is ever introduced here.
+    // Be precise about what this proves and what it does not. The code under
+    // test never traverses these bytes at all: an `SQ` with no items goes
+    // straight to `emptyUnauditableSequence`, which reads `.length`. So this is
+    // a FORWARD TRIPWIRE, not a measurement of an existing loop - it fails the
+    // day someone adds a content test on this path, and a quadratic re-scan of
+    // this shape measured 22.5 s at 256 KiB and ~257 s at 1 MiB, so the ceiling
+    // has roughly three orders of magnitude of headroom.
     const ds = parseDicom(adversarialCarrier(1 << 20));
     expect(ds.get(CARRIER)?.items).toBeUndefined();
     const started = performance.now();
@@ -379,6 +436,50 @@ describe("DICOM-DEIDENT-RAWBYTES-PASSTHROUGH: cost, on a fixture that can actual
     expect(small.unauditableSequences).toHaveLength(1);
     expect(large.unauditableSequences).toHaveLength(1);
     expect(large.unauditableSequences[0]?.byteLength).toBe(1 << 20);
+  });
+
+  it("caps the RECORD across the run, and never the removal", () => {
+    // `#48` bound every consumer-controlled diagnostic in this package, and
+    // `#53` then shipped a new unbounded one (`embeddedAttributes[].hidden`).
+    // The element COUNT is attacker-chosen just as a value's length is, so a
+    // finding-per-element is an amplification even though each finding is small.
+    //
+    // The cap has to span the run, not one Data Set: `processElements` builds a
+    // fresh result per Data Set and merges upward, so a per-result cap would
+    // bound each item independently and not the file. Hence the nesting here.
+    const many = MAX_UNAUDITABLE_SEQUENCE_FINDINGS * 4;
+    const items = Array.from({ length: many }, () => ({
+      elements: [
+        {
+          tag: HEALTHY_CARRIER,
+          declaredLengthDelta: 10,
+          items: [{ elements: [{ tag: "00080008", vr: "CS", value: ascii(ITEM_VALUE) }] }],
+        },
+        { tag: "00080060", vr: "CS", value: ascii("CT") },
+      ],
+    }));
+    const buf = buildDicom({
+      transferSyntax: IMPLICIT_LE,
+      mediaStorageSOPClassUID: "1.2.840.10008.5.1.4.1.1.2",
+      mediaStorageSOPInstanceUID: "1.2.826.0.1.3680043.10.1338.1",
+      elements: [
+        { tag: "00100010", vr: "PN", value: ascii(ROOT_NAME) },
+        { tag: CARRIER, items },
+      ] as never as Elements,
+    });
+    const ds = parseDicom(buf);
+    expect(ds.get(CARRIER)?.items).toHaveLength(many);
+
+    const { dataset, report } = deidentify(ds);
+    expect(report.unauditableSequences).toHaveLength(MAX_UNAUDITABLE_SEQUENCE_FINDINGS);
+    expect(
+      report.warnings.filter((w) => w.code === WARNING_CODES.DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE),
+    ).toHaveLength(MAX_UNAUDITABLE_SEQUENCE_FINDINGS);
+
+    // The action is NOT capped: every one of the `many` un-auditable sequences
+    // is emptied, including the ones past the reporting cap. A bound on what we
+    // will say must never become a bound on what we will remove.
+    expect(serializeDicom(dataset).toString("latin1")).not.toContain(ITEM_VALUE);
   });
 
   it("drops the whole un-auditable megabyte rather than serializing it", () => {

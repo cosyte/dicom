@@ -44,7 +44,8 @@
  * - A private data element kept under `RetainSafePrivate` is kept *verbatim* - if
  *   it is itself a sequence carrying standard PHI attributes, that nested content
  *   is not recursed. The profile vouches the element is safe; nest accordingly.
- * - An `SQ` whose `items` the parser did not materialize is **emptied**, not kept:
+ * - A **standard** (non-private) `SQ` whose `items` the parser did not
+ *   materialize is **emptied**, not kept:
  *   its value is by PS3.5 §7.5.1 a stream of Data Sets, and a run that cannot
  *   enumerate them cannot discharge §E.1.1's obligation inside them, so the
  *   fail-safe answer is to drop the carrier and say so
@@ -115,12 +116,35 @@ const BODY_ENCODING: Readonly<Record<string, BodyEncoding>> = {
   "1.2.840.10008.1.2.1.99": "explicitLE",
 };
 
+/**
+ * Cap on how many un-auditable sequences one run will *describe*
+ * ({@link DeidentifyReport.unauditableSequences} and the matching warnings).
+ *
+ * `#48` bound every consumer-controlled diagnostic in this package for a reason:
+ * a finding emitted per element is amplified by an element count the input
+ * chooses, and a 1 MiB crafted file can carry tens of thousands of un-auditable
+ * elements. It is a bound on the **record**, never on the action - every
+ * un-auditable sequence is emptied whether or not it is listed.
+ *
+ * A report whose array is exactly this long means "at least this many"; treat it
+ * as truncated.
+ */
+export const MAX_UNAUDITABLE_SEQUENCE_FINDINGS = 64;
+
 interface DeidentifyContext {
   readonly active: ReadonlySet<DeidentifyOption>;
   readonly remap: UidRemapper;
   readonly profile: Profile | undefined;
   readonly encoding: BodyEncoding;
   readonly littleEndian: boolean;
+  /**
+   * Run-scoped diagnostic budget. **Deliberately mutable**, and deliberately on
+   * the context rather than on a `ProcessResult`: `processElements` builds a
+   * fresh result per Data Set and merges them upward, so a per-result cap would
+   * bound each item independently and not the run - which is exactly the
+   * amplification the cap exists to stop.
+   */
+  readonly budget: { unauditableSequences: number };
 }
 
 /** Validate caller-supplied options; throws {@link DeidentifyError} on misconfig. */
@@ -340,11 +364,24 @@ function keepOrEmpty(
  * not materialize its items, so there is no item stream to walk.
  *
  * This is a fact the parser recorded on the element, not an inference from its
- * bytes. Both routes here are already announced on `Dataset.warnings` - a
- * defined-length Implicit VR LE value whose dictionary-resolved `SQ` was not a
- * valid item stream (`DICOM_SQ_NOT_DESCENDED`), and an undefined-length `UN`
- * whose CP-246 descent was refused. `items: []` is a *materialized empty*
- * sequence and is deliberately not this: nothing is hidden in zero items.
+ * bytes. **Exactly one route reaches it**, and it is announced on
+ * `Dataset.warnings`: a defined-length Implicit VR LE value whose
+ * dictionary-resolved `SQ` was not a valid item stream
+ * (`DICOM_SQ_NOT_DESCENDED`). `items: []` is a *materialized empty* sequence and
+ * is deliberately not this: nothing is hidden in zero items.
+ *
+ * **An undefined-length `UN` whose CP-246 descent was refused is NOT a route
+ * here**, and saying otherwise would be a false assurance about a shape that
+ * still writes an identifier into output. It keeps `vr === "UN"`, so the first
+ * conjunct is false; and it cannot be admitted by relaxing that conjunct,
+ * because every ordinary `UN` element also has `items === undefined` and the
+ * relaxed test would empty every unknown-VR element in every file. Telling the
+ * two apart needs a mark the parser does not set. Measured, still leaking.
+ *
+ * Note also what a `true` here does **not** guarantee: `keepsPrivate` runs
+ * before this on a private element, so a private `SQ` a {@link Profile} vouches
+ * for under `RetainSafePrivate` never reaches this predicate and is kept
+ * verbatim. See {@link deidentify}'s module notes.
  */
 function isUnauditableSequence(el: Element): boolean {
   return el.vr === "SQ" && el.items === undefined;
@@ -400,7 +437,17 @@ function emptyUnauditableSequence(
   contextPath: readonly string[],
   out: ProcessResult,
 ): void {
+  // The ACTION is never capped. Whatever the count, every un-auditable sequence
+  // is emptied - a bound on how much we are willing to *say* must never become a
+  // bound on what we are willing to *remove*.
   out.elements.set(el.tag, rebuildSequence(el, [], ctx.encoding));
+
+  // The RECORD is capped, per `#48`'s discipline for consumer-controlled
+  // diagnostics, against a budget that spans the whole run rather than this one
+  // Data Set. `report.unauditableSequences.length === MAX_UNAUDITABLE_SEQUENCE_
+  // FINDINGS` is the signal that more were emptied than are listed.
+  if (ctx.budget.unauditableSequences >= MAX_UNAUDITABLE_SEQUENCE_FINDINGS) return;
+  ctx.budget.unauditableSequences += 1;
   out.unauditableSequences.push({
     tag: el.tag,
     byteLength: el.rawBytes.length,
@@ -723,6 +770,7 @@ export function deidentify(
     profile: options.profile,
     encoding,
     littleEndian,
+    budget: { unauditableSequences: 0 },
   };
 
   const processed = processElements(ds.elements(), ctx, []);

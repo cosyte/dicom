@@ -231,6 +231,16 @@ export interface DeidentifyReport {
    * content was dropped from the de-identified output, and the matching
    * `DICOM_SQ_NOT_DESCENDED` entry on `Dataset.warnings` says why the parse
    * refused. See {@link UnauditableSequenceFinding}.
+   *
+   * **Capped, and the cap is on the record only.** A crafted input can carry
+   * tens of thousands of un-auditable elements, so this array (and its matching
+   * warnings) stops at `MAX_UNAUDITABLE_SEQUENCE_FINDINGS`. Every un-auditable
+   * sequence is still emptied; an array exactly that long means "at least this
+   * many", so read it as truncated rather than as a total.
+   *
+   * **It is not a complete list of what went un-audited, either**: a private
+   * `SQ` a {@link Profile} vouches for under `RetainSafePrivate` is kept
+   * verbatim and never appears here.
    */
   readonly unauditableSequences: readonly UnauditableSequenceFinding[];
   /**

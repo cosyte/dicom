@@ -30,17 +30,24 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   embedded in an Item of a Sequence of Items". Unable to enumerate the items, the obligation falls on
   the carrier, which is the escalation §E.1.1 itself makes for a SOP Instance UID inside a Sequence.
   Both sentences read from the vendored SHA-pinned documents, pins re-derived, each unique in its
-  document. An `SQ` with no items is therefore **emptied**, `report.unauditableSequences` names the
-  tag and the byte length dropped, and the new `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` is raised. A
+  document. A **standard** `SQ` with no items is therefore **emptied**,
+  `report.unauditableSequences` names the tag and the byte length dropped, and the new
+  `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` is raised. That record is **capped at 64 across the run**
+  (element count is attacker-chosen too, and `#48` bound every other consumer-controlled
+  diagnostic); the **emptying is never capped**, so an array exactly 64 long means "at least 64". A
   listed sequence kept by a Retain Option takes the same branch and its audit line now reads
   `emptied` rather than `kept` - previously it produced an empty sequence anyway while claiming the
   attribute was retained.
 
   **It costs content, and the number is published rather than described:** 2,448 grid cells lose a
   value from their de-identified output, of which **1,293 were not leaking anything** and pay purely
-  for the guarantee. Because the trigger is `items === undefined` rather than a content test there is
-  no scan, so no cost follows an attacker-chosen value length; the cost tests use a carrier where
-  **every even offset** is a tiling candidate, and assert that property rather than describing it.
+  for the guarantee. The accompanying `DICOM_SQ_NOT_DESCENDED` says why the parse refused, which is
+  _usually_ a sender defect - but **not always**: a conformant file nested deeper than this
+  library's own `NESTING_DEPTH_LIMIT` of 64 (ours; PS3.5 sets no nesting bound) is refused the same
+  way and loses that sequence too. Because the trigger is `items === undefined` rather than a
+  content test there is no scan, so no cost follows an attacker-chosen value length; the cost tests
+  use a carrier where **every even offset** is a tiling candidate and assert that property rather
+  than describing it, as a **forward tripwire** - this path never traverses those bytes.
 
   **New surface:** `UnauditableSequenceFinding`, `DeidentifyReport.unauditableSequences`, and
   `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` (**27 Tier-2 codes, was 26**; snapshot updated
@@ -51,7 +58,9 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   whose CP-246 descent was refused keeps `vr === "UN"`, and the rule cannot be extended to it because
   every ordinary `UN` element also has no items - measured on a hand-built file, the identifier still
   reaches output with no report entry. A **private** `SQ` under `RetainSafePrivate` plus a `Profile`
-  is still kept verbatim, deliberately. And the **binary-VR carrier** residual the previous entry
+  is still kept verbatim, deliberately - `keepsPrivate` decides first, so it never reaches this rule,
+  and measured on a synthetic vendor block the identifier does still reach output. Both carve-outs
+  are pinned by tests. And the **binary-VR carrier** residual the previous entry
   disclosed but could not measure now has a number: the grid gained an over-declaring **leaf**
   carrier dimension and finds **19 leaking cells, identical on both trees** - 11 at `delta=18` (the
   swallow into `OB`/`OW`/`US`/`UN`, silent, with `LO`/`ST` controls on the identical fixture at 0)
