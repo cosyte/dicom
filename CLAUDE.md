@@ -10,6 +10,96 @@
 
 ## Status
 
+- **🩺 A private value no longer crosses the PS3.5 section 7.8.1 reservation boundary WHEN AN ITEM
+  ABSORBS IT. The EJECT direction and the private-`SQ` carve-out are NOT closed - see below.**
+  (`DICOM-PRIVATE-CREATOR-RESERVATION-LEAK`, `PRE-EXISTING`, live on the published `0.0.9`, found by
+  `#51`'s pass-6 refuter and **measured identical on `origin/main`**). An `(FFFE,E000)` Item
+  declaring more bytes than its enclosing `SQ`'s Value Length absorbs the element that followed the
+  sequence; with the creator as genuine Item content and the private data element written at the
+  **root**, the absorbed element was vouched for by a reservation it never had. Measured on
+  `164eb39`: `removedPrivateTags: []`, the value in the output, `(0012,0062) = YES`, **no warning on
+  either channel**.
+  **▶ THE REMEDY IS AT THE DE-IDENTIFY BOUNDARY AND IT REMOVES - IT DOES NOT DOWNGRADE THE STAMP.**
+  `itemStreamOverrunsSequence` compares two fields the parser already recorded (`Element.length`
+  against `Element.rawBytes.length`), the same shape as `isUnauditableSequence`; `processElements`
+  carries a `reservationsUsable` flag that `descendSequence` narrows and that never recovers at any
+  depth below. **NO PARSER FILE IS TOUCHED**: an over-declaring Item and an under-declaring Sequence
+  are byte-identical, which `#51` established three times. Grid over **83,037 cells** vs `164eb39`:
+  **0 cells differing in any PARSE respect, 0 cells whose READING differs** (a new counter - the
+  parse-respect count folds both warning channels in), 0 new lenient or strict fatals, 0 markers
+  lost or gained, 0 wrong root `(0010,0020)`, **0 Implicit VR LE changed** (free control - that path
+  slices the item stream).
+  **▶ THE SPEC DOES THE WORK, AND BOTH CITATIONS ARE NORMATIVE BODY TEXT, NOT NOTES.** PS3.5 2026c
+  section 7.8.1: "Items within a sequence are self contained Data Sets ... The scope of the
+  reservation is just within the Item. Items do not inherit the Private Data Element reservations
+  made by Private Creator Data Elements in the Data Set in which the Item is nested" (one occurrence
+  in the document, a bare `<para>` at section level). PS3.15 2026c section E.3.10: "Private
+  Attributes that are known by the de-identifier to be safe from identity leakage shall be retained
+  ...; all other Private Attributes shall be removed **or processed in the element-specific manner recommended by Deidentification Action (0008,0307), if present within Private Data Element Characteristics Sequence (0008,0300)**." **QUOTE THE WHOLE CLAUSE - IT HAS TWO
+  BRANCHES AND A GATE CAUGHT THIS ONE TRUNCATED AT "removed"**, which reads a permissive clause as an
+  absolute. This library does not implement `(0008,0307)`, so removal is the branch available to it.
+  **Known** is the load-bearing word: the
+  reservation's scope IS the Item's boundary, so a file that contradicts itself about where the Item
+  ends establishes no knowledge, and E.3.10's default applies.
+  **▶ 🛑 THE FAIL-SAFE-DIRECTION ARGUMENT IS RETRACTED, NOT REWORDED - `#51` WAS REFUSED FOR IT IN
+  FIVE ARTIFACTS.** The direction is a property of **where the sender put the Private Creator**, not
+  of the two readings. Both ABSORB placements are pinned and both are refused; the EJECT direction is
+  pinned as a residual and is **not** refused. Do not restate this as "both directions are closed".
+  **▶ THE GRID COULD NOT SEE THIS CLASS AND NOW CAN - THAT IS THE REUSABLE PART.** Every family in
+  `scripts/measure-sq-bound-grid.ts` ran `deidentify()` with **no options**, and `RetainSafePrivate`
+  plus a `Profile` is the only route in the package that writes a private value into de-identified
+  output. Three refuter passes read "0 PHI regressions" off that harness while this was live. The
+  new `priv|` family sweeps creator placement x both length fields x three syntaxes: **58 -> 0**
+  cells keep a private value inside an Item on a self-contradicting file, **20 of the 58 were NOT
+  leaking anything** (creator and data element both genuine Item content - they pay for the
+  guarantee), retention on files whose length fields agree is **unchanged** (6 -> 6 in an Item,
+  **9 -> 9** at the root), and 0 rows are kept with no creator in scope on either tree.
+  **▶ 🩺 TWO ROUTES ARE NOT CLOSED, AND THE HEADLINE IS NARROWED TO SAY SO.** A pass-1
+  `conformance-refuter` grade found both; both are `PRE-EXISTING`, reproduce identically on
+  `164eb39`, and both produce the same false attestation (`removedPrivateTags: []`, the value in the
+  output, `(0012,0062) = YES`).
+  (a) **The EJECT direction.** An Item that _under_-declares pushes its trailing elements **out**
+  into the enclosing Data Set, which is not narrowed, so a creator that lands there reserves a block
+  for elements the sender never gave it. **🛑 IT IS NOT ROOT-SPECIFIC AND THE FIRST DRAFT OF THIS
+  ENTRY SAID IT WAS** - pass 2 reproduced it one level down, an inner sequence ejecting a creator
+  into the still-usable enclosing Item. **Scope the item to EVERY still-usable Data Set, not the
+  root**, or it gets built to the wrong bar. Silent on
+  every channel and silent under `{ strict: true }` on Explicit VR LE and BE. **22 grid cells.**
+  **THE WIDENING WAS BUILT AND MEASURED, NOT ARGUED ABOUT:** narrowing the flag whenever a Data Set
+  _contains_ an over-running sequence costs **24** root retentions and closes **2** of the 22 -
+  the other 20 are Implicit VR LE, where the sequence records **no over-run at all**
+  (`rawBytes.length === length`) because the ejection is reader desynchronization, not an item
+  reading past its sequence. A different mechanism, its own slice.
+  (b) **The private-`SQ` carve-out.** `keepsPrivate` decides **before** `descendSequence`, so a
+  private `SQ` the profile vouches for is kept **verbatim**, its items are never walked, and this
+  rule is never consulted inside it. **This is `#54`'s exact refusal repeated** - the first draft of
+  every artifact here said "every private element in such an Item is removed", unconditionally, with
+  the carve-out documented two bullets above it in the README. Corrected everywhere, guard not
+  widened. Both routes are **pinned as residual tests that assert the leaking behaviour**, so they go
+  red when fixed.
+  **▶ 🛑 THE GRID DOES NOT HOLD THE HEADLINE SHAPE, AND THE NUMBERS ARE STILL PRECISE.** `DELTAS` has
+  no 26 (the wire size of the fixture's private value), so the `priv|` family contains **no**
+  `creator-in-item`-absorbs-the-root-secret cell: the 58 are 38 `creator-at-root` + 20
+  `both-in-item`. The headline shape is held by the unit tests, not by the grid. Adding 26 re-baselines
+  every figure in every artifact, so it is a deliberate follow-up, never a silent edit.
+  **▶ 🛑 CLASSIFY A `priv|` CELL BY WHAT THE PARSE PRODUCED, NEVER BY THE FIXTURE'S PLACEMENT LABEL.**
+  A first draft counted **28 rows as leaks** that are conformant retentions: a delta pair can re-frame
+  `creator-in-item` into a file whose honest reading puts **both** elements at the root, or into one
+  where both are genuinely in the Item. `itemDelta === sqDelta` is exactly "the file does not
+  contradict itself" for this family (one defined-length item, no Item Delimitation Item). The
+  fixture-artifact-reported-as-a-finding failure mode, one more time.
+  **▶ NO NEW PUBLIC SURFACE, DELIBERATELY**: no Tier-2 code, no report field, no snapshot change.
+  `report.removedPrivateTags` already names every removed tag and is the channel this defect read
+  `[]` on. What is **not** on any channel is the _reason_ - disclosed, not closed, because a new code
+  owes `profiles.strict` an escalation answer and `#48` an amplification bound.
+  **Adjacent shapes measured and pinned rather than assumed:** a Private Creator that over-declares
+  and swallows its own block is removed **because `decodeCreator` no longer matches the profile**
+  (fail-safe by construction, not by this rule); `RetainSafePrivate` with no profile retains nothing;
+  and the other five Retain options plus a profile do not reopen it, because `keepsPrivate` is the
+  only Data-Set-scoped decision in the module. **10 of the 31 tests in
+  `test/integration/deident-private-reservation.test.ts` run red against `origin/main`'s `src/`** -
+  and the two residual tests are green on base **by design**, because they assert the leaking
+  behaviour so that closing either route turns them red.
 - **An unrecognized Explicit VR is read AND written long-form** (`DICOM-UNRECOGNIZED-VR-SHORT-FORM`,
   closed after `0.0.8`). **This is the root cause `#53`/`#54`/`#55` compensated for at the
   de-identify boundary, and it is a behaviour change on the read path.** PS3.5 2026c section 6.2:

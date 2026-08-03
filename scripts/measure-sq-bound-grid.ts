@@ -183,7 +183,7 @@
 import { Buffer } from "node:buffer";
 import { readFileSync, writeFileSync } from "node:fs";
 
-import { deidentify, parseDicom, serializeDicom } from "../src/index.js";
+import { deidentify, parseDicom, profiles, serializeDicom } from "../src/index.js";
 import { buildDicom } from "../test/helpers/build-dicom.js";
 
 const IMPLICIT_LE = "1.2.840.10008.1.2";
@@ -279,6 +279,28 @@ const SECOND_VALUE = "CT";
  */
 const LEGIT_VALUE = "LUT-DATA";
 
+/**
+ * The private value the {@link PRIVATE_PLACEMENTS} family writes, and the axis
+ * `DICOM-PRIVATE-CREATOR-RESERVATION-LEAK` lives on.
+ *
+ * It is deliberately **not** in {@link PHI_STRINGS}. `RetainSafePrivate` plus a
+ * profile that documents `(0009,1001)` as safe is *meant* to write this value
+ * into de-identified output, so an unconditional "present in the output" count
+ * would read 93 legitimate retentions as leaks. What decides is **which Data Set
+ * it was retained in and whether the file agrees with itself about that
+ * boundary**, which is what the dedicated `priv:` counters in `--diff` report.
+ */
+const PRIVATE_SECRET = "SECRET-PRIVATE-PHI";
+
+/**
+ * The `GEMS_IDEN_01` block `profiles.ge` documents as safe, and the creator whose
+ * §7.8.1 reservation decides whether `(0009,1001)` is retained. `(0009,1001)`
+ * resolves through that profile to `0009XX01` `LO` `FullFidelity`.
+ */
+const PRIVATE_CREATOR_VALUE = "GEMS_IDEN_01";
+const PRIVATE_CREATOR_TAG = "00090010" as const;
+const PRIVATE_DATA_TAG = "00091001" as const;
+
 /** A source value reaching de-identified output is a PHI regression, not a structural nit. */
 const PHI_STRINGS = [ROOT_NAME, TRAILING_VALUE, ROOT_ID, ITEM_ID];
 
@@ -296,6 +318,7 @@ const MARKERS = [
   ITEM_VALUE,
   SECOND_VALUE,
   LEGIT_VALUE,
+  PRIVATE_SECRET,
 ];
 
 function ascii(s: string): Buffer {
@@ -555,6 +578,117 @@ function legitTilingFixture(ts: string, carrier: (typeof LEGIT_TILING_CARRIERS)[
   });
 }
 
+/**
+ * Where the file puts the Private Creator relative to the Private Data Element
+ * whose block it reserves - the axis `DICOM-PRIVATE-CREATOR-RESERVATION-LEAK`
+ * lives on, and the one this grid could not express until it was added.
+ *
+ * Three refuter passes read "0 PHI regressions" off this harness while that leak
+ * was live on the registry, because every fixture above is free of private tags
+ * and every `deidentify()` call above runs with **no options**. `RetainSafePrivate`
+ * plus a {@link Profile} is the only route in the package that writes a private
+ * value into de-identified output, so a grid that never enables it is silent on
+ * the whole class. That is why this family exists rather than a fixture list.
+ *
+ * PS3.5 2026c §7.8.1 scopes a private block reservation to the Data Set the
+ * Private Creator appears in, and an Item is its own Data Set. The two length
+ * fields the sequence sweep already varies decide **which Data Set each of these
+ * two elements lands in**, so each placement below reads differently on a file
+ * that lies and identically on one that does not:
+ *
+ *  - `creator-in-item` - the creator is genuine Item content and the private data
+ *    element sits at the root after the sequence. An item that over-declares
+ *    absorbs the data element into the Item, where it borrows a reservation the
+ *    sender never gave it. **This is the leaking shape.**
+ *  - `creator-at-root` - the mirror: the data element is genuine Item content and
+ *    the creator follows the sequence at the root. An over-declaring item absorbs
+ *    the *creator*, which reserves the block inside the Item after the fact.
+ *  - `both-in-item` - a **conformant control**: both elements are genuine Item
+ *    content, the reservation is real, and retention is correct. A remedy that
+ *    empties this row is over-removing.
+ *  - `both-at-root` - the same control one level up, with no sequence involved in
+ *    the reservation at all.
+ *  - `no-creator` - the data element is in the Item and no creator exists
+ *    anywhere. It must be removed on every tree and under every delta; a row that
+ *    retains it is a defect regardless of the length fields.
+ *
+ * **🛑 {@link DELTAS} does not contain 26, the wire size of {@link PRIVATE_SECRET},
+ * so this family holds NO cell in which `creator-in-item` absorbs the root's
+ * private data element** - the headline shape of
+ * `DICOM-PRIVATE-CREATOR-RESERVATION-LEAK` itself. The 58 leaking cells are 38
+ * `creator-at-root` plus 20 `both-in-item`. That is not a gap in the numbers
+ * (nothing claims otherwise, and they are precise as printed), but **do not treat
+ * this grid as the regression net for that shape**: it is held by the unit tests
+ * in `test/integration/deident-private-reservation.test.ts`. Adding 26 to
+ * {@link DELTAS} would re-baseline every figure in every artifact, so it is a
+ * deliberate follow-up rather than a silent edit.
+ */
+const PRIVATE_PLACEMENTS = [
+  "creator-in-item",
+  "creator-at-root",
+  "both-in-item",
+  "both-at-root",
+  "no-creator",
+] as const;
+
+type PrivatePlacement = (typeof PRIVATE_PLACEMENTS)[number];
+
+/**
+ * A file carrying one private block, split across the Item/root boundary per
+ * `placement`, with both sequence-level length fields under the caller's control.
+ *
+ * The carrier is {@link CARRIER} `(0008,1115)`, which has no Table E.1-1 row, so
+ * `deidentify()` recurses into it and the only thing at stake in the Item is the
+ * private block.
+ */
+function reservationFixture(
+  ts: string,
+  placement: PrivatePlacement,
+  itemDelta: number,
+  sqDelta: number,
+): Buffer {
+  const creator = {
+    tag: PRIVATE_CREATOR_TAG,
+    vr: "LO" as const,
+    value: ascii(PRIVATE_CREATOR_VALUE),
+  };
+  const secret = { tag: PRIVATE_DATA_TAG, vr: "LO" as const, value: ascii(PRIVATE_SECRET) };
+  const leaf = { tag: ITEM_TAG, vr: "CS" as const, value: ascii(ITEM_VALUE) };
+
+  const inItem: unknown[] = [leaf];
+  const afterSq: unknown[] = [];
+  if (placement === "creator-in-item") {
+    inItem.push(creator);
+    afterSq.push(secret);
+  } else if (placement === "creator-at-root") {
+    inItem.push(secret);
+    afterSq.push(creator);
+  } else if (placement === "both-in-item") {
+    inItem.push(creator, secret);
+  } else if (placement === "both-at-root") {
+    afterSq.push(creator, secret);
+  } else {
+    inItem.push(secret);
+  }
+
+  const elements = [
+    { tag: "00100010", vr: "PN", value: ascii(ROOT_NAME) },
+    {
+      tag: CARRIER,
+      declaredLengthDelta: sqDelta,
+      items: [{ declaredLengthDelta: itemDelta, elements: inItem }],
+    },
+    ...afterSq,
+  ] as never as Elements;
+
+  return buildDicom({
+    transferSyntax: ts,
+    mediaStorageSOPClassUID: "1.2.840.10008.5.1.4.1.1.2",
+    mediaStorageSOPInstanceUID: "1.2.826.0.1.3680043.10.1338.1",
+    elements,
+  });
+}
+
 interface Treeish {
   elements(): readonly unknown[];
 }
@@ -589,7 +723,20 @@ function codeOf(err: unknown): string {
   return (err as { code?: string }).code ?? (err as Error).name;
 }
 
-function cell(buf: Buffer): Record<string, unknown> {
+/**
+ * `deidentify()` options for a cell. Every family above runs with the default
+ * `{}` - `RetainSafePrivate` plus a {@link Profile} is the only route that keeps
+ * a private value, so it is opted into by the reservation family alone and the
+ * other populations stay comparable to every earlier snapshot.
+ */
+type DeidOptions = Parameters<typeof deidentify>[1];
+
+const RETAIN_SAFE_PRIVATE_GE: DeidOptions = {
+  retain: ["RetainSafePrivate"],
+  profile: profiles.ge,
+};
+
+function cell(buf: Buffer, deidOptions: DeidOptions = {}): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   const streamed: string[] = [];
 
@@ -609,11 +756,18 @@ function cell(buf: Buffer): Record<string, unknown> {
         ?.rawBytes.toString("latin1")
         .trimEnd() ?? null;
     try {
-      const { dataset, report } = deidentify(ds) as unknown as {
+      const { dataset, report } = deidentify(ds, deidOptions) as unknown as {
         dataset: unknown;
-        report: { attributes: readonly { tag: string; action: string; contextPath?: string }[] };
+        report: {
+          attributes: readonly { tag: string; action: string; contextPath?: string }[];
+          removedPrivateTags: readonly string[];
+        };
       };
       out["report"] = report.attributes.map((a) => `${a.tag}:${a.action}:${a.contextPath ?? ""}`);
+      // The channel `DICOM-PRIVATE-CREATOR-RESERVATION-LEAK` read `[]` on while
+      // the private value survived into the output stamped
+      // `PatientIdentityRemoved = YES`.
+      out["removedPriv"] = [...report.removedPrivateTags];
       const bytes = serializeDicom(dataset as never).toString("latin1");
       out["phiLeak"] = PHI_STRINGS.filter((p) => bytes.includes(p));
       // What survives INTO THE DE-IDENTIFIED OUTPUT, which is a different
@@ -704,6 +858,31 @@ function sweep(): { results: Snapshot; built: number; unbuildable: number } {
       built++;
     }
   }
+  // The private-reservation family. Own key prefix, and the ONLY population that
+  // runs `deidentify()` with `RetainSafePrivate` + a profile - see
+  // `PRIVATE_PLACEMENTS` for why the rest of the grid is structurally blind to
+  // this class.
+  for (const ts of SYNTAXES) {
+    for (const placement of PRIVATE_PLACEMENTS) {
+      for (const itemDelta of DELTAS) {
+        for (const sqDelta of DELTAS) {
+          let buf: Buffer;
+          try {
+            buf = reservationFixture(ts, placement, itemDelta, sqDelta);
+          } catch {
+            unbuildable++;
+            continue;
+          }
+          results[`priv|${ts}|${placement}|${String(itemDelta)}|${String(sqDelta)}`] = cell(
+            buf,
+            RETAIN_SAFE_PRIVATE_GE,
+          );
+          built++;
+        }
+      }
+    }
+  }
+
   return { results, built, unbuildable };
 }
 
@@ -749,6 +928,24 @@ function parseView(cell: Record<string, unknown>): string {
   });
 }
 
+/**
+ * The **reading** only: what the parser produced, with both warning channels and
+ * `{ strict: true }` left out.
+ *
+ * {@link parseView} folds warnings in, so a slice that adds one Tier-2 code and
+ * changes no reading reads non-zero there. That is the right number for "the
+ * parse is untouched" and the wrong one for "the reading is untouched", and the
+ * two have been quoted for each other before. Keep both.
+ */
+function readingView(cell: Record<string, unknown>): string {
+  return JSON.stringify({
+    lenient: cell["lenient"],
+    tree: cell["tree"],
+    seen: cell["seen"],
+    rootId: cell["rootId"],
+  });
+}
+
 function diff(basePath: string, newPath: string): void {
   const base = JSON.parse(readFileSync(basePath, "utf8")) as Snapshot;
   const next = JSON.parse(readFileSync(newPath, "utf8")) as Snapshot;
@@ -774,6 +971,24 @@ function diff(basePath: string, newPath: string): void {
   let onWarningMismatchImplicitBase = 0;
   let gainedValue = 0;
   let parseChanged = 0;
+  let readingChanged = 0;
+  // The private-reservation family, counted on its own because it is the only
+  // population running `RetainSafePrivate`.
+  let privItemContradictedBase = 0;
+  let privItemContradictedNext = 0;
+  let privItemConsistentBase = 0;
+  let privItemConsistentNext = 0;
+  let privRootConsistentBase = 0;
+  let privRootConsistentNext = 0;
+  let privRootContradictedBase = 0;
+  let privRootContradictedNext = 0;
+  let privRootEjectLeakBase = 0;
+  let privRootEjectLeakNext = 0;
+  let privCostBothInItem = 0;
+  let privNoCreatorBase = 0;
+  let privNoCreatorNext = 0;
+  const privLeakNextKeys: string[] = [];
+  const privControlLostKeys: string[] = [];
   let leakBase = 0;
   let leakNext = 0;
   let leakCarrierBase = 0;
@@ -858,6 +1073,72 @@ function diff(basePath: string, newPath: string): void {
       parseChanged++;
       parseChangedKeys.push(k);
     }
+    if (readingView(b) !== readingView(n)) readingChanged++;
+
+    if (k.startsWith("priv|")) {
+      // Classify by what the PARSE produced and by the file's two length fields,
+      // never by the placement the fixture intended. A delta pair can re-frame
+      // `creator-in-item` into a file whose honest reading puts both elements at
+      // the root, where retention is correct - a first draft counted 28 such
+      // rows as leaks, which is the fixture-artifact failure mode this repo has
+      // paid for before.
+      const [, ts, placement, itemDeltaStr, sqDeltaStr] = k.split("|");
+      // With exactly one defined-length item and no Item Delimitation Item, the
+      // Item's declared end and the sequence's declared end move together, so
+      // equal deltas is exactly "the file does not contradict itself about where
+      // the Item ends" and unequal deltas is exactly "it does".
+      const contradicted = itemDeltaStr !== sqDeltaStr;
+      const secretInItem = (c: Record<string, unknown>): boolean =>
+        JSON.stringify(c["tree"] ?? []).includes(`"${PRIVATE_DATA_TAG}"`) &&
+        (c["tree"] as { items?: unknown }[] | undefined)?.some((el) =>
+          JSON.stringify(el.items ?? []).includes(`"${PRIVATE_DATA_TAG}"`),
+        ) === true;
+      const held = (c: Record<string, unknown>): boolean =>
+        Array.isArray(c["deidSeen"]) && (c["deidSeen"] as string[]).includes(PRIVATE_SECRET);
+      for (const [c, isBase] of [
+        [b, true],
+        [n, false],
+      ] as const) {
+        if (!held(c)) continue;
+        if (!secretInItem(c)) {
+          // Split by whether the file contradicts itself, and inside that by
+          // whether the honest control for the SAME placement keeps it. A single
+          // unconditional root count reads 87 on both trees and hides the eject
+          // route (finding 1 of the pass-1 refuter grade) inside a number quoted
+          // as an over-removal control for honest files.
+          const control = (isBase ? base : next)[`priv|${ts}|${placement ?? ""}|0|0`];
+          if (!contradicted) {
+            if (isBase) privRootConsistentBase++;
+            else privRootConsistentNext++;
+          } else {
+            if (isBase) privRootContradictedBase++;
+            else privRootContradictedNext++;
+            if (control !== undefined && !held(control)) {
+              if (isBase) privRootEjectLeakBase++;
+              else privRootEjectLeakNext++;
+            }
+          }
+        } else if (contradicted) {
+          if (isBase) {
+            privItemContradictedBase++;
+            if (placement === "both-in-item") privCostBothInItem++;
+          } else {
+            privItemContradictedNext++;
+            if (privLeakNextKeys.length < 8) privLeakNextKeys.push(k);
+          }
+        } else {
+          if (isBase) privItemConsistentBase++;
+          else privItemConsistentNext++;
+        }
+      }
+      if (held(b) && !held(n) && !contradicted && privControlLostKeys.length < 8) {
+        privControlLostKeys.push(k);
+      }
+      if (placement === "no-creator") {
+        if (held(b)) privNoCreatorBase++;
+        if (held(n)) privNoCreatorNext++;
+      }
+    }
     const isCarrier = k.startsWith("carrier|");
     if (Array.isArray(b["phiLeak"]) && (b["phiLeak"] as unknown[]).length > 0) {
       leakBase++;
@@ -894,6 +1175,20 @@ function diff(basePath: string, newPath: string): void {
   say("  ...of base's, leaf-carrier rows", leakCarrierBase);
   say("  ...of new's, leaf-carrier rows", leakCarrierNext);
   say("cells differing in any PARSE respect", parseChanged);
+  say("cells whose READING differs", readingChanged);
+  say("priv: kept in an ITEM, file CONTRADICTS: base", privItemContradictedBase);
+  say("priv: kept in an ITEM, file CONTRADICTS: new (0)", privItemContradictedNext);
+  say("  ...of base's, both-in-item (the COST)", privCostBothInItem);
+  say("priv: kept in an ITEM, file consistent: base", privItemConsistentBase);
+  say("priv: kept in an ITEM, file consistent: new (=)", privItemConsistentNext);
+  say("priv: kept at ROOT, file consistent: base", privRootConsistentBase);
+  say("priv: kept at ROOT, file consistent: new (=)", privRootConsistentNext);
+  say("priv: kept at ROOT, file CONTRADICTS: base", privRootContradictedBase);
+  say("priv: kept at ROOT, file CONTRADICTS: new", privRootContradictedNext);
+  say("  ...whose honest control does NOT keep it: base", privRootEjectLeakBase);
+  say("  ...whose honest control does NOT keep it: new", privRootEjectLeakNext);
+  say("priv: no-creator row kept: base (want 0)", privNoCreatorBase);
+  say("priv: no-creator row kept: new (want 0)", privNoCreatorNext);
   say("de-identified OUTPUT lost a marker (cost)", deidLostValue);
   say("conformant tiling control emptied: base", legitLostBase);
   say("conformant tiling control emptied: new", legitLostNext);
@@ -926,6 +1221,8 @@ function diff(basePath: string, newPath: string): void {
 
   for (const [label, ks] of [
     ["parse-changed", parseChangedKeys],
+    ["priv-leaking", privLeakNextKeys],
+    ["priv-control-lost", privControlLostKeys],
     ["still-leaking", leakNextKeys],
     ["conformant-emptied", legitLostNextKeys],
     ["lost-value", lostValueKeys],
