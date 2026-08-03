@@ -92,6 +92,108 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Security
 
+- **A symbolic link under `test/fixtures/` pointing at a PHI-bearing file scanned CLEAN on BOTH of
+  `scripts/phi-scan.ts`'s enumerating routes, so the commit gate passed it twice over**
+  (`PHI-SCAN-SYMLINK-BLIND-ON-BOTH-ROUTES`; pre-existing). Reproduced on `0f898be` with a synthetic
+  name-bearing payload outside the walk root and a link to it at `test/fixtures/leak.txt`: all-mode
+  exited **0** printing `OK - no hits`, `--staged` exited **0** after `git add`, and naming the
+  target explicitly exited **1** with three hits (the PN plus both dates). The payload was always
+  detectable; the two routes never looked at it.
+
+  **Two mechanisms, two fixes.** `walk()` enumerates `Dirent.isFile()`, which is an lstat answer, so
+  a link is neither a file nor a directory and fell out of the loop silently. `isDirectory()`
+  answers false for a **linked directory** too, so a whole subtree vanished the same way (measured:
+  a link to a directory holding the payload, exit 0). And `--staged` reads content with
+  `git show :<path>`, while git stores a link as its **target path** under mode `120000`, so that
+  route was handed the path text and never the target's bytes. `--staged` is this repo's
+  `pre-commit` hook.
+
+  **Neither route is made to follow the link.** Following would read bytes the enumeration does not
+  control (outside the repo, a loop, a device, a FIFO that blocks the gate forever), and git does not
+  carry those bytes anyway, so a hit on them would be a claim about something no commit contains.
+  The enumeration is narrowed instead: an **in-scope entry that is not a regular file refuses the
+  scan** (exit 2), naming every offender rather than the first. `--staged` now reads
+  `git diff --cached --raw -z` so the destination mode is visible; an unparseable `--raw` record
+  refuses too, because a silently shortened list is exactly what this scan must never report clean
+  over. **Be precise about which mode was blind:** `120000` was the leak. A staged **gitlink**
+  (`160000`) already exited 2 on the base scanner, because `git show :<path>` fails outright on one
+  (`fatal: bad object`, exit 128) and the read-error path caught it. Its refusal is now a named one
+  with a reason instead of a relayed git error, which is an improvement in the message, not the
+  closing of a hole.
+
+  **`--diff-filter=AMT`, not `AM`, and the one-letter difference is what makes the mode check
+  reachable.** Replacing a **tracked** fixture with a link is neither an add nor a modify: git raises
+  it as a typechange, `:100644 120000 <sha> <sha> T`. Measured on git 2.39.5, both
+  `git diff --cached --raw --diff-filter=AM` and `--name-only --diff-filter=AM` print **nothing** for
+  that stage, so the record died before any mode could be read and the hook would have passed a
+  mode-`120000` blob green while this entry claimed it refuses one. Typechange carries a single path,
+  exactly like `A` and `M`, so admitting it costs the two-field record stride nothing, and the
+  reverse typechange (a link replaced by a real file) is now scanned as the file it became.
+
+  **`--no-renames` as well, and the status filter alone was not enough - the gate's first pass
+  claimed otherwise and was refuted by measurement.** Rename detection is on by default, so
+  `git mv <link> test/fixtures/<name>` - an ordinary developer action, no crafted input - stages as
+  `:120000 120000 <sha> <sha> R100` with **two** paths, which `--diff-filter=AMT` then deletes
+  outright: the index held `120000 ... test/fixtures/toplink.txt` and this route printed
+  `OK - no hits` and exited **0**. The first pass disclosed that as out of scope on the grounds that
+  admitting a rename "needs the two-path record shape handled". It does not. With detection off the
+  destination arrives as an ordinary single-path `A` (`:000000 120000 0000000 <sha> A`) and the
+  source as a `D` the filter drops, so the two-field stride is untouched and the entry is refused.
+  It also makes that stride **structural rather than conditional**: with detection off, no `R` or `C`
+  record can be produced whatever the caller's `diff.renames` setting is. The cost is that the
+  destination of an ordinary clean rename into `test/fixtures/` is now scanned where it used to be
+  dropped, which is more coverage rather than less, and is pinned in both directions.
+
+  **The fixture root's own path is in scope too, not just what is under it.** A prefix test requiring
+  the trailing slash let a staged `test/fixtures` through (measured: mode `120000` at exactly that
+  path, exit 0) - the corpus root replaced by a link, so the whole corpus goes unscanned. Git records
+  no index entry for a directory, so that path can only mean a blob, a link or a gitlink, and it is
+  now refused. Only the "never a directory" half is load-bearing; the other three are all handled.
+
+  **A refusal names the entry's own repo-relative path and an engine-owned kind token, never the
+  link target**, which is working-tree text that can itself carry PHI. That is not hypothetical
+  here: on the base scanner, a link whose target filename carried a name and a date made `--staged`
+  exit **1** and print a hit whose value was **the date out of the filename** - a report about the
+  working tree's own text, not about anything the target contained. For the same reason the shape of
+  such a filename is written out in the scanner's docblock rather than exemplified: a diagnostic
+  about a PHI leak is itself a PHI surface, and that applies to the prose explaining it.
+
+  **Almost all of the scope is unchanged, and the two places it moved both admit MORE.** All-mode
+  still walks only `test/fixtures/` and still excludes a gitignored entry, by the same rule that
+  already excludes a gitignored fixture (`git check-ignore` does not answer for a tracked path, so
+  force-adding the link puts it back in scope, and that is pinned). `--staged` still covers only the
+  fixture path, and only the staged records git reports as added, modified or typechanged - a
+  deletion has no staged blob to scan and an unmerged path has no single one, both pre-existing and
+  both stated in the scanner's own banner rather than left to be inferred from the path prefix. The
+  two movements are the rename destination and the root path above; neither widens a route to a new
+  directory, and a link outside either boundary is still left alone, tested in both directions. The
+  `readme.md` exemption deliberately does **not** reach a link: that exemption is a judgement about a
+  file whose bytes the walk could have read, and a link's name is no evidence at all about what is on
+  the other side.
+
+  Pinned in `test/scripts/phi-scan.test.ts` with a synthetic name-bearing payload whose target
+  filename also carries a name, so the no-echo assertions cannot pass by fixture: **13 of the 31
+  cases are red on `0f898be`**, and the four cases covering the three corrections above are red on the
+  first pass of this change as well. The file also carries a negative control asserting the scanner
+  under test is this package's and not a sibling's.
+
+  **Not covered, deliberately, each measured rather than assumed.** Explicit-path mode already read
+  through a link and is unchanged. The **enumerate-then-read race** is untouched:
+  a file that vanishes between `walk()` and `readFileSync` aborts the whole sweep at exit 2, which
+  fails closed and is a different defect from this one. **There is still no rule refusing a scan that
+  observed nothing, and that has a measured instance worth naming rather than leaving abstract:** if
+  `test/fixtures` is itself a DANGLING link, `existsSync` follows it, answers false, and all-mode
+  prints `OK - no hits` and exits **0** over a corpus it never opened (identical on the base
+  scanner). If it is a link to a regular file, `readdirSync` raises an uncaught `ENOTDIR` - noisy and
+  fail-closed, but exit 1, which this contract reserves for "hits found". The `--staged` half of that
+  same shape is closed above; the all-mode half needs the observed-nothing rule, which is its own
+  slice. Also `--allow-fixture <path>` with no positional path still scans **nothing** and
+  prints `OK - no hits` even for a path that does not exist (measured), which makes this suite's
+  existing "honors `--allow-fixture` with an override-log entry" case vacuous. All pre-existing,
+  disclosed rather than fixed here.
+
+  No source, parser, de-identify or public API change.
+
 - **An element whose on-wire VR is not one of the 34 PS3.5 §6.2 defines was kept verbatim by
   `deidentify()`, carrying a source `(0010,0020)` Patient ID into de-identified output next to the
   `(0012,0062) PatientIdentityRemoved = YES` this library writes** (`DICOM-CARRIER-LEAF-LEAKS`,
