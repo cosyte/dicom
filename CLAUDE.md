@@ -593,7 +593,8 @@ not by copying files (Phase E migration). The source of truth is the meta-repo's
 - **Language:** TypeScript (strict, full rigor set incl. `noUncheckedIndexedAccess`) via
   `@cosyte/tsconfig`. **Target ES2023**, `NodeNext`.
 - **Build:** dual ESM + CJS + `.d.ts`/`.d.cts` via `tsup` (`@cosyte/tsup-config`); `attw` is a
-  publish gate (per-condition types: `.d.ts` for `import`, `.d.cts` for `require`).
+  publish gate (per-condition types: `.d.ts` for `import`, `.d.cts` for `require`). The `attw` and
+  `typecheck:exports` scripts run **`scripts/attw.mjs`, not the bare CLI** - see the guardrail below.
 - **Node:** **>= 22** (CI matrix 22 + 24).
 - **Package manager:** `pnpm@10`.
 - **Lint/format:** **ESLint 10** + unified `typescript-eslint` (type-checked) via
@@ -619,6 +620,49 @@ not by copying files (Phase E migration). The source of truth is the meta-repo's
 - Fatal errors only for unrecoverable structural corruption (4 Tier-3 codes: `NOT_DICOM_PART_10`, `INVALID_FILE_META`, `UNSUPPORTED_TRANSFER_SYNTAX`, `EMPTY_INPUT`). Everything else is a warning.
 - Buffer-first API for binary values. String decoding respects `(0008,0005)` Specific Character Set.
 - Data dictionary is generated at build time from the official DICOM Part 6 source and committed; runtime has no network/filesystem dependency on it.
+- **▶ `attw` SAYS "does not contain types" AND EXITS 0, SO THE `attw` SCRIPT IS A WRAPPER, NOT THE
+  BARE CLI.** `getExitCode.js` in `@arethetypeswrong/cli@0.18.4` opens with
+  `if (!analysis.types) return 0` - an untyped package is a legitimate npm package, so "no types at
+  all" is a description, not a problem, and the problem list is never consulted. No `--profile`,
+  `--ignore-rules` or config setting reaches that early return. For a package that ships types it
+  means the declarations were **not in the tarball**, which is a broken publish reported as a pass,
+  and `pnpm attw` is both a shared-CI step and the last step of `prepublishOnly`. **Diagnosed in
+  `@cosyte/terminology` (#28, `bf153cb`); the code was ported here, the measurements were re-taken
+  here.** Measured on this package with **zero concurrency**: `rm -f dist/index.d.ts dist/index.d.cts
+&& pnpm attw` and `rm -rf dist && pnpm attw` both print the sentence and exit **0**.
+  **The race only supplies the condition.** `tsup` emits JS in one pass and declarations in a later
+  one, so every build has a window where `dist/` holds `.mjs`/`.cjs` and no `.d.ts` - measured over
+  three clean builds on an idle box at **1.06s / 1.23s / 1.43s**, wider under CPU contention. So the
+  answer is **not** a lock, a lease or a build queue: the gate must be able to say its own inputs
+  were missing, whatever removed them.
+  `scripts/attw.mjs` carries **two nets that catch different things** - a preflight that every
+  relative path `package.json` promises (`main`, `module`, `types`, `typings`, every string leaf of
+  `exports`) exists and is non-empty, which catches the build window and _names the missing file_;
+  and a post-check on `attw`'s untyped sentence, which catches what the preflight structurally cannot
+  (declarations on disk but excluded from the tarball by `files`/`.npmignore`). **No instance of that
+  second case is on record here.** **Neither net covers the rest of `files`** (`README.md`,
+  `LICENSE`, `TRADEMARKS.md`, `CHANGELOG.md`) - `attw` analyses types and never looks at them.
+  **The post-check reads a string, so what would hide that string is refused**, by option and not by
+  value. **Eleven blinding routes were measured here** - `--quiet`, `-q`, `--format json`, `-f json`,
+  `--format=json`, `-fjson`, `-qf json`, `-Pfjson`, a `.attw.json` setting `quiet` or `format`, and
+  **`--config-path`**, which terminology's copy refused by inference only.
+  **▶ THE PREDICATE IS NOT AN EXACT-TOKEN SET, AND THE FIRST DRAFT OF THIS FILE'S OWN SCRIPT WAS.**
+  Commander lets a short option's value attach (`-fjson`) and lets shorts combine (`-qf`), so `-f` is
+  not visible as a whole token. Measured on that draft: `-fjson` gave **exit 0 with the gate silent**.
+  A single-dash argument is refused if any character in its cluster is `q` or `f`, which is sound
+  because `-f` is `attw`'s only value-taking short. **Do not "simplify" it back to a token set.**
+  Measured in both directions, because the bound is the point: `--format table-flipped` and
+  `--format ascii` still print the sentence and are refused anyway (the deliberate trade against
+  value-parsing them), while `--form json`, `--quiet=true` and `-f=json` each look like a route and
+  are not, since commander rejects them outright. **Nothing else is refused** - `--profile node16`
+  and `-P` still reach `attw`, and a forwarded extra positional does not retarget the run.
+  `test/scripts/attw-gate.test.ts` pins both nets against the real binary (including the upstream
+  exit-0 itself, a negative control on a well-formed package, and that a real `attw` failure still
+  fails). Proved non-vacuous by putting the bare invocation back: **15 of its 22 tests red**.
+  **`lint` is deliberately NOT widened to `.mjs`, measured rather than assumed:** the shared
+  `@cosyte/eslint-config` rule blocks are scoped to `**/*.ts`, so a seeded unused variable and a
+  missing semicolon in `scripts/attw.mjs` produce **zero** ESLint findings. Widening the glob would
+  add a gate-shaped thing that gates nothing. `format:check` does cover it and is real.
 - Coverage: per-directory gate **enabled** on `src/parser/`, `src/dataset/`, `src/dictionary/` (and
   `src/helpers/` once it exists) via `pnpm test:coverage`. Canonical bar is ≥ 90%; early-phase floors
   currently sit just below that as documented transient relaxations with TODOs. Raise them toward 90
