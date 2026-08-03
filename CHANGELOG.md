@@ -4,6 +4,63 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ## [Unreleased]
 
+### Fixed
+
+- **The `attw` publish gate exited 0 on a tarball carrying no type declarations, so a broken publish
+  read as a pass** (`ATTW-FALSE-GREEN-PORT`). `pnpm attw` now runs `scripts/attw.mjs`, ported from
+  `@cosyte/terminology` (#28, `bf153cb`), where the defect was diagnosed; `typecheck:exports` runs
+  through the same wrapper with its `--profile node16` forwarded. The code ported, the measurements
+  were re-taken on this package rather than carried over.
+
+  **The cause is unconditional CLI semantics, not a lenient invocation and not concurrency.**
+  `getExitCode.js` in `@arethetypeswrong/cli@0.18.4` opens with `if (!analysis.types) return 0`,
+  returning before the problem list is read, because an untyped package is a legitimate npm package.
+  Reproduced here with **zero concurrency**: on a quiet box `rm -f dist/index.d.ts dist/index.d.cts
+&& pnpm attw` and `rm -rf dist && pnpm attw` both print "This package does not contain types." and
+  exit **0**. Concurrency only supplies the condition. `tsup` writes the JS bundles before the
+  declaration files, so every build of this package has a window in which `dist/` holds
+  `index.mjs`/`index.cjs` and no `index.d.ts`: measured over three clean `pnpm build` runs on an idle
+  box, polling every 25ms, at **1.06s, 1.23s and 1.43s** (JS at +4.83s to +5.36s, declarations at
+  +6.06s to +6.49s). That is why the remedy is not a lock, a lease or a build queue - a lock would
+  leave the defect intact on an idle box, and the gate is supposed to be able to say its own inputs
+  were missing whatever removed them.
+
+  **Two nets, which catch different things.** A **preflight** that every relative path
+  `package.json` promises (`main`, `module`, `types`, `typings`, and every string leaf of `exports`,
+  which here is `./dist/index.cjs`, `./dist/index.mjs`, `./dist/index.d.ts` and
+  `./dist/index.d.cts`) exists and is non-empty; it catches the build window and names the missing
+  file rather than leaving a reader to infer it from a sentence about types. And a **post-check**
+  that promotes `attw`'s untyped sentence to a failure, which the preflight structurally cannot see:
+  the declarations can be on disk and still be absent from the tarball because `files` or
+  `.npmignore` left them out. No instance of that second case is on record in this repo. **Neither
+  net covers the rest of `files`** (`README.md`, `LICENSE`, `TRADEMARKS.md`, `CHANGELOG.md`), stated
+  plainly rather than left to be discovered: `attw` analyses types and never looks at them.
+
+  **The post-check reads a string, so the routes that would hide that string are refused**, by option
+  name and wholesale rather than by value. **Five were measured here** on a fixture whose tarball
+  genuinely carries no types, each restoring the exact exit-0 with the sentence unreadable:
+  `--quiet`/`-q`, `--format json`/`-f json`, a `.attw.json` setting either (`readConfig()` applies
+  config after argv), and **`--config-path`** pointing at a file that sets one - that last one is the
+  difference from terminology's copy, which refused it by inference and said so. Measured the other
+  way as well: `--format table-flipped` and `--format ascii` still print the sentence and blind
+  nothing, and are refused anyway. Value-parsing them would be a third moving part in the guard.
+
+  `test/scripts/attw-gate.test.ts` pins both nets against the real binary: the upstream exit-0
+  itself, so an `attw` upgrade that fixes it or rewords the sentence reds instead of letting the net
+  go slack; the `tsup` window in this package's own dual ESM/CJS `exports` shape, asserting both that
+  bare `attw` passes it with exit 0 and that the wrapper reds naming `./dist/index.d.ts`; a negative
+  control on a well-formed package; that a real `attw` failure still fails with `attw`'s own status;
+  and that other arguments are still forwarded. **Proved non-vacuous by putting the bare invocation
+  back: 11 of the 15 tests red**, the 4 that survive being exactly the ones that must pass on both.
+  `scripts/verify.sh` in the meta-repo needed no change and was not touched, and no lock, lease,
+  semaphore or queue was added (ADR 0015).
+
+### Changed
+
+- `format` and `format:check` now cover `scripts/**/*.mjs` as well as `scripts/**/*.ts`, so the new
+  gate script is actually format-gated. The two `.mjs` files already in `scripts/` were verified
+  Prettier-clean before the glob widened, so this red-flags nothing retroactively.
+
 ### Security
 
 - **An element whose on-wire VR is not one of the 34 PS3.5 §6.2 defines was kept verbatim by
