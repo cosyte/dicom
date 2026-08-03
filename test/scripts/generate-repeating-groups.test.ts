@@ -58,14 +58,14 @@
  */
 
 import { beforeAll, describe, expect, it } from "vitest";
-import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { deflateSync, inflateSync } from "node:zlib";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { runRepoScript, type ScriptResult } from "../helpers/run-script.js";
+
 const REPO_ROOT = process.cwd();
-const GENERATOR = join(REPO_ROOT, "scripts", "generate-repeating-groups.ts");
 const ARTIFACT = join(REPO_ROOT, "src", "dictionary", "generated", "repeating-groups.ts");
 
 const PART05_ROOT = join(REPO_ROOT, "vendor", "nema", "part05");
@@ -73,13 +73,14 @@ const PART05_SHA_FILE = join(PART05_ROOT, "SHA.txt");
 const PART05_2004_ROOT = join(REPO_ROOT, "vendor", "nema", "part05-2004");
 const PART05_2004_SHA_FILE = join(PART05_2004_ROOT, "SHA.txt");
 
-/** Spawning tsx, parsing 1 MB of DocBook and inflating a 546 KB PDF. */
+/** Per-test budget for the generator run. No justification is stated, because the
+ * one that used to sit here priced a `tsx` process start this suite no longer pays
+ * and was never re-measured against the global it claimed not to fit. */
 const GENERATOR_TIMEOUT_MS = 120_000;
 
-function runGenerator(): { code: number; stdout: string; stderr: string } {
-  const tsxBin = join(REPO_ROOT, "node_modules", ".bin", "tsx");
-  const r = spawnSync(tsxBin, [GENERATOR], { cwd: REPO_ROOT, encoding: "utf8", shell: false });
-  return { code: r.status ?? -1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
+/** Runner choice and its cost: `test/helpers/run-script.ts`. */
+function runGenerator(): ScriptResult {
+  return runRepoScript("generate-repeating-groups.ts");
 }
 
 function pinnedShaOf(shaFile: string): string {

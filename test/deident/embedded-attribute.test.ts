@@ -322,14 +322,24 @@ describe("deidentify: an over-declared Value Length that swallowed the next elem
     expect(findEmbeddedAttributes(value, "CS", "explicitLE", () => true)).toBeUndefined();
   });
 
-  it("decodes each even offset of a large value once", () => {
+  it("finds nothing in a large value whose every offset fails to decode", () => {
     // Exercises the backward memo pass only: a value of 0x41 produces **zero**
     // tiling candidates, so it says nothing about the forward loop. The
     // adversarial fixture that does - every even offset a candidate, which is
     // where a quadratic hid for one round - is in `embedded-detector.test.ts`.
+    //
+    // THE STOPWATCH THAT USED TO SIT HERE WAS DELETED, AND IT IS THE REASON THIS
+    // TEST WAS RENAMED. `expect(elapsed).toBeLessThan(2_000)` asserted the machine,
+    // not the code. It reads a couple of hundred milliseconds on a quiet box, but
+    // it was measured AT OR OVER that literal on an ordinary loaded one with the
+    // algorithm untouched - a false red, and no figure is quoted here because the
+    // figure is a property of whatever box you are on. It was also the weakest cost
+    // claim in this package: a fixture that produces zero candidates short-circuits
+    // at every offset before the repertoire scan the quadratic lived in, so the
+    // number it produced was never a measurement of that cost. Deleting it
+    // does not leave the cost unbounded: `vitest.config.ts`'s per-test timeout still
+    // bounds this test, and that is the mechanism built for it.
     const value = Buffer.alloc(1 << 19, 0x41);
-    const started = performance.now();
     expect(findEmbeddedAttributes(value, "UT", "explicitLE", () => true)).toBeUndefined();
-    expect(performance.now() - started).toBeLessThan(2_000);
   });
 });
