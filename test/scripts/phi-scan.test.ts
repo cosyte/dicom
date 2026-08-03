@@ -33,6 +33,8 @@ import {
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
+import { runRepoScript } from "../helpers/run-script.js";
+
 const REPO_ROOT = process.cwd();
 const FIX_DIR = join(REPO_ROOT, "test", "fixtures", "phi-scan");
 const SCANNER_PATH = join(REPO_ROOT, "scripts", "phi-scan.ts");
@@ -147,22 +149,9 @@ interface RunResult {
   stderr: string;
 }
 
-/**
- * Invoke the scanner via spawnSync (array args, no shell). Uses the local
- * `tsx` from node_modules to run the TypeScript scanner directly.
- */
+/** Invoke the scanner in a subprocess. Runner choice and its cost: `run-script.ts`. */
 function runScanner(args: string[]): RunResult {
-  const tsxBin = join(REPO_ROOT, "node_modules", ".bin", "tsx");
-  const r = spawnSync(tsxBin, [SCANNER_PATH, ...args], {
-    cwd: REPO_ROOT,
-    encoding: "utf8",
-    shell: false,
-  });
-  return {
-    code: r.status ?? -1,
-    stdout: r.stdout ?? "",
-    stderr: r.stderr ?? "",
-  };
+  return runRepoScript("phi-scan.ts", args);
 }
 
 // ---------------------------------------------------------------------------
@@ -310,9 +299,7 @@ function gitOut(cwd: string, args: string[]): string {
 }
 
 function runIn(cwd: string, args: string[]): RunResult {
-  const tsxBin = join(REPO_ROOT, "node_modules", ".bin", "tsx");
-  const r = spawnSync(tsxBin, [SCANNER_PATH, ...args], { cwd, encoding: "utf8", shell: false });
-  return { code: r.status ?? -1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
+  return runRepoScript("phi-scan.ts", args, { cwd });
 }
 
 const repos: string[] = [];

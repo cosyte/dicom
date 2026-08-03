@@ -15,31 +15,36 @@
  *      printed rather than asserted in a comment, so a re-pin that moves one is
  *      visible in the run that moves it.
  *
- * The generator is invoked via spawnSync (array args, no shell), like
- * `phi-scan.test.ts`. It writes `src/dictionary/generated/annex-e.ts`; the run
- * is deterministic, so the file is asserted byte-identical afterwards, which is
- * the local mirror of the CI regen gate.
+ * The generator is invoked through `test/helpers/run-script.ts`, like the other
+ * script suites. It writes `src/dictionary/generated/annex-e.ts`; the run is
+ * deterministic, so the file is asserted byte-identical afterwards, which is the
+ * local mirror of the CI regen gate.
  */
 
 import { beforeAll, describe, expect, it } from "vitest";
-import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { runRepoScript, type ScriptResult } from "../helpers/run-script.js";
+
 const REPO_ROOT = process.cwd();
-const GENERATOR = join(REPO_ROOT, "scripts", "generate-annex-e.ts");
 const ARTIFACT = join(REPO_ROOT, "src", "dictionary", "generated", "annex-e.ts");
 const NEMA_ROOT = join(REPO_ROOT, "vendor", "nema", "part15");
 const NEMA_SHA_FILE = join(NEMA_ROOT, "SHA.txt");
 
-/** Spawning tsx and parsing 3.5 MB of DocBook does not fit the suite default. */
+/** Per-test budget for the generator run. See the sibling generator suite for why no
+ * justification is stated here. */
 const GENERATOR_TIMEOUT_MS = 120_000;
 
-function runGenerator(): { code: number; stdout: string; stderr: string } {
-  const tsxBin = join(REPO_ROOT, "node_modules", ".bin", "tsx");
-  const r = spawnSync(tsxBin, [GENERATOR], { cwd: REPO_ROOT, encoding: "utf8", shell: false });
-  return { code: r.status ?? -1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
+/**
+ * This generator is the one script in the repo that still needs `tsx`, because it
+ * imports `"../src/dictionary/repeating-groups.js"` and Node's ESM resolver will not
+ * rewrite that onto the `.ts` file. See `test/helpers/run-script.ts`; the test at the
+ * bottom of this file pins the failure so the exception cannot outlive its reason.
+ */
+function runGenerator(): ScriptResult {
+  return runRepoScript("generate-annex-e.ts", [], { runner: "tsx" });
 }
 
 /**
@@ -280,6 +285,26 @@ describe("generate-annex-e", () => {
       } finally {
         writeFileSync(NEMA_SHA_FILE, original, "utf8");
       }
+    },
+    GENERATOR_TIMEOUT_MS,
+  );
+
+  it(
+    "still needs tsx, because Node will not resolve its .js specifier onto the .ts file",
+    () => {
+      // The reason `run-script.ts` carves this one script out, pinned rather than
+      // asserted in a comment. It fails at module resolution, before it opens the
+      // DocBook, so nothing is generated and nothing is restored. The day Node
+      // resolves the specifier this reds, and the carve-out goes with it.
+      const r = runRepoScript("generate-annex-e.ts", [], { runner: "node" });
+      expect(r.code).not.toBe(0);
+      expect(r.stderr).toContain("ERR_MODULE_NOT_FOUND");
+      // Naming the specifier is what makes this a pin on the carve-out's REASON
+      // rather than on "node happens to fail". The sibling generator imports
+      // nothing from `src/`, which is why the carve-out is one script and not
+      // "the generators"; it is not re-run here, because it writes into
+      // `src/dictionary/generated/` and this file already races that one.
+      expect(r.stderr).toContain("repeating-groups.js");
     },
     GENERATOR_TIMEOUT_MS,
   );
