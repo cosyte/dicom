@@ -147,7 +147,8 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   **The fixture root's own path is in scope too, not just what is under it.** A prefix test requiring
   the trailing slash let a staged `test/fixtures` through (measured: mode `120000` at exactly that
   path, exit 0) - the corpus root replaced by a link, so the whole corpus goes unscanned. Git records
-  no index entry for a directory, so that path can only mean a blob or a link, and it is now refused.
+  no index entry for a directory, so that path can only mean a blob, a link or a gitlink, and it is
+  now refused. Only the "never a directory" half is load-bearing; the other three are all handled.
 
   **A refusal names the entry's own repo-relative path and an engine-owned kind token, never the
   link target**, which is working-tree text that can itself carry PHI. That is not hypothetical
@@ -172,7 +173,7 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
   Pinned in `test/scripts/phi-scan.test.ts` with a synthetic name-bearing payload whose target
   filename also carries a name, so the no-echo assertions cannot pass by fixture: **13 of the 31
-  cases are red on `0f898be`**, and the four cases covering the two remedies above are red on the
+  cases are red on `0f898be`**, and the four cases covering the three corrections above are red on the
   first pass of this change as well. The file also carries a negative control asserting the scanner
   under test is this package's and not a sibling's.
 

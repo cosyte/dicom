@@ -531,9 +531,10 @@ function buildTargetsForStaged(): Target[] {
 
   // The fixture ROOT'S OWN PATH is in scope as well as everything under it. An
   // index entry at exactly `test/fixtures` is never a directory - git records no
-  // entry for one - so it is the corpus root replaced by a blob or a link, and
-  // the prefix test alone let that through (measured: exit 0 over a staged
-  // mode-120000 `test/fixtures`).
+  // entry for one - so it is the corpus root replaced by a blob, a link or a
+  // gitlink, and the prefix test alone let that through (measured: exit 0 over a
+  // staged mode-120000 `test/fixtures`). Only the "never a directory" half is
+  // load-bearing for the `===` test; the other three are all handled below.
   const inScope = staged.filter(
     (s) => s.path === "test/fixtures" || s.path.startsWith("test/fixtures/"),
   );
