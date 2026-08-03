@@ -59,8 +59,9 @@ need a record of what was done, without mutating the original.
 
 `deidentify(ds)` applies the PS3.15 Annex E **Basic Application Level Confidentiality Profile**
 (replacing, emptying, or removing every attribute the standard lists as identifying) and returns a
-fresh `Dataset` plus a `DeidentifyReport` that is **value-free apart from `uidMap`**, whose keys are
-the source UIDs the file carried. It is a **pure function**: your input
+fresh `Dataset` plus a `DeidentifyReport`. Two of its fields are **not** value-free and are named on
+the type: `uidMap`, whose keys are the source UIDs the file carried, and `removedPrivateTags`, whose
+entries are four source bytes each. It is a **pure function**: your input
 dataset is never mutated.
 
 ```ts runnable

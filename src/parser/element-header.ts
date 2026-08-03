@@ -25,6 +25,7 @@ import type { Buffer } from "node:buffer";
 import { isKnownCharsetTerm, parseSpecificCharacterSet } from "../dataset/vr/charset.js";
 import type { DictionaryEntry, Tag, VR } from "../dictionary/types.js";
 import type { ByteCursor } from "./byte-cursor.js";
+import { isRecognizedVr } from "./endian.js";
 import type { DicomPosition, ParseContext } from "./types.js";
 import {
   implicitVRForPrivateTagWithoutVR,
@@ -362,8 +363,24 @@ export interface ExplicitElementHeader {
 /**
  * Read an Explicit-VR element header from `cursor` per D-22:
  *   - Short-form: group(2) + element(2) + VR(2 ASCII) + length(2).
- *   - Long-form (when VR ∈ {@link LONG_FORM_VRS}): group(2) + element(2) +
+ *   - Long-form (when VR ∈ {@link LONG_FORM_VRS}, **or when the VR is not one
+ *     of the 34 this edition of PS3.5 defines**): group(2) + element(2) +
  *     VR(2 ASCII) + reserved(2 - must be `0x00 0x00`) + length(4).
+ *
+ * **The unrecognized-VR half is normative, not tolerance.** PS3.5 2026c section
+ * 6.2: "All new VRs defined in future versions of DICOM **shall** be of the
+ * same Data Element Structure as defined in [section 7.1.2] with reserved bytes
+ * after the VR and a 32-bit unsigned integer VL (i.e., following the format for
+ * VRs such as OB or UT)". A VR `isRecognizedVr` rejects is by that
+ * rule long-form, so reading it short-form takes the length from the two bytes
+ * section 7.1.2 reserves and spans the value over the wrong bytes. Section
+ * 6.2's *note* about ignoring unrecognized VRs is informative and is **not**
+ * what this rests on; the "shall" above it is.
+ *
+ * Everything after the header read is deliberately unchanged: an unrecognized
+ * VR takes the same value read, the same declared-length-exceeds-buffer refusal
+ * and the same undefined-length refusal that `OB` / `UT` / `UN` already take.
+ * This is one more VR class routed into an existing bound, not a new bound.
  *
  * Endianness comes from the cursor - group / element / length use
  * `cursor.readUInt16` / `readUInt32`. The 2-byte VR field is ASCII and
@@ -396,13 +413,15 @@ export function readExplicitElementHeader(
 
   let length: number;
   let headerLength: 8 | 12;
-  if (LONG_FORM_VRS.has(vr)) {
+  if (LONG_FORM_VRS.has(vr) || !isRecognizedVr(vr)) {
     // 2 reserved bytes (must be 0x00 0x00 per D-22) + 4-byte length.
     const reserved0 = cursor.buffer[cursor.position];
     const reserved1 = cursor.buffer[cursor.position + 1];
     cursor.position += 2;
     if ((reserved0 ?? 0) !== 0x00 || (reserved1 ?? 0) !== 0x00) {
-      emit(nonzeroReservedBytes({ byteOffset: headerStart }, tag, reserved0 ?? 0, reserved1 ?? 0));
+      // No tag: when the reserved bytes are not zero, this may not be a header,
+      // so the four bytes that would render as one are input. See the factory.
+      emit(nonzeroReservedBytes({ byteOffset: headerStart }, reserved0 ?? 0, reserved1 ?? 0));
     }
     length = cursor.readUInt32();
     headerLength = 12;

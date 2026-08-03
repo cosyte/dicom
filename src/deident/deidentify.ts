@@ -5,8 +5,8 @@
  * nine *metadata-affecting* Annex E Options, driven by the generated Table E.1-1
  * action map ({@link annexE}). It is a **pure** function: the input {@link Dataset}
  * is never mutated; a fresh `Dataset` (with a rebuilt element map and File Meta)
- * is returned alongside a {@link DeidentifyReport} that is value-free except for
- * `uidMap`, whose keys are the file's own source UIDs.
+ * is returned alongside a {@link DeidentifyReport} whose two non-value-free
+ * fields are named on that type: `uidMap` and `removedPrivateTags`.
  *
  * **What it does**
  * - Resolves each attribute's action (basic profile, overridden by an active
@@ -89,7 +89,7 @@ import { Buffer } from "node:buffer";
 
 import { annexE, type AnnexEAction, type AnnexEActionCode } from "../dictionary/annex-e.js";
 import type { Tag, VR } from "../dictionary/types.js";
-import { BE_VR_STRIDE } from "../parser/endian.js";
+import { KNOWN_VRS } from "../parser/endian.js";
 import { Dataset, type DatasetInit } from "../dataset/dataset.js";
 import { Element, type ElementInit } from "../dataset/element.js";
 import type { FileMeta } from "../dataset/file-meta.js";
@@ -165,13 +165,6 @@ export const MAX_UNAUDITABLE_SEQUENCE_FINDINGS = 64;
  * means "at least this many"; treat it as truncated.
  */
 export const MAX_UNDEFINED_VR_FINDINGS = 64;
-
-/**
- * The 34 VRs PS3.5 2026c section 6.2 defines, as a closed set to test an element's
- * recorded on-wire VR against. Keyed off the serializer's own stride table so
- * the set cannot drift from the one the rest of the package uses.
- */
-const KNOWN_VRS: ReadonlySet<string> = new Set<string>(Object.keys(BE_VR_STRIDE));
 
 interface DeidentifyContext {
   readonly active: ReadonlySet<DeidentifyOption>;
@@ -377,29 +370,48 @@ function actsOnTag(tag: Tag, ctx: DeidentifyContext): boolean {
  * recorded rather than inspecting the value: a set membership check, O(1), no
  * per-offset loop and no cost that follows an attacker-chosen value length.
  *
- * ## Why an unrecognized VR is not a value
+ * ## Why an unrecognized VR is not auditable
  *
  * PS3.5 section 6.2 fixes the structure of every VR that does not exist yet:
  * "All new VRs defined in future versions of DICOM shall be of the same Data
  * Element Structure as defined in [section 7.1.2] with reserved bytes after the
  * VR and a 32-bit unsigned integer VL (i.e., following the format for VRs such
- * as OB or UT)". This parser reads an unrecognized VR **short-form** - it trusts
- * the two on-wire bytes (Postel's Law, `explicit-le.ts`) and only
- * `LONG_FORM_VRS` takes the long layout - so its length field is read from the
- * wrong two bytes and its "value" spans the wrong bytes, by the standard's own
- * structure rule. Nothing about the content has to be argued.
+ * as OB or UT)". **The parser applies that rule** - see
+ * `readExplicitElementHeader` - so the header is read the way the standard
+ * defines it and the *span* is no longer in doubt.
+ *
+ * What is still in doubt is the only thing this rule turns on: **what the bytes
+ * mean.** Table E.1-1 acts per attribute, and the de-identifier has no way to
+ * know whether a VR published after this edition holds free text, a name, a
+ * date, or an opaque blob. Emptying is the fail-safe answer, and it is the same
+ * answer the sibling `SQ`-with-no-items rule gives for the same reason.
  *
  * ## Where these come from, and what they carry
  *
- * The routine producer is an **under**-declared Value Length upstream: the
- * reader finishes the short value early and reads the remainder of the value
- * that was actually encoded as the next Data Element header, so tag, VR and
- * length are all fragments of somebody's value - and the element that genuinely
- * followed is swallowed as this fabricated element's value. Measured on
- * `scripts/measure-sq-bound-grid.ts` at `35adc2d`: a carrier under-declaring by
- * 6 yields `(4156,554C)` with VR bytes `"E "` holding the source `(0010,0020)`
- * Patient ID, on **8** grid cells, silently, and on **string** carriers as
- * readily as binary ones - the carrier's own VR is not what decides it.
+ * **Until `DICOM-UNRECOGNIZED-VR-SHORT-FORM` the routine producer was a
+ * malformed file, and now it is a conformant one.** The old reader took an
+ * unrecognized VR short-form, so an **under**-declared Value Length upstream
+ * would leave the remainder of a value to be read as the next Data Element
+ * header - tag, VR and length all fragments of somebody's value. Most of those
+ * files are now refused outright at parse (measured: every one of the 932 grid
+ * cells this reader newly refuses had an unrecognized VR in its old parse tree).
+ *
+ * The fabricated shape is **not gone**, because bytes that happen to form a
+ * complete long-form header still tile: `test/integration/deident-undefined-vr.test.ts`
+ * builds one whose four tag bytes are four letters of a surname, which is why
+ * the finding and the warning below still name no tag. What is new is the other
+ * producer - a **section 6.2 conformant** file carrying a VR from a future
+ * edition, which this parser now reads correctly and this rule then empties.
+ * That is a real cost and it is the `DICOM-DEIDENT-OVER-REDACTION` trade, not a
+ * defect.
+ *
+ * **There is no account here of what the old reader did with such a file, and
+ * that is a decision.** `#55` published "on a file conformant to PS3.5 2026c the
+ * cost is zero"; it was never true. Three further attempts were made in the
+ * slice that closed `DICOM-UNRECOGNIZED-VR-SHORT-FORM` to say what *was* true in
+ * one sentence, and its gate refuted all three. The behaviour is shape-specific
+ * and no sentence covers it. `scripts/measure-unrecognized-vr.ts` prints what
+ * each named shape does on each tree - **add a shape rather than a sentence.**
  *
  * ## What it deliberately does not cover
  *

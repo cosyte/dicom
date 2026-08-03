@@ -19,7 +19,7 @@
  */
 
 import type { Tag, VR } from "../dictionary/types.js";
-import { BE_VR_STRIDE } from "./endian.js";
+import { KNOWN_VRS } from "./endian.js";
 import { WITHHELD } from "./tokens.js";
 import type { DicomPosition } from "./types.js";
 
@@ -165,8 +165,12 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
     "Private element ({tag}) has no Private Creator registered for its block; treating as VR=UN.",
   DICOM_GROUP_LENGTH_IN_DATASET:
     "Retired Group Length element ({tag}) encountered in dataset; preserved as-is.",
+  // The tag is deliberately absent, and this is the only *parser* message where
+  // that is true. See `nonzeroReservedBytes`. Kept terse for the same reason the
+  // de-identify messages are: it is emitted once per element, and element count
+  // is attacker-chosen.
   DICOM_NONZERO_RESERVED_BYTES:
-    "Element ({tag}) has non-zero reserved bytes between VR and length (first byte {n}, second byte {n2}); ignoring.",
+    "Non-zero reserved bytes between VR and length (first byte {n}, second byte {n2}); ignoring. Tag withheld; the byte offset identifies the element.",
   DICOM_SQ_NOT_DESCENDED:
     "Element ({tag}) resolved to VR=SQ from the dictionary but its defined-length value is not a valid item stream; kept as opaque bytes and NOT descended, so nothing nested inside it is visible to navigation, and deidentify() cannot audit it. See DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE.",
   DICOM_UN_PARSED_AS_SQ:
@@ -238,9 +242,6 @@ interface WarningTokens {
   /** A second such number. */
   readonly n2?: number;
 }
-
-/** The 34 VRs PS3.5 section 6.2 defines, as the closed set `{vr}` is checked against. */
-const KNOWN_VRS: ReadonlySet<string> = new Set<string>(Object.keys(BE_VR_STRIDE));
 
 /** An 8-hex-char tag as this parser composes it: uppercase, exactly four bytes. */
 const TAG_SHAPE = /^[0-9A-F]{8}$/u;
@@ -423,8 +424,28 @@ export function groupLengthInDataset(position: DicomPosition, tag: Tag): DicomPa
  * VR long-form header has non-zero bytes in its 2-byte reserved field
  * (between VR and the 4-byte length per D-22).
  *
- * The two bytes are reported as the **numbers** they are, in wire order, rather
- * than as a hex echo of the bytes: an input-derived number is the prescribed
+ * ## It takes no tag, uniquely among the parser's factories
+ *
+ * `renderTag` validates a tag's SHAPE and therefore cannot refuse one, so
+ * `WarningTokens`' "structural by construction" property has to be kept at the
+ * call site wherever the trigger is itself "these bytes are not what they claim
+ * to be". **That is exactly this code's trigger.** PS3.5 §7.1.2 requires those
+ * two bytes to be `0x0000`; a header where they are not may not be a header at
+ * all, in which case the four bytes this message would call a tag are four bytes
+ * of some element's value.
+ *
+ * Measured, on a name-bearing payload: an `ST` carrier holding
+ * `"MR BRAIN SMITHSON "` whose Value Length under-declares by 6 desynchronizes
+ * the reader onto a fabricated header at `(4854,4F53)` - `"THSO"` in wire order,
+ * four letters of the surname - and the old message rendered it. `#55` paid a
+ * blocker for the identical mistake in `report.undefinedVrElements[].tag`; the
+ * remedy is the same one, and so is the reason it is not a guard: the honestly
+ * written case and the fabricated case are indistinguishable here, so the tag is
+ * withheld on both rather than on a guess. `position.byteOffset` locates the
+ * element and is a count the parser kept.
+ *
+ * The two reserved bytes are reported as the **numbers** they are, in wire
+ * order, rather than as a hex echo: an input-derived number is the prescribed
  * shape here, and a re-rendered slice of input is not, however short. They are
  * reported separately because composing them into one 16-bit value would have
  * to pick an endianness, and the reserved field has none: the message would then
@@ -432,17 +453,15 @@ export function groupLengthInDataset(position: DicomPosition, tag: Tag): DicomPa
  *
  * @example
  * ```ts
- * const w = nonzeroReservedBytes({ byteOffset: 500 }, "7FE00010", 0x00, 0xff);
+ * const w = nonzeroReservedBytes({ byteOffset: 500 }, 0x00, 0xff);
  * ```
  */
 export function nonzeroReservedBytes(
   position: DicomPosition,
-  tag: Tag,
   first: number,
   second: number,
 ): DicomParseWarning {
   return build(WARNING_CODES.DICOM_NONZERO_RESERVED_BYTES, position, {
-    tag,
     n: first,
     n2: second,
   });

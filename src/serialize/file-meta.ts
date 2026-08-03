@@ -32,6 +32,7 @@ import type { FileMeta } from "../dataset/file-meta.js";
 import { splitTag } from "../dataset/tag.js";
 import type { Tag, VR } from "../dictionary/types.js";
 import { LONG_FORM_VRS } from "../parser/element-header.js";
+import { isRecognizedVr } from "../parser/endian.js";
 import { padValue } from "./element.js";
 
 /**
@@ -58,7 +59,10 @@ function encodeMetaElement(tag: Tag, vr: VR, rawValue: Buffer): Buffer {
   const elementBuf = Buffer.alloc(2);
   elementBuf.writeUInt16LE(element, 0);
   const vrBuf = Buffer.from(vr, "ascii");
-  if (LONG_FORM_VRS.has(vr)) {
+  // Same PS3.5 2026c section 6.2 rule the dataset writer applies: an
+  // unrecognized VR is long-form. `FileMetaRawElement.vr` carries whatever the
+  // source file wrote, so this branch is reachable from a real input.
+  if (LONG_FORM_VRS.has(vr) || !isRecognizedVr(vr)) {
     const lengthBuf = Buffer.alloc(4);
     lengthBuf.writeUInt32LE(value.length, 0);
     return Buffer.concat([

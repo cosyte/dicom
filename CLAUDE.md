@@ -10,6 +10,93 @@
 
 ## Status
 
+- **An unrecognized Explicit VR is read AND written long-form** (`DICOM-UNRECOGNIZED-VR-SHORT-FORM`,
+  closed after `0.0.8`). **This is the root cause `#53`/`#54`/`#55` compensated for at the
+  de-identify boundary, and it is a behaviour change on the read path.** PS3.5 2026c section 6.2:
+  "All new VRs defined in future versions of DICOM **shall** be of the same Data Element Structure
+  as defined in [section 7.1.2] with reserved bytes after the VR and a 32-bit unsigned integer VL".
+  Read from the `vendor/nema/part05` pin; the section 6.2 **note** about ignoring unrecognized VRs
+  is informative and is not what this rests on.
+  **▶ 🛑 WHAT A CONFORMANT FUTURE-VR FILE USED TO DO: NO SENTENCE, AND THIS SLICE MADE THE FOURTH
+  WRONG ONE BEFORE ITS GATE CAUGHT IT.** The first draft of every artifact here said "it was a
+  whole-object `INVALID_FILE_META` in every readable shape". **False.** The short-form read took the
+  length from the two reserved bytes (`0x0000`), produced a zero-length value and resumed inside the
+  32-bit VL field - so what happened next was decided by **the payload's own bytes**. The refuting
+  case is now a row in the harness (`long-payload-tiles`): a payload beginning `"SH"` + a 16-bit `4`
+  parses on base into a zero-length carrier PLUS a manufactured `(0000,0008) SH` element, and under
+  **Explicit VR BE with no warning on either channel.** `long-overrun` and `long-undefined-length`
+  are fatal on both trees; the three short-form shapes go the other way.
+  **`scripts/measure-unrecognized-vr.ts` PRINTS THE TABLE - ADD A SHAPE, DO NOT WRITE A SUMMARY.
+  Four attempts, four wrong.**
+  **▶ ONE MORE VR CLASS ROUTED INTO AN EXISTING BOUND, NOT A NEW BOUND - the distinction four
+  refusals in this family were about.** The gate re-derived section 7.1.2's short-form list
+  independently (a closed 21-VR set) and confirmed `LONG_FORM_VRS ∪ ¬isRecognizedVr` is exactly its
+  complement. `readExplicitElementHeader` and the File Meta reader take
+  the 12-byte header when `!isRecognizedVr(vr)`; everything after it is untouched, so the value read,
+  the declared-length-exceeds-buffer refusal and the undefined-length refusal are the ones `OB` /
+  `UT` / `UN` already take. **No new warning code**: a conformant file is not something to warn
+  about, and a new Tier-2 code would throw under `{ strict: true }` on exactly such a file.
+  **▶ THE READER AND THE WRITER HAD TO SHIP TOGETHER.** The short form's length field is 16 bits, so
+  a reader-only fix would re-emit a 70,000-byte value declaring **4,464**, silently. Pinned by a
+  round-trip test at that size. `isRecognizedVr` / `KNOWN_VRS` now live once in `src/parser/endian.ts`
+  (they were three private copies of `new Set(Object.keys(BE_VR_STRIDE))`).
+  **▶ THE TRADE, ON THE 76,611-CELL GRID AGAINST `66f0c95`: 1,221 RECOVERED vs 932 NEWLY REFUSED.**
+  0 PHI regressions, 0 root `(0010,0020)` value changes, **0 Implicit VR LE cells changed** (free
+  control), leaking cells unmoved at 11. The grid also reads **0 cells that parse on both trees and
+  read differently** - **quote that as a fact about the GRID'S FIXTURES, never as "the change never
+  silently re-reads anything"**, which the gate refuted: `long-payload-tiles` is exactly such a cell
+  and it is outside anything the grid sweeps. **All 932** of the newly refused had an unrecognized VR in their base
+  parse tree - every file this refuses is one the old reader only "read" by manufacturing a header
+  out of the middle of a value; the fabricated VRs include **`"CT"`, a Modality value read as a VR**.
+  **The mirror shape is the cost and it is pinned by a test**: a sender that ignores section 6.2 and
+  writes an unrecognized VR short-form parsed before and is refused now.
+  **▶ 🛑 `#55`'s "on a conformant file the cost is zero" WAS NEVER TRUE, AND THE EXPLANATION OF WHY
+  IS DELETED RATHER THAN REWORDED - THREE ATTEMPTS, THREE REFUTATIONS, IN THIS SLICE ALONE.** The
+  gate refuted "it did not parse at all" (pass 1), the same sentence surviving in three more places
+  (pass 2), and then "it parsed but the rule saw nothing in the value" (pass 3, counterexample: a
+  conformant BE carrier whose payload is `"QQ" + u16(8) + 8 bytes` reaches the rule at base with
+  **eight real value bytes**). That is `main`'s own rule applied to itself: **re-wording a
+  disclosure twice is the signal to delete it.** The refuting shape is now a harness row
+  (`long-payload-tiles-future-vr`). **ADD A SHAPE, NEVER A SENTENCE.** `deidentify()` still
+  empties an unrecognized-VR element (reading a header is not knowing what the value means; Table E.1-1 acts
+  per attribute), so a conformant future-VR file now loses a legitimate value. Disclosed, the same
+  over-redaction trade as the sequence rule, and re-deciding it is `DICOM-DEIDENT-OVER-REDACTION`.
+  **▶ `#55`'s TEST SUITE WAS RE-CUT, AND THE RE-CUT IS THE PROOF THE ROOT CAUSE MOVED.** Its
+  under-declare fixtures fabricated `(4156,554C)` VR `"E "` from six leftover bytes; that file no
+  longer parses. The fixtures now leave a **complete 12-byte header** in the leftover, giving
+  `(4854,4F53)` VR `"ZZ"` - `"THSO"` in wire order, four letters of the surname in the payload - so
+  the rule, the leak and the no-tag-in-the-diagnostic pins all still have a name-bearing fixture.
+  **A fabricated header is NOT gone; it got more expensive to build.**
+  **▶ THE `removedPrivateTags` CHANNEL: MEASURED, DISCLOSED, DELIBERATELY NOT CLOSED.** An `OB`
+  carrier holding `"SECRET-NOTE-"` followed by a well-formed odd-group header reports
+  `["41534342"]` = `"SABC"` in wire order, **identically on both trees**. The measured _text_-carrier
+  instances (16 rows across four name payloads at `delta=-6`) are gone, because those files are now
+  refused - but the channel is structural, not closed. Reporting the tag is the field's whole audit
+  value on a well-formed file, so the **claim** was corrected (the report is not "value-free apart
+  from `uidMap`"; there are two exceptions) rather than the guard widened. Narrowing the field is a
+  product call about audit value versus a four-byte echo and has NOT been made.
+  **▶ 🩺 THE PHI FIX THIS SLICE OWED, FOUND BY ITS GATE: `DICOM_NONZERO_RESERVED_BYTES` NAMED A TAG.**
+  Reading an unrecognized VR long-form lands on the two bytes section 7.1.2 reserves, so that Tier-2
+  code is **newly reachable on a fabricated header**. Measured on an `ST` carrier holding
+  `"MR BRAIN  SMITHSON"` under-declared by 6: it streamed `Element (54495348) ...` - `"ITHS"` in wire
+  order, **four letters of the surname** - on a file `66f0c95` parsed while emitting **nothing that
+  named the fabricated element** (its only warning is `DICOM_ODD_LENGTH_VALUE_PADDED`, on a genuine
+  `(0010,0010)`; measure it rather than saying "no warning at all", which a gate corrected).
+  **Quote the payload WITH its tag**: `"MR BRAIN SMITHSON "` gives `48544F53` instead, and a draft
+  of this entry paired the two wrongly. **The factory now takes no
+  tag parameter** - the bound is the signature, not a branch - and `position.byteOffset` locates the
+  element. Identical remedy and identical reasoning to `#55`'s blocker: where the trigger IS "these
+  bytes are not what they claim to be", `renderTag` checks shape and cannot refuse them. It also
+  closes a `PRE-EXISTING` instance of the same factory. Pinned with a name-bearing payload **and** a
+  non-vacuity assertion that the code fires.
+  **▶ WHAT THIS SLICE DID NOT TOUCH, ON PURPOSE:** `src/deident/embedded.ts`'s tiling scanner still
+  refuses to tile an unrecognized VR (widening it empties more values - the same product call);
+  and **the Tier-3 fatal messages still interpolate a tag and a VR composed from input**
+  (`explicit-le.ts`, `implicit-le.ts`, `sequence.ts`). That is pre-existing and is not amplified
+  here in kind: measured on the name-bearing fixture, base put the same four bytes on `Element.tag`
+  and in `report.removedPrivateTags`, while head puts them in `err.message` beside a `snippet` that
+  is already 16 raw source bytes by design (D-10). A registry for fatal messages, mirroring `#48`'s
+  work on warnings, is its own slice.
 - **De-identification refuses to keep an element whose VR is not a VR**
   (`DICOM-CARRIER-LEAF-LEAKS` mechanism 2, closed after `0.0.6`). **The leaf-carrier 19 was two
   defects, and this is the half nobody knew about.** Re-derived on
@@ -30,9 +117,12 @@
   §6.2 "Value Representation (VR)": "All new VRs defined in future versions of DICOM **shall** be of
   the same Data Element Structure as defined in [§7.1.2] with reserved bytes after the VR and a
   32-bit unsigned integer VL". So an unrecognized VR is long-form by the standard's own rule, while
-  this parser reads it **short-form** (Postel; only `LONG_FORM_VRS` takes the long layout) - its
-  length came from the wrong two bytes and its value spans the wrong bytes. Nothing about the
-  content has to be argued. `hasUndefinedVr` is `!KNOWN_VRS.has(el.vr)`: O(1), no per-offset loop.
+  this parser read it **short-form** (Postel; only `LONG_FORM_VRS` took the long layout) - its
+  length came from the wrong two bytes and its value spanned the wrong bytes.
+  **CORRECTED 2026-08-03: THE PARSER NO LONGER DOES THIS** (`DICOM-UNRECOGNIZED-VR-SHORT-FORM`, the
+  entry above). The de-identify rule survives on a different footing - the header is now read the
+  way §6.2 defines it, and what remains undecidable is what the value _means_, which is what Table
+  E.1-1 needs. Trigger and code unchanged. `hasUndefinedVr` is `!KNOWN_VRS.has(el.vr)`: O(1), no per-offset loop.
   **The §6.2 sentence about treating an unrecognized VR as `UN` is in a `<note>` and is
   informative** - cite the "shall" above it, not that. Pins re-derived (`part05`
   `4dfd7b8c…`); each sentence occurs exactly once.
@@ -51,8 +141,9 @@
   THAN `#54`'s.** An undefined-VR element is short-form, so the cheapest one an input can encode is
   an **8-byte header with a zero-length value**: 1 MiB is 131,072 of them. Budget on
   `DeidentifyContext`, not `ProcessResult` (which is per Data Set). The warning omits the tag and
-  the VR - both are input, emitted once per element. Its `byteLength` maxes at **65,534**, and that number is
-  itself the §6.2 contradiction the rule rests on.
+  the VR - both are input, emitted once per element. Its `byteLength` maxed at **65,534** while the
+  VL was read from 16 bits; **since `DICOM-UNRECOGNIZED-VR-SHORT-FORM` the field is 32-bit and that
+  ceiling is gone** (the cap test now runs at 70,000).
   **▶ 🩺 THE GATE'S BLOCKER, AND IT IS THE ONE TO REMEMBER: THE DIAGNOSTIC REPUBLISHED THE PHI IT
   WAS RAISED ABOUT.** The first draft put `el.tag` into `report.undefinedVrElements[].tag` **and**
   into the warning message, under its own written claim "Both fields are structural... Safe to log",
@@ -74,13 +165,14 @@
   `MAX_UNDEFINED_VR_FINDINGS`. `isScannableCarrier` **lost** its "VR not one of the 34" disjunct: the
   new rule empties such an element before the scan is reached, and conditioning the answer on a
   tiling run was the defect - an undefined-VR element whose bytes did not tile was kept.
-  **▶ 🩺 THE ROOT CAUSE IS A PARSE BEHAVIOUR THIS SLICE DOES NOT TOUCH, AND IT IS ITS OWN ITEM.**
+  **▶ 🩺 THE ROOT CAUSE WAS A PARSE BEHAVIOUR THIS SLICE DID NOT TOUCH. CLOSED 2026-08-03 BY
+  `DICOM-UNRECOGNIZED-VR-SHORT-FORM` - see the entry at the top of this list.**
   §6.2's **note** (informative) says an implementation "may choose to ignore VRs not recognized by
   applying the rules stated in [§7.1.2]" and that such an element's value "may be copied unchanged"
   - i.e. the standard treats it as a real Data Element with a real Value, read **long-form**. This
-    parser reads an unrecognized VR **short-form**. Emptying at the de-identify boundary is therefore
-    **compensation, not conformance**. `PRE-EXISTING`. Do not quote the note as support for this rule;
-    the "shall" in §6.2's body is what supports it.
+    parser read an unrecognized VR **short-form**, so emptying at the de-identify boundary was
+    **compensation, not conformance**. Do not quote the note as support for this rule; the "shall"
+    in §6.2's body is what supports it - and is what the parser now implements.
     **DO NOT SUMMARIZE WHAT A §6.2-CONFORMANT FUTURE-VR FILE DOES HERE. THREE PASSES TRIED AND ALL
     THREE SUMMARIES WERE WRONG** - including one written _into the warning against writing one_,
     which pass 3 then refuted by measuring the very shape it named. Passes 2 and 3 disagree on what a
@@ -106,9 +198,13 @@
     tag reaches `report.removedPrivateTags` on **both** trees (measured `["4D535449"]` = `"SMIT"`), so
     the "value-free apart from `uidMap`" claim on the report was already imprecise before this slice -
     the even-group half and the log-message channel were this slice's to fix and are fixed, that one
-    is not. And an emptied undefined-VR element is **re-emitted** as a short-form element with an
-    undefined VR, violating the same §6.2 sentence, inside output stamped `PatientIdentityRemoved=YES`
-    (base emitted the same shape with a value attached, so not introduced).
+    is not. **The CLAIM was corrected 2026-08-03** (`DeidentifyReport` now names two exceptions, not
+    one) and the measured text-carrier instances are gone with the parse behaviour that produced
+    them, but **the channel is structural and still open** - re-measured at `["41534342"]` = `"SABC"`
+    on an `OB` carrier, identically on both trees. And an emptied undefined-VR element was
+    **re-emitted** as a short-form element with an undefined VR, violating the same §6.2 sentence,
+    inside output stamped `PatientIdentityRemoved=YES`; **the writer was fixed 2026-08-03** with the
+    reader, so it re-emits the long form.
 - **De-identification refuses to keep a sequence it could not walk**
   (`DICOM-DEIDENT-RAWBYTES-PASSTHROUGH`, closed after `0.0.6`). **This was the larger half of the
   2,127 and it was never the same defect as the entry below.** A defined-length Implicit VR LE value

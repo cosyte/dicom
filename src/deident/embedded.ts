@@ -125,12 +125,9 @@ import type { Buffer } from "node:buffer";
 
 import { joinTag } from "../dataset/tag.js";
 import type { Tag, VR } from "../dictionary/types.js";
-import { BE_VR_STRIDE } from "../parser/endian.js";
+import { KNOWN_VRS } from "../parser/endian.js";
 import { LONG_FORM_VRS } from "../parser/element-header.js";
 import type { BodyEncoding } from "../serialize/element.js";
-
-/** The 34 VRs PS3.5 §6.2 defines, as a closed set to check an on-wire VR against. */
-const KNOWN_VRS: ReadonlySet<string> = new Set<string>(Object.keys(BE_VR_STRIDE));
 
 const UNDEFINED_LENGTH = 0xffffffff;
 
