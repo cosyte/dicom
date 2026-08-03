@@ -81,6 +81,29 @@
  *   `35adc2d`. No content test can decide it - arbitrary bytes are what those
  *   VRs are for - and the one candidate remedy empties conformant binary values.
  *   See `./embedded.ts`.
+ * - `RetainSafePrivate` **retains nothing inside a Sequence Item whose Data Set
+ *   boundary the file contradicts** - an item stream that ran past its
+ *   sequence's own declared Value Length. Which elements are in the Item is then
+ *   not determined by the file, and PS3.5 §7.8.1 scopes a private block
+ *   reservation to exactly that boundary, so PS3.15 §E.3.10's "known ... to be
+ *   safe" cannot be established and its "all other Private Attributes shall be
+ *   removed **or processed in the element-specific manner recommended by
+ *   Deidentification Action (0008,0307), if present within Private Data Element
+ *   Characteristics Sequence (0008,0300)**" applies - a two-branch clause, of
+ *   which removal is the branch available here (`(0008,0307)` is not
+ *   implemented). Every private element the recursion **reaches** in such an
+ *   Item, at any depth below it, is removed and named in
+ *   `report.removedPrivateTags`. **There is one carve-out, and it is the same one
+ *   `#54` was refused for asserting away**: `keepsPrivate` decides *before* the
+ *   descent, so a **private `SQ`** the profile vouches for is kept **verbatim**,
+ *   its items are never walked, and this rule is never consulted inside it -
+ *   measured, and it still leaks a private value absorbed from the root
+ *   (`PRE-EXISTING`, identical on `164eb39`, its own item). That costs content
+ *   on a malformed file and nothing at all on a conformant one; without it a
+ *   private value the sender wrote **outside** the sequence was retained on the
+ *   Item's reservation and written into output stamped `PatientIdentityRemoved =
+ *   YES` with `removedPrivateTags: []` (`DICOM-PRIVATE-CREATOR-RESERVATION-LEAK`,
+ *   live through `0.0.9`). See {@link itemStreamOverrunsSequence}.
  *
  * @module
  */
@@ -666,10 +689,74 @@ function creatorFor(tag: Tag, creators: ReadonlyMap<string, string>): string | u
   return creators.get(`${String(group)}:${String((element >> 8) & 0xff)}`);
 }
 
+/** PS3.5 2026c section 7.5.2's "undefined length" sentinel for a Value Length field. */
+const UNDEFINED_LENGTH = 0xffffffff;
+
+/**
+ * On-wire header size of a defined-length `SQ` under Explicit VR: tag (4) + `SQ`
+ * (2) + two reserved bytes + a 32-bit Value Length, per PS3.5 2026c section
+ * 7.1.2. `SQ` is one of the long-form VRs, so this is a constant and never 8.
+ * Under Implicit VR LE the parser keeps a **value-only** slice for this shape
+ * (`isFullSpanElement` in `../serialize/element.ts` keys exactly that case off
+ * the encoding), so there is no header to subtract there.
+ */
+const EXPLICIT_SQ_HEADER_BYTES = 12;
+
+/**
+ * `true` when the parser consumed **more** bytes for this defined-length `SQ`
+ * than its own Value Length field declared - i.e. its item stream ran past the
+ * end the sequence itself named.
+ *
+ * ## Why this is a recorded fact and not a re-parse
+ *
+ * `Element.length` is the Value Length read off the wire and `Element.rawBytes`
+ * is the span the parser actually consumed, both set once at parse time. This
+ * compares two numbers already on the element - the same shape as
+ * {@link isUnauditableSequence}, which reads the parser's own refusal rather than
+ * re-deriving it. There is no scan, no per-offset loop and no cost that follows
+ * an attacker-chosen value length.
+ *
+ * ## Why only the over-run direction
+ *
+ * The over-run is the direction that **moves an element into a Data Set it was
+ * not encoded in**: an item that declares more bytes than its enclosing sequence
+ * does absorbs whatever follows the sequence. The opposite comparison would also
+ * fire on a hand-built {@link Element} whose `length` and `rawBytes` a caller set
+ * independently ({@link Element} is publicly constructible and `deidentify` runs
+ * on any `Dataset`), and nothing is moved anywhere in that case.
+ *
+ * ## What it deliberately does not answer
+ *
+ * An **undefined-length** `SQ` declares no extent, so there is nothing for its
+ * item stream to contradict and this returns `false` for it - measured, not
+ * assumed: across the shape sweep in
+ * `test/integration/deident-private-reservation.test.ts` no undefined-length
+ * sequence produces the retention this guards, because an item that reads past
+ * the `(FFFE,E0DD)` Sequence Delimitation Item is refused by the parser outright.
+ *
+ * It is also **not** a claim about which reading of the file is right. PS3.5
+ * gives the item's length field and the sequence's length field equal standing
+ * (section 7.5.1 and section 7.5.2), and an over-declaring item is byte-identical
+ * to an under-declaring sequence, so no predicate can separate the sender's two
+ * possible intents. This says only that the file contradicts itself about where
+ * the Item ends - which is exactly the boundary section 7.8.1 scopes a private
+ * block reservation to.
+ */
+function itemStreamOverrunsSequence(el: Element, encoding: BodyEncoding): boolean {
+  if (el.vr !== "SQ" || el.length === UNDEFINED_LENGTH) return false;
+  const headerBytes = encoding === "implicit" ? 0 : EXPLICIT_SQ_HEADER_BYTES;
+  return el.rawBytes.length - headerBytes > el.length;
+}
+
 /**
  * Decide whether to keep a private element under `RetainSafePrivate` + a
  * profile. `creators` is the reservation map of the Data Set this element lives
  * in, never an enclosing one.
+ *
+ * The caller must also have established that this Data Set's boundary is the one
+ * the file declares - see `reservationsUsable` on {@link processElements}. This
+ * function answers "does the profile vouch for this element in this Data Set",
+ * not "is this Data Set well defined".
  */
 function keepsPrivate(
   el: Element,
@@ -688,11 +775,77 @@ function keepsPrivate(
 /**
  * De-identify one ordered run of elements (a dataset body or a sequence item),
  * returning the rebuilt element map plus the audit accumulated at this depth.
+ *
+ * ## `reservationsUsable`
+ *
+ * `false` when this Data Set was reached through a sequence whose item stream
+ * over-ran its own declared Value Length ({@link itemStreamOverrunsSequence}).
+ * On such a file, which elements are inside the Item and which are outside it is
+ * **not determined by the file**, and PS3.5 2026c section 7.8.1 scopes a private
+ * block reservation to exactly that boundary: "Items within a sequence are self
+ * contained Data Sets ..., any Item in the sequence that contains Private Data
+ * Elements shall also have Private Creator Data Element reserving a block of
+ * Elements for those Private Data Elements. The scope of the reservation is just
+ * within the Item. Items do not inherit the Private Data Element reservations
+ * made by Private Creator Data Elements in the Data Set in which the Item is
+ * nested."
+ *
+ * So a `(gggg,00EE)` element found here may be reserving a block for elements the
+ * sender never put in this Item, and a `(gggg,eeee)` element found here may be
+ * borrowing a reservation it never had. PS3.15 2026c section E.3.10 licenses
+ * retention only for what the de-identifier **knows** to be safe - "Private
+ * Attributes that are known by the de-identifier to be safe from identity
+ * leakage shall be retained, together with the Private Creator IDs that are
+ * required to fully define the retained Private Attributes; all other Private
+ * Attributes shall be removed **or processed in the element-specific manner
+ * recommended by Deidentification Action (0008,0307), if present within Private
+ * Data Element Characteristics Sequence (0008,0300)**" - a two-branch clause, of
+ * which removal is the branch available here (`(0008,0307)` is not implemented).
+ * That knowledge is keyed by the reservation. With the reservation undetermined
+ * nothing here is known to be safe, so `RetainSafePrivate` retains nothing in
+ * this Data Set and every private element **this function is given** is removed
+ * and named in `report.removedPrivateTags`.
+ *
+ * **What that does NOT cover, and the sentence is qualified rather than the guard
+ * widened** (`#54`'s rule, and `#54`'s exact refusal): a **private `SQ`** the
+ * profile vouches for is settled by `keepsPrivate` -> `keepOrEmpty` **before**
+ * {@link descendSequence} runs, so its items are never walked and this flag is
+ * never carried into them. A private element absorbed into such a carrier's item
+ * by an over-run is kept verbatim. Measured, `PRE-EXISTING`, identical on
+ * `164eb39`, and pinned as a residual test rather than asserted away.
+ *
+ * **It propagates downward and never recovers.** A nested sequence inside a
+ * disputed Item is itself made of disputed bytes, so its items' boundaries are no
+ * better determined than their parent's.
+ *
+ * **🩺 The root Data Set is always `true`, and that is a LIMITATION, not a
+ * proof.** An earlier draft of this note claimed "nothing is ever moved out of an
+ * Item into the enclosing Data Set" and that the claim was pinned by a test.
+ * **Both were false and are retracted.** An Item that *under*-declares **ejects**
+ * its trailing elements out into the enclosing Data Set, and a Private Creator
+ * that lands there reserves a block for root elements the sender never gave it -
+ * the mirror of the case this flag closes, and the same false attestation.
+ * Measured on `164eb39` and here, Explicit VR LE and BE, an Item under-declaring
+ * by exactly its creator's 20 wire bytes inside a sequence under-declaring by 24:
+ * `removedPrivateTags: []`, the value in the output, `(0012,0062) = YES`,
+ * `ds.warnings: []`, and no throw under `{ strict: true }`. `PRE-EXISTING`,
+ * identical on both trees, **its own item** - and pinned as a residual in
+ * `test/integration/deident-private-reservation.test.ts` so it stays visible.
+ *
+ * **The obvious widening was BUILT AND MEASURED rather than argued about**, and
+ * its numbers are why it is not taken: narrowing this flag whenever the Data Set
+ * *contains* an over-running sequence costs **24** root retentions and closes
+ * **2** of the **22** leaking cells. The other 20 are Implicit VR LE, where the
+ * sequence records **no over-run at all** ({@link itemStreamOverrunsSequence} is
+ * `false`: `rawBytes.length === length`) because the ejection there happens by
+ * reader desynchronization, not by an item reading past its sequence. That is a
+ * different mechanism and needs its own slice.
  */
 function processElements(
   source: readonly Element[],
   ctx: DeidentifyContext,
   contextPath: readonly string[],
+  reservationsUsable: boolean,
 ): ProcessResult {
   const out: ProcessResult = {
     elements: new Map<Tag, Element>(),
@@ -708,7 +861,8 @@ function processElements(
 
   for (const el of source) {
     if (isPrivateTag(el.tag)) {
-      if (keepsPrivate(el, ctx, creators)) keepOrEmpty(el, ctx, contextPath, out);
+      if (reservationsUsable && keepsPrivate(el, ctx, creators))
+        keepOrEmpty(el, ctx, contextPath, out);
       else out.removedPrivateTags.push(el.tag);
       continue;
     }
@@ -721,7 +875,8 @@ function processElements(
       // statement about this tag, not about the Data Sets inside its value.
       if (el.vr === "SQ") {
         if (isUnauditableSequence(el)) emptyUnauditableSequence(el, ctx, contextPath, out);
-        else out.elements.set(el.tag, descendSequence(el, ctx, contextPath, out));
+        else
+          out.elements.set(el.tag, descendSequence(el, ctx, contextPath, out, reservationsUsable));
       } else {
         keepOrEmpty(el, ctx, contextPath, out);
       }
@@ -731,7 +886,7 @@ function processElements(
     const resolved = resolveAction(effectiveCode(action, ctx.active));
 
     if (el.vr === "SQ") {
-      applySequenceAction(el, resolved, action, ctx, contextPath, out);
+      applySequenceAction(el, resolved, action, ctx, contextPath, out, reservationsUsable);
       continue;
     }
 
@@ -780,17 +935,27 @@ function processElements(
   return out;
 }
 
-/** Recurse into a sequence's items and rebuild it, merging nested audit upward. */
+/**
+ * Recurse into a sequence's items and rebuild it, merging nested audit upward.
+ *
+ * This is where `reservationsUsable` is narrowed: each Item is a Data Set whose
+ * boundary is this sequence's Value Length, so a sequence whose item stream ran
+ * past that length hands its items down as Data Sets whose membership the file
+ * does not determine. Once `false` it stays `false` at every deeper level.
+ */
 function descendSequence(
   el: Element,
   ctx: DeidentifyContext,
   contextPath: readonly string[],
   out: ProcessResult,
+  reservationsUsable: boolean,
 ): Element {
+  const childReservationsUsable =
+    reservationsUsable && !itemStreamOverrunsSequence(el, ctx.encoding);
   const newItems: Item[] = [];
   (el.items ?? []).forEach((item, index) => {
     const childPath = [...contextPath, `${el.tag}[${String(index)}]`];
-    const inner = processElements(item.elements(), ctx, childPath);
+    const inner = processElements(item.elements(), ctx, childPath, childReservationsUsable);
     out.attributes.push(...inner.attributes);
     out.removedPrivateTags.push(...inner.removedPrivateTags);
     out.embeddedAttributes.push(...inner.embeddedAttributes);
@@ -820,6 +985,7 @@ function applySequenceAction(
   ctx: DeidentifyContext,
   contextPath: readonly string[],
   out: ProcessResult,
+  reservationsUsable: boolean,
 ): void {
   let applied: AppliedAction;
   switch (resolved) {
@@ -836,7 +1002,7 @@ function applySequenceAction(
         emptyUnauditableSequence(el, ctx, contextPath, out);
         applied = "emptied";
       } else {
-        out.elements.set(el.tag, descendSequence(el, ctx, contextPath, out));
+        out.elements.set(el.tag, descendSequence(el, ctx, contextPath, out, reservationsUsable));
         applied = "cleaned";
       }
       break;
@@ -846,7 +1012,7 @@ function applySequenceAction(
         emptyUnauditableSequence(el, ctx, contextPath, out);
         applied = "emptied";
       } else {
-        out.elements.set(el.tag, descendSequence(el, ctx, contextPath, out));
+        out.elements.set(el.tag, descendSequence(el, ctx, contextPath, out, reservationsUsable));
         applied = "kept";
       }
       break;
@@ -944,7 +1110,12 @@ export function deidentify(
     budget: { unauditableSequences: 0, undefinedVrElements: 0 },
   };
 
-  const processed = processElements(ds.elements(), ctx, []);
+  // The root starts usable. That is a LIMITATION, not a proof: an Item that
+  // under-declares DOES eject elements into the enclosing Data Set, the root
+  // included, and a Private Creator that lands there is still trusted here. See
+  // `processElements`' `reservationsUsable` note for the measurement and for why
+  // the widening was priced and refused.
+  const processed = processElements(ds.elements(), ctx, [], true);
   const {
     elements,
     attributes,

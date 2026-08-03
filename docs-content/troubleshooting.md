@@ -191,6 +191,37 @@ Each is tracked as a future companion package, not a gap to be filled here:
   also has `items === undefined` and applying it there would empty every unknown-VR element in every
   file. So for either, the reliable test is still `el.items === undefined`, and a report is a record
   of what was reached, not a proof that everything was.
+- **A private value vanishes under `RetainSafePrivate`, and `report.removedPrivateTags` names it.**
+  The file's own length fields contradict each other about where a Sequence Item ends: its
+  `(FFFE,E000)` Item declares more bytes than the enclosing `SQ` element's Value Length allows, so
+  the Item reads past the end of its sequence and absorbs the element that followed it. PS3.5 2026c
+  §7.8.1 scopes a Private Creator's block reservation to the Data Set it appears in and an Item is
+  its own Data Set ("The scope of the reservation is just within the Item. Items do not inherit the
+  Private Data Element reservations made by Private Creator Data Elements in the Data Set in which
+  the Item is nested"), so on such a file **which Data Set a private element is in is not determined
+  by the file**. PS3.15 2026c §E.3.10 retains only Private Attributes "known by the de-identifier to
+  be safe from identity leakage" and requires that "all other Private Attributes shall be removed **or
+  processed in the element-specific manner recommended by Deidentification Action (0008,0307), if
+  present within Private Data Element Characteristics Sequence (0008,0300)**". That clause licenses
+  two dispositions; this library does not implement `(0008,0307)`, so `deidentify()` removes every private element **it reaches** in that Item and at every depth below it (a private `SQ` the profile vouches for is settled before the descent and is kept verbatim, so nothing inside it is examined), and
+  records each in `report.removedPrivateTags`.
+  **This is the fix for a leak that shipped through `0.0.9`** and needed the opt-in
+  `RetainSafePrivate` plus a vendor profile: a private value the sender wrote **outside** the
+  sequence was retained on the Item's reservation, `report.removedPrivateTags` read `[]`, and the
+  object was still stamped `(0012,0062) Patient Identity Removed = YES`.
+  **Two shapes are not covered and still leak**, both `PRE-EXISTING` and both pinned by tests: an
+  Item that _under_-declares **ejects** its trailing elements into the enclosing Data Set at any
+  depth, where a Private Creator that lands there vouches for elements the sender never reserved; and a
+  **private `SQ`** a profile vouches for is kept verbatim before the descent runs, so nothing inside
+  it is examined. For either, `report.removedPrivateTags` reading `[]` is not proof that nothing was
+  retained.
+  **Nothing announces this on `ds.warnings`** - the file parses silently on this reader and on
+  `0.0.9` - so the audit channel is the report, not the warnings. If you expected those private
+  attributes and need them, the fix is at the sender: an Item's declared length and its sequence's
+  declared length have to agree. **It costs content on files that lie**: where the creator and the
+  data element were both genuine Item content the reservation was real, and it is removed anyway,
+  because nothing on the wire distinguishes that case. A file whose length fields agree is
+  unaffected, whatever they say.
 - **Repeating-group rows are matched by mask, within the range the standard bounds them to.**
   `(50xx,xxxx)` Curve Data, `(60xx,3000)` Overlay Data and `(60xx,4000)` Overlay Comments are stated
   by the standard as a group mask rather than a single tag. `deidentify()` matches them in the
