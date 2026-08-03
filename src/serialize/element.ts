@@ -33,6 +33,7 @@ import type { Element } from "../dataset/element.js";
 import { splitTag } from "../dataset/tag.js";
 import type { VR } from "../dictionary/types.js";
 import { LONG_FORM_VRS } from "../parser/element-header.js";
+import { isRecognizedVr } from "../parser/endian.js";
 
 /** `0xFFFFFFFF` - the undefined-length sentinel (PS3.5 §7.1.1). */
 const UNDEFINED_LENGTH = 0xffffffff;
@@ -134,7 +135,13 @@ export function encodeDatasetElement(el: Element, encoding: BodyEncoding): Buffe
 
   const littleEndian = encoding === "explicitLE";
   const vrBuf = Buffer.from(el.vr, "ascii");
-  if (LONG_FORM_VRS.has(el.vr)) {
+  // The write side of PS3.5 2026c section 6.2's structure rule: a VR outside the
+  // 34 this edition defines is long-form. Keeping the reader and the writer on
+  // one predicate is not symmetry for its own sake - the short form's length
+  // field is 16 bits, so writing a 70,000-byte unrecognized-VR value through it
+  // would truncate the declared length to 4,464 silently, and the reader can now
+  // produce such a value.
+  if (LONG_FORM_VRS.has(el.vr) || !isRecognizedVr(el.vr)) {
     return Buffer.concat([
       uint16(group, littleEndian),
       uint16(element, littleEndian),

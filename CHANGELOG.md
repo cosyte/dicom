@@ -6,6 +6,93 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Fixed
 
+- **An unrecognized Explicit VR was read short-form, contrary to PS3.5 2026c §6.2's normative
+  "shall"** (`DICOM-UNRECOGNIZED-VR-SHORT-FORM`). It is now read - and written - long-form. **This
+  is a behaviour change on the read path**, and the trade is measured below rather than asserted.
+
+  **The clause, read from the vendored `vendor/nema/part05` pin (`4dfd7b8c…`), one occurrence in the
+  document.** §6.2 "Value Representation (VR)": "All new VRs defined in future versions of DICOM
+  **shall** be of the same Data Element Structure as defined in [§7.1.2] with reserved bytes after
+  the VR and a 32-bit unsigned integer VL (i.e., following the format for VRs such as OB or UT), and
+  may or may not permit Undefined Length." §6.2's **note** about an implementation choosing to
+  ignore unrecognized VRs is informative, and is deliberately not what this rests on.
+
+  **What a conformant future-VR file used to do: no sentence, deliberately.** Four attempts have
+  now been made to summarize that in one sentence and all four were wrong, the fourth by the first
+  draft of this entry. It is **shape-specific**: the short-form read took the carrier's length from
+  the two bytes §7.1.2 reserves (`0x0000`), got a zero-length value, and resumed inside the 32-bit
+  VL field - so what happened next depended on the payload's own bytes. Sometimes a whole-object
+  `INVALID_FILE_META`; sometimes a **clean parse into a tree the sender did not write**, with a
+  zero-length carrier plus an element manufactured out of the payload and, under Explicit VR BE,
+  **no warning on either channel**. `scripts/measure-unrecognized-vr.ts` is new here and prints the
+  per-shape table for both trees, including that case (`long-payload-tiles`). **Add a shape rather
+  than writing a summary.**
+
+  **What changed, and what deliberately did not.** `readExplicitElementHeader` and the File Meta
+  element reader take the 12-byte header for any VR outside the 34 this edition defines;
+  `serializeDicom` writes one. Everything after the header read is untouched - the same value read,
+  the same "declared length exceeds the remaining buffer" refusal, and the same undefined-length
+  refusal that `OB` / `UT` / `UN` already take. **This is one more VR class routed into an existing
+  bound, not a new bound**, which is the distinction four refusals in this family were about. No new
+  warning code was minted: a §6.2-conformant file is not something to warn about, and a new Tier-2
+  code would throw under `{ strict: true }` on exactly such a file.
+
+  **The reader and the writer had to move in one commit.** The short form's length field is 16 bits.
+  With the reader fixed alone, a 70,000-byte unrecognized-VR value would have been re-emitted
+  declaring **4,464**, silently. Pinned by a round-trip test at that size.
+
+  **The trade, on `scripts/measure-sq-bound-grid.ts` against `66f0c95` (76,611 cells).**
+  **1,221 recovered** (fatal before, parse now) against **932 newly refused**; 0 PHI regressions;
+  0 cells where the root `(0010,0020)` changes value; 0 reports that lose an attribute on a cell
+  that still parses; **0 Implicit VR LE cells changed at all** (a free control - there is no on-wire
+  VR there); leaking cells unmoved at 11 (`DICOM-BINARY-CARRIER-OVERDECLARE`, untouched here).
+  **All 932** of the newly refused had an unrecognized VR in their `66f0c95` parse tree, so every
+  file this refuses is one the old reader only "read" by manufacturing a Data Element header out of
+  the middle of somebody's value; the fabricated VRs across that population include `"CT"` - a
+  Modality value read as a VR.
+  The grid also reads **0 cells that parse on both trees and read differently**. Read that as a
+  statement about the grid's fixtures, **not** as "nothing is silently re-read": the
+  `long-payload-tiles` shape is exactly such a cell and it is outside anything the grid sweeps.
+  **The mirror shape is the honest cost**: a sender that ignores §6.2 and writes an unrecognized VR
+  in the 8-byte short form produced a readable object before and is refused now. That is pinned by a
+  test rather than left to be discovered.
+
+  **`deidentify()` is unchanged, and one of its claims was not.** The rule that empties an element
+  whose VR is not one of the 34 still fires - reading a header is not the same as knowing what its
+  value means, and Table E.1-1 acts per attribute. **Disclosed, not fixed**: it is the same
+  over-redaction trade the un-auditable-sequence rule makes, and re-deciding it is a product call.
+
+  **`#55` published "on a file conformant to PS3.5 2026c the cost is zero". It was never true**, and
+  no replacement account of the old reader belongs here: three were written while this entry was
+  drafted and the gate refuted all three. The harness prints what each shape does on each tree, and
+  the shape that refutes the shortest version of the story is a row in it
+  (`long-payload-tiles-future-vr`). **Add a shape rather than a sentence.**
+
+  **`DICOM_NONZERO_RESERVED_BYTES` no longer names a tag, and that is a PHI fix this slice owed.**
+  Reading an unrecognized VR long-form means landing on the two bytes §7.1.2 reserves, so this code
+  is newly reachable on a **fabricated** header - one built out of the middle of somebody's value.
+  Its message interpolated the four bytes it would call a tag: measured on an `ST` carrier holding
+  `"MR BRAIN  SMITHSON"` under-declared by 6, it streamed `Element (54495348) …` - the bytes
+  `"ITHS"` in wire order, four letters of the surname - where `66f0c95` emitted nothing naming that
+  element on the same file (its only warning there is `DICOM_ODD_LENGTH_VALUE_PADDED`, on a genuine
+  `(0010,0010)`). (Quote the payload **with** its tag: `"MR BRAIN SMITHSON "` produces `48544F53`
+  instead, and an earlier draft of this entry paired the two wrongly.) **The factory now takes no
+  tag parameter**, so the bound is the signature rather than a branch, and `position.byteOffset`
+  locates the element. This is exactly the remedy `#55` paid a blocker for in
+  `report.undefinedVrElements[].tag`, and the reason is the same: where the trigger is "these bytes
+  are not what they claim to be", `renderTag` checks shape and cannot refuse them. It also closes a
+  `PRE-EXISTING` instance on the same factory - a long-form VR fabricated the same way rendered its
+  tag on `66f0c95` too. Pinned with a name-bearing fixture and a non-vacuity assertion that the code
+  really fires.
+
+  **A second `DeidentifyReport` claim corrected rather than widened.** The report was described as
+  "value-free apart from `uidMap`". `removedPrivateTags` is a second exception: its entries are four
+  source bytes each, and on a malformed file those bytes can be document content. Measured
+  identically on **both** trees - an `OB` carrier holding `"SECRET-NOTE-"` followed by a well-formed
+  odd-group header reports `["41534342"]`, whose wire-order bytes read `"SABC"`. Reporting the tag
+  is the whole audit value of the field on a well-formed file, so it is documented as PHI rather
+  than withheld; narrowing it is a product decision that has not been made.
+
 - **A test asserted the machine it ran on rather than the code, and the script suites paid a
   process start they did not need** (`PARSER-TESTTIMEOUT-ASSERTS-AN-IDLE-BOX`). This is a trim plus
   two deletions and nothing else. Test and test-configuration only: no source, parser, de-identify,

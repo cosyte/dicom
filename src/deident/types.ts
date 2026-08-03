@@ -288,13 +288,21 @@ export interface UndefinedVrFinding {
 /**
  * The audit trail returned alongside the de-identified dataset.
  *
- * Every field except one is composed from static tables: tags, Part 6 keywords,
- * Annex E action codes, structural `TAG[index]` sequence paths, and registry
- * warning messages. **`uidMap` is the exception, and it is not value-free.** Its
- * keys are the source UIDs read out of the file, kept so a caller can make UID
- * replacement consistent across a study or an archive. A Study or SOP Instance
- * UID is a unique identifying number, so treat `uidMap` as PHI: the rest of the
- * report is safe to log, and that field is not.
+ * Most fields are composed from static tables: Part 6 keywords, Annex E action
+ * codes, structural `TAG[index]` sequence paths, and registry warning messages.
+ * **Two are not, and both are named here rather than in a footnote.**
+ *
+ * 1. **`uidMap`** - its keys are the source UIDs read out of the file, kept so a
+ *    caller can make UID replacement consistent across a study or an archive. A
+ *    Study or SOP Instance UID is a unique identifying number, so treat it as
+ *    PHI.
+ * 2. **`removedPrivateTags`** - see the field's own note. On a *well-formed*
+ *    file these are the sender's own private tag numbers and carry nothing; on a
+ *    malformed one a tag can be four bytes of a value, and it is measured, not
+ *    theoretical.
+ *
+ * So "the report is safe to log apart from `uidMap`" is **not** an accurate
+ * description of this type, and was corrected rather than kept convenient.
  *
  * @example
  * ```ts
@@ -307,7 +315,24 @@ export interface UndefinedVrFinding {
 export interface DeidentifyReport {
   /** Per-attribute outcomes for every attribute Annex E acted on. */
   readonly attributes: readonly DeidentifiedAttribute[];
-  /** Private tags removed under the Basic Profile (kept ones are omitted). */
+  /**
+   * Private tags removed under the Basic Profile (kept ones are omitted).
+   *
+   * **This is the second field that is not value-free, and the qualification is
+   * measured.** A tag here is composed from four bytes of the source, and on a
+   * file whose Value Lengths disagree with its bytes those four bytes can be
+   * document content rather than a tag the sender wrote: an `OB` carrier holding
+   * `"SECRET-NOTE-"` followed by a well-formed odd-group header reports
+   * `["41534342"]`, whose wire-order bytes read `"SABC"`. That reproduces
+   * identically on every release that has shipped this field.
+   *
+   * It is reported anyway, because *which* private tags were removed is the
+   * whole audit value of the field and withholding them would destroy it on
+   * every well-formed file to bound a malformed one. Narrowing it - to blocks a
+   * creator in the same Data Set actually reserved, say - is a product decision
+   * about audit value versus a four-byte echo, not a defect fix, and it has not
+   * been made. Treat this array as PHI when the source is untrusted.
+   */
   readonly removedPrivateTags: readonly Tag[];
   /**
    * Values emptied because whole Data Elements were encoded inside them by an

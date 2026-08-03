@@ -1,0 +1,15 @@
+---
+"@cosyte/dicom": patch
+---
+
+**An Explicit VR this edition of PS3.5 does not define is now read and written long-form, per section 6.2's normative "shall"** (`DICOM-UNRECOGNIZED-VR-SHORT-FORM`). It was read short-form, taking the length from the two bytes section 7.1.2 reserves. A behaviour change, with the trade measured on a 76,611-cell grid.
+
+The clause is PS3.5 2026c section 6.2, read from the vendored `vendor/nema/part05` pin: "All new VRs defined in future versions of DICOM **shall** be of the same Data Element Structure as defined in [section 7.1.2] with reserved bytes after the VR and a 32-bit unsigned integer VL (i.e., following the format for VRs such as OB or UT)". Section 6.2's note about ignoring unrecognized VRs is informative and is deliberately not what this rests on.
+
+**What changed.** `readExplicitElementHeader` and the File Meta reader take the 12-byte header for any VR outside the 34 PS3.5 2026c defines, and `serializeDicom` writes one. Nothing else moved: an unrecognized VR takes the same value read, the same "declared length exceeds the buffer" refusal and the same undefined-length refusal that `OB` / `UT` / `UN` already take. The reader and the writer had to move together, because the short form's length field is 16 bits and a 70,000-byte value written through it would have declared 4,464.
+
+**The trade, measured rather than argued.** On `scripts/measure-sq-bound-grid.ts`, against `66f0c95`: **1,221 cells recovered** (fatal before, parse now) against **932 newly refused**, 0 PHI regressions, 0 cells where the root `(0010,0020)` changes value, and 0 Implicit VR LE cells touched at all. The grid also reads 0 cells that parse on both trees and read differently - a statement about its fixtures, not about the change: the `long-payload-tiles` shape in the new script is exactly such a cell. All 932 of the newly refused had an unrecognized VR in their `66f0c95` parse tree, so every file this refuses is one the old reader only "read" by manufacturing a Data Element header out of the middle of somebody's value - the VRs it fabricated across that population include `"CT"`, a Modality value read as a VR. Named shapes, including the ones a sender that ignores section 6.2 writes and that are refused now, are printed by the new `scripts/measure-unrecognized-vr.ts`.
+
+**`deidentify()` is unchanged and still empties an unrecognized-VR element**, because reading a header is not the same as knowing what its value means. That now costs something it could not cost before: a section 6.2 conformant future-VR file parses, so its legitimate value is emptied. Disclosed, not fixed - it is the same over-redaction trade the un-auditable-sequence rule makes.
+
+**Two report claims were corrected rather than widened.** `DeidentifyReport` was described as "value-free apart from `uidMap`"; `removedPrivateTags` is a second exception, measured on both trees at `["41534342"]` (wire order `"SABC"`) for an `OB` carrier whose tail forms a well-formed odd-group header. Narrowing that field is a product decision about audit value versus a four-byte echo and has not been made.

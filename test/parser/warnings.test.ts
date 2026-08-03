@@ -130,12 +130,23 @@ describe("warning factories (D-12 - one named factory per active-emit code)", ()
   });
 
   it("nonzeroReservedBytes reports the reserved bytes as a number, not a hex echo", () => {
-    const w = nonzeroReservedBytes(pos, "7FE00010", 0x00, 0xff);
+    const w = nonzeroReservedBytes(pos, 0x00, 0xff);
     expect(w.code).toBe(WARNING_CODES.DICOM_NONZERO_RESERVED_BYTES);
     // Reported in wire order as two numbers: composing them into one 16-bit
     // value would have to pick an endianness the reserved field does not have.
     expect(w.message).toContain("first byte 0");
     expect(w.message).toContain("second byte 255");
+  });
+
+  it("nonzeroReservedBytes takes no tag at all, so no call site can pass one", () => {
+    // The bound is the SIGNATURE, not a withholding branch: the trigger for this
+    // code is "the bytes after the VR are not what PS3.5 §7.1.2 requires", so a
+    // header that raises it may not be a header, and its four tag bytes may be
+    // document content. `renderTag` checks shape and cannot refuse them.
+    expect(nonzeroReservedBytes.length).toBe(3);
+    const w = nonzeroReservedBytes({ byteOffset: 284 }, 0x10, 0x00);
+    expect(w.message).not.toMatch(/[0-9A-F]{8}/u);
+    expect(w.message).toContain("Tag withheld");
   });
 
   it("unParsedAsSQ", () => {

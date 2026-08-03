@@ -13,12 +13,24 @@
  * length are all fragments of somebody's value, and the element that genuinely
  * followed is consumed as this fabricated element's "value".
  *
- * The fixtures below under-declare a 14-byte `"CARRIER-VALUE "` by 6. The
- * leftover bytes are `"VALUE "`, which under Explicit VR LE read as tag
- * `(4156,554C)` with the VR bytes `"E "` and a length of 16 - exactly the
- * `(0010,0020)` header and value that follow. The tag and the VR in these
- * expectations are therefore **derived from the fixture**, not chosen: change
- * the carrier's value and they change with it.
+ * ## ▶ RE-CUT BY `DICOM-UNRECOGNIZED-VR-SHORT-FORM`, AND THE RE-CUT IS THE POINT
+ *
+ * These fixtures used to under-declare a 14-byte `"CARRIER-VALUE "` by 6, whose
+ * leftover `"VALUE "` read as tag `(4156,554C)` with the VR bytes `"E "`. That
+ * file **no longer parses at all**: PS3.5 2026c §6.2 makes an unrecognized VR
+ * long-form, so those six leftover bytes are no longer a whole header and the
+ * parser refuses the file rather than manufacturing an element from the middle
+ * of a value. The de-identify rule under test here did not change - its
+ * *cheapest* producer did.
+ *
+ * So the fixtures now write a carrier whose leftover bytes are a **complete
+ * §6.2-conformant header**: four tag bytes, an unrecognized VR, two zero
+ * reserved bytes and a 32-bit VL of 18 - exactly the `(0010,0020)` header and
+ * value that follow. The tag `(4854,4F53)` and the VR `"ZZ"` are therefore still
+ * **derived from the fixture**, not chosen: change the carrier's value and they
+ * change with it. And the rule is still load-bearing, because this shape reaches
+ * `deidentify()` with `warnings: []`, no `(0010,0020)` in the object, and the
+ * identifier sitting inside the fabricated element's value.
  *
  * ## Why the string controls are here and not in a binary-only file
  *
@@ -70,33 +82,38 @@ const OB_CARRIER: Tag = "40101006";
 const UN_TAG: Tag = "30020003";
 
 /**
- * The element the under-declare fabricates: tag `(4156,554C)`, VR bytes `"E "`.
- * Both fall out of `"VALUE "` read as an Explicit VR LE header - see the module
- * note. Asserting the exact tag is deliberate: it proves the fixture produced
- * the shape under test rather than merely producing *a* failure.
+ * The element the under-declare fabricates: tag `(4854,4F53)`, VR bytes `"ZZ"`.
+ * Both fall out of {@link CARRIER_PREFIX}'s tail read as an Explicit VR LE
+ * header - see the module note. Asserting the exact tag is deliberate: it proves
+ * the fixture produced the shape under test rather than merely producing *a*
+ * failure.
+ *
+ * The four bytes are `"THSO"` in wire order - **four letters of the surname in
+ * {@link CARRIER_PREFIX}**, which is why no diagnostic here may name the tag.
  */
-const FABRICATED_TAG: Tag = "4156554C";
+const FABRICATED_TAG: Tag = "48544F53";
 
-/** The carrier payload whose 6-byte tail becomes {@link FABRICATED_TAG}'s header. */
-const CARRIER_VALUE = "CARRIER-VALUE";
+/** The surname the fabricated tag is cut out of. */
+const SURNAME = "SMITHSON";
 
 /**
- * A carrier payload whose 6-byte tail is **a patient's surname**, so the header
- * the under-declare fabricates is made of exactly the bytes a diagnostic must
- * not republish. Under-declared by 6, the leftover bytes are `"THSON "`, giving
- * the fabricated tag `48544F53` - four letters of the name.
- *
- * The benign {@link CARRIER_VALUE} above cannot express that: its leftover bytes
- * are `"VALUE "`, so a diagnostic that echoed them would still look clean. A
- * fixture that cannot show the leak measures nothing - the vacuity class this
- * repo has now been caught by twice, and the reason the first version of this
- * file shipped a PHI echo past its own `not.toContain` assertion.
+ * The carrier payload's head: **a patient's name**, whose last four bytes become
+ * {@link FABRICATED_TAG}. A benign payload cannot express that - a diagnostic
+ * that echoed the tag would still look clean - and a fixture that cannot show
+ * the leak measures nothing. That is the vacuity class this repo has now been
+ * caught by twice, and the reason the first version of this file shipped a PHI
+ * echo straight past its own `not.toContain` assertion.
  */
-const NAME_CARRIER_VALUE = "MR BRAIN SMITHSON";
-/** The surname whose bytes {@link NAME_CARRIER_VALUE} puts into the fabricated header. */
-const SURNAME = "SMITHSON";
-/** What the fabricated tag renders as for {@link NAME_CARRIER_VALUE}: `"THSO"` in wire order. */
-const NAME_DERIVED_TAG = "48544F53";
+const CARRIER_PREFIX = "MR BRAIN SMITHSO";
+
+/** The last four bytes of {@link CARRIER_PREFIX}, which become the tag. */
+const TAG_BYTES = 4;
+
+/** A payload with nothing in it worth republishing, for the no-op control. */
+const BENIGN_CARRIER_VALUE = "CARRIER-VALUE";
+
+/** `(0010,0020)`'s on-wire size in every syntax these fixtures use: 8 + 10. */
+const TRAILING_ELEMENT_BYTES = 18;
 
 function ascii(text: string): Buffer {
   const buf = Buffer.from(text, "latin1");
@@ -104,23 +121,47 @@ function ascii(text: string): Buffer {
 }
 
 /**
- * A file whose carrier under-declares its own Value Length by 6, desynchronizing
- * the reader so that the `(0010,0020)` that follows is read as the value of a
- * fabricated element instead of as itself.
+ * The 8 bytes that complete {@link FABRICATED_TAG}'s header once the carrier's
+ * declared length stops short of them: an unrecognized VR, the two zero reserved
+ * bytes PS3.5 §7.1.2 requires, and a 32-bit VL covering the `(0010,0020)` that
+ * follows.
+ *
+ * It is written little-endian, and every fixture in this file is Explicit VR LE
+ * for that reason: under Explicit VR BE a reader takes the VL from the same four
+ * bytes in the other order, so these exact bytes do not fabricate this exact
+ * element. **There is no Explicit VR BE coverage of the fabricated shape here,
+ * on either tree, and there never was** - `underDeclare`'s `transferSyntax`
+ * parameter has never been passed at any call site. Said plainly rather than
+ * implied, because a claim that a case is covered is worse than the gap.
  */
-function underDeclare(
-  carrier: Tag,
-  vr: VR,
-  transferSyntax = TS_EXPLICIT_LE,
-  payload = CARRIER_VALUE,
-): Buffer {
+const FABRICATED_HEADER_TAIL = (): Buffer => {
+  const vl = Buffer.alloc(4);
+  vl.writeUInt32LE(TRAILING_ELEMENT_BYTES, 0);
+  return Buffer.concat([Buffer.from("ZZ", "ascii"), Buffer.from([0x00, 0x00]), vl]);
+};
+
+/**
+ * A file whose carrier under-declares its own Value Length by exactly the 8
+ * trailing bytes above, desynchronizing the reader so that the `(0010,0020)`
+ * that follows is read as the value of a fabricated element instead of as
+ * itself.
+ */
+function underDeclare(carrier: Tag, vr: VR, transferSyntax = TS_EXPLICIT_LE): Buffer {
+  const tail = FABRICATED_HEADER_TAIL();
   return buildDicom({
     transferSyntax,
     mediaStorageSOPClassUID: "1.2.840.10008.5.1.4.1.1.2",
     mediaStorageSOPInstanceUID: "1.2.826.0.1.3680043.10.1338.1",
     elements: [
       { tag: "00100010", vr: "PN" as VR, value: ascii(ROOT_NAME) },
-      { tag: carrier, vr, value: ascii(payload), declaredLengthDelta: -6 },
+      {
+        tag: carrier,
+        vr,
+        value: Buffer.concat([ascii(CARRIER_PREFIX), tail]),
+        // Stop the declared value four bytes BEFORE the crafted header, so the
+        // tag is cut out of the surname rather than out of the crafted bytes.
+        declaredLengthDelta: -(tail.length + TAG_BYTES),
+      },
       { tag: PATIENT_ID_TAG, vr: "LO" as VR, value: ascii(PATIENT_ID) },
     ],
   });
@@ -135,14 +176,14 @@ describe("DICOM-CARRIER-LEAF-LEAKS: an on-wire VR that is not a VR", () => {
   // The defect, and the fixture's own preconditions.
   // -------------------------------------------------------------------------
 
-  it("the parser really does fabricate (4156,554C) with the VR bytes 'E '", () => {
+  it("the parser really does fabricate (4854,4F53) with the VR bytes 'ZZ'", () => {
     // The precondition every expectation below rests on. Without it a green
     // result could mean the remedy works OR that the fixture never produced the
     // shape - the vacuity class `#50` shipped once and this repo now checks for.
     const ds = parseDicom(underDeclare(LO_CARRIER, "LO"));
     const fabricated = ds.get(FABRICATED_TAG);
     expect(fabricated).toBeDefined();
-    expect(fabricated?.vr).toBe("E ");
+    expect(fabricated?.vr).toBe("ZZ");
     expect(fabricated?.rawBytes.toString("latin1")).toContain(PATIENT_ID);
     // And the real Patient ID element does NOT exist, which is why Table E.1-1
     // has nothing to act on and the identifier used to survive.
@@ -165,7 +206,9 @@ describe("DICOM-CARRIER-LEAF-LEAKS: an on-wire VR that is not a VR", () => {
     const offset = ds.get(FABRICATED_TAG)?.byteOffset;
     expect(offset).toBeGreaterThan(0);
     const { report } = deidentify(ds);
-    expect(report.undefinedVrElements).toEqual([{ byteOffset: offset, byteLength: 16 }]);
+    expect(report.undefinedVrElements).toEqual([
+      { byteOffset: offset, byteLength: TRAILING_ELEMENT_BYTES },
+    ]);
   });
 
   // -------------------------------------------------------------------------
@@ -180,28 +223,26 @@ describe("DICOM-CARRIER-LEAF-LEAKS: an on-wire VR that is not a VR", () => {
 
   it("the fabricated tag really is made of the patient's surname", () => {
     // The precondition. Without it the two tests below are decoration.
-    const ds = parseDicom(underDeclare(ST_CARRIER, "ST", TS_EXPLICIT_LE, NAME_CARRIER_VALUE));
-    expect(ds.get(NAME_DERIVED_TAG as Tag)).toBeDefined();
+    const ds = parseDicom(underDeclare(ST_CARRIER, "ST"));
+    expect(ds.get(FABRICATED_TAG)).toBeDefined();
     // The tag's two 16-bit halves are written little-endian, so the four bytes
     // on the wire are "THSO" - four letters out of the middle of the surname.
-    const group = Buffer.from(NAME_DERIVED_TAG.slice(0, 4), "hex").reverse().toString("latin1");
-    const element = Buffer.from(NAME_DERIVED_TAG.slice(4), "hex").reverse().toString("latin1");
+    const group = Buffer.from(FABRICATED_TAG.slice(0, 4), "hex").reverse().toString("latin1");
+    const element = Buffer.from(FABRICATED_TAG.slice(4), "hex").reverse().toString("latin1");
     expect(SURNAME).toContain(group + element);
   });
 
   it("puts no part of the surname in report.undefinedVrElements", () => {
-    const { report } = deidentify(
-      parseDicom(underDeclare(ST_CARRIER, "ST", TS_EXPLICIT_LE, NAME_CARRIER_VALUE)),
-    );
+    const { report } = deidentify(parseDicom(underDeclare(ST_CARRIER, "ST")));
     expect(report.undefinedVrElements).toHaveLength(1);
     // Whatever fields the finding grows, none may render as those bytes.
     const rendered = JSON.stringify(report.undefinedVrElements);
-    expect(rendered).not.toContain(NAME_DERIVED_TAG);
+    expect(rendered).not.toContain(FABRICATED_TAG);
     expect(rendered).not.toContain("THSO");
   });
 
   it("warns with a message that names no tag, no VR and no value", () => {
-    const raw = underDeclare(ST_CARRIER, "ST", TS_EXPLICIT_LE, NAME_CARRIER_VALUE);
+    const raw = underDeclare(ST_CARRIER, "ST");
     const { report } = deidentify(parseDicom(raw));
     const w = report.warnings.find(
       (x) => x.code === WARNING_CODES.DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE,
@@ -211,14 +252,14 @@ describe("DICOM-CARRIER-LEAF-LEAKS: an on-wire VR that is not a VR", () => {
     // not: the tag is four bytes of the surname, and `renderTag` validates a
     // tag's SHAPE so it cannot refuse one - the withholding has to happen at the
     // call site, which is what this pins.
-    expect(w?.message).not.toContain(NAME_DERIVED_TAG);
+    expect(w?.message).not.toContain(FABRICATED_TAG);
     expect(w?.message).not.toContain("THSO");
     expect(w?.message).not.toContain(PATIENT_ID);
-    // THIS fixture's fabricated VR bytes, read off the parse rather than copied
-    // from the benign fixture - they are `"N "` here, not the `"E "` that
-    // `CARRIER_VALUE` produces, and asserting the wrong pair proves nothing.
-    const fabricatedVr = parseDicom(raw).get(NAME_DERIVED_TAG)?.vr;
-    expect(fabricatedVr).toBe("N ");
+    // THIS fixture's fabricated VR bytes, read off the parse rather than
+    // asserted from memory - `renderVr` checks a closed set, so an unrecognized
+    // VR renders as withheld, and pinning the wrong pair proves nothing.
+    const fabricatedVr = parseDicom(raw).get(FABRICATED_TAG)?.vr;
+    expect(fabricatedVr).toBe("ZZ");
     expect(w?.message).not.toContain(fabricatedVr);
     // Still locatable: the byte offset is a position the parser counted.
     expect(w?.message).toContain(String(w?.position.byteOffset));
@@ -352,13 +393,13 @@ describe("DICOM-CARRIER-LEAF-LEAKS: an on-wire VR that is not a VR", () => {
       transferSyntax: TS_EXPLICIT_LE,
       elements: [
         { tag: "00100010", vr: "PN" as VR, value: ascii(ROOT_NAME) },
-        { tag: LO_CARRIER, vr: "LO" as VR, value: ascii(CARRIER_VALUE) },
+        { tag: LO_CARRIER, vr: "LO" as VR, value: ascii(BENIGN_CARRIER_VALUE) },
         { tag: PATIENT_ID_TAG, vr: "LO" as VR, value: ascii(PATIENT_ID) },
       ],
     });
     const { dataset, report } = deidentify(parseDicom(raw));
     expect(report.undefinedVrElements).toEqual([]);
-    expect(dataset.get(LO_CARRIER)?.rawBytes.toString("latin1")).toBe(CARRIER_VALUE + " ");
+    expect(dataset.get(LO_CARRIER)?.rawBytes.toString("latin1")).toBe(BENIGN_CARRIER_VALUE + " ");
   });
 
   // -------------------------------------------------------------------------
@@ -422,16 +463,15 @@ describe("DICOM-CARRIER-LEAF-LEAKS: an on-wire VR that is not a VR", () => {
 
   it("the report does not grow with the value's length either", () => {
     // One undefined-VR element yields exactly one finding whether its value is
-    // 10 bytes or the largest one this parser can read, and the finding is three
-    // structural fields.
+    // 10 bytes or far larger, and the finding is two structural fields.
     //
-    // 65,534 is that largest, and the number is itself the §6.2 contradiction
-    // this rule rests on: an unrecognized VR is read SHORT-form here, so its
-    // length field is 16 bits - while PS3.5 §6.2 requires every VR it does not
-    // yet define to be long-form with a 32-bit VL. The value length that reaches
-    // the de-identifier is therefore already not the one the standard's own
-    // structure rule would produce.
-    const max = 65_534;
+    // The size here is deliberately PAST 65,534, and that is what
+    // `DICOM-UNRECOGNIZED-VR-SHORT-FORM` changed: an unrecognized VR used to be
+    // read short-form, so its length field was 16 bits and 65,534 was the
+    // largest value that could reach the de-identifier at all. PS3.5 §6.2 gives
+    // it a 32-bit VL, so this test now exercises a length the old reader could
+    // not express - and the report still holds exactly one finding.
+    const max = 70_000;
     const big = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
       elements: [

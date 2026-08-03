@@ -22,6 +22,7 @@ import type { FileMeta, FileMetaRawElement } from "../dataset/file-meta.js";
 import type { Tag, VR } from "../dictionary/types.js";
 import { ByteCursor } from "./byte-cursor.js";
 import { LONG_FORM_VRS } from "./element-header.js";
+import { isRecognizedVr } from "./endian.js";
 import { buildSnippet, DicomParseError, FATAL_CODES } from "./errors.js";
 import type { ParseContext } from "./types.js";
 import type { DicomParseWarning } from "./warnings.js";
@@ -221,7 +222,10 @@ function readExplicitLeElement(cursor: ByteCursor): FmRawElement {
   const vr = cursor.slice(2).toString("ascii") as VR;
   let length: number;
   let headerLength: number;
-  if (LONG_FORM_VRS.has(vr)) {
+  // A VR outside the 34 PS3.5 2026c defines is long-form too, per section 6.2's
+  // "shall" - the File Meta group is Explicit VR LE (PS3.10 section 7.1), so the
+  // same structure rule governs it. See `readExplicitElementHeader`.
+  if (LONG_FORM_VRS.has(vr) || !isRecognizedVr(vr)) {
     cursor.slice(2); // 2 reserved bytes - File Meta tolerates non-zero here; long-form check lives in dataset parsers.
     length = cursor.readUInt32();
     headerLength = 12;

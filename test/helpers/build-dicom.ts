@@ -89,6 +89,26 @@ const BE_VR_STRIDE_LOCAL: Readonly<Record<VR, 0 | 2 | 4 | 8>> = {
   SQ: 0,
 };
 
+/**
+ * `true` when this element must be written with the 12-byte long-form header:
+ * one of the {@link LONG_FORM_VRS}, **or a VR PS3.5 2026c does not define**.
+ *
+ * The second half is section 6.2's normative "shall" - "All new VRs defined in
+ * future versions of DICOM shall be of the same Data Element Structure as
+ * defined in [section 7.1.2] with reserved bytes after the VR and a 32-bit
+ * unsigned integer VL" - and it is here so that a fixture written with an
+ * unrecognized VR is a **conformant** file rather than one no conformant reader
+ * would accept. A test that needs the *non*-conformant short form (the shape
+ * `DICOM-UNRECOGNIZED-VR-SHORT-FORM` refuses) hand-assembles it; see
+ * `test/integration/unrecognized-vr-structure.test.ts`.
+ *
+ * `BE_VR_STRIDE_LOCAL`'s keys are the 34, mirroring the production set the same
+ * way the stride table above does.
+ */
+function writesLongForm(vr: VR): boolean {
+  return LONG_FORM_VRS.has(vr) || !Object.prototype.hasOwnProperty.call(BE_VR_STRIDE_LOCAL, vr);
+}
+
 /** A single dataset element to emit. */
 export interface BuildDicomElement {
   /** 8-char uppercase hex tag, e.g. `"00100010"`. */
@@ -314,7 +334,7 @@ function buildExplicitLeElement(tag: Tag, vr: VR, value: Buffer, delta = 0): Buf
   const elementBuf = Buffer.alloc(2);
   elementBuf.writeUInt16LE(element, 0);
   const vrBuf = Buffer.from(vr, "ascii");
-  if (LONG_FORM_VRS.has(vr)) {
+  if (writesLongForm(vr)) {
     const reserved = Buffer.from([0x00, 0x00]);
     const lengthBuf = Buffer.alloc(4);
     lengthBuf.writeUInt32LE(declared, 0);
@@ -369,9 +389,11 @@ function buildExplicitBeElement(tag: Tag, vr: VR, value: Buffer, delta = 0): Buf
   // AT stride=2: caller-supplied bytes are interpreted as a contiguous run
   // of group/element 16-bit halves, each emitted BE - total swap count is
   // value.length/2.
-  const swapped = swapBytes(value, BE_VR_STRIDE_LOCAL[vr]);
+  // An unrecognized VR has no published stride; a byte stream is the only safe
+  // reading, so it is never swapped (the same answer `OB` / `UN` get, D-24).
+  const swapped = swapBytes(value, BE_VR_STRIDE_LOCAL[vr] ?? 0);
   const declared = swapped.length + delta;
-  if (LONG_FORM_VRS.has(vr)) {
+  if (writesLongForm(vr)) {
     const reserved = Buffer.from([0x00, 0x00]);
     const lengthBuf = Buffer.alloc(4);
     lengthBuf.writeUInt32BE(declared, 0);
