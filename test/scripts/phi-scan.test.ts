@@ -559,6 +559,69 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
     expect(r.stderr).toContain("RIVERA^JUANITA");
   });
 
+  it("refuses a link RENAMED into the scan root, which rename detection hid entirely", () => {
+    // `git mv <link> test/fixtures/<name>` is an ordinary developer action, and
+    // with rename detection on git stages it as a TWO-PATH `R100` record that
+    // `--diff-filter=AMT` then deletes outright. `--no-renames` makes the
+    // destination arrive as a single-path `A` instead.
+    const root = makeRepo();
+    writeFileSync(join(root, TARGET_NAME), SYNTHETIC_PHI);
+    symlinkSync(TARGET_NAME, join(root, "toplink.txt"));
+    git(root, ["add", "toplink.txt", "test/fixtures/ordinary.txt"]);
+    git(root, ["-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-qm", "base"]);
+    git(root, ["mv", "toplink.txt", "test/fixtures/toplink.txt"]);
+
+    // The premise, in both directions: with detection on the record is a
+    // two-path rename the status filter drops; with it off it is a plain add.
+    expect(gitOut(root, ["diff", "--cached", "--raw"])).toContain("R100");
+    expect(gitOut(root, ["diff", "--cached", "--raw", "--diff-filter=AMT"]).trim()).toBe("");
+    expect(
+      gitOut(root, ["diff", "--cached", "--raw", "--no-renames", "--diff-filter=AMT"]),
+    ).toMatch(/^:000000 120000 /);
+    expect(gitOut(root, ["ls-files", "--stage", "test/fixtures/toplink.txt"])).toMatch(/^120000 /);
+
+    const r = runIn(root, ["--staged"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("test/fixtures/toplink.txt");
+    expect(r.stderr).toContain("a symbolic link");
+    expectNoPhi(r.stderr);
+  });
+
+  it("still scans a CLEAN file renamed into the scan root, rather than dropping it", () => {
+    // The other half of turning rename detection off: the destination of an
+    // ordinary rename is now enumerated where it used to be skipped entirely.
+    const root = makeRepo();
+    writeFileSync(join(root, "loose.txt"), SYNTHETIC_PHI);
+    git(root, ["add", "loose.txt", "test/fixtures/ordinary.txt"]);
+    git(root, ["-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-qm", "base"]);
+    git(root, ["mv", "loose.txt", "test/fixtures/loose.txt"]);
+
+    const r = runIn(root, ["--staged"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("test/fixtures/loose.txt");
+    expect(r.stderr).toContain("RIVERA^JUANITA");
+  });
+
+  it("refuses the fixture ROOT itself staged as a link, not just entries under it", () => {
+    // An index entry at exactly `test/fixtures` is the corpus root replaced by a
+    // blob or a link; git records no index entry for a directory, so this path
+    // can only mean that. A prefix test that requires the trailing slash lets it
+    // through, and the whole corpus then goes unscanned.
+    const root = makeRepo();
+    writeFileSync(join(root, TARGET_NAME), SYNTHETIC_PHI);
+    rmSync(join(root, "test", "fixtures"), { recursive: true });
+    symlinkSync(join("..", TARGET_NAME), join(root, "test", "fixtures"));
+    git(root, ["add", "test/fixtures"]);
+
+    expect(gitOut(root, ["ls-files", "--stage", "test/fixtures"])).toMatch(/^120000 /);
+
+    const r = runIn(root, ["--staged"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("test/fixtures");
+    expect(r.stderr).toContain("a symbolic link");
+    expectNoPhi(r.stderr);
+  });
+
   it("refuses a staged gitlink under the scanned prefix (exit 2)", () => {
     const root = makeRepo();
     const nested = join(root, "test", "fixtures", "nested");
@@ -569,10 +632,23 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
     git(nested, ["-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-qm", "n"]);
     git(root, ["add", "test/fixtures/nested"]);
 
+    // The premise the refusal's WORDING rests on, and it is not the symlink one:
+    // `git show` does not hand back a target path for a gitlink, it fails
+    // outright. A `why` clause asserting otherwise would be false for every mode
+    // this refusal covers except 120000.
+    const shown = spawnSync("git", ["show", ":test/fixtures/nested"], {
+      cwd: root,
+      encoding: "utf8",
+      shell: false,
+    });
+    expect(shown.status).not.toBe(0);
+    expect(shown.stderr).toContain("bad object");
+
     const r = runIn(root, ["--staged"]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(2);
     expect(r.stderr).toContain("test/fixtures/nested");
     expect(r.stderr).toContain("a gitlink");
+    expect(r.stderr).not.toContain("hands back its target path");
     expectNoPhi(r.stderr);
   });
 

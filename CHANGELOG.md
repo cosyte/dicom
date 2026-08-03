@@ -113,9 +113,13 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   carry those bytes anyway, so a hit on them would be a claim about something no commit contains.
   The enumeration is narrowed instead: an **in-scope entry that is not a regular file refuses the
   scan** (exit 2), naming every offender rather than the first. `--staged` now reads
-  `git diff --cached --raw -z` so the destination mode is visible, and refuses `120000` and `160000`;
-  an unparseable `--raw` record refuses too, because a silently shortened list is exactly what this
-  scan must never report clean over.
+  `git diff --cached --raw -z` so the destination mode is visible; an unparseable `--raw` record
+  refuses too, because a silently shortened list is exactly what this scan must never report clean
+  over. **Be precise about which mode was blind:** `120000` was the leak. A staged **gitlink**
+  (`160000`) already exited 2 on the base scanner, because `git show :<path>` fails outright on one
+  (`fatal: bad object`, exit 128) and the read-error path caught it. Its refusal is now a named one
+  with a reason instead of a relayed git error, which is an improvement in the message, not the
+  closing of a hole.
 
   **`--diff-filter=AMT`, not `AM`, and the one-letter difference is what makes the mode check
   reachable.** Replacing a **tracked** fixture with a link is neither an add nor a modify: git raises
@@ -126,6 +130,25 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   exactly like `A` and `M`, so admitting it costs the two-field record stride nothing, and the
   reverse typechange (a link replaced by a real file) is now scanned as the file it became.
 
+  **`--no-renames` as well, and the status filter alone was not enough - the gate's first pass
+  claimed otherwise and was refuted by measurement.** Rename detection is on by default, so
+  `git mv <link> test/fixtures/<name>` - an ordinary developer action, no crafted input - stages as
+  `:120000 120000 <sha> <sha> R100` with **two** paths, which `--diff-filter=AMT` then deletes
+  outright: the index held `120000 ... test/fixtures/toplink.txt` and this route printed
+  `OK - no hits` and exited **0**. The first pass disclosed that as out of scope on the grounds that
+  admitting a rename "needs the two-path record shape handled". It does not. With detection off the
+  destination arrives as an ordinary single-path `A` (`:000000 120000 0000000 <sha> A`) and the
+  source as a `D` the filter drops, so the two-field stride is untouched and the entry is refused.
+  It also makes that stride **structural rather than conditional**: with detection off, no `R` or `C`
+  record can be produced whatever the caller's `diff.renames` setting is. The cost is that the
+  destination of an ordinary clean rename into `test/fixtures/` is now scanned where it used to be
+  dropped, which is more coverage rather than less, and is pinned in both directions.
+
+  **The fixture root's own path is in scope too, not just what is under it.** A prefix test requiring
+  the trailing slash let a staged `test/fixtures` through (measured: mode `120000` at exactly that
+  path, exit 0) - the corpus root replaced by a link, so the whole corpus goes unscanned. Git records
+  no index entry for a directory, so that path can only mean a blob or a link, and it is now refused.
+
   **A refusal names the entry's own repo-relative path and an engine-owned kind token, never the
   link target**, which is working-tree text that can itself carry PHI. That is not hypothetical
   here: on the base scanner, a link whose target filename carried a name and a date made `--staged`
@@ -134,27 +157,36 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   such a filename is written out in the scanner's docblock rather than exemplified: a diagnostic
   about a PHI leak is itself a PHI surface, and that applies to the prose explaining it.
 
-  **Scope is narrowed, never widened.** All-mode still walks only `test/fixtures/` and still excludes
-  a gitignored entry, by the same rule that already excludes a gitignored fixture (`git check-ignore`
-  does not answer for a tracked path, so force-adding the link puts it back in scope, and that is
-  pinned). `--staged` still looks only at `test/fixtures/**`. A link outside either boundary is left
-  alone, and both directions are tested so the claim cannot drift. The `readme.md` exemption
-  deliberately does **not** reach a link: that exemption is a judgement about a file whose bytes the
-  walk could have read, and a link's name is no evidence at all about what is on the other side.
+  **Almost all of the scope is unchanged, and the two places it moved both admit MORE.** All-mode
+  still walks only `test/fixtures/` and still excludes a gitignored entry, by the same rule that
+  already excludes a gitignored fixture (`git check-ignore` does not answer for a tracked path, so
+  force-adding the link puts it back in scope, and that is pinned). `--staged` still covers only the
+  fixture path, and only the staged records git reports as added, modified or typechanged - a
+  deletion has no staged blob to scan and an unmerged path has no single one, both pre-existing and
+  both stated in the scanner's own banner rather than left to be inferred from the path prefix. The
+  two movements are the rename destination and the root path above; neither widens a route to a new
+  directory, and a link outside either boundary is still left alone, tested in both directions. The
+  `readme.md` exemption deliberately does **not** reach a link: that exemption is a judgement about a
+  file whose bytes the walk could have read, and a link's name is no evidence at all about what is on
+  the other side.
 
   Pinned in `test/scripts/phi-scan.test.ts` with a synthetic name-bearing payload whose target
-  filename also carries a name, so the no-echo assertions cannot pass by fixture: **10 of the 28
-  cases are red on `0f898be`**. The file also carries a negative control asserting the scanner under
-  test is this package's and not a sibling's.
+  filename also carries a name, so the no-echo assertions cannot pass by fixture: **13 of the 31
+  cases are red on `0f898be`**, and the four cases covering the two remedies above are red on the
+  first pass of this change as well. The file also carries a negative control asserting the scanner
+  under test is this package's and not a sibling's.
 
   **Not covered, deliberately, each measured rather than assumed.** Explicit-path mode already read
-  through a link and is unchanged. `R` (rename) and `C` (copy) are still not enumerated by `--staged`
-  at all, so a staged rename that appends PHI passes that route; admitting them needs the two-path
-  record shape handled, which is a scope decision, and if one ever reached the parser the stride
-  desyncs and it refuses, which is the safe outcome. The **enumerate-then-read race** is untouched:
+  through a link and is unchanged. The **enumerate-then-read race** is untouched:
   a file that vanishes between `walk()` and `readFileSync` aborts the whole sweep at exit 2, which
-  fails closed and is a different defect from this one. There is still no rule refusing a scan that
-  observed nothing, and `--allow-fixture <path>` with no positional path still scans **nothing** and
+  fails closed and is a different defect from this one. **There is still no rule refusing a scan that
+  observed nothing, and that has a measured instance worth naming rather than leaving abstract:** if
+  `test/fixtures` is itself a DANGLING link, `existsSync` follows it, answers false, and all-mode
+  prints `OK - no hits` and exits **0** over a corpus it never opened (identical on the base
+  scanner). If it is a link to a regular file, `readdirSync` raises an uncaught `ENOTDIR` - noisy and
+  fail-closed, but exit 1, which this contract reserves for "hits found". The `--staged` half of that
+  same shape is closed above; the all-mode half needs the observed-nothing rule, which is its own
+  slice. Also `--allow-fixture <path>` with no positional path still scans **nothing** and
   prints `OK - no hits` even for a path that does not exist (measured), which makes this suite's
   existing "honors `--allow-fixture` with an override-log entry" case vacuous. All pre-existing,
   disclosed rather than fixed here.

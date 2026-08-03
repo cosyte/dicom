@@ -40,11 +40,22 @@
  * the only true thing available: there is an entry here the scan cannot account
  * for, so the scan is not clean.
  *
- * "In scope" is each route's own existing boundary, not a new one: the walk
- * still excludes a gitignored entry (the same rule that already excludes a
- * gitignored fixture, so links do not get a second, stricter boundary of their
- * own), and `--staged` still only looks at `test/fixtures/**`. This narrows what
- * those scopes ADMIT; it does not widen the scopes.
+ * "IN SCOPE" IS A NARROWER THING THAN THE PATH PREFIX, AND THE EXACT BOUNDARY IS
+ * WORTH STATING RATHER THAN LEAVING TO BE INFERRED, BECAUSE THE GAP BETWEEN THE
+ * TWO IS WHERE THIS DEFECT LIVED. The walk covers everything under
+ * `test/fixtures/` except a gitignored entry (the same rule that already excludes
+ * a gitignored fixture, so links do not get a second, stricter boundary of their
+ * own). `--staged` covers `test/fixtures` and everything under it, restricted to
+ * the staged records git reports as ADDED, MODIFIED or TYPECHANGED - a deletion
+ * has no staged blob to scan and an unmerged path has no single one, and both are
+ * still out of scope.
+ *
+ * Almost all of that is unchanged; the two places it MOVED are called out rather
+ * than folded into "narrowing", because both admit MORE than before: rename
+ * detection is off, so a rename destination now arrives as an ordinary add
+ * instead of vanishing with its two-path record, and the fixture root's own path
+ * is in scope as well as its contents. Both are the same one entry-shape this
+ * banner is about, reached by a route the prefix test did not cover.
  *
  * A refusal names the entry's own repo-relative path and an engine-owned token
  * for its kind. IT NEVER REPORTS THE LINK TARGET, which is text off the working
@@ -55,6 +66,13 @@
  * the target's contents. The shape is written out rather than an example,
  * because a diagnostic ABOUT a PHI leak is itself a PHI surface, and that
  * applies to the prose explaining it too.
+ *
+ * The entry's OWN name is a different matter and is printed deliberately, but it
+ * is a new line on a channel that used to print nothing for a link, so say what
+ * it is: it is the same locus every hit already carries, it is a path a developer
+ * chose and git would record in a commit, and a refusal that will not say WHICH
+ * entry it means cannot be acted on. Nothing from the other side of the link
+ * joins it.
  * ---------------------------------------------------------------------------
  *
  * D-15 / D-16 / D-17 / TEST-09.
@@ -436,8 +454,9 @@ function buildTargetsForStaged(): Target[] {
   let listBuf: Buffer;
   try {
     // `--raw` rather than `--name-only` because the DESTINATION MODE is the only
-    // thing that distinguishes a staged regular file from a staged symlink or
-    // gitlink, and `git show :<path>` answers all three without complaint.
+    // thing this route can read a non-regular entry off. `git show :<path>` does
+    // not stand in for it: for a symbolic link it answers the target path as if
+    // it were content, and it is the mode, not the answer, that says so.
     //
     // `T` (TYPECHANGE) IS IN THE FILTER, AND LEAVING IT OUT MADE THE MODE CHECK
     // BELOW UNREACHABLE WHENEVER THE FIXTURE WAS ALREADY TRACKED. Replacing a
@@ -448,10 +467,27 @@ function buildTargetsForStaged(): Target[] {
     // and `M`, so admitting it costs the two-field stride below nothing, and the
     // reverse typechange (a link replaced by a real file) is now scanned as the
     // file it became.
-    listBuf = execFileSync("git", ["diff", "--cached", "--raw", "-z", "--diff-filter=AMT"], {
-      encoding: "buffer",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    //
+    // `--no-renames` FOR THE SAME REASON, AND THE FILTER ALONE WAS NOT ENOUGH.
+    // With rename detection on (it is on by default, and `diff.renames` can turn
+    // copy detection on too) `git mv <link> test/fixtures/<name>` stages as
+    // `:120000 120000 <sha> <sha> R100` with TWO paths, which `--diff-filter=AMT`
+    // then deletes outright - so an ordinary `git mv` put a mode-120000 entry
+    // under the scan root and this route printed "OK - no hits". Turning
+    // detection off makes the destination arrive as an ordinary single-path `A`
+    // (`:000000 120000 0000000 <sha> A`) and the source as a `D` the filter drops,
+    // which costs the stride nothing and needs no two-path record shape. It also
+    // makes the two-field stride STRUCTURAL rather than conditional: with
+    // detection off, no `R` or `C` record can be produced whatever the caller's
+    // `diff.renames` setting is.
+    listBuf = execFileSync(
+      "git",
+      ["diff", "--cached", "--raw", "-z", "--no-renames", "--diff-filter=AMT"],
+      {
+        encoding: "buffer",
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
   } catch (err) {
     throw new InvocationError(
       `git diff --cached failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -459,16 +495,18 @@ function buildTargetsForStaged(): Target[] {
   }
 
   // `--raw -z` emits `<info>\0<path>\0` per record. `R` (rename) and `C` (copy)
-  // are the only statuses carrying a SECOND path, and the filter excludes both,
-  // so the stride is two fields. If one ever reached here the stride would
-  // desync and the next record would fail to parse, which REFUSES - the same
-  // outcome as any other unparseable record, and the safe one.
+  // are the only statuses carrying a SECOND path, and `--no-renames` above means
+  // git cannot emit either, so the stride is two fields. The regex still admits a
+  // score-suffixed status: if one ever reached here the stride would desync and
+  // the next record would fail to parse, which REFUSES - the same outcome as any
+  // other unparseable record, and the safe one. A record that does not parse
+  // REFUSES rather than being skipped: a silently shortened list is exactly the
+  // shape this scan must never report clean over.
   //
-  // Excluding `R`/`C` also means this route does not enumerate a staged rename
-  // at all. That is PRE-EXISTING and is not narrowed here: admitting them needs
-  // the two-path record shape handled, which is a scope decision, not this one.
-  // A record that does not parse REFUSES rather than being skipped: a silently
-  // shortened list is exactly the shape this scan must never report clean over.
+  // What this route still does NOT enumerate, stated because the boundary is
+  // narrower than the path prefix alone: `--diff-filter=AMT` also drops `D`
+  // (a deletion has no staged blob to scan) and `U` (an unmerged path has no
+  // single one). Both are PRE-EXISTING.
   const fields = listBuf.toString("utf8").split("\0");
   const staged: { path: string; mode: string }[] = [];
   let i = 0;
@@ -491,14 +529,26 @@ function buildTargetsForStaged(): Target[] {
     i += 2;
   }
 
-  const inScope = staged.filter((s) => s.path.startsWith("test/fixtures/"));
+  // The fixture ROOT'S OWN PATH is in scope as well as everything under it. An
+  // index entry at exactly `test/fixtures` is never a directory - git records no
+  // entry for one - so it is the corpus root replaced by a blob or a link, and
+  // the prefix test alone let that through (measured: exit 0 over a staged
+  // mode-120000 `test/fixtures`).
+  const inScope = staged.filter(
+    (s) => s.path === "test/fixtures" || s.path.startsWith("test/fixtures/"),
+  );
 
   refuseUnscannable(
     inScope
       .filter((s) => !REGULAR_BLOB_MODES.has(s.mode))
       .map((s) => ({ path: s.path, kind: gitModeKind(s.mode) })),
-    "For such an entry `git show :<path>` hands back its target path rather than any content, " +
-      "so scanning it would prove nothing about what it points at.",
+    // Deliberately says what the INDEX holds, not what `git show` would answer:
+    // `git show :<path>` answers a symbolic link with its target path as though
+    // that were content, but for a gitlink it fails outright (`fatal: bad
+    // object`), so a sentence about `git show` would be false for every mode
+    // here except 120000.
+    "The index records such an entry by reference rather than as file content, so nothing " +
+      "readable through it would be evidence about what it names.",
     "Unstage it, or replace it with a regular file.",
   );
 
