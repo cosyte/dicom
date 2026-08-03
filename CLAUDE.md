@@ -642,15 +642,27 @@ not by copying files (Phase E migration). The source of truth is the meta-repo's
   (declarations on disk but excluded from the tarball by `files`/`.npmignore`). **No instance of that
   second case is on record here.** **Neither net covers the rest of `files`** (`README.md`,
   `LICENSE`, `TRADEMARKS.md`, `CHANGELOG.md`) - `attw` analyses types and never looks at them.
-  **The post-check reads a string, so what would hide that string is refused**, by option name and
-  wholesale rather than by value. **Five blinding routes were measured here** - `--quiet`/`-q`,
-  `--format json`/`-f json`, a `.attw.json` setting either, and **`--config-path`**, which
-  terminology's copy refused by inference only. Measured the other way too: `--format table-flipped`
-  and `--format ascii` still print the sentence and are refused anyway; that is the deliberate trade
-  against value-parsing them. `test/scripts/attw-gate.test.ts` pins both nets against the real binary
-  (including the upstream exit-0 itself, a negative control on a well-formed package, and that a real
-  `attw` failure still fails). Proved non-vacuous by putting the bare invocation back: **11 of its 15
-  tests red**.
+  **The post-check reads a string, so what would hide that string is refused**, by option and not by
+  value. **Eleven blinding routes were measured here** - `--quiet`, `-q`, `--format json`, `-f json`,
+  `--format=json`, `-fjson`, `-qf json`, `-Pfjson`, a `.attw.json` setting `quiet` or `format`, and
+  **`--config-path`**, which terminology's copy refused by inference only.
+  **▶ THE PREDICATE IS NOT AN EXACT-TOKEN SET, AND THE FIRST DRAFT OF THIS FILE'S OWN SCRIPT WAS.**
+  Commander lets a short option's value attach (`-fjson`) and lets shorts combine (`-qf`), so `-f` is
+  not visible as a whole token. Measured on that draft: `-fjson` gave **exit 0 with the gate silent**.
+  A single-dash argument is refused if any character in its cluster is `q` or `f`, which is sound
+  because `-f` is `attw`'s only value-taking short. **Do not "simplify" it back to a token set.**
+  Measured in both directions, because the bound is the point: `--format table-flipped` and
+  `--format ascii` still print the sentence and are refused anyway (the deliberate trade against
+  value-parsing them), while `--form json`, `--quiet=true` and `-f=json` each look like a route and
+  are not, since commander rejects them outright. **Nothing else is refused** - `--profile node16`
+  and `-P` still reach `attw`, and a forwarded extra positional does not retarget the run.
+  `test/scripts/attw-gate.test.ts` pins both nets against the real binary (including the upstream
+  exit-0 itself, a negative control on a well-formed package, and that a real `attw` failure still
+  fails). Proved non-vacuous by putting the bare invocation back: **15 of its 22 tests red**.
+  **`lint` is deliberately NOT widened to `.mjs`, measured rather than assumed:** the shared
+  `@cosyte/eslint-config` rule blocks are scoped to `**/*.ts`, so a seeded unused variable and a
+  missing semicolon in `scripts/attw.mjs` produce **zero** ESLint findings. Widening the glob would
+  add a gate-shaped thing that gates nothing. `format:check` does cover it and is real.
 - Coverage: per-directory gate **enabled** on `src/parser/`, `src/dataset/`, `src/dictionary/` (and
   `src/helpers/` once it exists) via `pnpm test:coverage`. Canonical bar is ≥ 90%; early-phase floors
   currently sit just below that as documented transient relaxations with TODOs. Raise them toward 90

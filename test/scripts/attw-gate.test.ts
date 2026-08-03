@@ -322,6 +322,13 @@ describe("the refusals that keep the post-check readable", () => {
     ["--format json", ["--format", "json"]],
     ["-f json", ["-f", "json"]],
     ["--format=json", ["--format=json"]],
+    // The three cluster forms. An exact-token predicate misses all of them, because
+    // commander lets a short option's value attach and lets shorts combine, so `-f`
+    // is not visible as a whole token. `-fjson` reached exit 0 with the gate silent
+    // on the first draft of scripts/attw.mjs.
+    ["-fjson", ["-fjson"]],
+    ["-qf json", ["-qf", "json"]],
+    ["-Pfjson", ["-Pfjson"]],
   ])(
     "refuses %s, and bare attw with it hands back a blind exit 0",
     (_name, extra) => {
@@ -335,6 +342,38 @@ describe("the refusals that keep the post-check readable", () => {
       const r = runWrapper(typesNotPacked, [...OFFLINE, ...extra]);
       expect(r.code).not.toBe(0);
       expect(r.out).toContain("attw gate");
+    },
+    SPAWN_TIMEOUT,
+  );
+
+  it.each([
+    ["--form json (no option-name abbreviation)", ["--form", "json"]],
+    ["--quiet=true (no = on a boolean)", ["--quiet=true"]],
+    ["-f=json (no = on an attached short value)", ["-f=json"]],
+  ])(
+    "does not need to refuse %s, because attw itself rejects it",
+    (_name, extra) => {
+      // Measured, not assumed. Each of these looks like a blinding route and is not
+      // one: commander rejects the argument outright, so nothing is analysed and
+      // nothing is hidden. The refusal set is bounded by what is actually reachable.
+      const bare = runAttw(typesNotPacked, extra);
+      expect(bare.code).not.toBe(0);
+      expect(bare.out).toContain("error: ");
+    },
+    SPAWN_TIMEOUT,
+  );
+
+  it(
+    "refuses nothing else: -P and --profile still reach attw",
+    () => {
+      // The over-strictness is bounded. A single-dash cluster with no `q` or `f`, and
+      // a long option that is not one of the three, are forwarded and the post-check
+      // still does its job on the untyped fixture.
+      for (const extra of [["-P"], ["--profile", "node16"]]) {
+        const r = runWrapper(typesNotPacked, [...OFFLINE, ...extra]);
+        expect(r.code).not.toBe(0);
+        expect(r.out).toContain(UNTYPED);
+      }
     },
     SPAWN_TIMEOUT,
   );

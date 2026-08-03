@@ -81,29 +81,53 @@
  *   suite reds and tells you to revisit this file rather than letting the net go
  *   quietly slack.
  *
- * BLINDING. Five routes were measured HERE to restore the exact false green, each by
- * making the untyped sentence absent from what this script can read, and each on a
- * fixture package whose tarball genuinely carries no types:
+ * BLINDING. Every route below was measured HERE, on a fixture package whose tarball
+ * genuinely carries no types, and each one restores the exact false green by making
+ * the untyped sentence absent from what this script can read:
  *
- *     --quiet / -q            exit 0, sentence absent
- *     --format json / -f json exit 0, sentence absent
+ *     --quiet                 exit 0, sentence absent
+ *     -q                      exit 0, sentence absent
+ *     --format json           exit 0, sentence absent
+ *     -f json                 exit 0, sentence absent
+ *     --format=json           exit 0, sentence absent
+ *     -fjson                  exit 0, sentence absent   (attached short value)
+ *     -qf json                exit 0, sentence absent   (combined short cluster)
+ *     -Pfjson                 exit 0, sentence absent   (cluster + attached value)
  *     .attw.json {"quiet"}    exit 0, sentence absent
  *     .attw.json {"format"}   exit 0, sentence absent
  *     --config-path <file>    exit 0, sentence absent
  *
- * The last one is the difference from terminology's copy, which refused
- * `--config-path` by inference and said so. It was measured here: pointing at a file
- * that sets `quiet` blinds the post-check exactly like an in-tree `.attw.json` does.
- * `readConfig()` applies config after argv, and reads `.attw.json` from the working
- * directory unless `--config-path` names another file, so those are the only two
- * config routes that exist.
+ * `--config-path` is the difference from terminology's copy, which refused it by
+ * inference and said so. Measured here: pointing it at a file that sets `quiet`
+ * blinds the post-check exactly like an in-tree `.attw.json` does. `readConfig()`
+ * applies config after argv, and reads `.attw.json` from the working directory unless
+ * `--config-path` names another file, so those are the only two config routes.
  *
- * The refusal is BY OPTION NAME, WHOLESALE, not by value. Measured here:
- * `--format table-flipped` and `--format ascii` both still print the sentence and
- * blind nothing, and both are refused anyway. That is the deliberate trade:
- * value-parsing these would be a third moving part in the guard, and being
- * over-strict about an argument nobody passes to a repo's own publish gate costs
- * less than a route back to a false green.
+ * THE LAST THREE ARE WHY THE PREDICATE IS NOT AN EXACT-TOKEN SET, and a first draft
+ * of this file got that wrong. It matched `a.split("=")[0]` against a set of exact
+ * spellings, which `-fjson` walks straight past: commander lets a short option's value
+ * attach to it and lets shorts combine, so `-f`'s presence is not visible in the whole
+ * token. Measured on that draft, on the untyped fixture: `-fjson` gave exit 0 with the
+ * gate silent. So a single-dash argument is now refused if ANY character in its cluster
+ * is `q` or `f`. `-f` is attw's only value-taking short option, so a `q` or `f`
+ * anywhere in a cluster means the flag itself is there.
+ *
+ * The refusal is BY OPTION, NOT BY VALUE, and it is deliberately over-strict.
+ * Measured here: `--format table-flipped` and `--format ascii` both still print the
+ * sentence and blind nothing, and both are refused anyway. Value-parsing these would
+ * be a third moving part in the guard, and being over-strict about an argument nobody
+ * passes to a repo's own publish gate costs less than a route back to a false green.
+ * The over-strictness is bounded and stated rather than open-ended: it costs `-q`,
+ * `-f`, `--quiet`, `--format`, `--config-path` and any single-dash cluster containing
+ * `q` or `f`. Nothing else is refused.
+ *
+ * NOT ROUTES, measured rather than assumed, because each looks like one:
+ * `--form json` and `--quiet=true` and `-f=json` are all rejected by commander itself
+ * with exit 1 (no option-name abbreviation, no `=` on a boolean, no `=` on an attached
+ * short value), so none reaches the analysis. And a forwarded extra positional
+ * (`node scripts/attw.mjs ../other`) does NOT retarget the run: `--pack .` supplies
+ * the first positional and attw ignores the second, so the analysis stays on this
+ * package and the preflight it was paired with is still the right one.
  *
  * Other arguments are forwarded, so `--profile node16` and friends still work. That
  * is what lets `typecheck:exports` run through this wrapper too, and what lets the
@@ -125,11 +149,21 @@ const die = (msg) => {
 };
 
 // ---- Refuse what would blind the post-check --------------------------------
-const BLINDING = new Set(["-q", "--quiet", "-f", "--format", "--config-path"]);
-const blinding = args.filter((a) => BLINDING.has(a.split("=")[0]));
+// See BLINDING in the header. A long option is matched on its name, before any `=`.
+// A single-dash argument is a CLUSTER, because commander lets shorts combine and lets
+// a value attach (`-qf json`, `-fjson`, `-Pfjson`), so matching the whole token would
+// miss it. `-f` is attw's only value-taking short, so a `q` or `f` anywhere in the
+// cluster means the flag itself is present.
+const BLINDING_LONG = new Set(["--quiet", "--format", "--config-path"]);
+const BLINDING_SHORT = new Set(["q", "f"]);
+const blinds = (a) =>
+  a.startsWith("--")
+    ? BLINDING_LONG.has(a.split("=")[0])
+    : a.startsWith("-") && a.length > 1 && [...a.slice(1)].some((c) => BLINDING_SHORT.has(c));
+const blinding = args.filter(blinds);
 if (blinding.length > 0) {
   die(
-    `${blinding.join(", ")} is refused wholesale, by option name and not by value.\n` +
+    `${blinding.join(", ")} is refused by option and not by value.\n` +
       `  This gate reads attw's printed output, attw exits 0 on an untyped package,\n` +
       `  and some values of these options hide that output. Run it without them.`,
   );

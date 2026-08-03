@@ -37,13 +37,29 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   plainly rather than left to be discovered: `attw` analyses types and never looks at them.
 
   **The post-check reads a string, so the routes that would hide that string are refused**, by option
-  name and wholesale rather than by value. **Five were measured here** on a fixture whose tarball
-  genuinely carries no types, each restoring the exact exit-0 with the sentence unreadable:
-  `--quiet`/`-q`, `--format json`/`-f json`, a `.attw.json` setting either (`readConfig()` applies
-  config after argv), and **`--config-path`** pointing at a file that sets one - that last one is the
-  difference from terminology's copy, which refused it by inference and said so. Measured the other
-  way as well: `--format table-flipped` and `--format ascii` still print the sentence and blind
-  nothing, and are refused anyway. Value-parsing them would be a third moving part in the guard.
+  and not by value. **Eleven were measured here** on a fixture whose tarball genuinely carries no
+  types, each restoring the exact exit-0 with the sentence unreadable: `--quiet`, `-q`,
+  `--format json`, `-f json`, `--format=json`, `-fjson`, `-qf json`, `-Pfjson`, a `.attw.json`
+  setting `quiet` or `format` (`readConfig()` applies config after argv), and **`--config-path`**
+  pointing at a file that sets one - that last is the difference from terminology's copy, which
+  refused it by inference and said so.
+
+  **The three cluster forms are why the predicate is not an exact-token set, and a first draft of
+  this change got that wrong.** It matched each whole argument, before any `=`, against a set of
+  exact spellings; commander lets a short option's value attach to it and lets shorts combine, so
+  `-f` is not visible as a token in `-fjson`. Measured on that draft, on the untyped fixture:
+  `-fjson` gave **exit 0 with the gate silent**. A single-dash argument is now refused if any
+  character in its cluster is `q` or `f`, which is sound because `-f` is `attw`'s only value-taking
+  short option.
+
+  Measured the other way too, and both directions are stated because the bound matters: `--format
+  table-flipped` and `--format ascii` still print the sentence and blind nothing, and are refused
+  anyway (value-parsing them would be a third moving part in the guard); while `--form json`,
+  `--quiet=true` and `-f=json` each look like a route and are not, because commander rejects them
+  outright with exit 1. **The over-strictness is bounded and nothing else is refused**: a forwarded
+  `--profile node16` or `-P` still reaches `attw`. A forwarded extra positional does not retarget the
+  run either - `--pack .` supplies the first positional and `attw` ignores the second, so the
+  analysis stays on this package.
 
   `test/scripts/attw-gate.test.ts` pins both nets against the real binary: the upstream exit-0
   itself, so an `attw` upgrade that fixes it or rewords the sentence reds instead of letting the net
@@ -51,15 +67,28 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   bare `attw` passes it with exit 0 and that the wrapper reds naming `./dist/index.d.ts`; a negative
   control on a well-formed package; that a real `attw` failure still fails with `attw`'s own status;
   and that other arguments are still forwarded. **Proved non-vacuous by putting the bare invocation
-  back: 11 of the 15 tests red**, the 4 that survive being exactly the ones that must pass on both.
+  back into the script: 15 of the 22 tests red**, re-measured on the file as it stands. The 7 that
+  survive are exactly the ones that must pass on both: the upstream exit-0 pin, the well-formed
+  negative control, the real-failure parity case, argument forwarding, and the three controls that
+  only ever invoke the bare tool.
   `scripts/verify.sh` in the meta-repo needed no change and was not touched, and no lock, lease,
   semaphore or queue was added (ADR 0015).
 
 ### Changed
 
 - `format` and `format:check` now cover `scripts/**/*.mjs` as well as `scripts/**/*.ts`, so the new
-  gate script is actually format-gated. The two `.mjs` files already in `scripts/` were verified
-  Prettier-clean before the glob widened, so this red-flags nothing retroactively.
+  gate script is actually format-gated. Exactly one pre-existing file entered that glob,
+  `scripts/sync-version.mjs`, and it was verified Prettier-clean before the glob widened, so nothing
+  is red-flagged retroactively. (The tree's other `.mjs` file, `test/smoke/esm/index.mjs`, is under
+  `test/` and is not covered by this glob or by the `test/**/*.ts` one.)
+
+  **`lint` was deliberately NOT widened the same way, and the reason is measured rather than
+  assumed.** ESLint applies no rules at all to `.mjs` here: the shared `@cosyte/eslint-config` rule
+  blocks are scoped to `**/*.ts`, so `eslint --print-config scripts/attw.mjs` returns only the
+  Prettier-conflict disables, and a deliberately seeded unused variable plus a missing semicolon in
+  `scripts/attw.mjs` produced **zero** findings. Widening the `lint` glob would have added a
+  gate-shaped thing that gates nothing, which is the exact failure this change exists to remove.
+  Making ESLint genuinely cover `.mjs` means changing the shared config, and that is its own slice.
 
 ### Security
 
