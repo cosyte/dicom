@@ -40,6 +40,17 @@
  *   - T-02-04-03: CPU DoS via pathological CP-246. tryParseUnAsSQ caps
  *     attempts at the same nesting-depth limit; on parse failure, state
  *     is restored - no infinite retry loop.
+ *     **No primitive here parses the same bytes twice, and that is the
+ *     invariant this threat reduces to once nesting is in play.** A descent
+ *     that runs, fails and is retried costs 2x at one level and 2^depth across
+ *     nested sequences - the same unbounded-CPU threat by a different route. An
+ *     earlier draft of `DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ` tried a bounded
+ *     reading of a defined-length `SQ` and re-parsed item-driven when it was not
+ *     adopted, and was measured at 75,475 ms for a 606-byte file with 20 nested
+ *     sequences against 0.7 ms for one pass. `tryParseDefinedLengthSQ` and
+ *     `tryParseUnAsSQ` roll back and return rather than re-running; the
+ *     `DICOM_ITEM_CROSSES_SEQUENCE_END` disclosure below is one integer
+ *     comparison and walks nothing. Adding a retry here reopens T-02-04-03.
  *
  * Circular-import note: `parseSequence` calls into the per-TS parsers
  * (Implicit-LE / Explicit-LE / Explicit-BE), and those parsers ALSO call
@@ -63,6 +74,7 @@ import { WARNING_CODES } from "./warnings.js";
 import type { ParseContext } from "./types.js";
 import {
   emptyItemInSequence,
+  itemCrossesSequenceEnd,
   sqNotDescended,
   unParsedAsSQ,
   type DicomParseWarning,
@@ -295,6 +307,57 @@ export function parseSequence(
         cursor.position = inner.endOffset;
       } else {
         // Defined-length item - slice and parse exactly `itemLength` bytes.
+        //
+        // PS3.5 2026c section 7.5.2 makes the `SQ` element's Value Length "the
+        // total length resulting from the sequence of zero or more items
+        // conveyed by this Data Element", and section 7.5.1 governs the Item's
+        // own length field. A malformed file makes the two disagree, and this
+        // reader resolves the disagreement in favour of the ITEM's field - the
+        // reading every released version gives. `endLimit < buffer.length` is
+        // what makes the disagreement consequential rather than academic: it
+        // says this sequence is being read IN PLACE inside a larger Data Set,
+        // so the bytes the item is about to take are that Data Set's own. Every
+        // other descent primitive here is handed a slice already cut at the
+        // declared end, where the two fields cannot reach past anything, and a
+        // sequence that is the last thing in its buffer has nothing to reach
+        // into - so neither says anything and neither warns.
+        //
+        // **Disclosure only. Nothing is re-framed, and that is the slice.** The
+        // two readings this file admits are byte-identical inputs - a file where
+        // the ITEM over-declares and a file where the SEQUENCE under-declares are
+        // the same bytes, proven in `test/integration/explicit-sq-item-bound.test.ts`
+        // - so no bound can prefer one without also imposing it on the other.
+        // That indistinguishability is the whole reason no bound ships here, and
+        // it is sufficient on its own.
+        //
+        // **🛑 DO NOT ADD A FAIL-SAFE-DIRECTION ARGUMENT BACK. `#51` WAS REFUSED
+        // FOR ONE, IN FIVE ARTIFACTS AT ONCE.** The retracted claim was that
+        // following the item's field is the safe half, because a Private Creator
+        // swallowed INTO an item leaves the enclosing block unclaimed and an
+        // unclaimed block is removed. It is false: which direction leaks depends
+        // on where the SENDER put the Private Creator, not on which length field
+        // a reader follows. Put the creator in the item's genuine content and
+        // the absorb direction leaks too - `DICOM-PRIVATE-CREATOR-RESERVATION-
+        // LEAK`, measured on `164eb39` and closed at the de-identify boundary by
+        // `#66`, never here. The eject direction is still open and pinned as a
+        // residual. Neither reading is safe by construction, which is exactly
+        // why this reports rather than decides.
+        if (
+          opts.explicitLength !== undefined &&
+          endLimit < buffer.length &&
+          cursor.position + itemLength > endLimit
+        ) {
+          // `itemLength` is deliberately NOT passed: it is a raw 32-bit wire
+          // read on a file whose length fields are by definition lying, so the
+          // factory takes no parameter for it. See `itemCrossesSequenceEnd`.
+          emit(
+            itemCrossesSequenceEnd(
+              { byteOffset: itemHeaderStart },
+              itemTag,
+              Math.max(0, endLimit - cursor.position),
+            ),
+          );
+        }
         if (cursor.position + itemLength > buffer.length) {
           throw new DicomParseError(
             FATAL_CODES.INVALID_FILE_META,

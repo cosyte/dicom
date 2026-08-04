@@ -49,6 +49,7 @@ export const WARNING_CODES = {
   DICOM_FILE_META_GROUP_LENGTH_MISSING: "DICOM_FILE_META_GROUP_LENGTH_MISSING",
   DICOM_GROUP_LENGTH_IN_DATASET: "DICOM_GROUP_LENGTH_IN_DATASET",
   DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR: "DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR",
+  DICOM_ITEM_CROSSES_SEQUENCE_END: "DICOM_ITEM_CROSSES_SEQUENCE_END",
   DICOM_MISSING_PREAMBLE: "DICOM_MISSING_PREAMBLE",
   DICOM_NONZERO_RESERVED_BYTES: "DICOM_NONZERO_RESERVED_BYTES",
   DICOM_ODD_LENGTH_VALUE_PADDED: "DICOM_ODD_LENGTH_VALUE_PADDED",
@@ -176,6 +177,11 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   DICOM_UN_PARSED_AS_SQ:
     "Element ({tag}) has VR=UN with undefined length; descended as Implicit VR LE sequence per CP-246.",
   DICOM_EMPTY_ITEM_IN_SEQUENCE: "Sequence ({tag}) contains an empty item (length=0); tolerated.",
+  // The Item's own declared length is deliberately absent. See
+  // `itemCrossesSequenceEnd`; `{n2}` stays because the emit site's
+  // `endLimit < buffer.length` conjunct bounds it by the buffer.
+  DICOM_ITEM_CROSSES_SEQUENCE_END:
+    "Item ({tag}) declares a length reaching past its enclosing sequence's declared end, so it reads the enclosing Data Set's bytes; {n2} bytes remained inside the sequence. The file's two length fields disagree (PS3.5 7.5.1 and 7.5.2 govern them); the item's is used. The declared length is withheld; the byte offset locates the item.",
   DICOM_PIXEL_DATA_LENGTH_MISMATCH:
     "(7FE0,0010) PixelData declared length {n} does not match computed {n2} bytes.",
   DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR:
@@ -537,6 +543,103 @@ export function unParsedAsSQ(position: DicomPosition, tag: Tag): DicomParseWarni
  */
 export function sqNotDescended(position: DicomPosition, tag: Tag): DicomParseWarning {
   return build(WARNING_CODES.DICOM_SQ_NOT_DESCENDED, position, { tag });
+}
+
+/**
+ * Build a `DICOM_ITEM_CROSSES_SEQUENCE_END` warning. Emitted when a
+ * defined-length `(FFFE,E000)` Item inside a defined-length `SQ` being read **in
+ * place** declares a length reaching past the end that `SQ` declared, so the
+ * item's value read takes bytes belonging to the enclosing Data Set.
+ *
+ * PS3.5 2026c section 7.5.2 "Delimitation of The Sequence of Items" makes the
+ * `SQ` element's Value Length "the total length resulting from the sequence of
+ * zero or more items conveyed by this Data Element"; section 7.5.1 governs the
+ * Item's own length field. A malformed file makes the two disagree, and this
+ * warning is the disclosure of that disagreement, not a decision about it: the
+ * reader follows the Item's field, which is what every released version does.
+ *
+ * **It does not fire wherever the two merely differ.** `endLimit <
+ * buffer.length` is required, so it fires only where the disagreement is
+ * consequential - an item reaching into a larger Data Set's bytes. A sequence
+ * handed a slice cut at its declared end (`tryParseDefinedLengthSQ`,
+ * `tryParseUnAsSQ`), an undefined-length sequence, and a sequence that is the
+ * last thing in its buffer all have nothing to reach into.
+ *
+ * **Provenance:** both citations are traced, not stated. PS3.5 2026c section
+ * 7.5.2's "This length shall include the total length resulting from the
+ * sequence of zero or more items conveyed by this Data Element" and section
+ * 7.5.1 "Item Encoding Rules" are read from the SHA-pinned `vendor/nema/part05/`
+ * and each occurs once in that document. Neither clause says what a decoder must
+ * do when the two disagree, so no reading is derived from either: this code only
+ * reports the contradiction.
+ *
+ * ## Slots, and what is input
+ *
+ * `{tag}` carries the Item tag `FFFEE000`, matching {@link emptyItemInSequence}:
+ * a constant this parser recognised, not four bytes echoed back.
+ *
+ * `position.byteOffset` is the item header's offset **in the buffer
+ * `parseSequence` was handed**, which is the file for a root-level sequence and
+ * the enclosing item's slice for a nested one. It is frame-dependent for the
+ * same reason `Element.byteOffset` is, and neither documents a
+ * frame-of-reference contract. Measured and pinned rather than described.
+ *
+ * **🛑 THE ITEM'S DECLARED LENGTH IS BOUND OUT OF THIS SIGNATURE AND MUST NOT
+ * COME BACK. A DIAGNOSTIC ABOUT A LENGTH FIELD THAT LIES IS ITSELF A PHI
+ * SURFACE.** It shipped here as a `{n}` slot and was refused. The condition that
+ * raises this code is precisely "these length fields are not what they claim to
+ * be", so the Item's 32-bit Value Length can be four bytes of somebody's value:
+ * measured, an item header fabricated over the payload `"SMITHSON"` rendered it
+ * as the decimal **1414090067**, `"SMIT"` in wire order, losslessly reversible
+ * with one `readUInt32LE` - and it is emitted **above** the truncation guard, so
+ * the message reaches `onWarning` on a file the parse then refuses. Identical
+ * remedy and identical reasoning to {@link nonzeroReservedBytes} and to `#55`:
+ * where `renderTag` and `renderVr` check a shape or a closed set and a raw length
+ * has neither, the bound has to be **the signature** rather than a branch. The
+ * factory cannot be handed the value, so no future call site can put it back
+ * without changing this signature.
+ *
+ * **`{n2}` stays, and the asymmetry is structural rather than a judgement call.**
+ * It is `endLimit - cursor.position` under the emit site's `endLimit <
+ * buffer.length` conjunct, so it is bounded by the buffer: a byte count inside
+ * the file, which is the class this package's frozen-registry contract already
+ * names. Measured against the same attack: fabricating the **`SQ`**'s length
+ * field over `"SMITHSON"` puts `endLimit` past the buffer, so this code does not
+ * fire at all and the parse dies on the pre-existing item-header truncation
+ * guard. Both measurements are pinned in
+ * `test/integration/explicit-sq-item-bound.test.ts` with a name-bearing payload
+ * and a mutation control, and
+ * `test/integration/phi-diagnostic-surface.test.ts` holds the slot.
+ *
+ * ## Two things it does NOT do
+ *
+ * **`profiles.strict` does not escalate it.** The `{ strict: true }` option
+ * does, through the `makeEmitter` chokepoint, but the preset's escalation list
+ * is unchanged: adding a code to a shipped preset moves every `profiles.strict`
+ * consumer's parse and is a measured behaviour change of its own, not a side
+ * effect of adding a code. Pinned by a test.
+ *
+ * **It is not bounded, and "at most one per sequence" is not a bound.** The
+ * shape does hold - an overrunning item consumes to its own declared end and the
+ * item loop then exits - but a file is free to carry as many sequences as it can
+ * encode, and `ds.warnings` is uncapped. That is `#48`'s pre-existing,
+ * package-wide posture for parser warnings rather than anything new here. Pinned
+ * by a test that asserts the growth rather than a cap.
+ *
+ * @example
+ * ```ts
+ * const w = itemCrossesSequenceEnd({ byteOffset: 320 }, "FFFEE000", 12);
+ * ```
+ */
+export function itemCrossesSequenceEnd(
+  position: DicomPosition,
+  tag: Tag,
+  availableLength: number,
+): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_ITEM_CROSSES_SEQUENCE_END, position, {
+    tag,
+    n2: availableLength,
+  });
 }
 
 /**

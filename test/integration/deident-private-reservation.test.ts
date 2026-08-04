@@ -85,7 +85,14 @@ import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
 import type { DeidentifyOptions } from "../../src/deident/types.js";
-import { Dataset, deidentify, parseDicom, profiles, serializeDicom } from "../../src/index.js";
+import {
+  Dataset,
+  DicomParseError,
+  deidentify,
+  parseDicom,
+  profiles,
+  serializeDicom,
+} from "../../src/index.js";
 import { buildDicom } from "../helpers/build-dicom.js";
 
 const IMPLICIT_LE = "1.2.840.10008.1.2";
@@ -218,11 +225,18 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       expect(out.parseWarnings).toEqual([]);
     });
 
-    it("the lying file parses with NO warning on either tree, so `ds.warnings` is not the signal", () => {
-      // The measured fact this whole item rests on: nothing about the file
-      // announces itself. `report.removedPrivateTags` is the audit channel.
+    it("the lying file now announces itself, and `#66` still did not rely on that", () => {
+      // 🛑 THIS TEST USED TO ASSERT `parseWarnings` WAS EMPTY, and that was true
+      // when `#66` shipped: nothing about the file announced itself, so
+      // `report.removedPrivateTags` had to be the audit channel and the remedy
+      // had to be structural. `DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ` then added
+      // `DICOM_ITEM_CROSSES_SEQUENCE_END`, which fires on exactly this shape.
+      //
+      // `#66`'s argument is unchanged by that and deliberately so: it reads two
+      // fields the parser recorded, never `ds.warnings`. What moved is the
+      // operator's visibility, not the remedy.
       const out = run(creatorInItem(EXPLICIT_LE, wireSize(SECRET)));
-      expect(out.parseWarnings).toEqual([]);
+      expect(out.parseWarnings).toEqual(["DICOM_ITEM_CROSSES_SEQUENCE_END"]);
       expect(out.removedPrivateTags).toContain(PRIVATE_TAG);
     });
   });
@@ -499,12 +513,25 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
         });
         const out = run(buf);
 
+        // The leak itself, unchanged and still open.
         expect(out.removedPrivateTags).toEqual([]);
         expect(out.secretInOutput).toBe(true);
         expect(out.identityRemoved).toBe("YES");
-        // Silent on every channel, which is what makes it worth pinning.
-        expect(out.parseWarnings).toEqual([]);
-        expect(() => parseDicom(buf, { strict: true })).not.toThrow();
+
+        // 🛑 THESE TWO USED TO ASSERT SILENCE ON EVERY CHANNEL AND A CLEAN
+        // `{ strict: true }` PARSE. That was true when `#66` shipped;
+        // `DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ` changed it on the **Explicit
+        // VR** shapes and nowhere else. This file's `SQ` under-declares by more
+        // than its item does, so the item still crosses the sequence's declared
+        // end and the disclosure fires.
+        //
+        // Read the combination rather than either line alone: a warning fires,
+        // AND the object is stamped `PatientIdentityRemoved=YES` while still
+        // carrying the private value. So that warning is the ONLY signal on a
+        // file whose de-identification audit is false, and it is emphatically
+        // not an all-clear. The troubleshooting row says exactly that.
+        expect(out.parseWarnings).toEqual(["DICOM_ITEM_CROSSES_SEQUENCE_END"]);
+        expect(() => parseDicom(buf, { strict: true })).toThrow(DicomParseError);
       },
     );
 
@@ -531,6 +558,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       const honest = run(build(0));
       expect(honest.removedPrivateTags).toEqual(["00291101"]);
       expect(honest.secretInOutput).toBe(false);
+      expect(honest.parseWarnings).toEqual([]);
 
       // Residual: the over-run pulls it inside the vouched-for carrier, which is
       // blitted verbatim.
@@ -538,6 +566,17 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       expect(lying.removedPrivateTags).toEqual([]);
       expect(lying.secretInOutput).toBe(true);
       expect(lying.identityRemoved).toBe("YES");
+
+      // 🛑 PIN THE WARNING CHANNEL, AND THIS ASSERTION IS WHY THE ROW ABOVE IT
+      // EXISTS. This test asserted the leak and never the warnings, so a
+      // troubleshooting sentence calling this shape "silent" went unchecked and
+      // shipped. It is NOT silent: this fixture is an Explicit VR LE
+      // defined-length `SQ` whose item over-declares with a trailing root
+      // element, which is exactly `DICOM_ITEM_CROSSES_SEQUENCE_END`'s trigger.
+      // Read it with the three lines above: a warning fires AND the object is
+      // stamped `PatientIdentityRemoved=YES` while still carrying the private
+      // value, so the warning is the only signal and is not an all-clear.
+      expect(lying.parseWarnings).toEqual(["DICOM_ITEM_CROSSES_SEQUENCE_END"]);
     });
   });
 

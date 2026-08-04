@@ -63,8 +63,15 @@
   for elements the sender never gave it. **🛑 IT IS NOT ROOT-SPECIFIC AND THE FIRST DRAFT OF THIS
   ENTRY SAID IT WAS** - pass 2 reproduced it one level down, an inner sequence ejecting a creator
   into the still-usable enclosing Item. **Scope the item to EVERY still-usable Data Set, not the
-  root**, or it gets built to the wrong bar. Silent on
-  every channel and silent under `{ strict: true }` on Explicit VR LE and BE. **22 grid cells.**
+  root**, or it gets built to the wrong bar. It was silent on every channel and silent under
+  `{ strict: true }` when `#66` shipped; **`DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ` changed that on
+  the Explicit VR shapes and NOWHERE ELSE, so do not carry the old sentence forward.** Re-measured
+  on the residual test's own fixture: `DICOM_ITEM_CROSSES_SEQUENCE_END` on both channels, a throw
+  under `{ strict: true }`, and the leak unchanged beside it (`removedPrivateTags: []`, the value in
+  the serialized output, `(0012,0062) = YES`). **That warning is now the only signal on a file whose
+  de-identification audit is false**, which is what the troubleshooting row says and why it refuses
+  to read as an all-clear. The 20 Implicit VR LE cells are still silent - that path slices the item
+  stream, so no over-run is recorded. **22 grid cells.**
   **THE WIDENING WAS BUILT AND MEASURED, NOT ARGUED ABOUT:** narrowing the flag whenever a Data Set
   _contains_ an over-running sequence costs **24** root retentions and closes **2** of the 22 -
   the other 20 are Implicit VR LE, where the sequence records **no over-run at all**
@@ -733,19 +740,138 @@
   pops its warnings off `ctx.warnings`, but `makeEmitter` hands them to `onWarning` **before** the
   push it is undoing (D-03 ordering), so a streaming consumer sees warnings `ds.warnings` does not.
   Disclosed, not fixed - buffering emissions is a larger change than the leak it would tidy.
-  **Residual, PRE-EXISTING and filed rather than fixed here:** the same unbounded item read
-  mis-structures **Explicit VR LE** on `main` and on published `0.0.5` (the root element vanishes from
-  the root and exists only inside the item, and the element ships a `length` shorter than its
-  `rawBytes`). Bounding `parseSequence` itself would close both, but on the Explicit VR path there is
-  no fallback, so it would convert a file that parses today into a whole-object `INVALID_FILE_META` -
-  precisely the trap `#49` paid for. It needs its own slice, with that loss measured.
-  Also minor, and the second refuter pass caught the wording: **everything raised inside a descent is
-  slice-relative, and that covers `Element.byteOffset` on a nested element, not just a warning's
-  `position`.** Defined-length items always were (`parseSequence` hands the inner parser an
-  `itemSlice`), so the two _item_ forms now agree; they still disagree with the undefined-length
-  _sequence_ branch, which passes the whole buffer. `Element.byteOffset` documents no
-  frame-of-reference contract either way. The refusal this slice's own primitive emits is the
-  exception and is absolute.
+  **The Explicit VR unbounded-item-read residual this bullet filed is DISCLOSED rather than closed**
+  by `DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ`, the bullet below, and the prediction it was filed with
+  was wrong in an instructive way. This note said bounding `parseSequence` would convert files that
+  parse today into a whole-object `INVALID_FILE_META`. That was the wrong hazard to fear. The real
+  one is that **the two files a bound would have to tell apart are the same file** - proven by a
+  `Buffer.equals` test - so honouring PS3.5 7.5.2 on the one it should also moves an element out of
+  an item on the one it should not, and moving a **Private Creator** that way leaks PHI. Five graded
+  refuter passes went into finding that. The mis-structure is still there and is now pinned as a
+  residual instead of being predicted about.
+  Also minor, and **corrected 2026-08-03 after a refuted draft got it wrong three ways at once**:
+  `Element.byteOffset` inside a sequence item is **not** uniformly slice-relative, this is **not**
+  new, and the two item forms do **not** agree. Measured identically on this branch and on
+  `origin/main`: a 210-byte file, `SQ` at 172, the element inside a **defined-length** item reads
+  **0** (`parseSequence` hands the inner parser an `itemSlice`, which is its own frame) and the same
+  element inside an **undefined-length** item reads **192**, file-absolute, because that branch is
+  handed the outer buffer. `Element.byteOffset` documents no frame-of-reference contract either way.
+  **Measure it rather than describing it.**
+- **Two length fields describe the same bytes, either one can be the lie, and THE TWO FILES ARE THE
+  SAME FILE** (`DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ`, the Explicit VR twin `#50` filed,
+  pre-existing and live on published `0.0.10`). `parseSequence` computes `endLimit` from the `SQ`'s
+  declared length but bounds each **item's** value read against `buffer.length`. The Explicit VR
+  strategies are the only callers that read a defined-length sequence **in place** in the caller's
+  buffer - `tryParseDefinedLengthSQ` and `tryParseUnAsSQ` are each handed a slice already cut at the
+  declared end - so they are the only path where an item's own length field can reach past the
+  sequence. PS3.5 2026c section **7.5.2** makes the `SQ`'s Value Length the exact extent of the item
+  stream ("This length shall include the total length resulting from the sequence of zero or more
+  items conveyed by this Data Element"); section **7.5.1** governs the Item's own length. Both traced
+  to the SHA-pinned `vendor/nema/part05/`. **Neither says what a decoder does when they disagree**,
+  so no reading is derived from either.
+  **The harm is a wrong structure, not a missing one, and the report is where it becomes a false
+  statement:** a root `(0010,0020)` Patient ID exactly as long as the item over-declares vanishes from
+  the root, appears as a per-item attribute, and `deidentify()` reports it with a `contextPath`
+  naming a sequence item it was never in. Silent, and silent under `{ strict: true }`.
+  **▶ 🛑 WHAT SHIPPED IS A WARNING AND NOTHING ELSE, AFTER FIVE REFUSED ATTEMPTS AT A BOUND, AND THE
+  REASON IS ONE LINE OF MEASUREMENT: A FILE WHOSE ITEM OVER-DECLARES AND A FILE WHOSE SEQUENCE
+  UNDER-DECLARES ARE BYTE-IDENTICAL.** `test/integration/explicit-sq-item-bound.test.ts` builds both
+  from two contradictory `build-dicom` descriptions and asserts `Buffer.equals`; it is the
+  load-bearing test in the file. **This is the third time this repo has hit the same permanent fact
+  about the format** - see `DICOM-OVERDECLARE-SWALLOWS-INTO-VALUE` ("an over-declaring element and a
+  well-formed one with an odd value are byte-identical; intent is not on the wire") - and the first
+  time it has been pinned rather than described. **A founder re-scope, not a sixth remedy**: cumulative
+  refuter passes on this lineage are **6** (ADR 0016's 2026-07-29 amendment, RESET-BUT-RECORD).
+  **▶ 🛑 THE FAIL-SAFE-DIRECTION ARGUMENT IS DELETED, NOT REWORDED - THIS IS WHAT PASS 6 REFUSED, IN
+  FIVE ARTIFACTS AT ONCE. DO NOT WRITE IT AGAIN.** The retracted claim was that following 7.5.1 is
+  the safe half of the ambiguity, because a Private Creator swallowed **into** an item leaves the
+  enclosing block unclaimed and an unclaimed block is removed. **False.** Which direction leaks is a
+  property of **where the SENDER put the Private Creator**, not of which length field a reader
+  follows: with the creator as genuine Item content the absorb direction leaks too
+  (`DICOM-PRIVATE-CREATOR-RESERVATION-LEAK`, closed at the de-identify boundary by `#66`, never in
+  the parser), and the eject direction is still open. Neither reading is safe by construction, which
+  is exactly why this code reports rather than decides. The repo's own rule applied: **a disclosure
+  reworded twice is deleted, not given a third wording.**
+  **▶ 🩺 AND IT IS NOW THE ONLY SIGNAL ON A FILE WHOSE DE-IDENTIFICATION AUDIT IS FALSE.** `#66`
+  recorded its EJECT residual as silent on every channel. On the **Explicit VR** shapes that stopped
+  being true here. Re-measured on that residual's own fixture: `DICOM_ITEM_CROSSES_SEQUENCE_END` on
+  both channels, a throw under `{ strict: true }`, and the leak entirely unchanged beside it
+  (`removedPrivateTags: []`, the private value in the serialized output, `(0012,0062) = YES`).
+  **The leak is NOT closed and the warning is NOT an all-clear** - the troubleshooting row says so in
+  those words, because its first draft said "nothing is retained that would not be", which is false
+  on exactly that file and was the second refusing major. The 20 Implicit VR LE cells stay silent:
+  that path slices the item stream, so no over-run is recorded.
+  **▶ THE FOUR THINGS THE FIVE REFUSALS ESTABLISHED, EACH STILL PINNED THOUGH THE CODE THEY GUARDED
+  IS GONE. DO NOT DROP THEM WHEN SOMEBODY RE-OPENS THE BOUND.** (1) **One pass is a security
+  property, not an efficiency one**: a try-then-fallback shape re-parsed nested defined-length
+  sequences and cost **2^depth** - 75,475 ms for a **606-byte** file 20 levels deep, against 0.7 ms
+  for one pass. That is T-02-04-03 by a new route, and `sequence.ts`'s module header now names it.
+  The 20-deep cost pins stay. (2) **`NESTING_DEPTH_LIMIT` must propagate untouched** - the fallback
+  shape needed an error subclass to stop a catch-all rollback turning the cap into "descend one level
+  less"; there is no `catch` in this path, and the 65-level pin proves it. (3) **A warning emitted
+  for a reading that is then discarded** costs a `{ strict: true }` caller the object and makes
+  `onWarning` disagree with `ds.warnings`. Nothing is tried here, so there is nothing to discard.
+  (4) **The enclosing Data Set is a `Map<Tag, Element>`**, so any future bound that moves an element
+  can silently **replace** one - measured as a root Patient ID reading `MRN-99999` where the file says
+  `MRN-11111`.
+  **▶ WHERE IT FIRES, AND THE CONJUNCT THAT IS NOT DECORATION.** A defined-length `(FFFE,E000)` item,
+  inside a defined-length `SQ`, with `endLimit < buffer.length` - the last one is what says the
+  sequence sits inside a larger Data Set whose bytes are there to be taken. Slice-bounded callers, an
+  undefined-length sequence, an undefined-length item and a sequence that ends its own buffer all stay
+  silent, each pinned. New Tier-2 code `DICOM_ITEM_CROSSES_SEQUENCE_END`; `WARNING_CODES` is **29, was
+  28**, which is what the locked snapshot pins. **"26 codes, was 25" was wrong and so was the
+  README's `25`** - that numeral is now deleted from the README rather than corrected a third time,
+  because the snapshot measures it on every run.
+  **▶ 🛑 FOUR THINGS ABOUT THIS DIAGNOSTIC THAT A DRAFT GOT WRONG AND EACH IS NOW A PINNED
+  MEASUREMENT, NOT A SENTENCE.**
+  (1) **🩺 THE ITEM'S DECLARED LENGTH IS WITHHELD, AND THE BOUND IS THE FACTORY SIGNATURE. DO NOT PUT
+  IT BACK.** It shipped as a `{n}` slot under the claim "no bytes off the wire"; both were refuted.
+  The condition that raises this code is precisely "these length fields are not what they claim to
+  be", so those four bytes can be document content: measured, an item header fabricated over
+  `"SMITHSON"` rendered it as **1414090067**, `"SMIT"` in wire order, reversible with one
+  `readUInt32LE` - and it is emitted **above** the truncation guard, so the message reaches
+  `onWarning` on a file the parse then refuses. `itemCrossesSequenceEnd` takes no parameter for it,
+  identical remedy and reasoning to `#64`'s `DICOM_NONZERO_RESERVED_BYTES` and `#55`'s
+  `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE`: where `renderTag` checks a shape and `renderVr` a
+  closed set, a raw length has neither, so the bound has to be the signature. **`{n2}` stays and the
+  asymmetry is structural, not a judgement call**: it is `endLimit - cursor.position` under the emit
+  site's own `endLimit < buffer.length` conjunct, so it is a byte count bounded by the buffer.
+  Measured against the identical attack - fabricating the **`SQ`**'s length field over the same name
+  puts `endLimit` past the buffer and the code does not fire at all. Both pinned with a name-bearing
+  payload and a mutation control. **A PHI test whose payload carries no name is vacuous BY FIXTURE**
+  (`#55`'s was); this one goes red the moment the binding is removed.
+  (2) **"At most one warning per sequence" is TRUE and is NOT an amplification bound.** A file may
+  carry as many sequences as it can encode. `ds.warnings` is uncapped, `#48`'s pre-existing
+  package-wide posture; pinned by a test that asserts the growth rather than a cap.
+  (3) **`profiles.strict` does NOT escalate it.** The `{ strict: true }` option does, through the
+  `makeEmitter` chokepoint. Adding a code to a shipped preset moves every `profiles.strict`
+  consumer's parse and is its own measured change. Pinned.
+  (4) **The warning's `position.byteOffset` is frame-dependent** - file-absolute for a root-level
+  sequence, slice-relative inside an enclosing item, exactly as `Element.byteOffset` is, and neither
+  documents a frame-of-reference contract. Pinned by measuring both frames.
+  **▶ THE MEASUREMENT, RE-DERIVED AGAINST `2f0abd9` AFTER THE REBASE ONTO `#66`.** 83,037 grid cells:
+  **0 cells whose READING differs**, **616** newly emitting the code and **0** losing it, **576** new
+  strict fatals (all 576 carry the code, so none is collateral), 0 new lenient fatals, 0 values lost
+  or gained, 0 wrong root `(0010,0020)`, 0 PHI regressions, 0 reports losing an attribute, 0 Implicit
+  VR LE cells changed, **every `priv|` column from `#66` unchanged**, leaking cells unmoved at 11.
+  The other **16,396** of the 17,012 differing cells are **strict-fatal on both trees** and differ
+  only in the class of the throw. **Quote the reading count and the strict count together or
+  neither** - 576 files that parsed under `{ strict: true }` now do not, and that is the whole price.
+  **🛑 THE PRE-REBASE FIGURES (76,611 cells, 442 newly warning, 402 strict fatals, 15,180) ARE DEAD**
+  - they were taken against `164eb39`, before `#66` added the `priv|` family. And `cells whose
+READING differs` is **not** new here: `#66` added it, and a draft of this entry claimed the credit.
+    **▶ WHAT IS LEFT, NAMED:** the **mis-structure itself** (an over-declaring item still relocates the
+    element that follows the sequence, and the `contextPath` still names an item it was never in -
+    pinned by a test, and repairing it needs something the bytes do not carry); the
+    **undefined-length item with no `(FFFE,E00D)`**, which has no declared length to disagree with;
+    and **11 grid cells still leaking** through the `OB`/`OW`/`US`/`UN` leaf carrier, `PRE-EXISTING`.
+    **▶ `Element.byteOffset` INSIDE AN ITEM DISAGREES WITH ITSELF, ALWAYS HAS, AND A REFUTED DRAFT GOT
+    THIS WRONG THREE WAYS AT ONCE.** Measured identically on this branch and on `origin/main`: a
+    210-byte file, `SQ` at 172, the element inside a **defined-length** item reads **0** (the item slice
+    is its own frame) and the same element inside an **undefined-length** item reads **192**,
+    file-absolute, because `parseSequence` hands that branch the outer buffer. It is not new, it is not
+    uniformly item-relative, and the two forms do not agree. `Element.byteOffset` documents no
+    frame-of-reference contract either way. **Re-measure it rather than describing it.**
 - **Em-dash brand gate armed.** `scripts/check-no-emdash.sh` (`pnpm check:no-emdash`) plus
   `.github/workflows/no-emdash.yml` enforce the founder directive banning `U+2014` outright
   (`knowledgebase/06-brand/voice-and-tone.md`, "No em dashes. Ever."). It scans **both** halves the
