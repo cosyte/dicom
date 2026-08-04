@@ -442,6 +442,35 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     expectCode: WARNING_CODES.DICOM_SQ_NOT_DESCENDED,
   },
   {
+    // The marker IS the element the clamp keeps out of the item. An item inside
+    // a defined-length `SQ` over-declares by exactly this element's on-wire size,
+    // which is what used to make the item swallow it; the warning that now fires
+    // reports the bytes that remained inside the sequence, withholds the Item's
+    // own declared length, and must not reach for the marker either way.
+    name: "(0010,0020) PatientID [LO] after an item over-declaring by exactly its size",
+    plant: (m) => {
+      const value = val(m);
+      // Explicit VR short form: tag(4) + VR(2) + length(2) + value.
+      const onWire = 8 + value.length;
+      return buildDicom({
+        transferSyntax: TS_EXPLICIT_LE,
+        elements: [
+          {
+            tag: "00081115",
+            items: [
+              {
+                declaredLengthDelta: onWire,
+                elements: [{ tag: "00080008", vr: "CS" as VR, value: Buffer.from("ORIGINAL") }],
+              },
+            ],
+          },
+          { tag: "00100020", vr: "LO" as VR, value },
+        ],
+      });
+    },
+    expectCode: WARNING_CODES.DICOM_ITEM_CROSSES_SEQUENCE_END,
+  },
+  {
     name: "(0010,0020) PatientID [LO] beside a retired (0008,0000) group length",
     plant: (m) =>
       buildDicom({
