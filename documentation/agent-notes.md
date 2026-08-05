@@ -13,7 +13,7 @@ passes that produced it.
 
 **Read the section before you re-open the thing its rule guards.** These are clinical-safety
 lessons in a parser: every one of them cost a defect, a refused pass, or both. The compressed line in
-`CLAUDE.md` is enough to stop you doing the wrong thing; it is _not_ enough to justify doing a new
+`CLAUDE.md` is enough to stop you doing the wrong thing; it is *not* enough to justify doing a new
 thing in the same area.
 
 Section order matches the order these entries had in `CLAUDE.md`'s Status list: most recent first,
@@ -21,6 +21,7 @@ then the shipped-phase history, then the generator/authority notes, then the old
 then the two gates.
 
 ---
+
 
 ## DICOM-TAG-COLLISION-DESTROYS-ELEMENT
 
@@ -53,9 +54,17 @@ then the two gates.
   tag twice is the rare route; the ordinary one is a length field that lies, so the second header's
   four tag bytes come out of the middle of somebody's value. The bound is the **factory signature**
   (`duplicateTagInDataSet(position)`), as for `DICOM_NONZERO_RESERVED_BYTES`,
-  `DICOM_ITEM_CROSSES_SEQUENCE_END` and `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE`. **The tag is
-  still reachable, from the model rather than from a message**: `position.byteOffset` is the
-  surviving element's own `Element.byteOffset`, and the replaced element's tag IS the survivor's.
+  `DICOM_ITEM_CROSSES_SEQUENCE_END` and `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE`.
+  **▶ 🛑 AND THE OFFSET IS NOT A KEY. THE FIRST DRAFT SHIPPED A LOOKUP RECIPE IN TWO CONSUMER DOCS
+  AND A REFUTER BROKE IT ON THE FIRST TRY.** `position.byteOffset` is the surviving element's own
+  `Element.byteOffset`, and the replaced element's tag IS the survivor's - but `Element.byteOffset`
+  is **frame-dependent and always has been** (file-absolute at the root, relative to the item's own
+  slice inside a defined-length Item, and no frame-of-reference contract is documented either way).
+  So a collision inside an Item reports an offset that a **root** element can also occupy, and
+  "look it up on the model" then names the wrong attribute. Measured: a `(0010,0020)` collision
+  inside item 0 of `(0040,A730)` reported offset 172, where the root's intact `(0008,0008)` also
+  sits. The docs now say root-only, and `position.contextPath` is **not** populated by any parser
+  warning - adding it is a package-wide feature and a wider slice, not a rider on this one.
   **▶ WHAT THE EVIDENCE ACTUALLY IS, BECAUSE THE GRID CANNOT STAND IN FOR IT.**
   `scripts/measure-sq-bound-grid.ts` vs `0ead071`: of 83,037 cells, **349 differ and every difference
   is confined to the warning channels and `{ strict: true }`** - 0 differ in the element tree, the
@@ -66,8 +75,10 @@ then the two gates.
   real files, and the grid reaches the collision **only** through a length lie. The plain duplicate,
   the duplicate inside an Item, the collision that lands on a sequence's own tag and takes the whole
   `SQ` out of the object, the frame the offset is in, and the strict behaviour are pinned in
-  `test/integration/tag-collision.test.ts` or nowhere: **11 of its 12 tests run red against
-  `origin/main` at `0ead071`**, the twelfth being the no-duplicate control, green there by design.
+  `test/integration/tag-collision.test.ts` or nowhere: **13 of its 14 tests run red against
+  `origin/main` at `0ead071`** (re-measured after the gate's remedy added two; the figure moves with
+  every test you add, so it is written with its sha), the fourteenth being the no-duplicate control,
+  green there by design.
   **▶ THE COST, WHICH IS A `{ strict: true }` COST AND NOT A READING ONE.** **9 cells that parsed
   under `{ strict: true }` now throw**, lenient readings identical, because every Tier-2 code
   escalates through the one chokepoint. A further **4** were already fatal there and now carry this
@@ -78,11 +89,30 @@ then the two gates.
   and the Item's both have to give way; an Item-only under-declare there is refused outright as a
   Tier-3 fatal, which is loud. Under Implicit VR LE the defined-length `SQ` path slices the item
   stream, so the `SQ`'s field is the one that ejects and an Item-only lie ejects **nothing**.
+  **▶ THE MESSAGE LENGTH IS A MEASUREMENT, NOT AN ADJECTIVE.** The first draft said "kept short"
+  about a **400-character** string, which was the **longest of the 30** in `WARNING_MESSAGES` -
+  longer than every de-identify message it named as its model - on the one channel whose multiplicity
+  the input chooses (`ds.warnings` is uncapped, `PRE-EXISTING` and package-wide). A refuter measured
+  131,071 warnings and 50 M characters from a 1 MiB file. It is now **188 characters - seventh of the
+  30, not the longest** (against a median of 102, so still an above-median string, which is the honest
+  way to put it), and the reasoning lives here rather than in the string.
   **▶ WHAT IT DOES NOT REACH, MEASURED NOT ASSUMED.** The **File Meta group** is accumulated into an
   **array** by `parseFileMeta`, not a map, so nothing is overwritten there and this code does not
-  fire on it. `deidentify()` builds its output map from tags that are already unique, so it has no
-  collision to report. Neither is a claim that duplicate File Meta tags are handled well - only that
-  they are not destroyed by this mechanism.
+  fire on it - which is not a claim that duplicate File Meta tags are handled well, only that they
+  are not destroyed by this mechanism. And it does **not** cover `deidentify()`, which is
+  `out.elements.set()` throughout: **the first draft claimed it "has no collision to report" and
+  that is false.** `deidentify.ts:1260` and `:1265` set `(0012,0062)` and `(0012,0063)`
+  unconditionally, so a source `(0012,0063)` is **replaced** rather than added to. `PRE-EXISTING`,
+  identical on both trees, and **it is a real finding against PS3.15 2026c §E.1.1**, which says the
+  method description "shall be inserted in or added to" that attribute. Filed for its own slice,
+  untouched here; it destroys provenance metadata rather than a dose, an identifier or a code system.
+  **▶ AND ONE SHAPE STREAMS THE CODE FOR A DATA SET THAT WAS THEN DISCARDED.** Under Implicit VR LE,
+  a defined-length `SQ` whose item stream holds a duplicate **and then** a non-Item tag makes
+  `tryParseDefinedLengthSQ` roll back: `onWarning` sees `DICOM_DUPLICATE_TAG_IN_DATA_SET`,
+  `ds.warnings` does not, and **nothing was lost** - both values survive in `Element.rawBytes`. That
+  is the `PRE-EXISTING` D-03 pop-after-stream divergence (`makeEmitter` streams before the pop), now
+  reachable by one more code, in the **false-alarm** direction rather than the silent one. Pinned by
+  a test rather than described.
   **▶ STILL OPEN, UNTOUCHED:** `DICOM-PRIVATE-SQ-CARVE-OUT`, and the structural relocation itself
   under `DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ`. This slice makes the loss observable; it does not
   make the file readable.
@@ -145,7 +175,7 @@ then the two gates.
   private-retention path. Asserted in the tests so it cannot be mistaken for something this remedy
   handled.
   **▶ THE PRICE, AND IT IS NOT SMALL.** Grid over **83,037** cells against `300af87`: `priv: kept at
-ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** and the remaining
+  ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** and the remaining
   **56 are the cost** - root retentions on self-contradicting files whose honest control does keep the
   value. Retention on files that do not contradict themselves is unchanged (**9 -> 9** root, **6 -> 6**
   in an Item), `no-creator` **0 -> 0**, `LEAKING` **11 -> 11**, conformant tiling controls **7 -> 7**,
@@ -156,7 +186,7 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   Implicit VR LE, 44 Explicit VR.** `structural` also reads 118 by construction (it counts any record
   difference, de-identify columns included) and is not a reading claim.
   **▶ 🛑 THE HARNESS'S SYNTAX SPLIT WAS BLIND TO THREE OF ITS FOUR FAMILIES, AND IT IS FIXED HERE.**
-  `--diff` classified a cell by whether its key _starts with_ the transfer syntax, which is only true
+  `--diff` classified a cell by whether its key *starts with* the transfer syntax, which is only true
   of the sequence sweep; `carrier|`, `legit|` and `priv|` put their own prefix there, so **no row of
   theirs could ever count as Implicit VR LE**. This slice's 74 Implicit VR LE cells printed as
   `Implicit VR LE 0`. `transferSyntaxOf` fixes it, which also takes
@@ -188,6 +218,7 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   `descendSequence`, so a private `SQ` inside the settled run that the profile vouches for is kept
   verbatim and nothing inside it is examined. `PRE-EXISTING`, its own item, still pinned as a residual
   test that asserts the leaking behaviour.
+
 
 ## DICOM-PRIVATE-CREATOR-RESERVATION-LEAK
 
@@ -298,6 +329,7 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
 > a "N of M tests run red on base" figure has a moving base, so it is not a fact.** Re-run it or do
 > not quote it. It is written here with the sha it was measured against for exactly that reason.
 
+
 ## DICOM-UNRECOGNIZED-VR-SHORT-FORM
 
 - **An unrecognized Explicit VR is read AND written long-form** (`DICOM-UNRECOGNIZED-VR-SHORT-FORM`,
@@ -387,6 +419,7 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   and in `report.removedPrivateTags`, while head puts them in `err.message` beside a `snippet` that
   is already 16 raw source bytes by design (D-10). A registry for fatal messages, mirroring `#48`'s
   work on warnings, is its own slice.
+
 
 ## DICOM-CARRIER-LEAF-LEAKS
 
@@ -499,6 +532,7 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
     inside output stamped `PatientIdentityRemoved=YES`; **the writer was fixed 2026-08-03** with the
     reader, so it re-emits the long form.
 
+
 ## DICOM-DEIDENT-RAWBYTES-PASSTHROUGH
 
 - **De-identification refuses to keep a sequence it could not walk**
@@ -567,6 +601,7 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   file. It needs a parser-set mark, i.e. its own slice. Measured on a hand-built file: identifier in
   the output, no report entry, only `DICOM_VR_MISMATCH`. A **private** `SQ` under `RetainSafePrivate`
   - a `Profile` is still kept verbatim, deliberately - the profile vouched for it.
+
 
 ## DICOM-OVERDECLARE-SWALLOWS-INTO-VALUE
 
@@ -639,6 +674,7 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   -picked with the `declaredLengthDelta` / `omitItemDelim` knobs in `test/helpers/build-dicom.ts` that
   it needs. 76,293 cells; `--diff` prints every number the artifacts state.
 
+
 ## Shipped phases (4 through 7 of 8)
 
 - **Phase 7 of 8 complete** (580 tests passing, 1 todo). Metadata-level de-identification live:
@@ -674,6 +710,7 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   value-layer `DicomValueError`. Builds on Phase 3 VR value decode (all 34 VRs via `Element.value`) +
   the `Dataset`/`Item` navigation API.
 
+
 ## The PS3.6 element registry generator
 
 - **The element registry is sourced from the normative PS3.6 DocBook, not from a mirror alone.**
@@ -693,6 +730,7 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   live tags). **There is no staleness clock and must not be one** - a date gate fires the day it is
   written, demands an action nobody can take on demand, and reds unrelated PRs. "Has NEMA moved" is
   one content-comparing command in `vendor/nema/README.md`; CI gates byte-identical regen, offline.
+
 
 ## The PS3.15 Annex E action table generator
 
@@ -724,6 +762,7 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   protective** branch - `K` on all 169 where modified-dates says `C`; the JSDoc and troubleshooting
   doc now say so, and splitting the option is a public-surface change deliberately not made).
 
+
 ## Repeating-group masks on the de-identify path
 
 - **Table E.1-1's repeating-group rows are matched by mask, bounded by PS3.5 §7.6.** `(50xx,xxxx)`
@@ -754,6 +793,7 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   `test/scripts/generate-annex-e.test.ts`: the pre-remedy generator exits 0 on an injected `(7Fxx,0010)`
   row, the post-remedy one exits 1; a second mutation moves the Overlay Comments code `X` -> `K` and
   proves the emitted rule follows the document rather than a hard-coded `X`.
+
 
 ## The vendored PS3.5 repeating-group bound
 
@@ -805,6 +845,7 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   re-deriving the bound from a current normative source. **No staleness clock here either**, same
   reasoning as PS3.6 and PS3.15.
 
+
 ## PHI-WARNING-MESSAGE-LEAK
 
 - **Diagnostics are built from a frozen registry, not from the document** (`PHI-WARNING-MESSAGE-LEAK`).
@@ -849,6 +890,7 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   conformant reading and fail-safe, and it is a **behaviour change against `0.0.5`** for any sender
   that declares a creator once at the root and writes private data into Per-Frame Functional Groups
   items.
+
 
 ## DICOM-PARSE-CREATORS-SCOPE
 
@@ -895,6 +937,7 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   disclosed instead:** under `{ strict: true }` the new warning is promoted to a throw, so a file
   whose items borrow an enclosing block parses lenient and throws strict. That is strict doing its
   job on a warning that is now correctly emitted, and the release note says so.
+
 
 ## DICOM-IMPLICIT-SQ-NOT-DESCENDED
 
@@ -983,6 +1026,7 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   element inside an **undefined-length** item reads **192**, file-absolute, because that branch is
   handed the outer buffer. `Element.byteOffset` documents no frame-of-reference contract either way.
   **Measure it rather than describing it.**
+
 
 ## DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ
 
@@ -1102,6 +1146,7 @@ READING differs` is **not** new here: `#66` added it, and a draft of this entry 
     uniformly item-relative, and the two forms do not agree. `Element.byteOffset` documents no
     frame-of-reference contract either way. **Re-measure it rather than describing it.**
 
+
 ## The em-dash brand gate
 
 - **Em-dash brand gate armed.** `scripts/check-no-emdash.sh` (`pnpm check:no-emdash`) plus
@@ -1127,6 +1172,7 @@ READING differs` is **not** new here: `#66` added it, and a draft of this entry 
   it, and do not remove the NUL to quiet the gate. When the gate goes red the fix is never to
   re-encode the character: rewrite with a period, colon, comma, or parentheses. Known limits are in
   the script header and are shared across every copy, so fix them there, not here.
+
 
 ## The attw wrapper gate
 

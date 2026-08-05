@@ -43,7 +43,11 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   therefore cannot refuse one, so the bound is the factory signature, as it is for
   `DICOM_NONZERO_RESERVED_BYTES` and `DICOM_ITEM_CROSSES_SEQUENCE_END`. `position.byteOffset` is the
   offset of the header that replaced, which is the surviving element's own `Element.byteOffset` -
-  so the tag is read off the model rather than out of a message.
+  so at the **root** the tag is read off the model rather than out of a message. **Inside a
+  defined-length Sequence Item it is not a lookup at all**: `Element.byteOffset` is item-relative
+  there, so the same number can name an untouched root element, and no parser warning populates
+  `position.contextPath` to tell them apart. Read the code as "an element in this object was
+  destroyed" unless you have established the frame.
 
   **What this cost, measured on `scripts/measure-sq-bound-grid.ts` against `0ead071`, because a
   disclosure that changes a `{ strict: true }` parse is a behaviour change.** Of 83,037 cells, **349
@@ -62,9 +66,10 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   The plain duplicate, the duplicate inside an Item, the collision that lands on a sequence's own tag
   and takes the whole `SQ` and everything nested in it out of the object, the frame the byte offset
   is in, and the `{ strict: true }` behaviour are pinned in
-  `test/integration/tag-collision.test.ts` or nowhere: **11 of its 12 tests run red against
-  `origin/main` at `0ead071`**, the twelfth being the no-duplicate control, which is green there by
-  design.
+  `test/integration/tag-collision.test.ts` or nowhere: **13 of its 14 tests run red against
+  `origin/main` at `0ead071`** - re-measured after the gate's remedy added two, and written with its
+  sha because that figure moves with every test added - the fourteenth being the no-duplicate
+  control, which is green there by design.
 
   **Still open, and not touched here:** the private-`SQ` carve-out (`DICOM-PRIVATE-SQ-CARVE-OUT`),
   and the structural relocation itself under `DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ` - an

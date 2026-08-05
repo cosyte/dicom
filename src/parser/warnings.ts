@@ -180,11 +180,12 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   DICOM_EMPTY_ITEM_IN_SEQUENCE: "Sequence ({tag}) contains an empty item (length=0); tolerated.",
   // Neither the tag nor the replaced element's value is here, and the tag's
   // absence is specific to this code rather than caution. See
-  // `duplicateTagInDataSet`. Kept short for the reason the de-identify messages
-  // are: one is raised per collision, and the collision count is chosen by the
-  // input.
+  // `duplicateTagInDataSet`. Short by measurement rather than by intention: one
+  // is raised per collision and the collision count is chosen by the input, so a
+  // 400-character draft was measured at 50 M characters over a 1 MiB file and
+  // cut. The reasoning lives in the factory's JSDoc, not in the string.
   DICOM_DUPLICATE_TAG_IN_DATA_SET:
-    "A second Data Element carrying a tag this Data Set already holds was read at this byte offset; a Data Set is keyed by tag, so it replaced the earlier element, whose value is not in the parsed object and cannot be recovered from it. PS3.5 7.1 requires a tag to occur at most once in a Data Set, and 7.5.1 the same within an Item. The tag is withheld; the byte offset locates the element that survived.",
+    "A Data Element carrying a tag this Data Set already holds replaced the earlier one at this byte offset; that element's value is not in the parsed object. PS3.5 7.1 and 7.5.1. Tag withheld.",
   // The Item's own declared length is deliberately absent. See
   // `itemCrossesSequenceEnd`; `{n2}` stays because the emit site's
   // `endLimit < buffer.length` conjunct bounds it by the buffer.
@@ -707,11 +708,18 @@ export function emptyItemInSequence(position: DicomPosition, tag: Tag): DicomPar
  * carries under that tag. The element that was replaced is gone, and its tag is
  * the survivor's.
  *
- * `position.byteOffset` is frame-dependent exactly as `Element.byteOffset` is:
- * file-absolute at the root, and relative to the item's own slice inside a
- * defined-length item. Neither documents a frame-of-reference contract; both are
- * measured and pinned in `test/integration/tag-collision.test.ts` rather than
- * described here.
+ * **🛑 THAT LOOKUP IS ROOT-ONLY, AND SAYING IT UNQUALIFIED IS A DEFECT A GATE
+ * ALREADY CAUGHT.** `position.byteOffset` is frame-dependent exactly as
+ * `Element.byteOffset` is: file-absolute at the root, relative to the item's own
+ * slice inside a defined-length item, with no frame-of-reference contract
+ * documented either way. **So it is not a unique key over the object.** A
+ * collision inside an item reports an offset a *root* element may also occupy -
+ * measured: a `(0010,0020)` collision inside item 0 of `(0040,A730)` reports
+ * offset 172, where the root's untouched `(0008,0008)` also sits, so a
+ * root-only search names the wrong attribute. `position.contextPath` would
+ * disambiguate it and **no parser warning populates it**; giving them one is a
+ * package-wide change, not a rider on this code. Both frames are measured and
+ * pinned in `test/integration/tag-collision.test.ts` rather than described.
  *
  * ## What it does not do
  *

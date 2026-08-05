@@ -339,7 +339,115 @@ describe("the diagnostic itself", () => {
     );
     expect(warning?.message).not.toContain("SMITHSON");
     expect(warning?.message).not.toContain(PATIENT_ID);
-    expect(warning?.message).toContain("The tag is withheld");
+    expect(warning?.message).toContain("Tag withheld");
+  });
+
+  it("🛑 the byte offset is NOT a key: an in-Item collision reports an offset a ROOT element holds", () => {
+    // The refutation this test exists for. The message withholds the tag and
+    // the docs offer `position.byteOffset` instead - but `Element.byteOffset` is
+    // frame-dependent (file-absolute at the root, item-relative inside a
+    // defined-length Item), so "find the element at that offset" can name an
+    // element that was never touched. Derived at run time rather than written as
+    // a numeral: the padding that makes the two frames coincide is computed from
+    // this fixture's own measurements, because the file's File Meta size decides
+    // them and a hard-coded number goes stale with any fixture edit.
+    const build = (pad: number): Buffer =>
+      buildDicom({
+        transferSyntax: EXPLICIT_LE,
+        elements: [
+          { tag: "00080008", vr: "CS" as VR, value: val("ORIGINAL") },
+          {
+            tag: CONTENT_SEQUENCE,
+            items: [
+              {
+                elements: [
+                  { tag: "00080018", vr: "UI" as VR, value: Buffer.alloc(pad, 0x30) },
+                  { tag: PATIENT_ID, vr: "LO" as VR, value: val(FIRST) },
+                  { tag: PATIENT_ID, vr: "LO" as VR, value: val(SECOND) },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+
+    const probe = parseDicom(build(2));
+    const probeWarning = probe.warnings.find(
+      (w) => w.code === WARNING_CODES.DICOM_DUPLICATE_TAG_IN_DATA_SET,
+    );
+    const rootOffset = probe.get("00080008")?.byteOffset ?? -1;
+    // The frames disagree, which is the premise: the same collision is "near the
+    // start" in the item's frame and the root filler is far into the file.
+    expect(probeWarning?.position.byteOffset).toBeLessThan(rootOffset);
+
+    const pad = 2 + (rootOffset - (probeWarning?.position.byteOffset ?? 0));
+    expect(pad % 2).toBe(0);
+    const collided = parseDicom(build(pad));
+    const warning = collided.warnings.find(
+      (w) => w.code === WARNING_CODES.DICOM_DUPLICATE_TAG_IN_DATA_SET,
+    );
+
+    // The offset now names TWO different elements in two different frames, and
+    // the root one is intact. Any consumer recipe that searches the root by this
+    // offset gets `(0008,0008)` and no indication it is wrong, so the docs say
+    // root-only and `position.contextPath` is left for a slice that gives every
+    // parser warning one.
+    const rootMatches = [...collided.elements()].filter(
+      (el) => el.byteOffset === warning?.position.byteOffset,
+    );
+    expect(rootMatches.map((el) => el.tag)).toStrictEqual(["00080008"]);
+    expect(rootMatches[0]?.rawBytes.toString("latin1")).toBe(val("ORIGINAL").toString("latin1"));
+    // The element actually destroyed is inside the item, under a different tag.
+    const item = collided.get(CONTENT_SEQUENCE)?.items?.[0];
+    expect(item?.get(PATIENT_ID)?.byteOffset).toBe(warning?.position.byteOffset);
+    expect(item?.get(PATIENT_ID)?.rawBytes.toString("latin1")).toBe(val(SECOND).toString("latin1"));
+    expect(warning?.position.contextPath).toBeUndefined();
+  });
+
+  it("a rolled-back descent streams the code to `onWarning` while `ds.warnings` never gets it", () => {
+    // The one shape where the code fires and NOTHING was lost, and it is a
+    // false alarm rather than a silence. Under Implicit VR LE a defined-length
+    // `SQ` whose value holds a duplicate and then a non-Item tag makes
+    // `tryParseDefinedLengthSQ` roll the parse back: the map that took the
+    // collision is discarded, and both values survive in `Element.rawBytes`.
+    // `makeEmitter` streams to `onWarning` BEFORE the pop that undoes it (the
+    // pre-existing D-03 ordering), so the two channels disagree. Pinned rather
+    // than described, because this is exactly the disclosure a later slice would
+    // otherwise have to rediscover.
+    const trailing = { tag: "00080060" as const, vr: "CS" as VR, value: val("MR") };
+    const buf = buildDicom({
+      transferSyntax: IMPLICIT_LE,
+      elements: [
+        {
+          tag: CONTENT_SEQUENCE,
+          declaredLengthDelta: shortFormWireSize(trailing.value),
+          items: [
+            {
+              elements: [
+                { tag: PATIENT_ID, vr: "LO" as VR, value: val(FIRST) },
+                { tag: PATIENT_ID, vr: "LO" as VR, value: val(SECOND) },
+              ],
+            },
+          ],
+        },
+        trailing,
+      ],
+    });
+    const streamed: string[] = [];
+    const ds = parseDicom(buf, { onWarning: (w) => streamed.push(w.code) });
+
+    expect(streamed).toContain(WARNING_CODES.DICOM_DUPLICATE_TAG_IN_DATA_SET);
+    expect(ds.warnings.map((w) => w.code)).not.toContain(
+      WARNING_CODES.DICOM_DUPLICATE_TAG_IN_DATA_SET,
+    );
+    expect(ds.warnings.map((w) => w.code)).toContain(WARNING_CODES.DICOM_SQ_NOT_DESCENDED);
+
+    // Nothing was lost on that file: the sequence was not descended, so both
+    // values are still in the object as bytes.
+    const raw = ds.get(CONTENT_SEQUENCE)?.rawBytes.toString("latin1") ?? "";
+    expect(raw).toContain(FIRST);
+    expect(raw).toContain(SECOND);
+    expect(ds.get(CONTENT_SEQUENCE)?.items).toBeUndefined();
   });
 
   it("escalates under { strict: true }, which is the chokepoint's contract and not a choice made here", () => {

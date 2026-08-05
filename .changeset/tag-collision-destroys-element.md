@@ -25,9 +25,10 @@ exactly once in that document. So the code cannot fire on a conformant file.
 
 **The message names no tag**, which is specific to this code rather than caution: the ordinary route
 to a collision is a length field that lies, so the four tag bytes of the second header can be
-fragments of some element's value. `position.byteOffset` locates the element that survived, and it
-is that element's own `Element.byteOffset`, so the tag is read off the model instead of out of a
-message.
+fragments of some element's value. `position.byteOffset` locates the element that survived, and it is
+that element's own `Element.byteOffset` - so at the root the tag is read off the model instead of out
+of a message, and **inside a defined-length Sequence Item it is not a lookup**, because
+`Element.byteOffset` is item-relative there and no parser warning populates `position.contextPath`.
 
 **Two behaviour changes for callers, both measured on `scripts/measure-sq-bound-grid.ts` against
 `0ead071` and neither discoverable from the diff.** Of its 83,037 cells, **349 differ and every
