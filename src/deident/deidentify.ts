@@ -43,10 +43,16 @@
  *   replacement (which needs domain context the metadata layer lacks).
  * - Pixel-level options (`CleanPixelData`, `CleanRecognizableVisual`) are out of
  *   scope; burned-in text is warned, never cleaned.
- * - A private data element kept under `RetainSafePrivate` is kept *verbatim* - if
- *   it is itself a sequence carrying standard PHI attributes, that nested content
- *   is not recursed. The profile vouches the element is safe; nest accordingly.
- * - A **standard** (non-private) `SQ` whose `items` the parser did not
+ * - A private data element kept under `RetainSafePrivate` is kept *verbatim*
+ *   **unless it is a sequence**. A private `SQ` the profile vouches for is
+ *   retained as an element but its items are **walked**, so standard PHI
+ *   attributes nested inside it are de-identified like any others
+ *   (`DICOM-PRIVATE-SQ-CARVE-OUT`; it was kept whole and unexamined through
+ *   `0.0.10`). The profile vouches that the *private attribute* is safe, which
+ *   PS3.15 §E.3.10 is about; it cannot vouch for a Data Set nested in its value,
+ *   which §E.1.1 covers "whether contained in the top level Data Set or embedded
+ *   in an Item of a Sequence of Items". See {@link keepRetainedPrivate}.
+ * - A `SQ` whose `items` the parser did not
  *   materialize is **emptied**, not kept:
  *   its value is by PS3.5 §7.5.1 a stream of Data Sets, and a run that cannot
  *   enumerate them cannot discharge §E.1.1's obligation inside them, so the
@@ -57,16 +63,15 @@
  *   `(0010,0020)` Patient IDs among them - into output stamped
  *   `(0012,0062) PatientIdentityRemoved = YES`
  *   (`DICOM-DEIDENT-RAWBYTES-PASSTHROUGH`, live through `0.0.6`).
- * - Two things are still kept verbatim, deliberately. A **private** `SQ`
- *   retained under `RetainSafePrivate` + a {@link Profile}, where the profile has
- *   vouched for the element by creator and tag - the pre-existing "kept
- *   verbatim" limitation above, unchanged. And an undefined-length **`UN`** whose
- *   CP-246 descent was refused: it keeps `vr === "UN"`, and since every ordinary
- *   `UN` element also has no items, the test above cannot be applied there
- *   without emptying every unknown-VR element in every file. That one is
- *   measured and **still leaks** (`PRE-EXISTING`); the reliable consumer-side
- *   test remains `el.items === undefined` on a `UN` element you are trusting a
- *   report about.
+ * - One thing is still kept verbatim, and it is **not** the private `SQ`: an
+ *   undefined-length **`UN`** whose CP-246 descent was refused. It keeps
+ *   `vr === "UN"`, and since every ordinary `UN` element also has no items, the
+ *   test above cannot be applied there without emptying every unknown-VR element
+ *   in every file. That one is measured and **still leaks** (`PRE-EXISTING`);
+ *   the reliable consumer-side test remains `el.items === undefined` on a `UN`
+ *   element you are trusting a report about. `RetainSafePrivate` no longer
+ *   exempts anything from the rule above it - a vouched-for private `SQ` with no
+ *   materialized items is emptied on the same terms as any other.
  * - An element whose **on-wire VR is not one of the 34** PS3.5 §6.2 defines is
  *   **emptied**, not kept (`DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` +
  *   `report.undefinedVrElements`). Such an element is what an *under*-declared
@@ -95,12 +100,14 @@
  *   which removal is the branch available here (`(0008,0307)` is not
  *   implemented). Every private element the recursion **reaches** in such an
  *   Item, at any depth below it, is removed and named in
- *   `report.removedPrivateTags`. **There is one carve-out, and it is the same one
- *   `#54` was refused for asserting away**: `keepsPrivate` decides *before* the
- *   descent, so a **private `SQ`** the profile vouches for is kept **verbatim**,
- *   its items are never walked, and this rule is never consulted inside it -
- *   measured, and it still leaks a private value absorbed from the root
- *   (`PRE-EXISTING`, identical on `164eb39`, its own item). That costs content
+ *   `report.removedPrivateTags`. **The carve-out `#54` was refused for asserting
+ *   away is CLOSED** (`DICOM-PRIVATE-SQ-CARVE-OUT`): `keepsPrivate` still decides
+ *   before the descent, but a **private `SQ`** it vouches for now routes through
+ *   {@link keepRetainedPrivate} into the ordinary `SQ` branches instead of being
+ *   kept verbatim, so its items **are** walked and this rule **is** consulted
+ *   inside them. Read that as "the retention decision no longer decides the fate
+ *   of the Data Sets below it", never as "the class is closed" - the residual
+ *   list in `CLAUDE.md` is the census. That costs content
  *   on a malformed file and nothing at all on a conformant one; without it a
  *   private value the sender wrote **outside** the sequence was retained on the
  *   Item's reservation and written into output stamped `PatientIdentityRemoved =
@@ -116,10 +123,10 @@
  *   inner sequence ejecting a creator into the still-usable Item that encloses it
  *   is measured and pinned. The cut is positional, so a reservation the sender
  *   wrote **ahead of** the offending sequence is untouched. Every private element
- *   after that point is removed and named in `report.removedPrivateTags`, and the
- *   **private-`SQ` carve-out above still applies**: a private `SQ` inside the
- *   settled run that the profile vouches for is kept verbatim and never walked.
- *   See {@link settledBound}.
+ *   after that point is removed and named in `report.removedPrivateTags`. A
+ *   private `SQ` inside the settled run that the profile vouches for is retained
+ *   and **walked**, so the rule reaches its items too - it no longer stops at the
+ *   carrier. See {@link settledBound} and {@link keepRetainedPrivate}.
  *
  * @module
  */
@@ -480,10 +487,11 @@ function hasUndefinedVr(el: Element): boolean {
  * into de-identified output unchanged**, which is what makes the two refusals
  * below unconditional rather than a promise: every other outcome (`X` remove,
  * `Z`/`C` empty, `D` dummy, `U` remap, and a private tag the Basic Profile
- * drops) has already replaced the value by the time it would matter. A private
- * element a {@link Profile} vouches for under `RetainSafePrivate` does route
- * here, so it is covered too - which is the carve-out its `SQ` sibling has and
- * this does not.
+ * drops) has already replaced the value by the time it would matter. A **non-`SQ`**
+ * private element a {@link Profile} vouches for under `RetainSafePrivate` does
+ * route here, so it is covered too. Its `SQ` sibling no longer reaches this
+ * function at all: {@link keepRetainedPrivate} sends a vouched-for private `SQ`
+ * down the descent instead, which is `DICOM-PRIVATE-SQ-CARVE-OUT`.
  *
  * Order matters and is not arbitrary. The undefined-VR test comes first because
  * it is the cheaper and the stronger of the two: it settles the element from a
@@ -589,10 +597,11 @@ function emptyUndefinedVrElement(
  * relaxed test would empty every unknown-VR element in every file. Telling the
  * two apart needs a mark the parser does not set. Measured, still leaking.
  *
- * Note also what a `true` here does **not** guarantee: `keepsPrivate` runs
- * before this on a private element, so a private `SQ` a {@link Profile} vouches
- * for under `RetainSafePrivate` never reaches this predicate and is kept
- * verbatim. See {@link deidentify}'s module notes.
+ * A private `SQ` a {@link Profile} vouches for under `RetainSafePrivate` reaches
+ * this predicate too, since `DICOM-PRIVATE-SQ-CARVE-OUT`: it arrives via
+ * {@link keepRetainedPrivate} rather than from `processElements` directly, and
+ * an un-auditable one is emptied on the same terms as any other. The vouching
+ * exempts nothing from this test. See {@link deidentify}'s module notes.
  */
 function isUnauditableSequence(el: Element): boolean {
   return el.vr === "SQ" && el.items === undefined;
@@ -677,10 +686,23 @@ function emptyUnauditableSequence(
  * `Element.privateCreator` is membership-bounded against the profile that was
  * active **at parse time** (`src/parser/tokens.ts`), and a caller may perfectly
  * reasonably parse without a profile and pass one here. Re-deriving the
- * reservation from the elements in front of us makes `RetainSafePrivate` behave
- * identically whether the profile arrived at parse or at de-identification. The
- * decoded string never leaves this map: it is a lookup key, not a value on any
- * surface.
+ * reservation from the elements in front of us makes **the reservation lookup**
+ * behave identically whether the profile arrived at parse or at
+ * de-identification. The decoded string never leaves this map: it is a lookup
+ * key, not a value on any surface.
+ *
+ * **🛑 THAT IS A STATEMENT ABOUT THE RESERVATION AND NOT ABOUT THE RUN, AND THE
+ * WIDER READING IS RETRACTED.** It used to say `RetainSafePrivate` as a whole
+ * behaves identically either way, which was true only while every retained
+ * private element was kept verbatim. It is false now: under Implicit VR LE a
+ * private tag carries no VR on the wire, so a profile-declared `SQ` is an
+ * inference the **parser** makes. Parse with the profile and the element arrives
+ * as an `SQ` with items and {@link keepRetainedPrivate} walks it; parse without
+ * it and the same bytes arrive as `UN`, take the non-`SQ` branch, and are kept
+ * verbatim. Same profile, same bytes, different outcome
+ * (`DICOM-PRIVATE-SQ-PARSE-VR`, `PRE-EXISTING`, pinned as a residual test in
+ * `test/integration/deident-private-reservation.test.ts`). Pass the profile to
+ * `parseDicom` as well when you rely on `RetainSafePrivate`.
  *
  * **Per Data Set, not per run, and the difference is a PHI defect.** PS3.5 §7.5
  * makes each Sequence Item its own Data Set and §7.8.1 scopes a block
@@ -916,6 +938,97 @@ function keepsPrivate(
 }
 
 /**
+ * Retain a private element the profile vouches for - **walking it first when it
+ * is an `SQ`**.
+ *
+ * ## What a {@link Profile} does and does not vouch for
+ *
+ * PS3.15 2026c §E.3.10 licenses retention for "Private Attributes that are known
+ * by the de-identifier to be safe from identity leakage". A profile entry is
+ * exactly that knowledge, and it is knowledge about **one private attribute**:
+ * the element carrying that tag under that Private Creator. It is not, and
+ * cannot be, knowledge about the contents of a Data Set nested inside that
+ * element's value. PS3.5 2026c §7.5.1 "Item Encoding Rules" says "Each Item
+ * Value shall contain a DICOM Data Set composed of Data Elements", so an `SQ`
+ * whose items were materialized carries Data Elements the vendor entry never
+ * named - `(0010,0010)` Patient's Name among them, which is not a Private
+ * Attribute at all and which §E.3.10 therefore says nothing about.
+ *
+ * PS3.15 2026c §E.1.1 "De-identifier" settles it in the other direction: an
+ * implementation claiming the Basic Application Level Confidentiality Profile
+ * shall "protect or retain all instances of the Attributes listed in [Table
+ * E.1-1], **whether contained in the top level Data Set or embedded in an Item
+ * of a Sequence of Items**". A vouched-for private carrier does not exempt the
+ * Items inside it from that obligation - it is one of the Sequences of Items the
+ * clause names.
+ *
+ * ## Why this is not a widened guard
+ *
+ * The retention decision itself is untouched: {@link keepsPrivate} still answers
+ * "does the profile vouch for this element", the profile is still the vouching
+ * authority, and no content test second-guesses it. What changes is only that
+ * the answer "yes" no longer **also** decides the fate of every Data Set below
+ * it. A private `SQ` is now routed through the same two branches every other
+ * `SQ` in this module takes - {@link descendSequence} when its items exist,
+ * {@link emptyUnauditableSequence} when the parser never materialized them - so
+ * the rules below it are consulted rather than skipped.
+ *
+ * Note that this is what carries `reservationsUsable` into the carrier's items,
+ * which is the mechanism the sibling absorb rule needed and never got: a private
+ * element the file's own contents pulled **into** such an item is now reached by
+ * {@link processElements} and refused there, rather than blitted out with the
+ * carrier.
+ *
+ * ## What it costs
+ *
+ * Content, on exactly the files that carry a vouched-for private `SQ`. Table
+ * E.1-1 rows inside its items are now acted on, UIDs inside it are remapped
+ * under `U`, and a nested private element whose block no Private Creator
+ * reserves **within that item** is removed and named in
+ * `report.removedPrivateTags` - PS3.5 §7.8.1's per-Data-Set scope, which items
+ * do not inherit. A vendor block that encodes its own reservation inside the
+ * item, as §7.8.1 requires, is retained exactly as before. A non-`SQ` private
+ * element is untouched by this function and still routes to
+ * {@link keepOrEmpty}.
+ *
+ * ## 🛑 The bound: `el.vr` is the PARSED VR, not the profile's declared one
+ *
+ * The `SQ` branch keys on what the parse tree says, and under Implicit VR LE a
+ * private tag has no VR on the wire at all - `SQ` there is an inference the
+ * parser draws from a {@link Profile} it was given. So a caller who passes the
+ * profile to `deidentify()` but **not** to `parseDicom` hands this function a
+ * `UN` element with no items, it takes the non-`SQ` branch, and the carrier is
+ * kept verbatim exactly as before this slice. That is `DICOM-PRIVATE-SQ-PARSE-VR`,
+ * `PRE-EXISTING` and its own item, pinned as a residual test rather than
+ * asserted away. **It is not the undefined-length `UN` residual**: that one is a
+ * CP-246 descent this parser refused, and the carrier here has a defined length,
+ * so CP-246 is never reached.
+ *
+ * `reservationsUsable` is threaded through rather than assumed. Its only call
+ * site today is already guarded by `reservationsUsable &&`, so it can only
+ * arrive `true`; it is a parameter so that the guard and the descent cannot
+ * drift apart if that call site is ever relaxed, not because this function makes
+ * a decision with it.
+ */
+function keepRetainedPrivate(
+  el: Element,
+  ctx: DeidentifyContext,
+  contextPath: readonly string[],
+  out: ProcessResult,
+  reservationsUsable: boolean,
+): void {
+  if (el.vr !== "SQ") {
+    keepOrEmpty(el, ctx, contextPath, out);
+    return;
+  }
+  if (isUnauditableSequence(el)) {
+    emptyUnauditableSequence(el, ctx, contextPath, out);
+    return;
+  }
+  out.elements.set(el.tag, descendSequence(el, ctx, contextPath, out, reservationsUsable));
+}
+
+/**
  * De-identify one ordered run of elements (a dataset body or a sequence item),
  * returning the rebuilt element map plus the audit accumulated at this depth.
  *
@@ -949,13 +1062,16 @@ function keepsPrivate(
  * this Data Set and every private element **this function is given** is removed
  * and named in `report.removedPrivateTags`.
  *
- * **What that does NOT cover, and the sentence is qualified rather than the guard
- * widened** (`#54`'s rule, and `#54`'s exact refusal): a **private `SQ`** the
- * profile vouches for is settled by `keepsPrivate` -> `keepOrEmpty` **before**
- * {@link descendSequence} runs, so its items are never walked and this flag is
- * never carried into them. A private element absorbed into such a carrier's item
- * by an over-run is kept verbatim. Measured, `PRE-EXISTING`, identical on
- * `164eb39`, and pinned as a residual test rather than asserted away.
+ * **What this used NOT to cover, and no longer needs qualifying** (`#54`'s exact
+ * refusal, closed by `DICOM-PRIVATE-SQ-CARVE-OUT`): a **private `SQ`** the
+ * profile vouches for was settled by `keepsPrivate` -> `keepOrEmpty` **before**
+ * {@link descendSequence} ran, so its items were never walked and this flag was
+ * never carried into them, and a private element absorbed into such a carrier's
+ * item by an over-run was kept verbatim. It now routes through
+ * {@link keepRetainedPrivate}, which takes the same descent every other `SQ`
+ * takes, so this flag reaches those items and the absorbed element is refused
+ * there like any other. The residual tests that asserted the leak assert the
+ * closure instead.
  *
  * **It propagates downward and never recovers.** A nested sequence inside a
  * disputed Item is itself made of disputed bytes, so its items' boundaries are no
@@ -998,7 +1114,7 @@ function processElements(
   for (const [at, el] of source.entries()) {
     if (isPrivateTag(el.tag)) {
       if (reservationsUsable && isSettled(el, at, bound) && keepsPrivate(el, ctx, creators))
-        keepOrEmpty(el, ctx, contextPath, out);
+        keepRetainedPrivate(el, ctx, contextPath, out, reservationsUsable);
       else out.removedPrivateTags.push(el.tag);
       continue;
     }

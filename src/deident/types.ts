@@ -356,9 +356,11 @@ export interface DeidentifyReport {
    * sequence is still emptied; an array exactly that long means "at least this
    * many", so read it as truncated rather than as a total.
    *
-   * **It is not a complete list of what went un-audited, either**: a private
-   * `SQ` a {@link Profile} vouches for under `RetainSafePrivate` is kept
-   * verbatim and never appears here.
+   * **It covers private sequences too, since `DICOM-PRIVATE-SQ-CARVE-OUT`.** A
+   * private `SQ` a {@link Profile} vouches for under `RetainSafePrivate` used to
+   * be kept verbatim and never appear here; it is now emptied and listed on the
+   * same terms as any other, because the profile's licence under PS3.15 §E.3.10
+   * is over a private attribute and not over an item stream nothing could read.
    */
   readonly unauditableSequences: readonly UnauditableSequenceFinding[];
   /**
@@ -387,14 +389,17 @@ export interface DeidentifyReport {
    * {@link UndefinedVrFinding}: the tag of a fabricated header is itself part of
    * some element's value.
    *
-   * Unlike its sibling this list has **no carve-out**, and the reason is
-   * structural rather than a promise: `keepOrEmpty` is the **only** path that
-   * writes a source value into de-identified output unchanged, and the test sits
-   * at the top of it. Every other outcome - `X` remove, `Z`/`C` empty, `D` dummy,
-   * `U` remap, and a private tag the Basic Profile drops - already replaces the
-   * value. So a `RetainSafePrivate` element a {@link Profile} vouches for still
-   * reaches this test and is still emptied, which is where the sibling
-   * `SQ`-with-no-items rule has a real carve-out and this one does not.
+   * This list has **no carve-out**, and the reason is structural rather than a
+   * promise: `keepOrEmpty` is the **only** path that writes a source value into
+   * de-identified output unchanged, and the test sits at the top of it. Every
+   * other outcome - `X` remove, `Z`/`C` empty, `D` dummy, `U` remap, and a
+   * private tag the Basic Profile drops - already replaces the value. So a
+   * `RetainSafePrivate` element a {@link Profile} vouches for still reaches this
+   * test and is still emptied. Its sibling
+   * {@link DeidentifyReport.unauditableSequences} had a real one until
+   * `DICOM-PRIVATE-SQ-CARVE-OUT`; neither has one now, and they arrive at that by
+   * different routes - this one because nothing bypasses `keepOrEmpty`, that one
+   * because a vouched-for private `SQ` is routed into the ordinary `SQ` branches.
    */
   readonly undefinedVrElements: readonly UndefinedVrFinding[];
   /**

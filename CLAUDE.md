@@ -28,15 +28,15 @@ in the same area - open the section first.**
   file** - `npm view @cosyte/dicom version` is the only source of truth, and the meta-repo's ADR 0023
   carries the measured history of why. Do not re-derive it here; do not add a numeral to this bullet.
 - **🩺 Open PHI residuals - measured, disclosed, NOT closed. None of these is an all-clear:**
-  - The **private-`SQ` carve-out** (`keepsPrivate` decides before `descendSequence`, so a vouched-for
-    private `SQ` is kept verbatim and never walked). Produces a **false attestation**:
-    `removedPrivateTags: []`, the value in the output, `(0012,0062) = YES`. Pinned as a residual test
-    that asserts the leaking behaviour, so closing it turns that test red. Its sibling, the **EJECT**
-    direction, is **closed** - and closing it needed a **second predicate** (Implicit VR LE records no
-    over-run at all) plus a **positional cut with TWO bounds**, so do not read the absorb rule as
-    covering it.
-    [#dicom-item-eject-route](documentation/agent-notes.md#dicom-item-eject-route) ·
-    [#dicom-private-creator-reservation-leak](documentation/agent-notes.md#dicom-private-creator-reservation-leak)
+  - The **private-`SQ` carve-out** is **CLOSED, BUT ONLY WHERE THE PARSER RESOLVED THE ELEMENT TO
+    `SQ`** - the branch keys on the PARSED VR, and Implicit VR LE carries none on the wire, so a
+    profile given to `deidentify()` but not `parseDicom` still leaks verbatim
+    (`DICOM-PRIVATE-SQ-PARSE-VR`; **defined** length, so the CP-246 `UN` residual is NOT it).
+    **A `Profile` vouches for a Private Attribute (PS3.15 §E.3.10), never for a Data Set nested in
+    its value (§E.1.1).** **The grid holds no private-`SQ` cell**; the unit tests are the net.
+    ABSORB and EJECT are closed too; EJECT needed a **second predicate** (Implicit VR LE records no
+    over-run) plus a **positional cut with TWO bounds**, so do not read absorb as covering it.
+    [#dicom-private-sq-carve-out](documentation/agent-notes.md#dicom-private-sq-carve-out)
   - **11 grid cells** still leak through an over-declaring `OB`/`OW`/`US`/`UN` **leaf** carrier,
     silent. `PRE-EXISTING`.
     [#dicom-carrier-leaf-leaks](documentation/agent-notes.md#dicom-carrier-leaf-leaks)
@@ -273,11 +273,11 @@ not soften them. All anchors are in `documentation/agent-notes.md`.
   not "simplify" `ParseContext.creators` back to a `readonly` field - the swap is what scopes it.
   [#phi-warning-message-leak](documentation/agent-notes.md#phi-warning-message-leak) ·
   [#dicom-parse-creators-scope](documentation/agent-notes.md#dicom-parse-creators-scope)
-- **`keepsPrivate` decides BEFORE `descendSequence`, so a private `SQ` a profile vouches for is kept
-  verbatim and no rule below is ever consulted inside it.** Never claim a de-identify rule is
-  unconditional without checking this first - it is `#54`'s exact refusal and it has recurred twice.
-  [#dicom-private-creator-reservation-leak](documentation/agent-notes.md#dicom-private-creator-reservation-leak) ·
-  [#dicom-deident-rawbytes-passthrough](documentation/agent-notes.md#dicom-deident-rawbytes-passthrough)
+- **A RETENTION DECISION MUST NOT ALSO DECIDE THE FATE OF THE DATA SETS BELOW IT.** `keepsPrivate`
+  decided before `descendSequence`, so a vouched-for private `SQ` was kept verbatim with nothing
+  inside it consulted - `#54`'s refusal, twice recurred, closed by `DICOM-PRIVATE-SQ-CARVE-OUT`.
+  Never claim a de-identify rule is unconditional without checking what decides first.
+  [#dicom-private-sq-carve-out](documentation/agent-notes.md#dicom-private-sq-carve-out)
 - **Cap every consumer-controlled diagnostic PER RUN, on `DeidentifyContext` and not on
   `ProcessResult`** (which is per Data Set, so a per-result cap bounds each item and not the file) -
   and keep registry messages short, because a per-element string is multiplied by an attacker-chosen

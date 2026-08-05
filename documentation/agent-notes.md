@@ -646,16 +646,111 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   **▶ NO NEW PUBLIC SURFACE, DELIBERATELY** - no Tier-2 code, no report field, no snapshot change, the
   same choice `#66` made. `report.removedPrivateTags` already names every removed tag and is the
   channel this defect read `[]` on.
-  **▶ WHAT IS NOT CLOSED:** the **private-`SQ` carve-out**. `keepsPrivate` decides before
-  `descendSequence`, so a private `SQ` inside the settled run that the profile vouches for is kept
-  verbatim and nothing inside it is examined. `PRE-EXISTING`, its own item, still pinned as a residual
-  test that asserts the leaking behaviour.
+  **▶ WHAT THIS SLICE DID NOT CLOSE, CLOSED SINCE:** the **private-`SQ` carve-out**, by
+  `DICOM-PRIVATE-SQ-CARVE-OUT` (its own section below). At the time of this slice `keepsPrivate`
+  decided before `descendSequence`, so a private `SQ` inside the settled run that the profile
+  vouched for was kept verbatim and nothing inside it was examined.
+
+## DICOM-PRIVATE-SQ-CARVE-OUT
+
+- **🩺 A `Profile` vouching for a private attribute no longer decides the fate of the Data Sets
+  nested inside its value.** (`PRE-EXISTING`, live through the published `0.0.10`, found by `#66`'s
+  refuter, base `495c9fc`.) `keepsPrivate` still decides retention *before* the descent, and that is
+  not what was wrong. What was wrong is that "yes, retain" routed the element to `keepOrEmpty`,
+  **the only path in the module that writes a source value into output unchanged** - so a private
+  `SQ` was blitted whole and **nothing inside it was ever examined for PHI**. The remedy is four
+  lines: `keepRetainedPrivate` sends a vouched-for private `SQ` into the same two branches every
+  other `SQ` in the module already takes (`descendSequence` when its items exist,
+  `emptyUnauditableSequence` when the parser never materialized them), and leaves a non-`SQ`
+  private element on its existing `keepOrEmpty` route.
+  **▶ THE CITATION IS §E.1.1, AND §E.3.10 IS WHAT BOUNDS THE PROFILE'S LICENCE.** PS3.15 2026c
+  §E.3.10 retains "Private Attributes that are known by the de-identifier to be safe from identity
+  leakage" - **one private attribute**, which is what a profile entry is knowledge about. It says
+  nothing about a Data Set the sender encoded inside that attribute's value, and PS3.5 2026c §7.5.1
+  makes an Item Value exactly that ("a DICOM Data Set composed of Data Elements"). PS3.15 2026c
+  §E.1.1 then settles it directly: the obligation covers Table E.1-1 attributes "whether contained
+  in the top level Data Set or embedded in an Item of a Sequence of Items", and a private carrier is
+  one of those Sequences. **A vendor cannot vouch for `(0010,0010)`; it is not a Private Attribute.**
+  **▶ THE HALF THAT NEEDS NO MALFORMED FILE IS THE SHARPER HALF, AND THE ORIGINAL RESIDUAL DID NOT
+  HOLD IT.** The pinned residual was an absorb shape - a length lie pulling an orphan private element
+  into the carrier's item. But on a **fully conformant** file, with `ds.warnings` empty and no length
+  lie anywhere, a vendor who writes `(0010,0010)` inside a vouched-for private `SQ` had that name
+  copied into de-identified output stamped `(0012,0062) = YES`. That case is now pinned with a
+  **name-bearing** payload (`BOND^JAMES`) plus non-vacuity assertions that the name is really on the
+  wire and really inside the item before the call - this repo has shipped two PHI pins that were
+  vacuous by fixture, and a payload of UIDs and IDs cannot fail for the reason it claims to.
+  **▶ 🛑 THE GRID CANNOT SEE THIS REMEDY AT ALL, AND THAT IS A CODE FACT, NOT A NULL RESULT.**
+  `scripts/measure-sq-bound-grid.ts`'s `priv|` family builds its private data element as `LO` and its
+  carrier is the public `(0008,1115)`, so the harness holds **no private-`SQ` cell**. Measured base
+  `495c9fc` vs this tree over **83,037 cells**: **0 cells differing in any PARSE respect, 0 whose
+  READING differs, 0 changed, 0 PHI regressions, 0 de-identified output lost a marker**, and every
+  `priv:` counter identical (6 = 6 kept in an Item on a consistent file, 9 = 9 at the root). Read
+  that as blast-radius evidence - the change reaches nothing outside the vouched-for-private-`SQ`
+  path - and **never** as "measured safe by the grid". Same posture as the positional cut. The
+  regression net is the unit tests.
+  **▶ THE BASE-RED FIGURE, PINNED PER-SHA.** Against base `src/` at **`495c9fc`**, replaced
+  wholesale rather than overlaid: **5 of the 57** tests in
+  `test/integration/deident-private-reservation.test.ts` +
+  `test/integration/deident-unauditable-sequence.test.ts` run red - the **4 that assert the
+  closure**, plus the **control row** of the
+  `DICOM-PRIVATE-SQ-PARSE-VR` residual, which asserts this same closure on the file the parser did
+  resolve. Say "the 4 that assert the closure", **never "the 4 carve-out tests"**: five `it()`s live
+  under a `DICOM-PRIVATE-SQ-CARVE-OUT` describe block, so a next worker enumerating the block finds
+  5 and the phrase contradicts itself. That residual's own leaking row is **green on base by
+  design**, and that half is **not** readable off the base-red run - the control assertion throws
+  first, so the leaking row never executes. It was established by extracting that row into a
+  standalone probe against base `src/`; re-derive it the same way rather than quoting this. That is
+  the negative control as well as the figure - the tests fail against the wrong `src/` and pass
+  against this one.
+  Full suite `1071 -> 1074` passing.
+  **🛑 THIS FIGURE READ `4 of the 56` AND `1071 -> 1073` UNTIL PASS 2 REFUSED IT.** The pass-1
+  remedy added a test *after* the figure was taken and the figure was not re-run - the exact trap
+  `CLAUDE.md` writes with a 🛑, inside the slice that quotes it. Re-measured in a clean tree
+  (`git archive b02e3a5`, then `src/` replaced wholesale from `495c9fc`), not patched in place.
+  **▶ THE PRICE, MEASURED AND PINNED, AND IT IS PS3.5 §7.8.1's AND NOT A CHOICE MADE HERE.** Walking
+  the carrier means the per-Data-Set reservation scope applies **inside** it, and Items do not
+  inherit the enclosing Data Set's reservations. A vendor who nests a private element in a private
+  `SQ` and reserves its block only at the **root** loses it - named on `report.removedPrivateTags`,
+  never dropped silently. A vendor who writes the Private Creator **inside the Item**, as §7.8.1
+  requires, keeps it. Both rows are pinned as a pair; the conformant one is what stops the remedy
+  from degenerating into "empty every private sequence".
+  **▶ NO NEW PUBLIC SURFACE, DELIBERATELY** - no Tier-2 code, no report field, no snapshot change,
+  the same choice `#66` and `DICOM-ITEM-EJECT-ROUTE` made. The existing channels carry it:
+  `report.removedPrivateTags` for a refused nested private element, `report.attributes` with a
+  nested `contextPath` for a Table E.1-1 row acted on inside the carrier, and
+  `report.unauditableSequences` + `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` for an un-walkable one.
+  **▶ 🛑 THE BOUND, AND PASS 1 REFUSED THE SLICE FOR NOT STATING IT: `el.vr` IS THE PARSED VR, NOT
+  THE PROFILE'S DECLARED ONE.** The `SQ` branch keys on the parse tree. Under Implicit VR LE a
+  private tag has **no VR on the wire**, so `SQ` there is an inference the **parser** draws from a
+  `Profile` it was given. Pass the profile to `parseDicom` and the element arrives `SQ` with items
+  and is walked; pass it **only** to `deidentify()` and the identical bytes arrive `UN` with no
+  items, take the non-`SQ` branch, and are kept verbatim exactly as before. Same profile, same
+  bytes, opposite outcome. That is `DICOM-PRIVATE-SQ-PARSE-VR`, `PRE-EXISTING`, its own item, pinned
+  as a residual test with a name-bearing payload. **It is NOT the undefined-length `UN` residual** -
+  that one is a CP-246 descent this parser refused, and this carrier's length is **defined**, so
+  CP-246 is never reached. The first draft of five artifacts said "one shape is still exempt" and
+  named only the `UN`; the enumeration was the defect, not the guard. **Corrected, guard not
+  widened** - and the `creatorsInScope` sentence claiming `RetainSafePrivate` "behaves identically
+  whether the profile arrived at parse or at de-identification" is **retracted**: it was true only
+  while every retained private element was kept verbatim.
+  **▶ WHAT IS STILL NOT CLOSED, AND THIS SLICE DOES NOT TOUCH IT:** `DICOM-PRIVATE-SQ-PARSE-VR`
+  above; the undefined-length **`UN`**
+  whose CP-246 descent was refused (it keeps `vr === "UN"`, so `isUnauditableSequence`'s first
+  conjunct is false and relaxing it would empty every unknown-VR element in every file); and the
+  11 leaf-carrier cells of `DICOM-BINARY-CARRIER-OVERDECLARE`, **whose leak the founder decided to
+  ACCEPT on 2026-08-05** - the grid confirms this slice left it alone at 11 -> 11, with the
+  conformant tiling-control counter unmoved at 7 -> 7. A pass-1 finding also names a **binary
+  private carrier written `OB`/`UN` with an honest defined length whose value is a well-formed item
+  stream**, reached through the `RetainSafePrivate` retention route the grid's `carrier|` family
+  never exercises (it runs `deidentify()` with no options). Adjacent to the accepted
+  `DICOM-BINARY-CARRIER-OVERDECLARE` but not the same route; **do not grow the guard for it**.
 
 ## DICOM-PRIVATE-CREATOR-RESERVATION-LEAK
 
 - **🩺 A private value no longer crosses the PS3.5 section 7.8.1 reservation boundary WHEN AN ITEM
   ABSORBS IT. The EJECT direction is closed by `DICOM-ITEM-EJECT-ROUTE` (its own section above);
-  the private-`SQ` carve-out is NOT closed - see below.**
+  the private-`SQ` carve-out is closed by `DICOM-PRIVATE-SQ-CARVE-OUT` (its own section above), and
+  was open at the time this slice shipped - read the bullet below as history, not as status.**
   (`DICOM-PRIVATE-CREATOR-RESERVATION-LEAK`, `PRE-EXISTING`, **measured live on the published `0.0.8` tarball and fixed on `0.0.10`; `0.0.9` is not on the registry**, found by
   `#51`'s pass-6 refuter and **measured identical on `origin/main`**). An `(FFFE,E000)` Item
   declaring more bytes than its enclosing `SQ`'s Value Length absorbs the element that followed the
@@ -711,13 +806,15 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   **2** of the 22 - is **superseded, not the remedy that shipped**: the other 20 are Implicit VR LE,
   where the sequence records no over-run at all, and the closing remedy needed a second predicate and
   a positional cut. Do not quote the 24 or the 2 as a cost of what shipped.
-  (b) **The private-`SQ` carve-out.** `keepsPrivate` decides **before** `descendSequence`, so a
-  private `SQ` the profile vouches for is kept **verbatim**, its items are never walked, and this
-  rule is never consulted inside it. **This is `#54`'s exact refusal repeated** - the first draft of
-  every artifact here said "every private element in such an Item is removed", unconditionally, with
-  the carve-out documented two bullets above it in the README. Corrected everywhere, guard not
-  widened. Both routes are **pinned as residual tests that assert the leaking behaviour**, so they go
-  red when fixed.
+  (b) **The private-`SQ` carve-out. CLOSED by `DICOM-PRIVATE-SQ-CARVE-OUT`** - the section above
+  carries the remedy, the citations, the base-red figure and the price. What is preserved here is
+  what this slice established and a later one must not re-derive: `keepsPrivate` decided **before**
+  `descendSequence`, so a private `SQ` the profile vouched for was kept **verbatim**, its items were
+  never walked, and this rule was never consulted inside it. **This is `#54`'s exact refusal
+  repeated** - the first draft of every artifact here said "every private element in such an Item is
+  removed", unconditionally, with the carve-out documented two bullets above it in the README.
+  Corrected everywhere, guard not widened. Both routes were **pinned as residual tests that asserted
+  the leaking behaviour**, and both went red when fixed, which is what those pins were for.
   **▶ 🛑 THE GRID DOES NOT HOLD THE HEADLINE SHAPE, AND THE NUMBERS ARE STILL PRECISE.** `DELTAS` has
   no 26 (the wire size of the fixture's private value), so the `priv|` family contains **no**
   `creator-in-item`-absorbs-the-root-secret cell: the 58 are 38 `creator-at-root` + 20
@@ -1030,8 +1127,9 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   JSDoc named the CP-246 `UN` shape as a covered "route" while three other artifacts in the same
   commit said it still leaks. (2) The `DICOM_SQ_NOT_DESCENDED` message and the README/troubleshooting
   rows said `deidentify()` empties such an element, **unconditionally** - but `keepsPrivate` decides
-  first, so a private `SQ` vouched for by `RetainSafePrivate` + a `Profile` is kept verbatim and
-  **measurably still leaks**. (3) "the sender's encoding is why" is false for a **conformant** file
+  first, so a private `SQ` vouched for by `RetainSafePrivate` + a `Profile` was kept verbatim and
+  **measurably still leaked** (closed since, by `DICOM-PRIVATE-SQ-CARVE-OUT`; the claim was correct
+  when it was written, which is the point of the rule). (3) "the sender's encoding is why" is false for a **conformant** file
   nested past `NESTING_DEPTH_LIMIT` (64), which is this library's bound, not PS3.5's. Both carve-outs
   are now pinned by tests so the claims and the code cannot drift apart again.
   **▶ THE BINARY-VR RESIDUAL IS NO LONGER UNMEASURED, AND THE SWEEP FOUND A SECOND MECHANISM.** The
@@ -1047,8 +1145,11 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   `UN` whose CP-246 descent was refused keeps `vr === "UN"`, and **every ordinary `UN` element also
   has `items === undefined`**, so the same test there would empty every unknown-VR element in every
   file. It needs a parser-set mark, i.e. its own slice. Measured on a hand-built file: identifier in
-  the output, no report entry, only `DICOM_VR_MISMATCH`. A **private** `SQ` under `RetainSafePrivate`
-  - a `Profile` is still kept verbatim, deliberately - the profile vouched for it.
+  the output, no report entry, only `DICOM_VR_MISMATCH`. Its former companion - a **private** `SQ`
+  under `RetainSafePrivate` + a `Profile`, kept verbatim because the profile vouched for it - is
+  **closed by `DICOM-PRIVATE-SQ-CARVE-OUT`**, but **only when the PARSER resolved it to `SQ`**:
+  `DICOM-PRIVATE-SQ-PARSE-VR` is the residual where the profile reached `deidentify()` and not
+  `parseDicom`, and it is a **defined**-length carrier, so this CP-246 shape does not cover it.
 
 ## DICOM-OVERDECLARE-SWALLOWS-INTO-VALUE
 

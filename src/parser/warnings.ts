@@ -561,9 +561,9 @@ export function unParsedAsSQ(position: DicomPosition, tag: Tag): DicomParseWarni
  * file needs to be told the audit did not reach inside this element - and
  * `deidentify()` needs to be told too, which is why it now **empties** such an
  * element rather than passing its bytes through
- * (`DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE`), unless `RetainSafePrivate` plus a
- * profile has vouched for it. The warning is what stops that emptying being a
- * silent drop.
+ * (`DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE`). The warning is what stops that
+ * emptying being a silent drop. `RetainSafePrivate` plus a profile used to
+ * exempt a private `SQ` from it; since `DICOM-PRIVATE-SQ-CARVE-OUT` it does not.
  *
  * **Do not read it as "the sender is at fault".** It usually is, but the same
  * refusal is raised for a *conformant* file whose sequences nest deeper than
