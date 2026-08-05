@@ -103,7 +103,21 @@
  *   private value the sender wrote **outside** the sequence was retained on the
  *   Item's reservation and written into output stamped `PatientIdentityRemoved =
  *   YES` with `removedPrivateTags: []` (`DICOM-PRIVATE-CREATOR-RESERVATION-LEAK`,
- *   live through `0.0.9`). See {@link itemStreamOverrunsSequence}.
+ *   measured on the published `0.0.8` tarball and fixed on `0.0.10`; there is no `0.0.9` on
+ *   the registry). See {@link itemStreamOverrunsSequence}.
+ * - `RetainSafePrivate` **retains nothing that a Data Set holds after a sequence
+ *   whose own contents contradict the extent it declared** - the mirror
+ *   direction, where an Item that *under*-declares **ejects** its trailing
+ *   elements out and a Private Creator landing in the enclosing Data Set reserves
+ *   a block for elements the sender never put beside it. The same false
+ *   attestation, and it applies **in every Data Set, not just the root**: an
+ *   inner sequence ejecting a creator into the still-usable Item that encloses it
+ *   is measured and pinned. The cut is positional, so a reservation the sender
+ *   wrote **ahead of** the offending sequence is untouched. Every private element
+ *   after that point is removed and named in `report.removedPrivateTags`, and the
+ *   **private-`SQ` carve-out above still applies**: a private `SQ` inside the
+ *   settled run that the profile vouches for is kept verbatim and never walked.
+ *   See {@link settledBound}.
  *
  * @module
  */
@@ -749,6 +763,130 @@ function itemStreamOverrunsSequence(el: Element, encoding: BodyEncoding): boolea
 }
 
 /**
+ * Where one Data Set stops accounting for its own membership: the first sequence
+ * whose extent its own contents contradict, named **twice** - by its place in the
+ * Data Set's order and by the byte offset it was read at.
+ *
+ * ## Why two bounds and not one
+ *
+ * 🛑 **A Data Set is a `Map<Tag, Element>`, so its order is not its file order.**
+ * When an ejected element carries a tag the Data Set **already holds**, `Map.set`
+ * overwrites in place and the newcomer inherits the **earlier** element's
+ * position - ahead of the sequence it was ejected from. An index cut alone reads
+ * that element as settled and retains it; measured on a root holding a genuine
+ * `(0009,0010)` + `(0009,1001)` reservation ahead of a sequence whose item ejects
+ * a second `(0009,1001)`, which lands at index 2 with `byteOffset` 274 while the
+ * sequence sits at index 3 with `byteOffset` 238 - the fixture pinned in
+ * `test/integration/deident-private-reservation.test.ts`, whose File Meta is the
+ * minimum THIS PARSER requires rather than PS3.10's; a longer File Meta group
+ * shifts both numbers together. `Element.byteOffset` is the
+ * position the parser counted and the overwrite cannot move it, so the offset
+ * bound is what closes that shape.
+ *
+ * **The two are conjunctive, and each covers what the other cannot.** Offsets are
+ * comparable *within* one Data Set - all of an Item's elements share that Item's
+ * frame, measured 0/16/36 for three elements of a defined-length item - but
+ * {@link Element} is publicly constructible and `deidentify` runs on any
+ * {@link Dataset}, so a hand-built object may carry no meaningful offsets at all;
+ * there the index bound is the one that still bites. Neither is a re-parse.
+ *
+ * The offset bound is taken as the **minimum** over every disputed sequence in
+ * the Data Set while the index bound is taken from the **first** one, because the
+ * same `Map` overwrite is what lets those two orderings disagree. Where they do,
+ * the conjunction refuses more than either alone, which is the fail-safe
+ * direction.
+ *
+ * ## What goes wrong after that point (the EJECT direction)
+ *
+ * {@link itemStreamOverrunsSequence} is about elements moving **into** an Item.
+ * The mirror moves them **out**: when a sequence's contents and its declared
+ * Value Length disagree, the parser resumes the enclosing Data Set at the
+ * declared end, and the bytes the sender encoded as Item content are then read
+ * as elements of the enclosing Data Set. A Private Creator that lands there
+ * reserves a `(gggg,00EE)` block for elements the sender never put beside it, so
+ * the very next private element is retained under `RetainSafePrivate` on a
+ * reservation PS3.5 2026c section 7.8.1 never gave it - "The scope of the
+ * reservation is just within the Item. Items do not inherit the Private Data
+ * Element reservations made by Private Creator Data Elements in the Data Set in
+ * which the Item is nested." As with the absorb direction, PS3.15 2026c section
+ * E.3.10 licenses retention only for what is **known** safe, and a file that
+ * contradicts itself about where an Item ends establishes no such knowledge, so
+ * its other branch applies: "all other Private Attributes shall be removed **or
+ * processed in the element-specific manner recommended by Deidentification
+ * Action (0008,0307), if present within Private Data Element Characteristics
+ * Sequence (0008,0300)**" - two branches, of which removal is the one available
+ * here (`(0008,0307)` is not implemented).
+ *
+ * ## The two ways the parser records the same contradiction
+ *
+ * Both are facts already on the element. Neither is a re-parse, a scan, or a
+ * claim about which of the file's length fields is the lie.
+ *
+ *  - **Explicit VR.** `parseSequence` bounds an item against the buffer rather
+ *    than against the sequence, so an item that runs past the sequence's
+ *    declared end is *read*, and the span shows up as `rawBytes.length` exceeding
+ *    `length` ({@link itemStreamOverrunsSequence}).
+ *  - **Implicit VR LE.** That path slices the item stream to the declared Value
+ *    Length, so an item claiming more than fits is not a valid item stream at
+ *    all: the descent is refused, `items` is `undefined`, and
+ *    `DICOM_SQ_NOT_DESCENDED` is raised ({@link isUnauditableSequence}). Nothing
+ *    over-runs, so the first test reads `false` on every one of these - which is
+ *    why one predicate does not cover both, and why this is its own slice rather
+ *    than a widening of the absorb rule.
+ *
+ * **The second test is broader than the ejection it is here for, deliberately
+ * and in the fail-safe direction.** `isUnauditableSequence` says the parser could
+ * not walk the sequence, not specifically that an item claimed to extend past the
+ * declared end; another unwalkable item stream reaches it too. What the two share
+ * is the only thing this function needs: the sequence's own contents do not
+ * corroborate the boundary the enclosing Data Set resumed at, so which elements
+ * that Data Set holds from there on is not established by the file. Such a
+ * sequence is **already** emptied by {@link emptyUnauditableSequence}; this adds
+ * that its neighbours' membership is not settled either.
+ *
+ * ## Why a prefix and not the whole Data Set
+ *
+ * An element read **before** the sequence cannot have come out of it. Narrowing
+ * the whole Data Set instead was built and measured on
+ * `scripts/measure-sq-bound-grid.ts` and rejected: it costs root retentions on
+ * files whose reservation the sender wrote entirely ahead of the offending
+ * sequence, which is a conformant arrangement and is pinned as a control in
+ * `test/integration/deident-private-reservation.test.ts`. The disputed sequence
+ * itself is inside the prefix - its own header was read at a settled offset, and
+ * only what follows it is in doubt.
+ *
+ * Both the reservation map and the retention decision are taken from this prefix,
+ * so a creator ejected into the enclosing Data Set cannot vouch for anything
+ * there either, whichever side of it the private data element sits on.
+ */
+interface SettledBound {
+  /** Elements from this index of the Data Set's own order onward are disputed. */
+  readonly index: number;
+  /** Elements read past this byte offset are disputed; `undefined` when none are. */
+  readonly byteOffset: number | undefined;
+}
+
+function settledBound(source: readonly Element[], encoding: BodyEncoding): SettledBound {
+  let index = source.length;
+  let byteOffset: number | undefined;
+  for (const [at, el] of source.entries()) {
+    if (!itemStreamOverrunsSequence(el, encoding) && !isUnauditableSequence(el)) continue;
+    if (index === source.length) index = at + 1;
+    if (byteOffset === undefined || el.byteOffset < byteOffset) byteOffset = el.byteOffset;
+  }
+  return { index, byteOffset };
+}
+
+/**
+ * Whether this Data Set accounts for holding `el`, per {@link settledBound}. The
+ * disputed sequence itself is settled: its own header was read at an offset
+ * nothing contradicts, and only what the file places *after* it is in doubt.
+ */
+function isSettled(el: Element, at: number, bound: SettledBound): boolean {
+  return at < bound.index && (bound.byteOffset === undefined || el.byteOffset <= bound.byteOffset);
+}
+
+/**
  * Decide whether to keep a private element under `RetainSafePrivate` + a
  * profile. `creators` is the reservation map of the Data Set this element lives
  * in, never an enclosing one.
@@ -818,28 +956,14 @@ function keepsPrivate(
  * disputed Item is itself made of disputed bytes, so its items' boundaries are no
  * better determined than their parent's.
  *
- * **🩺 The root Data Set is always `true`, and that is a LIMITATION, not a
- * proof.** An earlier draft of this note claimed "nothing is ever moved out of an
- * Item into the enclosing Data Set" and that the claim was pinned by a test.
- * **Both were false and are retracted.** An Item that *under*-declares **ejects**
- * its trailing elements out into the enclosing Data Set, and a Private Creator
- * that lands there reserves a block for root elements the sender never gave it -
- * the mirror of the case this flag closes, and the same false attestation.
- * Measured on `164eb39` and here, Explicit VR LE and BE, an Item under-declaring
- * by exactly its creator's 20 wire bytes inside a sequence under-declaring by 24:
- * `removedPrivateTags: []`, the value in the output, `(0012,0062) = YES`,
- * `ds.warnings: []`, and no throw under `{ strict: true }`. `PRE-EXISTING`,
- * identical on both trees, **its own item** - and pinned as a residual in
- * `test/integration/deident-private-reservation.test.ts` so it stays visible.
- *
- * **The obvious widening was BUILT AND MEASURED rather than argued about**, and
- * its numbers are why it is not taken: narrowing this flag whenever the Data Set
- * *contains* an over-running sequence costs **24** root retentions and closes
- * **2** of the **22** leaking cells. The other 20 are Implicit VR LE, where the
- * sequence records **no over-run at all** ({@link itemStreamOverrunsSequence} is
- * `false`: `rawBytes.length === length`) because the ejection there happens by
- * reader desynchronization, not by an item reading past its sequence. That is a
- * different mechanism and needs its own slice.
+ * **🩺 This flag is about what an Item ABSORBS, and the root Data Set's value for
+ * it is always `true`. That is not a claim that nothing leaves an Item.** The
+ * mirror direction - an Item that *under*-declares **ejecting** its trailing
+ * elements out into the enclosing Data Set - is answered by
+ * {@link settledBound}, inside whichever Data Set they land in, at every
+ * depth. The two are separate mechanisms with separate predicates: this one reads
+ * an over-run recorded on the sequence, and the Implicit VR LE half of the eject
+ * route records no over-run at all.
  */
 function processElements(
   source: readonly Element[],
@@ -856,12 +980,19 @@ function processElements(
     undefinedVrElements: [],
     warnings: [],
   };
-  // Derived here, at every depth: `source` is exactly one Data Set.
-  const creators = creatorsInScope(source);
+  // The run this Data Set actually accounts for. Everything after it was read at
+  // an offset the file's own contents contradict - see {@link settledBound} for
+  // the two shapes, for why the cut is positional, and for why it takes two
+  // bounds rather than one.
+  const bound = settledBound(source, ctx.encoding);
+  // Derived here, at every depth: `source` is exactly one Data Set. Only the
+  // settled run reserves anything, so a creator ejected out of a sequence
+  // reserves no block in the Data Set it landed in.
+  const creators = creatorsInScope(source.filter((el, at) => isSettled(el, at, bound)));
 
-  for (const el of source) {
+  for (const [at, el] of source.entries()) {
     if (isPrivateTag(el.tag)) {
-      if (reservationsUsable && keepsPrivate(el, ctx, creators))
+      if (reservationsUsable && isSettled(el, at, bound) && keepsPrivate(el, ctx, creators))
         keepOrEmpty(el, ctx, contextPath, out);
       else out.removedPrivateTags.push(el.tag);
       continue;

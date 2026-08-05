@@ -31,11 +31,14 @@ in the same area - open the section first.**
   document is stale the next release; the meta-repo's ADR 0023 carries the measured history of that
   across the org. Do not re-derive it here, and do not add a numeral to this bullet.)
 - **🩺 Open PHI residuals - measured, disclosed, NOT closed. None of these is an all-clear:**
-  - The **EJECT** direction of the private-creator reservation leak (an Item that under-declares
-    pushes a Private Creator out into an enclosing Data Set that was never narrowed), and the
-    **private-`SQ` carve-out** (`keepsPrivate` decides before `descendSequence`). Both produce a
-    **false attestation**: `removedPrivateTags: []`, the value in the output, `(0012,0062) = YES`.
-    Pinned as residual tests that assert the leaking behaviour, so closing either turns them red.
+  - The **private-`SQ` carve-out** (`keepsPrivate` decides before `descendSequence`, so a vouched-for
+    private `SQ` is kept verbatim and never walked). Produces a **false attestation**:
+    `removedPrivateTags: []`, the value in the output, `(0012,0062) = YES`. Pinned as a residual test
+    that asserts the leaking behaviour, so closing it turns that test red. Its sibling, the **EJECT**
+    direction, is **closed** - and closing it needed a **second predicate** (Implicit VR LE records no
+    over-run at all) plus a **positional cut with TWO bounds**, so do not read the absorb rule as
+    covering it.
+    [#dicom-item-eject-route](documentation/agent-notes.md#dicom-item-eject-route) ·
     [#dicom-private-creator-reservation-leak](documentation/agent-notes.md#dicom-private-creator-reservation-leak)
   - **11 grid cells** still leak through an over-declaring `OB`/`OW`/`US`/`UN` **leaf** carrier,
     silent. `PRE-EXISTING`.
@@ -67,16 +70,12 @@ in the same area - open the section first.**
     [#dicom-explicit-vr-unbounded-item-read](documentation/agent-notes.md#dicom-explicit-vr-unbounded-item-read)
   - **This list is an index, not a census.** Each relocated section names its own residuals, and
     several are disclosed only there. Read the section before claiming a class is closed.
-- **🛑 A STALE CLAIM IN THE RELOCATED NOTES, CARRIED FORWARD FLAGGED RATHER THAN RESTATED OR
-  DROPPED.** Both halves of one sentence in `#dicom-private-creator-reservation-leak` are
-  unverified: the **"10 of the 31 tests"** count in
-  `test/integration/deident-private-reservation.test.ts`, **and the "the two residual tests are
-  green on base by design" clause beside it** - the umbrella's backlog records that both residual
-  tests now assert the new warning code, so both are red against base. **It records the figure as
-  having been stale before `#51`, and that no pass across eight grades flagged it**, so do not
-  attribute the staleness to any one later commit. **Re-measure against today's `origin/main`
-  before quoting either half anywhere.**
-  [#dicom-private-creator-reservation-leak](documentation/agent-notes.md#dicom-private-creator-reservation-leak)
+- **🛑 A "N OF M TESTS RUN RED ON BASE" FIGURE HAS A MOVING BASE AND IS NOT A FACT.** The
+  **"10 of the 31 tests"** claim and the "both residual tests are red against base" correction beside
+  it were **both wrong against today's `main`**, in opposite directions, and are deleted rather than
+  reworded a third time. Re-measured and written with its sha: **8 of 37 against `300af87`**. Quote
+  such a figure only with the sha you ran it on, and re-run it after every test you add.
+  [#dicom-item-eject-route](documentation/agent-notes.md#dicom-item-eject-route)
 
 ## Tech Stack (the shared `@cosyte/*` standard)
 
@@ -291,9 +290,21 @@ not soften them. All anchors are in `documentation/agent-notes.md`.
 - **Scan cost is capped PER ELEMENT, not per file** (`MAX_SCAN_BYTES`); the forward loop `return`s
   rather than `continue`s, valid because the repertoire test is **monotone in the offset**.
   [#dicom-overdeclare-swallows-into-value](documentation/agent-notes.md#dicom-overdeclare-swallows-into-value)
-- **The EJECT residual must be scoped to EVERY still-usable Data Set, not the root** - it was
-  reproduced one level down and the first draft called it root-specific.
-  [#dicom-private-creator-reservation-leak](documentation/agent-notes.md#dicom-private-creator-reservation-leak)
+- **A private-reservation rule is scoped to EVERY still-usable Data Set, never the root** - the eject
+  route reproduced one level down and the first draft called it root-specific. **And the cut inside a
+  Data Set is POSITIONAL: the grid cannot see that at all** (every `priv|` fixture writes its block
+  after the sequence), so the whole-Data-Set variant measures byte-identical there and is refused by
+  **tests alone - 5 of them, and you must count over the FULL SUITE**: a one-file count reads 4 and
+  misses the second file's. [#dicom-item-eject-route](documentation/agent-notes.md#dicom-item-eject-route)
+- **🛑 A DATA SET IS A `Map<Tag, Element>`, SO ITS ORDER IS NOT ITS FILE ORDER.** An element moved in
+  by a length lie whose tag the Data Set already holds **overwrites in place and inherits the earlier
+  position**, so any positional rule needs `Element.byteOffset` beside the index - and the overwrite
+  **destroys the original value** silently, `PRE-EXISTING`, on the private path as well as
+  `(0010,0020)`. [#dicom-item-eject-route](documentation/agent-notes.md#dicom-item-eject-route)
+- **🛑 THE GRID'S SYNTAX SPLIT WAS BLIND TO THREE OF ITS FOUR FAMILIES** - it keyed on the cell key
+  _starting with_ the transfer syntax, so no `carrier|`, `legit|` or `priv|` row could ever count as
+  Implicit VR LE. Fixed; any such split quoted before it is not re-derivable.
+  [#dicom-item-eject-route](documentation/agent-notes.md#dicom-item-eject-route)
 - **Over-redaction is a PRODUCT call with its own item (`DICOM-DEIDENT-OVER-REDACTION`), not a bug
   fix.** Dropping the repertoire conjunct for binary VRs takes 11 leaks to 0 **and empties all 5
   conformant binary tiling controls**; widening `embedded.ts`'s tiling scanner to unrecognized VRs
