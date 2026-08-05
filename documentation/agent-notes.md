@@ -75,15 +75,34 @@ then the two gates.
   real files, and the grid reaches the collision **only** through a length lie. The plain duplicate,
   the duplicate inside an Item, the collision that lands on a sequence's own tag and takes the whole
   `SQ` out of the object, the frame the offset is in, and the strict behaviour are pinned in
-  `test/integration/tag-collision.test.ts` or nowhere: **13 of its 14 tests run red against
-  `origin/main` at `0ead071`** (re-measured after the gate's remedy added two; the figure moves with
-  every test you add, so it is written with its sha), the fourteenth being the no-duplicate control,
+  `test/integration/tag-collision.test.ts` or nowhere: **14 of its 15 tests run red against
+  `origin/main` at `0ead071`** (re-measured after each gate pass added tests - two after pass 1, one after
+  pass 2 - so it is written with its sha; the figure moves with every test you add), the fifteenth being the no-duplicate control,
   green there by design.
   **▶ THE COST, WHICH IS A `{ strict: true }` COST AND NOT A READING ONE.** **9 cells that parsed
-  under `{ strict: true }` now throw**, lenient readings identical, because every Tier-2 code
-  escalates through the one chokepoint. A further **4** were already fatal there and now carry this
-  code instead of `INVALID_FILE_META`, because the escalation happens earlier in the parse. The
-  shipped `profiles.strict` preset is unchanged and does **not** escalate it (pinned).
+  under `{ strict: true }` now throw**, because every Tier-2 code escalates through the one
+  chokepoint; their element trees, reports, root identifiers, surviving markers and lenient class are
+  identical on both trees. **Do NOT source that from the harness's
+  `...on an UNCHANGED lenient reading` line** - `lenientSame` compares the whole record minus
+  `strict`, warnings included, so it reads 0 by construction for any slice that adds a code. It comes
+  from the per-field counters. A further **4** cells were already fatal there and now carry this code
+  instead of `INVALID_FILE_META`, because the escalation happens earlier in the parse. The shipped
+  `profiles.strict` preset is unchanged and does **not** escalate it (pinned).
+  **▶ AND A FIFTH STRICT SUBSTITUTION THE GRID DOES NOT COUNT, FOUND BY PASS 2.** On the rolled-back
+  Implicit VR LE shape above, `{ strict: true }` threw `DICOM_SQ_NOT_DESCENDED` on base and throws
+  `DICOM_DUPLICATE_TAG_IN_DATA_SET` here - measured on both trees. Both refuse the file, so no caller
+  loses an object, but **the new code asserts a loss on the one file where nothing was lost** and the
+  base's code was the more accurate diagnosis. Disclosed rather than fixed: suppressing an emission
+  during a trial descent is a change to the chokepoint's contract, which is a wider slice than this
+  one. Pinned by a test.
+  **▶ 🩺 AND "NAMES NO TAG" IS MESSAGE-SCOPED. THE STRICT CHANNEL HANDS BACK WHAT THE MESSAGE
+  WITHHELD.** `makeEmitter`'s escalate path builds `DicomParseError.snippet` from 16 raw source bytes
+  at the warning's offset, which is the replacing element's header: measured on a plain duplicate,
+  `10 00 20 00 4c 4f 0a 00 53 4d 49 54 48 53 4f 4e` - the withheld tag, and eight bytes of the value,
+  in hex. That is D-10, `PRE-EXISTING` and package-wide (the same fixture reaches it on base through
+  `DICOM_ODD_LENGTH_VALUE_PADDED`), and the PHI-diagnostic runner structurally cannot see it because
+  hex is a re-encoding. One more code reaches it; **the guarantee to state is "the message names no
+  tag", never "this code cannot surface one".** Pinned by a test so the sentence cannot drift back.
   **▶ TWO SYNTAXES, TWO DIFFERENT LIES, AND THE FIXTURE IS PARAMETERISED BY BOTH RATHER THAN
   DESCRIBED.** Under Explicit VR the item stream is bounded against the buffer, so the `SQ`'s field
   and the Item's both have to give way; an Item-only under-declare there is refused outright as a
@@ -94,7 +113,7 @@ then the two gates.
   longer than every de-identify message it named as its model - on the one channel whose multiplicity
   the input chooses (`ds.warnings` is uncapped, `PRE-EXISTING` and package-wide). A refuter measured
   131,071 warnings and 50 M characters from a 1 MiB file. It is now **188 characters - seventh of the
-  30, not the longest** (against a median of 102, so still an above-median string, which is the honest
+  30, not the longest** (against a median of 99.5, so still an above-median string, which is the honest
   way to put it), and the reasoning lives here rather than in the string.
   **▶ WHAT IT DOES NOT REACH, MEASURED NOT ASSUMED.** The **File Meta group** is accumulated into an
   **array** by `parseFileMeta`, not a map, so nothing is overwritten there and this code does not
@@ -113,6 +132,13 @@ then the two gates.
   is the `PRE-EXISTING` D-03 pop-after-stream divergence (`makeEmitter` streams before the pop), now
   reachable by one more code, in the **false-alarm** direction rather than the silent one. Pinned by
   a test rather than described.
+  **▶ ONE MORE FOR THE BACKLOG, SAME FAMILY, FOUND BY PASS 2 AND NOT THIS SLICE'S TO FIX.** File Meta
+  is an array, so nothing is *overwritten* there - but `parseFileMeta` projects a modeled
+  `(0002,xxxx)` with `fmElements.find(...)` (first wins) and `extraElements` filters every
+  `MODELED_FM_TAGS` entry out, so a **second** copy of a modeled File Meta element - a duplicated
+  `(0002,0010)` Transfer Syntax UID with a different value, say - is dropped from the model with no
+  warning and no array residue. `PRE-EXISTING`, and the same shape as the item this section is
+  about, one group over.
   **▶ STILL OPEN, UNTOUCHED:** `DICOM-PRIVATE-SQ-CARVE-OUT`, and the structural relocation itself
   under `DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ`. This slice makes the loss observable; it does not
   make the file readable.

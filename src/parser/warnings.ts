@@ -723,6 +723,16 @@ export function emptyItemInSequence(position: DicomPosition, tag: Tag): DicomPar
  *
  * ## What it does not do
  *
+ * **🩺 "Names no tag" is about THIS MESSAGE, not about the strict channel.**
+ * `{ strict: true }` escalates every Tier-2 code through `makeEmitter`, and the
+ * `DicomParseError` it throws carries `snippet`: 16 raw source bytes at the same
+ * offset, rendered as hex. On a plain duplicate that is
+ * `10 00 20 00 4c 4f 0a 00 53 4d 49 54 48 53 4f 4e` - the withheld tag, and
+ * eight bytes of the value. That is D-10, package-wide and reachable through
+ * other codes on every release, and the PHI-diagnostic runner cannot see it
+ * because hex is a re-encoding. Pinned in `test/integration/tag-collision`, so
+ * that the guarantee is never restated as "this code cannot surface a tag".
+ *
  * **It is not bounded.** A file may encode as many collisions as it can fit, and
  * `ds.warnings` is uncapped: that is this package's pre-existing, package-wide
  * posture for parser warnings, not something new here. **And it does not reach

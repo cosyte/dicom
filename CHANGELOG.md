@@ -57,18 +57,34 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   controls 7 -> 7. **345 cells now report a collision that was silent on base** (295 Implicit VR LE,
   25 Explicit VR LE, 25 Explicit VR BE), all of them in the grid's two hoist-collision families -
   a fact about those fixtures, not a rate for real files. **9 cells that parsed under
-  `{ strict: true }` now throw**, lenient readings identical; a further **4** were already fatal
-  there and now carry this code instead of `INVALID_FILE_META`, because the escalation happens
-  earlier in the parse. The shipped `profiles.strict` preset is unchanged.
+  `{ strict: true }` now throw** - element trees, reports, root identifiers and surviving markers
+  identical on both trees, taken from those per-field counters and **not** from the harness's
+  `...on an UNCHANGED lenient reading` line, which reads 0 by construction for any slice that adds a
+  code. A further **4** were already fatal there and now carry this code instead of
+  `INVALID_FILE_META`, because the escalation happens earlier in the parse. The shipped
+  `profiles.strict` preset is unchanged.
+
+  **Three more things a `{ strict: true }` caller should know, none of them fixed here.** (1) On the
+  one shape where the parse rolls a descent back - an Implicit VR LE defined-length `SQ` whose value
+  holds a duplicate and then a non-Item tag - `{ strict: true }` threw `DICOM_SQ_NOT_DESCENDED`
+  before and throws this code now, on a file where **nothing was destroyed**: both values survive in
+  `Element.rawBytes`. Both refuse the file, so no object is lost, but the older code was the more
+  accurate diagnosis. (2) The same shape streams the code to `onWarning` while `ds.warnings` never
+  receives it, which is the pre-existing D-03 ordering reached by one more code. (3) **"Names no tag"
+  is about the message.** Strict mode throws a `DicomParseError` whose `snippet` is 16 raw source
+  bytes at that offset, rendered as hex - measured on a plain duplicate:
+  `10 00 20 00 4c 4f 0a 00 53 4d 49 54 48 53 4f 4e`, the withheld tag plus eight bytes of the value.
+  That is the package-wide D-10 design, reachable on `0ead071` through other codes, and it is why the
+  guarantee is worded about the message rather than about the channel.
 
   **What the grid is NOT evidence for here, stated because it was read that way once.** It reaches
   the collision only through a length lie, and it swept nothing that carries a tag twice honestly.
   The plain duplicate, the duplicate inside an Item, the collision that lands on a sequence's own tag
   and takes the whole `SQ` and everything nested in it out of the object, the frame the byte offset
   is in, and the `{ strict: true }` behaviour are pinned in
-  `test/integration/tag-collision.test.ts` or nowhere: **13 of its 14 tests run red against
-  `origin/main` at `0ead071`** - re-measured after the gate's remedy added two, and written with its
-  sha because that figure moves with every test added - the fourteenth being the no-duplicate
+  `test/integration/tag-collision.test.ts` or nowhere: **14 of its 15 tests run red against
+  `origin/main` at `0ead071`** - re-measured after each gate pass added tests, and written with its sha
+  because the figure moves with every test added - the fifteenth being the no-duplicate
   control, which is green there by design.
 
   **Still open, and not touched here:** the private-`SQ` carve-out (`DICOM-PRIVATE-SQ-CARVE-OUT`),

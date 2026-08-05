@@ -37,8 +37,16 @@ element tree, the `DeidentifyReport`, the de-identified bytes, the surviving mar
 root Patient ID, and there are 0 new lenient fatals. (1) **345 cells now report a collision that was
 silent before** - 295 Implicit VR LE, 25 Explicit VR LE, 25 Explicit VR BE - all of them in the
 grid's two hoist-collision families, which is a fact about those fixtures and not a rate for real
-files. (2) **9 cells that parsed under `{ strict: true }` now throw**, with their lenient readings
-identical, because every Tier-2 code escalates through the one chokepoint; a further 4 cells were
-already fatal under `{ strict: true }` and now carry this code instead of `INVALID_FILE_META`,
-because the escalation happens earlier in the parse. The shipped `profiles.strict` preset is
-unchanged and does not escalate it.
+files. (2) **9 cells that parsed under `{ strict: true }` now throw** - element trees, reports, root
+identifiers and surviving markers identical on both trees - because every Tier-2 code escalates
+through the one chokepoint; a further 4 cells were already fatal under `{ strict: true }` and now
+carry this code instead of `INVALID_FILE_META`, because the escalation happens earlier in the parse.
+The shipped `profiles.strict` preset is unchanged and does not escalate it.
+
+Two limits worth stating for a `{ strict: true }` caller, neither new to this release. On the one
+shape where a descent is rolled back (Implicit VR LE, a defined-length `SQ` whose value holds a
+duplicate and then a non-Item tag) the code fires for a Data Set that was then discarded: nothing was
+destroyed, `onWarning` sees it and `ds.warnings` does not, and strict mode throws this code where it
+previously threw `DICOM_SQ_NOT_DESCENDED`. And "the message names no tag" is about the message: a
+strict-mode `DicomParseError` carries a 16-byte hex `snippet` of the source at that offset, which is
+the package's documented D-10 design and reachable through other codes on every release.

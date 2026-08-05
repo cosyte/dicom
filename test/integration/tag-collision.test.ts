@@ -442,6 +442,21 @@ describe("the diagnostic itself", () => {
     );
     expect(ds.warnings.map((w) => w.code)).toContain(WARNING_CODES.DICOM_SQ_NOT_DESCENDED);
 
+    // 🩺 AND THE STRICT CHANNEL SUBSTITUTES THE CODE ON THIS FILE, which is the
+    // one place the new code is the LESS accurate diagnosis. Measured on both
+    // trees: `0ead071` throws `DICOM_SQ_NOT_DESCENDED` here, this tree throws the
+    // collision - on a file where nothing was destroyed. Both refuse it, so no
+    // caller loses an object. Disclosed rather than fixed: not emitting during a
+    // trial descent is a change to the chokepoint's contract and a wider slice.
+    try {
+      parseDicom(buf, { strict: true });
+      expect.unreachable("strict mode must refuse this file on both trees");
+    } catch (err) {
+      expect((err as { readonly code: string }).code).toBe(
+        WARNING_CODES.DICOM_DUPLICATE_TAG_IN_DATA_SET,
+      );
+    }
+
     // Nothing was lost on that file: the sequence was not descended, so both
     // values are still in the object as bytes.
     const raw = ds.get(CONTENT_SEQUENCE)?.rawBytes.toString("latin1") ?? "";
@@ -459,6 +474,29 @@ describe("the diagnostic itself", () => {
       expect((err as { readonly code: string }).code).toBe(
         WARNING_CODES.DICOM_DUPLICATE_TAG_IN_DATA_SET,
       );
+    }
+  });
+
+  it("🩺 the message names no tag, but the STRICT channel's snippet carries one (D-10, pre-existing)", () => {
+    // The sentence this pins is "the MESSAGE names no tag", never "this code
+    // cannot surface one". `makeEmitter`'s escalate path builds
+    // `DicomParseError.snippet` from 16 raw source bytes at the same offset -
+    // the replacing element's header - and renders them as hex, which the
+    // PHI-diagnostic runner structurally cannot match. That is D-10, package-wide
+    // and reachable through other codes on `0ead071` with the identical fixture,
+    // so it is NOT this slice's to fix; it is asserted so the guarantee cannot
+    // drift into the wider claim.
+    try {
+      parseDicom(duplicate, { strict: true });
+      expect.unreachable("strict mode must escalate");
+    } catch (err) {
+      const thrown = err as { readonly message: string; readonly snippet?: string };
+      expect(thrown.message).not.toContain("SMITHSON");
+      expect(thrown.message).not.toContain(PATIENT_ID);
+      // The tag, byte for byte, in the snippet the message withheld it from.
+      expect(thrown.snippet).toContain("10 00 20 00");
+      // And the value's first bytes: "SMIT" as 53 4d 49 54.
+      expect(thrown.snippet).toContain("53 4d 49 54");
     }
   });
 
