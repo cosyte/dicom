@@ -73,8 +73,11 @@ in the same area - open the section first.**
 - **🛑 A "N OF M TESTS RUN RED ON BASE" FIGURE HAS A MOVING BASE AND IS NOT A FACT.** The
   **"10 of the 31 tests"** claim and the "both residual tests are red against base" correction beside
   it were **both wrong against today's `main`**, in opposite directions, and are deleted rather than
-  reworded a third time. Re-measured and written with its sha: **8 of 37 against `300af87`**. Quote
-  such a figure only with the sha you ran it on, and re-run it after every test you add.
+  reworded a third time. Re-measured at `2daf0e3`, one test file, three bases, every figure carrying
+  its own sha: **8 of 37 on `300af87`** · **2 of 37 on `0ead071`** · **0 of 37 on `2daf0e3`**. Quote
+  such a figure only with the sha you ran it on; re-run it after every test you add **or strengthen**
+  (`#70` added none and still moved what this file reads on a base); and **replace `src/` rather than
+  overlaying it** when you swap a base in.
   [#dicom-item-eject-route](documentation/agent-notes.md#dicom-item-eject-route)
 
 ## Tech Stack (the shared `@cosyte/*` standard)
