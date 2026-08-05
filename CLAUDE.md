@@ -299,8 +299,12 @@ not soften them. All anchors are in `documentation/agent-notes.md`.
 - **🛑 A DATA SET IS A `Map<Tag, Element>`, SO ITS ORDER IS NOT ITS FILE ORDER.** An element moved in
   by a length lie whose tag the Data Set already holds **overwrites in place and inherits the earlier
   position**, so any positional rule needs `Element.byteOffset` beside the index - and the overwrite
-  **destroys the original value** silently, `PRE-EXISTING`, on the private path as well as
-  `(0010,0020)`. [#dicom-item-eject-route](documentation/agent-notes.md#dicom-item-eject-route)
+  **destroys the original value**, on the private path as well as `(0010,0020)`.
+  **The loss is REPORTED now (`DICOM_DUPLICATE_TAG_IN_DATA_SET`, every Data Set, every depth) and is
+  otherwise UNCHANGED - last read still wins and nothing is guessed.** Never answer it with a bound:
+  the two files are byte-identical. Adding the code cost 9 grid cells a `{ strict: true }` parse.
+  [#dicom-item-eject-route](documentation/agent-notes.md#dicom-item-eject-route) ·
+  [#dicom-tag-collision-destroys-element](documentation/agent-notes.md#dicom-tag-collision-destroys-element)
 - **🛑 THE GRID'S SYNTAX SPLIT WAS BLIND TO THREE OF ITS FOUR FAMILIES** - it keyed on the cell key
   _starting with_ the transfer syntax, so no `carrier|`, `legit|` or `priv|` row could ever count as
   Implicit VR LE. Fixed; any such split quoted before it is not re-derivable.

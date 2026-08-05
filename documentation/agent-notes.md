@@ -13,7 +13,7 @@ passes that produced it.
 
 **Read the section before you re-open the thing its rule guards.** These are clinical-safety
 lessons in a parser: every one of them cost a defect, a refused pass, or both. The compressed line in
-`CLAUDE.md` is enough to stop you doing the wrong thing; it is *not* enough to justify doing a new
+`CLAUDE.md` is enough to stop you doing the wrong thing; it is _not_ enough to justify doing a new
 thing in the same area.
 
 Section order matches the order these entries had in `CLAUDE.md`'s Status list: most recent first,
@@ -22,6 +22,72 @@ then the two gates.
 
 ---
 
+## DICOM-TAG-COLLISION-DESTROYS-ELEMENT
+
+- **🩺 A DATA SET DESTROYS ITS OWN ELEMENT AT PARSE TIME, AND UNTIL THIS SLICE IT DID SO IN
+  SILENCE.** (`DICOM-TAG-COLLISION-DESTROYS-ELEMENT`, `PRE-EXISTING`, **measured live on the
+  published `0.0.10` tarball**; recorded by `#51`'s pass-4 refuter as F1, reached again by `#69` on
+  the private path, deliberately not fixed by either.) A parsed Data Set is a `Map<Tag, Element>`,
+  so `Map.set` on a tag the map already holds **overwrites in place**: the earlier element's value is
+  gone from the object and the survivor is indistinguishable from an element the sender wrote once.
+  A reader cannot detect it, a round trip cannot reveal it, and no consumer can ask what was lost.
+  **In a de-identification tool, silently dropping a real element is the mirror of silently keeping
+  a private one.**
+  **▶ THE REMEDY IS A DISCLOSURE AT THE SITE THAT DECIDES, AND NOTHING ELSE.** `defineElement`
+  (`src/parser/data-set-map.ts`) is now the only writer of that map, and it emits the new Tier-2 code
+  `DICOM_DUPLICATE_TAG_IN_DATA_SET` when it is about to replace. **The reading does not move**: the
+  last element read still wins, on every file, and **no value is guessed for the one that lost**.
+  Same family as `X12-837-SV-SILENT-ZERO` (a fabricated `X12Decimal.ZERO`), `fhir`'s JSON writer
+  authoring `{}` for a scalar, and `astm`'s greedy atom: in every one the fix was to REPORT, never to
+  invent a better value.
+  **▶ WHY NOT A BOUND.** An over-declaring Item and an under-declaring Sequence are byte-identical
+  (`Buffer.equals`, pinned in `test/integration/explicit-sq-item-bound.test.ts`), so no reader can
+  tell from the bytes which element "should" have survived. Five graded attempts at such a bound were
+  refused on `#51`. What a reader CAN do is say that it had to choose.
+  **▶ THE CITATIONS, TRACED.** PS3.5 2026c section 7.1 "Data Elements" ("shall occur at most once in
+  a Data Set") and section 7.5.1 "Item Encoding Rules" ("appear only once" within an Item), read from
+  the SHA-pinned `vendor/nema/part05/`, **each occurring exactly once in that document**. So the code
+  cannot fire on a conformant file, which is what makes it safe under the `{ strict: true }`
+  escalation every Tier-2 code takes.
+  **▶ NO TAG IN THE MESSAGE, AND THIS IS THE FOURTH CODE TO NEED THAT BOUND.** A sender writing one
+  tag twice is the rare route; the ordinary one is a length field that lies, so the second header's
+  four tag bytes come out of the middle of somebody's value. The bound is the **factory signature**
+  (`duplicateTagInDataSet(position)`), as for `DICOM_NONZERO_RESERVED_BYTES`,
+  `DICOM_ITEM_CROSSES_SEQUENCE_END` and `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE`. **The tag is
+  still reachable, from the model rather than from a message**: `position.byteOffset` is the
+  surviving element's own `Element.byteOffset`, and the replaced element's tag IS the survivor's.
+  **▶ WHAT THE EVIDENCE ACTUALLY IS, BECAUSE THE GRID CANNOT STAND IN FOR IT.**
+  `scripts/measure-sq-bound-grid.ts` vs `0ead071`: of 83,037 cells, **349 differ and every difference
+  is confined to the warning channels and `{ strict: true }`** - 0 differ in the element tree, the
+  `DeidentifyReport`, the de-identified bytes, the surviving marker values or the root `(0010,0020)`;
+  0 new lenient fatals; `LEAKING` 11 -> 11; conformant tiling controls 7 -> 7. **345 cells report a
+  collision that was silent on base** (295 Implicit VR LE, 25 Explicit VR LE, 25 Explicit VR BE),
+  **all of them in the two hoist-collision families** - a fact about those fixtures, not a rate for
+  real files, and the grid reaches the collision **only** through a length lie. The plain duplicate,
+  the duplicate inside an Item, the collision that lands on a sequence's own tag and takes the whole
+  `SQ` out of the object, the frame the offset is in, and the strict behaviour are pinned in
+  `test/integration/tag-collision.test.ts` or nowhere: **11 of its 12 tests run red against
+  `origin/main` at `0ead071`**, the twelfth being the no-duplicate control, green there by design.
+  **▶ THE COST, WHICH IS A `{ strict: true }` COST AND NOT A READING ONE.** **9 cells that parsed
+  under `{ strict: true }` now throw**, lenient readings identical, because every Tier-2 code
+  escalates through the one chokepoint. A further **4** were already fatal there and now carry this
+  code instead of `INVALID_FILE_META`, because the escalation happens earlier in the parse. The
+  shipped `profiles.strict` preset is unchanged and does **not** escalate it (pinned).
+  **▶ TWO SYNTAXES, TWO DIFFERENT LIES, AND THE FIXTURE IS PARAMETERISED BY BOTH RATHER THAN
+  DESCRIBED.** Under Explicit VR the item stream is bounded against the buffer, so the `SQ`'s field
+  and the Item's both have to give way; an Item-only under-declare there is refused outright as a
+  Tier-3 fatal, which is loud. Under Implicit VR LE the defined-length `SQ` path slices the item
+  stream, so the `SQ`'s field is the one that ejects and an Item-only lie ejects **nothing**.
+  **▶ WHAT IT DOES NOT REACH, MEASURED NOT ASSUMED.** The **File Meta group** is accumulated into an
+  **array** by `parseFileMeta`, not a map, so nothing is overwritten there and this code does not
+  fire on it. `deidentify()` builds its output map from tags that are already unique, so it has no
+  collision to report. Neither is a claim that duplicate File Meta tags are handled well - only that
+  they are not destroyed by this mechanism.
+  **▶ STILL OPEN, UNTOUCHED:** `DICOM-PRIVATE-SQ-CARVE-OUT`, and the structural relocation itself
+  under `DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ`. This slice makes the loss observable; it does not
+  make the file readable.
+
+---
 
 ## DICOM-ITEM-EJECT-ROUTE
 
@@ -79,7 +145,7 @@ then the two gates.
   private-retention path. Asserted in the tests so it cannot be mistaken for something this remedy
   handled.
   **▶ THE PRICE, AND IT IS NOT SMALL.** Grid over **83,037** cells against `300af87`: `priv: kept at
-  ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** and the remaining
+ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** and the remaining
   **56 are the cost** - root retentions on self-contradicting files whose honest control does keep the
   value. Retention on files that do not contradict themselves is unchanged (**9 -> 9** root, **6 -> 6**
   in an Item), `no-creator` **0 -> 0**, `LEAKING` **11 -> 11**, conformant tiling controls **7 -> 7**,
@@ -90,7 +156,7 @@ then the two gates.
   Implicit VR LE, 44 Explicit VR.** `structural` also reads 118 by construction (it counts any record
   difference, de-identify columns included) and is not a reading claim.
   **▶ 🛑 THE HARNESS'S SYNTAX SPLIT WAS BLIND TO THREE OF ITS FOUR FAMILIES, AND IT IS FIXED HERE.**
-  `--diff` classified a cell by whether its key *starts with* the transfer syntax, which is only true
+  `--diff` classified a cell by whether its key _starts with_ the transfer syntax, which is only true
   of the sequence sweep; `carrier|`, `legit|` and `priv|` put their own prefix there, so **no row of
   theirs could ever count as Implicit VR LE**. This slice's 74 Implicit VR LE cells printed as
   `Implicit VR LE 0`. `transferSyntaxOf` fixes it, which also takes
@@ -122,7 +188,6 @@ then the two gates.
   `descendSequence`, so a private `SQ` inside the settled run that the profile vouches for is kept
   verbatim and nothing inside it is examined. `PRE-EXISTING`, its own item, still pinned as a residual
   test that asserts the leaking behaviour.
-
 
 ## DICOM-PRIVATE-CREATOR-RESERVATION-LEAK
 
@@ -233,7 +298,6 @@ then the two gates.
 > a "N of M tests run red on base" figure has a moving base, so it is not a fact.** Re-run it or do
 > not quote it. It is written here with the sha it was measured against for exactly that reason.
 
-
 ## DICOM-UNRECOGNIZED-VR-SHORT-FORM
 
 - **An unrecognized Explicit VR is read AND written long-form** (`DICOM-UNRECOGNIZED-VR-SHORT-FORM`,
@@ -323,7 +387,6 @@ then the two gates.
   and in `report.removedPrivateTags`, while head puts them in `err.message` beside a `snippet` that
   is already 16 raw source bytes by design (D-10). A registry for fatal messages, mirroring `#48`'s
   work on warnings, is its own slice.
-
 
 ## DICOM-CARRIER-LEAF-LEAKS
 
@@ -436,7 +499,6 @@ then the two gates.
     inside output stamped `PatientIdentityRemoved=YES`; **the writer was fixed 2026-08-03** with the
     reader, so it re-emits the long form.
 
-
 ## DICOM-DEIDENT-RAWBYTES-PASSTHROUGH
 
 - **De-identification refuses to keep a sequence it could not walk**
@@ -505,7 +567,6 @@ then the two gates.
   file. It needs a parser-set mark, i.e. its own slice. Measured on a hand-built file: identifier in
   the output, no report entry, only `DICOM_VR_MISMATCH`. A **private** `SQ` under `RetainSafePrivate`
   - a `Profile` is still kept verbatim, deliberately - the profile vouched for it.
-
 
 ## DICOM-OVERDECLARE-SWALLOWS-INTO-VALUE
 
@@ -578,7 +639,6 @@ then the two gates.
   -picked with the `declaredLengthDelta` / `omitItemDelim` knobs in `test/helpers/build-dicom.ts` that
   it needs. 76,293 cells; `--diff` prints every number the artifacts state.
 
-
 ## Shipped phases (4 through 7 of 8)
 
 - **Phase 7 of 8 complete** (580 tests passing, 1 todo). Metadata-level de-identification live:
@@ -614,7 +674,6 @@ then the two gates.
   value-layer `DicomValueError`. Builds on Phase 3 VR value decode (all 34 VRs via `Element.value`) +
   the `Dataset`/`Item` navigation API.
 
-
 ## The PS3.6 element registry generator
 
 - **The element registry is sourced from the normative PS3.6 DocBook, not from a mirror alone.**
@@ -634,7 +693,6 @@ then the two gates.
   live tags). **There is no staleness clock and must not be one** - a date gate fires the day it is
   written, demands an action nobody can take on demand, and reds unrelated PRs. "Has NEMA moved" is
   one content-comparing command in `vendor/nema/README.md`; CI gates byte-identical regen, offline.
-
 
 ## The PS3.15 Annex E action table generator
 
@@ -666,7 +724,6 @@ then the two gates.
   protective** branch - `K` on all 169 where modified-dates says `C`; the JSDoc and troubleshooting
   doc now say so, and splitting the option is a public-surface change deliberately not made).
 
-
 ## Repeating-group masks on the de-identify path
 
 - **Table E.1-1's repeating-group rows are matched by mask, bounded by PS3.5 §7.6.** `(50xx,xxxx)`
@@ -697,7 +754,6 @@ then the two gates.
   `test/scripts/generate-annex-e.test.ts`: the pre-remedy generator exits 0 on an injected `(7Fxx,0010)`
   row, the post-remedy one exits 1; a second mutation moves the Overlay Comments code `X` -> `K` and
   proves the emitted rule follows the document rather than a hard-coded `X`.
-
 
 ## The vendored PS3.5 repeating-group bound
 
@@ -749,7 +805,6 @@ then the two gates.
   re-deriving the bound from a current normative source. **No staleness clock here either**, same
   reasoning as PS3.6 and PS3.15.
 
-
 ## PHI-WARNING-MESSAGE-LEAK
 
 - **Diagnostics are built from a frozen registry, not from the document** (`PHI-WARNING-MESSAGE-LEAK`).
@@ -794,7 +849,6 @@ then the two gates.
   conformant reading and fail-safe, and it is a **behaviour change against `0.0.5`** for any sender
   that declares a creator once at the root and writes private data into Per-Frame Functional Groups
   items.
-
 
 ## DICOM-PARSE-CREATORS-SCOPE
 
@@ -841,7 +895,6 @@ then the two gates.
   disclosed instead:** under `{ strict: true }` the new warning is promoted to a throw, so a file
   whose items borrow an enclosing block parses lenient and throws strict. That is strict doing its
   job on a warning that is now correctly emitted, and the release note says so.
-
 
 ## DICOM-IMPLICIT-SQ-NOT-DESCENDED
 
@@ -930,7 +983,6 @@ then the two gates.
   element inside an **undefined-length** item reads **192**, file-absolute, because that branch is
   handed the outer buffer. `Element.byteOffset` documents no frame-of-reference contract either way.
   **Measure it rather than describing it.**
-
 
 ## DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ
 
@@ -1050,7 +1102,6 @@ READING differs` is **not** new here: `#66` added it, and a draft of this entry 
     uniformly item-relative, and the two forms do not agree. `Element.byteOffset` documents no
     frame-of-reference contract either way. **Re-measure it rather than describing it.**
 
-
 ## The em-dash brand gate
 
 - **Em-dash brand gate armed.** `scripts/check-no-emdash.sh` (`pnpm check:no-emdash`) plus
@@ -1076,7 +1127,6 @@ READING differs` is **not** new here: `#66` added it, and a draft of this entry 
   it, and do not remove the NUL to quiet the gate. When the gate goes red the fix is never to
   re-encode the character: rewrite with a period, colon, comma, or parentheses. Known limits are in
   the script header and are shared across every copy, so fix them there, not here.
-
 
 ## The attw wrapper gate
 

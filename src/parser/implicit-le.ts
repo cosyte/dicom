@@ -50,6 +50,7 @@ import { Element } from "../dataset/element.js";
 import { joinTag } from "../dataset/tag.js";
 import type { Tag } from "../dictionary/types.js";
 import { ByteCursor, copyValueBytes } from "./byte-cursor.js";
+import { defineElement } from "./data-set-map.js";
 import {
   applySpecificCharacterSet,
   registerPrivateCreator,
@@ -148,8 +149,8 @@ export function parseImplicitLE(
           ? copyValueBytes(buffer.subarray(valueRawStart, cursor.position))
           : buffer.subarray(valueRawStart, cursor.position);
         const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
-        elements.set(
-          tag,
+        defineElement(
+          elements,
           new Element({
             tag,
             vr,
@@ -161,6 +162,7 @@ export function parseImplicitLE(
             items: seq.items,
             ...(privateCreator !== undefined ? { privateCreator } : {}),
           }),
+          emit,
         );
         continue;
       }
@@ -195,8 +197,8 @@ export function parseImplicitLE(
             ? copyValueBytes(buffer.subarray(valueRawStart, cursor.position))
             : buffer.subarray(valueRawStart, cursor.position);
           const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
-          elements.set(
-            tag,
+          defineElement(
+            elements,
             new Element({
               tag,
               vr: "SQ", // Promoted, exactly as the Explicit-VR path promotes it.
@@ -209,6 +211,7 @@ export function parseImplicitLE(
               items: cp246.items,
               ...(privateCreator !== undefined ? { privateCreator } : {}),
             }),
+            emit,
           );
           continue;
         }
@@ -269,8 +272,8 @@ export function parseImplicitLE(
       );
       if (seq.success) {
         const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
-        elements.set(
-          tag,
+        defineElement(
+          elements,
           new Element({
             tag,
             vr,
@@ -282,6 +285,7 @@ export function parseImplicitLE(
             items: seq.items,
             ...(privateCreator !== undefined ? { privateCreator } : {}),
           }),
+          emit,
         );
         continue;
       }
@@ -305,8 +309,8 @@ export function parseImplicitLE(
     applySpecificCharacterSet(tag, valueSlice, ctx, emit, position);
 
     const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
-    elements.set(
-      tag,
+    defineElement(
+      elements,
       new Element({
         tag,
         vr,
@@ -319,6 +323,7 @@ export function parseImplicitLE(
         ...(ctx.currentCharset !== undefined ? { specificCharacterSet: ctx.currentCharset } : {}),
         ...(privateCreator !== undefined ? { privateCreator } : {}),
       }),
+      emit,
     );
   }
 

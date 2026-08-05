@@ -37,6 +37,7 @@ import { joinTag } from "../dataset/tag.js";
 import { lookup as dictionaryLookup } from "../dictionary/index.js";
 import type { Tag, VR } from "../dictionary/types.js";
 import { ByteCursor, copyValueBytes } from "./byte-cursor.js";
+import { defineElement } from "./data-set-map.js";
 import {
   applySpecificCharacterSet,
   readExplicitElementHeader,
@@ -202,8 +203,8 @@ export function _parseExplicit(
         ? copyValueBytes(buffer.subarray(headerStart, cursor.position))
         : buffer.subarray(headerStart, cursor.position);
       const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
-      elements.set(
-        tag,
+      defineElement(
+        elements,
         new Element({
           tag,
           vr: "SQ",
@@ -215,6 +216,7 @@ export function _parseExplicit(
           items: seqResult.items,
           ...(privateCreator !== undefined ? { privateCreator } : {}),
         }),
+        emit,
       );
       continue;
     }
@@ -233,8 +235,8 @@ export function _parseExplicit(
       const rawBytes = ctx.copyValues
         ? copyValueBytes(buffer.subarray(headerStart, cursor.position))
         : buffer.subarray(headerStart, cursor.position);
-      elements.set(
-        tag,
+      defineElement(
+        elements,
         new Element({
           tag,
           vr: "OB", // NOT promoted; Phase 4 surfaces fragments.
@@ -245,6 +247,7 @@ export function _parseExplicit(
           littleEndian: mode.littleEndian,
           items: result.items,
         }),
+        emit,
       );
       continue;
     }
@@ -267,8 +270,8 @@ export function _parseExplicit(
           ? copyValueBytes(buffer.subarray(headerStart, cursor.position))
           : buffer.subarray(headerStart, cursor.position);
         const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
-        elements.set(
-          tag,
+        defineElement(
+          elements,
           new Element({
             tag,
             vr: "SQ", // Promoted.
@@ -281,6 +284,7 @@ export function _parseExplicit(
             items: cp246.items,
             ...(privateCreator !== undefined ? { privateCreator } : {}),
           }),
+          emit,
         );
         continue;
       }
@@ -296,8 +300,8 @@ export function _parseExplicit(
       const fallbackBytes = ctx.copyValues
         ? copyValueBytes(buffer.subarray(headerStart, fallbackEnd))
         : buffer.subarray(headerStart, fallbackEnd);
-      elements.set(
-        tag,
+      defineElement(
+        elements,
         new Element({
           tag,
           vr: "UN",
@@ -308,6 +312,7 @@ export function _parseExplicit(
           littleEndian: mode.littleEndian,
           ...(privateCreator !== undefined ? { privateCreator } : {}),
         }),
+        emit,
       );
       cursor.position = fallbackEnd;
       continue;
@@ -355,8 +360,8 @@ export function _parseExplicit(
 
     const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
     const finalVr: VR = vr; // Postel: trust on-wire VR (warning already emitted on mismatch).
-    elements.set(
-      tag,
+    defineElement(
+      elements,
       new Element({
         tag,
         vr: finalVr,
@@ -369,6 +374,7 @@ export function _parseExplicit(
         ...(ctx.currentCharset !== undefined ? { specificCharacterSet: ctx.currentCharset } : {}),
         ...(privateCreator !== undefined ? { privateCreator } : {}),
       }),
+      emit,
     );
   }
 
