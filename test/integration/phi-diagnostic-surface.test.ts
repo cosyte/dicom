@@ -182,8 +182,11 @@ function cp246Fixture(marker: string): Buffer {
  * `Dataset.warnings` is the structural-parse array. The second is easy to miss:
  * VR decode is lazy and post-parse, so a decode-time deviation cannot be folded
  * into the frozen `Dataset.warnings` and rides on `Element.value.warnings`
- * instead (`src/dataset/vr/types.ts`). Seven of the twenty-six codes live only
- * there. Reading `.value` here is what forces the lazy decode, so a selector
+ * instead (`src/dataset/vr/types.ts`). The seven VR-decode-time codes live only
+ * there, and the registry's size is deliberately not written here: it was wrong
+ * in this sentence ("twenty-six" against twenty-nine) before this slice made it
+ * thirty, and the locked snapshot in `test/property/` measures it every run.
+ * Reading `.value` here is what forces the lazy decode, so a selector
  * that only walked `ds.warnings` would report green for the entire Phase 3
  * decode surface.
  */
@@ -469,6 +472,40 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
       });
     },
     expectCode: WARNING_CODES.DICOM_ITEM_CROSSES_SEQUENCE_END,
+  },
+  {
+    // The marker IS the element that lands on top of another one. The item
+    // UNDER-declares by exactly its trailing element's on-wire size, so that
+    // element is read as an element of the enclosing Data Set - where the root
+    // already holds `(0010,0020)`, and the newcomer replaces it. The tag the
+    // collision is about is composed from bytes the file placed inside a value,
+    // so `DICOM_DUPLICATE_TAG_IN_DATA_SET` names no tag at all; this is the slot
+    // that proves a planted marker cannot reach the message either.
+    name: "(0010,0020) PatientID [LO] ejected out of an under-declaring item onto the root's own tag",
+    plant: (m) => {
+      const value = val(m);
+      const onWire = 8 + value.length;
+      return buildDicom({
+        transferSyntax: TS_EXPLICIT_LE,
+        elements: [
+          { tag: "00100020", vr: "LO" as VR, value: val("MRN-11111") },
+          {
+            tag: "0040A730",
+            declaredLengthDelta: -onWire,
+            items: [
+              {
+                declaredLengthDelta: -onWire,
+                elements: [
+                  { tag: "00080008", vr: "CS" as VR, value: Buffer.from("ORIGINAL") },
+                  { tag: "00100020", vr: "LO" as VR, value },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+    },
+    expectCode: WARNING_CODES.DICOM_DUPLICATE_TAG_IN_DATA_SET,
   },
   {
     name: "(0010,0020) PatientID [LO] beside a retired (0008,0000) group length",

@@ -6,6 +6,94 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Fixed
 
+- **🩺 A Data Set that carries one tag twice DESTROYED the first element's value at parse time, and
+  said nothing** (`DICOM-TAG-COLLISION-DESTROYS-ELEMENT`). **`PRE-EXISTING`**, on every released
+  version including the current published `0.0.10`. A parsed Data Set is a `Map<Tag, Element>`, so
+  `Map.set` on a tag the map already holds **overwrites in place**: the earlier element's value is
+  gone from the object, and the survivor is indistinguishable from an element the sender wrote once.
+  No warning, no report entry, nothing a reader could query and nothing a round trip could reveal -
+  which is the same harm as a leak, in the other direction. It is now disclosed by the new Tier-2
+  code **`DICOM_DUPLICATE_TAG_IN_DATA_SET`**, raised at the moment of the replacement, in every Data
+  Set at every depth.
+
+  **Measured on the published tarball rather than inferred from a version number.**
+  `npm pack @cosyte/dicom@0.0.10` (the registry's current `latest`; `npm view` is the only source
+  for that, and there is no `0.0.9`), an Explicit VR LE file carrying `(0010,0020)` twice:
+  `ds.get("00100020")` reads the **second** value, `ds.warnings` is **empty**, and `{ strict: true }`
+  does **not** throw. Silent on every channel, on the released package.
+
+  **The remedy is the disclosure and nothing else.** The reading does not move: the last element read
+  still wins, exactly as in every released version, and **no value is invented for the one that was
+  replaced**. That is deliberate rather than modest. A file whose Item over-declares and a file whose
+  Sequence under-declares are byte-identical (pinned by `Buffer.equals` in
+  `test/integration/explicit-sq-item-bound.test.ts`), so a reader cannot choose the "right" element
+  from the bytes; what it can do is say that it had to choose.
+
+  **Citations, traced rather than stated.** PS3.5 2026c section 7.1 "Data Elements": "The Data
+  Elements in a Data Set shall be ordered by increasing Data Element Tag Number and shall occur at
+  most once in a Data Set." Section 7.5.1 "Item Encoding Rules", one level down: "Within the context
+  of each Item, these Data Elements shall be ordered by increasing Data Element Tag value and appear
+  only once." Both read from the SHA-pinned `vendor/nema/part05/`, each occurring exactly once in
+  that document. **So this code cannot fire on a conformant file**, which is what makes it safe to add
+  under the `{ strict: true }` escalation every Tier-2 code takes.
+
+  **The message names no tag, and that is specific to this code.** A sender writing the same tag twice
+  is the rare route; the ordinary one is a length field that lies, so the second header's four tag
+  bytes are read out of the middle of some element's value. `renderTag` shape-checks a tag and
+  therefore cannot refuse one, so the bound is the factory signature, as it is for
+  `DICOM_NONZERO_RESERVED_BYTES` and `DICOM_ITEM_CROSSES_SEQUENCE_END`. `position.byteOffset` is the
+  offset of the header that replaced, which is the surviving element's own `Element.byteOffset` -
+  so at the **root** the tag is read off the model rather than out of a message. **Inside a
+  defined-length Sequence Item it is not a lookup at all**: `Element.byteOffset` is item-relative
+  there, so the same number can name an untouched root element, and no parser warning populates
+  `position.contextPath` to tell them apart. Read the code as "an element in this object was
+  destroyed" unless you have established the frame.
+
+  **What this cost, measured on `scripts/measure-sq-bound-grid.ts` against `0ead071`, because a
+  disclosure that changes a `{ strict: true }` parse is a behaviour change.** Of 83,037 cells, **349
+  differ and every difference is confined to the warning channels and `{ strict: true }`**: 0 cells
+  differ in the element tree, the `DeidentifyReport`, the de-identified bytes, which marker values
+  survive, or the root `(0010,0020)`; 0 new lenient fatals; leaking cells 11 -> 11; conformant tiling
+  controls 7 -> 7. **345 cells now report a collision that was silent on base** (295 Implicit VR LE,
+  25 Explicit VR LE, 25 Explicit VR BE), all of them in the grid's two hoist-collision families -
+  a fact about those fixtures, not a rate for real files. **9 cells that parsed under
+  `{ strict: true }` now throw** - element trees, reports, root identifiers and surviving markers
+  identical on both trees, taken from those per-field counters and **not** from the harness's
+  `...on an UNCHANGED lenient reading` line, which reads 0 by construction for any slice that adds a
+  code. A further **4** were already fatal there and now carry this code instead of
+  `INVALID_FILE_META`, because the escalation happens earlier in the parse. The shipped
+  `profiles.strict` preset is unchanged.
+
+  **Three more things a `{ strict: true }` caller should know, none of them fixed here.** (1) On the
+  one shape where the parse rolls a descent back - an Implicit VR LE defined-length `SQ` whose value
+  holds a duplicate and then a non-Item tag - `{ strict: true }` threw `DICOM_SQ_NOT_DESCENDED`
+  before and throws this code now, on a file where **nothing was destroyed**: both values survive in
+  `Element.rawBytes`. Both refuse the file, so no object is lost, but the older code was the more
+  accurate diagnosis. (2) The same shape streams the code to `onWarning` while `ds.warnings` never
+  receives it, which is the pre-existing D-03 ordering reached by one more code. (3) **"Names no tag"
+  is about the message.** Strict mode throws a `DicomParseError` whose `snippet` is 16 raw source
+  bytes at that offset, rendered as hex - measured on a plain duplicate:
+  `10 00 20 00 4c 4f 0e 00 53 4d 49 54 48 53 4f 4e`, the withheld tag plus eight bytes of the value.
+  That is the package-wide D-10 design. The same file does not throw at all on `0ead071` (this code is
+  what refuses it), but the same file with its even-length padding removed produces the identical 16
+  bytes there through `DICOM_ODD_LENGTH_VALUE_PADDED`, one length byte apart - which is why the
+  guarantee is worded about the message rather than about the channel.
+
+  **What the grid is NOT evidence for here, stated because it was read that way once.** It reaches
+  the collision only through a length lie, and it swept nothing that carries a tag twice honestly.
+  The plain duplicate, the duplicate inside an Item, the collision that lands on a sequence's own tag
+  and takes the whole `SQ` and everything nested in it out of the object, the frame the byte offset
+  is in, and the `{ strict: true }` behaviour are pinned in
+  `test/integration/tag-collision.test.ts` or nowhere: **14 of its 15 tests run red against
+  `origin/main` at `0ead071`** - re-measured after each gate pass added tests, and written with its sha
+  because the figure moves with every test added - the fifteenth being the no-duplicate
+  control, which is green there by design.
+
+  **Still open, and not touched here:** the private-`SQ` carve-out (`DICOM-PRIVATE-SQ-CARVE-OUT`),
+  and the structural relocation itself under `DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ` - an
+  over-declaring Item still moves the element that follows the sequence. This slice makes the loss
+  observable; it does not make the file readable.
+
 - **🩺 The mirror of the above: a private value ejected OUT of a Sequence Item was retained on a
   reservation it borrowed from the Data Set it landed in, in output stamped
   `PatientIdentityRemoved = YES` with `report.removedPrivateTags` reading `[]`**

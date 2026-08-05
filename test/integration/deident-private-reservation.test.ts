@@ -104,6 +104,7 @@ import type { DeidentifyOptions } from "../../src/deident/types.js";
 import {
   Dataset,
   DicomParseError,
+  WARNING_CODES,
   deidentify,
   parseDicom,
   profiles,
@@ -680,13 +681,16 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
         // overwrite cannot move it. `PRE-EXISTING` and leaking on `300af87`
         // (`removedPrivateTags: []`, the value in the output).
         //
-        // 🩺 AND IT DESTROYS THE ROOT'S OWN VALUE ON THE WAY IN, WHICH THIS
-        // SLICE DOES NOT FIX. The overwrite replaces the reservation's genuine
-        // root element with the Item's, silently, at parse time - the
-        // `Map<Tag, Element>` substitution already recorded for `(0010,0020)`,
-        // reached here on the private path. It is `PRE-EXISTING`, identical on
-        // both trees, and it is asserted below so it cannot be mistaken for
-        // something this remedy handled.
+        // 🩺 AND IT DESTROYS THE ROOT'S OWN VALUE ON THE WAY IN. The overwrite
+        // replaces the reservation's genuine root element with the Item's, at
+        // parse time - the `Map<Tag, Element>` substitution already recorded for
+        // `(0010,0020)`, reached here on the private path. `#69` did not fix it
+        // and it is asserted below so it cannot be mistaken for something that
+        // remedy handled. **It is no longer SILENT:**
+        // `DICOM-TAG-COLLISION-DESTROYS-ELEMENT` made the parse report it as
+        // `DICOM_DUPLICATE_TAG_IN_DATA_SET`, asserted here as well, and the
+        // substitution itself is unchanged. Full coverage of the disclosure is
+        // in `test/integration/tag-collision.test.ts`.
         const build = (sq: number, item: number): Buffer =>
           buildDicom({
             transferSyntax: ts,
@@ -714,12 +718,18 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
         const lying = run(build(sqDelta, itemDelta));
         expect(lying.removedPrivateTags).toEqual([PRIVATE_TAG]);
         expect(lying.secretInOutput).toBe(false);
-        // The `PRE-EXISTING` substitution, pinned rather than described: the
-        // root's own value is gone from the parsed object before `deidentify()`
-        // is ever called, so no remedy at this boundary can bring it back.
-        expect(
-          parseDicom(build(sqDelta, itemDelta)).get(PRIVATE_TAG)?.rawBytes.toString("latin1"),
-        ).toBe(SECRET);
+        // The substitution, pinned rather than described: the root's own value
+        // is gone from the parsed object before `deidentify()` is ever called,
+        // so no remedy at this boundary can bring it back - and the parse now
+        // says so, on the honest control as well (it must NOT fire there).
+        const lyingParse = parseDicom(build(sqDelta, itemDelta));
+        expect(lyingParse.get(PRIVATE_TAG)?.rawBytes.toString("latin1")).toBe(SECRET);
+        expect(lyingParse.warnings.map((w) => w.code)).toContain(
+          WARNING_CODES.DICOM_DUPLICATE_TAG_IN_DATA_SET,
+        );
+        expect(parseDicom(build(0, 0)).warnings.map((w) => w.code)).not.toContain(
+          WARNING_CODES.DICOM_DUPLICATE_TAG_IN_DATA_SET,
+        );
         expect(lying.rootPrivateInOutput).toBe(false);
       },
     );

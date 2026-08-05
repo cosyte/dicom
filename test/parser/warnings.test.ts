@@ -36,6 +36,9 @@ describe("WARNING_CODES (D-08)", () => {
 
   it("contains every Phase-2 actively-emitted code", () => {
     const active: ReadonlyArray<keyof typeof WARNING_CODES> = [
+      // Added by `DICOM-TAG-COLLISION-DESTROYS-ELEMENT`: emitted by
+      // `defineElement` when an element replaces one the Data Set already holds.
+      "DICOM_DUPLICATE_TAG_IN_DATA_SET",
       "DICOM_EMPTY_ITEM_IN_SEQUENCE",
       "DICOM_FILE_META_GROUP_LENGTH_MISMATCH",
       "DICOM_FILE_META_GROUP_LENGTH_MISSING",

@@ -44,6 +44,7 @@ import type { DicomPosition } from "./types.js";
  */
 export const WARNING_CODES = {
   // === Phase 2 actively emits (D-08 active list - alphabetical-within-prefix per CONTEXT specifics §) ===
+  DICOM_DUPLICATE_TAG_IN_DATA_SET: "DICOM_DUPLICATE_TAG_IN_DATA_SET",
   DICOM_EMPTY_ITEM_IN_SEQUENCE: "DICOM_EMPTY_ITEM_IN_SEQUENCE",
   DICOM_FILE_META_GROUP_LENGTH_MISMATCH: "DICOM_FILE_META_GROUP_LENGTH_MISMATCH",
   DICOM_FILE_META_GROUP_LENGTH_MISSING: "DICOM_FILE_META_GROUP_LENGTH_MISSING",
@@ -177,6 +178,14 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   DICOM_UN_PARSED_AS_SQ:
     "Element ({tag}) has VR=UN with undefined length; descended as Implicit VR LE sequence per CP-246.",
   DICOM_EMPTY_ITEM_IN_SEQUENCE: "Sequence ({tag}) contains an empty item (length=0); tolerated.",
+  // Neither the tag nor the replaced element's value is here, and the tag's
+  // absence is specific to this code rather than caution. See
+  // `duplicateTagInDataSet`. Short by measurement rather than by intention: one
+  // is raised per collision and the collision count is chosen by the input, so a
+  // 400-character draft was measured at 50 M characters over a 1 MiB file and
+  // cut. The reasoning lives in the factory's JSDoc, not in the string.
+  DICOM_DUPLICATE_TAG_IN_DATA_SET:
+    "A Data Element carrying a tag this Data Set already holds replaced the earlier one at this byte offset; that element's value is not in the parsed object. PS3.5 7.1 and 7.5.1. Tag withheld.",
   // The Item's own declared length is deliberately absent. See
   // `itemCrossesSequenceEnd`; `{n2}` stays because the emit site's
   // `endLimit < buffer.length` conjunct bounds it by the buffer.
@@ -654,6 +663,90 @@ export function itemCrossesSequenceEnd(
  */
 export function emptyItemInSequence(position: DicomPosition, tag: Tag): DicomParseWarning {
   return build(WARNING_CODES.DICOM_EMPTY_ITEM_IN_SEQUENCE, position, { tag });
+}
+
+/**
+ * Build a `DICOM_DUPLICATE_TAG_IN_DATA_SET` warning. Emitted by
+ * {@link defineElement} when an element is read whose tag the Data Set being
+ * built already holds, at the moment the second one replaces the first.
+ *
+ * ## What it discloses, and why a warning is the whole remedy
+ *
+ * A parsed Data Set is a `Map<Tag, Element>`. `Map.set` on a key the map
+ * already has overwrites in place, so the first element's value leaves the
+ * object and nothing in the model records that it was ever there: the survivor
+ * looks exactly like an element the sender wrote once. That is a loss a reader
+ * cannot detect and a round trip cannot reveal, which is why the disclosure is
+ * the fix. **This code decides nothing.** The reading is unchanged, the last
+ * element read still wins, and no value is invented for the one that lost.
+ *
+ * ## Citations, traced rather than stated
+ *
+ * PS3.5 2026c section 7.1 "Data Elements": "The Data Elements in a Data Set
+ * shall be ordered by increasing Data Element Tag Number and shall occur at most
+ * once in a Data Set." Section 7.5.1 "Item Encoding Rules" repeats it one level
+ * down: within an Item the Data Elements "shall be ordered by increasing Data
+ * Element Tag value and appear only once". Both are read from the SHA-pinned
+ * `vendor/nema/part05/`, and each sentence occurs exactly once in that document.
+ * So this code cannot fire on a conformant file, which is what makes it safe to
+ * add under the `{ strict: true }` escalation every Tier-2 code takes.
+ *
+ * ## Slots, and what is input
+ *
+ * **🛑 THE TAG IS BOUND OUT OF THIS SIGNATURE AND MUST NOT COME BACK.** The
+ * ordinary way a Data Set comes to hold one tag twice is not a sender typing it
+ * twice: it is a length field that lies, so bytes inside somebody's value are
+ * read as a Data Element header. The four tag bytes are then document content,
+ * and `renderTag` shape-checks a tag and therefore cannot refuse one. Identical
+ * remedy and reasoning to {@link nonzeroReservedBytes} and
+ * {@link itemCrossesSequenceEnd}: the bound is the signature, so no future call
+ * site can put it back without changing it.
+ *
+ * The survivor's tag is still reachable, and from the model rather than from a
+ * message: `position.byteOffset` is the byte offset the parser counted for the
+ * replacing element's header, which is the `Element.byteOffset` the Data Set now
+ * carries under that tag. The element that was replaced is gone, and its tag is
+ * the survivor's.
+ *
+ * **🛑 THAT LOOKUP IS ROOT-ONLY, AND SAYING IT UNQUALIFIED IS A DEFECT A GATE
+ * ALREADY CAUGHT.** `position.byteOffset` is frame-dependent exactly as
+ * `Element.byteOffset` is: file-absolute at the root, relative to the item's own
+ * slice inside a defined-length item, with no frame-of-reference contract
+ * documented either way. **So it is not a unique key over the object.** A
+ * collision inside an item reports an offset a *root* element may also occupy -
+ * measured: a `(0010,0020)` collision inside item 0 of `(0040,A730)` reports
+ * offset 172, where the root's untouched `(0008,0008)` also sits, so a
+ * root-only search names the wrong attribute. `position.contextPath` would
+ * disambiguate it and **no parser warning populates it**; giving them one is a
+ * package-wide change, not a rider on this code. Both frames are measured and
+ * pinned in `test/integration/tag-collision.test.ts` rather than described.
+ *
+ * ## What it does not do
+ *
+ * **🩺 "Names no tag" is about THIS MESSAGE, not about the strict channel.**
+ * `{ strict: true }` escalates every Tier-2 code through `makeEmitter`, and the
+ * `DicomParseError` it throws carries `snippet`: 16 raw source bytes at the same
+ * offset, rendered as hex. On a plain duplicate that is
+ * `10 00 20 00 4c 4f 0e 00 53 4d 49 54 48 53 4f 4e` - the withheld tag, and
+ * eight bytes of the value. That is D-10 and package-wide: the same file with
+ * its even-length padding removed produces the identical bytes on `0ead071`
+ * through `DICOM_ODD_LENGTH_VALUE_PADDED` (`0d` for `0e`), and the
+ * PHI-diagnostic runner cannot see either, because hex is a re-encoding. Pinned in `test/integration/tag-collision`, so
+ * that the guarantee is never restated as "this code cannot surface a tag".
+ *
+ * **It is not bounded.** A file may encode as many collisions as it can fit, and
+ * `ds.warnings` is uncapped: that is this package's pre-existing, package-wide
+ * posture for parser warnings, not something new here. **And it does not reach
+ * the File Meta group**, which `parseFileMeta` accumulates into an array and not
+ * a map, so nothing is overwritten there.
+ *
+ * @example
+ * ```ts
+ * const w = duplicateTagInDataSet({ byteOffset: 274 });
+ * ```
+ */
+export function duplicateTagInDataSet(position: DicomPosition): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DUPLICATE_TAG_IN_DATA_SET, position);
 }
 
 /**

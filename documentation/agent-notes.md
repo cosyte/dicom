@@ -23,6 +23,132 @@ then the two gates.
 ---
 
 
+## DICOM-TAG-COLLISION-DESTROYS-ELEMENT
+
+- **🩺 A DATA SET DESTROYS ITS OWN ELEMENT AT PARSE TIME, AND UNTIL THIS SLICE IT DID SO IN
+  SILENCE.** (`DICOM-TAG-COLLISION-DESTROYS-ELEMENT`, `PRE-EXISTING`, **measured live on the
+  published `0.0.10` tarball**; recorded by `#51`'s pass-4 refuter as F1, reached again by `#69` on
+  the private path, deliberately not fixed by either.) A parsed Data Set is a `Map<Tag, Element>`,
+  so `Map.set` on a tag the map already holds **overwrites in place**: the earlier element's value is
+  gone from the object and the survivor is indistinguishable from an element the sender wrote once.
+  A reader cannot detect it, a round trip cannot reveal it, and no consumer can ask what was lost.
+  **In a de-identification tool, silently dropping a real element is the mirror of silently keeping
+  a private one.**
+  **▶ THE REMEDY IS A DISCLOSURE AT THE SITE THAT DECIDES, AND NOTHING ELSE.** `defineElement`
+  (`src/parser/data-set-map.ts`) is now the only writer of that map, and it emits the new Tier-2 code
+  `DICOM_DUPLICATE_TAG_IN_DATA_SET` when it is about to replace. **The reading does not move**: the
+  last element read still wins, on every file, and **no value is guessed for the one that lost**.
+  Same family as `X12-837-SV-SILENT-ZERO` (a fabricated `X12Decimal.ZERO`), `fhir`'s JSON writer
+  authoring `{}` for a scalar, and `astm`'s greedy atom: in every one the fix was to REPORT, never to
+  invent a better value.
+  **▶ WHY NOT A BOUND.** An over-declaring Item and an under-declaring Sequence are byte-identical
+  (`Buffer.equals`, pinned in `test/integration/explicit-sq-item-bound.test.ts`), so no reader can
+  tell from the bytes which element "should" have survived. Five graded attempts at such a bound were
+  refused on `#51`. What a reader CAN do is say that it had to choose.
+  **▶ THE CITATIONS, TRACED.** PS3.5 2026c section 7.1 "Data Elements" ("shall occur at most once in
+  a Data Set") and section 7.5.1 "Item Encoding Rules" ("appear only once" within an Item), read from
+  the SHA-pinned `vendor/nema/part05/`, **each occurring exactly once in that document**. So the code
+  cannot fire on a conformant file, which is what makes it safe under the `{ strict: true }`
+  escalation every Tier-2 code takes.
+  **▶ NO TAG IN THE MESSAGE, AND THIS IS THE FOURTH CODE TO NEED THAT BOUND.** A sender writing one
+  tag twice is the rare route; the ordinary one is a length field that lies, so the second header's
+  four tag bytes come out of the middle of somebody's value. The bound is the **factory signature**
+  (`duplicateTagInDataSet(position)`), as for `DICOM_NONZERO_RESERVED_BYTES`,
+  `DICOM_ITEM_CROSSES_SEQUENCE_END` and `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE`.
+  **▶ 🛑 AND THE OFFSET IS NOT A KEY. THE FIRST DRAFT SHIPPED A LOOKUP RECIPE IN TWO CONSUMER DOCS
+  AND A REFUTER BROKE IT ON THE FIRST TRY.** `position.byteOffset` is the surviving element's own
+  `Element.byteOffset`, and the replaced element's tag IS the survivor's - but `Element.byteOffset`
+  is **frame-dependent and always has been** (file-absolute at the root, relative to the item's own
+  slice inside a defined-length Item, and no frame-of-reference contract is documented either way).
+  So a collision inside an Item reports an offset that a **root** element can also occupy, and
+  "look it up on the model" then names the wrong attribute. Measured: a `(0010,0020)` collision
+  inside item 0 of `(0040,A730)` reported offset 172, where the root's intact `(0008,0008)` also
+  sits. The docs now say root-only, and `position.contextPath` is **not** populated by any parser
+  warning - adding it is a package-wide feature and a wider slice, not a rider on this one.
+  **▶ WHAT THE EVIDENCE ACTUALLY IS, BECAUSE THE GRID CANNOT STAND IN FOR IT.**
+  `scripts/measure-sq-bound-grid.ts` vs `0ead071`: of 83,037 cells, **349 differ and every difference
+  is confined to the warning channels and `{ strict: true }`** - 0 differ in the element tree, the
+  `DeidentifyReport`, the de-identified bytes, the surviving marker values or the root `(0010,0020)`;
+  0 new lenient fatals; `LEAKING` 11 -> 11; conformant tiling controls 7 -> 7. **345 cells report a
+  collision that was silent on base** (295 Implicit VR LE, 25 Explicit VR LE, 25 Explicit VR BE),
+  **all of them in the two hoist-collision families** - a fact about those fixtures, not a rate for
+  real files, and the grid reaches the collision **only** through a length lie. The plain duplicate,
+  the duplicate inside an Item, the collision that lands on a sequence's own tag and takes the whole
+  `SQ` out of the object, the frame the offset is in, and the strict behaviour are pinned in
+  `test/integration/tag-collision.test.ts` or nowhere: **14 of its 15 tests run red against
+  `origin/main` at `0ead071`** (re-measured after each gate pass added tests - two after pass 1, one after
+  pass 2 - so it is written with its sha; the figure moves with every test you add), the fifteenth being the no-duplicate control,
+  green there by design.
+  **▶ THE COST, WHICH IS A `{ strict: true }` COST AND NOT A READING ONE.** **9 cells that parsed
+  under `{ strict: true }` now throw**, because every Tier-2 code escalates through the one
+  chokepoint; their element trees, reports, root identifiers, surviving markers and lenient class are
+  identical on both trees. **Do NOT source that from the harness's
+  `...on an UNCHANGED lenient reading` line** - `lenientSame` compares the whole record minus
+  `strict`, warnings included, so it reads 0 by construction for any slice that adds a code. It comes
+  from the per-field counters. A further **4** cells were already fatal there and now carry this code
+  instead of `INVALID_FILE_META`, because the escalation happens earlier in the parse. The shipped
+  `profiles.strict` preset is unchanged and does **not** escalate it (pinned).
+  **▶ AND A FIFTH STRICT SUBSTITUTION THE GRID DOES NOT COUNT, FOUND BY PASS 2.** On the rolled-back
+  Implicit VR LE shape above, `{ strict: true }` threw `DICOM_SQ_NOT_DESCENDED` on base and throws
+  `DICOM_DUPLICATE_TAG_IN_DATA_SET` here - measured on both trees. Both refuse the file, so no caller
+  loses an object, but **the new code asserts a loss on the one file where nothing was lost** and the
+  base's code was the more accurate diagnosis. Disclosed rather than fixed: suppressing an emission
+  during a trial descent is a change to the chokepoint's contract, which is a wider slice than this
+  one. Pinned by a test.
+  **▶ 🩺 AND "NAMES NO TAG" IS MESSAGE-SCOPED. THE STRICT CHANNEL HANDS BACK WHAT THE MESSAGE
+  WITHHELD.** `makeEmitter`'s escalate path builds `DicomParseError.snippet` from 16 raw source bytes
+  at the warning's offset, which is the replacing element's header: measured on a plain duplicate,
+  `10 00 20 00 4c 4f 0e 00 53 4d 49 54 48 53 4f 4e` - the withheld tag, and eight bytes of the value,
+  in hex. That is D-10, `PRE-EXISTING` and package-wide, and the base reachability is measured
+  rather than asserted: this exact fixture does **not** throw on `0ead071` at all (no code, no
+  snippet), while the **same fixture with its even-length padding removed** reaches the identical
+  16 bytes there through `DICOM_ODD_LENGTH_VALUE_PADDED` -
+  `10 00 20 00 4c 4f 0d 00 53 4d 49 54 48 53 4f 4e`, one length byte apart. The PHI-diagnostic
+  runner structurally cannot see either, because
+  hex is a re-encoding. One more code reaches it; **the guarantee to state is "the message names no
+  tag", never "this code cannot surface one".** Pinned by a test so the sentence cannot drift back.
+  **▶ TWO SYNTAXES, TWO DIFFERENT LIES, AND THE FIXTURE IS PARAMETERISED BY BOTH RATHER THAN
+  DESCRIBED.** Under Explicit VR the item stream is bounded against the buffer, so the `SQ`'s field
+  and the Item's both have to give way; an Item-only under-declare there is refused outright as a
+  Tier-3 fatal, which is loud. Under Implicit VR LE the defined-length `SQ` path slices the item
+  stream, so the `SQ`'s field is the one that ejects and an Item-only lie ejects **nothing**.
+  **▶ THE MESSAGE LENGTH IS A MEASUREMENT, NOT AN ADJECTIVE.** The first draft said "kept short"
+  about a **400-character** string, which was the **longest of the 30** in `WARNING_MESSAGES` -
+  longer than every de-identify message it named as its model - on the one channel whose multiplicity
+  the input chooses (`ds.warnings` is uncapped, `PRE-EXISTING` and package-wide). A refuter measured
+  131,071 warnings and 50 M characters from a 1 MiB file. It is now **188 characters - seventh of the
+  30, not the longest** (against a median of 99.5, so still an above-median string, which is the honest
+  way to put it), and the reasoning lives here rather than in the string.
+  **▶ WHAT IT DOES NOT REACH, MEASURED NOT ASSUMED.** The **File Meta group** is accumulated into an
+  **array** by `parseFileMeta`, not a map, so nothing is overwritten there and this code does not
+  fire on it - which is not a claim that duplicate File Meta tags are handled well, only that they
+  are not destroyed by this mechanism. And it does **not** cover `deidentify()`, which is
+  `out.elements.set()` throughout: **the first draft claimed it "has no collision to report" and
+  that is false.** `deidentify.ts:1260` and `:1265` set `(0012,0062)` and `(0012,0063)`
+  unconditionally, so a source `(0012,0063)` is **replaced** rather than added to. `PRE-EXISTING`,
+  identical on both trees, and **it is a real finding against PS3.15 2026c §E.1.1**, which says the
+  method description "shall be inserted in or added to" that attribute. Filed for its own slice,
+  untouched here; it destroys provenance metadata rather than a dose, an identifier or a code system.
+  **▶ AND ONE SHAPE STREAMS THE CODE FOR A DATA SET THAT WAS THEN DISCARDED.** Under Implicit VR LE,
+  a defined-length `SQ` whose item stream holds a duplicate **and then** a non-Item tag makes
+  `tryParseDefinedLengthSQ` roll back: `onWarning` sees `DICOM_DUPLICATE_TAG_IN_DATA_SET`,
+  `ds.warnings` does not, and **nothing was lost** - both values survive in `Element.rawBytes`. That
+  is the `PRE-EXISTING` D-03 pop-after-stream divergence (`makeEmitter` streams before the pop), now
+  reachable by one more code, in the **false-alarm** direction rather than the silent one. Pinned by
+  a test rather than described.
+  **▶ ONE MORE FOR THE BACKLOG, SAME FAMILY, FOUND BY PASS 2 AND NOT THIS SLICE'S TO FIX.** File Meta
+  is an array, so nothing is *overwritten* there - but `parseFileMeta` projects a modeled
+  `(0002,xxxx)` with `fmElements.find(...)` (first wins) and `extraElements` filters every
+  `MODELED_FM_TAGS` entry out, so a **second** copy of a modeled File Meta element - a duplicated
+  `(0002,0010)` Transfer Syntax UID with a different value, say - is dropped from the model with no
+  warning and no array residue. `PRE-EXISTING`, and the same shape as the item this section is
+  about, one group over.
+  **▶ STILL OPEN, UNTOUCHED:** `DICOM-PRIVATE-SQ-CARVE-OUT`, and the structural relocation itself
+  under `DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ`. This slice makes the loss observable; it does not
+  make the file readable.
+
+---
+
 ## DICOM-ITEM-EJECT-ROUTE
 
 - **🩺 THE EJECT DIRECTION IS CLOSED. THE PRIVATE-`SQ` CARVE-OUT IS NOT, AND THE CLASS IS NOT.**
