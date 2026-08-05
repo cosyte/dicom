@@ -706,12 +706,31 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   `report.removedPrivateTags` for a refused nested private element, `report.attributes` with a
   nested `contextPath` for a Table E.1-1 row acted on inside the carrier, and
   `report.unauditableSequences` + `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` for an un-walkable one.
-  **▶ WHAT IS STILL NOT CLOSED, AND THIS SLICE DOES NOT TOUCH IT:** the undefined-length **`UN`**
+  **▶ 🛑 THE BOUND, AND PASS 1 REFUSED THE SLICE FOR NOT STATING IT: `el.vr` IS THE PARSED VR, NOT
+  THE PROFILE'S DECLARED ONE.** The `SQ` branch keys on the parse tree. Under Implicit VR LE a
+  private tag has **no VR on the wire**, so `SQ` there is an inference the **parser** draws from a
+  `Profile` it was given. Pass the profile to `parseDicom` and the element arrives `SQ` with items
+  and is walked; pass it **only** to `deidentify()` and the identical bytes arrive `UN` with no
+  items, take the non-`SQ` branch, and are kept verbatim exactly as before. Same profile, same
+  bytes, opposite outcome. That is `DICOM-PRIVATE-SQ-PARSE-VR`, `PRE-EXISTING`, its own item, pinned
+  as a residual test with a name-bearing payload. **It is NOT the undefined-length `UN` residual** -
+  that one is a CP-246 descent this parser refused, and this carrier's length is **defined**, so
+  CP-246 is never reached. The first draft of five artifacts said "one shape is still exempt" and
+  named only the `UN`; the enumeration was the defect, not the guard. **Corrected, guard not
+  widened** - and the `creatorsInScope` sentence claiming `RetainSafePrivate` "behaves identically
+  whether the profile arrived at parse or at de-identification" is **retracted**: it was true only
+  while every retained private element was kept verbatim.
+  **▶ WHAT IS STILL NOT CLOSED, AND THIS SLICE DOES NOT TOUCH IT:** `DICOM-PRIVATE-SQ-PARSE-VR`
+  above; the undefined-length **`UN`**
   whose CP-246 descent was refused (it keeps `vr === "UN"`, so `isUnauditableSequence`'s first
   conjunct is false and relaxing it would empty every unknown-VR element in every file); and the
   11 leaf-carrier cells of `DICOM-BINARY-CARRIER-OVERDECLARE`, **whose leak the founder decided to
   ACCEPT on 2026-08-05** - the grid confirms this slice left it alone at 11 -> 11, with the
-  conformant tiling-control counter unmoved at 7 -> 7.
+  conformant tiling-control counter unmoved at 7 -> 7. A pass-1 finding also names a **binary
+  private carrier written `OB`/`UN` with an honest defined length whose value is a well-formed item
+  stream**, reached through the `RetainSafePrivate` retention route the grid's `carrier|` family
+  never exercises (it runs `deidentify()` with no options). Adjacent to the accepted
+  `DICOM-BINARY-CARRIER-OVERDECLARE` but not the same route; **do not grow the guard for it**.
 
 ## DICOM-PRIVATE-CREATOR-RESERVATION-LEAK
 
@@ -1113,9 +1132,11 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   `UN` whose CP-246 descent was refused keeps `vr === "UN"`, and **every ordinary `UN` element also
   has `items === undefined`**, so the same test there would empty every unknown-VR element in every
   file. It needs a parser-set mark, i.e. its own slice. Measured on a hand-built file: identifier in
-  the output, no report entry, only `DICOM_VR_MISMATCH`. **That `UN` shape is the only one of the two
-  still open.** Its former companion - a **private** `SQ` under `RetainSafePrivate` + a `Profile`,
-  kept verbatim because the profile vouched for it - is **closed by `DICOM-PRIVATE-SQ-CARVE-OUT`**.
+  the output, no report entry, only `DICOM_VR_MISMATCH`. Its former companion - a **private** `SQ`
+  under `RetainSafePrivate` + a `Profile`, kept verbatim because the profile vouched for it - is
+  **closed by `DICOM-PRIVATE-SQ-CARVE-OUT`**, but **only when the PARSER resolved it to `SQ`**:
+  `DICOM-PRIVATE-SQ-PARSE-VR` is the residual where the profile reached `deidentify()` and not
+  `parseDicom`, and it is a **defined**-length carrier, so this CP-246 shape does not cover it.
 
 ## DICOM-OVERDECLARE-SWALLOWS-INTO-VALUE
 

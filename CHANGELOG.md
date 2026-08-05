@@ -57,9 +57,24 @@ Removed = YES`.
   tests for this item. The two residuals that asserted the leaking behaviour were rewritten to
   assert the closure, which is what those pins existed for.
 
-  **Still open, and untouched here:** the undefined-length `UN` whose CP-246 descent was refused
+  **The bound, stated because a graded pass refused the draft that left it out: the branch keys on
+  the PARSED VR, not on the VR the profile declares.** Under Implicit VR LE a private tag carries no
+  VR on the wire, so `SQ` there is an inference the parser draws from a `Profile` it was given. Pass
+  the profile to `parseDicom` and the element arrives as an `SQ` with items and is walked; pass it
+  only to `deidentify()` and the identical bytes arrive as `UN` with no items, take the non-`SQ`
+  branch, and are kept verbatim as before, under `(0012,0062) = YES`, with
+  `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR` the only signal. That is
+  `DICOM-PRIVATE-SQ-PARSE-VR`, `PRE-EXISTING`, its own item and pinned as a residual test. It is
+  **not** the undefined-length `UN` residual below: that carrier's length is defined, so CP-246
+  never runs. **Pass your profile to `parseDicom` as well as to `deidentify()`.** The
+  `creatorsInScope` note claiming `RetainSafePrivate` "behaves identically whether the profile
+  arrived at parse or at de-identification" is retracted for the same reason; it was true only while
+  every retained private element was kept verbatim.
+
+  **Still open, and untouched here:** `DICOM-PRIVATE-SQ-PARSE-VR` above; the undefined-length `UN`
+  whose CP-246 descent was refused
   (it keeps `vr === "UN"`, so the rule cannot reach it without emptying every unknown-VR element in
-  every file), and the 11 leaf-carrier cells of `DICOM-BINARY-CARRIER-OVERDECLARE` (11 to 11 on the
+  every file); and the 11 leaf-carrier cells of `DICOM-BINARY-CARRIER-OVERDECLARE` (11 to 11 on the
   grid, with the conformant tiling-control counter unmoved at 7 to 7).
 
 - **🩺 The `(0012,0063)` De-identification Method this library writes for itself exceeded the 64-character

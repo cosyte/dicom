@@ -107,6 +107,7 @@ import {
   Dataset,
   DicomParseError,
   WARNING_CODES,
+  defineProfile,
   deidentify,
   parseDicom,
   profiles,
@@ -994,6 +995,83 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       const inherited = run(build(false));
       expect(inherited.removedPrivateTags).toEqual(["00091002"]);
       expect(inherited.secretInOutput).toBe(false);
+    });
+
+    it("RESIDUAL - the rule keys on the PARSED VR, so a profile that arrives only at deidentify() still leaks", () => {
+      // 🩺 THE BOUND OF THIS SLICE, PINNED AS A RESIDUAL RATHER THAN ASSERTED
+      // AWAY, and found by this slice's pass-1 `conformance-refuter`.
+      // `keepRetainedPrivate` branches on `el.vr === "SQ"`, which is the VR on
+      // the PARSE TREE. Under Implicit VR LE a private tag has no VR on the
+      // wire, so `SQ` is a `Profile`-resolved inference made at parse time: pass
+      // the profile to `parseDicom` and the element arrives as an `SQ` with
+      // items and is walked; pass it only to `deidentify()` and the same bytes
+      // arrive as `UN` with no items, take the non-`SQ` branch to `keepOrEmpty`,
+      // and are kept verbatim. `DICOM-PRIVATE-SQ-PARSE-VR`, its own item.
+      //
+      // It is NOT covered by the undefined-length `UN` residual named in the
+      // README and CLAUDE.md: that one is a CP-246 descent this parser refused,
+      // and this carrier's length is DEFINED, so CP-246 is never reached. Do not
+      // read "the private-`SQ` carve-out is closed" as covering this.
+      //
+      // Name-bearing payload and a control pair, because a residual asserting a
+      // leak is exactly where a vacuous fixture hides.
+      const NESTED_NAME = "BOND^JAMES";
+      const profile = defineProfile({
+        name: "acme-parse-vr",
+        description: "Synthetic vendor block declared SQ, written under Implicit VR LE.",
+        privateTags: {
+          ACME: { "0009XX01": { vr: "SQ", keyword: "AcmeSeq", name: "Acme Seq" } },
+        },
+      });
+      const buf = buildDicom({
+        transferSyntax: IMPLICIT_LE,
+        elements: [
+          nameEl,
+          { tag: "00090010", vr: "LO", value: ascii("ACME") },
+          {
+            tag: "00091001",
+            items: [{ elements: [{ tag: "00100010", vr: "PN", value: ascii(NESTED_NAME) }] }],
+          },
+        ] as never,
+      });
+      const deidOptions: DeidentifyOptions = { retain: ["RetainSafePrivate"], profile };
+      const outcome = (
+        parseOptions: { profile: typeof profile } | undefined,
+      ): { vr: string | undefined; items: number | undefined; leaks: boolean; codes: string[] } => {
+        const ds = parseOptions === undefined ? parseDicom(buf) : parseDicom(buf, parseOptions);
+        const el = ds.get("00091001");
+        const { dataset } = deidentify(ds, deidOptions);
+        return {
+          vr: el?.vr,
+          items: el?.items?.length,
+          leaks: serializeDicom(dataset).toString("latin1").includes(NESTED_NAME),
+          codes: ds.warnings.map((w) => w.code),
+        };
+      };
+
+      // Non-vacuity: the name really is on the wire before either call.
+      expect(serializeDicom(parseDicom(buf)).toString("latin1")).toContain(NESTED_NAME);
+
+      // Control: profile at parse time. The element resolves to `SQ`, is walked,
+      // and this slice's remedy scrubs the name. Nothing is warned.
+      const resolved = outcome({ profile });
+      expect(resolved.vr).toBe("SQ");
+      expect(resolved.items).toBe(1);
+      expect(resolved.leaks).toBe(false);
+      expect(resolved.codes).toEqual([]);
+
+      // Residual: identical bytes, profile withheld from the parse. The element
+      // is `UN`, the non-`SQ` branch keeps it verbatim, and the name ships.
+      const unresolved = outcome(undefined);
+      expect(unresolved.vr).toBe("UN");
+      expect(unresolved.items).toBeUndefined();
+      expect(unresolved.leaks).toBe(true);
+      // 🛑 PIN THE WARNING CHANNEL ON BOTH ROWS. It is NOT silent - a private tag
+      // with no VR on the wire and no profile to resolve it raises this code - but
+      // read it with the row above: the object is still stamped
+      // `PatientIdentityRemoved = YES`, so the warning is the only signal and is
+      // not an all-clear. Never call this shape silent without re-running it.
+      expect(unresolved.codes).toEqual(["DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR"]);
     });
   });
 

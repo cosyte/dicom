@@ -686,10 +686,23 @@ function emptyUnauditableSequence(
  * `Element.privateCreator` is membership-bounded against the profile that was
  * active **at parse time** (`src/parser/tokens.ts`), and a caller may perfectly
  * reasonably parse without a profile and pass one here. Re-deriving the
- * reservation from the elements in front of us makes `RetainSafePrivate` behave
- * identically whether the profile arrived at parse or at de-identification. The
- * decoded string never leaves this map: it is a lookup key, not a value on any
- * surface.
+ * reservation from the elements in front of us makes **the reservation lookup**
+ * behave identically whether the profile arrived at parse or at
+ * de-identification. The decoded string never leaves this map: it is a lookup
+ * key, not a value on any surface.
+ *
+ * **🛑 THAT IS A STATEMENT ABOUT THE RESERVATION AND NOT ABOUT THE RUN, AND THE
+ * WIDER READING IS RETRACTED.** It used to say `RetainSafePrivate` as a whole
+ * behaves identically either way, which was true only while every retained
+ * private element was kept verbatim. It is false now: under Implicit VR LE a
+ * private tag carries no VR on the wire, so a profile-declared `SQ` is an
+ * inference the **parser** makes. Parse with the profile and the element arrives
+ * as an `SQ` with items and {@link keepRetainedPrivate} walks it; parse without
+ * it and the same bytes arrive as `UN`, take the non-`SQ` branch, and are kept
+ * verbatim. Same profile, same bytes, different outcome
+ * (`DICOM-PRIVATE-SQ-PARSE-VR`, `PRE-EXISTING`, pinned as a residual test in
+ * `test/integration/deident-private-reservation.test.ts`). Pass the profile to
+ * `parseDicom` as well when you rely on `RetainSafePrivate`.
  *
  * **Per Data Set, not per run, and the difference is a PHI defect.** PS3.5 §7.5
  * makes each Sequence Item its own Data Set and §7.8.1 scopes a block
@@ -977,6 +990,25 @@ function keepsPrivate(
  * item, as §7.8.1 requires, is retained exactly as before. A non-`SQ` private
  * element is untouched by this function and still routes to
  * {@link keepOrEmpty}.
+ *
+ * ## 🛑 The bound: `el.vr` is the PARSED VR, not the profile's declared one
+ *
+ * The `SQ` branch keys on what the parse tree says, and under Implicit VR LE a
+ * private tag has no VR on the wire at all - `SQ` there is an inference the
+ * parser draws from a {@link Profile} it was given. So a caller who passes the
+ * profile to `deidentify()` but **not** to `parseDicom` hands this function a
+ * `UN` element with no items, it takes the non-`SQ` branch, and the carrier is
+ * kept verbatim exactly as before this slice. That is `DICOM-PRIVATE-SQ-PARSE-VR`,
+ * `PRE-EXISTING` and its own item, pinned as a residual test rather than
+ * asserted away. **It is not the undefined-length `UN` residual**: that one is a
+ * CP-246 descent this parser refused, and the carrier here has a defined length,
+ * so CP-246 is never reached.
+ *
+ * `reservationsUsable` is threaded through rather than assumed. Its only call
+ * site today is already guarded by `reservationsUsable &&`, so it can only
+ * arrive `true`; it is a parameter so that the guard and the descent cannot
+ * drift apart if that call site is ever relaxed, not because this function makes
+ * a decision with it.
  */
 function keepRetainedPrivate(
   el: Element,
