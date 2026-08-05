@@ -156,47 +156,47 @@ then the two gates.
   longer than the ceiling still fails to serialize. That is `PRE-EXISTING` and caller-supplied rather
   than file-supplied, so it is a backlog line.
   **▶ 🛑 THE GUARD IS OVER THE RETURN, NOT OVER THE JOIN, AND PASS 2 REFUTED THE DRAFT THAT PUT IT ON
-  THE JOIN.** That draft returned the prior value unbounded as soon as nothing was missing to append
-  - the already-recorded case, which is exactly a file this library de-identified once already and
-    exactly what the fixed-point rule exists for. Measured: a `(0012,0063)` declaring an odd
-    **65,535**-byte Value Length came straight back out, `report.warnings` was **EMPTY**, and
-    `serializeDicom` threw the identical raw `RangeError`; base returned 76 bytes and serialized.
-    Narrower than the first route (the parse warns `DICOM_ODD_LENGTH_VALUE_PADDED` and
-    `{ strict: true }` refuses the file outright) and still an outcome base did not have. **`kept` is
-    file-supplied on every path; only `added` is not** - which is what makes the "one route left, and
-    it is caller-supplied" enumeration true now and false in the draft. Pinned.
-    **▶ 🛑 AND "THE ONE SHAPE WHERE IT CANNOT ADD" IS FALSE - THERE ARE TWO, AND THE OTHER IS SILENT.**
-    A `(0012,0063)` a file encoded under a VR other than `LO` is replaced with `report.warnings` empty.
-    `PRE-EXISTING` and deliberately not taken, so the CLAIM is corrected rather than the guard widened:
-    `DICOM_DEIDENT_METHOD_NOT_ADDED` means "the length ceiling was reached", never "every fallback is
-    disclosed".
-    **▶ 🩺 THE COST IS A RESIDUAL, DISCLOSED, WITH A TEST THAT ASSERTS IT RATHER THAN AN ALL-CLEAR.**
-    `(0012,0063)` is **not in Table E.1-1**, so the Basic Profile never acted on it and the incoming
-    value reached the insertion point untouched - **the replacement was the only thing removing it, and
-    removing it was an action no profile asked for**. So a sender who wrote something identifying into
-    `(0012,0063)` now sees that text in de-identified output. That is the retained-by-omission posture
-    every other unlisted attribute already has, not a channel this insertion opens; **closing it is a
-    product call about unlisted attributes, in the family of `DICOM-DEIDENT-OVER-REDACTION`, and it
-    would turn that residual test red on purpose.** The `DeidentifyReport` is unchanged and echoes
-    nothing from the attribute; a test asserts the name is absent from every value-free field of it.
-    **▶ THE BASE-RED FIGURES, WITH THEIR SHA.** Re-measured at `e75fb38` after the last test was added:
-    **8 of the 12** in `test/integration/file-meta-duplicate.test.ts` and **7 of the 13** in
-    `test/deident/deident-method-add.test.ts` run red against that base, 15 of 25 in all. The File Meta
-    file **cannot link against base `src/` at all** - neither
-    `WARNING_CODES.DICOM_DUPLICATE_FILE_META_ELEMENT` nor `duplicateFileMetaElement` exists there - so
-    that 8 is measured with those two symbols substituted for their literals; unmodified it is 12 of 12
-    by construction, which is a fact about linking rather than about behaviour. The base was taken in a
-    **detached worktree at the sha**, not by checking `src/` over the working tree, because
-    `git checkout <base> -- src/` **overlays** rather than replaces (`#71`). **Re-run after every remedy
-    that added or strengthened a test, which is the rule and not a courtesy - after pass 1's six and
-    after pass 2's one: 8 of 12 and 11 of 19, 19 of 31.** The de-identify file cannot link against base `src/` either now, for the same reason
-    (`deidentMethodNotAdded`), so its figure is measured the same way and unmodified it is 19 of 19.
-    **▶ WHAT PASS 1 FOUND AND THIS SLICE DID NOT TAKE.** Three `PRE-EXISTING` backlog lines, each
-    reproduced on `e75fb38`: the two File Meta bounds above; and **the library's own default
-    `(0012,0063)` value exceeds `LO`'s 64-character per-value maximum** (76 characters by default,
-    **130** with three Retain options, against PS3.5 2026c Table 6.2-1). The last one is newly
-    _fixable_ by the delimiter this slice introduces - splitting the default into `1-n` values - but
-    that changes the shipped output of every de-identification and is its own measured change.
+  THE JOIN.** That draft returned the prior value unbounded as soon as nothing was missing to
+  append, the already-recorded case, which is exactly a file this library de-identified once already
+  and exactly what the fixed-point rule exists for. Measured: a `(0012,0063)` declaring an odd
+  **65,535**-byte Value Length came straight back out, `report.warnings` was **EMPTY**, and
+  `serializeDicom` threw the identical raw `RangeError`; base returned 76 bytes and serialized.
+  Narrower than the first route (the parse warns `DICOM_ODD_LENGTH_VALUE_PADDED` and
+  `{ strict: true }` refuses the file outright) and still an outcome base did not have. **`kept` is
+  file-supplied on every path; only `added` is not** - which is what makes the "one route left, and
+  it is caller-supplied" enumeration true now and false in the draft. Pinned.
+  **▶ 🛑 AND "THE ONE SHAPE WHERE IT CANNOT ADD" IS FALSE - THERE ARE TWO, AND THE OTHER IS SILENT.**
+  A `(0012,0063)` a file encoded under a VR other than `LO` is replaced with `report.warnings` empty.
+  `PRE-EXISTING` and deliberately not taken, so the CLAIM is corrected rather than the guard widened:
+  `DICOM_DEIDENT_METHOD_NOT_ADDED` means "the length ceiling was reached", never "every fallback is
+  disclosed".
+  **▶ 🩺 THE COST IS A RESIDUAL, DISCLOSED, WITH A TEST THAT ASSERTS IT RATHER THAN AN ALL-CLEAR.**
+  `(0012,0063)` is **not in Table E.1-1**, so the Basic Profile never acted on it and the incoming
+  value reached the insertion point untouched - **the replacement was the only thing removing it, and
+  removing it was an action no profile asked for**. So a sender who wrote something identifying into
+  `(0012,0063)` now sees that text in de-identified output. That is the retained-by-omission posture
+  every other unlisted attribute already has, not a channel this insertion opens; **closing it is a
+  product call about unlisted attributes, in the family of `DICOM-DEIDENT-OVER-REDACTION`, and it
+  would turn that residual test red on purpose.** The `DeidentifyReport` is unchanged and echoes
+  nothing from the attribute; a test asserts the name is absent from every value-free field of it.
+  **▶ THE BASE-RED FIGURES, WITH THEIR SHA.** Re-measured at `e75fb38` after the last test was added:
+  **8 of the 12** in `test/integration/file-meta-duplicate.test.ts` and **7 of the 13** in
+  `test/deident/deident-method-add.test.ts` run red against that base, 15 of 25 in all. The File Meta
+  file **cannot link against base `src/` at all** - neither
+  `WARNING_CODES.DICOM_DUPLICATE_FILE_META_ELEMENT` nor `duplicateFileMetaElement` exists there - so
+  that 8 is measured with those two symbols substituted for their literals; unmodified it is 12 of 12
+  by construction, which is a fact about linking rather than about behaviour. The base was taken in a
+  **detached worktree at the sha**, not by checking `src/` over the working tree, because
+  `git checkout <base> -- src/` **overlays** rather than replaces (`#71`). **Re-run after every remedy
+  that added or strengthened a test, which is the rule and not a courtesy - after pass 1's six and
+  after pass 2's one: 8 of 12 and 11 of 19, 19 of 31.** The de-identify file cannot link against base `src/` either now, for the same reason
+  (`deidentMethodNotAdded`), so its figure is measured the same way and unmodified it is 19 of 19. **A figure taken this way is substitution-sensitive and the third pass read 9 rather than 8**, the delta being the factory-signature row, which is red or green purely by how the absent factory is stood in for. Read it as a floor, and re-derive it rather than quoting it.
+  **▶ WHAT PASS 1 FOUND AND THIS SLICE DID NOT TAKE.** Three `PRE-EXISTING` backlog lines, each
+  reproduced on `e75fb38`: the two File Meta bounds above; and **the library's own default
+  `(0012,0063)` value exceeds `LO`'s 64-character per-value maximum** (76 characters by default,
+  **130** with three Retain options, against PS3.5 2026c Table 6.2-1). The last one is newly
+  _fixable_ by the delimiter this slice introduces - splitting the default into `1-n` values - but
+  that changes the shipped output of every de-identification and is its own measured change.
 
 ## DICOM-TAG-COLLISION-DESTROYS-ELEMENT
 

@@ -107,7 +107,7 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   `WARNING_CODES.DICOM_DEIDENT_METHOD_NOT_ADDED` or `deidentMethodNotAdded` exists there - so both
   figures are measured with those symbols substituted for their literals; unmodified they are 12 of
   12 and 19 of 19 by construction, which is a fact about linking rather than about behaviour. The
-  ones that stay green on base are the controls that make the rest non-vacuous. Quote such a figure
+  ones that stay green on base are the controls that make the rest non-vacuous. **A figure taken this way is substitution-sensitive and the third pass read 9 rather than 8**, the delta being the factory-signature row, which is red or green purely by how the absent factory is stood in for. Read it as a floor, and re-derive it rather than quoting it. Quote such a figure
   only with the sha it was run on.
 
 - **🩺 A Data Set that carries one tag twice DESTROYED the first element's value at parse time, and
