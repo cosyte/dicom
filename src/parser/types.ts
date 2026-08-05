@@ -149,6 +149,26 @@ export interface ParseOptions {
    * When `true`, every Tier-2 warning is escalated to a thrown
    * `DicomParseError` carrying the warning code. Default `false`.
    *
+   * 🛑 **THE ESCALATED DIAGNOSTIC CARRIES SOURCE BYTES THAT THE WARNING DOES
+   * NOT.** A `DicomParseWarning.message` is a frozen registry string with only
+   * structural tokens filled in, so it is safe to log whole; the
+   * `DicomParseError` this option raises in its place also carries `snippet`,
+   * **16 raw bytes, unredacted** (D-10), read at the warning's own `byteOffset`.
+   * **Which element those bytes belong to is not contracted**: that offset's
+   * frame follows where the element was read - file-absolute at the root,
+   * relative to the enclosing slice inside a defined-length Sequence or Item,
+   * and into the inflated stream under Deflated Explicit VR LE - while the
+   * snippet is cut from whichever buffer the parse is holding, so the two can
+   * disagree and the bytes can be an unrelated element's value. Do not reason
+   * from a code's message to what its snippet holds - **measure it, and treat
+   * every one of them as document content.**
+   *
+   * That is the documented design of `snippet` rather than a defect in any one
+   * code, and turning this option on does not change what any of them means -
+   * but a message-only PHI review of the lenient path does not transfer to the
+   * strict one. Log `err.code`, `err.byteOffset` and `err.message`; treat
+   * `err.snippet` as PHI.
+   *
    * Omit (do not pass `undefined`) to use the default.
    */
   readonly strict?: boolean;

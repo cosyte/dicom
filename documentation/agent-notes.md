@@ -22,6 +22,110 @@ then the two gates.
 
 ---
 
+## DICOM-LO-LENGTH-AND-SILENT-REPLACE
+
+- **🩺 THE `(0012,0063)` THIS LIBRARY WROTE FOR ITSELF EXCEEDED THE 64-CHARACTER MAXIMUM PS3.5 GIVES
+  AN `LO` VALUE, ON EVERY FILE IT EVER DE-IDENTIFIED.** `PRE-EXISTING`, measured through the **built
+  package** on `da1f209`: **76** characters with no options, **130** with
+  `RetainUIDs + RetainSafePrivate + RetainDeviceIdentity`, **272** with all nine, and **512 of 512
+  option subsets** over the maximum. The backlog's earlier note that "130 is NOT REPRODUCIBLE" is
+  itself what does not reproduce; 130 reproduces exactly, and the item had already been corrected to
+  say so.
+- **THE BOUND IS PER VALUE, AND THAT IS THE WHOLE SHAPE OF THE FIX.** PS3.5 2026c Table 6.2-1's `LO`
+  row ("64 chars maximum") describes a **Value**, and `(0012,0063)` is `1-n`. A field of 247 bytes
+  made of ten values of 61 is conformant; a field of 76 bytes made of one value is not. **Reading a
+  per-Value clause as a per-Field one is the same misreading that left `#74`'s hole** (there, §6.4 -
+  a clause about where the ENCODER puts its pad - was read as a bound on a COMPARISON). The remedy
+  is therefore multi-valued rather than shorter: one Value naming the Profile
+  (`@cosyte/dicom Basic Application Level Confidentiality Profile`, **61**) and one per active
+  Option (**28** at most, `RetainPatientCharacteristics`). Nine names cannot fit 64 characters
+  however they are abbreviated, so shortening only moves the ceiling.
+- **PROVED BY SWEEP, NOT BY EXAMPLE, AND THE FIELD FIGURE IS ASSERTED BESIDE THE VALUE FIGURE.** All
+  **512** subsets, **2,816** value cells: **0** over the maximum, against **512 of 512** on base. The
+  tests assert `field.length > 64` **and** `max(valueLength) <= 64` in the same row, so a remedy that
+  had merely shortened the text could not pass them, and a `sweep can actually fail` control feeds an
+  over-long caller value through the same measurement and finds it. Options are emitted in
+  `DEIDENTIFY_OPTIONS` order rather than the caller's, so the same set always writes the same bytes.
+- **THE FIXED POINT WAS RE-MEASURED, NOT ASSUMED**: six real `parse -> deidentify -> serialize ->
+parse` round trips, **62** bytes flat by default and **248** flat with all nine, on RAW bytes and
+  never through `methodOf()`.
+- **THE SECOND REPLACEMENT SHAPE IS DISCLOSED NOW: `DICOM_DEIDENT_METHOD_NOT_LO`.** A `(0012,0063)`
+  a file encoded under any other VR is still **replaced** - the join concatenates `LO` values with
+  `5CH`, which is not defined over the arbitrary octets an `OB` or `UN` holds, and guessing an
+  encoding was refused - but it replaced with `report.warnings` **empty** under `(0012,0062) = YES`.
+  It is a **separate code** from `DICOM_DEIDENT_METHOD_NOT_ADDED` because the causes are unrelated:
+  the chain outgrew the VR, or the bytes were never in that VR at all. An empty or padding-only prior
+  raises neither, because nothing was lost. **No value, no length and NO VR** in the message - two
+  bytes read out of a fabricated header are document content, which is how "ITHS" reached
+  `DICOM_NONZERO_RESERVED_BYTES`.
+- **🛑 A TEST NAMED FOR A PROPERTY IS NOT A TEST OF IT, AND THIS SLICE FOUND ONE OF ITS OWN.**
+  `deident-method-add.test.ts`'s "the ceiling guards the ALREADY-RECORDED return too" **quoted the
+  default method as a literal**. Changing the default left the row green through the branch next
+  door (the ceiling), testing the case it was written to distinguish itself from. It now **derives**
+  the default from a run and asserts `prior` really does already record every value. Quote nothing a
+  run can produce.
+- **🛑 `{ strict: true }` RENDERS SOURCE BYTES THE WARNING WITHHOLDS, AND THE BLOCK CLAIMING
+  OTHERWISE READ ONLY `warning.message`.** `PRE-EXISTING`; the claim was corrected and the behaviour
+  pinned rather than the guard widened. The escalation raises a `DicomParseError` whose `snippet` is
+  16 raw source bytes read **from the file** at the warning's own `byteOffset` (D-10), while
+  `err.message` stays the frozen registry string. Measured on
+  `DICOM_DUPLICATE_FILE_META_ELEMENT` **only**, because that group is never nested and its offset is
+  therefore unambiguously the dropped copy's header: a `(0002,0016)` Source AE Title of `AE-SMITHSON`
+  returns `02 00 16 00 41 45 0c 00 41 45 2d 53 4d 49 54 48`, five letters of the surname.
+  `file-meta-duplicate.test.ts`'s block titled **"the diagnostic is not itself a PHI surface"**
+  asserted the clean half over `warning.message` and nothing else; it is now titled **"the warning
+  MESSAGE is not itself a PHI surface"**, with a residual block beside it that pins the snippet
+  **byte for byte** (a substring assertion is what `#70`'s third pass refused). Redacting `snippet`
+  would be a decision about every Tier-3 fatal in the library and belongs with
+  `DICOM-FATAL-MESSAGE-REGISTRY`, not here.
+- **🛑 AND THE PER-CODE VERSION OF THAT DISCLOSURE IS DELETED RATHER THAN REWORDED A FOURTH TIME.**
+  Draft 1 said both duplicate codes point their snippet at the **dropped** element; pass 1 refuted it
+  (`data-set-map.ts` passes the **replacing** element's offset). Draft 2 said
+  `DICOM_DUPLICATE_TAG_IN_DATA_SET` therefore renders the **survivor** and the dropped value never
+  appears; **pass 2 refuted that too, and the counter-example was already in this repo**: the
+  snippet is cut from whichever buffer the parse is holding, at an offset whose frame follows where
+  the element was read - **slice-relative** inside a defined-length Sequence or Item, and into the
+  inflated stream under Deflated Explicit VR LE - so an in-Item collision returned a complete,
+  unrelated root `(0010,0010)` Patient Name. `tag-collision.test.ts`'s own **"the byte offset is NOT a key"** row proves the frame
+  disagreement twelve lines from where draft 2's block was added. So the rule this repo already
+  carries applied twice over - **re-wording a disclosure twice is the signal to DELETE it**, and
+  **measure a byte offset's frame rather than describing it** - and what is left in every artifact is
+  the one statement that survives every frame: **which element a snippet's bytes belong to is NOT
+  CONTRACTED; treat every snippet as document content.** The behaviour behind it is `PRE-EXISTING`,
+  byte-identical on `da1f209`, and is a backlog line beside `DICOM-FATAL-MESSAGE-REGISTRY` and the
+  un-populated `position.contextPath`.
+- **BASE-RED, RE-RUN AFTER EVERY TEST CHANGE, `src/` REPLACED AND NOT OVERLAID (`rm -rf src`
+  first): 18 of 117, in 3 files of 4, on `da1f209`.** `deident-method-lo-length.test.ts` 16 of 24 ·
+  `deident-method-add.test.ts` 1 of 29 · `phi-diagnostic-surface.test.ts` 1 of 50 ·
+  **`file-meta-duplicate.test.ts` 0 of 14, deliberately** - its strict-snippet block pins
+  `PRE-EXISTING` behaviour, so a red there would mean the slice had changed something it says it did
+  not. **This figure moved twice inside the slice** (16 of 115 in 3 of 4 as first measured, then 18 of
+  133 in 3 of 5 when the pass-1 remedy added two rows and a fifth file, then back to four files when
+  pass 2 refuted the claim that fifth file existed to ground). That is the rule this lineage wrote
+  three times, earned a fourth time here: **re-run it after every test you add, strengthen OR
+  DELETE**, and never carry one forward.
+- **TWO COSTS, DISCLOSED AND PINNED RATHER THAN FIXED.** A caller `deidentificationMethod` longer
+  than 64 characters, and a prior value the **source file** wrote longer than it, are both written
+  through undisclosed: splitting or truncating either would invent a de-identification record nobody
+  made. Both have residual tests, so closing either turns a test red.
+- **🛑 "A SENDER'S NON-CONFORMANT `LO` IS THE SENDER'S" WAS REFUTED, AND THE SENDER IS US.** Every
+  object de-identified **without a caller-supplied method** by **any published release** carries the
+  76-character value - measured in the `0.0.1` and `0.0.11` tarballs, and **pass 2 refuted the
+  `0.0.3`-onward range a first draft wrote**: `0.0.1` is on the registry and has it, while `0.0.2`
+  and `0.0.9` were never published at all. So the over-long prior that rule waves away is, in the
+  common case, this
+  library's own earlier output. Re-de-identifying one **keeps it**: measured flat at **138** bytes
+  over four passes, values of **76** and **61**, `DICOM_DEIDENT_METHOD_PRIOR_RETAINED` raised for the
+  retention and **nothing said about the length**. Keeping it is still correct - E.1.1 says "added
+  to", and rewriting a prior record destroys provenance whoever wrote it - but never describe the
+  residual as somebody else's file. Pinned.
+- **A LATER PASS WITH FEWER OPTIONS LEAVES NO TRACE THAT THE EARLIER ONE HAD MORE.** Splitting the
+  record per option plus de-duplicating per value means `(0012,0063)` now records the **union** of
+  the options ever applied rather than a per-run history; the base's one-value-per-run text did
+  distinguish two such runs. The direction is **conservative** (the union over-states retention,
+  never understates it), so it is not a leak - it is a reduction in what E.1.1's provenance carrier
+  holds, disclosed here and pinned, and a **backlog line** rather than something this slice takes on.
+
 ## DICOM-DEIDENT-NOT-A-FIXED-POINT
 
 - **🩺 REPEATED DE-IDENTIFICATION GREW `(0012,0063)` BY THE WHOLE METHOD STRING ON EVERY PASS, FOR

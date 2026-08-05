@@ -291,7 +291,31 @@ describe("a File Meta group that carries one modeled (0002,xxxx) tag twice", () 
   });
 });
 
-describe("the diagnostic is not itself a PHI surface", () => {
+/**
+ * 🛑 **THE TITLE OF THIS BLOCK IS NARROWER THAN IT WAS, AND THAT IS THE POINT.**
+ * It used to read "the diagnostic is not itself a PHI surface" while every row
+ * in it read `warning.message` and nothing else. The message is clean; the
+ * **diagnostic** is not, because `{ strict: true }` replaces the whole warning
+ * with a `DicomParseError` whose `snippet` is 16 raw bytes of the file, read at
+ * the warning's own offset - and **for this code**, whose group is never nested
+ * so no frame ambiguity can reach it, that offset is the header of the element
+ * that was dropped. So the snippet renders the first bytes of the value the
+ * message deliberately withholds. A claim that big, tested that narrowly, is the
+ * shape `#55` shipped and `#64` repeated.
+ *
+ * So the claim is cut to what the rows prove and the rest is pinned as the
+ * measured residual it is, in `the strict-mode escalation` block below. **That
+ * block is about THIS code and generalises to none other**, and two graded
+ * passes are why: a warning's `byteOffset` is file-absolute here but
+ * slice-relative inside a defined-length Sequence or Item (and into the inflated
+ * stream under Deflated Explicit VR LE), while the snippet is cut from whichever
+ * buffer the parse is holding, so which element a snippet's bytes belong to is
+ * **not contracted** anywhere in this package. The snippet is a documented,
+ * package-wide design (D-10) rather than a defect in this code, and redacting it
+ * is a decision about every Tier-3 fatal in the library, not a rider on a File
+ * Meta disclosure.
+ */
+describe("the warning MESSAGE is not itself a PHI surface", () => {
   it("a name-bearing dropped value reaches no part of the message", () => {
     const dropped = val(AE_TITLE);
     const ds = parseDicom(
@@ -354,6 +378,85 @@ describe("the diagnostic is not itself a PHI surface", () => {
       const wire = wireBytes(tag);
       expect(wire.filter((b) => b === 0x00).length).toBeGreaterThanOrEqual(2);
     }
+  });
+});
+
+describe("the strict-mode escalation of THIS diagnostic DOES carry source bytes", () => {
+  /**
+   * The fixture the block above uses, with the surname where a snippet at the
+   * dropped element's own offset can reach it: header (8 bytes) then the first 8
+   * bytes of the value.
+   *
+   * 🛑 **NOTHING HERE GENERALISES TO ANOTHER CODE, AND A GRADED PASS REFUTED THE
+   * DRAFT THAT SAID IT DID.** The reach below holds because the File Meta group
+   * is never nested, so this warning's `byteOffset` is unambiguously
+   * file-absolute and unambiguously the dropped copy's header. Inside a
+   * defined-length Sequence Item that offset is relative to the item's own slice
+   * while `buildSnippet` still reads the whole file, so for a code that can fire
+   * in there the snippet may be an unrelated element's value entirely. Measure
+   * it per code; do not reason from this row.
+   */
+  const named = (): Buffer =>
+    withFileMeta([
+      tsElement(EXPLICIT_LE),
+      { tag: SOURCE_AE, vr: "AE", value: val("CT-SCANNER-1") },
+      { tag: SOURCE_AE, vr: "AE", value: val(`AE-${AE_TITLE}`) },
+    ]);
+
+  it("🩺 `err.snippet` renders the dropped value's bytes, and this pins it rather than denying it", () => {
+    // NON-VACUITY FIRST, and by fixture: the lenient parse of these same bytes
+    // produces a warning whose message holds no window of the name. Without this
+    // the row below could pass against a build that never carried the name at
+    // all - which is exactly how `#55`'s pin proved nothing.
+    const lenient = parseDicom(named());
+    const warning = lenient.warnings.find(
+      (w) => w.code === WARNING_CODES.DICOM_DUPLICATE_FILE_META_ELEMENT,
+    );
+    expect(warning).toBeDefined();
+    for (const window of windows(AE_TITLE, 4)) {
+      expect(warning?.message).not.toContain(window);
+    }
+
+    let thrown: DicomParseError | undefined;
+    try {
+      parseDicom(named(), { strict: true });
+      expect.unreachable("strict mode must escalate the disclosure");
+    } catch (err) {
+      thrown = err as DicomParseError;
+    }
+
+    expect(thrown?.code).toBe(WARNING_CODES.DICOM_DUPLICATE_FILE_META_ELEMENT);
+    // The thrown MESSAGE is still the registry string, so the escalation adds no
+    // interpolation of its own.
+    expect(thrown?.message).toContain(WARNING_MESSAGES.DICOM_DUPLICATE_FILE_META_ELEMENT);
+    for (const window of windows(AE_TITLE, 4)) {
+      expect(thrown?.message).not.toContain(window);
+    }
+
+    // And the snippet beside it is the source, unredacted. Asserted as an exact
+    // byte string rather than "contains something": a pin that asserts the wrong
+    // bytes is worse than no pin, and only decoding it proves what a consumer
+    // logging `err.snippet` actually writes down.
+    const decoded = Buffer.from((thrown?.snippet ?? "").replaceAll(" ", ""), "hex");
+    expect(thrown?.snippet).toBe("02 00 16 00 41 45 0c 00 41 45 2d 53 4d 49 54 48");
+    expect(decoded.subarray(0, 8)).toStrictEqual(
+      Buffer.from([0x02, 0x00, 0x16, 0x00, 0x41, 0x45, 0x0c, 0x00]),
+    );
+    expect(decoded.subarray(8).toString("latin1")).toBe("AE-SMITH");
+    // Five letters of the surname, from a value the message withholds. `#55`
+    // shipped on four.
+    expect(decoded.toString("latin1")).toContain("SMITH");
+  });
+
+  it("the lenient path carries no snippet at all, which is what makes the two paths differ", () => {
+    // The control. `DicomParseWarning` has no `snippet` field by design (D-07),
+    // so "review the message" is a complete review of the lenient path and an
+    // incomplete one of the strict path. That asymmetry is the finding.
+    const warning = parseDicom(named()).warnings.find(
+      (w) => w.code === WARNING_CODES.DICOM_DUPLICATE_FILE_META_ELEMENT,
+    );
+    expect(warning).toBeDefined();
+    expect(Object.keys(warning ?? {})).not.toContain("snippet");
   });
 });
 

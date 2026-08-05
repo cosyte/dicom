@@ -450,6 +450,19 @@ export interface DeidentifyOptions {
    * Text **added to** `(0012,0063)` De-identification Method. Default names the
    * Basic Profile and the active options.
    *
+   * **The default is multi-valued, one Value per name, and that is a conformance
+   * fix rather than a style choice.** PS3.5 2026c Table 6.2-1 caps an `LO` at
+   * **64 characters per Value**, and `(0012,0063)` is `1-n`; the single-value
+   * default this replaced measured 76 characters with no options and 272 with
+   * all nine, so every run this library ever made wrote a value no `LO` may
+   * legally carry. The Profile name is now one Value of 61 characters and each
+   * active option is its own, so no option subset can exceed the maximum.
+   *
+   * **Your string is not bounded here.** A value of your own longer than 64
+   * characters is written through as given, with no warning: it is yours, and
+   * splitting or truncating it would invent a record you did not write. Split it
+   * on `\` yourself if a strict receiver is in your path.
+   *
    * PS3.15 E.1.1 says this string is "inserted in or added to" the attribute, so
    * a value the incoming Data Set already carried is kept and this one is
    * appended after a `\` as a further value of the `1-n` attribute - the
@@ -479,7 +492,10 @@ export interface DeidentifyOptions {
    *
    * `DICOM_DEIDENT_METHOD_NOT_ADDED` means "the length ceiling was reached", never
    * "every fallback is disclosed": a `(0012,0063)` a file encoded under a VR other
-   * than `LO` is also replaced, and that one is silent.
+   * than `LO` is also replaced, and that one raises `DICOM_DEIDENT_METHOD_NOT_LO`.
+   * Two codes rather than one because the causes are unrelated - the chain outgrew
+   * the VR, or the bytes were never in that VR at all - and a prior value that is
+   * empty or padding only raises neither, because nothing was lost.
    *
    * When the prior value **is** kept, `report.warnings` carries
    * `DICOM_DEIDENT_METHOD_PRIOR_RETAINED`: `(0012,0063)` is not in Table E.1-1, so

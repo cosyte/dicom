@@ -230,9 +230,17 @@ describe("(0012,0063) is added to, never replaced", () => {
         ],
       ]),
     });
-    const method = methodOf(deidentify(ds).dataset);
+    const { dataset, report } = deidentify(ds);
+    const method = methodOf(dataset);
     expect(method).toContain("@cosyte/dicom");
     expect(method).not.toContain(BACKSLASH);
+    // 🩺 AND IT IS NO LONGER SILENT. The replacement is deliberate - the join is
+    // a text operation over `5CH`-delimited `LO` values and these are arbitrary
+    // octets - but until `DICOM-LO-LENGTH-AND-SILENT-REPLACE` it happened with
+    // `report.warnings` empty, which made this row a test of the loss and not of
+    // the disclosure. The full shape, with a name-bearing payload, is in
+    // `deident-method-lo-length.test.ts`.
+    expect(report.warnings.map((w) => w.code)).toContain(WARNING_CODES.DICOM_DEIDENT_METHOD_NOT_LO);
   });
 
   it("(0012,0062) is still REPLACED with YES, because the standard uses the other verb there", () => {
@@ -315,10 +323,20 @@ describe("🩺 the join is bounded, because an unencodable value takes the whole
     // the parser tolerates with DICOM_ODD_LENGTH_VALUE_PADDED, with this run's
     // own method among the values so nothing is missing to append. `report`
     // carried no warning and `serializeDicom` threw a raw RangeError.
-    const method = "Cosyte @cosyte/dicom: PS3.15 Basic Application Level Confidentiality Profile";
+    // 🛑 DERIVED, NEVER QUOTED. This row is named for the ALREADY-RECORDED path,
+    // which it reaches only while `prior` carries every value this run would
+    // add. A quoted literal of the default stops doing that silently the day the
+    // default changes - and it did change, in
+    // `DICOM-LO-LENGTH-AND-SILENT-REPLACE`: the row stayed green through the
+    // ceiling branch instead, testing the case next door. That is the same
+    // "named for the property, exercised somewhere else" shape that shipped
+    // `#73`'s regression.
+    const method = methodOf(deidentify(buildWithPriorMethod()).dataset);
     const filler = "F".repeat(65_535 - method.length - 1);
     const prior = `${method}${BACKSLASH}${filler}`;
     expect(prior.length).toBe(65_535);
+    // Nothing is missing to append, which is the whole point of the row.
+    expect(prior.split(BACKSLASH)).toContain(method);
 
     const parsed = buildWithPriorMethod({ vr: "LO" as VR, value: Buffer.from(prior, "latin1") });
     expect(parsed.get(DEIDENT_METHOD)?.rawBytes.length).toBeGreaterThan(MAX_SHORT_FORM_VALUE_BYTES);
