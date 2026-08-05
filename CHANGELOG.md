@@ -51,11 +51,13 @@ Removed = YES`.
   in any parse respect, 0 whose reading differs, 0 changed, 0 PHI regressions, 0 de-identified
   outputs lost a marker, and every `priv:` counter identical. Read that as evidence of blast radius,
   never as a safety measurement. The regression net is the unit tests: against base `src/` at
-  `495c9fc`, **4 of the 56** tests across
+  `495c9fc`, **5 of the 57** tests across
   `test/integration/deident-private-reservation.test.ts` and
-  `test/integration/deident-unauditable-sequence.test.ts` run red, and they are exactly the four
-  tests for this item. The two residuals that asserted the leaking behaviour were rewritten to
-  assert the closure, which is what those pins existed for.
+  `test/integration/deident-unauditable-sequence.test.ts` run red: the **4** that assert this
+  closure, plus the control row of the `DICOM-PRIVATE-SQ-PARSE-VR` residual, which asserts the same
+  closure on a file the parser did resolve. The residual's own leaking row is green on base by
+  design. Full suite 1071 to 1074 passing. The two residuals that asserted the leaking behaviour
+  were rewritten to assert the closure, which is what those pins existed for.
 
   **The bound, stated because a graded pass refused the draft that left it out: the branch keys on
   the PARSED VR, not on the VR the profile declares.** Under Implicit VR LE a private tag carries no

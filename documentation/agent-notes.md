@@ -689,11 +689,18 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   path - and **never** as "measured safe by the grid". Same posture as the positional cut. The
   regression net is the unit tests.
   **▶ THE BASE-RED FIGURE, PINNED PER-SHA.** Against base `src/` at **`495c9fc`**, replaced
-  wholesale rather than overlaid: **4 of the 56** tests in
+  wholesale rather than overlaid: **5 of the 57** tests in
   `test/integration/deident-private-reservation.test.ts` +
-  `test/integration/deident-unauditable-sequence.test.ts` run red, and they are exactly the four
-  `DICOM-PRIVATE-SQ-CARVE-OUT` tests. That is the negative control as well as the figure - the tests
-  fail against the wrong `src/` and pass against this one. Full suite `1071 -> 1073` passing.
+  `test/integration/deident-unauditable-sequence.test.ts` run red - the **4**
+  `DICOM-PRIVATE-SQ-CARVE-OUT` tests, plus the **control row** of the
+  `DICOM-PRIVATE-SQ-PARSE-VR` residual, which asserts this same closure on the file the parser did
+  resolve; that residual's own leaking row is **green on base by design**. That is the negative
+  control as well as the figure - the tests fail against the wrong `src/` and pass against this one.
+  Full suite `1071 -> 1074` passing.
+  **🛑 THIS FIGURE READ `4 of the 56` AND `1071 -> 1073` UNTIL PASS 2 REFUSED IT.** The pass-1
+  remedy added a test *after* the figure was taken and the figure was not re-run - the exact trap
+  `CLAUDE.md` writes with a 🛑, inside the slice that quotes it. Re-measured in a clean tree
+  (`git archive b02e3a5`, then `src/` replaced wholesale from `495c9fc`), not patched in place.
   **▶ THE PRICE, MEASURED AND PINNED, AND IT IS PS3.5 §7.8.1's AND NOT A CHOICE MADE HERE.** Walking
   the carrier means the per-Data-Set reservation scope applies **inside** it, and Items do not
   inherit the enclosing Data Set's reservations. A vendor who nests a private element in a private
