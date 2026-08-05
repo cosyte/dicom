@@ -78,6 +78,7 @@ export const WARNING_CODES = {
   // === Reserved by later phases (declared, not emitted in Phase 2) ===
   DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED: "DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED", // reserved by Phase 7 - not emitted in Phase 2
   DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED: "DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED", // emitted by deidentify(), never by the parser
+  DICOM_DEIDENT_METHOD_NOT_ADDED: "DICOM_DEIDENT_METHOD_NOT_ADDED", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE: "DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE: "DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE", // emitted by deidentify(), never by the parser
   DICOM_PRIVATE_CREATOR_UNKNOWN: "DICOM_PRIVATE_CREATOR_UNKNOWN", // reserved by Phase 6 - not emitted in Phase 2
@@ -192,8 +193,19 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   // the OPPOSITE way round to a Data Set: first copy wins here, last read wins
   // there. Short for the same measured reason - one is raised per repeat and the
   // repeat count is chosen by the input.
+  // 🛑 NO SPEC CITATION HERE, AND ITS ABSENCE IS DELIBERATE. A draft ended this
+  // string "PS3.5 7.1.", which asserts that section's "at most once in a Data
+  // Set" governs the File Meta group - the applicability this slice states it
+  // cannot establish, because PS3.10 governs that group and is not vendored
+  // here. Under `{ strict: true }` this string is also the thrown message, so an
+  // unqualified citation there is the claim, not a footnote. Do not put it back.
   DICOM_DUPLICATE_FILE_META_ELEMENT:
-    "A File Meta Data Element repeats a (0002,xxxx) tag the group already carries; the copy at this byte offset is not in the parsed File Meta, and the FIRST copy of that tag is the one projected. PS3.5 7.1. Tag withheld.",
+    "A File Meta Data Element repeats a (0002,xxxx) tag the group already carries; the copy at this byte offset is not in the parsed File Meta, and the FIRST copy of that tag is the one projected. Tag withheld.",
+  // No value and no length: the prior value is the file's own text. The tag is a
+  // constant of this code rather than composed from input, as in the two
+  // (0002,0000) messages above.
+  DICOM_DEIDENT_METHOD_NOT_ADDED:
+    "The De-identification Method this run recorded could not be added beside the value (0012,0063) already carried without exceeding the largest Value Length that VR can encode, so the earlier value was replaced (PS3.15 E.1.1). The replaced text is not in the output.",
   // The Item's own declared length is deliberately absent. See
   // `itemCrossesSequenceEnd`; `{n2}` stays because the emit site's
   // `endLimit < buffer.length` conjunct bounds it by the buffer.
@@ -822,9 +834,23 @@ export function duplicateTagInDataSet(position: DicomPosition): DicomParseWarnin
  *
  * It does not fire for a repeated `(0002,xxxx)` tag that is **not** modeled:
  * every copy of those is kept verbatim in `FileMeta.extraElements`, so nothing
- * is dropped and there is nothing to disclose. It does not change which copy is
- * read, add residue, or make the serializer re-emit the repeat - the serializer
- * is the conservative half of this package and emits a spec-clean group. And
+ * is dropped and there is nothing to disclose. **What that does NOT mean, and a
+ * graded pass refuted the draft that said it did: `encodeFileMeta` re-emits both
+ * copies, so this package writes a `(0002,xxxx)` tag twice on such a file.**
+ * That is `PRE-EXISTING` and unchanged here, it is not what "the serializer is
+ * conservative" covers, and it is a backlog line rather than a rider on this
+ * code - the round-trip promise and the spec-clean promise disagree on exactly
+ * this input, and choosing between them is a decision, not a fix.
+ *
+ * **It does not reach a copy that sits past an honest `(0002,0000)`.** The group
+ * loop stops at the declared length when the declaration is consistent, so a
+ * second `(0002,0010)` an intermediary appended without updating the group
+ * length is never a File Meta element to this parser at all: it is relocated
+ * into the main Data Set, silently, on this tree and on every earlier one. Also
+ * `PRE-EXISTING`, also a backlog line, and the reason this code is described as
+ * covering the group **as the parser delimits it** rather than the group.
+ *
+ * It does not change which copy is read and it adds no residue. And
  * "names no tag" is about this message only: `{ strict: true }` escalates every
  * Tier-2 code through `makeEmitter`, and the `DicomParseError` it throws carries
  * `snippet`, 16 raw source bytes at the same offset rendered as hex (D-10,
@@ -918,6 +944,41 @@ export function privateCreatorUnknown(position: DicomPosition, tag: Tag): DicomP
  */
 export function burnedInAnnotationNotRemoved(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED, position);
+}
+
+/**
+ * Build a `DICOM_DEIDENT_METHOD_NOT_ADDED` warning for a `(0012,0063)` whose
+ * prior value `deidentify()` had to **replace** rather than add to, because the
+ * join would not fit the largest Value Length an `LO` can encode.
+ *
+ * @remarks
+ * PS3.15 2026c E.1.1 obliges a de-identifier to insert its method text in, or
+ * add it to, `(0012,0063)`. `deidentify()` adds; this code is raised on the one
+ * shape where it cannot, and it exists so the fallback is never silent. **The
+ * fallback is not a new loss** - it is what every released version did on every
+ * file - but it is still a loss, and an audit that reads as a complete
+ * provenance chain it did not preserve is the worse half of every leak in this
+ * package.
+ *
+ * Truncating the chain instead was refused deliberately: choosing which of the
+ * sender's earlier de-identification records to drop is a policy the standard
+ * does not state. This package reports rather than invents.
+ *
+ * **No value, no length, no VR.** The prior text is the file's own, and the
+ * length that failed to fit is a count over it. The tag in the message is a
+ * constant of this code, like `(7FE0,0010)` in
+ * `DICOM_PIXEL_DATA_LENGTH_MISMATCH`, never composed from input.
+ *
+ * Emitted by `deidentify()` only, so it reaches `report.warnings` and is not
+ * subject to the parser's `{ strict: true }` escalation.
+ *
+ * @example
+ * ```ts
+ * const w = deidentMethodNotAdded({ byteOffset: 4096, fileMeta: false });
+ * ```
+ */
+export function deidentMethodNotAdded(position: DicomPosition): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DEIDENT_METHOD_NOT_ADDED, position);
 }
 
 /**

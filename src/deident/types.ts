@@ -445,8 +445,18 @@ export interface DeidentifyOptions {
    * PS3.15 E.1.1 says this string is "inserted in or added to" the attribute, so
    * a value the incoming Data Set already carried is kept and this one is
    * appended after a `\` as a further value of the `1-n` attribute - the
-   * provenance chain, not a replacement. A value that already records this exact
-   * text is left alone, so repeated de-identification does not grow it.
+   * provenance chain, not a replacement.
+   *
+   * **This string is itself a `1-n` value**: it is split on `\` and only the
+   * values not already recorded are added, so repeated de-identification is a
+   * fixed point whether or not it carries a delimiter.
+   *
+   * One bound. When the join would exceed the largest Value Length an `LO` can
+   * encode, the prior value is **replaced** rather than added to - an element the
+   * serializer cannot encode would take the whole de-identified object down - and
+   * `report.warnings` carries `DICOM_DEIDENT_METHOD_NOT_ADDED`. A string longer
+   * than that ceiling on its own is not bounded here and will fail to serialize,
+   * exactly as it did before this option grew a join.
    */
   readonly deidentificationMethod?: string;
 }

@@ -138,6 +138,7 @@ import type { Profile } from "../parser/types.js";
 import type { DicomParseWarning } from "../parser/warnings.js";
 import {
   burnedInAnnotationNotRemoved,
+  deidentMethodNotAdded,
   embeddedAttributeRemoved,
   sequenceNotAuditable,
   undefinedVrNotAuditable,
@@ -1195,6 +1196,14 @@ function defaultMethod(active: ReadonlySet<DeidentifyOption>): string {
 const VALUE_DELIMITER = 0x5c;
 
 /**
+ * The largest **even** Value Length an Explicit VR short form can express
+ * (`0xFFFE`). `encodeDatasetElement` writes a 16-bit length for every VR outside
+ * `LONG_FORM_VRS`, and `padValue` runs first, so an odd 65,535-byte value would
+ * pad past the field as well. `LO` is a short-form VR.
+ */
+const MAX_SHORT_FORM_VALUE_BYTES = 0xfffe;
+
+/**
  * Build the `(0012,0063)` De-identification Method value: `method` **added to**
  * whatever the incoming Data Set already recorded there, never replacing it.
  *
@@ -1222,7 +1231,7 @@ const VALUE_DELIMITER = 0x5c;
  * `(0012,0063)` is now no worse served than one who put it in any other unlisted
  * attribute.
  *
- * Three shapes, each pinned by a test:
+ * Four shapes, each pinned by a test:
  *
  *  - **No usable prior value** (absent, empty, or padding only) - the method is
  *    the whole value, exactly as before this change.
@@ -1230,21 +1239,64 @@ const VALUE_DELIMITER = 0x5c;
  *    `1-n` attribute, after a `\`. The prior bytes are copied through verbatim,
  *    so a value encoded under a `(0008,0005)` repertoire survives byte for byte;
  *    only the even-length pad and any trailing NUL are trimmed before the join.
- *  - **A prior value that already records this exact method** - appended again
- *    it would record nothing, and repeated application would grow the attribute
- *    without bound, so it is left as it is. `deidentify(deidentify(ds))` is
- *    therefore fixed after one pass.
+ *  - **A prior value that already records this method** - appending it again
+ *    would record nothing, and repeated application would grow the attribute
+ *    without bound, so only the values that are not already there are added, and
+ *    a method every one of whose values is present leaves the attribute alone.
+ *    **The comparison is per VALUE on BOTH sides, and a graded pass refuted the
+ *    draft that compared the whole added string against each prior value.**
+ *    `deidentificationMethod` is a `1-n` value like any other, so a caller string
+ *    that carries a `\` never matched any single prior value and every pass
+ *    appended a whole further copy - measured at 29 -> 59 -> 89 -> 119 bytes over
+ *    four passes, against a flat 29 on base, and it reaches the ceiling below and
+ *    throws at pass 2185. `deidentify(deidentify(ds))` is a fixed point on both
+ *    shapes now.
+ *  - **A prior value the join cannot be encoded beside** - see the ceiling below.
  *
- * Two bounds worth stating. The VR must be `LO`; a `(0012,0063)` a file encoded
- * as something else is not a De-identification Method this can concatenate into,
- * so that case still replaces. And the delimiter split used for the
- * already-recorded test is a comparison only - a repertoire where 5CH is not the
- * delimiter can at worst make it append a value it could have skipped, which
- * loses nothing.
+ * **🩺 THE CEILING IS NOT A STYLE CHOICE. AN UNBOUNDED APPEND CRASHES THE
+ * SERIALIZER, AND A GRADED PASS FOUND IT ON A FILE THE PARSER CALLS CLEAN.**
+ * `LO` is not in `LONG_FORM_VRS`, so under an Explicit VR transfer syntax
+ * `encodeDatasetElement` writes its Value Length with a **16-bit** field. A
+ * `(0012,0063)` carrying a legal 65,534-byte chain of `1-n` values - exactly the
+ * provenance chain this function exists to build - parses with **no warnings**,
+ * and appending to it produced a 65,611-byte value that `serializeDicom` could
+ * not encode: a raw `RangeError` out of Node's `Buffer` internals, outside the
+ * documented `DicomSerializeError` surface, taking the whole de-identified object
+ * down. On base the same file serialized, because base replaced.
+ *
+ * So when the join would exceed {@link MAX_SHORT_FORM_VALUE_BYTES}, this falls
+ * back to the **pre-existing replacement** and says so, by returning
+ * `replacedPrior`. That is not a new loss - it is what every released version did
+ * on *every* file - and this slice narrows it from "always" to "only when the
+ * prior chain is within a few bytes of the ceiling". **It is not silent**: the
+ * caller gets `DICOM_DEIDENT_METHOD_NOT_ADDED` on `report.warnings`. Truncating
+ * the chain instead was refused: choosing which of the sender's earlier
+ * de-identification records to drop is a policy the standard does not state, and
+ * this package reports rather than invents.
+ *
+ * The bound is applied uniformly rather than per encoding. Under Implicit VR LE
+ * the length field is 32 bits and a longer value would encode, but one rule that
+ * holds for every transfer syntax is worth more than a few thousand bytes of
+ * chain in a case this extreme.
+ *
+ * **One route to an unencodable value is left exactly as it was on base and is
+ * NOT closed here**: a caller who passes a `deidentificationMethod` longer than
+ * the ceiling. That is `PRE-EXISTING` - base replaces with it and hits the same
+ * `RangeError` - and it is caller-supplied rather than file-supplied, so it is a
+ * backlog line and not a rider on this one.
+ *
+ * One more bound worth stating: the VR must be `LO`; a `(0012,0063)` a file
+ * encoded as something else is not a De-identification Method this can
+ * concatenate into, so that case still replaces. And the delimiter split is a
+ * comparison only - a repertoire where 5CH is not the delimiter can at worst make
+ * it append a value it could have skipped, which loses nothing.
  */
-function addDeidentificationMethod(existing: Element | undefined, method: string): Buffer {
+function addDeidentificationMethod(
+  existing: Element | undefined,
+  method: string,
+): { readonly value: Buffer; readonly replacedPrior: boolean } {
   const added = Buffer.from(method, "latin1");
-  if (existing === undefined || existing.vr !== "LO") return added;
+  if (existing === undefined || existing.vr !== "LO") return { value: added, replacedPrior: false };
   let end = existing.rawBytes.length;
   while (end > 0) {
     const last = existing.rawBytes[end - 1];
@@ -1252,14 +1304,34 @@ function addDeidentificationMethod(existing: Element | undefined, method: string
     else break;
   }
   const kept = Buffer.from(existing.rawBytes.subarray(0, end));
-  if (kept.length === 0) return added;
-  let start = 0;
-  for (let i = 0; i <= kept.length; i++) {
-    if (i !== kept.length && kept[i] !== VALUE_DELIMITER) continue;
-    if (kept.subarray(start, i).equals(added)) return kept;
-    start = i + 1;
+  if (kept.length === 0) return { value: added, replacedPrior: false };
+
+  const keptValues = splitValues(kept);
+  const missing = splitValues(added).filter((v) => !keptValues.some((k) => k.equals(v)));
+  if (missing.length === 0) return { value: kept, replacedPrior: false };
+
+  const parts: Buffer[] = [kept];
+  for (const value of missing) {
+    parts.push(Buffer.from([VALUE_DELIMITER]), value);
   }
-  return Buffer.concat([kept, Buffer.from([VALUE_DELIMITER]), added]);
+  const joined = Buffer.concat(parts);
+  if (joined.length > MAX_SHORT_FORM_VALUE_BYTES) {
+    return { value: added, replacedPrior: true };
+  }
+  return { value: joined, replacedPrior: false };
+}
+
+/** Split a string-VR value on the `\` delimiter. Never empty: `[]` splits to `[""]`. */
+function splitValues(value: Buffer): readonly Buffer[] {
+  const out: Buffer[] = [];
+  let start = 0;
+  for (let i = 0; i <= value.length; i++) {
+    if (i === value.length || value[i] === VALUE_DELIMITER) {
+      out.push(value.subarray(start, i));
+      start = i + 1;
+    }
+  }
+  return out;
 }
 
 /** True when Pixel Data is present and not affirmatively marked free of burned-in text. */
@@ -1335,17 +1407,19 @@ export function deidentify(
     insertedScalar(TAG_PATIENT_IDENTITY_REMOVED, "CS", Buffer.from("YES", "latin1"), littleEndian),
   );
   const method = options.deidentificationMethod ?? defaultMethod(active);
+  const priorMethod = elements.get(TAG_DEIDENTIFICATION_METHOD);
+  const deidentMethod = addDeidentificationMethod(priorMethod, method);
   elements.set(
     TAG_DEIDENTIFICATION_METHOD,
-    insertedScalar(
-      TAG_DEIDENTIFICATION_METHOD,
-      "LO",
-      addDeidentificationMethod(elements.get(TAG_DEIDENTIFICATION_METHOD), method),
-      littleEndian,
-    ),
+    insertedScalar(TAG_DEIDENTIFICATION_METHOD, "LO", deidentMethod.value, littleEndian),
   );
 
   const warnings: DicomParseWarning[] = [...processed.warnings];
+  if (deidentMethod.replacedPrior) {
+    warnings.push(
+      deidentMethodNotAdded({ byteOffset: priorMethod?.byteOffset ?? 0, fileMeta: false }),
+    );
+  }
   if (hasUncleanedBurnedIn(ds)) {
     const offset = ds.get(TAG_PIXEL_DATA)?.byteOffset ?? 0;
     warnings.push(burnedInAnnotationNotRemoved({ byteOffset: offset, fileMeta: false }));

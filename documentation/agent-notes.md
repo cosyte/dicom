@@ -13,7 +13,7 @@ passes that produced it.
 
 **Read the section before you re-open the thing its rule guards.** These are clinical-safety
 lessons in a parser: every one of them cost a defect, a refused pass, or both. The compressed line in
-`CLAUDE.md` is enough to stop you doing the wrong thing; it is *not* enough to justify doing a new
+`CLAUDE.md` is enough to stop you doing the wrong thing; it is _not_ enough to justify doing a new
 thing in the same area.
 
 Section order matches the order these entries had in `CLAUDE.md`'s Status list: most recent first,
@@ -21,7 +21,6 @@ then the shipped-phase history, then the generator/authority notes, then the old
 then the two gates.
 
 ---
-
 
 ## DICOM-FILE-META-DROPS-DUPLICATE
 
@@ -33,8 +32,8 @@ then the two gates.
   **▶ THE ROUTE IS DIFFERENT FROM `#70`'s, AND THAT DIFFERENCE IS THE WHOLE ENTRY.** `parseFileMeta`
   collects the group into an **array**, so nothing is overwritten and `DICOM_DUPLICATE_TAG_IN_DATA_SET`
   never fired here. `#70`'s own JSDoc said exactly that, in a sentence that read as an all-clear:
-  *"it does not reach the File Meta group, which `parseFileMeta` accumulates into an array and not a
-  map, so nothing is overwritten there."* Literally true, and wrong in effect. The eight tags in
+  _"it does not reach the File Meta group, which `parseFileMeta` accumulates into an array and not a
+  map, so nothing is overwritten there."_ Literally true, and wrong in effect. The eight tags in
   `MODELED_FM_TAGS` are answered by a **first-match** search (`projectUI` / `projectText` /
   `projectRaw`, and `fmElements.find` for `(0002,0010)`) and are **excluded** from `extraElements`,
   the verbatim residue that gives the group its byte-exact round trip. A second copy of one is
@@ -48,6 +47,18 @@ then the two gates.
   repeated `(0002,xxxx)` tag this library does **not** model stays silent, because every copy of one
   is already kept verbatim in `extraElements` and nothing is dropped; that control is pinned, with
   both copies asserted present, so "silent" is "nothing was lost" rather than "the check missed it".
+  **▶ 🛑 TWO `PRE-EXISTING` BOUNDS PASS 1 NAMED, AND THE CLAIMS BESIDE THEM WERE THE `INTRODUCED`
+  PART. NEITHER IS CLOSED HERE.** (1) `encodeFileMeta` **re-emits BOTH copies** of a duplicated
+  non-modeled `(0002,xxxx)`, so this package writes a tag twice on such a file and a strict reparse
+  of its own output is silent - "the serializer is the conservative half of this package" does not
+  cover it, and that sentence is corrected rather than the guard widened. This is where the
+  byte-exact round-trip promise and the spec-clean promise disagree, and choosing between them is a
+  decision. (2) A repeated MODELED tag sitting **past an honest `(0002,0000)`** - the classic "an
+  intermediary appended an element and did not update the group length" - never reaches Step 3.5 at
+  all: the group loop stops at the declared length, no mismatch fires, and a second `(0002,0010)`
+  with a **different** UID is relocated into the main Data Set and survives a round trip there.
+  Silent on both trees. So this code covers the group **AS THE PARSER DELIMITS IT**, never "the
+  group", and every artifact says so.
   **▶ THE MEASUREMENT, ON THE PUBLISHED PACKAGE.** `npm pack @cosyte/dicom@0.0.10` (the registry's
   current `latest`; there is no `0.0.9`), a file carrying `(0002,0010)` twice with two **different**
   Transfer Syntax UIDs: `fileMeta.transferSyntaxUID` reads the first, `fileMeta.extraElements` is
@@ -70,7 +81,7 @@ then the two gates.
   THE EIGHT TAGS RATHER THAN AN ARGUMENT.** The group loop only continues while the next two bytes
   read `0x0002`, and every modeled element number is below `0x0100`, so each modeled tag needs at
   least **two NUL bytes** on the wire (three, for `(0002,0000)`). No printable name supplies one, so
-  a length lie cannot compose a *modeled* tag out of document text the way it can at `(0010,0020)`.
+  a length lie cannot compose a _modeled_ tag out of document text the way it can at `(0010,0020)`.
   Pinned over all eight. **That does not relax the bound**: the VR, the length and the value after
   such a header still come out of somebody's value, and the offset still points inside one.
   **▶ `position.byteOffset` IS FILE-ABSOLUTE HERE, AND THAT IS STRUCTURAL RATHER THAN LUCKY.**
@@ -109,13 +120,40 @@ then the two gates.
   **▶ THE SHAPE.** The method is appended as a further value of the `1-n` attribute after a `\`, with
   the prior bytes copied through **verbatim**, so a value encoded under a `(0008,0005)` repertoire
   survives byte for byte - the join is a byte concatenation and only the even-length pad and any
-  trailing NUL are trimmed. **A value that already records this exact method is left alone**, so
+  trailing NUL are trimmed. **Only the values not already recorded are added**, so
   `deidentify(deidentify(ds))` is a fixed point rather than a growing string; without that rule
   repeated application grows the attribute without bound, which is a defect the fix would have
   introduced. The delimiter split used for that test is a **comparison only** - a repertoire where
   5CH is not the delimiter can at worst make it append a value it could have skipped, which loses
   nothing. **The VR must be `LO`**; a `(0012,0063)` a file encoded as something else is not a
   De-identification Method this can concatenate into, so that case still replaces, and it is pinned.
+  **▶ 🛑 THE COMPARISON IS PER VALUE ON BOTH SIDES, AND THE DRAFT THAT COMPARED THE WHOLE ADDED
+  STRING AGAINST EACH PRIOR VALUE WAS REFUTED ON PASS 1.** `deidentificationMethod` is a `1-n` value
+  like any other, and the option's own JSDoc teaches the delimiter, so a caller string carrying a
+  `\` never matched any single prior value and every pass appended a whole further copy: measured
+  **29 -> 59 -> 89 -> 119** bytes over four passes, against a flat **29** on base, reaching the
+  ceiling below and throwing at pass 2185. The claim had shipped in six artifacts and the test named
+  for it exercised only the default method - **a test named for the thing it did not check occupies
+  the slot**, again. Pinned now with a delimiter-carrying caller string and a set-of-lengths
+  assertion.
+  **▶ 🩺 THE JOIN IS BOUNDED, AND AN UNBOUNDED ONE CRASHES THE SERIALIZER ON A FILE THE PARSER CALLS
+  CLEAN. PASS 1 GRADED THIS A BLOCKER AND IT WAS RIGHT.** `LO` is not in `LONG_FORM_VRS`, so
+  `encodeDatasetElement` writes its Value Length with a **16-bit** field. A `(0012,0063)` carrying a
+  legal **65,534**-byte chain of `1-n` values - exactly the provenance chain this feature exists to
+  build - parses with **zero** warnings, and appending to it produced a **65,611**-byte value that
+  `serializeDicom` could not encode: a raw `RangeError` out of Node's `Buffer` internals, **outside
+  the documented `DicomSerializeError` surface**, taking the whole de-identified object down. Base
+  serialized the same file, because base replaced. So when the join would exceed `0xFFFE` the prior
+  value is **replaced** instead - which is what every released version did on **every** file, so the
+  slice narrows that loss from "always" to "only at the ceiling" rather than introducing one - and
+  **it is not silent**: `report.warnings` carries the new `DICOM_DEIDENT_METHOD_NOT_ADDED`.
+  **Truncating the chain was refused**: choosing which of the sender's earlier de-identification
+  records to drop is a policy the standard does not state, and this package reports rather than
+  invents. The bound is applied uniformly rather than per encoding, because one rule that holds for
+  every transfer syntax is worth more than a few thousand bytes of chain in a case this extreme.
+  **One route is deliberately left as base has it**: a CALLER who passes a `deidentificationMethod`
+  longer than the ceiling still fails to serialize. That is `PRE-EXISTING` and caller-supplied rather
+  than file-supplied, so it is a backlog line.
   **▶ 🩺 THE COST IS A RESIDUAL, DISCLOSED, WITH A TEST THAT ASSERTS IT RATHER THAN AN ALL-CLEAR.**
   `(0012,0063)` is **not in Table E.1-1**, so the Basic Profile never acted on it and the incoming
   value reached the insertion point untouched - **the replacement was the only thing removing it, and
@@ -133,8 +171,16 @@ then the two gates.
   that 8 is measured with those two symbols substituted for their literals; unmodified it is 12 of 12
   by construction, which is a fact about linking rather than about behaviour. The base was taken in a
   **detached worktree at the sha**, not by checking `src/` over the working tree, because
-  `git checkout <base> -- src/` **overlays** rather than replaces (`#71`).
-
+  `git checkout <base> -- src/` **overlays** rather than replaces (`#71`). **Re-run again after the
+  pass-1 remedy added six tests, which is the rule and not a courtesy: 8 of 12 and 10 of 18, 18 of
+  30.** The de-identify file cannot link against base `src/` either now, for the same reason
+  (`deidentMethodNotAdded`), so its figure is measured the same way and unmodified it is 18 of 18.
+  **▶ WHAT PASS 1 FOUND AND THIS SLICE DID NOT TAKE.** Three `PRE-EXISTING` backlog lines, each
+  reproduced on `e75fb38`: the two File Meta bounds above; and **the library's own default
+  `(0012,0063)` value exceeds `LO`'s 64-character per-value maximum** (76 characters by default,
+  **130** with three Retain options, against PS3.5 2026c Table 6.2-1). The last one is newly
+  _fixable_ by the delimiter this slice introduces - splitting the default into `1-n` values - but
+  that changes the shipped output of every de-identification and is its own measured change.
 
 ## DICOM-TAG-COLLISION-DESTROYS-ELEMENT
 
@@ -250,7 +296,7 @@ then the two gates.
   reachable by one more code, in the **false-alarm** direction rather than the silent one. Pinned by
   a test rather than described.
   **▶ ONE MORE FOR THE BACKLOG, SAME FAMILY, FOUND BY PASS 2 AND NOT THIS SLICE'S TO FIX.** File Meta
-  is an array, so nothing is *overwritten* there - but `parseFileMeta` projects a modeled
+  is an array, so nothing is _overwritten_ there - but `parseFileMeta` projects a modeled
   `(0002,xxxx)` with `fmElements.find(...)` (first wins) and `extraElements` filters every
   `MODELED_FM_TAGS` entry out, so a **second** copy of a modeled File Meta element - a duplicated
   `(0002,0010)` Transfer Syntax UID with a different value, say - is dropped from the model with no
@@ -318,7 +364,7 @@ then the two gates.
   private-retention path. Asserted in the tests so it cannot be mistaken for something this remedy
   handled.
   **▶ THE PRICE, AND IT IS NOT SMALL.** Grid over **83,037** cells against `300af87`: `priv: kept at
-  ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** and the remaining
+ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** and the remaining
   **56 are the cost** - root retentions on self-contradicting files whose honest control does keep the
   value. Retention on files that do not contradict themselves is unchanged (**9 -> 9** root, **6 -> 6**
   in an Item), `no-creator` **0 -> 0**, `LEAKING` **11 -> 11**, conformant tiling controls **7 -> 7**,
@@ -329,7 +375,7 @@ then the two gates.
   Implicit VR LE, 44 Explicit VR.** `structural` also reads 118 by construction (it counts any record
   difference, de-identify columns included) and is not a reading claim.
   **▶ 🛑 THE HARNESS'S SYNTAX SPLIT WAS BLIND TO THREE OF ITS FOUR FAMILIES, AND IT IS FIXED HERE.**
-  `--diff` classified a cell by whether its key *starts with* the transfer syntax, which is only true
+  `--diff` classified a cell by whether its key _starts with_ the transfer syntax, which is only true
   of the sequence sweep; `carrier|`, `legit|` and `priv|` put their own prefix there, so **no row of
   theirs could ever count as Implicit VR LE**. This slice's 74 Implicit VR LE cells printed as
   `Implicit VR LE 0`. `transferSyntaxOf` fixes it, which also takes
@@ -362,7 +408,6 @@ then the two gates.
   `descendSequence`, so a private `SQ` inside the settled run that the profile vouches for is kept
   verbatim and nothing inside it is examined. `PRE-EXISTING`, its own item, still pinned as a residual
   test that asserts the leaking behaviour.
-
 
 ## DICOM-PRIVATE-CREATOR-RESERVATION-LEAK
 
@@ -493,7 +538,6 @@ then the two gates.
 > a "N of M tests run red on base" figure has a moving base, so it is not a fact.** Re-run it or do
 > not quote it. It is written here with the sha it was measured against for exactly that reason.
 
-
 ## DICOM-UNRECOGNIZED-VR-SHORT-FORM
 
 - **An unrecognized Explicit VR is read AND written long-form** (`DICOM-UNRECOGNIZED-VR-SHORT-FORM`,
@@ -583,7 +627,6 @@ then the two gates.
   and in `report.removedPrivateTags`, while head puts them in `err.message` beside a `snippet` that
   is already 16 raw source bytes by design (D-10). A registry for fatal messages, mirroring `#48`'s
   work on warnings, is its own slice.
-
 
 ## DICOM-CARRIER-LEAF-LEAKS
 
@@ -696,7 +739,6 @@ then the two gates.
     inside output stamped `PatientIdentityRemoved=YES`; **the writer was fixed 2026-08-03** with the
     reader, so it re-emits the long form.
 
-
 ## DICOM-DEIDENT-RAWBYTES-PASSTHROUGH
 
 - **De-identification refuses to keep a sequence it could not walk**
@@ -765,7 +807,6 @@ then the two gates.
   file. It needs a parser-set mark, i.e. its own slice. Measured on a hand-built file: identifier in
   the output, no report entry, only `DICOM_VR_MISMATCH`. A **private** `SQ` under `RetainSafePrivate`
   - a `Profile` is still kept verbatim, deliberately - the profile vouched for it.
-
 
 ## DICOM-OVERDECLARE-SWALLOWS-INTO-VALUE
 
@@ -838,7 +879,6 @@ then the two gates.
   -picked with the `declaredLengthDelta` / `omitItemDelim` knobs in `test/helpers/build-dicom.ts` that
   it needs. 76,293 cells; `--diff` prints every number the artifacts state.
 
-
 ## Shipped phases (4 through 7 of 8)
 
 - **Phase 7 of 8 complete** (580 tests passing, 1 todo). Metadata-level de-identification live:
@@ -874,7 +914,6 @@ then the two gates.
   value-layer `DicomValueError`. Builds on Phase 3 VR value decode (all 34 VRs via `Element.value`) +
   the `Dataset`/`Item` navigation API.
 
-
 ## The PS3.6 element registry generator
 
 - **The element registry is sourced from the normative PS3.6 DocBook, not from a mirror alone.**
@@ -894,7 +933,6 @@ then the two gates.
   live tags). **There is no staleness clock and must not be one** - a date gate fires the day it is
   written, demands an action nobody can take on demand, and reds unrelated PRs. "Has NEMA moved" is
   one content-comparing command in `vendor/nema/README.md`; CI gates byte-identical regen, offline.
-
 
 ## The PS3.15 Annex E action table generator
 
@@ -926,7 +964,6 @@ then the two gates.
   protective** branch - `K` on all 169 where modified-dates says `C`; the JSDoc and troubleshooting
   doc now say so, and splitting the option is a public-surface change deliberately not made).
 
-
 ## Repeating-group masks on the de-identify path
 
 - **Table E.1-1's repeating-group rows are matched by mask, bounded by PS3.5 §7.6.** `(50xx,xxxx)`
@@ -957,7 +994,6 @@ then the two gates.
   `test/scripts/generate-annex-e.test.ts`: the pre-remedy generator exits 0 on an injected `(7Fxx,0010)`
   row, the post-remedy one exits 1; a second mutation moves the Overlay Comments code `X` -> `K` and
   proves the emitted rule follows the document rather than a hard-coded `X`.
-
 
 ## The vendored PS3.5 repeating-group bound
 
@@ -1009,7 +1045,6 @@ then the two gates.
   re-deriving the bound from a current normative source. **No staleness clock here either**, same
   reasoning as PS3.6 and PS3.15.
 
-
 ## PHI-WARNING-MESSAGE-LEAK
 
 - **Diagnostics are built from a frozen registry, not from the document** (`PHI-WARNING-MESSAGE-LEAK`).
@@ -1054,7 +1089,6 @@ then the two gates.
   conformant reading and fail-safe, and it is a **behaviour change against `0.0.5`** for any sender
   that declares a creator once at the root and writes private data into Per-Frame Functional Groups
   items.
-
 
 ## DICOM-PARSE-CREATORS-SCOPE
 
@@ -1101,7 +1135,6 @@ then the two gates.
   disclosed instead:** under `{ strict: true }` the new warning is promoted to a throw, so a file
   whose items borrow an enclosing block parses lenient and throws strict. That is strict doing its
   job on a warning that is now correctly emitted, and the release note says so.
-
 
 ## DICOM-IMPLICIT-SQ-NOT-DESCENDED
 
@@ -1190,7 +1223,6 @@ then the two gates.
   element inside an **undefined-length** item reads **192**, file-absolute, because that branch is
   handed the outer buffer. `Element.byteOffset` documents no frame-of-reference contract either way.
   **Measure it rather than describing it.**
-
 
 ## DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ
 
@@ -1310,7 +1342,6 @@ READING differs` is **not** new here: `#66` added it, and a draft of this entry 
     uniformly item-relative, and the two forms do not agree. `Element.byteOffset` documents no
     frame-of-reference contract either way. **Re-measure it rather than describing it.**
 
-
 ## The em-dash brand gate
 
 - **Em-dash brand gate armed.** `scripts/check-no-emdash.sh` (`pnpm check:no-emdash`) plus
@@ -1336,7 +1367,6 @@ READING differs` is **not** new here: `#66` added it, and a draft of this entry 
   it, and do not remove the NUL to quiet the gate. When the gate goes red the fix is never to
   re-encode the character: rewrite with a period, colon, comma, or parentheses. Known limits are in
   the script header and are shared across every copy, so fix them there, not here.
-
 
 ## The attw wrapper gate
 

@@ -24,9 +24,9 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   **So the two codes resolve a repeat the opposite way round, deliberately, because the two readings
   do: the FIRST copy wins in the File Meta group, the LAST read wins in a Data Set.** Neither
   reading moves in this release, **no value is guessed for the copy that lost**, and no residue is
-  invented for it - inventing one would make the conservative serializer re-emit a group it should
-  not write. A repeated `(0002,xxxx)` tag this library does **not** model stays silent, because every
-  copy of one is already kept verbatim in `extraElements` and nothing is dropped.
+  invented for it - inventing one would make the serializer write a group it should not. A repeated
+  `(0002,xxxx)` tag this library does **not** model stays silent, because every copy of one is
+  already kept verbatim in `extraElements` and nothing is dropped. **Two `PRE-EXISTING` bounds a graded pass named, neither closed here**: `serializeDicom` re-emits BOTH copies of such a non-modeled repeat, which is where this package's round-trip promise and its spec-clean promise disagree; and the disclosure covers the group **as the parser delimits it**, so a copy an intermediary appended past an honest `(0002,0000)` group length is never a File Meta element to this parser at all and is relocated into the main Data Set, silently, on this tree and every earlier one.
 
   **Measured on the published tarball rather than inferred from a version number.**
   `npm pack @cosyte/dicom@0.0.10` (the registry's current `latest`; there is no `0.0.9`), a file
@@ -66,8 +66,22 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   added to** De-identification Method (0012,0063)." Replacing is neither verb. This release appends
   its own text as a further value of the `1-n` attribute after a `\`, copying the prior bytes through
   **verbatim** so a value encoded under a `(0008,0005)` repertoire survives byte for byte. A value
-  that already records this exact method is left alone, so `deidentify(deidentify(ds))` is a fixed
-  point rather than a growing string.
+  that already records this method is left alone, so `deidentify(deidentify(ds))` is a fixed
+  point rather than a growing string. **The comparison is per VALUE on both sides**: the method string
+  is itself a `1-n` value, and a graded pass refuted the draft that compared the whole string against
+  each prior value - a caller method carrying a `\` never matched one, and every pass appended a
+  further copy (29 -> 59 -> 89 -> 119 bytes over four passes, against a flat 29 on base).
+
+  **The join is bounded, and the bound is not cosmetic.** `LO` is a short-form VR, so
+  `encodeDatasetElement` writes its Value Length with a 16-bit field. A `(0012,0063)` carrying a legal
+  65,534-byte chain of `1-n` values - exactly the provenance chain this feature exists to build -
+  parses with no warnings, and an unbounded append produced a 65,611-byte value that `serializeDicom`
+  could not encode: a raw `RangeError` out of Node's `Buffer` internals, outside the documented
+  `DicomSerializeError` surface, taking the whole de-identified object down. When the join would
+  exceed the ceiling the prior value is **replaced** instead, which is what every released version did
+  on every file, and `report.warnings` carries the new `DICOM_DEIDENT_METHOD_NOT_ADDED` so the
+  fallback is never silent. Truncating the sender's earlier records instead was refused: choosing
+  which to drop is a policy the standard does not state.
 
   **`(0012,0062)` Patient Identity Removed is still REPLACED with `YES`, and the asymmetry is the
   standard's own**: the sentence immediately above it, in the same list, says it "shall be **replaced
@@ -83,13 +97,16 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   rather than appended to.
 
   **The evidence, with its sha, because the base moves.** Re-measured at `e75fb38` after the last
-  test was added: **8 of the 12** tests in `test/integration/file-meta-duplicate.test.ts` and **7 of
-  the 13** in `test/deident/deident-method-add.test.ts` run red against that base - 15 of 25 in all.
-  The File Meta file cannot even link against base `src/` (neither
-  `WARNING_CODES.DICOM_DUPLICATE_FILE_META_ELEMENT` nor `duplicateFileMetaElement` exists there), so
-  that 8 is measured with those two symbols substituted for their literals; unmodified it is 12 of 12
-  by construction. The four that stay green on base are the controls that make the rest
-  non-vacuous. Quote such a figure only with the sha it was run on.
+  test was added - and again after the conformance gate's remedy added six more, which is the rule
+  and not a courtesy: **8 of the 12** tests in `test/integration/file-meta-duplicate.test.ts` and
+  **10 of the 18** in `test/deident/deident-method-add.test.ts` run red against that base, 18 of 30
+  in all. **Neither file can link against base `src/`** - none of
+  `WARNING_CODES.DICOM_DUPLICATE_FILE_META_ELEMENT`, `duplicateFileMetaElement`,
+  `WARNING_CODES.DICOM_DEIDENT_METHOD_NOT_ADDED` or `deidentMethodNotAdded` exists there - so both
+  figures are measured with those symbols substituted for their literals; unmodified they are 12 of
+  12 and 18 of 18 by construction, which is a fact about linking rather than about behaviour. The
+  ones that stay green on base are the controls that make the rest non-vacuous. Quote such a figure
+  only with the sha it was run on.
 
 - **🩺 A Data Set that carries one tag twice DESTROYED the first element's value at parse time, and
   said nothing** (`DICOM-TAG-COLLISION-DESTROYS-ELEMENT`). **`PRE-EXISTING`**, on every released

@@ -38,8 +38,16 @@ import { Buffer } from "node:buffer";
 
 import { describe, expect, it } from "vitest";
 
-import { Dataset, Element, deidentify, parseDicom, serializeDicom } from "../../src/index.js";
+import {
+  Dataset,
+  Element,
+  WARNING_CODES,
+  deidentify,
+  parseDicom,
+  serializeDicom,
+} from "../../src/index.js";
 import type { Tag, VR } from "../../src/dictionary/types.js";
+import { WARNING_MESSAGES, deidentMethodNotAdded } from "../../src/parser/warnings.js";
 import { buildDicom } from "../helpers/build-dicom.js";
 
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
@@ -143,6 +151,30 @@ describe("(0012,0063) is added to, never replaced", () => {
     expect(methodOf(deidentify(twice).dataset)).toBe(methodOf(once));
   });
 
+  it("🛑 a CALLER method that itself carries a `\\` is still a fixed point", () => {
+    // The refuted draft compared the whole added string against each prior
+    // value, so a `1-n` caller string never matched one and every pass appended
+    // a further copy: 29 -> 59 -> 89 -> 119 bytes over four passes, against a
+    // flat 29 on base. `deidentificationMethod` is a `1-n` value like any other.
+    const method = `ACME Anonymizer${BACKSLASH}Basic Profile`;
+    let ds = buildWithPriorMethod();
+    const lengths: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      ds = deidentify(ds, { deidentificationMethod: method }).dataset;
+      lengths.push(methodOf(ds).length);
+    }
+    expect(methodOf(ds)).toBe(method);
+    expect(new Set(lengths).size).toBe(1);
+  });
+
+  it("a method half of whose values are already recorded adds only the missing ones", () => {
+    const first = deidentify(buildWithPriorMethod(), { deidentificationMethod: "Pass A" }).dataset;
+    const second = deidentify(first, {
+      deidentificationMethod: `Pass A${BACKSLASH}Pass B`,
+    }).dataset;
+    expect(methodOf(second).split(BACKSLASH)).toEqual(["Pass A", "Pass B"]);
+  });
+
   it("a distinct prior method is kept when this one is added, so the chain is a chain", () => {
     const first = deidentify(buildWithPriorMethod({ vr: "LO" as VR, value: even(PRIOR) }), {
       deidentificationMethod: "Pass A",
@@ -197,6 +229,75 @@ describe("(0012,0063) is added to, never replaced", () => {
     const reparsed = parseDicom(serializeDicom(dataset));
     expect(methodOf(reparsed).split(BACKSLASH)[0]).toBe(PRIOR);
     expect(methodOf(reparsed)).toBe(methodOf(dataset));
+  });
+});
+
+describe("🩺 the join is bounded, because an unencodable value takes the whole object down", () => {
+  /** `n` legal 64-character `LO` values joined by `\`: 65n - 1 bytes. */
+  function chain(n: number): string {
+    return Array.from({ length: n }, (_, i) => `V${String(i).padStart(63, "0")}`).join(BACKSLASH);
+  }
+
+  it("a chain the method still fits beside is appended to, and serializes", () => {
+    // The control that makes the row below non-vacuous: 65,389 bytes of prior
+    // chain, which the 76-byte default method and one delimiter still fit under
+    // the ceiling.
+    const prior = chain(1006);
+    expect(prior.length).toBe(65_389);
+    const { dataset, report } = deidentify(
+      buildWithPriorMethod({ vr: "LO" as VR, value: even(prior) }),
+    );
+    expect(methodOf(dataset).startsWith(prior)).toBe(true);
+    expect(report.warnings.map((w) => w.code)).not.toContain(
+      WARNING_CODES.DICOM_DEIDENT_METHOD_NOT_ADDED,
+    );
+    expect(() => serializeDicom(dataset)).not.toThrow();
+  });
+
+  it("a chain it does not fit beside falls back to the pre-existing replace, and SAYS SO", () => {
+    // 65,519 bytes: a legal `1-n` chain, parsed with no warnings, and exactly
+    // the provenance chain this feature exists to build. Appending produced a
+    // 65,596-byte value, and `LO` is a short-form VR whose Value Length field is
+    // 16 bits, so `serializeDicom` threw a raw `RangeError` out of Node's
+    // `Buffer` internals - outside the documented `DicomSerializeError` surface,
+    // taking the whole de-identified object down.
+    const prior = chain(1008);
+    expect(prior.length).toBe(65_519);
+    const parsed = buildWithPriorMethod({ vr: "LO" as VR, value: even(prior) });
+    expect(parsed.warnings).toHaveLength(0);
+
+    const { dataset, report } = deidentify(parsed);
+    expect(methodOf(dataset)).toContain("@cosyte/dicom");
+    expect(methodOf(dataset)).not.toContain(prior);
+
+    // Not silent. That is the whole difference between this fallback and the
+    // defect it falls back to.
+    expect(report.warnings.map((w) => w.code)).toContain(
+      WARNING_CODES.DICOM_DEIDENT_METHOD_NOT_ADDED,
+    );
+
+    // And the object survives, which is what the bound is for.
+    expect(() => serializeDicom(dataset)).not.toThrow();
+    expect(methodOf(parseDicom(serializeDicom(dataset)))).toBe(methodOf(dataset));
+  });
+
+  it("the disclosure carries no value, no length and no VR", () => {
+    // 🛑 A DIAGNOSTIC ABOUT A DROPPED VALUE IS ITSELF A PHI SURFACE. The prior
+    // text is the file's own, so the message must not quote it - name-bearing
+    // payload, with a non-vacuity assertion first.
+    const named = `${chain(1008).slice(0, 65_500)}${BACKSLASH}removed ${PATIENT}`;
+    expect(named).toContain("SMITHSON");
+    const { report } = deidentify(buildWithPriorMethod({ vr: "LO" as VR, value: even(named) }));
+    const warning = report.warnings.find(
+      (w) => w.code === WARNING_CODES.DICOM_DEIDENT_METHOD_NOT_ADDED,
+    );
+    expect(warning).toBeDefined();
+    expect(warning?.message).toBe(WARNING_MESSAGES.DICOM_DEIDENT_METHOD_NOT_ADDED);
+    for (let i = 0; i + 4 <= PATIENT.length; i++) {
+      expect(warning?.message).not.toContain(PATIENT.slice(i, i + 4));
+    }
+    // The mutation control: the bound is the factory signature.
+    expect(deidentMethodNotAdded).toHaveLength(1);
   });
 });
 

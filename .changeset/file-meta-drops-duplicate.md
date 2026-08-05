@@ -20,9 +20,9 @@ second copy of one of them is in neither. It simply left the object.
 The two codes resolve a repeat the opposite way round, deliberately, because the two readings do:
 **the FIRST copy wins in the File Meta group, the LAST read wins in a Data Set.** Neither reading
 moves here, no value is guessed for the copy that lost, and no residue is invented for it - inventing
-one would make the conservative serializer re-emit a group it should not write. A repeated
+one would make the serializer write a group it should not. A repeated
 `(0002,xxxx)` tag this library does not model stays silent, because every copy of one is already kept
-verbatim in `extraElements` and nothing is dropped.
+verbatim in `extraElements` and nothing is dropped. **Two `PRE-EXISTING` bounds a graded pass named, neither closed here**: `serializeDicom` re-emits BOTH copies of such a non-modeled repeat, which is where this package's round-trip promise and its spec-clean promise disagree; and the disclosure covers the group **as the parser delimits it**, so a copy an intermediary appended past an honest `(0002,0000)` group length is never a File Meta element to this parser at all and is relocated into the main Data Set, silently, on this tree and every earlier one.
 
 Measured on the published tarball rather than inferred: `npm pack @cosyte/dicom@0.0.10` (the
 registry's current `latest`; there is no `0.0.9`), a file carrying `(0002,0010)` twice with two
@@ -55,8 +55,22 @@ on `0.0.10`, a file recording `"ACME Anonymizer v3 Basic Profile"` came out of `
 recording only this library's method, with the earlier one gone and nothing saying so. This release
 appends its own text as a further value of the `1-n` attribute after a `\`, copying the prior bytes
 through verbatim so a value encoded under a `(0008,0005)` repertoire survives byte for byte. A value
-that already records this exact method is left alone, so `deidentify(deidentify(ds))` is a fixed
-point rather than a growing string.
+that already records this method is left alone, so `deidentify(deidentify(ds))` is a fixed
+point rather than a growing string. **The comparison is per VALUE on both sides**: the method string
+is itself a `1-n` value, and a graded pass refuted the draft that compared the whole string against
+each prior value - a caller method carrying a `\` never matched one, and every pass appended a
+further copy (29 -> 59 -> 89 -> 119 bytes over four passes, against a flat 29 on base).
+
+**The join is bounded, and the bound is not cosmetic.** `LO` is a short-form VR, so
+`encodeDatasetElement` writes its Value Length with a 16-bit field. A `(0012,0063)` carrying a legal
+65,534-byte chain of `1-n` values - exactly the provenance chain this feature exists to build -
+parses with no warnings, and an unbounded append produced a 65,611-byte value that `serializeDicom`
+could not encode: a raw `RangeError` out of Node's `Buffer` internals, outside the documented
+`DicomSerializeError` surface, taking the whole de-identified object down. When the join would
+exceed the ceiling the prior value is **replaced** instead, which is what every released version did
+on every file, and `report.warnings` carries the new `DICOM_DEIDENT_METHOD_NOT_ADDED` so the
+fallback is never silent. Truncating the sender's earlier records instead was refused: choosing
+which to drop is a policy the standard does not state.
 
 `(0012,0062)` Patient Identity Removed is still **replaced** with `YES`. The asymmetry is the
 standard's own: the sentence immediately above, in the same list, says it "shall be **replaced or
