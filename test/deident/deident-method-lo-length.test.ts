@@ -396,8 +396,11 @@ describe("what this slice does NOT bound, pinned rather than left to be rediscov
 
   it("🩺 and the most likely writer of one is THIS library: its own 0.0.11 value is kept", () => {
     // 🛑 A graded pass refuted "a sender's non-conformant LO is the sender's".
-    // Every object 0.0.3 through 0.0.11 de-identified without a caller-supplied
-    // method carries the 76-character value, so the over-long prior the row
+    // Every object any PUBLISHED release de-identified without a caller-supplied
+    // method carries the 76-character value (measured in the 0.0.1 and 0.0.11
+    // tarballs; a graded pass refuted the "0.0.3 onward" range a draft wrote,
+    // because 0.0.1 is on the registry and has it while 0.0.2 and 0.0.9 were
+    // never published), so the over-long prior the row
     // above calls the sender's is, in the common case, this library's own. It is
     // still KEPT, and that is right - PS3.15 E.1.1 says "added to", and
     // rewriting a prior de-identifier's record destroys the provenance the

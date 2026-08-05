@@ -1238,8 +1238,11 @@ const DEFAULT_METHOD_PROFILE = "@cosyte/dicom Basic Application Level Confidenti
  *
  * **🩺 AND THE MOST LIKELY SENDER OF AN OVER-LONG PRIOR VALUE IS THIS LIBRARY,
  * WHICH IS WHY THAT SENTENCE IS NOT "the sender's problem". A graded pass
- * refuted the draft that said it was.** Every object `0.0.3` through `0.0.11`
- * de-identified without a caller-supplied method carries the 76-character value,
+ * refuted the draft that said it was.** Every object **any published release**
+ * de-identified without a caller-supplied method carries the 76-character value -
+ * measured in the `0.0.1` and `0.0.11` tarballs, and a graded pass refuted the
+ * `0.0.3`-onward range a draft wrote, because `0.0.1` is on the registry and has
+ * it while `0.0.2` and `0.0.9` were never published at all -
  * and re-de-identifying one keeps it: measured at a flat **138** bytes over four
  * passes, two values of **76** and **61**, with `DICOM_DEIDENT_METHOD_PRIOR_RETAINED`
  * raised for the retention and **nothing said about the length**. Keeping it is

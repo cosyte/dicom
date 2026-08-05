@@ -296,17 +296,23 @@ describe("a File Meta group that carries one modeled (0002,xxxx) tag twice", () 
  * It used to read "the diagnostic is not itself a PHI surface" while every row
  * in it read `warning.message` and nothing else. The message is clean; the
  * **diagnostic** is not, because `{ strict: true }` replaces the whole warning
- * with a `DicomParseError` whose `snippet` is 16 raw bytes of the file at the
- * same offset - and for this code that offset is the header of the element that
- * was dropped, so the snippet renders the first bytes of the value the message
- * deliberately withholds. A claim that big, tested that narrowly, is the shape
- * `#55` shipped and `#64` repeated.
+ * with a `DicomParseError` whose `snippet` is 16 raw bytes of the file, read at
+ * the warning's own offset - and **for this code**, whose group is never nested
+ * so no frame ambiguity can reach it, that offset is the header of the element
+ * that was dropped. So the snippet renders the first bytes of the value the
+ * message deliberately withholds. A claim that big, tested that narrowly, is the
+ * shape `#55` shipped and `#64` repeated.
  *
  * So the claim is cut to what the rows prove and the rest is pinned as the
- * measured residual it is, in `the strict-mode escalation` block below. The
- * snippet is a documented, package-wide design (D-10) rather than a defect in
- * this code, and redacting it is a decision about every Tier-3 fatal in the
- * library, not a rider on a File Meta disclosure.
+ * measured residual it is, in `the strict-mode escalation` block below. **That
+ * block is about THIS code and generalises to none other**, and two graded
+ * passes are why: a warning's `byteOffset` is file-absolute here but
+ * item-relative inside a defined-length Sequence Item, while the snippet is
+ * always read from the whole file, so which element a snippet's bytes belong to
+ * is **not contracted** anywhere in this package. The snippet is a documented,
+ * package-wide design (D-10) rather than a defect in this code, and redacting it
+ * is a decision about every Tier-3 fatal in the library, not a rider on a File
+ * Meta disclosure.
  */
 describe("the warning MESSAGE is not itself a PHI surface", () => {
   it("a name-bearing dropped value reaches no part of the message", () => {
@@ -374,11 +380,20 @@ describe("the warning MESSAGE is not itself a PHI surface", () => {
   });
 });
 
-describe("the strict-mode escalation of the same diagnostic DOES carry source bytes", () => {
+describe("the strict-mode escalation of THIS diagnostic DOES carry source bytes", () => {
   /**
    * The fixture the block above uses, with the surname where a snippet at the
    * dropped element's own offset can reach it: header (8 bytes) then the first 8
    * bytes of the value.
+   *
+   * 🛑 **NOTHING HERE GENERALISES TO ANOTHER CODE, AND A GRADED PASS REFUTED THE
+   * DRAFT THAT SAID IT DID.** The reach below holds because the File Meta group
+   * is never nested, so this warning's `byteOffset` is unambiguously
+   * file-absolute and unambiguously the dropped copy's header. Inside a
+   * defined-length Sequence Item that offset is relative to the item's own slice
+   * while `buildSnippet` still reads the whole file, so for a code that can fire
+   * in there the snippet may be an unrelated element's value entirely. Measure
+   * it per code; do not reason from this row.
    */
   const named = (): Buffer =>
     withFileMeta([

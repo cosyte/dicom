@@ -47,17 +47,17 @@ RetainDeviceIdentity`, **272** with all nine, and **all 512 option subsets over 
   `DICOM_NONZERO_RESERVED_BYTES`.
 
 - **🩺 `{ strict: true }` renders source bytes the warning it replaces deliberately withholds.**
-  `PRE-EXISTING`, **disclosed and pinned rather than changed**: the escalation raises a
-  `DicomParseError` whose `snippet` is 16 raw source bytes at the warning's own offset (D-10). **The
-  two codes that report a lost value place that offset differently, and a graded pass refuted the
-  claim that they agree.** `DICOM_DUPLICATE_FILE_META_ELEMENT`'s offset is the **dropped** element's
-  header, so its snippet renders the value its own message withholds: a `(0002,0016)` Source AE Title
-  of `AE-SMITHSON` comes back as `02 00 16 00 41 45 0c 00 41 45 2d 53 4d 49 54 48`, five letters of
-  the surname. `DICOM_DUPLICATE_TAG_IN_DATA_SET`'s offset is the **surviving** element's header (two
-  `(0010,0020)` values `DROPPED-SMITHSON` then `SURVIVOR-JONESXX` give
-  `10 00 20 00 4c 4f 10 00 53 55 52 56 49 56 4f 52`), so the dropped value never appears in it. Both
-  are document content, neither is redacted, and `err.message` stays the frozen registry string in
-  both cases. Each is pinned byte for byte. Redacting `snippet` is a decision about every Tier-3
+  `PRE-EXISTING`, **disclosed rather than changed**: the escalation raises a `DicomParseError` whose
+  `snippet` is 16 raw source bytes read from the file at the warning's own `byteOffset` (D-10), while
+  `err.message` stays the frozen registry string. Measured on
+  `DICOM_DUPLICATE_FILE_META_ELEMENT`, whose group is never nested and whose offset is therefore
+  unambiguously the dropped copy's header: a `(0002,0016)` Source AE Title of `AE-SMITHSON` comes
+  back as `02 00 16 00 41 45 0c 00 41 45 2d 53 4d 49 54 48`, five letters of the surname. **Nothing
+  more general is claimed, and two graded passes are why**: which element a snippet's bytes belong to
+  is **not contracted** anywhere in this package, because a warning's `byteOffset` is file-absolute at
+  the root and relative to the enclosing slice inside a defined-length Sequence Item while the snippet
+  is always read from the whole file. Do not reason from a code's message to what its snippet holds;
+  measure it, and treat every snippet as document content. Redacting `snippet` is a decision about every Tier-3
   fatal in the library, not a rider on a File Meta disclosure, so the **claim** was corrected instead:
   the test block asserting "the diagnostic is not itself a PHI surface" read `warning.message` and
   nothing else, and is now titled for what it proves, with the strict path pinned beside it as the

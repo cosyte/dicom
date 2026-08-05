@@ -342,65 +342,6 @@ describe("the diagnostic itself", () => {
     expect(warning?.message).toContain("Tag withheld");
   });
 
-  it("🩺 under { strict: true } the snippet renders the SURVIVOR's bytes, not the dropped value's", () => {
-    // 🛑 THE COMPANION TO `file-meta-duplicate.test.ts`'s STRICT BLOCK, AND THE
-    // TWO CODES DO NOT AGREE. A graded pass refuted a draft that said they did.
-    // `{ strict: true }` replaces the warning with a `DicomParseError` carrying
-    // `snippet`, 16 raw source bytes at the warning's own offset (D-10), and
-    // this code's offset is the **replacing** element's header
-    // (`data-set-map.ts`), which is the survivor's. So the value that was
-    // destroyed never appears in the snippet - the File Meta code's does,
-    // because its offset is the dropped copy's header. Both are document
-    // content; only one exposes what its own message withholds.
-    //
-    // Two distinguishable, name-bearing values, so "which one is in the hex" is
-    // decidable rather than assumed.
-    const dropped = "DROPPED-SMITHSON";
-    const survivor = "SURVIVOR-JONESXX";
-    const buf = buildDicom({
-      transferSyntax: EXPLICIT_LE,
-      elements: [
-        { tag: PATIENT_ID, vr: "LO" as VR, value: val(dropped) },
-        { tag: PATIENT_ID, vr: "LO" as VR, value: val(survivor) },
-      ],
-    });
-
-    // NON-VACUITY: the file really does carry both, the reading really does keep
-    // the last, and the lenient message really is clean.
-    const lenient = parseDicom(buf);
-    expect(lenient.get(PATIENT_ID)?.rawBytes.toString("latin1")).toBe(
-      val(survivor).toString("latin1"),
-    );
-    const warning = lenient.warnings.find(
-      (w) => w.code === WARNING_CODES.DICOM_DUPLICATE_TAG_IN_DATA_SET,
-    );
-    expect(warning?.message).not.toContain("SMITHSON");
-    expect(warning?.message).not.toContain("JONES");
-
-    let thrown: DicomParseError | undefined;
-    try {
-      parseDicom(buf, { strict: true });
-      expect.unreachable("strict mode must escalate the disclosure");
-    } catch (err) {
-      thrown = err as DicomParseError;
-    }
-    expect(thrown?.code).toBe(WARNING_CODES.DICOM_DUPLICATE_TAG_IN_DATA_SET);
-    expect(thrown?.message).not.toContain("SMITHSON");
-    expect(thrown?.message).not.toContain("JONES");
-
-    // Byte for byte, decoded rather than searched: a pin asserting the wrong
-    // bytes is worse than no pin, and a substring assertion is what `#70`'s
-    // third pass refused.
-    const decoded = Buffer.from((thrown?.snippet ?? "").replaceAll(" ", ""), "hex");
-    expect(thrown?.snippet).toBe("10 00 20 00 4c 4f 10 00 53 55 52 56 49 56 4f 52");
-    expect(decoded.subarray(0, 8)).toStrictEqual(
-      Buffer.from([0x10, 0x00, 0x20, 0x00, 0x4c, 0x4f, 0x10, 0x00]),
-    );
-    expect(decoded.subarray(8).toString("latin1")).toBe("SURVIVOR");
-    expect(decoded.toString("latin1")).not.toContain("DROPPED");
-    expect(decoded.toString("latin1")).not.toContain("SMITH");
-  });
-
   it("🛑 the byte offset is NOT a key: an in-Item collision reports an offset a ROOT element holds", () => {
     // The refutation this test exists for. The message withholds the tag and
     // the docs offer `position.byteOffset` instead - but `Element.byteOffset` is

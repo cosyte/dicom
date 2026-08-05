@@ -153,21 +153,16 @@ export interface ParseOptions {
    * NOT.** A `DicomParseWarning.message` is a frozen registry string with only
    * structural tokens filled in, so it is safe to log whole; the
    * `DicomParseError` this option raises in its place also carries `snippet`,
-   * **16 raw bytes of the file at the warning's own offset, unredacted** (D-10).
-   * Which element those bytes belong to is per code, and **the two codes that
-   * report a lost value answer it differently**:
-   * `DICOM_DUPLICATE_FILE_META_ELEMENT`'s offset is the **dropped** element's
-   * header, so its snippet renders the first bytes of the value the message
-   * deliberately withholds (measured: a `(0002,0016)` Source AE Title of
-   * `AE-SMITHSON` renders as `41 45 2d 53 4d 49 54 48`, `AE-SMITH`);
-   * `DICOM_DUPLICATE_TAG_IN_DATA_SET`'s offset is the **surviving** element's
-   * header, so its snippet renders the survivor's bytes and the dropped value
-   * never appears in it (measured: two `(0010,0020)` values `DROPPED-SMITHSON`
-   * then `SURVIVOR-JONESXX` give `SURVIVOR`). Both are document content and
-   * neither is redacted; only the first exposes what its own message withholds.
+   * **16 raw bytes of the file, unredacted** (D-10), read at the warning's own
+   * `byteOffset`. **Which element those bytes belong to is not contracted**:
+   * that offset is file-absolute at the root and relative to the enclosing
+   * slice inside a defined-length Sequence Item, while the snippet is always
+   * read from the whole file, so it can be an unrelated element's value. Do not
+   * reason from a code's message to what its snippet holds - **measure it, and
+   * treat every one of them as document content.**
    *
-   * That is the documented design of `snippet` rather than a defect in these
-   * codes, and turning this option on does not change what any of them means -
+   * That is the documented design of `snippet` rather than a defect in any one
+   * code, and turning this option on does not change what any of them means -
    * but a message-only PHI review of the lenient path does not transfer to the
    * strict one. Log `err.code`, `err.byteOffset` and `err.message`; treat
    * `err.snippet` as PHI.

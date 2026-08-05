@@ -47,7 +47,7 @@ then the two gates.
   over-long caller value through the same measurement and finds it. Options are emitted in
   `DEIDENTIFY_OPTIONS` order rather than the caller's, so the same set always writes the same bytes.
 - **THE FIXED POINT WAS RE-MEASURED, NOT ASSUMED**: six real `parse -> deidentify -> serialize ->
-  parse` round trips, **62** bytes flat by default and **248** flat with all nine, on RAW bytes and
+parse` round trips, **62** bytes flat by default and **248** flat with all nine, on RAW bytes and
   never through `methodOf()`.
 - **THE SECOND REPLACEMENT SHAPE IS DISCLOSED NOW: `DICOM_DEIDENT_METHOD_NOT_LO`.** A `(0012,0063)`
   a file encoded under any other VR is still **replaced** - the join concatenates `LO` values with
@@ -67,39 +67,52 @@ then the two gates.
 - **🛑 `{ strict: true }` RENDERS SOURCE BYTES THE WARNING WITHHOLDS, AND THE BLOCK CLAIMING
   OTHERWISE READ ONLY `warning.message`.** `PRE-EXISTING`; the claim was corrected and the behaviour
   pinned rather than the guard widened. The escalation raises a `DicomParseError` whose `snippet` is
-  16 raw source bytes at the warning's own offset (D-10). **THE TWO CODES THAT REPORT A LOST VALUE
-  PLACE THAT OFFSET DIFFERENTLY, AND A GRADED PASS REFUTED THE FIRST DRAFT FOR SAYING THEY AGREE.**
-  `DICOM_DUPLICATE_FILE_META_ELEMENT`'s offset is the **dropped** element's header, so its snippet
-  renders the value its own message withholds: a `(0002,0016)` Source AE Title of `AE-SMITHSON`
+  16 raw source bytes read **from the file** at the warning's own `byteOffset` (D-10), while
+  `err.message` stays the frozen registry string. Measured on
+  `DICOM_DUPLICATE_FILE_META_ELEMENT` **only**, because that group is never nested and its offset is
+  therefore unambiguously the dropped copy's header: a `(0002,0016)` Source AE Title of `AE-SMITHSON`
   returns `02 00 16 00 41 45 0c 00 41 45 2d 53 4d 49 54 48`, five letters of the surname.
-  `DICOM_DUPLICATE_TAG_IN_DATA_SET`'s offset is the **surviving** element's header
-  (`data-set-map.ts` passes the replacing element's `byteOffset`, and its own factory JSDoc says so),
-  so two `(0010,0020)` values `DROPPED-SMITHSON` then `SURVIVOR-JONESXX` return
-  `10 00 20 00 4c 4f 10 00 53 55 52 56 49 56 4f 52` and the dropped value never appears. Both are
-  document content and neither is redacted; only the File Meta one exposes what its message
-  withholds. `file-meta-duplicate.test.ts`'s block titled **"the diagnostic is not itself a PHI
-  surface"** asserted the clean half over `warning.message` and nothing else; it is now titled
-  **"the warning MESSAGE is not itself a PHI surface"**, with a residual block beside it, and
-  `tag-collision.test.ts` carries the matching block for the other code. Both pin the snippet **byte
-  for byte** (a substring assertion is what `#70`'s third pass refused). Redacting `snippet` would be
-  a decision about every Tier-3 fatal in the library and belongs with `DICOM-FATAL-MESSAGE-REGISTRY`,
-  not here.
-- **BASE-RED, RE-RUN AFTER THE LAST TEST WAS ADDED, `src/` REPLACED AND NOT OVERLAID
-  (`rm -rf src` first): 18 of 133, in 3 files of 5, on `da1f209`.**
-  `deident-method-lo-length.test.ts` 16 of 24 · `deident-method-add.test.ts` 1 of 29 ·
-  `phi-diagnostic-surface.test.ts` 1 of 50 · **`file-meta-duplicate.test.ts` 0 of 14 and
-  `tag-collision.test.ts` 0 of 16, deliberately** - both strict-snippet blocks pin `PRE-EXISTING`
-  behaviour, so a red in either would mean the slice had changed something it says it did not.
-  **The pass-1 remedy moved this figure** (it read 16 of 115 in 3 of 4 before the two residual rows
-  and the second snippet pin were added), which is the rule this lineage wrote three times: re-run
-  it after every test you add **or strengthen**, never carry it forward.
+  `file-meta-duplicate.test.ts`'s block titled **"the diagnostic is not itself a PHI surface"**
+  asserted the clean half over `warning.message` and nothing else; it is now titled **"the warning
+  MESSAGE is not itself a PHI surface"**, with a residual block beside it that pins the snippet
+  **byte for byte** (a substring assertion is what `#70`'s third pass refused). Redacting `snippet`
+  would be a decision about every Tier-3 fatal in the library and belongs with
+  `DICOM-FATAL-MESSAGE-REGISTRY`, not here.
+- **🛑 AND THE PER-CODE VERSION OF THAT DISCLOSURE IS DELETED RATHER THAN REWORDED A FOURTH TIME.**
+  Draft 1 said both duplicate codes point their snippet at the **dropped** element; pass 1 refuted it
+  (`data-set-map.ts` passes the **replacing** element's offset). Draft 2 said
+  `DICOM_DUPLICATE_TAG_IN_DATA_SET` therefore renders the **survivor** and the dropped value never
+  appears; **pass 2 refuted that too, and the counter-example was already in this repo**: the
+  snippet is read from the WHOLE FILE at an offset that is **item-relative** inside a defined-length
+  Sequence Item, so an in-Item collision returned a complete, unrelated root `(0010,0010)` Patient
+  Name. `tag-collision.test.ts`'s own **"the byte offset is NOT a key"** row proves the frame
+  disagreement twelve lines from where draft 2's block was added. So the rule this repo already
+  carries applied twice over - **re-wording a disclosure twice is the signal to DELETE it**, and
+  **measure a byte offset's frame rather than describing it** - and what is left in every artifact is
+  the one statement that survives every frame: **which element a snippet's bytes belong to is NOT
+  CONTRACTED; treat every snippet as document content.** The behaviour behind it is `PRE-EXISTING`,
+  byte-identical on `da1f209`, and is a backlog line beside `DICOM-FATAL-MESSAGE-REGISTRY` and the
+  un-populated `position.contextPath`.
+- **BASE-RED, RE-RUN AFTER EVERY TEST CHANGE, `src/` REPLACED AND NOT OVERLAID (`rm -rf src`
+  first): 18 of 117, in 3 files of 4, on `da1f209`.** `deident-method-lo-length.test.ts` 16 of 24 ·
+  `deident-method-add.test.ts` 1 of 29 · `phi-diagnostic-surface.test.ts` 1 of 50 ·
+  **`file-meta-duplicate.test.ts` 0 of 14, deliberately** - its strict-snippet block pins
+  `PRE-EXISTING` behaviour, so a red there would mean the slice had changed something it says it did
+  not. **This figure moved twice inside the slice** (16 of 115 in 3 of 4 as first measured, then 18 of
+  133 in 3 of 5 when the pass-1 remedy added two rows and a fifth file, then back to four files when
+  pass 2 refuted the claim that fifth file existed to ground). That is the rule this lineage wrote
+  three times, earned a fourth time here: **re-run it after every test you add, strengthen OR
+  DELETE**, and never carry one forward.
 - **TWO COSTS, DISCLOSED AND PINNED RATHER THAN FIXED.** A caller `deidentificationMethod` longer
   than 64 characters, and a prior value the **source file** wrote longer than it, are both written
   through undisclosed: splitting or truncating either would invent a de-identification record nobody
   made. Both have residual tests, so closing either turns a test red.
 - **🛑 "A SENDER'S NON-CONFORMANT `LO` IS THE SENDER'S" WAS REFUTED, AND THE SENDER IS US.** Every
-  object `0.0.3` through `0.0.11` de-identified **without a caller-supplied method** carries the
-  76-character value, so the over-long prior that rule waves away is, in the common case, this
+  object de-identified **without a caller-supplied method** by **any published release** carries the
+  76-character value - measured in the `0.0.1` and `0.0.11` tarballs, and **pass 2 refuted the
+  `0.0.3`-onward range a first draft wrote**: `0.0.1` is on the registry and has it, while `0.0.2`
+  and `0.0.9` were never published at all. So the over-long prior that rule waves away is, in the
+  common case, this
   library's own earlier output. Re-de-identifying one **keeps it**: measured flat at **138** bytes
   over four passes, values of **76** and **61**, `DICOM_DEIDENT_METHOD_PRIOR_RETAINED` raised for the
   retention and **nothing said about the length**. Keeping it is still correct - E.1.1 says "added
