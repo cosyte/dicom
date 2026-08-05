@@ -6,6 +6,62 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Fixed
 
+- **🩺 A private `SQ` a `Profile` vouched for under `RetainSafePrivate` was written into
+  de-identified output verbatim, so nothing inside it was ever examined for PHI**
+  (`DICOM-PRIVATE-SQ-CARVE-OUT`). `PRE-EXISTING`, live through the published `0.0.10`, found by
+  `#66`'s `conformance-refuter`. `keepsPrivate` decides retention before the descent, and that part
+  was never wrong; what was wrong is that a "yes, retain" routed the element to `keepOrEmpty`, **the
+  only path in the module that writes a source value into output unchanged**. So a vendor sequence
+  the profile named was blitted whole: Table E.1-1 attributes the vendor encoded in its items, UIDs
+  inside it, and any private element the file's own length fields pulled into it all survived, with
+  `report.removedPrivateTags` reading `[]` and the object stamped `(0012,0062) Patient Identity
+Removed = YES`.
+
+  **The sharper half needs no malformed file at all.** On a fully conformant file, with `ds.warnings`
+  empty, a `(0010,0010)` Patient's Name written inside a vouched-for private `SQ` was copied straight
+  through. That case is now pinned with a name-bearing payload and non-vacuity assertions, alongside
+  the absorb shape the original residual held.
+
+  **What bounds the profile's licence is the spec, not a judgement call here.** PS3.15 2026c §E.3.10
+  retains "Private Attributes that are known by the de-identifier to be safe from identity leakage".
+  A profile entry is knowledge about **one Private Attribute**. It is not knowledge about a Data Set
+  nested inside that attribute's value, and PS3.5 2026c §7.5.1 makes an Item Value exactly that ("a
+  DICOM Data Set composed of Data Elements"). PS3.15 2026c §E.1.1 then obliges an implementation
+  claiming the Basic Profile to protect Table E.1-1 attributes "whether contained in the top level
+  Data Set or embedded in an Item of a Sequence of Items", and a private carrier is one of those
+  Sequences. A vendor cannot vouch for `(0010,0010)`; it is not a Private Attribute.
+
+  **The remedy widens no guard.** `keepsPrivate` still decides retention and the profile is still the
+  only vouching authority. A vouched-for private `SQ` is simply routed into the two branches every
+  other `SQ` in the module already takes: `descendSequence` when its items exist,
+  `emptyUnauditableSequence` (with `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` and
+  `report.unauditableSequences`) when the parser never materialized them. A non-`SQ` private element
+  is untouched. **No new public surface**: no Tier-2 code, no report field, no snapshot change.
+
+  **The price, measured and pinned.** Walking the carrier means PS3.5 2026c §7.8.1's per-Data-Set
+  reservation scope applies inside it, and Items do not inherit the enclosing Data Set's
+  reservations. A vendor who nests a private element in a private `SQ` and reserves its block only at
+  the **root** loses it, named on `report.removedPrivateTags` rather than dropped silently. A vendor
+  who writes the Private Creator **inside the Item**, as §7.8.1 requires, keeps it. Both rows are
+  pinned as a pair.
+
+  **No reading changes, and the grid cannot see this remedy.** `scripts/measure-sq-bound-grid.ts`
+  builds its `priv|` family's private data element as `LO` behind a public `(0008,1115)` carrier, so
+  it holds **no private-`SQ` cell**. Against base `495c9fc` over **83,037 cells**: 0 cells differing
+  in any parse respect, 0 whose reading differs, 0 changed, 0 PHI regressions, 0 de-identified
+  outputs lost a marker, and every `priv:` counter identical. Read that as evidence of blast radius,
+  never as a safety measurement. The regression net is the unit tests: against base `src/` at
+  `495c9fc`, **4 of the 56** tests across
+  `test/integration/deident-private-reservation.test.ts` and
+  `test/integration/deident-unauditable-sequence.test.ts` run red, and they are exactly the four
+  tests for this item. The two residuals that asserted the leaking behaviour were rewritten to
+  assert the closure, which is what those pins existed for.
+
+  **Still open, and untouched here:** the undefined-length `UN` whose CP-246 descent was refused
+  (it keeps `vr === "UN"`, so the rule cannot reach it without emptying every unknown-VR element in
+  every file), and the 11 leaf-carrier cells of `DICOM-BINARY-CARRIER-OVERDECLARE` (11 to 11 on the
+  grid, with the conformant tiling-control counter unmoved at 7 to 7).
+
 - **🩺 The `(0012,0063)` De-identification Method this library writes for itself exceeded the 64-character
   maximum PS3.5 gives an `LO` Value, on every file it ever de-identified**
   (`DICOM-LO-LENGTH-AND-SILENT-REPLACE`). `PRE-EXISTING`; measured through the built package on

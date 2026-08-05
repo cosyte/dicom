@@ -52,10 +52,12 @@
  * *under*-declares pushing its trailing elements out into the enclosing Data
  * Set, which `#66` did not narrow - is now closed by `settledBound`, and those two
  * residuals were rewritten to assert the closure. The
- * **private-`SQ` carve-out** (`keepsPrivate` decides before the descent, so a
- * vouched-for private `SQ` is kept verbatim and never walked) is **untouched and
- * still leaks**, pinned at the bottom of this file. Read the headline as "the
- * absorb and eject directions are closed", never as "the class is closed".
+ * **private-`SQ` carve-out** (`keepsPrivate` decided before the descent, so a
+ * vouched-for private `SQ` was kept verbatim and never walked) is closed too, by
+ * `DICOM-PRIVATE-SQ-CARVE-OUT`, and its residual at the bottom of this file was
+ * rewritten the same way. Read the headline as "these three routes are closed",
+ * never as "the class is closed" - `CLAUDE.md`'s residual list is the census,
+ * and the undefined-length `UN` whose CP-246 descent was refused is still on it.
  *
  * The eject remedy is a **positional** cut inside each Data Set, at every depth:
  * everything a Data Set holds after the first sequence whose own contents
@@ -77,7 +79,7 @@
  * and `creator at the root`) and both are refused, as is the **eject** placement
  * since `DICOM-ITEM-EJECT-ROUTE`. **That is still not "the ambiguity is safe in
  * one direction"** - each direction was closed by its own measured remedy, and
- * the private-`SQ` carve-out shows the class is not closed by either.
+ * the private-`SQ` carve-out needed a third one on top of both.
  *
  * ## The price, and it is measured
  *
@@ -780,11 +782,15 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       // the sequence, so the whole-Data-Set variant measures identically there
       // and differs on exactly 5 tests over the full suite: the mirror control
       // named above ("a root reservation the sender wrote at the root survives
-      // an over-running sequence"), both collision rows, and both private-SQ
-      // carve-out residuals (the second in
+      // an over-running sequence"), both collision rows, and both private-`SQ`
+      // carve-out tests (the second in
       // `deident-unauditable-sequence.test.ts`, which belongs to a different
       // item). NOT this test, which passes under that variant. Count it over the
       // suite, never over this file.
+      // Re-measured on this tree after `DICOM-PRIVATE-SQ-CARVE-OUT` rewrote two
+      // of those five from asserting the leak to asserting the closure: still
+      // exactly 5, and still the same five. The figure is quoted per-sha because
+      // its base moves - it was taken again rather than reworded.
       const build = (itemDelta: number): Buffer =>
         buildDicom({
           transferSyntax: EXPLICIT_LE,
@@ -808,21 +814,34 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
   });
 
   /**
-   * The route this slice does NOT close, pinned as a residual rather than
-   * asserted away. It is `PRE-EXISTING`, reproduces identically on `164eb39`,
-   * and puts a private value into output stamped `PatientIdentityRemoved = YES`
-   * with `report.removedPrivateTags: []`.
+   * `DICOM-PRIVATE-SQ-CARVE-OUT`, closed. These two tests asserted the
+   * **leaking** behaviour until this slice; they assert the closure now, and the
+   * rewrite is the argument, not a flip.
    *
-   * This test asserts the CURRENT, LEAKING behaviour on purpose. When it is
-   * fixed it goes red, which is the point: a residual nobody can see is how the
-   * defect this file exists for survived three refuter passes.
+   * What was live on `0.0.10`: `keepsPrivate` decided before the descent, so a
+   * private `SQ` a {@link profiles} entry vouched for was handed to
+   * `keepOrEmpty` and written into output **verbatim**. Nothing inside it was
+   * ever examined - not the private elements the file's own length fields pulled
+   * into its items, and not the plain Table E.1-1 attributes the vendor encoded
+   * there. `report.removedPrivateTags` read `[]` and `(0012,0062)` read `YES`
+   * over both.
+   *
+   * The remedy is not a widened guard: `keepsPrivate` still decides retention and
+   * the profile is still the only vouching authority. A vouched-for private `SQ`
+   * is simply routed through the two branches every other `SQ` in the module
+   * already takes. PS3.15 2026c §E.3.10 licenses retention for "Private
+   * Attributes that are known by the de-identifier to be safe from identity
+   * leakage" - one private attribute, not the Data Sets nested in its value - and
+   * PS3.15 2026c §E.1.1 obliges protecting Table E.1-1 attributes "whether
+   * contained in the top level Data Set or embedded in an Item of a Sequence of
+   * Items", which a private carrier is.
    */
-  describe("still leaking, measured, and its own item", () => {
-    it("RESIDUAL - a private SQ the profile vouches for is kept verbatim, so the descent never runs", () => {
-      // `keepsPrivate` decides before `descendSequence`, so `reservationsUsable`
-      // is never carried into this carrier's items. Exactly the carve-out `#54`
-      // was refused for asserting away, and it is why the "every private element
-      // in such an Item is removed" sentence is qualified everywhere it appears.
+  describe("DICOM-PRIVATE-SQ-CARVE-OUT: the descent runs inside a vouched-for private SQ", () => {
+    it("a private element the file pulls INTO a vouched-for private SQ is refused there", () => {
+      // `keepsPrivate` decides before `descendSequence` and used to end the
+      // matter; `reservationsUsable` is now carried into this carrier's items,
+      // so the "every private element in such an Item is removed" sentence no
+      // longer needs the qualification it carried everywhere it appeared.
       const build = (itemDelta: number): Buffer =>
         buildDicom({
           transferSyntax: EXPLICIT_LE,
@@ -830,36 +849,151 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
             nameEl,
             creatorEl,
             // (0009,1001) is `LO FullFidelity` in profiles.ge, so the profile
-            // vouches for this carrier and it is kept whole.
+            // vouches for this carrier. It is still retained - what changed is
+            // that its items are walked rather than blitted.
             { tag: PRIVATE_TAG, items: [{ declaredLengthDelta: itemDelta, elements: [sopEl] }] },
             // A different group, with no creator reserving block 0x11 anywhere.
             { tag: "00291101", vr: "LO", value: ascii(SECRET) },
           ] as never,
         });
 
-      // Control: with no length lie the orphan private element is removed.
+      // Control: with no length lie the orphan private element is removed at the
+      // root, and this row was green before the slice too. It is here to keep the
+      // pair honest - a lying fixture with no honest twin proves nothing about
+      // which input the code is reacting to.
       const honest = run(build(0));
       expect(honest.removedPrivateTags).toEqual(["00291101"]);
       expect(honest.secretInOutput).toBe(false);
       expect(honest.parseWarnings).toEqual([]);
 
-      // Residual: the over-run pulls it inside the vouched-for carrier, which is
-      // blitted verbatim.
+      // Closed: the over-run pulls it inside the vouched-for carrier, and the
+      // descent refuses it there. `removedPrivateTags` names it from inside the
+      // Item rather than reading `[]`, so the attestation is earned.
       const lying = run(build(wireSize(SECRET)));
-      expect(lying.removedPrivateTags).toEqual([]);
-      expect(lying.secretInOutput).toBe(true);
+      expect(lying.removedPrivateTags).toEqual(["00291101"]);
+      expect(lying.secretInOutput).toBe(false);
       expect(lying.identityRemoved).toBe("YES");
 
-      // 🛑 PIN THE WARNING CHANNEL, AND THIS ASSERTION IS WHY THE ROW ABOVE IT
-      // EXISTS. This test asserted the leak and never the warnings, so a
-      // troubleshooting sentence calling this shape "silent" went unchecked and
-      // shipped. It is NOT silent: this fixture is an Explicit VR LE
-      // defined-length `SQ` whose item over-declares with a trailing root
-      // element, which is exactly `DICOM_ITEM_CROSSES_SEQUENCE_END`'s trigger.
-      // Read it with the three lines above: a warning fires AND the object is
-      // stamped `PatientIdentityRemoved=YES` while still carrying the private
-      // value, so the warning is the only signal and is not an all-clear.
+      // 🛑 PIN THE WARNING CHANNEL ON BOTH ROWS, AND THIS ASSERTION IS WHY THE
+      // PAIR EXISTS. The predecessor asserted the leak and never the warnings, so
+      // a troubleshooting sentence calling this shape "silent" went unchecked and
+      // shipped. It is NOT silent, and it is not silent now either: an Explicit VR
+      // LE defined-length `SQ` whose item over-declares with a trailing root
+      // element is exactly `DICOM_ITEM_CROSSES_SEQUENCE_END`'s trigger. The
+      // warning is unchanged by this slice - nothing here touches a reading - so
+      // it is still the parse-side signal, and the de-identify side no longer
+      // contradicts it.
       expect(lying.parseWarnings).toEqual(["DICOM_ITEM_CROSSES_SEQUENCE_END"]);
+    });
+
+    it("🩺 a NAME the vendor encoded inside a vouched-for private SQ is de-identified, on a CONFORMANT file", () => {
+      // The half of this defect that needs no length lie at all, and the sharper
+      // half: PS3.15 §E.1.1 obliges protecting Table E.1-1 attributes "embedded
+      // in an Item of a Sequence of Items", and a private carrier is one. On
+      // `0.0.10` this file parsed clean, warned nothing, and wrote the patient's
+      // name into de-identified output under `PatientIdentityRemoved = YES`.
+      //
+      // Name-bearing on purpose. A payload with no name cannot fail this
+      // assertion for the reason it claims to, and this repo has shipped two PHI
+      // pins that were vacuous by fixture.
+      const NESTED_NAME = "BOND^JAMES";
+      const buf = buildDicom({
+        transferSyntax: EXPLICIT_LE,
+        elements: [
+          nameEl,
+          creatorEl,
+          {
+            tag: PRIVATE_TAG,
+            items: [
+              {
+                elements: [
+                  sopEl,
+                  { tag: "00100010", vr: "PN", value: ascii(NESTED_NAME) },
+                  { tag: "00100020", vr: "LO", value: ascii("MRN-11111") },
+                ],
+              },
+            ],
+          },
+        ] as never,
+      });
+
+      // Non-vacuity, first: the name really is in the file, really is inside the
+      // sequence's item, and the file really is conformant. Without these three
+      // the assertions below could pass on a fixture that never posed the
+      // question.
+      const ds = parseDicom(buf);
+      expect(ds.warnings).toEqual([]);
+      expect(serializeDicom(ds).toString("latin1")).toContain(NESTED_NAME);
+      expect(
+        ds
+          .get(PRIVATE_TAG)
+          ?.items?.[0]?.elements()
+          .map((el) => el.tag),
+      ).toEqual(["00080018", "00100010", "00100020"]);
+
+      const { dataset, report } = deidentify(ds, GE_RETAIN);
+      const bytes = serializeDicom(dataset).toString("latin1");
+      expect(bytes).not.toContain(NESTED_NAME);
+      expect(bytes).not.toContain("MRN-11111");
+      expect(dataset.get("00120062")?.rawBytes.toString("latin1").trimEnd()).toBe("YES");
+
+      // The carrier is still RETAINED - the profile's vouching is untouched, and
+      // a remedy that dropped the whole private element would be a different,
+      // over-removing change. It is the contents that were acted on, and the
+      // audit says so with the nested `contextPath`.
+      expect(dataset.get(PRIVATE_TAG)?.vr).toBe("SQ");
+      expect(dataset.get(PRIVATE_TAG)?.items).toHaveLength(1);
+      expect(
+        report.attributes
+          .filter((a) => a.contextPath?.[0] === `${PRIVATE_TAG}[0]`)
+          .map((a) => [a.tag, a.applied]),
+      ).toEqual([
+        ["00080018", "uid-remapped"],
+        ["00100010", "emptied"],
+        ["00100020", "emptied"],
+      ]);
+      expect(report.removedPrivateTags).toEqual([]);
+    });
+
+    it("THE PRICE, pinned: a nested private block reserved INSIDE the item survives, one reserved only OUTSIDE does not", () => {
+      // 🩺 THE COST OF THIS SLICE. Walking the carrier means PS3.5 §7.8.1's
+      // per-Data-Set reservation scope now applies inside it, and items do not
+      // inherit the enclosing Data Set's reservations. So a vendor who nests a
+      // private element inside a private `SQ` and reserves its block only at the
+      // root loses it. That is the standard's rule and not a choice made here,
+      // but it is over-removal against what `0.0.10` did, it is named on
+      // `report.removedPrivateTags` rather than dropped silently, and it is
+      // pinned so the next slice cannot rediscover it as a surprise.
+      const build = (reserveInsideItem: boolean): Buffer =>
+        buildDicom({
+          transferSyntax: EXPLICIT_LE,
+          elements: [
+            nameEl,
+            creatorEl,
+            {
+              tag: PRIVATE_TAG,
+              items: [
+                {
+                  elements: reserveInsideItem
+                    ? [creatorEl, { tag: "00091002", vr: "SH", value: ascii(SECRET) }]
+                    : [{ tag: "00091002", vr: "SH", value: ascii(SECRET) }],
+                },
+              ],
+            },
+          ] as never,
+        });
+
+      // §7.8.1-conformant: the Item carries its own Private Creator, so the
+      // reservation is real inside the Item and the value is retained. This row
+      // is what stops the remedy from being "empty every private sequence".
+      const conformant = run(build(true));
+      expect(conformant.removedPrivateTags).toEqual([]);
+      expect(conformant.secretInOutput).toBe(true);
+
+      // Reserved only at the root: the Item never had that block, so it goes.
+      const inherited = run(build(false));
+      expect(inherited.removedPrivateTags).toEqual(["00091002"]);
+      expect(inherited.secretInOutput).toBe(false);
     });
   });
 

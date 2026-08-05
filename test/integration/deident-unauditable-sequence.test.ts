@@ -348,15 +348,27 @@ describe("DICOM-DEIDENT-RAWBYTES-PASSTHROUGH: the no-loss controls", () => {
   });
 });
 
-describe("DICOM-DEIDENT-RAWBYTES-PASSTHROUGH: what the rule does NOT reach", () => {
-  it("a private SQ vouched for by RetainSafePrivate is kept verbatim, and still leaks", () => {
-    // `keepsPrivate` decides before this rule is consulted, so a profile that
-    // names the element by creator and tag keeps its bytes unaudited. That is
-    // the pre-existing, deliberate `RetainSafePrivate` posture (the profile is
-    // the vouching authority, and no content test can second-guess it), but it
-    // means the surrounding claims must not say "an SQ with no items is
-    // emptied" without the carve-out. Pinned here so the claim and the code
-    // cannot drift apart again.
+describe("DICOM-PRIVATE-SQ-CARVE-OUT: the rule reaches a vouched-for private SQ too", () => {
+  it("🩺 a private SQ vouched for by RetainSafePrivate is emptied when its items cannot be walked", () => {
+    // This test asserted the LEAK until `DICOM-PRIVATE-SQ-CARVE-OUT`. On
+    // `0.0.10` `keepsPrivate` decided before this rule was consulted, so a
+    // profile naming the element by creator and tag kept its bytes unaudited,
+    // `report.unauditableSequences` read `[]`, and the payload went into
+    // de-identified output whole.
+    //
+    // The vouching is still the profile's to give, and this slice does not
+    // second-guess it with a content test. What it withdraws is the *implication*
+    // that vouching for a private attribute also vouches for whatever Data Set
+    // the sender encoded inside it. PS3.15 2026c §E.3.10's licence is for
+    // "Private Attributes that are known by the de-identifier to be safe from
+    // identity leakage" - and when the parser could not materialize the items,
+    // nothing inside is known at all, which is exactly the condition
+    // `emptyUnauditableSequence` exists for.
+    //
+    // Name-bearing payload on purpose: `ID-000123` alone would let this pass for
+    // the wrong reason, and a vacuous-by-fixture PHI pin is this repo's
+    // recurring failure.
+    const NESTED_NAME = "DOE^JANE";
     const profile = defineProfile({
       name: "acme-test",
       description: "Synthetic vendor block whose private element is an SQ.",
@@ -375,23 +387,43 @@ describe("DICOM-DEIDENT-RAWBYTES-PASSTHROUGH: what the rule does NOT reach", () 
         {
           tag: "00091001",
           vr: "UN",
-          value: Buffer.concat([Buffer.from("JUNK", "ascii"), ascii(PATIENT_ID)]),
+          value: Buffer.concat([
+            Buffer.from("JUNK", "ascii"),
+            ascii(NESTED_NAME),
+            ascii(PATIENT_ID),
+          ]),
         },
       ] as never as Elements,
     });
     const ds = parseDicom(buf, { profile });
     expect(ds.get("00091001")?.vr).toBe("SQ");
     expect(ds.get("00091001")?.items).toBeUndefined();
+    // Non-vacuity: both markers really are on the wire before de-identification.
+    const before = serializeDicom(ds).toString("latin1");
+    expect(before).toContain(NESTED_NAME);
+    expect(before).toContain(PATIENT_ID);
 
     const { dataset, report } = deidentify(ds, { retain: ["RetainSafePrivate"], profile });
-    // The carve-out, stated as an assertion: no finding, and the bytes survive.
-    expect(report.unauditableSequences).toEqual([]);
-    expect(serializeDicom(dataset).toString("latin1")).toContain(PATIENT_ID);
+    // Closed: the finding is raised and the bytes are gone.
+    expect(report.unauditableSequences.map((s) => s.tag)).toEqual(["00091001"]);
+    const after = serializeDicom(dataset).toString("latin1");
+    expect(after).not.toContain(NESTED_NAME);
+    expect(after).not.toContain(PATIENT_ID);
+    // 🛑 PIN THE WARNING CHANNEL. The predecessor asserted only the bytes, and
+    // "it is silent" claims about this family have shipped unchecked twice. The
+    // de-identify channel says why, on both the report and the warning list.
+    expect(report.warnings.map((w) => w.code)).toContain("DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE");
+    // The attribute keeps existing as a zero-item `SQ` - emptied, not removed -
+    // so a consumer diffing tags does not read this as the element vanishing.
+    expect(dataset.get("00091001")?.vr).toBe("SQ");
+    expect(dataset.get("00091001")?.items).toEqual([]);
 
     // ...and without the vouching option the same element is removed as a
-    // private attribute, which is what makes the exemption the profile's doing.
+    // private attribute. Both routes now drop the payload, by different rules:
+    // `removedPrivateTags` there, `unauditableSequences` here.
     const plain = deidentify(parseDicom(buf, { profile }));
-    expect(serializeDicom(plain.dataset).toString("latin1")).not.toContain(PATIENT_ID);
+    expect(plain.report.removedPrivateTags).toContain("00091001");
+    expect(serializeDicom(plain.dataset).toString("latin1")).not.toContain(NESTED_NAME);
   });
 });
 
