@@ -439,8 +439,14 @@ export interface DeidentifyOptions {
    */
   readonly profile?: Profile;
   /**
-   * Text written to `(0012,0063)` De-identification Method. Default names the
+   * Text **added to** `(0012,0063)` De-identification Method. Default names the
    * Basic Profile and the active options.
+   *
+   * PS3.15 E.1.1 says this string is "inserted in or added to" the attribute, so
+   * a value the incoming Data Set already carried is kept and this one is
+   * appended after a `\` as a further value of the `1-n` attribute - the
+   * provenance chain, not a replacement. A value that already records this exact
+   * text is left alone, so repeated de-identification does not grow it.
    */
   readonly deidentificationMethod?: string;
 }

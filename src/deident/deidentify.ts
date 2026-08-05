@@ -27,8 +27,10 @@
  *   {@link Profile}, keeps the private data elements the profile's overlay names
  *   as safe (and the private-creator elements the profile recognizes).
  * - Remaps `(0002,0003)` Media Storage SOP Instance UID consistently (unless
- *   `RetainUIDs`), writes `(0012,0062)` Patient Identity Removed = `YES` and
- *   `(0012,0063)` De-identification Method, and warns
+ *   `RetainUIDs`), writes `(0012,0062)` Patient Identity Removed = `YES`, **adds**
+ *   its method text to `(0012,0063)` De-identification Method rather than
+ *   replacing what the file already recorded there (PS3.15 E.1.1 - see
+ *   `addDeidentificationMethod`), and warns
  *   (`DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED`) when Pixel Data is present and not
  *   marked free of burned-in annotation - this metadata-only pass cannot clean
  *   pixels (deferred to `@cosyte/dicom-pixel`).
@@ -1189,6 +1191,77 @@ function defaultMethod(active: ReadonlySet<DeidentifyOption>): string {
   return active.size === 0 ? base : `${base} + ${[...active].join(", ")}`;
 }
 
+/** The DICOM value delimiter, `\` (5CH), for a multi-valued string VR. */
+const VALUE_DELIMITER = 0x5c;
+
+/**
+ * Build the `(0012,0063)` De-identification Method value: `method` **added to**
+ * whatever the incoming Data Set already recorded there, never replacing it.
+ *
+ * PS3.15 2026c E.1.1 "De-identifier", read from the SHA-pinned
+ * `vendor/nema/part15/` and occurring exactly once in that document: "a text
+ * string describing the method used shall be **inserted in or added to**
+ * De-identification Method (0012,0063)". Replacing it is neither of those. It
+ * destroyed the record of every de-identification the file had already been
+ * through - the provenance chain that attribute exists to carry - and it did so
+ * silently, on a file whose prior pass may have been the one a recipient was
+ * relying on.
+ *
+ * The neighbouring obligation in the same paragraph is worded differently on
+ * purpose and is left alone: `(0012,0062)` Patient Identity Removed "shall be
+ * **replaced or added to** the Data Set with a value of YES". It is a CS of VM 1
+ * whose only conformant value here is YES, so `deidentify` still replaces it.
+ * The asymmetry is the standard's, not a judgement call.
+ *
+ * `(0012,0063)` is **not in Table E.1-1**, so the Basic Profile never acted on
+ * it and the incoming value reaches this point untouched: the replacement was
+ * the only thing removing it, and removing it was an action no profile asked
+ * for. **Disclosed rather than glossed:** de-identified output now carries the
+ * source file's own method text. That is the retained-by-omission posture every
+ * other unlisted attribute already has, and a sender who put a name in
+ * `(0012,0063)` is now no worse served than one who put it in any other unlisted
+ * attribute.
+ *
+ * Three shapes, each pinned by a test:
+ *
+ *  - **No usable prior value** (absent, empty, or padding only) - the method is
+ *    the whole value, exactly as before this change.
+ *  - **A prior value** - the method is appended as a further value of this
+ *    `1-n` attribute, after a `\`. The prior bytes are copied through verbatim,
+ *    so a value encoded under a `(0008,0005)` repertoire survives byte for byte;
+ *    only the even-length pad and any trailing NUL are trimmed before the join.
+ *  - **A prior value that already records this exact method** - appended again
+ *    it would record nothing, and repeated application would grow the attribute
+ *    without bound, so it is left as it is. `deidentify(deidentify(ds))` is
+ *    therefore fixed after one pass.
+ *
+ * Two bounds worth stating. The VR must be `LO`; a `(0012,0063)` a file encoded
+ * as something else is not a De-identification Method this can concatenate into,
+ * so that case still replaces. And the delimiter split used for the
+ * already-recorded test is a comparison only - a repertoire where 5CH is not the
+ * delimiter can at worst make it append a value it could have skipped, which
+ * loses nothing.
+ */
+function addDeidentificationMethod(existing: Element | undefined, method: string): Buffer {
+  const added = Buffer.from(method, "latin1");
+  if (existing === undefined || existing.vr !== "LO") return added;
+  let end = existing.rawBytes.length;
+  while (end > 0) {
+    const last = existing.rawBytes[end - 1];
+    if (last === 0x20 || last === 0x00) end--;
+    else break;
+  }
+  const kept = Buffer.from(existing.rawBytes.subarray(0, end));
+  if (kept.length === 0) return added;
+  let start = 0;
+  for (let i = 0; i <= kept.length; i++) {
+    if (i !== kept.length && kept[i] !== VALUE_DELIMITER) continue;
+    if (kept.subarray(start, i).equals(added)) return kept;
+    start = i + 1;
+  }
+  return Buffer.concat([kept, Buffer.from([VALUE_DELIMITER]), added]);
+}
+
 /** True when Pixel Data is present and not affirmatively marked free of burned-in text. */
 function hasUncleanedBurnedIn(ds: Dataset): boolean {
   if (!ds.has(TAG_PIXEL_DATA)) return false;
@@ -1264,7 +1337,12 @@ export function deidentify(
   const method = options.deidentificationMethod ?? defaultMethod(active);
   elements.set(
     TAG_DEIDENTIFICATION_METHOD,
-    insertedScalar(TAG_DEIDENTIFICATION_METHOD, "LO", Buffer.from(method, "latin1"), littleEndian),
+    insertedScalar(
+      TAG_DEIDENTIFICATION_METHOD,
+      "LO",
+      addDeidentificationMethod(elements.get(TAG_DEIDENTIFICATION_METHOD), method),
+      littleEndian,
+    ),
   );
 
   const warnings: DicomParseWarning[] = [...processed.warnings];

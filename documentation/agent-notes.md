@@ -23,6 +23,119 @@ then the two gates.
 ---
 
 
+## DICOM-FILE-META-DROPS-DUPLICATE
+
+- **🩺 THE FILE META GROUP DROPPED A SECOND COPY OF A MODELED `(0002,xxxx)` ELEMENT, AND AN ARRAY IS
+  NOT SAFETY.** (`DICOM-FILE-META-DROPS-DUPLICATE`, `PRE-EXISTING`, raised by `#70`'s gate,
+  **measured live on the published `0.0.10` tarball**.) This is `#70`'s shape one group over, and
+  **`(0002,xxxx)` is the group that decides how every following byte is read**, which makes it
+  strictly the more dangerous of the two.
+  **▶ THE ROUTE IS DIFFERENT FROM `#70`'s, AND THAT DIFFERENCE IS THE WHOLE ENTRY.** `parseFileMeta`
+  collects the group into an **array**, so nothing is overwritten and `DICOM_DUPLICATE_TAG_IN_DATA_SET`
+  never fired here. `#70`'s own JSDoc said exactly that, in a sentence that read as an all-clear:
+  *"it does not reach the File Meta group, which `parseFileMeta` accumulates into an array and not a
+  map, so nothing is overwritten there."* Literally true, and wrong in effect. The eight tags in
+  `MODELED_FM_TAGS` are answered by a **first-match** search (`projectUI` / `projectText` /
+  `projectRaw`, and `fmElements.find` for `(0002,0010)`) and are **excluded** from `extraElements`,
+  the verbatim residue that gives the group its byte-exact round trip. A second copy of one is
+  therefore in **neither**: not projected, because the first already answered, and not preserved,
+  because its tag is modeled. That sentence is corrected in place rather than deleted, and it now
+  names the new code.
+  **▶ THE TWO CODES RESOLVE A REPEAT THE OPPOSITE WAY ROUND, DELIBERATELY, BECAUSE THE TWO READINGS
+  DO. FIRST copy wins in the File Meta group; LAST read wins in a Data Set.** Neither reading moves
+  in this slice, no value is guessed for the copy that lost, and **no residue is invented for it** -
+  inventing one would make the conservative serializer re-emit a group it should not write. A
+  repeated `(0002,xxxx)` tag this library does **not** model stays silent, because every copy of one
+  is already kept verbatim in `extraElements` and nothing is dropped; that control is pinned, with
+  both copies asserted present, so "silent" is "nothing was lost" rather than "the check missed it".
+  **▶ THE MEASUREMENT, ON THE PUBLISHED PACKAGE.** `npm pack @cosyte/dicom@0.0.10` (the registry's
+  current `latest`; there is no `0.0.9`), a file carrying `(0002,0010)` twice with two **different**
+  Transfer Syntax UIDs: `fileMeta.transferSyntaxUID` reads the first, `fileMeta.extraElements` is
+  `[]`, `ds.warnings` is `[]`, and `{ strict: true }` does **not** throw. Silent on every channel.
+  **▶ THE STAKES ARE NOT HYPOTHETICAL AND ARE PINNED AS A MEASUREMENT.** The same dataset bytes, with
+  only the **order** of those two UIDs swapped, parse to two different objects - one reads
+  `(0010,0010)` correctly, the other raises `INVALID_FILE_META` out of `parseImplicitLE`, because a
+  length field read in the wrong encoding declares **1,199,696** bytes. On base both files were
+  silent, so a reader could not tell them apart. The disclosure is collected through `onWarning` in
+  that test, not off `ds.warnings`, because one of the two parses never returns an object.
+  **▶ NO TAG IN THE MESSAGE, AND THE BOUND IS THE FACTORY SIGNATURE - THE FIFTH CODE TO NEED IT.**
+  `duplicateFileMetaElement(position)`, as for `DICOM_DUPLICATE_TAG_IN_DATA_SET`,
+  `DICOM_NONZERO_RESERVED_BYTES`, `DICOM_ITEM_CROSSES_SEQUENCE_END` and
+  `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE`. Pinned by arity, so a call site cannot put a tag back
+  without changing the signature, and by a **name-bearing** payload: the dropped `(0002,0016)` value
+  is `"SMITHSON"` and the dataset carries `"MR BRAIN SMITHSON"`, both asserted present before every
+  4-character window of the name is refused from the message. **A PHI test whose payload carries no
+  name is vacuous BY FIXTURE** (`#55`'s was, and it rendered four letters of a surname).
+  **▶ 🛑 BUT THE FABRICATED-HEADER ROUTE IS NARROWER HERE THAN IN A DATA SET, AND IT IS A FACT ABOUT
+  THE EIGHT TAGS RATHER THAN AN ARGUMENT.** The group loop only continues while the next two bytes
+  read `0x0002`, and every modeled element number is below `0x0100`, so each modeled tag needs at
+  least **two NUL bytes** on the wire (three, for `(0002,0000)`). No printable name supplies one, so
+  a length lie cannot compose a *modeled* tag out of document text the way it can at `(0010,0020)`.
+  Pinned over all eight. **That does not relax the bound**: the VR, the length and the value after
+  such a header still come out of somebody's value, and the offset still points inside one.
+  **▶ `position.byteOffset` IS FILE-ABSOLUTE HERE, AND THAT IS STRUCTURAL RATHER THAN LUCKY.**
+  `#70`'s frame-of-reference caveat - the one a refuter broke on the first try - does not apply.
+  `parseFileMeta` is called **once** per parse, from `parseDicom`, with the whole buffer and the
+  post-`DICM` offset, and the File Meta group is never nested, so no item slice can reach it. It also
+  locates the copy that was **dropped**, not the survivor: the survivor came first, so its offset is
+  lower. Both facts are pinned by reading the header back out of the file at that index.
+  **▶ THE CITATION, AND THE ONE THAT IS DELIBERATELY ABSENT.** PS3.5 2026c section 7.1 "Data
+  Elements", read from the SHA-pinned `vendor/nema/part05/` and occurring **exactly once** in that
+  document: "The Data Elements in a Data Set shall be ordered by increasing Data Element Tag Number
+  and shall occur at most once in a Data Set." **PS3.10 - which governs the File Meta Information
+  group - is NOT vendored in this repo.** It was fetched and read while writing this slice, and
+  neither section 7.1 nor Table 7.1-1 states a uniqueness sentence to quote, so **no PS3.10 citation
+  is made and no conformance verdict about a repeated `(0002,xxxx)` is claimed anywhere in the
+  artifacts.** The Tier-2 escalation does not need one: the code fires exactly when a value the file
+  carried does not reach the parsed object, and a `{ strict: true }` caller has asked to be thrown at
+  rather than handed a lenient reading. **Do not "strengthen" this by asserting PS3.10 from memory** -
+  a per-part sentence transcribed from memory is not a citation, and vendoring a new part is its own
+  slice.
+- **🩺 `deidentify()` REPLACED `(0012,0063)` WHERE PS3.15 SAYS "INSERTED IN OR ADDED TO".**
+  (`PRE-EXISTING`, same item, measured on `0.0.10`: a file recording
+  `"ACME Anonymizer v3 Basic Profile"` came out of `deidentify()` recording only this library's own
+  method, with the earlier one gone and nothing saying so.) What that destroyed is the **provenance
+  chain** the attribute exists to carry, on a file whose earlier pass may be the one a recipient was
+  relying on.
+  **▶ THE CITATION.** PS3.15 2026c section **E.1.1 "De-identifier"**, read from the SHA-pinned
+  `vendor/nema/part15/` and occurring **exactly once** in that document: "one or more codes from
+  [PS3.16 CID 7050] corresponding to the Profile and Options used shall be added to De-identification
+  Method Code Sequence (0012,0064), and/or a text string describing the method used shall be
+  **inserted in or added to** De-identification Method (0012,0063)." Replacing is neither verb.
+  **▶ 🛑 THE ASYMMETRY WITH `(0012,0062)` IS THE STANDARD'S OWN AND MUST NOT BE "TIDIED".** The
+  sentence immediately above, in the same list: "The Attribute Patient Identity Removed (0012,0062)
+  shall be **replaced or added to** the Data Set with a value of YES." Different verbs, different
+  attributes. `deidentify` still replaces `(0012,0062)`, and a test pins that it does.
+  **▶ THE SHAPE.** The method is appended as a further value of the `1-n` attribute after a `\`, with
+  the prior bytes copied through **verbatim**, so a value encoded under a `(0008,0005)` repertoire
+  survives byte for byte - the join is a byte concatenation and only the even-length pad and any
+  trailing NUL are trimmed. **A value that already records this exact method is left alone**, so
+  `deidentify(deidentify(ds))` is a fixed point rather than a growing string; without that rule
+  repeated application grows the attribute without bound, which is a defect the fix would have
+  introduced. The delimiter split used for that test is a **comparison only** - a repertoire where
+  5CH is not the delimiter can at worst make it append a value it could have skipped, which loses
+  nothing. **The VR must be `LO`**; a `(0012,0063)` a file encoded as something else is not a
+  De-identification Method this can concatenate into, so that case still replaces, and it is pinned.
+  **▶ 🩺 THE COST IS A RESIDUAL, DISCLOSED, WITH A TEST THAT ASSERTS IT RATHER THAN AN ALL-CLEAR.**
+  `(0012,0063)` is **not in Table E.1-1**, so the Basic Profile never acted on it and the incoming
+  value reached the insertion point untouched - **the replacement was the only thing removing it, and
+  removing it was an action no profile asked for**. So a sender who wrote something identifying into
+  `(0012,0063)` now sees that text in de-identified output. That is the retained-by-omission posture
+  every other unlisted attribute already has, not a channel this insertion opens; **closing it is a
+  product call about unlisted attributes, in the family of `DICOM-DEIDENT-OVER-REDACTION`, and it
+  would turn that residual test red on purpose.** The `DeidentifyReport` is unchanged and echoes
+  nothing from the attribute; a test asserts the name is absent from every value-free field of it.
+  **▶ THE BASE-RED FIGURES, WITH THEIR SHA.** Re-measured at `e75fb38` after the last test was added:
+  **8 of the 12** in `test/integration/file-meta-duplicate.test.ts` and **7 of the 13** in
+  `test/deident/deident-method-add.test.ts` run red against that base, 15 of 25 in all. The File Meta
+  file **cannot link against base `src/` at all** - neither
+  `WARNING_CODES.DICOM_DUPLICATE_FILE_META_ELEMENT` nor `duplicateFileMetaElement` exists there - so
+  that 8 is measured with those two symbols substituted for their literals; unmodified it is 12 of 12
+  by construction, which is a fact about linking rather than about behaviour. The base was taken in a
+  **detached worktree at the sha**, not by checking `src/` over the working tree, because
+  `git checkout <base> -- src/` **overlays** rather than replaces (`#71`).
+
+
 ## DICOM-TAG-COLLISION-DESTROYS-ELEMENT
 
 - **🩺 A DATA SET DESTROYS ITS OWN ELEMENT AT PARSE TIME, AND UNTIL THIS SLICE IT DID SO IN
