@@ -813,6 +813,20 @@ const DEID_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     plant: swallowedAttributeFixture,
     expectCode: WARNING_CODES.DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED,
   },
+  {
+    // The marker is in the one attribute this package KEEPS the sender's bytes
+    // in - (0012,0063) is not in Table E.1-1 - so the value really does reach
+    // de-identified output. That is disclosed by
+    // `DICOM_DEIDENT_METHOD_PRIOR_RETAINED`, and this slot is what stops the
+    // disclosure from quoting what it discloses.
+    name: "deidentify: (0012,0063) DeidentificationMethod [LO] kept from the source file",
+    plant: (m) =>
+      buildDicom({
+        transferSyntax: TS_EXPLICIT_LE,
+        elements: [{ tag: "00120063", vr: "LO" as VR, value: val(m) }, FILLER],
+      }),
+    expectCode: WARNING_CODES.DICOM_DEIDENT_METHOD_PRIOR_RETAINED,
+  },
   // The three slots below name no code, and unlike the File Meta four they
   // cannot: the attributes they plant into are deleted by Annex E, so there is
   // nothing left to warn about. That also means they cannot go red here, and

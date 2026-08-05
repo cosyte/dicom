@@ -2,12 +2,10 @@
 
 **▶ THE NARRATIVE BEHIND EVERY TRAP IN THIS FILE LIVES IN
 [`documentation/agent-notes.md`](documentation/agent-notes.md).** This file is always-read for any
-worker that `cd`s in, so it is budgeted at write time by the meta-repo's `doc-budget.mjs`. It was cut
-on 2026-08-04 (`CLAUDE-MD-AUDIT`) by **relocating, never deleting**. **The budget is this repo's entry
-in `REPO_CLAUDE`, and no numeral for it is written here** - that number is a ratchet meant to be
-lowered as relocations land, and the ADR it came from was itself amended within a day of landing.
-Read `documentation/decisions/0023-doc-budgets.md` for what governs. Each trap below is one imperative
-plus the anchor that carries its measurements, its citations and the refuter passes that produced it.
+worker that `cd`s in, so it is budgeted at write time by the meta-repo's `doc-budget.mjs`. **The
+budget is this repo's entry in `REPO_CLAUDE`, and no numeral for it is written here.**
+Read `documentation/decisions/0023-doc-budgets.md` for what governs, and this file's own history in
+[agent-notes.md](documentation/agent-notes.md) - it opens on why, and on what "relocate" means here.
 **The line is enough to stop you doing the wrong thing. It is not enough to justify doing a new thing
 in the same area - open the section first.**
 
@@ -68,8 +66,10 @@ in the same area - open the section first.**
     with, so no over-run is recordable.
     [#dicom-explicit-vr-unbounded-item-read](documentation/agent-notes.md#dicom-explicit-vr-unbounded-item-read)
   - `(0012,0063)` carries the **source file's own method text** into de-identified output (PS3.15
-    E.1.1 says "added to"; Table E.1-1 omits it). A residual test asserts the cost.
-    [#dicom-file-meta-drops-duplicate](documentation/agent-notes.md#dicom-file-meta-drops-duplicate)
+    E.1.1 says "added to"; Table E.1-1 omits it); reported now, not silent. **An `LO` de-dup trims
+    trailing pad on BOTH sides or the value regrows every pass, and a fixed-point pin reads RAW
+    BYTES, never a trimming helper.** A residual test asserts the cost.
+    [#dicom-deident-not-a-fixed-point](documentation/agent-notes.md#dicom-deident-not-a-fixed-point)
   - **This list is an index, not a census.** Each relocated section names its own residuals, and
     several are disclosed only there. Read the section before claiming a class is closed.
 - **🛑 A "N OF M TESTS RUN RED ON BASE" FIGURE HAS A MOVING BASE AND IS NOT A FACT.** Quote one only

@@ -22,6 +22,89 @@ then the two gates.
 
 ---
 
+## DICOM-DEIDENT-NOT-A-FIXED-POINT
+
+- **🩺 REPEATED DE-IDENTIFICATION GREW `(0012,0063)` BY THE WHOLE METHOD STRING ON EVERY PASS, FOR
+  ANY `deidentificationMethod` ENDING IN A SPACE OR A NUL.** (`DICOM-DEIDENT-NOT-A-FIXED-POINT`,
+  **`INTRODUCED` by `#73` (`287efae`)**, found only by a **founder-authorised fourth grading pass**
+  after `#73` had merged with three `REFUTED` verdicts answered. **Never published** - the release was
+  held, Version PR `#72` left open, and the regression never reached a consumer.)
+  **▶ THE MEASUREMENT, WITH ITS SHAS.** In memory, four passes on `287efae`:
+  `deidentificationMethod: "ACME Anonymizer v3 "` read **19 -> 38 -> 57 -> 76** bytes and
+  `"Pass A\Pass B "` read **14 -> 21 -> 28 -> 35**; on `e75fb38` both are flat (**19, 19, 19, 19**
+  and **14, 14, 14, 14**). Over a real `parse -> deidentify -> serializeDicom -> parse` round trip a
+  16-byte method read **16 -> 32 -> 48 -> 64 -> 80 -> 96** over six cycles. **Base was a trivial
+  fixed point because base REPLACED**, so this is a regression the fix introduced, not an inherited
+  flaw.
+  **▶ THE TERMINAL OUTCOME IS THE LOSS `#73` EXISTED TO PREVENT.** Growth continues to the
+  **65,534**-byte ceiling, at which point the guard **replaces the entire prior provenance chain** -
+  now reachable from a benign caller string rather than only from a file already at the ceiling.
+  **▶ THE ROOT CAUSE IS ONE ASYMMETRY.** `addDeidentificationMethod` right-trimmed `0x20`/`0x00`
+  from `kept` and **not** from `added`, so a freshly supplied value never equalled its own prior
+  copy: the library writes the method, `encodeDatasetElement`'s even-length pad folds the trailing
+  byte in, the next parse trims it back off, and the next pass appends the whole method again.
+  **▶ THE CITATION.** PS3.5 2026c **Table 6.2-1**, `LO` row, from the SHA-pinned `vendor/nema/part05/`:
+  "A character string that **may be padded with leading and/or trailing spaces**." Trailing spaces in
+  an `LO` Value are **padding, not content**, so a de-duplication comparison must be
+  trailing-space-insensitive **on both sides**; `#73` implemented exactly half of that. **§6.4 says
+  where the pad goes**: "If padding is required to make the Value Field of even length, a single
+  padding character shall be applied to the end of the Value Field (**to the last Value**), in which
+  case the length of the last Value may exceed the length of Value by 1." That is why the trim is
+  over the **whole Value Field** and **trailing only** - per-value trimming would discard sender
+  bytes no writer added, and leading padding survives a round trip untouched (flat at 20 wire bytes
+  even on `287efae`, so that row is a control, not a pin).
+  **▶ THE REMEDY, AND ITS ONE DELIBERATE WIDENING.** Both operands go through one
+  `trimTrailingPad`, and **the value written is trimmed the same way**, so `deidentify` is a fixed
+  point **from the first pass** rather than from the second - the bytes it emits are the bytes it
+  reads back. A method that is padding only therefore records nothing, rather than appending an empty
+  value whose `\` would itself add a byte per pass.
+  **▶ 🩺 THE SILENCE WAS THE OTHER HALF, AND IT WAS THE WORSE HALF.** A name a sender wrote into
+  `(0012,0063)` reached output stamped `(0012,0062) Patient Identity Removed = YES` with
+  `report.warnings` **empty** and `report.retained` **`[]`** - **a stamp that outran the redaction**,
+  the failure `#66` and `#69` were each opened for. The retention is correct (PS3.15 E.1.1 says
+  "added to", and Table E.1-1 does not list the attribute, so nothing audited those bytes); the
+  silence was not. `deidentify` now raises **`DICOM_DEIDENT_METHOD_PRIOR_RETAINED`** on
+  `report.warnings` whenever prior file bytes survive into the output.
+  **▶ WHY NOT `report.retained`.** That field is typed `readonly DeidentifyOption[]` and means "the
+  Annex E option sets active for this run". A retained `(0012,0063)` is not an option set, and
+  widening the type to carry it would break every consumer switching over the nine names. The
+  disclosure is a warning, like every other thing `deidentify` has to say about a value it could not
+  vouch for.
+  **▶ THE WARNING IS ITSELF A PHI SURFACE AND CARRIES NO VALUE, NO LENGTH AND NO VR.** The retained
+  text is the file's own; the tag in the message is a constant of the code, never composed from
+  input, and `position.byteOffset` locates the element. Bound by the factory signature (a position,
+  and nothing else), by a name-bearing payload with a four-character-window non-vacuity assertion,
+  and by a slot in `test/integration/phi-diagnostic-surface.test.ts` planting the marker into
+  `(0012,0063)` itself. Emitted by `deidentify()` only, so it never reaches the parser's
+  `{ strict: true }` escalation and cannot refuse a conformant file.
+  **▶ 🛑 THE TRAP THAT COST FOUR GRADING PASSES: A TEST NAMED FOR A PROPERTY IS NOT A TEST OF IT.**
+  `#73`'s pin was titled "a CALLER method that itself carries a `\` is still a fixed point", picked
+  `"ACME Anonymizer\Basic Profile"` - **the one input with no trailing pad byte** - and asserted
+  through `methodOf()`, **which strips trailing `[NUL SP]`**. Named for the property, exercising the
+  one input where it holds, reading through the helper that hides the defect. **`#73`'s own commit
+  body called that pattern out twice and it recurred a third time inside the same slice.** The pins
+  assert **raw bytes**, run **six** passes on the wire rows and four in memory, and `methodOf` now
+  carries a header saying it must never hold a fixed-point assertion.
+  **▶ THE BASE-RED FIGURE, WITH ITS SHA.** Over the **full suite** at `287efae` with these tests
+  added: **6 of 1,043** red (one file of 66). Five are the growth rows; the sixth is the disclosure
+  row, which is red on that base for two reasons at once, because the code it names does not exist
+  there. Re-derive it rather than quoting it, and remember that
+  `git checkout <base> -- src/` **overlays** - `src/` was removed and restored, not overlaid.
+  **▶ THREE `PRE-EXISTING` LINES WERE DELIBERATELY NOT CUT IN** (the pass-4 grader advised against
+  it and the founder agreed): the default `(0012,0063)` overruns `LO`'s 64-character per-value
+  maximum; a `(0012,0063)` a file encoded under a VR other than `LO` is replaced silently;
+  and `{ strict: true }` renders dropped-element bytes in the snippet while the block titled "the
+  diagnostic is not itself a PHI surface" reads only `warning.message`.
+  **▶ 🛑 AND A FIGURE ATTACHED TO THAT FIRST LINE DID NOT SURVIVE RE-DERIVATION, IN THE DIRECTION
+  NOBODY EXPECTED.** The `287efae` reading is **76** characters for the default single value and
+  **130** with three Retain options appended (`RetainUIDs`, `RetainSafePrivate`,
+  `RetainDeviceIdentity`) - measured on this branch, one `LO` value in both cases. A pass-4 note
+  saying the 130 was "not reproducible - it stays 76" **is itself what does not reproduce**: the
+  option names are appended to the same value, so the count moves with the options. Whoever takes
+  that backlog line re-derives both numbers; **neither this page nor the item is the source.**
+
+---
+
 ## DICOM-FILE-META-DROPS-DUPLICATE
 
 - **🩺 THE FILE META GROUP DROPPED A SECOND COPY OF A MODELED `(0002,xxxx)` ELEMENT, AND AN ARRAY IS
@@ -120,10 +203,13 @@ then the two gates.
   **▶ THE SHAPE.** The method is appended as a further value of the `1-n` attribute after a `\`, with
   the prior bytes copied through **verbatim**, so a value encoded under a `(0008,0005)` repertoire
   survives byte for byte - the join is a byte concatenation and only the even-length pad and any
-  trailing NUL are trimmed. **Only the values not already recorded are added**, so
-  `deidentify(deidentify(ds))` is a fixed point rather than a growing string; without that rule
-  repeated application grows the attribute without bound, which is a defect the fix would have
-  introduced. The delimiter split used for that test is a **comparison only** - a repertoire where
+  trailing NUL are trimmed. **Only the values not already recorded are added**, so repeated
+  application does not grow the attribute without bound, which is a defect the fix would otherwise
+  have introduced. **🛑 IT DID INTRODUCE ONE ANYWAY, AND `287efae` SHIPPED IT TO `main`: the trim
+  above ran on the PRIOR value only, so a `deidentificationMethod` ending in a SPACE or NUL regrew
+  the attribute every pass.** Read
+  [#dicom-deident-not-a-fixed-point](#dicom-deident-not-a-fixed-point) before quoting anything on
+  this page as a fixed-point property. The delimiter split used for that test is a **comparison only** - a repertoire where
   5CH is not the delimiter can at worst make it append a value it could have skipped, which loses
   nothing. **The VR must be `LO`**; a `(0012,0063)` a file encoded as something else is not a
   De-identification Method this can concatenate into, so that case still replaces, and it is pinned.
@@ -134,8 +220,11 @@ then the two gates.
   **29 -> 59 -> 89 -> 119** bytes over four passes, against a flat **29** on base, reaching the
   ceiling below and throwing at pass 2185. The claim had shipped in six artifacts and the test named
   for it exercised only the default method - **a test named for the thing it did not check occupies
-  the slot**, again. Pinned now with a delimiter-carrying caller string and a set-of-lengths
-  assertion.
+  the slot**, again. Pinned with a delimiter-carrying caller string and a set-of-lengths assertion -
+  **and that pin was named for the property and did not check it either**: it picked the one
+  delimiter-carrying input with no trailing pad byte and asserted through a helper that strips
+  trailing `[NUL SP]`. Per-value comparison was **necessary and not sufficient**; see
+  [#dicom-deident-not-a-fixed-point](#dicom-deident-not-a-fixed-point).
   **▶ 🩺 THE JOIN IS BOUNDED, AND AN UNBOUNDED ONE CRASHES THE SERIALIZER ON A FILE THE PARSER CALLS
   CLEAN. PASS 1 GRADED THIS A BLOCKER AND IT WAS RIGHT.** `LO` is not in `LONG_FORM_VRS`, so
   `encodeDatasetElement` writes its Value Length with a **16-bit** field. A `(0012,0063)` carrying a
@@ -177,8 +266,11 @@ then the two gates.
   `(0012,0063)` now sees that text in de-identified output. That is the retained-by-omission posture
   every other unlisted attribute already has, not a channel this insertion opens; **closing it is a
   product call about unlisted attributes, in the family of `DICOM-DEIDENT-OVER-REDACTION`, and it
-  would turn that residual test red on purpose.** The `DeidentifyReport` is unchanged and echoes
+  would turn that residual test red on purpose.** The `DeidentifyReport` echoes
   nothing from the attribute; a test asserts the name is absent from every value-free field of it.
+  **🛑 IT WAS ALSO SILENT, AND THAT HALF WAS WRONG.** The retention now raises
+  `DICOM_DEIDENT_METHOD_PRIOR_RETAINED` -
+  [#dicom-deident-not-a-fixed-point](#dicom-deident-not-a-fixed-point).
   **▶ THE BASE-RED FIGURES, WITH THEIR SHA.** Re-measured at `e75fb38` after the last test was added:
   **8 of the 12** in `test/integration/file-meta-duplicate.test.ts` and **7 of the 13** in
   `test/deident/deident-method-add.test.ts` run red against that base, 15 of 25 in all. The File Meta

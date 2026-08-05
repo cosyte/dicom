@@ -79,6 +79,7 @@ export const WARNING_CODES = {
   DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED: "DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED", // reserved by Phase 7 - not emitted in Phase 2
   DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED: "DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_METHOD_NOT_ADDED: "DICOM_DEIDENT_METHOD_NOT_ADDED", // emitted by deidentify(), never by the parser
+  DICOM_DEIDENT_METHOD_PRIOR_RETAINED: "DICOM_DEIDENT_METHOD_PRIOR_RETAINED", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE: "DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE: "DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE", // emitted by deidentify(), never by the parser
   DICOM_PRIVATE_CREATOR_UNKNOWN: "DICOM_PRIVATE_CREATOR_UNKNOWN", // reserved by Phase 6 - not emitted in Phase 2
@@ -206,6 +207,10 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   // (0002,0000) messages above.
   DICOM_DEIDENT_METHOD_NOT_ADDED:
     "The De-identification Method this run recorded could not be added beside the value (0012,0063) already carried without exceeding the largest Value Length that VR can encode, so the earlier value was replaced (PS3.15 E.1.1). The replaced text is not in the output.",
+  // No value and no length, for the same reason as the code above: the retained
+  // text is the file's own. The tag is a constant of this code.
+  DICOM_DEIDENT_METHOD_PRIOR_RETAINED:
+    "A De-identification Method (0012,0063) value the source file already carried was kept beside the one this run recorded, as PS3.15 E.1.1 requires. That attribute is not in Table E.1-1, so no rule in this run inspected, audited or redacted those bytes: if the sender wrote identifying text there it is in the de-identified output, under (0012,0062) = YES. The text is withheld from this message.",
   // The Item's own declared length is deliberately absent. See
   // `itemCrossesSequenceEnd`; `{n2}` stays because the emit site's
   // `endLimit < buffer.length` conjunct bounds it by the buffer.
@@ -986,6 +991,44 @@ export function burnedInAnnotationNotRemoved(position: DicomPosition): DicomPars
  */
 export function deidentMethodNotAdded(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DEIDENT_METHOD_NOT_ADDED, position);
+}
+
+/**
+ * Build a `DICOM_DEIDENT_METHOD_PRIOR_RETAINED` warning for a `(0012,0063)`
+ * whose prior value `deidentify()` **kept** beside the method it recorded.
+ *
+ * @remarks
+ * PS3.15 2026c E.1.1 obliges a de-identifier to insert its method text in, or
+ * add it to, `(0012,0063)`, so keeping the sender's earlier record is the
+ * conformant act and this code is not a defect report. It is a **disclosure**:
+ * `(0012,0063)` is not in Table E.1-1, so no action fired on it, nothing
+ * inspected those bytes, and a sender who wrote a name there has that name in
+ * output stamped `(0012,0062) Patient Identity Removed = YES`. Before this code
+ * existed that happened with `report.warnings` empty and `report.retained` `[]` -
+ * **a stamp that outran the redaction**, which is the shape of failure this
+ * package has opened items for twice.
+ *
+ * **It is not on `report.retained`, deliberately.** That field is the list of
+ * Annex E option sets active for the run, typed `DeidentifyOption[]`; a retained
+ * `(0012,0063)` is not an option set, and widening the type to carry it would
+ * break every consumer that switches over the nine names.
+ *
+ * **No value, no length, no VR** - the retained text is the file's own, and the
+ * tag in the message is a constant of this code rather than composed from input,
+ * exactly as in `DICOM_DEIDENT_METHOD_NOT_ADDED`. `position.byteOffset` locates
+ * the element.
+ *
+ * Emitted by `deidentify()` only, so it reaches `report.warnings` and is not
+ * subject to the parser's `{ strict: true }` escalation - which is why adding it
+ * cannot refuse a conformant file.
+ *
+ * @example
+ * ```ts
+ * const w = deidentMethodPriorRetained({ byteOffset: 4096, fileMeta: false });
+ * ```
+ */
+export function deidentMethodPriorRetained(position: DicomPosition): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DEIDENT_METHOD_PRIOR_RETAINED, position);
 }
 
 /**
