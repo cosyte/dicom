@@ -73,8 +73,10 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   receives it, which is the pre-existing D-03 ordering reached by one more code. (3) **"Names no tag"
   is about the message.** Strict mode throws a `DicomParseError` whose `snippet` is 16 raw source
   bytes at that offset, rendered as hex - measured on a plain duplicate:
-  `10 00 20 00 4c 4f 0a 00 53 4d 49 54 48 53 4f 4e`, the withheld tag plus eight bytes of the value.
-  That is the package-wide D-10 design, reachable on `0ead071` through other codes, and it is why the
+  `10 00 20 00 4c 4f 0e 00 53 4d 49 54 48 53 4f 4e`, the withheld tag plus eight bytes of the value.
+  That is the package-wide D-10 design. The same file does not throw at all on `0ead071` (this code is
+  what refuses it), but the same file with its even-length padding removed produces the identical 16
+  bytes there through `DICOM_ODD_LENGTH_VALUE_PADDED`, one length byte apart - which is why the
   guarantee is worded about the message rather than about the channel.
 
   **What the grid is NOT evidence for here, stated because it was read that way once.** It reaches

@@ -98,9 +98,13 @@ then the two gates.
   **▶ 🩺 AND "NAMES NO TAG" IS MESSAGE-SCOPED. THE STRICT CHANNEL HANDS BACK WHAT THE MESSAGE
   WITHHELD.** `makeEmitter`'s escalate path builds `DicomParseError.snippet` from 16 raw source bytes
   at the warning's offset, which is the replacing element's header: measured on a plain duplicate,
-  `10 00 20 00 4c 4f 0a 00 53 4d 49 54 48 53 4f 4e` - the withheld tag, and eight bytes of the value,
-  in hex. That is D-10, `PRE-EXISTING` and package-wide (the same fixture reaches it on base through
-  `DICOM_ODD_LENGTH_VALUE_PADDED`), and the PHI-diagnostic runner structurally cannot see it because
+  `10 00 20 00 4c 4f 0e 00 53 4d 49 54 48 53 4f 4e` - the withheld tag, and eight bytes of the value,
+  in hex. That is D-10, `PRE-EXISTING` and package-wide, and the base reachability is measured
+  rather than asserted: this exact fixture does **not** throw on `0ead071` at all (no code, no
+  snippet), while the **same fixture with its even-length padding removed** reaches the identical
+  16 bytes there through `DICOM_ODD_LENGTH_VALUE_PADDED` -
+  `10 00 20 00 4c 4f 0d 00 53 4d 49 54 48 53 4f 4e`, one length byte apart. The PHI-diagnostic
+  runner structurally cannot see either, because
   hex is a re-encoding. One more code reaches it; **the guarantee to state is "the message names no
   tag", never "this code cannot surface one".** Pinned by a test so the sentence cannot drift back.
   **▶ TWO SYNTAXES, TWO DIFFERENT LIES, AND THE FIXTURE IS PARAMETERISED BY BOTH RATHER THAN

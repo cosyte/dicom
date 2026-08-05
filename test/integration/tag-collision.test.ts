@@ -483,9 +483,16 @@ describe("the diagnostic itself", () => {
     // `DicomParseError.snippet` from 16 raw source bytes at the same offset -
     // the replacing element's header - and renders them as hex, which the
     // PHI-diagnostic runner structurally cannot match. That is D-10, package-wide
-    // and reachable through other codes on `0ead071` with the identical fixture,
-    // so it is NOT this slice's to fix; it is asserted so the guarantee cannot
-    // drift into the wider claim.
+    // and reachable on `0ead071` through other codes - this file does not throw
+    // there at all, but the same file without its even-length padding gives the
+    // identical bytes via `DICOM_ODD_LENGTH_VALUE_PADDED`, one length byte apart
+    // (`0d` for `0e`). So it is NOT this slice's to fix; it is asserted so the
+    // guarantee cannot drift into the wider claim.
+    //
+    // The WHOLE 16 bytes are pinned, not two substrings around the interesting
+    // one. A pass-3 grade caught this exact artifact carrying `0a` where the
+    // fixture's declared length is `0e`, with a substring assertion green either
+    // way: a literal quoted in the docs has to be the literal a test compares.
     try {
       parseDicom(duplicate, { strict: true });
       expect.unreachable("strict mode must escalate");
@@ -493,10 +500,10 @@ describe("the diagnostic itself", () => {
       const thrown = err as { readonly message: string; readonly snippet?: string };
       expect(thrown.message).not.toContain("SMITHSON");
       expect(thrown.message).not.toContain(PATIENT_ID);
-      // The tag, byte for byte, in the snippet the message withheld it from.
-      expect(thrown.snippet).toContain("10 00 20 00");
-      // And the value's first bytes: "SMIT" as 53 4d 49 54.
-      expect(thrown.snippet).toContain("53 4d 49 54");
+      // `(0010,0020)`, VR `LO`, declared length 14, then "SMITHSON" - the tag the
+      // message withheld and eight bytes of the value, exactly as the CHANGELOG,
+      // the factory's JSDoc and `agent-notes.md` quote it.
+      expect(thrown.snippet).toBe("10 00 20 00 4c 4f 0e 00 53 4d 49 54 48 53 4f 4e");
     }
   });
 

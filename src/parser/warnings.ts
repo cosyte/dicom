@@ -727,10 +727,11 @@ export function emptyItemInSequence(position: DicomPosition, tag: Tag): DicomPar
  * `{ strict: true }` escalates every Tier-2 code through `makeEmitter`, and the
  * `DicomParseError` it throws carries `snippet`: 16 raw source bytes at the same
  * offset, rendered as hex. On a plain duplicate that is
- * `10 00 20 00 4c 4f 0a 00 53 4d 49 54 48 53 4f 4e` - the withheld tag, and
- * eight bytes of the value. That is D-10, package-wide and reachable through
- * other codes on every release, and the PHI-diagnostic runner cannot see it
- * because hex is a re-encoding. Pinned in `test/integration/tag-collision`, so
+ * `10 00 20 00 4c 4f 0e 00 53 4d 49 54 48 53 4f 4e` - the withheld tag, and
+ * eight bytes of the value. That is D-10 and package-wide: the same file with
+ * its even-length padding removed produces the identical bytes on `0ead071`
+ * through `DICOM_ODD_LENGTH_VALUE_PADDED` (`0d` for `0e`), and the
+ * PHI-diagnostic runner cannot see either, because hex is a re-encoding. Pinned in `test/integration/tag-collision`, so
  * that the guarantee is never restated as "this code cannot surface a tag".
  *
  * **It is not bounded.** A file may encode as many collisions as it can fit, and
