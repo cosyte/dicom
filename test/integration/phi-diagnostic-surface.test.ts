@@ -827,6 +827,21 @@ const DEID_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
       }),
     expectCode: WARNING_CODES.DICOM_DEIDENT_METHOD_PRIOR_RETAINED,
   },
+  {
+    // The other half of the same attribute: under a VR that is not `LO` the
+    // prior value is REPLACED rather than kept, so the marker is gone from the
+    // output and the only thing left that could quote it is the disclosure of
+    // its own removal. A diagnostic about a dropped value is itself a PHI
+    // surface - that is `#55`'s finding, and this slot is where the new code
+    // pays it.
+    name: "deidentify: (0012,0063) DeidentificationMethod under a non-LO VR, replaced",
+    plant: (m) =>
+      buildDicom({
+        transferSyntax: TS_EXPLICIT_LE,
+        elements: [{ tag: "00120063", vr: "SH" as VR, value: val(m) }, FILLER],
+      }),
+    expectCode: WARNING_CODES.DICOM_DEIDENT_METHOD_NOT_LO,
+  },
   // The three slots below name no code, and unlike the File Meta four they
   // cannot: the attributes they plant into are deleted by Annex E, so there is
   // nothing left to warn about. That also means they cannot go red here, and

@@ -46,15 +46,15 @@ in the same area - open the section first.**
     [#dicom-explicit-vr-unbounded-item-read](documentation/agent-notes.md#dicom-explicit-vr-unbounded-item-read)
   - `report.removedPrivateTags` can echo four bytes of document content from a **fabricated
     odd-group header**, identically on both trees. Structural, not closed; the **claim** was
-    corrected rather than the guard widened.
-    [#dicom-unrecognized-vr-short-form](documentation/agent-notes.md#dicom-unrecognized-vr-short-form)
+    corrected rather than the guard widened. With `uidMap` (the file's own source UIDs) it is the
+    second value-bearing field of `DeidentifyReport` - **two exceptions, not one**, and that report
+    is never "value-free".
+    [#dicom-unrecognized-vr-short-form](documentation/agent-notes.md#dicom-unrecognized-vr-short-form) ·
+    [#phi-warning-message-leak](documentation/agent-notes.md#phi-warning-message-leak)
   - `report.embeddedAttributes[].hidden` is **unbounded** (131,072 tag strings from a 1 MiB
     carrier). Linear, so not the CPU-DoS class - but it missed the cap every other
     consumer-controlled diagnostic takes. Take it before the next `deident` slice.
     [#dicom-overdeclare-swallows-into-value](documentation/agent-notes.md#dicom-overdeclare-swallows-into-value)
-  - `DeidentifyReport` is value-free **apart from `uidMap`** (the file's own source UIDs) **and**
-    `removedPrivateTags`. **Two exceptions, not one** - never describe it as value-free.
-    [#phi-warning-message-leak](documentation/agent-notes.md#phi-warning-message-leak)
   - A **failed CP-246 `UN` descent emits nothing**. The honest test for a consumer is
     `el.items === undefined`, **not** `ds.warnings`.
     [#dicom-implicit-sq-not-descended](documentation/agent-notes.md#dicom-implicit-sq-not-descended)
@@ -65,18 +65,21 @@ in the same area - open the section first.**
   - The **undefined-length item with no `(FFFE,E00D)`**, which has no declared length to disagree
     with, so no over-run is recordable.
     [#dicom-explicit-vr-unbounded-item-read](documentation/agent-notes.md#dicom-explicit-vr-unbounded-item-read)
-  - `(0012,0063)` carries the **source file's own method text** into de-identified output (PS3.15
-    E.1.1 says "added to"; Table E.1-1 omits it); reported now, not silent. **An `LO` de-dup trims
-    trailing pad on BOTH sides or the value regrows every pass, and a fixed-point pin reads RAW
-    BYTES, never a trimming helper.** A residual test asserts the cost.
+  - `(0012,0063)` carries the file's own method into output; disclosed now, under two codes.
+    **An `LO` de-dup trims trailing pad on BOTH sides or it regrows every pass; a fixed-point pin
+    reads RAW BYTES, never a trimming helper; and Table 6.2-1's "64 chars max" is per VALUE (`LO`
+    is `1-n`)** - ours was ONE value of 76/130/272, over on all 512 subsets. Residuals pin it.
     [#dicom-deident-not-a-fixed-point](documentation/agent-notes.md#dicom-deident-not-a-fixed-point)
+    · [#dicom-lo-length-and-silent-replace](documentation/agent-notes.md#dicom-lo-length-and-silent-replace)
   - **This list is an index, not a census.** Each relocated section names its own residuals, and
     several are disclosed only there. Read the section before claiming a class is closed.
 - **🛑 A "N OF M TESTS RUN RED ON BASE" FIGURE HAS A MOVING BASE AND IS NOT A FACT.** Quote one only
   with the sha you ran it on; re-run it after every test you add **or strengthen**; and **replace
   `src/` rather than overlaying it** when you swap a base in. Two such claims here were wrong against
-  `main` in opposite directions at once. The measured figures live in the section, with their shas.
-  [#dicom-item-eject-route](documentation/agent-notes.md#dicom-item-eject-route)
+  `main` in opposite directions at once, and one went stale at `6 of 9` inside a single draft. The
+  measured figures live in the sections, with their shas.
+  [#dicom-item-eject-route](documentation/agent-notes.md#dicom-item-eject-route) ·
+  [#dicom-parse-creators-scope](documentation/agent-notes.md#dicom-parse-creators-scope)
 
 ## Tech Stack (the shared `@cosyte/*` standard)
 
@@ -178,9 +181,6 @@ not soften them. All anchors are in `documentation/agent-notes.md`.
   `RetainSafePrivate` + a `Profile` is the only route in the package that writes a private value into
   de-identified output; **three refuter passes read "0 PHI regressions" off that harness while a leak
   was live.** [#dicom-private-creator-reservation-leak](documentation/agent-notes.md#dicom-private-creator-reservation-leak)
-- **Re-measure a "N of M tests run red on base" figure rather than carrying it forward** - one read
-  `6 of 9` and went stale within a draft.
-  [#dicom-parse-creators-scope](documentation/agent-notes.md#dicom-parse-creators-scope)
 - **Do not write a warning-code COUNT into prose.** The locked `WARNING_CODES` snapshot measures it
   every run; the README's numeral was corrected twice and then deleted.
   [#dicom-explicit-vr-unbounded-item-read](documentation/agent-notes.md#dicom-explicit-vr-unbounded-item-read)

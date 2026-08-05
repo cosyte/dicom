@@ -79,6 +79,7 @@ export const WARNING_CODES = {
   DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED: "DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED", // reserved by Phase 7 - not emitted in Phase 2
   DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED: "DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_METHOD_NOT_ADDED: "DICOM_DEIDENT_METHOD_NOT_ADDED", // emitted by deidentify(), never by the parser
+  DICOM_DEIDENT_METHOD_NOT_LO: "DICOM_DEIDENT_METHOD_NOT_LO", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_METHOD_PRIOR_RETAINED: "DICOM_DEIDENT_METHOD_PRIOR_RETAINED", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE: "DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE: "DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE", // emitted by deidentify(), never by the parser
@@ -207,6 +208,12 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   // (0002,0000) messages above.
   DICOM_DEIDENT_METHOD_NOT_ADDED:
     "The De-identification Method this run recorded could not be added beside the value (0012,0063) already carried without exceeding the largest Value Length that VR can encode, so the earlier value was replaced (PS3.15 E.1.1). The replaced text is not in the output.",
+  // No value, no length AND NO VR. The VR is two bytes read from the file, and a
+  // fabricated header makes those two bytes document content - the shape that
+  // put "ITHS" into DICOM_NONZERO_RESERVED_BYTES. Naming the VR here would read
+  // as harmless and is exactly the same defect.
+  DICOM_DEIDENT_METHOD_NOT_LO:
+    "The (0012,0063) value the source file carried is encoded under a Value Representation other than LO, which is not a De-identification Method this run can add its own text to (PS3.15 E.1.1), so the earlier value was replaced. The replaced text is not in the output. The text and the VR are both withheld from this message.",
   // No value and no length, for the same reason as the code above: the retained
   // text is the file's own. The tag is a constant of this code.
   DICOM_DEIDENT_METHOD_PRIOR_RETAINED:
@@ -965,12 +972,11 @@ export function burnedInAnnotationNotRemoved(position: DicomPosition): DicomPars
  * it did not preserve is the worse half of every leak in this package.
  *
  * **🛑 IT IS NOT "the one shape where `deidentify` cannot add", AND A GRADED PASS
- * REFUTED THAT SENTENCE.** There is a second, and it is still silent: a
- * `(0012,0063)` a file encoded under a VR other than `LO` is replaced, with
- * `report.warnings` empty. That shape is `PRE-EXISTING` and deliberately not
- * taken here, so the CLAIM is corrected rather than the guard widened. Read this
- * code as "the length ceiling was reached", never as "every fallback is
- * disclosed".
+ * REFUTED THAT SENTENCE.** There is a second - a `(0012,0063)` a file encoded
+ * under a VR other than `LO` - and it is no longer silent: it raises
+ * {@link deidentMethodNotLo}. Read this code as "the length ceiling was
+ * reached", never as "every fallback is disclosed"; the two shapes replace for
+ * unrelated reasons and a consumer that has to tell them apart can.
  *
  * Truncating the chain instead was refused deliberately: choosing which of the
  * sender's earlier de-identification records to drop is a policy the standard
@@ -991,6 +997,48 @@ export function burnedInAnnotationNotRemoved(position: DicomPosition): DicomPars
  */
 export function deidentMethodNotAdded(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DEIDENT_METHOD_NOT_ADDED, position);
+}
+
+/**
+ * Build a `DICOM_DEIDENT_METHOD_NOT_LO` warning for a `(0012,0063)` the source
+ * file encoded under a VR other than `LO`, which `deidentify()` therefore
+ * **replaced** rather than added to.
+ *
+ * @remarks
+ * PS3.15 2026c E.1.1 obliges a de-identifier to insert its method text in, or
+ * add it to, `(0012,0063)`. `deidentify()` adds - by concatenating `LO` values
+ * with the `5CH` delimiter, which is a text operation and only defined for the
+ * VR the Data Dictionary gives that tag. Bytes under any other VR are not values
+ * this can join into: an `OB` or `UN` value is arbitrary octets, and appending
+ * text to it would emit something no receiver can read as either.
+ *
+ * **So the fallback is deliberate, and it is the DISCLOSURE that is new.** Every
+ * released version replaced these bytes with `report.warnings` empty, which is
+ * the shape this package keeps opening items for: an audit stamped
+ * `(0012,0062) = YES` over a record it silently destroyed. Guessing an encoding
+ * for the prior text instead was refused for the reason every other guess in
+ * this package is - it reports rather than invents.
+ *
+ * **A prior value that is empty or padding only is not disclosed**, because
+ * nothing was lost: that matches the `LO` path, which raises no
+ * `DICOM_DEIDENT_METHOD_PRIOR_RETAINED` for an empty prior either.
+ *
+ * **No value, no length and NO VR.** The VR is two bytes read out of the file
+ * and a fabricated header makes them document content - the shape that rendered
+ * four letters of a surname through `DICOM_NONZERO_RESERVED_BYTES`. The tag in
+ * the message is a constant of this code. `position.byteOffset` locates the
+ * element.
+ *
+ * Emitted by `deidentify()` only, so it reaches `report.warnings` and is not
+ * subject to the parser's `{ strict: true }` escalation.
+ *
+ * @example
+ * ```ts
+ * const w = deidentMethodNotLo({ byteOffset: 4096, fileMeta: false });
+ * ```
+ */
+export function deidentMethodNotLo(position: DicomPosition): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DEIDENT_METHOD_NOT_LO, position);
 }
 
 /**

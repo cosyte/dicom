@@ -149,6 +149,23 @@ export interface ParseOptions {
    * When `true`, every Tier-2 warning is escalated to a thrown
    * `DicomParseError` carrying the warning code. Default `false`.
    *
+   * 🛑 **THE ESCALATED DIAGNOSTIC CARRIES SOURCE BYTES THAT THE WARNING DOES
+   * NOT.** A `DicomParseWarning.message` is a frozen registry string with only
+   * structural tokens filled in, so it is safe to log whole; the
+   * `DicomParseError` this option raises in its place also carries `snippet`,
+   * **16 raw bytes of the file at the warning's own offset, unredacted** (D-10).
+   * For the codes that report a value the reading dropped -
+   * `DICOM_DUPLICATE_TAG_IN_DATA_SET`, `DICOM_DUPLICATE_FILE_META_ELEMENT` -
+   * that offset is the dropped element's header, so the snippet renders the
+   * first bytes of the value the message deliberately withholds. Measured: an
+   * `AE` Title of `AE-SMITHSON^BRAIN` renders as `AE-SMITH` in the hex.
+   *
+   * That is the documented design of `snippet` rather than a defect in these
+   * codes, and turning this option on does not change what any of them means -
+   * but a message-only PHI review of the lenient path does not transfer to the
+   * strict one. Log `err.code`, `err.byteOffset` and `err.message`; treat
+   * `err.snippet` as PHI.
+   *
    * Omit (do not pass `undefined`) to use the default.
    */
   readonly strict?: boolean;

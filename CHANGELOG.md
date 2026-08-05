@@ -6,6 +6,59 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Fixed
 
+- **🩺 The `(0012,0063)` De-identification Method this library writes for itself exceeded the 64-character
+  maximum PS3.5 gives an `LO` Value, on every file it ever de-identified**
+  (`DICOM-LO-LENGTH-AND-SILENT-REPLACE`). `PRE-EXISTING`; measured through the built package on
+  `da1f209`: **76** characters with no options, **130** with `RetainUIDs + RetainSafePrivate +
+RetainDeviceIdentity`, **272** with all nine, and **all 512 option subsets over the maximum**. PS3.5
+  2026c **Table 6.2-1**, `LO` row, is "64 chars maximum" and that row describes a **Value**;
+  `(0012,0063)` is `1-n`, so the bound falls per value. Reading it as a bound on the Value Field is the
+  same misreading that left the fixed-point hole above (where §6.4, a clause about the **encoder**, was
+  read as a bound on a **comparison**), and it matters because the attribute concerned is the one a
+  receiver reads to decide whether an object was de-identified at all.
+
+  The default method text is now **multi-valued**: one Value naming the Profile
+  (`@cosyte/dicom Basic Application Level Confidentiality Profile`, **61** characters) and one Value per
+  active Annex E Option, joined with `\`. No option name exceeds **28** characters, so no subset can
+  breach the maximum - proved by sweeping **all 512 subsets / 2,816 value cells** rather than by
+  argument: **0 over the maximum**, against **512 of 512** on the commit before. The Value Field is
+  still 111 and 247 bytes for those two option sets, which is legal and is asserted alongside the
+  per-value figure so a remedy that merely shortened the text could not pass. Options are emitted in
+  `DEIDENTIFY_OPTIONS` order rather than the caller's, so the same option set always writes the same
+  bytes. The fixed point is unaffected and re-measured over six real wire round trips: **62** bytes flat
+  by default and **248** flat with all nine.
+
+  **Your own `deidentificationMethod` is not bounded for you** and neither is a prior value the source
+  file wrote: splitting or truncating either would invent a de-identification record nobody made. Both
+  are pinned as residual tests rather than left to be rediscovered. Split your string on `\` yourself if
+  a strict receiver is in your path.
+
+- **🩺 A `(0012,0063)` a file encoded under a VR other than `LO` was replaced silently**, and now raises
+  the new Tier-2 code **`DICOM_DEIDENT_METHOD_NOT_LO`** on `report.warnings`. The replacement itself is
+  deliberate and unchanged: the provenance chain is built by concatenating `LO` values with the `5CH`
+  delimiter, which is a text operation and not defined over the arbitrary octets an `OB` or `UN` value
+  holds, so guessing an encoding for them was refused. What was wrong was that the sender's earlier
+  de-identification record left the object with `report.warnings` **empty**, under
+  `(0012,0062) = YES`. It is a separate code from `DICOM_DEIDENT_METHOD_NOT_ADDED` because the causes
+  are unrelated - the chain outgrew the VR, or the bytes were never in that VR at all - and a consumer
+  that has to tell them apart now can. A prior value that is empty or padding only raises neither,
+  because nothing was lost. The code carries **no value, no length and no VR**: two bytes read out of a
+  fabricated header are document content, which is how four letters of a surname once reached
+  `DICOM_NONZERO_RESERVED_BYTES`.
+
+- **🩺 `{ strict: true }` renders the bytes of a dropped element that the warning it replaces
+  deliberately withholds.** `PRE-EXISTING`, **disclosed and pinned rather than changed**: the escalation
+  raises a `DicomParseError` whose `snippet` is 16 raw source bytes at the warning's own offset (D-10),
+  and for `DICOM_DUPLICATE_FILE_META_ELEMENT` and `DICOM_DUPLICATE_TAG_IN_DATA_SET` that offset is the
+  dropped element's header. Measured: a `(0002,0016)` Source AE Title of `AE-SMITHSON` comes back as
+  `02 00 16 00 41 45 0c 00 41 45 2d 53 4d 49 54 48`, five letters of the surname, while
+  `err.message` stays the frozen registry string. Redacting `snippet` is a decision about every Tier-3
+  fatal in the library, not a rider on a File Meta disclosure, so the **claim** was corrected instead:
+  the test block asserting "the diagnostic is not itself a PHI surface" read `warning.message` and
+  nothing else, and is now titled for what it proves, with the strict path pinned beside it as the
+  residual it is. `ParseOptions.strict` and the "Keeping PHI out of logs" guide now say so where the
+  decision is made. Review the two paths separately.
+
 - **🩺 Repeated de-identification was not a fixed point: `(0012,0063)` grew by the whole method
   string on every pass, for any `deidentificationMethod` ending in a SPACE or a NUL**
   (`DICOM-DEIDENT-NOT-A-FIXED-POINT`). **`INTRODUCED` by the entry below and never published** - it

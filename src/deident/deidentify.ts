@@ -139,6 +139,7 @@ import type { DicomParseWarning } from "../parser/warnings.js";
 import {
   burnedInAnnotationNotRemoved,
   deidentMethodNotAdded,
+  deidentMethodNotLo,
   deidentMethodPriorRetained,
   embeddedAttributeRemoved,
   sequenceNotAuditable,
@@ -1188,9 +1189,58 @@ function rebuildFileMeta(
   };
 }
 
+/**
+ * The Profile half of the default `(0012,0063)` text: **61 characters**, which
+ * is inside `LO`'s 64-character maximum with room to spare.
+ *
+ * The string it replaced was `"Cosyte @cosyte/dicom: PS3.15 Basic Application
+ * Level Confidentiality Profile"` - **76 characters**, and so a value this
+ * library itself wrote that no `LO` may legally carry. What went is the
+ * redundancy: `Cosyte` is already in `@cosyte/dicom`, and `PS3.15` is already
+ * implied by the profile's own name, which is quoted from that part.
+ */
+const DEFAULT_METHOD_PROFILE = "@cosyte/dicom Basic Application Level Confidentiality Profile";
+
+/**
+ * The `(0012,0063)` De-identification Method text a run records when the caller
+ * names none: **one Value for the Profile, then one Value per active Annex E
+ * Option**, joined with `\`.
+ *
+ * 🛑 **THE SHAPE IS THE FIX, AND THE MEASUREMENT IS PER VALUE BECAUSE THE VR
+ * IS.** PS3.5 2026c Table 6.2-1's `LO` row is "A character string that may be
+ * padded with leading and/or trailing spaces ... **64 chars maximum**", and that
+ * row describes a **Value**; `(0012,0063)` is `1-n`, so the bound falls on each
+ * value and not on the Value Field. The single-value string this replaced
+ * measured **76** characters with no options, **130** with `RetainUIDs +
+ * RetainSafePrivate + RetainDeviceIdentity` and **272** with all nine - every
+ * one of the 512 option subsets over the maximum, on every file, in a value this
+ * library wrote itself. A receiver that enforces the VR rejects it, and the
+ * attribute it rejects is the one carrying the de-identification provenance.
+ *
+ * Split per option rather than shortened, because shortening only moves the
+ * ceiling: nine option names in one value cannot fit 64 characters however they
+ * are abbreviated, and `1-n` is what the standard provides for exactly this.
+ * Each name is 28 characters at most (`RetainPatientCharacteristics`), so no
+ * subset can produce a value over the maximum - proved by sweeping all 512
+ * subsets rather than by argument.
+ *
+ * **The options are emitted in {@link DEIDENTIFY_OPTIONS} order, not in the
+ * caller's**, so two runs that activate the same set write the same bytes
+ * whatever order the `retain` array happened to be in. That is a byte-stability
+ * property, not a comparison one: {@link addDeidentificationMethod} matches per
+ * value, so order never affected the fixed point either way.
+ *
+ * **This bounds the value this library WRITES, and nothing else.** A caller
+ * `deidentificationMethod` whose own values exceed 64 characters is written
+ * through as given, undisclosed - the same posture as every other value the
+ * caller owns, and a residual test pins it rather than leaving it to be
+ * rediscovered. So is a prior value the source file wrote: those bytes are
+ * copied through verbatim by design, and a sender's non-conformant `LO` is the
+ * sender's.
+ */
 function defaultMethod(active: ReadonlySet<DeidentifyOption>): string {
-  const base = "Cosyte @cosyte/dicom: PS3.15 Basic Application Level Confidentiality Profile";
-  return active.size === 0 ? base : `${base} + ${[...active].join(", ")}`;
+  const options = DEIDENTIFY_OPTIONS.filter((option) => active.has(option));
+  return [DEFAULT_METHOD_PROFILE, ...options].join(String.fromCharCode(VALUE_DELIMITER));
 }
 
 /** The DICOM value delimiter, `\` (5CH), for a multi-valued string VR. */
@@ -1344,9 +1394,14 @@ const MAX_SHORT_FORM_VALUE_BYTES = 0xfffe;
  *
  * One more bound worth stating: the VR must be `LO`; a `(0012,0063)` a file
  * encoded as something else is not a De-identification Method this can
- * concatenate into, so that case still replaces. And the delimiter split is a
- * comparison only - a repertoire where 5CH is not the delimiter can at worst make
- * it append a value it could have skipped, which loses nothing.
+ * concatenate into, so that case still replaces - **and it is disclosed now,
+ * with its own code `DICOM_DEIDENT_METHOD_NOT_LO`, rather than being the one
+ * fallback left silent.** The cause is unrelated to the ceiling's, so it is not
+ * folded into `DICOM_DEIDENT_METHOD_NOT_ADDED`: one says the chain outgrew the
+ * VR, the other says the bytes were never in that VR to begin with. And the
+ * delimiter split is a comparison only - a repertoire where 5CH is not the
+ * delimiter can at worst make it append a value it could have skipped, which
+ * loses nothing.
  *
  * **`retainedPrior` says the output carries bytes the SOURCE FILE wrote.** A
  * `(0012,0063)` is not in Table E.1-1, so nothing audited or redacted those
@@ -1361,13 +1416,27 @@ const MAX_SHORT_FORM_VALUE_BYTES = 0xfffe;
 function addDeidentificationMethod(
   existing: Element | undefined,
   method: string,
-): { readonly value: Buffer; readonly replacedPrior: boolean; readonly retainedPrior: boolean } {
+): {
+  readonly value: Buffer;
+  readonly replacedPrior: boolean;
+  readonly retainedPrior: boolean;
+  readonly replacedNonLoPrior: boolean;
+} {
   const added = trimTrailingPad(Buffer.from(method, "latin1"));
-  if (existing === undefined || existing.vr !== "LO") {
-    return { value: added, replacedPrior: false, retainedPrior: false };
+  const none = { replacedPrior: false, retainedPrior: false, replacedNonLoPrior: false } as const;
+  if (existing === undefined) return { value: added, ...none };
+  if (existing.vr !== "LO") {
+    // 🩺 THE SECOND REPLACEMENT SHAPE, AND IT USED TO BE THE SILENT ONE. The
+    // join is a text operation over `5CH`-delimited `LO` values; bytes under any
+    // other VR are not values it can join into, so this still replaces. What
+    // changed is that it says so. An empty or padding-only prior is NOT
+    // disclosed, because nothing was lost - the same bound the `LO` path applies
+    // before it raises `DICOM_DEIDENT_METHOD_PRIOR_RETAINED`.
+    const lost = trimTrailingPad(existing.rawBytes).length > 0;
+    return { value: added, ...none, replacedNonLoPrior: lost };
   }
   const kept = Buffer.from(trimTrailingPad(existing.rawBytes));
-  if (kept.length === 0) return { value: added, replacedPrior: false, retainedPrior: false };
+  if (kept.length === 0) return { value: added, ...none };
 
   // 🛑 THE TRIM IS AT THE `equals`, PER VALUE, AND A FIFTH GRADED PASS IS WHY. A
   // draft trimmed each operand as a whole Value Field, which leaves the pad on
@@ -1401,9 +1470,9 @@ function addDeidentificationMethod(
   // after that sees a value it did not write.
   const value = trimTrailingPad(Buffer.concat(parts));
   if (value.length > MAX_SHORT_FORM_VALUE_BYTES) {
-    return { value: added, replacedPrior: true, retainedPrior: false };
+    return { value: added, ...none, replacedPrior: true };
   }
-  return { value, replacedPrior: false, retainedPrior: true };
+  return { value, ...none, retainedPrior: true };
 }
 
 /**
@@ -1542,6 +1611,14 @@ export function deidentify(
   if (deidentMethod.retainedPrior) {
     warnings.push(
       deidentMethodPriorRetained({ byteOffset: priorMethod?.byteOffset ?? 0, fileMeta: false }),
+    );
+  }
+  // The other replacement shape, and until this slice the silent one: a
+  // `(0012,0063)` the file encoded under a VR the join is not defined over. Same
+  // loss as the ceiling fallback, unrelated cause, so it has its own code.
+  if (deidentMethod.replacedNonLoPrior) {
+    warnings.push(
+      deidentMethodNotLo({ byteOffset: priorMethod?.byteOffset ?? 0, fileMeta: false }),
     );
   }
   if (hasUncleanedBurnedIn(ds)) {
