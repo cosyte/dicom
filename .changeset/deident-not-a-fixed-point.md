@@ -26,14 +26,22 @@ it back off, and the next pass appended the whole method again.
 PS3.5 2026c **Table 6.2-1**, `LO` row, read from the SHA-pinned `vendor/nema/part05/`: "A character
 string that **may be padded with leading and/or trailing spaces**." Trailing spaces in an `LO` Value
 are padding, not content, so a de-duplication comparison must be trailing-insensitive on **both**
-sides. **§6.4** says where that pad goes - "a single padding character shall be applied to the end of
-the Value Field (**to the last Value**)" - which is why the trim is over the whole Value Field and
-trailing only: per-value trimming would discard sender bytes no writer added, and leading padding
-survives a round trip untouched and is written through as the caller gave it. Both operands and
-**the value written** go through one trim now, so `deidentify` is a fixed point **from the first
-pass** rather than from the second: the bytes it emits are the bytes it reads back. A
-`deidentificationMethod` that is padding only records nothing, rather than appending an empty value
-whose `\` would itself add a byte per pass.
+sides.
+
+**And the trim is per VALUE, at the comparison - a graded pass refuted the first remedy for it.**
+That draft trimmed each operand as a whole Value Field, which reaches only its last value, so a pad
+byte on an **interior** value of a `1-n` method still regrew the attribute byte-identically to the
+regression: `"Pass A \Pass B"` beside a prior `"Pass B "` read **14 -> 21 -> 28 -> 35 -> 42**, and
+the whole chain was still replaced at the ceiling. Table 6.2-1 describes a **Value** and `LO` is
+`1-n`, so every value's trailing pad is padding, not only the field's; **§6.4**'s "a single padding
+character shall be applied to the end of the Value Field (**to the last Value**)" is about where the
+**encoder** writes its pad, not a bound on what a comparison may ignore. Trimming per value discards
+nothing - it is the comparison that trims, and the prior bytes are still written through verbatim.
+The value **written** is trimmed once over the field, which is exactly where the encoder's pad would
+land, so `deidentify` is a fixed point **from the first pass** rather than from the second: the bytes
+it emits are the bytes it reads back. Leading padding is not trimmed and is written through as the
+caller gave it. A `deidentificationMethod` that is padding only records nothing, rather than
+appending an empty value whose `\` would itself add a byte per pass.
 
 **`DICOM_DEIDENT_METHOD_PRIOR_RETAINED`, a new Tier-2 code.** Keeping the sender's earlier record is
 what PS3.15 E.1.1 requires and nothing about the retention changes - but `(0012,0063)` is not in
@@ -47,7 +55,10 @@ rather than composed from input, and `position.byteOffset` locates the element. 
 Annex E option sets active for this run" - a kept attribute is not an option set, and widening that
 type would break every consumer switching over the nine names. Emitted by `deidentify()` only, so it
 reaches `report.warnings` and never the parser's `{ strict: true }` escalation, and it cannot refuse
-a conformant file.
+a conformant file. **Read it as "bytes from the input file are in `(0012,0063)`", not as "a sender
+wrote something identifying"**: de-identifying an already-de-identified object raises it too, because
+the prior value is then this library's own earlier record and nothing on the wire distinguishes the
+two.
 
 **No reading changes**: no parser file is touched, and nothing outside `(0012,0063)` moves. What does
 move, and is stated rather than glossed: a caller whose `deidentificationMethod` ends in a SPACE or a
@@ -59,6 +70,9 @@ comparison.
 **The pins assert raw bytes.** The shipped pin for the sibling entry was titled for the fixed point,
 picked the one delimiter-carrying input with **no trailing pad byte**, and asserted through a helper
 that strips trailing `[NUL SP]` - named for a property it could not observe, which is how this
-regression went out. Every row here reads the Value Field as it stands, runs six wire passes and
-four in-memory ones, and pins the two measured rows above. Over the full suite at the regressed
-commit, **6 of 1,043** tests run red.
+regression went out. Every row here reads the Value Field as it stands, runs six wire passes and four
+in-memory ones, and pins the two measured rows above plus the interior-pad shape - and because a
+block named for a universal that pins the shapes it just fixed is the same mistake one level up, the
+property is swept over a matrix of 14 method shapes against 6 priors, four in-memory passes and four
+wire round trips per cell, raw-byte equality throughout. Over the full suite at the regressed commit,
+**10 of 1,045** tests run red, in **3** files.

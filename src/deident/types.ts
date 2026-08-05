@@ -458,13 +458,14 @@ export interface DeidentifyOptions {
    * **This string is itself a `1-n` value**: it is split on `\` and only the
    * values not already recorded are added.
    *
-   * **Trailing SPACE and NUL are padding, not content** (PS3.5 Table 6.2-1, `LO`;
-   * §6.4 puts the even-length pad on the last value), so they are trimmed from
-   * this string, from the prior value, and from the value written. That makes
-   * repeated de-identification a fixed point **from the first pass** - whether or
-   * not this string carries a delimiter, and whether or not it ends in a pad
-   * byte. A string that is padding only records nothing. Leading spaces are
-   * yours and are written through untouched.
+   * **Trailing SPACE and NUL are padding, not content** (PS3.5 Table 6.2-1's `LO`
+   * row, which describes a **Value** - and `LO` is `1-n`). They are ignored when
+   * a value here is matched against one already recorded, **per value, on both
+   * sides**, and they are trimmed from the value written. That makes repeated
+   * de-identification a fixed point **from the first pass**, for every string:
+   * with or without a delimiter, and with a pad byte on any value, last or not.
+   * A string that is padding only records nothing. Leading spaces are yours and
+   * are written through untouched.
    *
    * One bound, and it is over the value that would be **written**, not over the
    * join: when that value would exceed the largest Value Length an `LO` can

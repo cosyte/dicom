@@ -1273,21 +1273,29 @@ const MAX_SHORT_FORM_VALUE_BYTES = 0xfffe;
  * PS3.5 2026c Table 6.2-1, `LO` row: "A character string that **may be padded
  * with leading and/or trailing spaces**" - so a trailing space in an `LO` Value
  * is padding, not content, and a comparison that honours that on one side only
- * is not a comparison. Both operands are right-trimmed of `0x20`/`0x00` now, by
- * the one {@link trimTrailingPad} both call; and the value this WRITES is
- * trimmed the same way, so `deidentify` is a fixed point **from the first pass**
- * rather than from the second - the bytes it emits are the bytes it reads back.
+ * is not a comparison.
  *
- * **The trim is over the whole Value Field, not per value, because that is where
- * the standard puts the pad.** PS3.5 2026c §6.4: "If padding is required to make
- * the Value Field of even length, a single padding character shall be applied to
- * the end of the Value Field (**to the last Value**), in which case the length of
- * the last Value may exceed the length of Value by 1." Only the last value can
- * gain a byte on a round trip, so trimming each value separately would discard
- * sender bytes no writer added. **Leading padding is not trimmed either**: the
- * writer only ever pads on the right, so a leading space survives a round trip
- * untouched and cannot break the fixed point - pinned by a test, at a flat 20
- * bytes over four wire passes even on `287efae`.
+ * **🛑 AND THE TRIM IS AT THE `equals`, PER VALUE - A FIFTH GRADED PASS REFUTED
+ * THE DRAFT THAT TRIMMED EACH OPERAND AS A WHOLE VALUE FIELD.** That draft closed
+ * the terminal-pad shape and left the interior one open, because trimming the
+ * field only reaches the last value: a caller method `"Pass A \Pass B"` beside a
+ * prior `"Pass B "` still read **14 -> 21 -> 28 -> 35 -> 42** on the draft,
+ * byte-identical to `287efae`, and still **replaced the whole prior chain** at
+ * the ceiling - measured, at pass **9,362**. `LO` is a `1-n` VR and Table 6.2-1
+ * describes a **Value**, so every value's trailing pad is padding, not only the
+ * field's. §6.4 is about where the ENCODER puts its pad ("a single padding
+ * character shall be applied to the end of the Value Field (**to the last
+ * Value**)"), which is a fact about the write, not a bound on what a comparison
+ * may ignore. **Trimming per value discards nothing**: it is the comparison that
+ * trims, and `kept` is still written through verbatim.
+ *
+ * The value this WRITES is trimmed too - once, over the field, which is exactly
+ * where the encoder's pad would land - so `deidentify` is a fixed point **from
+ * the first pass** rather than from the second: the bytes it emits are the bytes
+ * it reads back. **Leading padding is not trimmed**: the writer only ever pads on
+ * the right, so a leading space survives a round trip untouched and cannot break
+ * the fixed point - pinned by a test, at a flat 20 bytes over four wire passes
+ * even on `287efae`.
  *
  * A method that is padding only therefore records nothing - `""` is not a "text
  * string describing the method used" - rather than appending an empty value
@@ -1361,13 +1369,19 @@ function addDeidentificationMethod(
   const kept = Buffer.from(trimTrailingPad(existing.rawBytes));
   if (kept.length === 0) return { value: added, replacedPrior: false, retainedPrior: false };
 
-  const keptValues = splitValues(kept);
+  // 🛑 THE TRIM IS AT THE `equals`, PER VALUE, AND A FIFTH GRADED PASS IS WHY. A
+  // draft trimmed each operand as a whole Value Field, which leaves the pad on
+  // any value that is not last: a caller method `"Pass A \Pass B"` beside a
+  // prior `"Pass B "` still read 14 -> 21 -> 28 -> 35 -> 42 and still replaced
+  // the whole chain at the ceiling, at pass 9,362. `LO` is `1-n` and Table 6.2-1
+  // describes a VALUE, so every value's trailing pad is padding.
+  const keptValues = splitValues(kept).map(trimTrailingPad);
   // A method that is padding only records nothing, rather than appending an
   // empty value whose `\` grows the attribute by a byte on every pass.
   const missing =
     added.length === 0
       ? []
-      : splitValues(added).filter((v) => !keptValues.some((k) => k.equals(v)));
+      : splitValues(added).filter((v) => !keptValues.some((k) => k.equals(trimTrailingPad(v))));
 
   const parts: Buffer[] = [kept];
   for (const value of missing) {
@@ -1382,7 +1396,10 @@ function addDeidentificationMethod(
   // the first route (the parse warns `DICOM_ODD_LENGTH_VALUE_PADDED` and
   // `{ strict: true }` refuses the file outright), still an outcome base did not
   // have. `kept` is file-supplied on every path here; only `added` is not.
-  const value = Buffer.concat(parts);
+  // Trimmed before the guard, because this is the value that gets WRITTEN: the
+  // bytes it emits have to be the bytes the next parse reads back, or the pass
+  // after that sees a value it did not write.
+  const value = trimTrailingPad(Buffer.concat(parts));
   if (value.length > MAX_SHORT_FORM_VALUE_BYTES) {
     return { value: added, replacedPrior: true, retainedPrior: false };
   }
@@ -1400,10 +1417,14 @@ function addDeidentificationMethod(
  * character string that may be padded with leading and/or trailing spaces" - the
  * pad is not content, so it cannot be content on one side only.
  *
- * **Trailing only, and over the whole Value Field.** PS3.5 2026c §6.4 puts the
- * pad "at the end of the Value Field (to the last Value)", so nothing else can
- * gain a byte on a round trip; leading spaces the sender wrote are copied
- * through.
+ * **Trailing only**: leading spaces the sender wrote are copied through, because
+ * the writer only ever pads on the right (PS3.5 2026c §6.4, "a single padding
+ * character shall be applied to the end of the Value Field (to the last Value)").
+ *
+ * **Called per VALUE at the comparison and once over the field at the write.** A
+ * fifth graded pass refuted the draft that called it only over the field: `LO` is
+ * `1-n`, Table 6.2-1 describes a Value, and a pad byte on a value that is not
+ * last regrew the attribute exactly as the terminal one did.
  */
 function trimTrailingPad(value: Buffer): Buffer {
   let end = value.length;

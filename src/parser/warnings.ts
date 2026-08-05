@@ -1008,6 +1008,11 @@ export function deidentMethodNotAdded(position: DicomPosition): DicomParseWarnin
  * **a stamp that outran the redaction**, which is the shape of failure this
  * package has opened items for twice.
  *
+ * **Read it as "bytes from the input file are in `(0012,0063)`", never as "the
+ * sender wrote something identifying".** De-identifying an object this library
+ * already de-identified raises it too: the prior value is then this library's own
+ * earlier record, and nothing on the wire distinguishes that from a third party's.
+ *
  * **It is not on `report.retained`, deliberately.** That field is the list of
  * Annex E option sets active for the run, typed `DeidentifyOption[]`; a retained
  * `(0012,0063)` is not an option set, and widening the type to carry it would

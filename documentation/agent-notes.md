@@ -49,12 +49,17 @@ then the two gates.
   trailing-space-insensitive **on both sides**; `#73` implemented exactly half of that. **§6.4 says
   where the pad goes**: "If padding is required to make the Value Field of even length, a single
   padding character shall be applied to the end of the Value Field (**to the last Value**), in which
-  case the length of the last Value may exceed the length of Value by 1." That is why the trim is
-  over the **whole Value Field** and **trailing only** - per-value trimming would discard sender
-  bytes no writer added, and leading padding survives a round trip untouched (flat at 20 wire bytes
-  even on `287efae`, so that row is a control, not a pin).
-  **▶ THE REMEDY, AND ITS ONE DELIBERATE WIDENING.** Both operands go through one
-  `trimTrailingPad`, and **the value written is trimmed the same way**, so `deidentify` is a fixed
+  case the length of the last Value may exceed the length of Value by 1."
+  **▶ 🛑 THOSE TWO SENTENCES GOVERN DIFFERENT THINGS, AND READING §6.4 AS A BOUND ON THE COMPARISON
+  IS WHAT THE FIRST REMEDY GOT WRONG.** Table 6.2-1 says what counts as content **in a Value**, and
+  `LO` is `1-n`, so **every** value's trailing pad is padding - the trim at the `equals` is therefore
+  **per value**. §6.4 says where the **encoder** puts its even-length pad, which is a fact about the
+  write: that is why the value **written** is trimmed once, over the whole field. Per-value trimming
+  discards nothing, because it is the comparison that trims and `kept` is still written through
+  verbatim. **Trailing only either way**: leading padding survives a round trip untouched (flat at 20
+  wire bytes even on `287efae`, so that row is a control, not a pin).
+  **▶ THE REMEDY.** `keptValues` and each added value go through `trimTrailingPad` at the
+  comparison, and **the value written is trimmed once over the field**, so `deidentify` is a fixed
   point **from the first pass** rather than from the second - the bytes it emits are the bytes it
   reads back. A method that is padding only therefore records nothing, rather than appending an empty
   value whose `\` would itself add a byte per pass.
@@ -64,7 +69,12 @@ then the two gates.
   the failure `#66` and `#69` were each opened for. The retention is correct (PS3.15 E.1.1 says
   "added to", and Table E.1-1 does not list the attribute, so nothing audited those bytes); the
   silence was not. `deidentify` now raises **`DICOM_DEIDENT_METHOD_PRIOR_RETAINED`** on
-  `report.warnings` whenever prior file bytes survive into the output.
+  `report.warnings` whenever prior file bytes survive into the output. **🛑 READ IT AS "BYTES FROM
+  THE INPUT FILE ARE IN `(0012,0063)`", NEVER AS "THE SENDER WROTE SOMETHING IDENTIFYING"** - a
+  second pass over an object this library already de-identified raises it too, because the prior
+  value is then this library's own earlier record and nothing on the wire tells the two apart. A
+  graded pass asked for that sentence; it is in the JSDoc, the troubleshooting row, the changeset and
+  a test.
   **▶ WHY NOT `report.retained`.** That field is typed `readonly DeidentifyOption[]` and means "the
   Annex E option sets active for this run". A retained `(0012,0063)` is not an option set, and
   widening the type to carry it would break every consumer switching over the nine names. The
@@ -85,11 +95,29 @@ then the two gates.
   body called that pattern out twice and it recurred a third time inside the same slice.** The pins
   assert **raw bytes**, run **six** passes on the wire rows and four in memory, and `methodOf` now
   carries a header saying it must never hold a fixed-point assertion.
+  **▶ 🛑 AND IT RECURRED A FOURTH TIME, ONE LEVEL UP, IN THE FIRST REMEDY FOR THIS VERY ITEM.** That
+  draft trimmed each operand as a **whole Value Field**, which reaches only its LAST value - so a pad
+  byte on an **interior** value of a `1-n` method still regrew the attribute, byte-identically to the
+  regression: `"Pass A \Pass B"` beside a prior `"Pass B "` read **14 -> 21 -> 28 -> 35 -> 42** in
+  memory (wire **14 -> 22 -> 28 -> 36 -> 42**) and a prose-shaped pair read
+  **40 -> 59 -> 78 -> 97 -> 116**, against a flat **14** and **40** on `e75fb38`; the chain was still
+  replaced at the ceiling, at pass **9,362**. **The block was named for a universal and pinned the two
+  shapes it had just fixed.** Pass 1 of this item's own gate refused it. `LO` is `1-n` and Table 6.2-1
+  describes a **Value**, so the trim at the `equals` is **per value**; §6.4 is about where the ENCODER
+  puts its pad, which is why the value **written** is trimmed once over the field. **A block named for
+  a universal now sweeps a matrix** - 14 method shapes x 6 priors, four in-memory passes and four wire
+  round trips each, raw-byte equality per cell - because two graded passes on one item were each spent
+  on a caller string nobody had thought to try.
   **▶ THE BASE-RED FIGURE, WITH ITS SHA.** Over the **full suite** at `287efae` with these tests
-  added: **6 of 1,043** red (one file of 66). Five are the growth rows; the sixth is the disclosure
-  row, which is red on that base for two reasons at once, because the code it names does not exist
-  there. Re-derive it rather than quoting it, and remember that
-  `git checkout <base> -- src/` **overlays** - `src/` was removed and restored, not overlaid.
+  added: **10 of 1,045** red, in **3** files (of 65). Seven are in
+  `test/deident/deident-method-add.test.ts` - the growth rows plus the disclosure row - and the other
+  two artifacts of this slice are red there for a second reason as well, because the code they name
+  does not exist on that tree: the `(0012,0063)` slot in
+  `test/integration/phi-diagnostic-surface.test.ts` and the locked `WARNING_CODES` snapshot. **A
+  first count read 6 and omitted those two**; a graded pass caught it. Re-derive rather than quoting,
+  re-run after every test **added or strengthened** (this figure moved twice inside one slice), and
+  remember that `git checkout <base> -- src/` **overlays** - `src/` was removed and restored, never
+  overlaid.
   **▶ THREE `PRE-EXISTING` LINES WERE DELIBERATELY NOT CUT IN** (the pass-4 grader advised against
   it and the founder agreed): the default `(0012,0063)` overruns `LO`'s 64-character per-value
   maximum; a `(0012,0063)` a file encoded under a VR other than `LO` is replaced silently;

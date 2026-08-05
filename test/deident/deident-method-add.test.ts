@@ -374,16 +374,30 @@ describe("🩺 the join is bounded, because an unencodable value takes the whole
  * `parse -> deidentify -> serializeDicom -> parse` round trip a 16-byte method
  * read **16 -> 32 -> 48 -> 64 -> 80 -> 96**.
  *
+ * **🛑 AND THE FIRST FIX FOR IT WAS REFUTED IN TURN, WHICH IS WHY THE SWEEP AT
+ * THE END OF THIS BLOCK EXISTS.** Trimming each operand as a whole Value Field
+ * reaches only its LAST value, so a pad byte on an interior value of a `1-n`
+ * method still regrew the attribute: `"Pass A \Pass B"` beside a prior
+ * `"Pass B "` read **14 -> 21 -> 28 -> 35 -> 42** on that draft, byte-identical
+ * to `287efae`, against a flat **14** on `e75fb38` - and it still replaced the
+ * whole chain at the ceiling. A block named for a universal must sweep the
+ * shapes, not pin the two it fixed.
+ *
  * PS3.5 2026c Table 6.2-1, `LO` row: "A character string that may be padded with
- * leading and/or trailing spaces." The pad is not content, so it cannot be
- * content on one side of a comparison only. §6.4 puts that pad "at the end of
- * the Value Field (to the last Value)", which is why the trim is over the whole
- * Value Field and trailing only.
+ * leading and/or trailing spaces." `LO` is `1-n` and that row describes a
+ * **Value**, so the trim at the comparison is **per value**; §6.4's "single
+ * padding character … to the end of the Value Field (to the last Value)" is
+ * about where the encoder writes its pad, which is why the value WRITTEN is
+ * trimmed once, over the field.
  */
 describe("🩺 repeated de-identification is a fixed point, on raw bytes", () => {
   /** `(0012,0063)` after each of `passes` full wire round trips. */
-  function wirePasses(method: string, passes: number): Buffer[] {
-    let bytes = serializeDicom(buildWithPriorMethod());
+  function wirePasses(method: string, passes: number, prior?: Buffer): Buffer[] {
+    let bytes = serializeDicom(
+      prior === undefined
+        ? buildWithPriorMethod()
+        : buildWithPriorMethod({ vr: "LO" as VR, value: prior }),
+    );
     const seen: Buffer[] = [];
     for (let i = 0; i < passes; i++) {
       const { dataset } = deidentify(parseDicom(bytes), { deidentificationMethod: method });
@@ -459,6 +473,106 @@ describe("🩺 repeated de-identification is a fixed point, on raw bytes", () =>
     expectFlat(memoryPasses("   ", 3, even(PRIOR)), PRIOR);
     expectFlat(memoryPasses("   ", 3), "");
   });
+
+  it("🛑 an INTERIOR value's pad byte: 14 -> 21 -> 28 -> 35 -> 42 on 287efae AND on the first fix", () => {
+    // The shape a graded pass found in the first remedy. Trimming each operand
+    // as a whole Value Field reaches only its last value, so `"Pass A "` sitting
+    // ahead of the delimiter never matched its own prior copy and the attribute
+    // regrew byte-identically to the regression: 14 -> 21 -> 28 -> 35 -> 42 in
+    // memory (wire 14 -> 22 -> 28 -> 36 -> 42), against a flat 14 on `e75fb38`,
+    // and it still replaced the whole chain at the ceiling. Five passes.
+    expectFlat(
+      memoryPasses(`Pass A ${BACKSLASH}Pass B`, 5, Buffer.from("Pass B  ", "latin1")),
+      "Pass B\\Pass A",
+    );
+    expectFlat(
+      wirePasses(`Pass A ${BACKSLASH}Pass B`, 5, Buffer.from("Pass B  ", "latin1")),
+      "Pass B\\Pass A ",
+    );
+
+    // A NUL in the interior position, the same way round.
+    expectFlat(
+      memoryPasses(`Pass A\0${BACKSLASH}Pass B`, 5, Buffer.from("Pass B  ", "latin1")),
+      "Pass B\\Pass A",
+    );
+
+    // And with a longer, prose-shaped pair, which is what a real caller writes:
+    // 40 -> 59 -> 78 -> 97 -> 116 on `287efae` and on the first fix.
+    expectFlat(
+      memoryPasses(
+        `ACME Anonymizer v3 ${BACKSLASH}PS3.15 Basic Profile`,
+        5,
+        Buffer.from("PS3.15 Basic Profile", "latin1"),
+      ),
+      "PS3.15 Basic Profile\\ACME Anonymizer v3",
+    );
+  });
+
+  /**
+   * 🛑 **A BLOCK NAMED FOR A UNIVERSAL SWEEPS THE SHAPES.** Two graded passes on
+   * this one item were each spent on a caller string nobody had thought to try -
+   * a terminal pad byte, then an interior one - so the property is asserted over
+   * a matrix rather than over the inputs that motivated each fix. Every cell runs
+   * four in-memory passes and four wire round trips and demands raw-byte
+   * equality; a cell that grows by even one byte per pass is red.
+   */
+  it("🛑 the SWEEP: every pad position, delimiter count and prior, flat over four passes", () => {
+    const methods = [
+      "ACME v3",
+      "ACME v3 ",
+      "ACME v3\0",
+      " ACME v3",
+      ` ACME v3 ${BACKSLASH} Pass B `,
+      `A${BACKSLASH}B`,
+      `A ${BACKSLASH}B`,
+      `A${BACKSLASH}B `,
+      `A ${BACKSLASH}B `,
+      `A\0${BACKSLASH}B\0`,
+      `A${BACKSLASH}${BACKSLASH}B`,
+      `A${BACKSLASH}A `,
+      `${BACKSLASH}A`,
+      `A${BACKSLASH}`,
+    ];
+    const priors = [
+      undefined,
+      Buffer.from("B ", "latin1"),
+      Buffer.from("A  ", "latin1"),
+      Buffer.from(`A ${BACKSLASH}B `, "latin1"),
+      Buffer.from(`B${BACKSLASH}A`, "latin1"),
+      even(PRIOR),
+    ];
+    for (const method of methods) {
+      for (const prior of priors) {
+        const mem = memoryPasses(method, 4, prior);
+        const first = mem[0] ?? Buffer.alloc(0);
+        for (const raw of mem) {
+          expect(
+            { method, prior: prior?.toString("latin1"), lengths: mem.map((r) => r.length) },
+            "in-memory passes must be byte-identical",
+          ).toEqual({
+            method,
+            prior: prior?.toString("latin1"),
+            lengths: mem.map(() => first.length),
+          });
+          expect(raw.equals(first)).toBe(true);
+        }
+
+        const onWire = wirePasses(method, 4, prior);
+        const firstWire = onWire[0] ?? Buffer.alloc(0);
+        for (const raw of onWire) {
+          expect(
+            { method, prior: prior?.toString("latin1"), lengths: onWire.map((r) => r.length) },
+            "wire round trips must be byte-identical",
+          ).toEqual({
+            method,
+            prior: prior?.toString("latin1"),
+            lengths: onWire.map(() => firstWire.length),
+          });
+          expect(raw.equals(firstWire)).toBe(true);
+        }
+      }
+    }
+  });
 });
 
 describe("what adding rather than replacing costs, disclosed", () => {
@@ -523,6 +637,17 @@ describe("what adding rather than replacing costs, disclosed", () => {
       buildWithPriorMethod({ vr: "LO" as VR, value: Buffer.from("  ", "latin1") }),
     );
     expect(padded.report.warnings.map((w) => w.code)).not.toContain(
+      WARNING_CODES.DICOM_DEIDENT_METHOD_PRIOR_RETAINED,
+    );
+
+    // But it DOES fire on this library's own earlier record, and that is the
+    // honest reading: on a second pass the prior value is a value the input file
+    // carried, and nothing on the wire says who wrote it. The code means "bytes
+    // from the input file are in (0012,0063)", never "the sender wrote something
+    // identifying" - stated in the code's JSDoc, the troubleshooting row and the
+    // changeset, so it is pinned here rather than left to the reader.
+    const twice = deidentify(deidentify(buildWithPriorMethod()).dataset);
+    expect(twice.report.warnings.map((w) => w.code)).toContain(
       WARNING_CODES.DICOM_DEIDENT_METHOD_PRIOR_RETAINED,
     );
 

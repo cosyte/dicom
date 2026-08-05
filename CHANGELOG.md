@@ -22,11 +22,18 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   the serializer's even-length pad folded the trailing byte in, the next parse trimmed it off, and
   the next pass appended the method again. PS3.5 2026c **Table 6.2-1**, `LO` row: "A character string
   that **may be padded with leading and/or trailing spaces**" - trailing spaces are padding, not
-  content, so the comparison cannot honour that on one side only. **§6.4** puts the pad "at the end
-  of the Value Field (**to the last Value**)", which is why the trim is over the whole Value Field
-  and trailing only; leading spaces a caller wrote are still written through untouched. Both
-  operands and **the value written** are trimmed now, so `deidentify` is a fixed point **from the
-  first pass**. A `deidentificationMethod` that is padding only records nothing.
+  content, so the comparison cannot honour that on one side only.
+
+  **The trim is per VALUE at the comparison, and a graded pass is why.** A first remedy trimmed each
+  operand as a whole Value Field, which reaches only its last value, so a pad byte on an interior
+  value of a `1-n` method still regrew the attribute byte-identically: `"Pass A \Pass B"` beside a
+  prior `"Pass B "` read **14 -> 21 -> 28 -> 35 -> 42**, and the chain was still replaced at the
+  ceiling. Table 6.2-1 describes a **Value** and `LO` is `1-n`, so every value's trailing pad is
+  padding; **§6.4**'s "single padding character ... to the end of the Value Field (**to the last
+  Value**)" is about where the encoder writes its pad, which is why the value **written** is trimmed
+  once over the field. Leading spaces a caller wrote are still written through untouched. With both,
+  `deidentify` is a fixed point **from the first pass**. A `deidentificationMethod` that is padding
+  only records nothing.
 
 - **🩺 A prior `(0012,0063)` value surviving into de-identified output is no longer silent**, via
   the new Tier-2 code **`DICOM_DEIDENT_METHOD_PRIOR_RETAINED`** on `report.warnings`. Keeping it is
