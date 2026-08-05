@@ -233,7 +233,8 @@ then the two gates.
   on the registry at all** (`package.json` carried it, the publish never happened, npm `E404`), which
   is why every "live on the published `0.0.9`" in this repo named a version that does not exist.
   **▶ 🛑 THE STALE BASE FIGURE IS RE-MEASURED AND BOTH HALVES ARE RETIRED, NOT REWORDED.** Fresh
-  against `origin/main` at `300af87`: **8 of the 37** tests in
+  against the **sha** `300af87` (`origin/main` when this was written, not since `#69`):
+  **8 of the 37** tests in
   `test/integration/deident-private-reservation.test.ts` run red, and they are exactly the eight eject
   tests; the remaining private-`SQ` residual is **green** on that base, by design. The old
   "**10 of the 31**" was measured against a **pre-`#66`** tree, so it was never a claim about today's
@@ -344,7 +345,7 @@ then the two gates.
 > the two residual tests are green on base by design". Both halves are retired:
 >
 > - The **10 of 31** was measured against a **pre-`#66`** tree, so it was never a claim about
->   today's `main`. **Fresh, against `origin/main` at `300af87`: 8 of the 37** run red, and they are
+>   today's `main`. **Fresh, against the sha `300af87`: 8 of the 37** run red, and they are
 >   exactly the eight eject tests this slice added or rewrote. (That figure was itself re-measured
 >   after a pass-1 remedy added three tests: it read 5 of 34 before them. **Inside the bullet that
 >   says a moving-base figure is not a fact.** Re-run it after every test you add.)
@@ -353,6 +354,26 @@ then the two gates.
 >   `DICOM_ITEM_CROSSES_SEQUENCE_END` has been on `main` since `79e9f34`, so asserting it is green
 >   there. Measured: the one remaining residual (the private-`SQ` carve-out) is **green** on
 >   `300af87`, by design, because it asserts behaviour base exhibits.
+> - **RE-RUN AT `2daf0e3` (`DICOM-ITEM-CROSSES-RESIDUALS`, 2026-08-05), because `#70` edited this
+>   test file after the measurement above was taken.** Same 37 tests, three bases, measured rather
+>   than reasoned about: **8 of 37 red on `300af87`** - unchanged, and still exactly the eight eject
+>   tests; **2 of 37 red on `0ead071`**, where six of the eight go green because `#69`'s fix is in
+>   that `src/` and the two that stay red are the two `#70` strengthened to assert
+>   `DICOM_DUPLICATE_TAG_IN_DATA_SET`, a code absent before it; and **0 of 37 on `2daf0e3`**, which
+>   is `origin/main` today. **The `300af87` number survived only because `#70`'s two new assertions
+>   landed inside tests that were already red there - it did not survive by being a fact.** So the
+>   rule below gains a clause: re-run after every test you add **or strengthen**. `#70` added no
+>   test, so the old clause obliged nothing, and that is the gap - not an oversight by `#70`.
+> - **A BASE SWAP MUST REPLACE `src/`, NOT OVERLAY IT - AND THIS BIT THE FIRST DRAFT OF THE BULLET
+>   ABOVE, which is why the recipe is written here rather than left to the next worker.**
+>   `git worktree add --detach <dir> HEAD` then `git -C <dir> checkout <base> -- src/` restores only
+>   the paths that exist at `<base>`; it does **not** remove paths added since, so
+>   `src/parser/data-set-map.ts` (new in `#70`) survives and the tree measured is the base **plus**
+>   one HEAD module. The three figures above are identical under both recipes **only because that
+>   module is unreferenced by the base parser** - luck, not method, and the same shape as the
+>   `300af87` number surviving. So: `rm -rf src` first, or `git archive <base> src | tar -x`, then
+>   run that one test file in `<dir>`. Both recipes were run; the figures quoted are the replacing
+>   one's.
 >
 > **The rule, which this file already carried once under
 > [DICOM-PARSE-CREATORS-SCOPE](#dicom-parse-creators-scope) and which two slices have now paid for:
