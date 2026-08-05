@@ -55,11 +55,13 @@ on `0.0.10`, a file recording `"ACME Anonymizer v3 Basic Profile"` came out of `
 recording only this library's method, with the earlier one gone and nothing saying so. This release
 appends its own text as a further value of the `1-n` attribute after a `\`, copying the prior bytes
 through verbatim so a value encoded under a `(0008,0005)` repertoire survives byte for byte. A value
-that already records this method is left alone, so `deidentify(deidentify(ds))` is a fixed
-point rather than a growing string. **The comparison is per VALUE on both sides**: the method string
-is itself a `1-n` value, and a graded pass refuted the draft that compared the whole string against
-each prior value - a caller method carrying a `\` never matched one, and every pass appended a
-further copy (29 -> 59 -> 89 -> 119 bytes over four passes, against a flat 29 on base).
+that already records this method is left alone rather than growing the attribute. **The comparison is
+per VALUE on both sides**: the method string is itself a `1-n` value, and a graded pass refuted the
+draft that compared the whole string against each prior value - a caller method carrying a `\` never
+matched one, and every pass appended a whole further copy (29 -> 59 -> 89 -> 119 bytes over four
+passes, against a flat 29 on base). **Per value was necessary and not sufficient, and the
+fixed-point property as first written did not hold**: see the trailing-pad entry in this release,
+which is what makes it true from the first pass.
 
 **The join is bounded, and the bound is not cosmetic.** `LO` is a short-form VR, so
 `encodeDatasetElement` writes its Value Length with a 16-bit field. A `(0012,0063)` carrying a legal

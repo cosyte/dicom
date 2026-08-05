@@ -405,7 +405,15 @@ export interface DeidentifyReport {
   readonly uidMap: ReadonlyMap<string, string>;
   /** Safety warnings - notably burned-in-pixel annotation that cannot be cleaned. */
   readonly warnings: readonly DicomParseWarning[];
-  /** The Retain/Clean options that were active for this run. */
+  /**
+   * The Retain/Clean options that were active for this run.
+   *
+   * **Not a list of what survived.** Attributes Table E.1-1 does not list are
+   * kept without appearing anywhere in this field - `(0012,0063)`
+   * De-identification Method is the one whose retention is disclosed, and it is
+   * disclosed as `DICOM_DEIDENT_METHOD_PRIOR_RETAINED` on
+   * {@link DeidentifyReport.warnings}, because it is not an option set.
+   */
   readonly retained: readonly DeidentifyOption[];
 }
 
@@ -448,8 +456,16 @@ export interface DeidentifyOptions {
    * provenance chain, not a replacement.
    *
    * **This string is itself a `1-n` value**: it is split on `\` and only the
-   * values not already recorded are added, so repeated de-identification is a
-   * fixed point whether or not it carries a delimiter.
+   * values not already recorded are added.
+   *
+   * **Trailing SPACE and NUL are padding, not content** (PS3.5 Table 6.2-1's `LO`
+   * row, which describes a **Value** - and `LO` is `1-n`). They are ignored when
+   * a value here is matched against one already recorded, **per value, on both
+   * sides**, and they are trimmed from the value written. That makes repeated
+   * de-identification a fixed point **from the first pass**, for every string:
+   * with or without a delimiter, and with a pad byte on any value, last or not.
+   * A string that is padding only records nothing. Leading spaces are yours and
+   * are written through untouched.
    *
    * One bound, and it is over the value that would be **written**, not over the
    * join: when that value would exceed the largest Value Length an `LO` can
@@ -464,6 +480,11 @@ export interface DeidentifyOptions {
    * `DICOM_DEIDENT_METHOD_NOT_ADDED` means "the length ceiling was reached", never
    * "every fallback is disclosed": a `(0012,0063)` a file encoded under a VR other
    * than `LO` is also replaced, and that one is silent.
+   *
+   * When the prior value **is** kept, `report.warnings` carries
+   * `DICOM_DEIDENT_METHOD_PRIOR_RETAINED`: `(0012,0063)` is not in Table E.1-1, so
+   * nothing in the run inspected or redacted those bytes, and a name a sender
+   * wrote there is in output stamped `(0012,0062) = YES`.
    */
   readonly deidentificationMethod?: string;
 }

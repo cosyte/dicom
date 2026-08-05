@@ -139,6 +139,7 @@ import type { DicomParseWarning } from "../parser/warnings.js";
 import {
   burnedInAnnotationNotRemoved,
   deidentMethodNotAdded,
+  deidentMethodPriorRetained,
   embeddedAttributeRemoved,
   sequenceNotAuditable,
   undefinedVrNotAuditable,
@@ -1249,9 +1250,56 @@ const MAX_SHORT_FORM_VALUE_BYTES = 0xfffe;
  *    that carries a `\` never matched any single prior value and every pass
  *    appended a whole further copy - measured at 29 -> 59 -> 89 -> 119 bytes over
  *    four passes, against a flat 29 on base, and it reaches the ceiling below and
- *    throws at pass 2185. `deidentify(deidentify(ds))` is a fixed point on both
- *    shapes now.
+ *    throws at pass 2185.
  *  - **A prior value the join cannot be encoded beside** - see the ceiling below.
+ *
+ * **🛑 THE PAD COMPARISON IS TRAILING-INSENSITIVE ON BOTH SIDES, AND A FOURTH
+ * GRADED PASS IS WHY. THE FIRST FIX FOR THE GROWTH ABOVE MADE THE COMPARISON
+ * ASYMMETRIC AND SO GREW THE ATTRIBUTE FOR A DIFFERENT CALLER STRING.** `kept`
+ * was right-trimmed of `0x20`/`0x00` and `added` was not, so a
+ * `deidentificationMethod` ending in a SPACE or a NUL never equalled its own
+ * prior copy: this library wrote the method, `encodeDatasetElement`'s
+ * even-length pad absorbed the trailing byte, the next parse trimmed it back off
+ * and the next pass appended the whole method again. Measured on `287efae`, in
+ * memory: `"ACME Anonymizer v3 "` read **19 -> 38 -> 57 -> 76** bytes over four
+ * passes and `"Pass A\Pass B "` read **14 -> 21 -> 28 -> 35**, against a flat
+ * **19** and **14** on `e75fb38` (which replaced, so it was a trivial fixed
+ * point). Over a real `parse -> deidentify -> serializeDicom -> parse` round
+ * trip a 16-byte method read **16 -> 32 -> 48 -> 64 -> 80 -> 96**. Growth ends
+ * at the ceiling below, where the guard **replaces the whole prior chain** - the
+ * exact loss this function exists to prevent, reached from a benign caller
+ * string.
+ *
+ * PS3.5 2026c Table 6.2-1, `LO` row: "A character string that **may be padded
+ * with leading and/or trailing spaces**" - so a trailing space in an `LO` Value
+ * is padding, not content, and a comparison that honours that on one side only
+ * is not a comparison.
+ *
+ * **🛑 AND THE TRIM IS AT THE `equals`, PER VALUE - A FIFTH GRADED PASS REFUTED
+ * THE DRAFT THAT TRIMMED EACH OPERAND AS A WHOLE VALUE FIELD.** That draft closed
+ * the terminal-pad shape and left the interior one open, because trimming the
+ * field only reaches the last value: a caller method `"Pass A \Pass B"` beside a
+ * prior `"Pass B "` still read **14 -> 21 -> 28 -> 35 -> 42** on the draft,
+ * byte-identical to `287efae`, and still **replaced the whole prior chain** at
+ * the ceiling - measured, at pass **9,362**. `LO` is a `1-n` VR and Table 6.2-1
+ * describes a **Value**, so every value's trailing pad is padding, not only the
+ * field's. §6.4 is about where the ENCODER puts its pad ("a single padding
+ * character shall be applied to the end of the Value Field (**to the last
+ * Value**)"), which is a fact about the write, not a bound on what a comparison
+ * may ignore. **Trimming per value discards nothing**: it is the comparison that
+ * trims, and `kept` is still written through verbatim.
+ *
+ * The value this WRITES is trimmed too - once, over the field, which is exactly
+ * where the encoder's pad would land - so `deidentify` is a fixed point **from
+ * the first pass** rather than from the second: the bytes it emits are the bytes
+ * it reads back. **Leading padding is not trimmed**: the writer only ever pads on
+ * the right, so a leading space survives a round trip untouched and cannot break
+ * the fixed point - pinned by a test, at a flat 20 bytes over four wire passes
+ * even on `287efae`.
+ *
+ * A method that is padding only therefore records nothing - `""` is not a "text
+ * string describing the method used" - rather than appending an empty value
+ * whose `\` would itself grow the attribute by one byte per pass.
  *
  * **🩺 THE CEILING IS NOT A STYLE CHOICE. AN UNBOUNDED APPEND CRASHES THE
  * SERIALIZER, AND A GRADED PASS FOUND IT ON A FILE THE PARSER CALLS CLEAN.**
@@ -1299,24 +1347,41 @@ const MAX_SHORT_FORM_VALUE_BYTES = 0xfffe;
  * concatenate into, so that case still replaces. And the delimiter split is a
  * comparison only - a repertoire where 5CH is not the delimiter can at worst make
  * it append a value it could have skipped, which loses nothing.
+ *
+ * **`retainedPrior` says the output carries bytes the SOURCE FILE wrote.** A
+ * `(0012,0063)` is not in Table E.1-1, so nothing audited or redacted those
+ * bytes; before this they reached output stamped `(0012,0062) = YES` with
+ * `report.warnings` empty and `report.retained` `[]`, which is a stamp that
+ * outran the redaction. The caller gets `DICOM_DEIDENT_METHOD_PRIOR_RETAINED`
+ * now. It is **not** carried on `report.retained`: that field is the list of
+ * Annex E option sets active for the run and a retained `(0012,0063)` is not one
+ * of them, so widening its type to say this would make every consumer's `switch`
+ * over `DeidentifyOption` wrong.
  */
 function addDeidentificationMethod(
   existing: Element | undefined,
   method: string,
-): { readonly value: Buffer; readonly replacedPrior: boolean } {
-  const added = Buffer.from(method, "latin1");
-  if (existing === undefined || existing.vr !== "LO") return { value: added, replacedPrior: false };
-  let end = existing.rawBytes.length;
-  while (end > 0) {
-    const last = existing.rawBytes[end - 1];
-    if (last === 0x20 || last === 0x00) end--;
-    else break;
+): { readonly value: Buffer; readonly replacedPrior: boolean; readonly retainedPrior: boolean } {
+  const added = trimTrailingPad(Buffer.from(method, "latin1"));
+  if (existing === undefined || existing.vr !== "LO") {
+    return { value: added, replacedPrior: false, retainedPrior: false };
   }
-  const kept = Buffer.from(existing.rawBytes.subarray(0, end));
-  if (kept.length === 0) return { value: added, replacedPrior: false };
+  const kept = Buffer.from(trimTrailingPad(existing.rawBytes));
+  if (kept.length === 0) return { value: added, replacedPrior: false, retainedPrior: false };
 
-  const keptValues = splitValues(kept);
-  const missing = splitValues(added).filter((v) => !keptValues.some((k) => k.equals(v)));
+  // 🛑 THE TRIM IS AT THE `equals`, PER VALUE, AND A FIFTH GRADED PASS IS WHY. A
+  // draft trimmed each operand as a whole Value Field, which leaves the pad on
+  // any value that is not last: a caller method `"Pass A \Pass B"` beside a
+  // prior `"Pass B "` still read 14 -> 21 -> 28 -> 35 -> 42 and still replaced
+  // the whole chain at the ceiling, at pass 9,362. `LO` is `1-n` and Table 6.2-1
+  // describes a VALUE, so every value's trailing pad is padding.
+  const keptValues = splitValues(kept).map(trimTrailingPad);
+  // A method that is padding only records nothing, rather than appending an
+  // empty value whose `\` grows the attribute by a byte on every pass.
+  const missing =
+    added.length === 0
+      ? []
+      : splitValues(added).filter((v) => !keptValues.some((k) => k.equals(trimTrailingPad(v))));
 
   const parts: Buffer[] = [kept];
   for (const value of missing) {
@@ -1331,11 +1396,44 @@ function addDeidentificationMethod(
   // the first route (the parse warns `DICOM_ODD_LENGTH_VALUE_PADDED` and
   // `{ strict: true }` refuses the file outright), still an outcome base did not
   // have. `kept` is file-supplied on every path here; only `added` is not.
-  const value = Buffer.concat(parts);
+  // Trimmed before the guard, because this is the value that gets WRITTEN: the
+  // bytes it emits have to be the bytes the next parse reads back, or the pass
+  // after that sees a value it did not write.
+  const value = trimTrailingPad(Buffer.concat(parts));
   if (value.length > MAX_SHORT_FORM_VALUE_BYTES) {
-    return { value: added, replacedPrior: true };
+    return { value: added, replacedPrior: true, retainedPrior: false };
   }
-  return { value, replacedPrior: false };
+  return { value, replacedPrior: false, retainedPrior: true };
+}
+
+/**
+ * Right-trim the `0x20` / `0x00` a writer's even-length pad can add to a string
+ * Value Field and a reader can strip back off.
+ *
+ * 🛑 **BOTH SIDES OF THE `(0012,0063)` COMPARISON GO THROUGH THIS ONE FUNCTION,
+ * AND A FOURTH GRADED PASS IS WHY.** Trimming the prior value and not the added
+ * one made a `deidentificationMethod` ending in a SPACE or NUL grow the
+ * attribute by its own length on every pass. PS3.5 2026c Table 6.2-1 `LO`: "A
+ * character string that may be padded with leading and/or trailing spaces" - the
+ * pad is not content, so it cannot be content on one side only.
+ *
+ * **Trailing only**: leading spaces the sender wrote are copied through, because
+ * the writer only ever pads on the right (PS3.5 2026c §6.4, "a single padding
+ * character shall be applied to the end of the Value Field (to the last Value)").
+ *
+ * **Called per VALUE at the comparison and once over the field at the write.** A
+ * fifth graded pass refuted the draft that called it only over the field: `LO` is
+ * `1-n`, Table 6.2-1 describes a Value, and a pad byte on a value that is not
+ * last regrew the attribute exactly as the terminal one did.
+ */
+function trimTrailingPad(value: Buffer): Buffer {
+  let end = value.length;
+  while (end > 0) {
+    const last = value[end - 1];
+    if (last === 0x20 || last === 0x00) end--;
+    else break;
+  }
+  return value.subarray(0, end);
 }
 
 /** Split a string-VR value on the `\` delimiter. Never empty: `[]` splits to `[""]`. */
@@ -1435,6 +1533,15 @@ export function deidentify(
   if (deidentMethod.replacedPrior) {
     warnings.push(
       deidentMethodNotAdded({ byteOffset: priorMethod?.byteOffset ?? 0, fileMeta: false }),
+    );
+  }
+  // 🩺 The other half of the same disclosure: when the join DID happen, source
+  // bytes no rule in Table E.1-1 audited are in the output under
+  // `(0012,0062) = YES`. Silence there is the failure this package keeps opening
+  // items for - an audit that reads as a scrub it did not perform.
+  if (deidentMethod.retainedPrior) {
+    warnings.push(
+      deidentMethodPriorRetained({ byteOffset: priorMethod?.byteOffset ?? 0, fileMeta: false }),
     );
   }
   if (hasUncleanedBurnedIn(ds)) {

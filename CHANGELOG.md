@@ -6,6 +6,48 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Fixed
 
+- **🩺 Repeated de-identification was not a fixed point: `(0012,0063)` grew by the whole method
+  string on every pass, for any `deidentificationMethod` ending in a SPACE or a NUL**
+  (`DICOM-DEIDENT-NOT-A-FIXED-POINT`). **`INTRODUCED` by the entry below and never published** - it
+  was found by a fourth graded pass while this release was still held, so no consumer ever saw it.
+  Measured in memory over four passes: `"ACME Anonymizer v3 "` read **19 -> 38 -> 57 -> 76** bytes
+  and `"Pass A\Pass B "` read **14 -> 21 -> 28 -> 35**, against a flat **19** and **14** on the
+  commit before. Over a real `parse -> deidentify -> serializeDicom -> parse` round trip a 16-byte
+  method read **16 -> 32 -> 48 -> 64 -> 80 -> 96** over six cycles. Growth continued to the
+  65,534-byte ceiling, where the guard **replaces the entire prior provenance chain** - the exact
+  loss the entry below exists to prevent, reached from a benign caller string.
+
+  One asymmetry caused it: the prior value was right-trimmed of `0x20`/`0x00` and the added one was
+  not, so a freshly supplied value never equalled its own prior copy - the library wrote the method,
+  the serializer's even-length pad folded the trailing byte in, the next parse trimmed it off, and
+  the next pass appended the method again. PS3.5 2026c **Table 6.2-1**, `LO` row: "A character string
+  that **may be padded with leading and/or trailing spaces**" - trailing spaces are padding, not
+  content, so the comparison cannot honour that on one side only.
+
+  **The trim is per VALUE at the comparison, and a graded pass is why.** A first remedy trimmed each
+  operand as a whole Value Field, which reaches only its last value, so a pad byte on an interior
+  value of a `1-n` method still regrew the attribute byte-identically: `"Pass A \Pass B"` beside a
+  prior `"Pass B "` read **14 -> 21 -> 28 -> 35 -> 42**, and the chain was still replaced at the
+  ceiling. Table 6.2-1 describes a **Value** and `LO` is `1-n`, so every value's trailing pad is
+  padding; **§6.4**'s "single padding character ... to the end of the Value Field (**to the last
+  Value**)" is about where the encoder writes its pad, which is why the value **written** is trimmed
+  once over the field. Leading spaces a caller wrote are still written through untouched. With both,
+  `deidentify` is a fixed point **from the first pass**. A `deidentificationMethod` that is padding
+  only records nothing.
+
+- **🩺 A prior `(0012,0063)` value surviving into de-identified output is no longer silent**, via
+  the new Tier-2 code **`DICOM_DEIDENT_METHOD_PRIOR_RETAINED`** on `report.warnings`. Keeping it is
+  what PS3.15 E.1.1 requires and nothing about the retention changes; the silence was the defect. A
+  name a sender wrote into `(0012,0063)` reached output stamped `(0012,0062) Patient Identity
+Removed = YES` with `report.warnings` empty **and** `report.retained` `[]` - an audit reading as a
+  scrub it had not performed, on an attribute Table E.1-1 does not list and no rule in the run
+  inspected. The code carries **no value, no length and no VR**: the retained text is the file's
+  own, the tag in the message is a constant of the code, and `position.byteOffset` locates the
+  element. It is deliberately **not** on `report.retained`, which lists the Annex E option sets
+  active for the run - a kept attribute is not an option set, and widening that type would break
+  every consumer switching over the nine names. Emitted by `deidentify()` only, so it never reaches
+  the parser's `{ strict: true }` escalation.
+
 - **🩺 A second copy of a MODELED `(0002,xxxx)` element left the parsed object with no warning and
   no residue** (`DICOM-FILE-META-DROPS-DUPLICATE`, raised by `#70`'s gate). **`PRE-EXISTING`**, on
   every released version including the current published `0.0.10`. This is `#70`'s shape one group
@@ -66,11 +108,13 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   added to** De-identification Method (0012,0063)." Replacing is neither verb. This release appends
   its own text as a further value of the `1-n` attribute after a `\`, copying the prior bytes through
   **verbatim** so a value encoded under a `(0008,0005)` repertoire survives byte for byte. A value
-  that already records this method is left alone, so `deidentify(deidentify(ds))` is a fixed
-  point rather than a growing string. **The comparison is per VALUE on both sides**: the method string
-  is itself a `1-n` value, and a graded pass refuted the draft that compared the whole string against
-  each prior value - a caller method carrying a `\` never matched one, and every pass appended a
-  further copy (29 -> 59 -> 89 -> 119 bytes over four passes, against a flat 29 on base).
+  that already records this method is left alone rather than growing the attribute. **The comparison
+  is per VALUE on both sides**: the method string is itself a `1-n` value, and a graded pass refuted
+  the draft that compared the whole string against each prior value - a caller method carrying a `\`
+  never matched one, and every pass appended a whole further copy (29 -> 59 -> 89 -> 119 bytes over
+  four passes, against a flat 29 on base). **Per value was necessary and not sufficient, and the
+  fixed-point claim as first written did not hold** - see the trailing-pad entry below, which is what
+  makes it true from the first pass.
 
   **The join is bounded, and the bound is not cosmetic.** `LO` is a short-form VR, so
   `encodeDatasetElement` writes its Value Length with a 16-bit field. A `(0012,0063)` carrying a legal
