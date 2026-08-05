@@ -27,9 +27,8 @@ in the same area - open the section first.**
   scope limits and the known serializer limitation:
   [agent-notes.md#shipped-phases-4-through-7-of-8](documentation/agent-notes.md#shipped-phases-4-through-7-of-8).
 - Published on npm on the **`0.0.x`-until-first-alpha** ladder. **Never quote a version in this
-  file** - `npm view @cosyte/dicom version` is the only source of truth. (A version written into a
-  document is stale the next release; the meta-repo's ADR 0023 carries the measured history of that
-  across the org. Do not re-derive it here, and do not add a numeral to this bullet.)
+  file** - `npm view @cosyte/dicom version` is the only source of truth, and the meta-repo's ADR 0023
+  carries the measured history of why. Do not re-derive it here; do not add a numeral to this bullet.
 - **🩺 Open PHI residuals - measured, disclosed, NOT closed. None of these is an all-clear:**
   - The **private-`SQ` carve-out** (`keepsPrivate` decides before `descendSequence`, so a vouched-for
     private `SQ` is kept verbatim and never walked). Produces a **false attestation**:
@@ -68,16 +67,15 @@ in the same area - open the section first.**
   - The **undefined-length item with no `(FFFE,E00D)`**, which has no declared length to disagree
     with, so no over-run is recordable.
     [#dicom-explicit-vr-unbounded-item-read](documentation/agent-notes.md#dicom-explicit-vr-unbounded-item-read)
+  - `(0012,0063)` carries the **source file's own method text** into de-identified output (PS3.15
+    E.1.1 says "added to"; Table E.1-1 omits it). A residual test asserts the cost.
+    [#dicom-file-meta-drops-duplicate](documentation/agent-notes.md#dicom-file-meta-drops-duplicate)
   - **This list is an index, not a census.** Each relocated section names its own residuals, and
     several are disclosed only there. Read the section before claiming a class is closed.
-- **🛑 A "N OF M TESTS RUN RED ON BASE" FIGURE HAS A MOVING BASE AND IS NOT A FACT.** The
-  **"10 of the 31 tests"** claim and the "both residual tests are red against base" correction beside
-  it were **both wrong against today's `main`**, in opposite directions, and are deleted rather than
-  reworded a third time. Re-measured at `2daf0e3`, one test file, three bases, every figure carrying
-  its own sha: **8 of 37 on `300af87`** · **2 of 37 on `0ead071`** · **0 of 37 on `2daf0e3`**. Quote
-  such a figure only with the sha you ran it on; re-run it after every test you add **or strengthen**
-  (`#70` added none and still moved what this file reads on a base); and **replace `src/` rather than
-  overlaying it** when you swap a base in.
+- **🛑 A "N OF M TESTS RUN RED ON BASE" FIGURE HAS A MOVING BASE AND IS NOT A FACT.** Quote one only
+  with the sha you ran it on; re-run it after every test you add **or strengthen**; and **replace
+  `src/` rather than overlaying it** when you swap a base in. Two such claims here were wrong against
+  `main` in opposite directions at once. The measured figures live in the section, with their shas.
   [#dicom-item-eject-route](documentation/agent-notes.md#dicom-item-eject-route)
 
 ## Tech Stack (the shared `@cosyte/*` standard)
@@ -308,6 +306,10 @@ not soften them. All anchors are in `documentation/agent-notes.md`.
   the two files are byte-identical. Adding the code cost 9 grid cells a `{ strict: true }` parse.
   [#dicom-item-eject-route](documentation/agent-notes.md#dicom-item-eject-route) ·
   [#dicom-tag-collision-destroys-element](documentation/agent-notes.md#dicom-tag-collision-destroys-element)
+- **🛑 THE FILE META GROUP LOSES A COPY THE OPPOSITE WAY ROUND, AND AN ARRAY IS NOT SAFETY.** A
+  modeled `(0002,xxxx)` is projected by FIRST match and excluded from `extraElements`, so a second
+  copy is in neither. FIRST wins there, LAST in a Data Set; `DICOM_DUPLICATE_FILE_META_ELEMENT`.
+  [#dicom-file-meta-drops-duplicate](documentation/agent-notes.md#dicom-file-meta-drops-duplicate)
 - **🛑 THE GRID'S SYNTAX SPLIT WAS BLIND TO THREE OF ITS FOUR FAMILIES** - it keyed on the cell key
   _starting with_ the transfer syntax, so no `carrier|`, `legit|` or `priv|` row could ever count as
   Implicit VR LE. Fixed; any such split quoted before it is not re-derivable.

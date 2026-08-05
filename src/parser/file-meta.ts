@@ -13,6 +13,12 @@
  *   - T-02-02-01 - Truncated File Meta (declared length > remaining buffer)
  *     throws `INVALID_FILE_META` rather than over-reading.
  *
+ * A repeated `(0002,xxxx)` tag is lossy here without being an overwrite. The
+ * eight tags in `MODELED_FM_TAGS` are answered by a first-match search and are
+ * excluded from `extraElements`, so a second copy of one is in neither - it left
+ * the object. Step 3.5 emits `DICOM_DUPLICATE_FILE_META_ELEMENT` for each such
+ * copy at the moment the projection drops it; the reading does not move.
+ *
  * @module
  */
 
@@ -26,7 +32,11 @@ import { isRecognizedVr } from "./endian.js";
 import { buildSnippet, DicomParseError, FATAL_CODES } from "./errors.js";
 import type { ParseContext } from "./types.js";
 import type { DicomParseWarning } from "./warnings.js";
-import { fileMetaGroupLengthMismatch, fileMetaGroupLengthMissing } from "./warnings.js";
+import {
+  duplicateFileMetaElement,
+  fileMetaGroupLengthMismatch,
+  fileMetaGroupLengthMissing,
+} from "./warnings.js";
 
 /**
  * The `(0002,xxxx)` tags projected into typed {@link FileMeta} fields, plus the
@@ -50,6 +60,12 @@ interface FmRawElement {
   readonly value: Buffer;
   /** Total bytes consumed by this element on the wire (header + value). */
   readonly bytesConsumed: number;
+  /**
+   * File-absolute offset of this element's own header start. Unambiguous here:
+   * the File Meta group is never nested, so unlike `Element.byteOffset` there is
+   * no item slice that could make it relative.
+   */
+  readonly byteOffset: number;
 }
 
 /** Result of {@link parseFileMeta}. */
@@ -175,6 +191,35 @@ export function parseFileMeta(
     }
   }
 
+  // Step 3.5: disclose every copy the projection below is about to drop.
+  //
+  // The group is an array, so nothing is overwritten - but a MODELED tag is
+  // answered by a first-match search and is then EXCLUDED from `extraElements`,
+  // so a second copy of one is in neither the typed fields nor the verbatim
+  // residue. It simply left the object. `(0002,0010)` makes that the more
+  // dangerous half of `#70`'s shape: it is the element that decides how every
+  // byte after this group is read.
+  //
+  // Nothing about the reading moves. The first copy still wins, no value is
+  // guessed for the one that lost, and no residue is invented for it: adding one
+  // would make the conservative serializer re-emit a group it should not write.
+  // A repeated NON-modeled tag is not reported, because every copy of one is
+  // kept verbatim in `extraElements` and nothing is dropped.
+  //
+  // `(0002,0000)` is seeded as already-seen when it was consumed as the group
+  // length above, because a second group length is dropped by exactly the same
+  // route and never reaches `fmElements` twice.
+  const seenModeledTags = new Set<Tag>();
+  if (declaredFmLength !== undefined) seenModeledTags.add("00020000");
+  for (const e of fmElements) {
+    if (!MODELED_FM_TAGS.has(e.tag)) continue;
+    if (seenModeledTags.has(e.tag)) {
+      emit(duplicateFileMetaElement({ byteOffset: e.byteOffset, fileMeta: true }));
+      continue;
+    }
+    seenModeledTags.add(e.tag);
+  }
+
   // Step 4: Project File Meta elements into the FileMeta interface.
   const tsElement = fmElements.find((e) => e.tag === "00020010");
   if (tsElement === undefined || tsElement.vr !== "UI") {
@@ -242,7 +287,7 @@ function readExplicitLeElement(cursor: ByteCursor): FmRawElement {
   if (bytesConsumed !== headerLength + length) {
     throw new RangeError("File Meta element accounting mismatch");
   }
-  return { tag, vr, value, bytesConsumed };
+  return { tag, vr, value, bytesConsumed, byteOffset: headerStart };
 }
 
 /** Trim trailing NUL (0x00) and SPACE (0x20) bytes per UI VR semantics. */

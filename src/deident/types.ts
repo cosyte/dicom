@@ -439,8 +439,31 @@ export interface DeidentifyOptions {
    */
   readonly profile?: Profile;
   /**
-   * Text written to `(0012,0063)` De-identification Method. Default names the
+   * Text **added to** `(0012,0063)` De-identification Method. Default names the
    * Basic Profile and the active options.
+   *
+   * PS3.15 E.1.1 says this string is "inserted in or added to" the attribute, so
+   * a value the incoming Data Set already carried is kept and this one is
+   * appended after a `\` as a further value of the `1-n` attribute - the
+   * provenance chain, not a replacement.
+   *
+   * **This string is itself a `1-n` value**: it is split on `\` and only the
+   * values not already recorded are added, so repeated de-identification is a
+   * fixed point whether or not it carries a delimiter.
+   *
+   * One bound, and it is over the value that would be **written**, not over the
+   * join: when that value would exceed the largest Value Length an `LO` can
+   * encode, the prior value is **replaced** rather than added to - an element the
+   * serializer cannot encode would take the whole de-identified object down - and
+   * `report.warnings` carries `DICOM_DEIDENT_METHOD_NOT_ADDED`. That includes a
+   * prior value already at the ceiling which records this method already, where
+   * there is no join to exceed anything. A string longer than that ceiling on its
+   * own is not bounded here and will fail to serialize, exactly as it did before
+   * this option grew a join.
+   *
+   * `DICOM_DEIDENT_METHOD_NOT_ADDED` means "the length ceiling was reached", never
+   * "every fallback is disclosed": a `(0012,0063)` a file encoded under a VR other
+   * than `LO` is also replaced, and that one is silent.
    */
   readonly deidentificationMethod?: string;
 }

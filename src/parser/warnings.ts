@@ -44,6 +44,7 @@ import type { DicomPosition } from "./types.js";
  */
 export const WARNING_CODES = {
   // === Phase 2 actively emits (D-08 active list - alphabetical-within-prefix per CONTEXT specifics §) ===
+  DICOM_DUPLICATE_FILE_META_ELEMENT: "DICOM_DUPLICATE_FILE_META_ELEMENT",
   DICOM_DUPLICATE_TAG_IN_DATA_SET: "DICOM_DUPLICATE_TAG_IN_DATA_SET",
   DICOM_EMPTY_ITEM_IN_SEQUENCE: "DICOM_EMPTY_ITEM_IN_SEQUENCE",
   DICOM_FILE_META_GROUP_LENGTH_MISMATCH: "DICOM_FILE_META_GROUP_LENGTH_MISMATCH",
@@ -77,6 +78,7 @@ export const WARNING_CODES = {
   // === Reserved by later phases (declared, not emitted in Phase 2) ===
   DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED: "DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED", // reserved by Phase 7 - not emitted in Phase 2
   DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED: "DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED", // emitted by deidentify(), never by the parser
+  DICOM_DEIDENT_METHOD_NOT_ADDED: "DICOM_DEIDENT_METHOD_NOT_ADDED", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE: "DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE: "DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE", // emitted by deidentify(), never by the parser
   DICOM_PRIVATE_CREATOR_UNKNOWN: "DICOM_PRIVATE_CREATOR_UNKNOWN", // reserved by Phase 6 - not emitted in Phase 2
@@ -186,6 +188,24 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   // cut. The reasoning lives in the factory's JSDoc, not in the string.
   DICOM_DUPLICATE_TAG_IN_DATA_SET:
     "A Data Element carrying a tag this Data Set already holds replaced the earlier one at this byte offset; that element's value is not in the parsed object. PS3.5 7.1 and 7.5.1. Tag withheld.",
+  // The tag is deliberately absent for the same reason as the code above, and
+  // the surviving copy is named because the File Meta group resolves a repeat
+  // the OPPOSITE way round to a Data Set: first copy wins here, last read wins
+  // there. Short for the same measured reason - one is raised per repeat and the
+  // repeat count is chosen by the input.
+  // 🛑 NO SPEC CITATION HERE, AND ITS ABSENCE IS DELIBERATE. A draft ended this
+  // string "PS3.5 7.1.", which asserts that section's "at most once in a Data
+  // Set" governs the File Meta group - the applicability this slice states it
+  // cannot establish, because PS3.10 governs that group and is not vendored
+  // here. Under `{ strict: true }` this string is also the thrown message, so an
+  // unqualified citation there is the claim, not a footnote. Do not put it back.
+  DICOM_DUPLICATE_FILE_META_ELEMENT:
+    "A File Meta Data Element repeats a (0002,xxxx) tag the group already carries; the copy at this byte offset is not in the parsed File Meta, and the FIRST copy of that tag is the one projected. Tag withheld.",
+  // No value and no length: the prior value is the file's own text. The tag is a
+  // constant of this code rather than composed from input, as in the two
+  // (0002,0000) messages above.
+  DICOM_DEIDENT_METHOD_NOT_ADDED:
+    "The De-identification Method this run recorded could not be added beside the value (0012,0063) already carried without exceeding the largest Value Length that VR can encode, so the earlier value was replaced (PS3.15 E.1.1). The replaced text is not in the output.",
   // The Item's own declared length is deliberately absent. See
   // `itemCrossesSequenceEnd`; `{n2}` stays because the emit site's
   // `endLimit < buffer.length` conjunct bounds it by the buffer.
@@ -736,9 +756,16 @@ export function emptyItemInSequence(position: DicomPosition, tag: Tag): DicomPar
  *
  * **It is not bounded.** A file may encode as many collisions as it can fit, and
  * `ds.warnings` is uncapped: that is this package's pre-existing, package-wide
- * posture for parser warnings, not something new here. **And it does not reach
- * the File Meta group**, which `parseFileMeta` accumulates into an array and not
- * a map, so nothing is overwritten there.
+ * posture for parser warnings, not something new here.
+ *
+ * **It does not reach the File Meta group, and the reason that was ever worth
+ * saying was WRONG.** `parseFileMeta` accumulates into an array, so nothing is
+ * overwritten there - but a repeated `(0002,xxxx)` tag the group models is
+ * *projected* by a first-match search and *filtered out* of `extraElements`, so
+ * the second copy left the object anyway, with no warning and no residue. That
+ * is {@link duplicateFileMetaElement}'s code, not this one, and until it existed
+ * this sentence read as an all-clear over the one group that decides how every
+ * following byte is read.
  *
  * @example
  * ```ts
@@ -747,6 +774,95 @@ export function emptyItemInSequence(position: DicomPosition, tag: Tag): DicomPar
  */
 export function duplicateTagInDataSet(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DUPLICATE_TAG_IN_DATA_SET, position);
+}
+
+/**
+ * Build a `DICOM_DUPLICATE_FILE_META_ELEMENT` warning for a second
+ * `(0002,xxxx)` element whose tag `parseFileMeta` projects into a typed
+ * {@link FileMeta} field, emitted at the moment the projection is about to drop
+ * it.
+ *
+ * @remarks
+ * ## Why the File Meta group needs its own code
+ *
+ * The File Meta group is not a `Map<Tag, Element>`, so nothing is overwritten
+ * there and {@link duplicateTagInDataSet} never fires on it. It is still lossy,
+ * by a different route and in the opposite direction. `parseFileMeta` collects
+ * every `(0002,xxxx)` element into an array and then projects the eight tags in
+ * `MODELED_FM_TAGS` into typed fields with a **first-match** search, while
+ * `extraElements` - the verbatim residue that gives the group its byte-exact
+ * round trip - is built by **excluding** exactly those eight tags. A second copy
+ * of a modeled tag is therefore in neither: not projected, because the first
+ * copy already answered, and not preserved, because its tag is modeled. It left
+ * the object with no warning and no residue.
+ *
+ * So the two codes disagree about which copy survives, deliberately, because the
+ * two readings do: **the FIRST copy wins in the File Meta group, the LAST read
+ * wins in a Data Set**, and neither reading moves. As in `#70`, nothing is
+ * guessed for the copy that lost and no bound is chosen - the remedy is the
+ * disclosure and nothing else.
+ *
+ * `(0002,0010)` Transfer Syntax UID makes this the more dangerous of the two
+ * shapes: it is the element that decides how every byte after the group is read,
+ * and a second copy carrying a *different* UID selected a different parse of the
+ * rest of the file for whoever wrote it. This library reads the first and says
+ * so; it does not attempt to decide which the sender meant, because the bytes do
+ * not carry that.
+ *
+ * ## The tag is not in the message, and that is the fifth code to need the bound
+ *
+ * Identical remedy and reasoning to {@link duplicateTagInDataSet},
+ * {@link nonzeroReservedBytes}, {@link itemCrossesSequenceEnd} and
+ * `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE`: the trigger is "a header appeared
+ * where the group did not expect one", and a header that should not be there may
+ * be composed of somebody's value bytes, so the four tag bytes are input.
+ * `renderTag` shape-checks a tag and therefore cannot refuse one. The bound is
+ * the **factory signature** - position only - so no future call site can put it
+ * back without changing it.
+ *
+ * ## `position.byteOffset` here IS file-absolute, and that is structural
+ *
+ * The frame-of-reference caveat that {@link duplicateTagInDataSet} carries does
+ * not apply. The File Meta group is never nested: `parseFileMeta` is called
+ * exactly once per parse, from `parseDicom`, with the whole buffer and the
+ * post-`DICM` offset, and there is no item slice anywhere on that path. The
+ * offset is the dropped element's own header start, counted from byte 0 of the
+ * file. It is **not** the surviving element's offset - the survivor is the
+ * earlier copy, so its offset is lower.
+ *
+ * ## What it does not do
+ *
+ * It does not fire for a repeated `(0002,xxxx)` tag that is **not** modeled:
+ * every copy of those is kept verbatim in `FileMeta.extraElements`, so nothing
+ * is dropped and there is nothing to disclose. **What that does NOT mean, and a
+ * graded pass refuted the draft that said it did: `encodeFileMeta` re-emits both
+ * copies, so this package writes a `(0002,xxxx)` tag twice on such a file.**
+ * That is `PRE-EXISTING` and unchanged here, it is not what "the serializer is
+ * conservative" covers, and it is a backlog line rather than a rider on this
+ * code - the round-trip promise and the spec-clean promise disagree on exactly
+ * this input, and choosing between them is a decision, not a fix.
+ *
+ * **It does not reach a copy that sits past an honest `(0002,0000)`.** The group
+ * loop stops at the declared length when the declaration is consistent, so a
+ * second `(0002,0010)` an intermediary appended without updating the group
+ * length is never a File Meta element to this parser at all: it is relocated
+ * into the main Data Set, silently, on this tree and on every earlier one. Also
+ * `PRE-EXISTING`, also a backlog line, and the reason this code is described as
+ * covering the group **as the parser delimits it** rather than the group.
+ *
+ * It does not change which copy is read and it adds no residue. And
+ * "names no tag" is about this message only: `{ strict: true }` escalates every
+ * Tier-2 code through `makeEmitter`, and the `DicomParseError` it throws carries
+ * `snippet`, 16 raw source bytes at the same offset rendered as hex (D-10,
+ * package-wide).
+ *
+ * @example
+ * ```ts
+ * const w = duplicateFileMetaElement({ byteOffset: 152, fileMeta: true });
+ * ```
+ */
+export function duplicateFileMetaElement(position: DicomPosition): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DUPLICATE_FILE_META_ELEMENT, position);
 }
 
 /**
@@ -828,6 +944,48 @@ export function privateCreatorUnknown(position: DicomPosition, tag: Tag): DicomP
  */
 export function burnedInAnnotationNotRemoved(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED, position);
+}
+
+/**
+ * Build a `DICOM_DEIDENT_METHOD_NOT_ADDED` warning for a `(0012,0063)` whose
+ * prior value `deidentify()` had to **replace** rather than add to, because the
+ * join would not fit the largest Value Length an `LO` can encode.
+ *
+ * @remarks
+ * PS3.15 2026c E.1.1 obliges a de-identifier to insert its method text in, or
+ * add it to, `(0012,0063)`. `deidentify()` adds; this code is raised when the
+ * value it would have to write is longer than that VR can encode. **The fallback
+ * is not a new loss** - it is what every released version did on every file -
+ * but it is still a loss, and an audit that reads as a complete provenance chain
+ * it did not preserve is the worse half of every leak in this package.
+ *
+ * **🛑 IT IS NOT "the one shape where `deidentify` cannot add", AND A GRADED PASS
+ * REFUTED THAT SENTENCE.** There is a second, and it is still silent: a
+ * `(0012,0063)` a file encoded under a VR other than `LO` is replaced, with
+ * `report.warnings` empty. That shape is `PRE-EXISTING` and deliberately not
+ * taken here, so the CLAIM is corrected rather than the guard widened. Read this
+ * code as "the length ceiling was reached", never as "every fallback is
+ * disclosed".
+ *
+ * Truncating the chain instead was refused deliberately: choosing which of the
+ * sender's earlier de-identification records to drop is a policy the standard
+ * does not state. This package reports rather than invents.
+ *
+ * **No value, no length, no VR.** The prior text is the file's own, and the
+ * length that failed to fit is a count over it. The tag in the message is a
+ * constant of this code, like `(7FE0,0010)` in
+ * `DICOM_PIXEL_DATA_LENGTH_MISMATCH`, never composed from input.
+ *
+ * Emitted by `deidentify()` only, so it reaches `report.warnings` and is not
+ * subject to the parser's `{ strict: true }` escalation.
+ *
+ * @example
+ * ```ts
+ * const w = deidentMethodNotAdded({ byteOffset: 4096, fileMeta: false });
+ * ```
+ */
+export function deidentMethodNotAdded(position: DicomPosition): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DEIDENT_METHOD_NOT_ADDED, position);
 }
 
 /**
