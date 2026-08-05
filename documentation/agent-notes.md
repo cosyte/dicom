@@ -691,11 +691,17 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   **▶ THE BASE-RED FIGURE, PINNED PER-SHA.** Against base `src/` at **`495c9fc`**, replaced
   wholesale rather than overlaid: **5 of the 57** tests in
   `test/integration/deident-private-reservation.test.ts` +
-  `test/integration/deident-unauditable-sequence.test.ts` run red - the **4**
-  `DICOM-PRIVATE-SQ-CARVE-OUT` tests, plus the **control row** of the
+  `test/integration/deident-unauditable-sequence.test.ts` run red - the **4 that assert the
+  closure**, plus the **control row** of the
   `DICOM-PRIVATE-SQ-PARSE-VR` residual, which asserts this same closure on the file the parser did
-  resolve; that residual's own leaking row is **green on base by design**. That is the negative
-  control as well as the figure - the tests fail against the wrong `src/` and pass against this one.
+  resolve. Say "the 4 that assert the closure", **never "the 4 carve-out tests"**: five `it()`s live
+  under a `DICOM-PRIVATE-SQ-CARVE-OUT` describe block, so a next worker enumerating the block finds
+  5 and the phrase contradicts itself. That residual's own leaking row is **green on base by
+  design**, and that half is **not** readable off the base-red run - the control assertion throws
+  first, so the leaking row never executes. It was established by extracting that row into a
+  standalone probe against base `src/`; re-derive it the same way rather than quoting this. That is
+  the negative control as well as the figure - the tests fail against the wrong `src/` and pass
+  against this one.
   Full suite `1071 -> 1074` passing.
   **🛑 THIS FIGURE READ `4 of the 56` AND `1071 -> 1073` UNTIL PASS 2 REFUSED IT.** The pass-1
   remedy added a test *after* the figure was taken and the figure was not re-run - the exact trap
