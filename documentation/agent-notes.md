@@ -83,9 +83,10 @@ parse` round trips, **62** bytes flat by default and **248** flat with all nine,
   (`data-set-map.ts` passes the **replacing** element's offset). Draft 2 said
   `DICOM_DUPLICATE_TAG_IN_DATA_SET` therefore renders the **survivor** and the dropped value never
   appears; **pass 2 refuted that too, and the counter-example was already in this repo**: the
-  snippet is read from the WHOLE FILE at an offset that is **item-relative** inside a defined-length
-  Sequence Item, so an in-Item collision returned a complete, unrelated root `(0010,0010)` Patient
-  Name. `tag-collision.test.ts`'s own **"the byte offset is NOT a key"** row proves the frame
+  snippet is cut from whichever buffer the parse is holding, at an offset whose frame follows where
+  the element was read - **slice-relative** inside a defined-length Sequence or Item, and into the
+  inflated stream under Deflated Explicit VR LE - so an in-Item collision returned a complete,
+  unrelated root `(0010,0010)` Patient Name. `tag-collision.test.ts`'s own **"the byte offset is NOT a key"** row proves the frame
   disagreement twelve lines from where draft 2's block was added. So the rule this repo already
   carries applied twice over - **re-wording a disclosure twice is the signal to DELETE it**, and
   **measure a byte offset's frame rather than describing it** - and what is left in every artifact is

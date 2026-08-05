@@ -307,9 +307,10 @@ describe("a File Meta group that carries one modeled (0002,xxxx) tag twice", () 
  * measured residual it is, in `the strict-mode escalation` block below. **That
  * block is about THIS code and generalises to none other**, and two graded
  * passes are why: a warning's `byteOffset` is file-absolute here but
- * item-relative inside a defined-length Sequence Item, while the snippet is
- * always read from the whole file, so which element a snippet's bytes belong to
- * is **not contracted** anywhere in this package. The snippet is a documented,
+ * slice-relative inside a defined-length Sequence or Item (and into the inflated
+ * stream under Deflated Explicit VR LE), while the snippet is cut from whichever
+ * buffer the parse is holding, so which element a snippet's bytes belong to is
+ * **not contracted** anywhere in this package. The snippet is a documented,
  * package-wide design (D-10) rather than a defect in this code, and redacting it
  * is a decision about every Tier-3 fatal in the library, not a rider on a File
  * Meta disclosure.

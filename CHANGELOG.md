@@ -54,9 +54,10 @@ RetainDeviceIdentity`, **272** with all nine, and **all 512 option subsets over 
   unambiguously the dropped copy's header: a `(0002,0016)` Source AE Title of `AE-SMITHSON` comes
   back as `02 00 16 00 41 45 0c 00 41 45 2d 53 4d 49 54 48`, five letters of the surname. **Nothing
   more general is claimed, and two graded passes are why**: which element a snippet's bytes belong to
-  is **not contracted** anywhere in this package, because a warning's `byteOffset` is file-absolute at
-  the root and relative to the enclosing slice inside a defined-length Sequence Item while the snippet
-  is always read from the whole file. Do not reason from a code's message to what its snippet holds;
+  is **not contracted** anywhere in this package: that offset's frame follows where the element was
+  read (file-absolute at the root, relative to the enclosing slice inside a defined-length Sequence or
+  Item, into the inflated stream under Deflated Explicit VR LE), while the snippet is cut from
+  whichever buffer the parse is holding, so the two can disagree. Do not reason from a code's message to what its snippet holds;
   measure it, and treat every snippet as document content. Redacting `snippet` is a decision about every Tier-3
   fatal in the library, not a rider on a File Meta disclosure, so the **claim** was corrected instead:
   the test block asserting "the diagnostic is not itself a PHI surface" read `warning.message` and

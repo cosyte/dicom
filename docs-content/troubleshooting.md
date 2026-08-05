@@ -75,10 +75,11 @@ Two things that array does **not** cover:
   input bytes and the library does not redact them. Log `err.code`, `err.byteOffset` and
   `err.message`; treat `err.snippet` as PHI. **`{ strict: true }` turns every Tier-2 warning into
   one of these**, so the frozen-registry guarantee above covers the `message` and nothing else on
-  the strict path. **Which element the bytes belong to is not contracted**: the offset is
-  file-absolute at the root and relative to the enclosing slice inside a defined-length Sequence
-  Item, while the snippet is always read from the whole file, so it can be an unrelated element's
-  value. Do not reason from a code's message to what its snippet holds. Review the two paths
+  the strict path. **Which element the bytes belong to is not contracted**: that offset's frame
+  follows where the element was read (file-absolute at the root, relative to the enclosing slice
+  inside a defined-length Sequence or Item, into the inflated stream under Deflated Explicit VR LE),
+  while the snippet is cut from whichever buffer the parse is holding, so the two can disagree and
+  the bytes can be an unrelated element's value. Do not reason from a code's message to what its snippet holds. Review the two paths
   separately; a message-only review of the lenient path does not transfer.
 - **Value-decode deviations do not appear on `ds.warnings`.** Decode is lazy, so a `DA` in a legacy
   format or a `UI` with the wrong pad surfaces on the decoded value's own `warnings`
