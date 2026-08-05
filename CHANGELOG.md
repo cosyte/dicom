@@ -46,13 +46,18 @@ RetainDeviceIdentity`, **272** with all nine, and **all 512 option subsets over 
   fabricated header are document content, which is how four letters of a surname once reached
   `DICOM_NONZERO_RESERVED_BYTES`.
 
-- **🩺 `{ strict: true }` renders the bytes of a dropped element that the warning it replaces
-  deliberately withholds.** `PRE-EXISTING`, **disclosed and pinned rather than changed**: the escalation
-  raises a `DicomParseError` whose `snippet` is 16 raw source bytes at the warning's own offset (D-10),
-  and for `DICOM_DUPLICATE_FILE_META_ELEMENT` and `DICOM_DUPLICATE_TAG_IN_DATA_SET` that offset is the
-  dropped element's header. Measured: a `(0002,0016)` Source AE Title of `AE-SMITHSON` comes back as
-  `02 00 16 00 41 45 0c 00 41 45 2d 53 4d 49 54 48`, five letters of the surname, while
-  `err.message` stays the frozen registry string. Redacting `snippet` is a decision about every Tier-3
+- **🩺 `{ strict: true }` renders source bytes the warning it replaces deliberately withholds.**
+  `PRE-EXISTING`, **disclosed and pinned rather than changed**: the escalation raises a
+  `DicomParseError` whose `snippet` is 16 raw source bytes at the warning's own offset (D-10). **The
+  two codes that report a lost value place that offset differently, and a graded pass refuted the
+  claim that they agree.** `DICOM_DUPLICATE_FILE_META_ELEMENT`'s offset is the **dropped** element's
+  header, so its snippet renders the value its own message withholds: a `(0002,0016)` Source AE Title
+  of `AE-SMITHSON` comes back as `02 00 16 00 41 45 0c 00 41 45 2d 53 4d 49 54 48`, five letters of
+  the surname. `DICOM_DUPLICATE_TAG_IN_DATA_SET`'s offset is the **surviving** element's header (two
+  `(0010,0020)` values `DROPPED-SMITHSON` then `SURVIVOR-JONESXX` give
+  `10 00 20 00 4c 4f 10 00 53 55 52 56 49 56 4f 52`), so the dropped value never appears in it. Both
+  are document content, neither is redacted, and `err.message` stays the frozen registry string in
+  both cases. Each is pinned byte for byte. Redacting `snippet` is a decision about every Tier-3
   fatal in the library, not a rider on a File Meta disclosure, so the **claim** was corrected instead:
   the test block asserting "the diagnostic is not itself a PHI surface" read `warning.message` and
   nothing else, and is now titled for what it proves, with the strict path pinned beside it as the

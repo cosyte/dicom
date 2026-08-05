@@ -1230,13 +1230,24 @@ const DEFAULT_METHOD_PROFILE = "@cosyte/dicom Basic Application Level Confidenti
  * property, not a comparison one: {@link addDeidentificationMethod} matches per
  * value, so order never affected the fixed point either way.
  *
- * **This bounds the value this library WRITES, and nothing else.** A caller
- * `deidentificationMethod` whose own values exceed 64 characters is written
- * through as given, undisclosed - the same posture as every other value the
- * caller owns, and a residual test pins it rather than leaving it to be
- * rediscovered. So is a prior value the source file wrote: those bytes are
- * copied through verbatim by design, and a sender's non-conformant `LO` is the
- * sender's.
+ * **This bounds the value this library WRITES FRESH, and nothing else.** A
+ * caller `deidentificationMethod` whose own values exceed 64 characters is
+ * written through as given, undisclosed - the same posture as every other value
+ * the caller owns. So is a prior value from the source file, which is copied
+ * through verbatim by design.
+ *
+ * **🩺 AND THE MOST LIKELY SENDER OF AN OVER-LONG PRIOR VALUE IS THIS LIBRARY,
+ * WHICH IS WHY THAT SENTENCE IS NOT "the sender's problem". A graded pass
+ * refuted the draft that said it was.** Every object `0.0.3` through `0.0.11`
+ * de-identified without a caller-supplied method carries the 76-character value,
+ * and re-de-identifying one keeps it: measured at a flat **138** bytes over four
+ * passes, two values of **76** and **61**, with `DICOM_DEIDENT_METHOD_PRIOR_RETAINED`
+ * raised for the retention and **nothing said about the length**. Keeping it is
+ * still the right act - PS3.15 E.1.1 says "added to", and rewriting a prior
+ * de-identifier's record would destroy the provenance this attribute exists to
+ * carry, whoever wrote it - but a consumer with a strict receiver in the path
+ * should expect an over-long Value on any object de-identified before this
+ * release. A residual test pins it rather than leaving it to be rediscovered.
  */
 function defaultMethod(active: ReadonlySet<DeidentifyOption>): string {
   const options = DEIDENTIFY_OPTIONS.filter((option) => active.has(option));

@@ -154,11 +154,17 @@ export interface ParseOptions {
    * structural tokens filled in, so it is safe to log whole; the
    * `DicomParseError` this option raises in its place also carries `snippet`,
    * **16 raw bytes of the file at the warning's own offset, unredacted** (D-10).
-   * For the codes that report a value the reading dropped -
-   * `DICOM_DUPLICATE_TAG_IN_DATA_SET`, `DICOM_DUPLICATE_FILE_META_ELEMENT` -
-   * that offset is the dropped element's header, so the snippet renders the
-   * first bytes of the value the message deliberately withholds. Measured: an
-   * `AE` Title of `AE-SMITHSON^BRAIN` renders as `AE-SMITH` in the hex.
+   * Which element those bytes belong to is per code, and **the two codes that
+   * report a lost value answer it differently**:
+   * `DICOM_DUPLICATE_FILE_META_ELEMENT`'s offset is the **dropped** element's
+   * header, so its snippet renders the first bytes of the value the message
+   * deliberately withholds (measured: a `(0002,0016)` Source AE Title of
+   * `AE-SMITHSON` renders as `41 45 2d 53 4d 49 54 48`, `AE-SMITH`);
+   * `DICOM_DUPLICATE_TAG_IN_DATA_SET`'s offset is the **surviving** element's
+   * header, so its snippet renders the survivor's bytes and the dropped value
+   * never appears in it (measured: two `(0010,0020)` values `DROPPED-SMITHSON`
+   * then `SURVIVOR-JONESXX` give `SURVIVOR`). Both are document content and
+   * neither is redacted; only the first exposes what its own message withholds.
    *
    * That is the documented design of `snippet` rather than a defect in these
    * codes, and turning this option on does not change what any of them means -

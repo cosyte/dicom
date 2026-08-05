@@ -64,29 +64,53 @@ then the two gates.
   door (the ceiling), testing the case it was written to distinguish itself from. It now **derives**
   the default from a run and asserts `prior` really does already record every value. Quote nothing a
   run can produce.
-- **🛑 `{ strict: true }` RENDERS THE BYTES OF THE ELEMENT THE READING DROPPED, AND THE BLOCK CLAIMING
+- **🛑 `{ strict: true }` RENDERS SOURCE BYTES THE WARNING WITHHOLDS, AND THE BLOCK CLAIMING
   OTHERWISE READ ONLY `warning.message`.** `PRE-EXISTING`; the claim was corrected and the behaviour
   pinned rather than the guard widened. The escalation raises a `DicomParseError` whose `snippet` is
-  16 raw source bytes at the warning's own offset (D-10), and for
-  `DICOM_DUPLICATE_FILE_META_ELEMENT` / `DICOM_DUPLICATE_TAG_IN_DATA_SET` that offset **is the
-  dropped element's header**. Measured: a `(0002,0016)` Source AE Title of `AE-SMITHSON` returns
-  `02 00 16 00 41 45 0c 00 41 45 2d 53 4d 49 54 48` - five letters of the surname - while
-  `err.message` stays the frozen registry string. `file-meta-duplicate.test.ts`'s block titled
-  **"the diagnostic is not itself a PHI surface"** asserted that over `warning.message` and nothing
-  else; it is now titled **"the warning MESSAGE is not itself a PHI surface"**, with a residual block
-  beside it that pins the snippet **byte for byte** (a substring assertion is what `#70`'s third pass
-  refused). Redacting `snippet` would be a decision about every Tier-3 fatal in the library and
-  belongs with `DICOM-FATAL-MESSAGE-REGISTRY`, not here.
-- **BASE-RED, RE-RUN AFTER THE LAST TEST WAS STRENGTHENED, `src/` REPLACED AND NOT OVERLAID
-  (`rm -rf src` first): 16 of 115, in 3 files of 4, on `da1f209`.**
-  `deident-method-lo-length.test.ts` 14 of 22 · `deident-method-add.test.ts` 1 of 29 ·
-  `phi-diagnostic-surface.test.ts` 1 of 50 · **`file-meta-duplicate.test.ts` 0 of 14, deliberately** -
-  the strict-snippet block pins `PRE-EXISTING` behaviour, so a red there would mean the slice had
-  changed something it says it did not.
+  16 raw source bytes at the warning's own offset (D-10). **THE TWO CODES THAT REPORT A LOST VALUE
+  PLACE THAT OFFSET DIFFERENTLY, AND A GRADED PASS REFUTED THE FIRST DRAFT FOR SAYING THEY AGREE.**
+  `DICOM_DUPLICATE_FILE_META_ELEMENT`'s offset is the **dropped** element's header, so its snippet
+  renders the value its own message withholds: a `(0002,0016)` Source AE Title of `AE-SMITHSON`
+  returns `02 00 16 00 41 45 0c 00 41 45 2d 53 4d 49 54 48`, five letters of the surname.
+  `DICOM_DUPLICATE_TAG_IN_DATA_SET`'s offset is the **surviving** element's header
+  (`data-set-map.ts` passes the replacing element's `byteOffset`, and its own factory JSDoc says so),
+  so two `(0010,0020)` values `DROPPED-SMITHSON` then `SURVIVOR-JONESXX` return
+  `10 00 20 00 4c 4f 10 00 53 55 52 56 49 56 4f 52` and the dropped value never appears. Both are
+  document content and neither is redacted; only the File Meta one exposes what its message
+  withholds. `file-meta-duplicate.test.ts`'s block titled **"the diagnostic is not itself a PHI
+  surface"** asserted the clean half over `warning.message` and nothing else; it is now titled
+  **"the warning MESSAGE is not itself a PHI surface"**, with a residual block beside it, and
+  `tag-collision.test.ts` carries the matching block for the other code. Both pin the snippet **byte
+  for byte** (a substring assertion is what `#70`'s third pass refused). Redacting `snippet` would be
+  a decision about every Tier-3 fatal in the library and belongs with `DICOM-FATAL-MESSAGE-REGISTRY`,
+  not here.
+- **BASE-RED, RE-RUN AFTER THE LAST TEST WAS ADDED, `src/` REPLACED AND NOT OVERLAID
+  (`rm -rf src` first): 18 of 133, in 3 files of 5, on `da1f209`.**
+  `deident-method-lo-length.test.ts` 16 of 24 · `deident-method-add.test.ts` 1 of 29 ·
+  `phi-diagnostic-surface.test.ts` 1 of 50 · **`file-meta-duplicate.test.ts` 0 of 14 and
+  `tag-collision.test.ts` 0 of 16, deliberately** - both strict-snippet blocks pin `PRE-EXISTING`
+  behaviour, so a red in either would mean the slice had changed something it says it did not.
+  **The pass-1 remedy moved this figure** (it read 16 of 115 in 3 of 4 before the two residual rows
+  and the second snippet pin were added), which is the rule this lineage wrote three times: re-run
+  it after every test you add **or strengthen**, never carry it forward.
 - **TWO COSTS, DISCLOSED AND PINNED RATHER THAN FIXED.** A caller `deidentificationMethod` longer
   than 64 characters, and a prior value the **source file** wrote longer than it, are both written
   through undisclosed: splitting or truncating either would invent a de-identification record nobody
   made. Both have residual tests, so closing either turns a test red.
+- **🛑 "A SENDER'S NON-CONFORMANT `LO` IS THE SENDER'S" WAS REFUTED, AND THE SENDER IS US.** Every
+  object `0.0.3` through `0.0.11` de-identified **without a caller-supplied method** carries the
+  76-character value, so the over-long prior that rule waves away is, in the common case, this
+  library's own earlier output. Re-de-identifying one **keeps it**: measured flat at **138** bytes
+  over four passes, values of **76** and **61**, `DICOM_DEIDENT_METHOD_PRIOR_RETAINED` raised for the
+  retention and **nothing said about the length**. Keeping it is still correct - E.1.1 says "added
+  to", and rewriting a prior record destroys provenance whoever wrote it - but never describe the
+  residual as somebody else's file. Pinned.
+- **A LATER PASS WITH FEWER OPTIONS LEAVES NO TRACE THAT THE EARLIER ONE HAD MORE.** Splitting the
+  record per option plus de-duplicating per value means `(0012,0063)` now records the **union** of
+  the options ever applied rather than a per-run history; the base's one-value-per-run text did
+  distinguish two such runs. The direction is **conservative** (the union over-states retention,
+  never understates it), so it is not a leak - it is a reduction in what E.1.1's provenance carrier
+  holds, disclosed here and pinned, and a **backlog line** rather than something this slice takes on.
 
 ## DICOM-DEIDENT-NOT-A-FIXED-POINT
 

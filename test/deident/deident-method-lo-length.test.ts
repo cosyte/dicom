@@ -381,9 +381,8 @@ describe("what this slice does NOT bound, pinned rather than left to be rediscov
   });
 
   it("a prior value the SOURCE FILE wrote over the maximum is copied through, undisclosed", () => {
-    // Same posture for the other direction: those bytes are the sender's, they
-    // are copied verbatim by design, and a sender's non-conformant LO is the
-    // sender's. Only its retention is disclosed.
+    // Same posture for the other direction: those bytes are the sender's and are
+    // copied verbatim by design. Only their retention is disclosed.
     const overlong = `ACME ${"Z".repeat(70)}`;
     const { dataset, report } = deidentify(
       buildWithPriorMethod({ vr: "LO" as VR, value: even(overlong) }),
@@ -393,5 +392,50 @@ describe("what this slice does NOT bound, pinned rather than left to be rediscov
     expect(report.warnings.map((w) => w.code)).toStrictEqual([
       WARNING_CODES.DICOM_DEIDENT_METHOD_PRIOR_RETAINED,
     ]);
+  });
+
+  it("🩺 and the most likely writer of one is THIS library: its own 0.0.11 value is kept", () => {
+    // 🛑 A graded pass refuted "a sender's non-conformant LO is the sender's".
+    // Every object 0.0.3 through 0.0.11 de-identified without a caller-supplied
+    // method carries the 76-character value, so the over-long prior the row
+    // above calls the sender's is, in the common case, this library's own. It is
+    // still KEPT, and that is right - PS3.15 E.1.1 says "added to", and
+    // rewriting a prior de-identifier's record destroys the provenance the
+    // attribute exists to carry whoever wrote it - but the length is not
+    // disclosed, and a consumer with a strict receiver in the path should expect
+    // an over-long Value on anything de-identified before this release.
+    let ds = buildWithPriorMethod({ vr: "LO" as VR, value: even(BASE_DEFAULT_76) });
+    const lengths: number[] = [];
+    let codes: readonly string[] = [];
+    for (let pass = 0; pass < 4; pass++) {
+      const { dataset, report } = deidentify(ds);
+      codes = report.warnings.map((w) => w.code);
+      lengths.push(rawMethod(dataset).length);
+      ds = parseDicom(serializeDicom(dataset));
+    }
+
+    // Flat, so this is a fixed point and not a growth defect...
+    expect(lengths).toStrictEqual([138, 138, 138, 138]);
+    // ...and one of its two values is still over the maximum.
+    expect(valueLengths(rawMethod(ds))).toStrictEqual([76, 61]);
+    // Disclosed as a retention, and silent about the length.
+    expect(codes).toStrictEqual([WARNING_CODES.DICOM_DEIDENT_METHOD_PRIOR_RETAINED]);
+  });
+
+  it("🩺 a later pass with FEWER options leaves no trace that the earlier one had more", () => {
+    // Disclosed here rather than left for a later slice to rediscover. Splitting
+    // the record per option plus de-duplicating per value means a token written
+    // by pass 1 is simply already present in pass 2, so the two runs are not
+    // distinguishable in the attribute: `(0012,0063)` records the UNION of the
+    // options ever applied, not a per-run history. The direction is
+    // conservative - the union over-states what was retained, never understates
+    // it - and the base's one-value-per-run text did distinguish them. It is a
+    // real reduction in what PS3.15 E.1.1's provenance carrier holds and is a
+    // backlog line, not a defect this slice takes on.
+    const first = deidentify(buildWithPriorMethod(), { retain: ["RetainUIDs"] }).dataset;
+    const second = deidentify(parseDicom(serializeDicom(first)), {}).dataset;
+
+    expect(rawMethod(second).equals(rawMethod(first))).toBe(true);
+    expect(valueLengths(rawMethod(second))).toStrictEqual([61, "RetainUIDs".length]);
   });
 });
