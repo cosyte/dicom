@@ -953,12 +953,19 @@ export function burnedInAnnotationNotRemoved(position: DicomPosition): DicomPars
  *
  * @remarks
  * PS3.15 2026c E.1.1 obliges a de-identifier to insert its method text in, or
- * add it to, `(0012,0063)`. `deidentify()` adds; this code is raised on the one
- * shape where it cannot, and it exists so the fallback is never silent. **The
- * fallback is not a new loss** - it is what every released version did on every
- * file - but it is still a loss, and an audit that reads as a complete
- * provenance chain it did not preserve is the worse half of every leak in this
- * package.
+ * add it to, `(0012,0063)`. `deidentify()` adds; this code is raised when the
+ * value it would have to write is longer than that VR can encode. **The fallback
+ * is not a new loss** - it is what every released version did on every file -
+ * but it is still a loss, and an audit that reads as a complete provenance chain
+ * it did not preserve is the worse half of every leak in this package.
+ *
+ * **🛑 IT IS NOT "the one shape where `deidentify` cannot add", AND A GRADED PASS
+ * REFUTED THAT SENTENCE.** There is a second, and it is still silent: a
+ * `(0012,0063)` a file encoded under a VR other than `LO` is replaced, with
+ * `report.warnings` empty. That shape is `PRE-EXISTING` and deliberately not
+ * taken here, so the CLAIM is corrected rather than the guard widened. Read this
+ * code as "the length ceiling was reached", never as "every fallback is
+ * disclosed".
  *
  * Truncating the chain instead was refused deliberately: choosing which of the
  * sender's earlier de-identification records to drop is a policy the standard

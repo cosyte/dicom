@@ -79,8 +79,10 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   could not encode: a raw `RangeError` out of Node's `Buffer` internals, outside the documented
   `DicomSerializeError` surface, taking the whole de-identified object down. When the join would
   exceed the ceiling the prior value is **replaced** instead, which is what every released version did
-  on every file, and `report.warnings` carries the new `DICOM_DEIDENT_METHOD_NOT_ADDED` so the
-  fallback is never silent. Truncating the sender's earlier records instead was refused: choosing
+  on every file, and `report.warnings` carries the new `DICOM_DEIDENT_METHOD_NOT_ADDED`, so THAT
+  fallback is disclosed. Read the code as "the length ceiling was reached", never as "every fallback
+  is disclosed": the `PRE-EXISTING` non-`LO` replacement below is a second shape where `deidentify`
+  cannot add, and it is still silent. Truncating the sender's earlier records instead was refused: choosing
   which to drop is a policy the standard does not state.
 
   **`(0012,0062)` Patient Identity Removed is still REPLACED with `YES`, and the asymmetry is the
@@ -97,14 +99,14 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   rather than appended to.
 
   **The evidence, with its sha, because the base moves.** Re-measured at `e75fb38` after the last
-  test was added - and again after the conformance gate's remedy added six more, which is the rule
+  test was added - and again after each conformance-gate remedy added more, which is the rule
   and not a courtesy: **8 of the 12** tests in `test/integration/file-meta-duplicate.test.ts` and
-  **10 of the 18** in `test/deident/deident-method-add.test.ts` run red against that base, 18 of 30
+  **11 of the 19** in `test/deident/deident-method-add.test.ts` run red against that base, 19 of 31
   in all. **Neither file can link against base `src/`** - none of
   `WARNING_CODES.DICOM_DUPLICATE_FILE_META_ELEMENT`, `duplicateFileMetaElement`,
   `WARNING_CODES.DICOM_DEIDENT_METHOD_NOT_ADDED` or `deidentMethodNotAdded` exists there - so both
   figures are measured with those symbols substituted for their literals; unmodified they are 12 of
-  12 and 18 of 18 by construction, which is a fact about linking rather than about behaviour. The
+  12 and 19 of 19 by construction, which is a fact about linking rather than about behaviour. The
   ones that stay green on base are the controls that make the rest non-vacuous. Quote such a figure
   only with the sha it was run on.
 

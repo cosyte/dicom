@@ -62,6 +62,10 @@ const PATIENT = "SMITHSON^BRAIN";
 
 const BACKSLASH = "\\";
 
+/** Mirror of `MAX_SHORT_FORM_VALUE_BYTES` in `src/deident/deidentify.ts`, kept local so a
+ * regression in either copy shows up here rather than agreeing with itself. */
+const MAX_SHORT_FORM_VALUE_BYTES = 0xfffe;
+
 function even(text: string): Buffer {
   const raw = Buffer.from(text, "latin1");
   return raw.length % 2 === 0 ? raw : Buffer.concat([raw, Buffer.from([0x20])]);
@@ -279,6 +283,32 @@ describe("🩺 the join is bounded, because an unencodable value takes the whole
     // And the object survives, which is what the bound is for.
     expect(() => serializeDicom(dataset)).not.toThrow();
     expect(methodOf(parseDicom(serializeDicom(dataset)))).toBe(methodOf(dataset));
+  });
+
+  it("🛑 the ceiling guards the ALREADY-RECORDED return too, which a draft left open", () => {
+    // The second graded pass found this: the guard sat on the join, so the
+    // already-recorded case - a file this library de-identified once already,
+    // which is exactly what the fixed-point rule is for - returned the prior
+    // value untouched and unbounded. Declared Value Length 65,535, an odd length
+    // the parser tolerates with DICOM_ODD_LENGTH_VALUE_PADDED, with this run's
+    // own method among the values so nothing is missing to append. `report`
+    // carried no warning and `serializeDicom` threw a raw RangeError.
+    const method = "Cosyte @cosyte/dicom: PS3.15 Basic Application Level Confidentiality Profile";
+    const filler = "F".repeat(65_535 - method.length - 1);
+    const prior = `${method}${BACKSLASH}${filler}`;
+    expect(prior.length).toBe(65_535);
+
+    const parsed = buildWithPriorMethod({ vr: "LO" as VR, value: Buffer.from(prior, "latin1") });
+    expect(parsed.get(DEIDENT_METHOD)?.rawBytes.length).toBeGreaterThan(MAX_SHORT_FORM_VALUE_BYTES);
+
+    const { dataset, report } = deidentify(parsed);
+    expect(report.warnings.map((w) => w.code)).toContain(
+      WARNING_CODES.DICOM_DEIDENT_METHOD_NOT_ADDED,
+    );
+    expect(dataset.get(DEIDENT_METHOD)?.rawBytes.length).toBeLessThanOrEqual(
+      MAX_SHORT_FORM_VALUE_BYTES,
+    );
+    expect(() => serializeDicom(dataset)).not.toThrow();
   });
 
   it("the disclosure carries no value, no length and no VR", () => {

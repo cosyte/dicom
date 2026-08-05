@@ -68,8 +68,10 @@ parses with no warnings, and an unbounded append produced a 65,611-byte value th
 could not encode: a raw `RangeError` out of Node's `Buffer` internals, outside the documented
 `DicomSerializeError` surface, taking the whole de-identified object down. When the join would
 exceed the ceiling the prior value is **replaced** instead, which is what every released version did
-on every file, and `report.warnings` carries the new `DICOM_DEIDENT_METHOD_NOT_ADDED` so the
-fallback is never silent. Truncating the sender's earlier records instead was refused: choosing
+on every file, and `report.warnings` carries the new `DICOM_DEIDENT_METHOD_NOT_ADDED`, so THAT
+fallback is disclosed. Read the code as "the length ceiling was reached", never as "every fallback
+is disclosed": the `PRE-EXISTING` non-`LO` replacement below is a second shape where `deidentify`
+cannot add, and it is still silent. Truncating the sender's earlier records instead was refused: choosing
 which to drop is a policy the standard does not state.
 
 `(0012,0062)` Patient Identity Removed is still **replaced** with `YES`. The asymmetry is the

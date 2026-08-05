@@ -1264,8 +1264,8 @@ const MAX_SHORT_FORM_VALUE_BYTES = 0xfffe;
  * documented `DicomSerializeError` surface, taking the whole de-identified object
  * down. On base the same file serialized, because base replaced.
  *
- * So when the join would exceed {@link MAX_SHORT_FORM_VALUE_BYTES}, this falls
- * back to the **pre-existing replacement** and says so, by returning
+ * So when the value this would return exceeds {@link MAX_SHORT_FORM_VALUE_BYTES},
+ * this falls back to the **pre-existing replacement** and says so, by returning
  * `replacedPrior`. That is not a new loss - it is what every released version did
  * on *every* file - and this slice narrows it from "always" to "only when the
  * prior chain is within a few bytes of the ceiling". **It is not silent**: the
@@ -1273,6 +1273,15 @@ const MAX_SHORT_FORM_VALUE_BYTES = 0xfffe;
  * the chain instead was refused: choosing which of the sender's earlier
  * de-identification records to drop is a policy the standard does not state, and
  * this package reports rather than invents.
+ *
+ * **The guard is over the RETURN, not over the join, and a second graded pass is
+ * why.** A draft applied it only where the join happened, so the
+ * already-recorded case - a file this library de-identified once already, which
+ * is exactly what the fixed-point rule is for - returned the prior value
+ * untouched and unbounded. A `(0012,0063)` declaring an odd 65,535-byte Value
+ * Length came straight back out and threw the same `RangeError`, with
+ * `report.warnings` **empty**. Every path that can return file-supplied bytes
+ * goes through the one check now.
  *
  * The bound is applied uniformly rather than per encoding. Under Implicit VR LE
  * the length field is 32 bits and a longer value would encode, but one rule that
@@ -1308,17 +1317,25 @@ function addDeidentificationMethod(
 
   const keptValues = splitValues(kept);
   const missing = splitValues(added).filter((v) => !keptValues.some((k) => k.equals(v)));
-  if (missing.length === 0) return { value: kept, replacedPrior: false };
 
   const parts: Buffer[] = [kept];
   for (const value of missing) {
     parts.push(Buffer.from([VALUE_DELIMITER]), value);
   }
-  const joined = Buffer.concat(parts);
-  if (joined.length > MAX_SHORT_FORM_VALUE_BYTES) {
+  // 🛑 ONE GUARD OVER EVERY PATH THAT CAN RETURN FILE-SUPPLIED BYTES, AND A
+  // SECOND GRADED PASS IS WHY. A draft returned `kept` unbounded as soon as
+  // `missing` was empty - the already-recorded case, which is precisely a file
+  // this library de-identified once already - so a `(0012,0063)` whose declared
+  // Value Length is an odd 65,535 came straight back out and `serializeDicom`
+  // threw the same raw `RangeError`, with `report.warnings` EMPTY. Narrower than
+  // the first route (the parse warns `DICOM_ODD_LENGTH_VALUE_PADDED` and
+  // `{ strict: true }` refuses the file outright), still an outcome base did not
+  // have. `kept` is file-supplied on every path here; only `added` is not.
+  const value = Buffer.concat(parts);
+  if (value.length > MAX_SHORT_FORM_VALUE_BYTES) {
     return { value: added, replacedPrior: true };
   }
-  return { value: joined, replacedPrior: false };
+  return { value, replacedPrior: false };
 }
 
 /** Split a string-VR value on the `\` delimiter. Never empty: `[]` splits to `[""]`. */
