@@ -516,7 +516,7 @@ describe("🩺 repeated de-identification is a fixed point, on raw bytes", () =>
    * four in-memory passes and four wire round trips and demands raw-byte
    * equality; a cell that grows by even one byte per pass is red.
    */
-  it("🛑 the SWEEP: every pad position, delimiter count and prior, flat over four passes", () => {
+  it("🛑 the SWEEP: 14 method shapes x 6 priors, flat over four passes", () => {
     const methods = [
       "ACME v3",
       "ACME v3 ",

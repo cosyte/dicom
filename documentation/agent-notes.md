@@ -109,15 +109,17 @@ then the two gates.
   round trips each, raw-byte equality per cell - because two graded passes on one item were each spent
   on a caller string nobody had thought to try.
   **▶ THE BASE-RED FIGURE, WITH ITS SHA.** Over the **full suite** at `287efae` with these tests
-  added: **10 of 1,045** red, in **3** files (of 65). Seven are in
-  `test/deident/deident-method-add.test.ts` - the growth rows plus the disclosure row - and the other
-  two artifacts of this slice are red there for a second reason as well, because the code they name
-  does not exist on that tree: the `(0012,0063)` slot in
-  `test/integration/phi-diagnostic-surface.test.ts` and the locked `WARNING_CODES` snapshot. **A
-  first count read 6 and omitted those two**; a graded pass caught it. Re-derive rather than quoting,
-  re-run after every test **added or strengthened** (this figure moved twice inside one slice), and
-  remember that `git checkout <base> -- src/` **overlays** - `src/` was removed and restored, never
-  overlaid.
+  added: **11 of 1,045** red, in **3** files (of 65). **Nine** are in
+  `test/deident/deident-method-add.test.ts` - the growth rows plus the two disclosure rows - and the
+  other two artifacts of this slice are red there for a second reason as well, because the code they
+  name does not exist on that tree: the `(0012,0063)` slot in
+  `test/integration/phi-diagnostic-surface.test.ts` and the locked `WARNING_CODES` snapshot.
+  **🛑 THIS ONE FIGURE WAS WRONG THREE TIMES IN ONE SLICE, AND EACH TIME FOR THE REASON `CLAUDE.md`
+  ALREADY NAMES.** A first count read **6** and omitted the last two files; a second read **10** and
+  missed that the remedy had **strengthened** an existing row (the `deidentify(deidentify(...))`
+  assertion) into a base-red one. Re-derive rather than quoting; re-run after every test added **or
+  strengthened**; and remember that `git checkout <base> -- src/` **overlays** - `src/` was removed
+  and restored, never overlaid.
   **▶ THREE `PRE-EXISTING` LINES WERE DELIBERATELY NOT CUT IN** (the pass-4 grader advised against
   it and the founder agreed): the default `(0012,0063)` overruns `LO`'s 64-character per-value
   maximum; a `(0012,0063)` a file encoded under a VR other than `LO` is replaced silently;

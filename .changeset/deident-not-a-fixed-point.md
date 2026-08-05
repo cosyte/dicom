@@ -75,4 +75,4 @@ in-memory ones, and pins the two measured rows above plus the interior-pad shape
 block named for a universal that pins the shapes it just fixed is the same mistake one level up, the
 property is swept over a matrix of 14 method shapes against 6 priors, four in-memory passes and four
 wire round trips per cell, raw-byte equality throughout. Over the full suite at the regressed commit,
-**10 of 1,045** tests run red, in **3** files.
+**11 of 1,045** tests run red, in **3** files - nine of them in the de-identify file.
