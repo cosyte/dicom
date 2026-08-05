@@ -887,6 +887,30 @@ function sweep(): { results: Snapshot; built: number; unbuildable: number } {
 }
 
 /**
+ * The transfer syntax a cell key names, in **every** family rather than only in
+ * the sequence sweep.
+ *
+ * 🛑 THIS EXISTS BECAUSE THE SYNTAX SPLIT WAS BLIND TO THREE OF THE FOUR
+ * FAMILIES. The sequence sweep keys on `<ts>|<shape>|...`, so `--diff` classified
+ * a cell by testing whether its key *starts with* the syntax. The `carrier|`,
+ * `legit|` and `priv|` families put their own prefix in that position, so none of
+ * their rows could ever be counted as Implicit VR LE and every one of them was
+ * reported under "of which Explicit VR". `DICOM-ITEM-EJECT-ROUTE` changed 118
+ * `priv|` cells, **74 of them Implicit VR LE**, and the line printed
+ * `Implicit VR LE 0`.
+ *
+ * The split is a **reading aid, never a gate** (which syntax is the control is a
+ * property of the slice), but a reading aid that reports the control clean while
+ * the slice is changing it is worse than none. **Any figure quoted off that line
+ * for a slice touching `carrier|`, `legit|` or `priv|` predates this fix and is
+ * not re-derivable** - re-run the diff rather than carrying it forward.
+ */
+function transferSyntaxOf(key: string): string {
+  const parts = key.split("|");
+  return (parts[0]?.startsWith("1.2.840.") === true ? parts[0] : parts[1]) ?? "";
+}
+
+/**
  * `tag:action` for each reported attribute, positionally suffixed so a tag
  * reported twice on base and once here still counts as a loss.
  */
@@ -1012,7 +1036,7 @@ function diff(basePath: string, newPath: string): void {
     const b = base[k];
     const n = next[k];
     if (b === undefined || n === undefined) continue;
-    const isImplicit = k.startsWith(`${IMPLICIT_LE}|`);
+    const isImplicit = transferSyntaxOf(k) === IMPLICIT_LE;
     const bl = JSON.stringify({ ...b, strict: undefined });
     const nl = JSON.stringify({ ...n, strict: undefined });
     const lenientSame = bl === nl;

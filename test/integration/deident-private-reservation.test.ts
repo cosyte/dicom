@@ -2,7 +2,7 @@
  * `DICOM-PRIVATE-CREATOR-RESERVATION-LEAK` - a private value retained on a
  * §7.8.1 block reservation the file does not unambiguously give it.
  *
- * ## The defect, as it shipped through `0.0.9`
+ * ## The defect, as it shipped (measured on the published `0.0.8` tarball)
  *
  * `deidentify(ds, { retain: ["RetainSafePrivate"], profile: profiles.ge })` on a
  * file whose Item declares more bytes than its enclosing Sequence does: the Item
@@ -44,15 +44,29 @@
  * is the branch available here (`(0008,0307)` is not implemented). So the
  * standard's own default applies and the value goes.
  *
- * ## Two routes this slice does NOT close
+ * ## The EJECT direction, closed by `DICOM-ITEM-EJECT-ROUTE`
  *
- * Found by the pass-1 `conformance-refuter` grade, both `PRE-EXISTING` and both
- * pinned as residual tests at the bottom of this file that assert the **leaking**
- * behaviour: the **eject** direction (an Item that under-declares pushes its
- * trailing elements out into the enclosing Data Set, which is not narrowed) and
- * the **private-`SQ` carve-out** (`keepsPrivate` decides before the descent, so a
- * vouched-for private `SQ` is kept verbatim and never walked). Read the headline
- * as "the absorb direction is closed", never as "the class is closed".
+ * `#66` shipped with two routes open, both found by its pass-1
+ * `conformance-refuter` grade and both pinned here as residual tests that
+ * asserted the **leaking** behaviour. The **eject** direction - an Item that
+ * *under*-declares pushing its trailing elements out into the enclosing Data
+ * Set, which `#66` did not narrow - is now closed by `settledBound`, and those two
+ * residuals were rewritten to assert the closure. The
+ * **private-`SQ` carve-out** (`keepsPrivate` decides before the descent, so a
+ * vouched-for private `SQ` is kept verbatim and never walked) is **untouched and
+ * still leaks**, pinned at the bottom of this file. Read the headline as "the
+ * absorb and eject directions are closed", never as "the class is closed".
+ *
+ * The eject remedy is a **positional** cut inside each Data Set, at every depth:
+ * everything a Data Set holds after the first sequence whose own contents
+ * contradict its declared extent is refused a private reservation, and anything
+ * ahead of it is untouched. Two predicates are needed, because the parser records
+ * the same contradiction two ways: `rawBytes.length > length` under Explicit VR,
+ * and a refused descent (`items === undefined`, `DICOM_SQ_NOT_DESCENDED`) under
+ * Implicit VR LE, where nothing over-runs at all. And the cut needs **two bounds**
+ * rather than one, because a Data Set is a `Map<Tag, Element>`: an ejected element
+ * whose tag the Data Set already holds overwrites in place and inherits the
+ * earlier position, so `Element.byteOffset` is checked beside the index.
  *
  * ## The direction argument is FALSE and is not restated
  *
@@ -60,8 +74,10 @@
  * of the ambiguity. It is not: the direction is a property of **where the sender
  * put the Private Creator relative to the disputed bytes**, not of the two
  * readings. Both **absorb** placements are pinned below (`creator in the Item`
- * and `creator at the root`) and both are refused now; the **eject** placement is
- * pinned as a residual and is not.
+ * and `creator at the root`) and both are refused, as is the **eject** placement
+ * since `DICOM-ITEM-EJECT-ROUTE`. **That is still not "the ambiguity is safe in
+ * one direction"** - each direction was closed by its own measured remedy, and
+ * the private-`SQ` carve-out shows the class is not closed by either.
  *
  * ## The price, and it is measured
  *
@@ -105,6 +121,14 @@ const CREATOR_TAG = "00090010";
 const PRIVATE_TAG = "00091001";
 const SECRET = "SECRET-PRIVATE-PHI";
 
+/**
+ * A second, distinct private value the ROOT's own reservation carries, so the
+ * `Map<Tag, Element>` collision shapes can tell "the Item's copy survived" apart
+ * from "the root's own copy survived". One marker for both would make those
+ * tests vacuous.
+ */
+const ROOT_PRIVATE = "ROOT-PRIVATE-VALUE";
+
 /** `(0008,1115)` has no Table E.1-1 row, so `deidentify()` recurses into it. */
 const CARRIER = "00081115";
 
@@ -131,6 +155,7 @@ const nameEl = { tag: "00100010", vr: "PN" as const, value: ascii("ROOT^PATIENT"
 interface Outcome {
   readonly removedPrivateTags: readonly string[];
   readonly secretInOutput: boolean;
+  readonly rootPrivateInOutput: boolean;
   readonly identityRemoved: string | undefined;
   readonly parseWarnings: readonly string[];
 }
@@ -142,6 +167,7 @@ function run(buf: Buffer, options: DeidentifyOptions = GE_RETAIN): Outcome {
   return {
     removedPrivateTags: report.removedPrivateTags,
     secretInOutput: bytes.includes(ascii(SECRET)),
+    rootPrivateInOutput: bytes.includes(ascii(ROOT_PRIVATE)),
     identityRemoved: dataset.get("00120062")?.rawBytes.toString("latin1").trimEnd(),
     parseWarnings: ds.warnings.map((w) => w.code),
   };
@@ -471,29 +497,26 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
   });
 
   /**
-   * Two routes this slice does NOT close, pinned as residuals rather than
-   * asserted away. Both are `PRE-EXISTING` and reproduce identically on
-   * `164eb39`; both put a private value into output stamped
-   * `PatientIdentityRemoved = YES` with `report.removedPrivateTags: []`.
+   * `DICOM-ITEM-EJECT-ROUTE`: the mirror direction, closed here.
    *
-   * These tests assert the CURRENT, LEAKING behaviour on purpose. When either is
-   * fixed they go red, which is the point: a residual nobody can see is how the
-   * defect this file exists for survived three refuter passes.
+   * These tests were the **residuals** this file shipped with. They asserted the
+   * leaking behaviour so that closing the route would turn them red, and it did;
+   * what follows is the same fixtures with the outcome inverted, plus the two
+   * shapes the residual never covered. The private-`SQ` carve-out below is
+   * untouched and still leaks.
    */
-  describe("still leaking, measured, and each its own item", () => {
+  describe("the EJECT direction: what a disputed sequence pushes OUT", () => {
     it.each([
       ["Explicit VR LE", EXPLICIT_LE],
       ["Explicit VR BE", EXPLICIT_BE],
     ])(
-      "%s: RESIDUAL - an Item that UNDER-declares EJECTS its creator into the root, which is not narrowed",
+      "%s: an Item that UNDER-declares ejects its creator into the root, which reserves nothing there",
       (_label, ts) => {
-        // The mirror of the closed case. `reservationsUsable` is hard-wired
-        // `true` at the root, and the element that moved landed there, so the
-        // creator now reserves a block for a root element the sender never gave
-        // it. Widening the flag to the enclosing Data Set was BUILT AND
-        // MEASURED: it costs 24 root retentions and closes 2 of the 22 leaking
-        // grid cells, because the other 20 are Implicit VR LE where the sequence
-        // records no over-run at all. A different mechanism, its own slice.
+        // Measured on `300af87` before the remedy: `removedPrivateTags: []`, the
+        // value in the serialized output, `(0012,0062) = YES`. The creator the
+        // sender wrote as Item content lands at the root, where the private data
+        // element genuinely is, and vouches for it on a reservation PS3.5 2026c
+        // §7.8.1 scopes to the Item it was written in.
         const buf = buildDicom({
           transferSyntax: ts,
           elements: [
@@ -513,28 +536,278 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
         });
         const out = run(buf);
 
-        // The leak itself, unchanged and still open.
-        expect(out.removedPrivateTags).toEqual([]);
-        expect(out.secretInOutput).toBe(true);
+        expect(out.removedPrivateTags).toEqual([CREATOR_TAG, PRIVATE_TAG]);
+        expect(out.secretInOutput).toBe(false);
+        // The stamp stays YES because the redaction it attests to now happens.
         expect(out.identityRemoved).toBe("YES");
 
-        // 🛑 THESE TWO USED TO ASSERT SILENCE ON EVERY CHANNEL AND A CLEAN
-        // `{ strict: true }` PARSE. That was true when `#66` shipped;
-        // `DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ` changed it on the **Explicit
-        // VR** shapes and nowhere else. This file's `SQ` under-declares by more
-        // than its item does, so the item still crosses the sequence's declared
-        // end and the disclosure fires.
-        //
-        // Read the combination rather than either line alone: a warning fires,
-        // AND the object is stamped `PatientIdentityRemoved=YES` while still
-        // carrying the private value. So that warning is the ONLY signal on a
-        // file whose de-identification audit is false, and it is emphatically
-        // not an all-clear. The troubleshooting row says exactly that.
+        // The posture of the file itself is unchanged by this slice - nothing
+        // here touches the parser. Pinned because the item filed for this route
+        // described it as silent on every channel including `{ strict: true }`,
+        // which was true when `#66` filed it and is not true now:
+        // `DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ` added the disclosure that
+        // fires on this shape. Do not carry the old sentence forward.
         expect(out.parseWarnings).toEqual(["DICOM_ITEM_CROSSES_SEQUENCE_END"]);
         expect(() => parseDicom(buf, { strict: true })).toThrow(DicomParseError);
       },
     );
 
+    it("Implicit VR LE ejects the same way with NO over-run recorded, which is why it is a second predicate", () => {
+      // 🩺 THE MECHANISM THAT MADE THIS ITS OWN SLICE RATHER THAN A WIDENING OF
+      // THE ABSORB RULE. `itemStreamOverrunsSequence` reads `false` here: the
+      // Implicit VR LE path slices the item stream to the sequence's declared
+      // Value Length, so `rawBytes.length === length` and nothing over-runs.
+      // What happens instead is that the item does not fit the slice, the
+      // descent is refused (`DICOM_SQ_NOT_DESCENDED`, `items === undefined`),
+      // and the 20 bytes the sender encoded as Item content are read as ROOT
+      // elements. Measured on `300af87`: `removedPrivateTags: []` with the value
+      // in the output.
+      const build = (sqDelta: number): Buffer =>
+        buildDicom({
+          transferSyntax: IMPLICIT_LE,
+          elements: [
+            nameEl,
+            {
+              tag: CARRIER,
+              declaredLengthDelta: sqDelta,
+              items: [
+                {
+                  elements: [{ tag: "00080008", vr: "CS", value: ascii("ORIGINAL") }, creatorEl],
+                },
+              ],
+            },
+            secretEl,
+          ] as never,
+        });
+
+      // 🛑 NON-VACUITY CONTROL, AND IT IS NOT THE HONEST FILE. The honest
+      // control here removes the secret for an unrelated reason - the creator
+      // really is inside the Item, so the root's private element has no creator
+      // at all - which would let this test pass against a build that retains
+      // nothing under Implicit VR LE. So the control is a CONFORMANT file whose
+      // reservation and data element are both at the root: it must be RETAINED,
+      // proving `RetainSafePrivate` + `profiles.ge` can keep a value under this
+      // transfer syntax.
+      const conformant = run(
+        buildDicom({
+          transferSyntax: IMPLICIT_LE,
+          elements: [nameEl, creatorEl, secretEl] as never,
+        }),
+      );
+      expect(conformant.removedPrivateTags).toEqual([]);
+      expect(conformant.secretInOutput).toBe(true);
+
+      const honest = run(build(0));
+      expect(honest.removedPrivateTags).toEqual([PRIVATE_TAG]);
+      expect(honest.secretInOutput).toBe(false);
+
+      const lying = run(build(-wireSize(CREATOR)));
+      expect(lying.removedPrivateTags).toEqual([CREATOR_TAG, PRIVATE_TAG]);
+      expect(lying.secretInOutput).toBe(false);
+      expect(lying.parseWarnings).toContain("DICOM_SQ_NOT_DESCENDED");
+    });
+
+    it("it is EVERY still-usable Data Set, not the root: an inner sequence ejects into the enclosing Item", () => {
+      // 🛑 THE SCOPE REQUIREMENT THE ITEM WAS FILED WITH, AND A ROOT-SCOPED
+      // REMEDY WOULD READ GREEN WITHOUT IT. The disputed sequence is one level
+      // down; the Data Set that receives the ejected creator is the enclosing
+      // Item, which no flag narrows - `reservationsUsable` is still `true` there
+      // because the OUTER sequence is honest. Measured on `300af87`:
+      // `removedPrivateTags: []` with the value in the output.
+      const build = (innerDelta: number, itemDelta: number): Buffer =>
+        buildDicom({
+          transferSyntax: EXPLICIT_LE,
+          elements: [
+            nameEl,
+            {
+              tag: CARRIER,
+              items: [
+                {
+                  elements: [
+                    sopEl,
+                    {
+                      tag: "00089215",
+                      declaredLengthDelta: innerDelta,
+                      items: [
+                        {
+                          declaredLengthDelta: itemDelta,
+                          elements: [
+                            { tag: "00080008", vr: "CS", value: ascii("ORIGINAL") },
+                            creatorEl,
+                          ],
+                        },
+                      ],
+                    },
+                    secretEl,
+                  ],
+                },
+              ],
+            },
+          ] as never,
+        });
+
+      // Control: with no length lie the creator stays in the inner Item, so the
+      // outer Item's private element has no reservation and is removed. Note
+      // what this control does and does not prove - the "both in the same Item"
+      // retention is proved by the conformant control in the over-removal block
+      // above, not here.
+      const honest = run(build(0, 0));
+      expect(honest.removedPrivateTags).toEqual([PRIVATE_TAG]);
+      expect(honest.secretInOutput).toBe(false);
+
+      const lying = run(build(-24, -wireSize(CREATOR)));
+      expect(lying.removedPrivateTags).toEqual([CREATOR_TAG, PRIVATE_TAG]);
+      expect(lying.secretInOutput).toBe(false);
+      expect(lying.identityRemoved).toBe("YES");
+    });
+
+    it.each([
+      ["Explicit VR LE", EXPLICIT_LE, -30, -26],
+      ["Implicit VR LE", IMPLICIT_LE, -26, 0],
+    ])(
+      "%s: an ejected element that COLLIDES with a tag the Data Set already holds is refused too",
+      (_label, ts, sqDelta, itemDelta) => {
+        // 🛑 THE SHAPE AN INDEX CUT ALONE CANNOT SEE, AND IT IS WHY
+        // `settledBound` CARRIES A BYTE OFFSET AS WELL. The enclosing Data Set is
+        // a `Map<Tag, Element>`: when the ejected element carries a tag the Data
+        // Set already holds, `Map.set` overwrites in place and the newcomer
+        // inherits the earlier element's POSITION, ahead of the sequence it came
+        // out of. Measured here: the ejected `(0009,1001)` sits at index 2 with
+        // `byteOffset` 274 while the sequence sits at index 3 with `byteOffset`
+        // 238. Those two numbers are properties of THIS fixture's File Meta
+        // length; a pass-2 grade read 292 off a fixture carrying more of it. The
+        // argument is the inequality, not the numerals. `Element.byteOffset` is the position the parser counted and the
+        // overwrite cannot move it. `PRE-EXISTING` and leaking on `300af87`
+        // (`removedPrivateTags: []`, the value in the output).
+        //
+        // 🩺 AND IT DESTROYS THE ROOT'S OWN VALUE ON THE WAY IN, WHICH THIS
+        // SLICE DOES NOT FIX. The overwrite replaces the reservation's genuine
+        // root element with the Item's, silently, at parse time - the
+        // `Map<Tag, Element>` substitution already recorded for `(0010,0020)`,
+        // reached here on the private path. It is `PRE-EXISTING`, identical on
+        // both trees, and it is asserted below so it cannot be mistaken for
+        // something this remedy handled.
+        const build = (sq: number, item: number): Buffer =>
+          buildDicom({
+            transferSyntax: ts,
+            elements: [
+              nameEl,
+              creatorEl,
+              { tag: PRIVATE_TAG, vr: "LO", value: ascii(ROOT_PRIVATE) },
+              {
+                tag: CARRIER,
+                declaredLengthDelta: sq,
+                items: [{ declaredLengthDelta: item, elements: [sopEl, secretEl] }],
+              },
+            ] as never,
+          });
+
+        // Control: no lie, so the Item's copy stays inside the Item and the
+        // root's own reservation is retained with its own value intact.
+        // The Item's own copy has no creator inside the Item, so it is removed
+        // on both files; the root's own reservation is what differs.
+        const honest = run(build(0, 0));
+        expect(honest.removedPrivateTags).toEqual([PRIVATE_TAG]);
+        expect(honest.secretInOutput).toBe(false);
+        expect(honest.rootPrivateInOutput).toBe(true);
+
+        const lying = run(build(sqDelta, itemDelta));
+        expect(lying.removedPrivateTags).toEqual([PRIVATE_TAG]);
+        expect(lying.secretInOutput).toBe(false);
+        // The `PRE-EXISTING` substitution, pinned rather than described: the
+        // root's own value is gone from the parsed object before `deidentify()`
+        // is ever called, so no remedy at this boundary can bring it back.
+        expect(
+          parseDicom(build(sqDelta, itemDelta)).get(PRIVATE_TAG)?.rawBytes.toString("latin1"),
+        ).toBe(SECRET);
+        expect(lying.rootPrivateInOutput).toBe(false);
+      },
+    );
+
+    it("the same collision on the CREATOR flips a genuine root element from removed to retained on base", () => {
+      // The mirror of the shape above: the root's creator is one no profile
+      // vouches for, and the ejected creator that overwrites it IS vouched for -
+      // so on `300af87` the root's own private element went from removed to
+      // retained (`removedPrivateTags: []`, `ROOT-PRIVATE-VALUE` in the output).
+      // The creator map is now built from the settled run only, so an ejected
+      // creator reserves nothing.
+      const build = (delta: number): Buffer =>
+        buildDicom({
+          transferSyntax: EXPLICIT_LE,
+          elements: [
+            nameEl,
+            { tag: CREATOR_TAG, vr: "LO", value: ascii("NOT_A_KNOWN_CRTR") },
+            { tag: PRIVATE_TAG, vr: "LO", value: ascii(ROOT_PRIVATE) },
+            {
+              tag: CARRIER,
+              declaredLengthDelta: delta === 0 ? 0 : -24,
+              items: [{ declaredLengthDelta: delta, elements: [sopEl, creatorEl] }],
+            },
+          ] as never,
+        });
+
+      const honest = run(build(0));
+      expect(honest.removedPrivateTags).toEqual([CREATOR_TAG, PRIVATE_TAG]);
+      expect(honest.rootPrivateInOutput).toBe(false);
+
+      const lying = run(build(-wireSize(CREATOR)));
+      expect(lying.removedPrivateTags).toEqual([CREATOR_TAG, PRIVATE_TAG]);
+      expect(lying.rootPrivateInOutput).toBe(false);
+    });
+
+    it("THE PRICE, pinned: a genuine ROOT reservation written AFTER the sequence is refused too", () => {
+      // 🩺 THE COST OF THIS SLICE, AND IT IS NOT ZERO. Both the creator and its
+      // data element are at the root and the reservation is real, but they were
+      // read from bytes the file's own contents do not settle the ownership of,
+      // so they are refused. Over-removal, in the fail-safe direction, and named
+      // on `report.removedPrivateTags` rather than dropped silently.
+      //
+      // The mirror control - the same reservation written BEFORE the sequence -
+      // is the "a root reservation the sender wrote at the root survives an
+      // over-running sequence" test above, which stays green. That pair is what
+      // makes the cut POSITIONAL rather than per-Data-Set, and the grid cannot
+      // see the difference: every `priv|` fixture puts the private block after
+      // the sequence, so the whole-Data-Set variant measures identically there
+      // and differs on exactly 5 tests over the full suite: the mirror control
+      // named above ("a root reservation the sender wrote at the root survives
+      // an over-running sequence"), both collision rows, and both private-SQ
+      // carve-out residuals (the second in
+      // `deident-unauditable-sequence.test.ts`, which belongs to a different
+      // item). NOT this test, which passes under that variant. Count it over the
+      // suite, never over this file.
+      const build = (itemDelta: number): Buffer =>
+        buildDicom({
+          transferSyntax: EXPLICIT_LE,
+          elements: [
+            nameEl,
+            { tag: CARRIER, items: [{ declaredLengthDelta: itemDelta, elements: [sopEl] }] },
+            { tag: "00080060", vr: "CS", value: ascii("MR") },
+            creatorEl,
+            secretEl,
+          ] as never,
+        });
+
+      const honest = run(build(0));
+      expect(honest.removedPrivateTags).toEqual([]);
+      expect(honest.secretInOutput).toBe(true);
+
+      const lying = run(build(wireSize("MR")));
+      expect(lying.removedPrivateTags).toEqual([CREATOR_TAG, PRIVATE_TAG]);
+      expect(lying.secretInOutput).toBe(false);
+    });
+  });
+
+  /**
+   * The route this slice does NOT close, pinned as a residual rather than
+   * asserted away. It is `PRE-EXISTING`, reproduces identically on `164eb39`,
+   * and puts a private value into output stamped `PatientIdentityRemoved = YES`
+   * with `report.removedPrivateTags: []`.
+   *
+   * This test asserts the CURRENT, LEAKING behaviour on purpose. When it is
+   * fixed it goes red, which is the point: a residual nobody can see is how the
+   * defect this file exists for survived three refuter passes.
+   */
+  describe("still leaking, measured, and its own item", () => {
     it("RESIDUAL - a private SQ the profile vouches for is kept verbatim, so the descent never runs", () => {
       // `keepsPrivate` decides before `descendSequence`, so `reservationsUsable`
       // is never carried into this carrier's items. Exactly the carve-out `#54`

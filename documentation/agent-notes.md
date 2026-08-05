@@ -23,11 +23,113 @@ then the two gates.
 ---
 
 
+## DICOM-ITEM-EJECT-ROUTE
+
+- **🩺 THE EJECT DIRECTION IS CLOSED. THE PRIVATE-`SQ` CARVE-OUT IS NOT, AND THE CLASS IS NOT.**
+  (`DICOM-ITEM-EJECT-ROUTE`, `PRE-EXISTING`, **measured live on the published `0.0.10` tarball**, found by `#66`'s pass-2
+  refuter and re-measured on `300af87` before anything changed.) An `(FFFE,E000)` Item that declares
+  **fewer** bytes than its content occupies ends early, so the elements the sender encoded as Item
+  content are read as elements of the **enclosing** Data Set. A Private Creator landing there reserves
+  a block for elements the sender never put beside it, and the next private element is kept verbatim
+  on it: `removedPrivateTags: []`, the value in the output, `(0012,0062) = YES`.
+  **▶ IT IS EVERY STILL-USABLE DATA SET, NOT THE ROOT, AND THAT IS PINNED BY A TEST RATHER THAN A
+  SENTENCE.** An inner sequence ejecting a creator into the still-usable Item that encloses it
+  reproduces it one level down, with the outer sequence honest and `reservationsUsable` still `true`.
+  A root-scoped remedy reads green on that file.
+  **▶ TWO PREDICATES, AND THE SECOND IS THE WHOLE REASON THIS WAS ITS OWN SLICE.** Under **Explicit
+  VR** the item stream is bounded against the buffer, so it reads past the sequence's declared end and
+  `rawBytes.length` exceeds `length` (`itemStreamOverrunsSequence`). Under **Implicit VR LE** that path
+  slices the item stream to the declared Value Length, so **nothing over-runs at all**
+  (`rawBytes.length === length`); the item does not fit the slice, the descent is refused, and the
+  element arrives with `items === undefined` and `DICOM_SQ_NOT_DESCENDED` (`isUnauditableSequence`).
+  Both are facts the parser already recorded. **The second predicate is broader than the ejection it
+  is here for, deliberately and in the fail-safe direction** - it says the parser could not walk the
+  sequence, which another unwalkable item stream also reaches. Do not restate it as "exactly the
+  ejection shape".
+  **▶ THE CUT IS POSITIONAL, AND THE GRID IS BLIND TO THAT - THE TESTS ARE THE PIN.**
+  `settledBound` takes the run up to and including the first disputed sequence; both the creator map
+  and the retention decision come from it, so an element read **before** the offending sequence keeps
+  its reservation and one read after does not. The whole-Data-Set variant was **built and measured**:
+  it produces a **byte-identical grid diff** (0 of 83,037 cells differ from what shipped), because
+  every `priv|` fixture writes its private block after the sequence. **It differs on exactly 5 tests,
+  counted over the FULL suite rather than one file** (an earlier draft said four, from a one-file
+  run), and they are why it is refused: the "root reservation the sender wrote at the root survives an
+  over-running sequence" control plus both collision rows, all three genuine root reservations the
+  sender wrote ahead of the disputed sequence; and **both** private-`SQ` carve-out residuals, which
+  belong to a different item - the second of them lives in
+  `test/integration/deident-unauditable-sequence.test.ts` and a per-file enumeration misses it.
+  **▶ 🛑 TWO BOUNDS, NOT ONE, AND THE MISSING ONE WAS A PASS-1 REFUTATION. A DATA SET IS A
+  `Map<Tag, Element>`, SO ITS ORDER IS NOT ITS FILE ORDER.** When the ejected element carries a tag
+  the Data Set **already holds**, `Map.set` overwrites in place and the newcomer inherits the
+  **earlier** element's position, ahead of the sequence it came out of; an index cut alone reads it as
+  settled and retains it. Measured on a root holding a genuine `(0009,0010)` + `(0009,1001)`
+  reservation ahead of a sequence whose item ejects a second `(0009,1001)`: it lands at **index 2 with
+  `byteOffset` 274** while the sequence sits at **index 3 with `byteOffset` 238** - measured on the fixture pinned in `test/integration/deident-private-reservation.test.ts`, whose File Meta is the minimum **this parser** requires rather than PS3.10's - a fixture with more File Meta shifts every offset, and a pass-2 grade read 292 off one that did.
+  `Element.byteOffset` is the position the parser counted and the overwrite cannot move it, so it is
+  checked **beside** the index, conjunctively - offsets are comparable within one Data Set (measured
+  0/16/36 for three elements of a defined-length item) but `Element` is publicly constructible, so a
+  hand-built object may carry none and there the index bound is what still bites. **The grid cannot
+  see this either: the index-only and two-bound remedies differ on 0 of 83,037 cells**, because no
+  `priv|` fixture collides tags. **3 tests, full suite, are the whole pin** - the two collision rows
+  and the creator-flip.
+  **▶ 🩺 AND THE COLLISION DESTROYS THE ROOT'S OWN VALUE ON THE WAY IN - `PRE-EXISTING`, ITS OWN
+  ITEM, NOT FIXED HERE.** The overwrite replaces the reservation's genuine root element with the
+  Item's, silently, at parse time, with no warning naming it and no report entry: the
+  `Map<Tag, Element>` substitution already recorded for `(0010,0020)`, now reached on the
+  private-retention path. Asserted in the tests so it cannot be mistaken for something this remedy
+  handled.
+  **▶ THE PRICE, AND IT IS NOT SMALL.** Grid over **83,037** cells against `300af87`: `priv: kept at
+  ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** and the remaining
+  **56 are the cost** - root retentions on self-contradicting files whose honest control does keep the
+  value. Retention on files that do not contradict themselves is unchanged (**9 -> 9** root, **6 -> 6**
+  in an Item), `no-creator` **0 -> 0**, `LEAKING` **11 -> 11**, conformant tiling controls **7 -> 7**,
+  **0 cells differing in any PARSE respect, 0 cells whose READING differs**, 0 new lenient or strict
+  fatals, 0 wrong root `(0010,0020)`. **Name the cost's column rather than folding it in:
+  `de-identified OUTPUT lost a marker (cost)` reads 78** - that is the de-identify-boundary column,
+  and the `LOST`/`GAINED a marker value` counters beside it are **parse**-tree columns reading 0. **118 cells changed, all `priv|`: 74
+  Implicit VR LE, 44 Explicit VR.** `structural` also reads 118 by construction (it counts any record
+  difference, de-identify columns included) and is not a reading claim.
+  **▶ 🛑 THE HARNESS'S SYNTAX SPLIT WAS BLIND TO THREE OF ITS FOUR FAMILIES, AND IT IS FIXED HERE.**
+  `--diff` classified a cell by whether its key *starts with* the transfer syntax, which is only true
+  of the sequence sweep; `carrier|`, `legit|` and `priv|` put their own prefix there, so **no row of
+  theirs could ever count as Implicit VR LE**. This slice's 74 Implicit VR LE cells printed as
+  `Implicit VR LE 0`. `transferSyntaxOf` fixes it, which also takes
+  `onWarning != ds.warnings, Explicit VR` from **43 to 0** - those 43 were Implicit VR LE rows in other
+  families, the D-03 residual, misattributed. **A syntax split quoted off that line for a slice
+  touching those three families predates this fix and is not re-derivable.**
+  **▶ THE "SILENT ON EVERY CHANNEL INCLUDING `{ strict: true }`" CLAIM IS TRUE OF THE PUBLISHED
+  PACKAGE AND FALSE OF `main`, AND THE DIFFERENCE IS `#51` BEING UNRELEASED. MEASURE THE TARBALL, NOT
+  THE VERSION NUMBER.** `npm pack @cosyte/dicom@0.0.10` plus the Explicit VR LE eject fixture:
+  `removedPrivateTags` `[]`, the value in the output, the stamp `YES`, **`ds.warnings` empty and no
+  throw under `{ strict: true }`** - exactly as the item filed it. On `main` the same file raises
+  `DICOM_ITEM_CROSSES_SEQUENCE_END` on both channels and throws. Same tarball run against the
+  **absorb** fixture: `0.0.8` leaks, `0.0.10` does not, so `#66` really did ship. **And `0.0.9` is not
+  on the registry at all** (`package.json` carried it, the publish never happened, npm `E404`), which
+  is why every "live on the published `0.0.9`" in this repo named a version that does not exist.
+  **▶ 🛑 THE STALE BASE FIGURE IS RE-MEASURED AND BOTH HALVES ARE RETIRED, NOT REWORDED.** Fresh
+  against `origin/main` at `300af87`: **8 of the 37** tests in
+  `test/integration/deident-private-reservation.test.ts` run red, and they are exactly the eight eject
+  tests; the remaining private-`SQ` residual is **green** on that base, by design. The old
+  "**10 of the 31**" was measured against a **pre-`#66`** tree, so it was never a claim about today's
+  `main`; and the correction beside it - "both residual tests now assert the new warning code, so both
+  are red against base" - is **false against today's `main`**, because
+  `DICOM_ITEM_CROSSES_SEQUENCE_END` has been on `main` since `79e9f34`. **A figure whose base moves is
+  not a fact; re-run it or do not quote it.**
+  **▶ NO NEW PUBLIC SURFACE, DELIBERATELY** - no Tier-2 code, no report field, no snapshot change, the
+  same choice `#66` made. `report.removedPrivateTags` already names every removed tag and is the
+  channel this defect read `[]` on.
+  **▶ WHAT IS NOT CLOSED:** the **private-`SQ` carve-out**. `keepsPrivate` decides before
+  `descendSequence`, so a private `SQ` inside the settled run that the profile vouches for is kept
+  verbatim and nothing inside it is examined. `PRE-EXISTING`, its own item, still pinned as a residual
+  test that asserts the leaking behaviour.
+
+
 ## DICOM-PRIVATE-CREATOR-RESERVATION-LEAK
 
 - **🩺 A private value no longer crosses the PS3.5 section 7.8.1 reservation boundary WHEN AN ITEM
-  ABSORBS IT. The EJECT direction and the private-`SQ` carve-out are NOT closed - see below.**
-  (`DICOM-PRIVATE-CREATOR-RESERVATION-LEAK`, `PRE-EXISTING`, live on the published `0.0.9`, found by
+  ABSORBS IT. The EJECT direction is closed by `DICOM-ITEM-EJECT-ROUTE` (its own section above);
+  the private-`SQ` carve-out is NOT closed - see below.**
+  (`DICOM-PRIVATE-CREATOR-RESERVATION-LEAK`, `PRE-EXISTING`, **measured live on the published `0.0.8` tarball and fixed on `0.0.10`; `0.0.9` is not on the registry**, found by
   `#51`'s pass-6 refuter and **measured identical on `origin/main`**). An `(FFFE,E000)` Item
   declaring more bytes than its enclosing `SQ`'s Value Length absorbs the element that followed the
   sequence; with the creator as genuine Item content and the private data element written at the
@@ -73,25 +175,15 @@ then the two gates.
   `conformance-refuter` grade found both; both are `PRE-EXISTING`, reproduce identically on
   `164eb39`, and both produce the same false attestation (`removedPrivateTags: []`, the value in the
   output, `(0012,0062) = YES`).
-  (a) **The EJECT direction.** An Item that _under_-declares pushes its trailing elements **out**
-  into the enclosing Data Set, which is not narrowed, so a creator that lands there reserves a block
-  for elements the sender never gave it. **🛑 IT IS NOT ROOT-SPECIFIC AND THE FIRST DRAFT OF THIS
-  ENTRY SAID IT WAS** - pass 2 reproduced it one level down, an inner sequence ejecting a creator
-  into the still-usable enclosing Item. **Scope the item to EVERY still-usable Data Set, not the
-  root**, or it gets built to the wrong bar. It was silent on every channel and silent under
-  `{ strict: true }` when `#66` shipped; **`DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ` changed that on
-  the Explicit VR shapes and NOWHERE ELSE, so do not carry the old sentence forward.** Re-measured
-  on the residual test's own fixture: `DICOM_ITEM_CROSSES_SEQUENCE_END` on both channels, a throw
-  under `{ strict: true }`, and the leak unchanged beside it (`removedPrivateTags: []`, the value in
-  the serialized output, `(0012,0062) = YES`). **That warning is now the only signal on a file whose
-  de-identification audit is false**, which is what the troubleshooting row says and why it refuses
-  to read as an all-clear. The 20 Implicit VR LE cells are still silent - that path slices the item
-  stream, so no over-run is recorded. **22 grid cells.**
-  **THE WIDENING WAS BUILT AND MEASURED, NOT ARGUED ABOUT:** narrowing the flag whenever a Data Set
-  _contains_ an over-running sequence costs **24** root retentions and closes **2** of the 22 -
-  the other 20 are Implicit VR LE, where the sequence records **no over-run at all**
-  (`rawBytes.length === length`) because the ejection is reader desynchronization, not an item
-  reading past its sequence. A different mechanism, its own slice.
+  (a) **The EJECT direction. CLOSED by `DICOM-ITEM-EJECT-ROUTE`** - the section above carries the
+  remedy, the two predicates, the price and the corrected figures. What is preserved here is what
+  `#66` established and a later slice must not re-derive: it was found by the pass-2 grade, it is
+  **not root-specific** (reproduced one level down, into the still-usable enclosing Item), and
+  **22 grid cells** exhibited it. The widening `#66` measured - narrowing `reservationsUsable`
+  whenever a Data Set _contains_ an over-running sequence, **24** root retentions lost to close
+  **2** of the 22 - is **superseded, not the remedy that shipped**: the other 20 are Implicit VR LE,
+  where the sequence records no over-run at all, and the closing remedy needed a second predicate and
+  a positional cut. Do not quote the 24 or the 2 as a cost of what shipped.
   (b) **The private-`SQ` carve-out.** `keepsPrivate` decides **before** `descendSequence`, so a
   private `SQ` the profile vouches for is kept **verbatim**, its items are never walked, and this
   rule is never consulted inside it. **This is `#54`'s exact refusal repeated** - the first draft of
@@ -118,31 +210,28 @@ then the two gates.
   and swallows its own block is removed **because `decodeCreator` no longer matches the profile**
   (fail-safe by construction, not by this rule); `RetainSafePrivate` with no profile retains nothing;
   and the other five Retain options plus a profile do not reopen it, because `keepsPrivate` is the
-  only Data-Set-scoped decision in the module. **10 of the 31 tests in
-  `test/integration/deident-private-reservation.test.ts` run red against `origin/main`'s `src/`** -
-  and the two residual tests are green on base **by design**, because they assert the leaking
-  behaviour so that closing either route turns them red.
+  only Data-Set-scoped decision in the module.
 
-> **🛑 STALENESS FLAG, ADDED 2026-08-04 BY `CLAUDE-MD-AUDIT`. THE FLAG COVERS BOTH HALVES OF THE
-> SENTENCE ABOVE, NOT JUST THE NUMBER.** Unverified and carried forward, **not** restated as fact:
-> (a) **"10 of the 31 tests ... run red against `origin/main`'s `src/`"**, and (b) **"the two
-> residual tests are green on base **by design**"**. The umbrella's backlog records that **both**
-> residual tests now assert the new warning code, so **both are red against base** - which makes (b)
-> the load-bearing half, because (b) is what says this entry's gate still pins the two live routes
-> the way it claims to.
+> **🛑 THE STALE FIGURE THAT SAT HERE IS RE-MEASURED AND DELETED, NOT REWORDED A THIRD TIME**
+> (`DICOM-ITEM-EJECT-ROUTE`, 2026-08-05). It read "**10 of the 31 tests** in
+> `test/integration/deident-private-reservation.test.ts` run red against `origin/main`'s `src/`, and
+> the two residual tests are green on base by design". Both halves are retired:
 >
-> **Do not attribute the staleness to any one later commit.** The backlog records the figure as
-> having been **stale before `#51`**, and that **no pass across eight grades flagged it** - so a
-> "`origin/main` moved under it" story is a hypothesis, and an earlier draft of this very flag
-> asserted one. Cause unestablished; that is part of the finding.
+> - The **10 of 31** was measured against a **pre-`#66`** tree, so it was never a claim about
+>   today's `main`. **Fresh, against `origin/main` at `300af87`: 8 of the 37** run red, and they are
+>   exactly the eight eject tests this slice added or rewrote. (That figure was itself re-measured
+>   after a pass-1 remedy added three tests: it read 5 of 34 before them. **Inside the bullet that
+>   says a moving-base figure is not a fact.** Re-run it after every test you add.)
+> - The correction the umbrella carried - "both residual tests now assert the new warning code, so
+>   both are red against base" - is **false against today's `main`**:
+>   `DICOM_ITEM_CROSSES_SEQUENCE_END` has been on `main` since `79e9f34`, so asserting it is green
+>   there. Measured: the one remaining residual (the private-`SQ` carve-out) is **green** on
+>   `300af87`, by design, because it asserts behaviour base exhibits.
 >
-> This is the failure mode this repo already caught once and wrote down under
-> [DICOM-PARSE-CREATORS-SCOPE](#dicom-parse-creators-scope): *"Re-measure that figure if you add a
-> test rather than carrying it forward: it read `6 of 9` after the first draft and the remedy below
-> made it stale"*. **Do not quote either half in a new artifact until you have re-run it against
-> today's `origin/main`.** Deliberately not deleted: the sentence names the gate that pins this
-> defect, and losing the pointer costs more than the wrong numeral does. Re-measure, then replace it
-> here.
+> **The rule, which this file already carried once under
+> [DICOM-PARSE-CREATORS-SCOPE](#dicom-parse-creators-scope) and which two slices have now paid for:
+> a "N of M tests run red on base" figure has a moving base, so it is not a fact.** Re-run it or do
+> not quote it. It is written here with the sha it was measured against for exactly that reason.
 
 
 ## DICOM-UNRECOGNIZED-VR-SHORT-FORM
