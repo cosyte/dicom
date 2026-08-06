@@ -69,6 +69,13 @@
  * re-encodings instead of hunting a verbatim marker. Do not read a green run here
  * as covering it.
  *
+ * **And it covered `report.*.contextPath`, which this file has swept from the
+ * start.** `deidIdentifiers` pushes every segment into the sweep, so the field
+ * looked covered; but a segment is `TAG[index]` and the tag half is a
+ * re-encoding, so no marker could ever have reached it verbatim. The describe
+ * block at the bottom of this file asks the question the runner cannot, with a
+ * name-bearing payload, a mutation control and a conformant negative control.
+ *
  * @module
  */
 
@@ -741,11 +748,18 @@ function deidDiagnostics(parsed: DeidSurface): readonly unknown[] {
  * report composes: the per-attribute tag, keyword, sequence context path and
  * repeating-group mask, the removed private tags, and the active option names.
  *
- * `report.uidMap` is deliberately absent, and it is the one part of the report
- * that is not value-free: its keys are the source UIDs read out of the file, kept
- * so a caller can make UID replacement consistent across a study. That is data
- * the report must carry to do its job, not an identifier the parser composed,
- * and the docs now say so instead of calling the whole report value-free.
+ * `report.uidMap` is deliberately absent **from this sweep**, because its keys
+ * are the source UIDs read out of the file, kept so a caller can make UID
+ * replacement consistent across a study. That is data the report must carry to
+ * do its job, not an identifier the parser composed, and the docs now say so
+ * instead of calling the whole report value-free.
+ *
+ * **🩺 It is not the only part of the report that is not value-free, and this
+ * docstring used to say it was.** {@link DeidentifyReport} carries the list, and
+ * one of the entries on it - `contextPath` - is swept here and **cannot go red
+ * here**, because a tag is a re-encoding and this runner hunts verbatim markers.
+ * That is measured in "report contextPath is not structural" at the bottom of
+ * this file. Sweeping a field is not the same as covering it.
  */
 function deidIdentifiers(parsed: DeidSurface): readonly string[] {
   const out: string[] = [...modelIdentifiers(parsed)];
@@ -1105,5 +1119,161 @@ describe("PHI: the de-identified bytes", () => {
     });
     const { dataset } = deidentify(parseDicom(raw));
     expect(serializeDicom(dataset).includes(Buffer.from(m, "latin1"))).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// `contextPath`: the identifier this file's own runner cannot go red on.
+// ---------------------------------------------------------------------------
+
+/**
+ * Synthetic and deliberately fake. `#55` paid a blocker for a pinning test that
+ * was **vacuous by fixture** - its payload carried no name, so nothing it
+ * asserted could have caught the leak it was written for.
+ *
+ * 18 bytes, so it needs no pad, and its last four bytes before the fabricated
+ * header start on an **even** ASCII code, which is what keeps the resulting
+ * group number even. An odd group would be read as a private tag and leave down
+ * the already-disclosed `removedPrivateTags` route instead of this one.
+ */
+const CONTEXT_NAME = "MRS BRAIN SMITHSON";
+
+/** Same shape, different surname: the mutation control for the pin below. */
+const CONTEXT_NAME_CONTROL = "MRS BRAIN DAVIDSON";
+
+function u16(value: number): Buffer {
+  const b = Buffer.alloc(2);
+  b.writeUInt16LE(value);
+  return b;
+}
+function u32(value: number): Buffer {
+  const b = Buffer.alloc(4);
+  b.writeUInt32LE(value);
+  return b;
+}
+
+/**
+ * An `LO` carrier holding `name` followed by a well-formed `SQ` header and one
+ * item, whose declared Value Length stops **four bytes short of that header**.
+ *
+ * So the reader finishes the carrier inside the name, resynchronizes onto the
+ * last four bytes of the surname as a tag, reads `SQ` as their VR, and descends
+ * a sequence the sender never wrote. Nothing about the fabricated header is
+ * distinguishable from one a sender did write - that is the same permanent fact
+ * `unauditableSequences[].tag` is disclosed under - so this is a measurement of
+ * what gets published, not a proposal to detect it.
+ */
+function fabricatedSequenceInsideAValue(name: string): Buffer {
+  const inner = Buffer.concat([
+    u16(0x0010),
+    u16(0x0020),
+    Buffer.from("LO", "ascii"),
+    u16(6),
+    Buffer.from("MRN-1 ", "ascii"),
+  ]);
+  const item = Buffer.concat([u16(0xfffe), u16(0xe000), u32(inner.length), inner]);
+  const sqHeader = Buffer.concat([Buffer.from("SQ", "ascii"), u16(0), u32(item.length)]);
+  const payload = Buffer.concat([Buffer.from(name, "latin1"), sqHeader, item]);
+  return buildDicom({
+    transferSyntax: TS_EXPLICIT_LE,
+    elements: [
+      { tag: "00100010", vr: "PN" as VR, value: val("ROOT^PATIENT") },
+      {
+        tag: "00081080",
+        vr: "LO" as VR,
+        value: payload,
+        declaredLengthDelta: name.length - 4 - payload.length,
+      },
+    ],
+  });
+}
+
+/**
+ * The four wire bytes an 8-hex-char tag was composed from.
+ *
+ * This is the whole reason the shared `assertNoDiagnosticPhiLeak` runner cannot
+ * answer this question: it hunts a **verbatim** marker, and a tag is a
+ * re-encoding. `phi-diagnostic-surface`'s module docstring already says that
+ * about `snippet`; `contextPath` sat inside the same blind spot with nothing
+ * asking about it.
+ */
+function tagToWireBytes(tag: string): string {
+  const b = Buffer.alloc(4);
+  b.writeUInt16LE(parseInt(tag.slice(0, 4), 16), 0);
+  b.writeUInt16LE(parseInt(tag.slice(4, 8), 16), 2);
+  return b.toString("latin1");
+}
+
+/** The first `contextPath` segment on any finding in the report. */
+function firstContextSegment(raw: Buffer): string | undefined {
+  const { report } = deidentify(parseDicom(raw));
+  return report.attributes.find((a) => a.contextPath !== undefined)?.contextPath?.[0];
+}
+
+describe("PHI: report contextPath is not structural, and this is the measurement", () => {
+  it("publishes four bytes of the payload as a contextPath segment", () => {
+    const segment = firstContextSegment(fabricatedSequenceInsideAValue(CONTEXT_NAME));
+
+    expect(segment).toBe("53484E4F[0]");
+    // Not "a tag that happens to look odd": these are the document's own bytes,
+    // recovered by writing the two halves back the way the parser read them.
+    expect(tagToWireBytes("53484E4F")).toBe("HSON");
+    expect(CONTEXT_NAME).toContain("HSON");
+  });
+
+  it("is the ONLY trace of that header anywhere in the output", () => {
+    // The reason this outranks a curiosity. A consumer has no other signal to
+    // correlate it with, so "the report's structural fields are safe to log" was
+    // the only guidance they had, and it was wrong.
+    const ds = parseDicom(fabricatedSequenceInsideAValue(CONTEXT_NAME));
+    const { report } = deidentify(ds);
+
+    expect(ds.warnings).toEqual([]);
+    expect(report.undefinedVrElements).toEqual([]);
+    expect(report.embeddedAttributes).toEqual([]);
+    expect(report.unauditableSequences).toEqual([]);
+    expect(report.removedPrivateTags).toEqual([]);
+    expect(report.warnings).toEqual([]);
+  });
+
+  it("tracks the payload: change the surname and the published bytes change with it", () => {
+    // The non-vacuity control. Without it the assertion above proves only that
+    // some constant string came back.
+    const segment = firstContextSegment(fabricatedSequenceInsideAValue(CONTEXT_NAME_CONTROL));
+
+    expect(segment).toBe("53444E4F[0]");
+    expect(tagToWireBytes("53444E4F")).toBe("DSON");
+    expect(CONTEXT_NAME_CONTROL).toContain("DSON");
+    expect(segment).not.toBe(firstContextSegment(fabricatedSequenceInsideAValue(CONTEXT_NAME)));
+  });
+
+  it("but on a conformant file the segment is the tag the sender wrote", () => {
+    // The negative control, and the reason the remedy is a corrected claim and
+    // not a withheld field: on every well-formed file this is exactly the audit
+    // information the field exists to carry.
+    const raw = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      elements: [
+        {
+          tag: "00081115",
+          items: [{ elements: [{ tag: "00100020", vr: "LO" as VR, value: val("MRN-1") }] }],
+        },
+        FILLER,
+      ],
+    });
+
+    expect(parseDicom(raw).warnings).toEqual([]);
+    expect(firstContextSegment(raw)).toBe("00081115[0]");
+  });
+
+  it("and the fabricated tag never reaches attributes[].tag, which IS bound", () => {
+    // The distinction the corrected docs turn on. `attributes[].tag` is only
+    // populated for a tag Annex E carries a row for - membership in a closed
+    // table - so the fabricated header is absent from it. `contextPath` has no
+    // such bound and that is the whole finding.
+    const { report } = deidentify(parseDicom(fabricatedSequenceInsideAValue(CONTEXT_NAME)));
+
+    expect(report.attributes.map((a) => a.tag)).not.toContain("53484E4F");
+    expect(report.attributes.map((a) => a.tag)).toContain("00100020");
   });
 });

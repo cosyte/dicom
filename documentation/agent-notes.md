@@ -22,6 +22,69 @@ then the two gates.
 
 ---
 
+## DICOM-ITEM-CROSSES-RESIDUALS
+
+The residual this item carried was undecidable; the one next door on the same field was not.
+
+**▶ THE EVIDENCE FOR `CLAUDE.md`'s BASE-RED TRAP LIVES HERE, RELOCATED RATHER THAN DELETED.** Two
+"N of M tests run red on base" claims in this repo were wrong against `main` **in opposite directions
+at once**, and one went stale at `6 of 9` inside a single draft. That is why the line demands a sha
+and a re-run after every test you add or strengthen.
+
+**▶ MEASURE THE PREMISE FIRST, AND IT PAID A THIRD TIME.** At `b7a77fe` the mis-structure is live and
+reproduces exactly as disclosed: the over-declaring file relocates `(0010,0020)` into the item, the
+report reads `contextPath: ["00081115[0]"]`, and the under-declaring shape leaves it at the root with
+none. Nothing was stale. What the measurement changed was the reading of what that means.
+
+**▶ 🛑 "NAMES AN ITEM IT WAS NEVER IN" IS A CLAIM DEFECT, AND IT IS DELETED, NOT REWORDED A THIRD
+TIME.** The sentence asserts which of two byte-identical files you have. On the partner file -
+`sqUnderDeclares()` in `test/integration/explicit-sq-item-bound.test.ts`, the *same bytes* assembled
+from the opposite intention - the element genuinely **is** inside the item and the identical
+`contextPath` is exactly right. So there is no fact of the matter to be wrong about, calling it an
+unfixed residual promises a repair that must invent the distinction five graded attempts at a bound
+already failed to find, and it is the very distinction the backlog item forbids proposing. It had
+been narrowed **once** already, in the troubleshooting row (unconditional to shape-specific), and
+left standing in five other artifacts. Two wordings is this repo's delete signal. What replaces it is
+the two-row measurement that was already sitting under it, with **neither row labelled the mistake**.
+**The relocation half stays exactly as it is: nothing shipped that prefers one length field.**
+
+**▶ 🩺 THE DECIDABLE HALF NOBODY HAD ASKED ABOUT: `contextPath` IS NOT STRUCTURAL AND SIX ARTIFACTS
+SAID IT WAS.** A segment is `TAG[index]`; the tag half is whatever tag `descendSequence` walked, read
+straight off the wire. Every other identifier the report composes is built from the Part 6 / Annex E
+tables or bound to a tag those tables carry a row for - **membership in a closed table, this repo's
+own standard since `phi-warning-message-leak`** - and this one is bound by nothing. Measured on a
+synthetic `LO` carrier holding `"MRS BRAIN SMITHSON"` under-declaring by four, so the reader
+resynchronizes onto the surname's last four bytes as a tag and reads `SQ` as their VR:
+`contextPath: ["53484E4F[0]"]`, which is `"HSON"` in wire order. Surname to `"DAVIDSON"` gives
+`"53444E4F[0]"` (`"DSON"`), which is the mutation control; a conformant file gives `"00081115[0]"`,
+the tag the sender wrote, which is the negative control and the reason the field is still published.
+**And it is the ONLY trace of that header in the whole output** - `ds.warnings` empty, every finding
+array empty - so the "structural fields are safe to log" guidance was all a consumer had.
+
+**▶ THE REMEDY IS THE CLAIM, NOT THE GUARD, AND THE ARGUMENT IS `removedPrivateTags`' OWN.** *Where*
+an attribute sat is the entire audit value of the field; withholding the tag would destroy it on
+every well-formed file in order to bound a malformed one. So `contextPath` joins the list of report
+fields that are not value-free - and **that list's numerals were deleted rather than incremented**,
+because having to add a fifth to a list whose count had already been wrong three times is the same
+disease one step removed. Corrected in `src/deident/types.ts` (five places), the construction site in
+`deidentify.ts`, `docs-content/spec-notes-tolerance.md` (its own row, bound: *none*),
+`docs-content/troubleshooting.md`, and the sweep's own docstring.
+
+**▶ THE PHI RUNNER SWEPT THIS FIELD FROM THE START AND COULD NEVER HAVE GONE RED ON IT.**
+`deidIdentifiers` pushes every `contextPath` segment into `assertNoDiagnosticPhiLeak`, so the field
+looked covered. The runner hunts a **verbatim** marker and a tag is a re-encoding - the identical
+blind spot already documented for `DicomParseError.snippet` and for the Tier-3 messages `#80` fixed.
+**Sweeping a field is not covering it**, and a green sweep over a re-encoding is the vacuity this
+package has now paid for three times.
+
+**▶ WHAT IS DELIBERATELY NOT SETTLED.** The relocation itself (undecidable, and the byte-identity
+test is the proof); `position.contextPath`, which no parser warning populates, so the parser-side
+type is inert; and whether `attributes[].tag` deserves the same treatment - it is bound to Annex E
+table membership, which is a real bound, and widening the disclosure to it without a measurement
+would be the claim defect this slice exists to correct.
+
+---
+
 ## DICOM-FATAL-MESSAGE-REGISTRY
 
 The Tier-3 half of "a diagnostic about a PHI leak is itself a PHI surface". Two halves, both closed:
@@ -1735,8 +1798,9 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   to that version exactly, so a `^0.0.1` pin silently tests against a kit with no such runner and
   passes. Four doc claims said the reverse of the source (warnings "PHI-free by construction",
   `DicomParseError` retaining "no raw input snippet" when `snippet` is 16 source bytes) and are
-  corrected; the `DeidentifyReport` is value-free **apart from `uidMap`**, whose keys are the file's
-  own source UIDs. **The gate does not make the diagnostic surface PHI-free and must not be described
+  corrected; the `DeidentifyReport` was described here as value-free **apart from `uidMap`**, and
+  that reading is superseded - the type now carries the list, `contextPath` included
+  (`DICOM-ITEM-CROSSES-RESIDUALS`), and **the list is un-numbered so it cannot be incremented**. **The gate does not make the diagnostic surface PHI-free and must not be described
   that way**: `snippet` is still 16 raw bytes as hex, deliberately (D-10), and hex is a re-encoding
   the runner cannot match, so no slot can ever go red on it.
   **Private block reservations are scoped per Data Set, and the refuter caught this the hard way.**

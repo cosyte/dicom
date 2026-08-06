@@ -1410,6 +1410,14 @@ function descendSequence(
     reservationsUsable && !itemStreamOverrunsSequence(el, ctx.encoding);
   const newItems: Item[] = [];
   (el.items ?? []).forEach((item, index) => {
+    // 🩺 `el.tag` here is read off the wire and bound by nothing, so this is the
+    // one identifier the report composes that can be four bytes of a value: a
+    // fabricated `SQ` header the reader was desynchronized onto is named in
+    // every `contextPath` beneath it. Documented on
+    // `DeidentifiedAttribute.contextPath`, measured in
+    // `test/integration/phi-diagnostic-surface.test.ts`. The field is published
+    // anyway - withholding it would destroy the audit on every well-formed file
+    // to bound a malformed one - so do not "fix" this by dropping the tag.
     const childPath = [...contextPath, `${el.tag}[${String(index)}]`];
     const inner = processElements(item.elements(), ctx, childPath, childReservationsUsable);
     out.attributes.push(...inner.attributes);

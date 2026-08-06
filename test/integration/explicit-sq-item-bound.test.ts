@@ -66,14 +66,39 @@
  * removes.** It is not evidence that the released reading is safe in general,
  * and no test here claims that.
  *
- * ## What is left for a later slice, named rather than implied
+ * ## 🛑 THE "contextPath NAMES AN ITEM IT WAS NEVER IN" DISCLOSURE IS DELETED,
+ * NOT REWORDED A THIRD TIME
  *
- * The mis-structure itself. On a file whose item genuinely over-declares, the
- * element that follows the sequence is still read as a per-item attribute and
- * `deidentify()` still reports it with a `contextPath` naming an item it was
- * never in. Nothing is lost and nothing leaks - the attribute is found, acted on
- * and reported - but the audit names the wrong Data Set. Pinned here as the
- * residual it is, so the claim and the code cannot drift apart.
+ * It said: on a file whose item genuinely over-declares, the element that
+ * follows the sequence is read as a per-item attribute and `deidentify()`
+ * reports it under a `contextPath` naming an item it was never in - a residual
+ * awaiting a fix.
+ *
+ * **"An item it was never in" asserts which of two byte-identical files you
+ * have**, which is the one thing the test above says the wire does not carry. On
+ * the partner file - `sqUnderDeclares()`, the same bytes - the element genuinely
+ * *is* inside the item and the identical `contextPath` is exactly right. So the
+ * sentence privileges one of two indistinguishable intents, and calling it an
+ * unfixed residual promises a repair that would have to invent the distinction
+ * five graded attempts at a bound already failed to find. It was narrowed once
+ * in the troubleshooting row (from unconditional to shape-specific) and left
+ * standing everywhere else; this repo's rule for a disclosure reworded twice is
+ * to delete it, and that is what happened.
+ *
+ * **What replaces it is the pair of measurements below, and nothing else.** One
+ * shape puts the element in the item with a `contextPath`, the other leaves it
+ * at the root with none; both are asserted, neither is labelled the mistake.
+ *
+ * ## What IS left on `contextPath`, and it is not this
+ *
+ * The field is documented as structural and it is not: its segment tags are read
+ * off the wire, bound by nothing, so a fabricated `SQ` header the reader was
+ * desynchronized onto is published there while the rest of the output stays
+ * silent. That is a decidable defect on a different route (any length lie, no
+ * sequence-vs-item disagreement required), it is measured with a name-bearing
+ * payload and a mutation control in
+ * `test/integration/phi-diagnostic-surface.test.ts`, and its remedy was to
+ * correct the claim rather than widen a guard.
  *
  * ## The fixture precision is the trap, and it is why this file exists
  *
@@ -719,11 +744,11 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the reading is untouched, whic
     expect(serializeDicom(dataset).includes(Buffer.from(TRAILING_VALUE, "ascii"))).toBe(false);
   });
 
-  it("STILL reports it under a contextPath naming an item it was never in", () => {
-    // **The disclosed residual, pinned so the claim cannot drift from the code.**
-    // Repairing this is what five graded attempts at a bound were for, and what
-    // the byte-identity above says the input cannot support. Left for a later
-    // slice.
+  it("reports it under a contextPath naming the item the reading put it in", () => {
+    // Half one of the two-row measurement that REPLACED the deleted "an item it
+    // was never in" disclosure. This row is a fact about the reading, not an
+    // accusation: the partner file `sqUnderDeclares()` is these same bytes with
+    // the element genuinely inside the item, where this contextPath is right.
     const { report } = deidentify(parseDicom(fixture(EXPLICIT_LE, TRAILING_ON_WIRE)));
 
     expect(report.attributes.find((a) => a.tag === TRAILING)?.contextPath).toEqual([
@@ -741,7 +766,8 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the reading is untouched, whic
     // and `(0010,0020)` is at the ROOT with `contextPath` undefined.
     //
     // The two halves are indistinguishable on the wire, so no summary of "what
-    // to expect" can be right for both. Read the tree, do not read a sentence.
+    // to expect" can be right for both, and neither row is the wrong one. Read
+    // the tree, do not read a sentence.
     const ds = parseDicom(fixture(EXPLICIT_LE, 0, -6));
 
     expect(ds.warnings.map((w) => w.code)).toContain(WARNING_CODES.DICOM_ITEM_CROSSES_SEQUENCE_END);
