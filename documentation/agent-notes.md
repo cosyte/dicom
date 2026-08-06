@@ -22,6 +22,146 @@ then the two gates.
 
 ---
 
+## DICOM-FATAL-MESSAGE-REGISTRY
+
+The Tier-3 half of "a diagnostic about a PHI leak is itself a PHI surface". Two halves, both closed:
+the fatal-message registry, and the `{ strict: true }` snippet's frame.
+
+**▶ MEASURE THE PREMISE FIRST, AND IT PAID AGAIN.** Both halves were re-measured open at `0a8c6e3`
+before a line was written, because `#79` was dispatched at a route `#78` had already closed and only
+an up-front measurement caught it. Here the premise held, and the measurement is also the evidence
+the changelog quotes: an `ST` carrier holding `"MR BRAIN SMITHSON "` whose Value Length
+under-declares desynchronizes the reader onto a fabricated header **inside the name**, and the old
+messages rendered it. Explicit VR LE at delta `-14`:
+`Element 41524E49 declared length=1330858068` - `41524E49` is `"RAIN"`, `1330858068` is `"THSO"`,
+eight consecutive payload bytes in two fields. Implicit VR LE reaches the identical message at
+`-12`. Also `Unexpected tag 524D4220 inside sequence` (`"MR B"`), `Item length=1109414477`
+(`"MR B"`), and `Unexpected FFFE marker FFFEE00D (length=1109414477)` (`"MR B"` again).
+
+**▶ THE BOUND IS THE SIGNATURE, AND A SHAPE CHECK WOULD NOT HAVE WORKED.** `src/parser/fatals.ts`
+mirrors `warnings.ts`, with one deliberate difference: `FatalTokens` has **no tag field and no
+wire-length field at all**, where `WarningTokens` still carries a `tag` and a shape-checking
+`renderTag`. That is not extra caution, it is the same conclusion `#55`, `#64` and
+`DICOM_ITEM_CROSSES_SEQUENCE_END` each reached separately - `renderTag` validates a tag's *shape* and
+therefore cannot refuse a fabricated one, so the only bound that holds is the absence of the slot.
+`renderVr` **can** refuse, because it tests membership in a closed set, so a VR still renders; it was
+moved to `tokens.ts` so both registries share one definition.
+
+**▶ THE REGISTRY IS KEYED BY REASON, NOT BY CODE, AND THAT IS FORCED.** D-09 locks the taxonomy at
+four Tier-3 codes, and `INVALID_FILE_META` alone is raised for sixteen structurally different
+reasons. So `FATAL_MESSAGES` is keyed by a `FatalMessageKey` and each entry carries its own code. The
+record is total over that union, which is what makes "every fatal message comes from the registry" a
+fact the type system checks rather than one a reader has to verify.
+
+**▶ THE TWO STRINGS THAT LOOK LIKE EXCEPTIONS AND ARE NOT.** `unsupportedTransferSyntax` takes the
+`(0002,0010)` UID and renders **PS3.6's own name for it**, so `JPEG Baseline (Process 1)` still reads
+usefully and the UID never appears; the closed-set lookup moved from the call site into the factory,
+where a future call site cannot skip it. `inflateFailed` takes zlib's `err.code` and renders it only
+when it names one of the nine `zlib.codes` entries, which turns a committed comment claiming that set
+was closed into a check. `SUPPORTED_TRANSFER_SYNTAXES` and `ZLIB_CODES` are both literals, because
+importing either source would close an import cycle or add a runtime dependency; both are pinned
+against their real source in `test/parser/fatals.test.ts`.
+
+**▶ 🩺 HALF 2: `ctx.buffer` HAD EXACTLY ONE READER AND WAS THE WRONG BUFFER FOR THREE OF ITS FOUR
+FRAMES.** `makeEmitter` cuts the strict-mode `snippet` with `buildSnippet(ctx.buffer, offset)`, and
+that offset moves with the frame the element was read in. `parseDeflatedLE` had already worked this
+out and swaps in the inflated stream with a committed comment saying why. The three sequence
+boundaries that hand a descent a **slice** did not, so a warning raised inside a defined-length Item
+cut the **file** at an **item-relative** number. Measured: an item-relative offset of 0 returns
+sixteen bytes of the preamble; engineered to collide, it returns the middle of the root
+`(0010,0010)` Patient Name. `ParseContext.buffer` is now documented as the **current frame's**
+buffer, is mutable, and is swapped with a `finally` restore at `parseSequence`'s defined-length item,
+`tryParseDefinedLengthSQ` and `tryParseUnAsSQ` - the same shape `creators` and `currentCharset`
+already use.
+
+**🛑 THIS DID NOT MAKE `snippet` SAFE AND NO ARTIFACT MAY SAY IT DID.** It is still 16 unredacted
+source bytes (D-10), and an honest frame makes them **more** certainly the named element's own
+content. `test/integration/fatal-diagnostic-surface.test.ts` carries a test whose entire job is to
+assert that, so the claim cannot quietly drift.
+
+**▶ THREE RESIDUALS THIS REGISTRY DOES NOT CLOSE, EACH WITH AN ASSERTED ROW IN
+`test/integration/fatal-diagnostic-surface.test.ts`.** All three are `PRE-EXISTING` and all three are
+the same **product call** already filed for `report.removedPrivateTags`: on a well-formed file these
+are the real tags of real attributes, so withholding them destroys the field's audit value to close a
+shape only a crafted file produces.
+
+1. The identical desynchronized read that fed the Tier-3 leaks lands on an **odd** group, so
+   `resolveImplicitVR` calls the fabricated header a private element and the **Tier-2**
+   `DICOM_PRIVATE_TAG_NO_CREATOR` names its tag: `4E495320`, `"IN S"`. Byte-identical on `0a8c6e3`.
+   It is the `#78` fabricated-header residual one layer up.
+2. `report.embeddedAttributes[].hidden` lists **every** tag in the run the embedded scanner found,
+   and a run needs only **one** actionable attribute to be reported - so a fabricated header sitting
+   beside a real one is listed too. Measured: `4D535449`, `"SMIT"` in wire order, beside the genuine
+   `00100020` that made the run reportable.
+3. Because of (1), **`ds.warnings[].message` is not unconditionally safe to log**, and
+   `spec-notes-tolerance.md` and `cookbook.md` said it was. **The CLAIM is corrected, the guard is
+   not widened** - this repo's own rule, and the shape `#55` paid a blocker for.
+
+**🛑 A DISCLOSURE THAT NAMES A TEST MUST NAME ONE THAT EXISTS.** The first draft of this section, the
+CHANGELOG and the commit body all said "both pinned as asserted rows" when only (1) had a row. That is
+`#78`'s own defect a release later: a residual written up as guarded with no guard. A graded pass
+caught it, and the row for (2) was written rather than the sentence softened.
+
+**▶ FIGURES, RE-RUN AFTER THE GRADED PASS ADDED A TEST. BASE IS THE SHA THAT MATTERS AND IT IS
+`0a8c6e3`; NO HEAD SHA IS QUOTED, DELIBERATELY.** A draft named one that resolved to nothing, and any
+pre-merge head sha is wrong the moment the PR squash-merges anyway - so the head figure is stated as
+reproducible on this section's own merge commit rather than pinned to a sha that cannot survive.
+Base, which is what a moving figure actually moves against, is pinned. Head: **1,119 passing + 1 todo across 68 files**. Base with the head `test/` tree:
+**4 of 1,081 red**, and **2 test files could not collect at all** because they import a module that
+does not exist there. That second number is why the behavioural figure was taken separately, by
+copying only the two new *non-behavioural* modules (`fatals.ts`, and `tokens.ts` whose diff is purely
+additive) onto base `src/`: **14 of the 39 new tests go red on base** - 11 PHI rows, the
+registry-shape test, and 2 of the 4 snippet-frame tests. **Three of the 39 are GREEN on base BY
+DESIGN, because they are controls or residual pins**: "the fixture really does collide" grades the
+fixture rather than the fix, and the two residual rows assert `PRE-EXISTING` behaviour that must
+reproduce on both trees or they are not residual pins at all. It read **1,118 / 14 of 38** before the
+graded pass, and was re-run rather than carried forward.
+
+**▶ THE DETECTOR IS THE DELIVERABLE, AND THE SHARED RUNNER COULD NOT HAVE FOUND THIS.**
+`assertNoDiagnosticPhiLeak` hunts a **verbatim** marker; this leak is a **re-encoding**, four bytes
+rendered as hex or as a decimal. So the sweep enumerates every 4-byte window of the payload rendered
+as a tag, every 4-byte window rendered as a `readUInt32LE` decimal, and every 2-byte window rendered
+as a VR, then searches every fatal message for all of them. It has a reconstructed non-vacuity
+control that rebuilds `0a8c6e3`'s own template and asserts the detector catches it.
+
+**▶ ⚠ MESSAGES ARE REWORDED, SO STRING-MATCHING CONSUMERS BREAK - AND THIS FILE QUOTES NO COUNT.**
+The first draft of four artifacts said "six"; a graded pass measured **nine**, naming two nobody had
+listed (`Encapsulated pixel data fragment length=...` and `Unexpected FFFE marker (...) at dataset
+root`), plus a tenth change where `inflateFailed`'s fallback moved `unknown` to `<withheld>`. The
+numeral is **deleted, not incremented** - this item's own rule, and `CLAUDE.md`'s. The set is
+derivable in one command and cannot go stale: diff `FATAL_MESSAGES` against the template literals in
+`git show 0a8c6e3 -- src/parser/`. `err.code` is unchanged everywhere and which files throw is
+unchanged. Four in-repo tests asserted on the old prose and were rewritten to assert the code plus the
+withholding; a test pinning a message this item exists to change is pinning the defect.
+
+**▶ THE CITATION IN A MESSAGE IS A CITATION, AND ONE SHIPPED WRONG TWICE IN ONE SLICE.** A draft of
+`UNDEFINED_LENGTH_ON_NON_SQ_EXPLICIT` attributed all three of its undefined-length exceptions to
+"PS3.5 7.5". **None of the three is there.** Encapsulated Pixel Data is **A.4** (*Transfer Syntaxes
+for Encapsulation of Encoded Pixel Data*), the `UN` form CP-246 addresses is **6.2.2** (*Unknown (UN)
+Value Representation*), and the Sequence one is **7.5.2** (*Delimitation of The Sequence of Items*),
+not §7.5 (*Nesting of Data Sets*, its parent). **The second correction is the interesting one: the
+first fix located sections BY LABEL, and a label proves the label exists, not that its body carries
+the normative sentence.** Re-derived the way `CLAUDE.md` requires - search for the sentence
+("The Value (Sequence) Length Field shall contain a Value FFFFFFFFH"), collect every candidate,
+require exactly one. It occurs **once**, inside §7.5.2. This repo already writes 7.5.1-for-7.5.2 as a
+trap it has paid for twice; this is the third. **A message is consumer-facing, so a citation in one is
+the claim, not a footnote** - the same reasoning that keeps `DICOM_DUPLICATE_FILE_META_ELEMENT`'s
+string citation-free.
+
+**▶ `{n}` IS BOUNDED BY BYTES PRESENT, NOT BY "NO SENDER WROTE IT", AND THE STRONGER WORDING WAS
+REFUSED.** A draft claimed the residual byte count is "bounded by the buffer the parse holds rather
+than being a field a sender wrote". Inside a defined-length Item the buffer **is** that Item's slice,
+so `{n}` plus `byteOffset` recovers the Item's own 32-bit declared length. Still not a Value Field,
+which is the property that matters and the reason it stays; not the absolute the draft asserted.
+
+**Provenance:** PS3.5 read from the SHA-pinned
+`vendor/nema/part05/4dfd7b8cbc7c368b7cf03e9c4b8a0773bed91266fcdb0bbf8ed634b7287cacca/part05.xml`,
+whose own `<subtitle>` reads *DICOM PS3.5 2026c - Data Structures and Encoding*. **Located by the
+normative SENTENCE, then by the innermost enclosing labelled section - not by label**, because
+matching a label is what put §7.5 in the string in the first place.
+
+---
+
 ## DICOM-LO-LENGTH-AND-SILENT-REPLACE
 
 - **🩺 THE `(0012,0063)` THIS LIBRARY WROTE FOR ITSELF EXCEEDED THE 64-CHARACTER MAXIMUM PS3.5 GIVES

@@ -154,20 +154,26 @@ export interface ParseOptions {
    * structural tokens filled in, so it is safe to log whole; the
    * `DicomParseError` this option raises in its place also carries `snippet`,
    * **16 raw bytes, unredacted** (D-10), read at the warning's own `byteOffset`.
-   * **Which element those bytes belong to is not contracted**: that offset's
-   * frame follows where the element was read - file-absolute at the root,
-   * relative to the enclosing slice inside a defined-length Sequence or Item,
-   * and into the inflated stream under Deflated Explicit VR LE - while the
-   * snippet is cut from whichever buffer the parse is holding, so the two can
-   * disagree and the bytes can be an unrelated element's value. Do not reason
-   * from a code's message to what its snippet holds - **measure it, and treat
-   * every one of them as document content.**
-   *
-   * That is the documented design of `snippet` rather than a defect in any one
-   * code, and turning this option on does not change what any of them means -
-   * but a message-only PHI review of the lenient path does not transfer to the
-   * strict one. Log `err.code`, `err.byteOffset` and `err.message`; treat
+   * A message-only PHI review of the lenient path therefore does not transfer to
+   * the strict one. Log `err.code`, `err.byteOffset` and `err.message`; treat
    * `err.snippet` as PHI.
+   *
+   * **The snippet is cut in the SAME FRAME the `byteOffset` is counted in**, so
+   * it is the bytes at the offset the diagnostic names: file-absolute at the
+   * root, relative to the enclosing slice inside a defined-length Sequence or
+   * Item, and into the inflated stream under Deflated Explicit VR LE. It was not
+   * always: until `DICOM-FATAL-MESSAGE-REGISTRY` the offset moved with the frame
+   * while the cut was always taken from the whole file, so inside a
+   * defined-length Item the 16 bytes were **an unrelated element's** - a
+   * diagnostic disclosing data from a part of the document the reader was never
+   * asked about. That is closed. **What is NOT closed, and never was a defect:
+   * the bytes are still raw source bytes.** Reading them as safe because the
+   * message beside them is registry-bound is the mistake this whole paragraph
+   * exists to prevent.
+   *
+   * **`byteOffset` still carries no frame-of-reference contract**, and closing
+   * the mismatch did not give it one: a nested offset is still not a key you can
+   * look up against the root. Measure it rather than reasoning about it.
    *
    * Omit (do not pass `undefined`) to use the default.
    */
@@ -222,7 +228,29 @@ export interface ParseOptions {
  * @internal
  */
 export interface ParseContext {
-  readonly buffer: Buffer;
+  /**
+   * **The buffer the CURRENT frame's byte offsets index into**, not the file.
+   *
+   * It has exactly one reader, `makeEmitter`, which cuts the `{ strict: true }`
+   * escalation's 16-byte `snippet` from it at the warning's own
+   * `position.byteOffset`. That is the whole reason it is mutable: an offset and
+   * the buffer it is cut from have to be in the same frame, and this parser
+   * changes frame in four places. `parseDeflatedLE` recognized that first and
+   * swaps in the inflated stream; `parseSequence`, `tryParseDefinedLengthSQ` and
+   * `tryParseUnAsSQ` hand a descent a **slice**, so they swap too and restore in
+   * a `finally`, exactly as they already do for {@link ParseContext.creators}
+   * and {@link ParseContext.currentCharset}.
+   *
+   * **🛑 IT WAS THE FILE EVERYWHERE UNTIL `DICOM-FATAL-MESSAGE-REGISTRY`, AND
+   * THAT MADE THE SNIPPET RETURN AN UNRELATED ELEMENT'S BYTES.** A warning
+   * raised inside a defined-length Sequence Item carries an item-relative
+   * offset, so cutting the file at it returned whatever happened to sit at that
+   * offset from byte 0 - a diagnostic handing back data from somewhere the
+   * reader never looked. Do not "simplify" this back to a `readonly` field
+   * holding the whole input: the swap is what keeps the offset and the bytes
+   * talking about the same element.
+   */
+  buffer: Buffer;
   readonly strict: boolean;
   readonly stripPreamble: "tolerate" | "require";
   readonly onWarning?: OnWarningCallback;

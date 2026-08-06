@@ -775,7 +775,10 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the reading is untouched, whic
   });
 
   it("still refuses an item declaring past the end of the buffer", () => {
-    // Base threw `Item length=N exceeds remaining buffer` and still does. The
+    // Base threw `Item length=N exceeds remaining buffer` and still refuses on
+    // the same input; since `DICOM-FATAL-MESSAGE-REGISTRY` the message no longer
+    // prints `N`, because that field is four bytes of the document on precisely
+    // the files this code fires for. The
     // disclosure fires first and is discarded with the object.
     expect(() => parseDicom(fixture(EXPLICIT_LE, 4096))).toThrow(DicomParseError);
   });
@@ -807,7 +810,9 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - where it deliberately says not
       ],
     });
 
-    expect(() => parseDicom(buf)).toThrow(/exceeds remaining buffer/u);
+    expect(() => parseDicom(buf)).toThrow(
+      /\(FFFE,E000\) Item declares a length reaching past the end/u,
+    );
   });
 
   it("says nothing about an item that stays inside the sequence's declared end", () => {
@@ -816,7 +821,9 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - where it deliberately says not
     // extent is not tiled) and this code says nothing about it. Under-declaring
     // the ITEM by 6 leaves the reader mid-value and desynchronizes it, which is
     // `origin/main`'s behaviour and stays that way.
-    expect(() => parseDicom(fixture(EXPLICIT_LE, -6))).toThrow(/exceeds remaining buffer/u);
+    expect(() => parseDicom(fixture(EXPLICIT_LE, -6))).toThrow(
+      /An element declares a Value Length reaching past the end/u,
+    );
   });
 
   it("says nothing about an UNDEFINED-length item with no ItemDelim - a disclosed residual", () => {

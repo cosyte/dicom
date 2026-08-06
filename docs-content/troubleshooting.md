@@ -64,10 +64,21 @@ warning you triage, not an exception you catch.
 
 ## Keeping PHI out of logs
 
-A Tier-2 **warning** is safe to log whole. Its `message` comes from a frozen registry keyed by the
-code, and the only things substituted into it are structural: a tag, a VR checked against the closed
-34-VR set, and input-derived numbers. No warning factory accepts a string read out of the document,
-so `ds.warnings` holds codes, positions and registry prose, not patient data.
+A Tier-2 **warning** is safe to log whole on any well-formed file. Its `message` comes from a frozen
+registry keyed by the code, and the only things substituted into it are structural: a tag, a VR
+checked against the closed 34-VR set, and input-derived numbers. No warning factory accepts a string
+read out of the document, so `ds.warnings` holds codes, positions and registry prose, not patient
+data.
+
+**One shape is the exception, and it is disclosed rather than guarded.** The tag slot is filled by a
+**shape** check, and a shape check cannot refuse a tag that a lying Value Length composed out of
+somebody's value. Measured: an `ST` carrying `"MR BRAIN SMITHSON "` that under-declares by 12
+desynchronizes the reader onto a fabricated header at an odd group, and
+`DICOM_PRIVATE_TAG_NO_CREATOR` renders it `4E495320`, which is `"IN S"` in wire order. Withholding the
+tag there would remove it from every private element in every conformant file, so the disclosure is
+the remedy; `report.removedPrivateTags` and `report.embeddedAttributes[].hidden` carry the same
+property for the same reason. **If you log messages from untrusted files verbatim, treat a tag in one
+as document-derived.**
 
 Two things that array does **not** cover:
 
@@ -75,12 +86,19 @@ Two things that array does **not** cover:
   input bytes and the library does not redact them. Log `err.code`, `err.byteOffset` and
   `err.message`; treat `err.snippet` as PHI. **`{ strict: true }` turns every Tier-2 warning into
   one of these**, so the frozen-registry guarantee above covers the `message` and nothing else on
-  the strict path. **Which element the bytes belong to is not contracted**: that offset's frame
-  follows where the element was read (file-absolute at the root, relative to the enclosing slice
-  inside a defined-length Sequence or Item, into the inflated stream under Deflated Explicit VR LE),
-  while the snippet is cut from whichever buffer the parse is holding, so the two can disagree and
-  the bytes can be an unrelated element's value. Do not reason from a code's message to what its snippet holds. Review the two paths
-  separately; a message-only review of the lenient path does not transfer.
+  the strict path. The snippet is cut **in the frame its `byteOffset` is counted in**, so it is the
+  bytes at the offset the error names: file-absolute at the root, relative to the enclosing slice
+  inside a defined-length Sequence or Item, into the inflated stream under Deflated Explicit VR LE.
+  It was not always, and the difference matters if you have logs from an earlier release: the cut
+  used to be taken from the whole file at an offset that had already moved with the frame, so an
+  escalation raised inside a defined-length Item returned **an unrelated element's** bytes. Review
+  the two paths separately; a message-only review of the lenient path does not transfer.
+- **A Tier-3 fatal's `message` is registry-composed too, and was not before this release.** It is
+  looked up in a second frozen registry, and the factories that build one **take no tag and no
+  wire-length parameter**, so neither can be interpolated: those are exactly the fields a fatal about
+  a lying length field would be reading out of somebody's value. `err.byteOffset` locates the
+  element instead. A VR still reads, when it names one of the 34; anything else renders
+  `<withheld>`.
 - **Value-decode deviations do not appear on `ds.warnings`.** Decode is lazy, so a `DA` in a legacy
   format or a `UI` with the wrong pad surfaces on the decoded value's own `warnings`
   (`el.value.warnings`), never folded into the frozen dataset array. Those messages are built from

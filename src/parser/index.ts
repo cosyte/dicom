@@ -26,21 +26,13 @@
 import { Buffer } from "node:buffer";
 
 import { Dataset } from "../dataset/dataset.js";
-import { uid as dictionaryUid } from "../dictionary/index.js";
 import { makeEmitter } from "./emit.js";
-import { buildSnippet, DicomParseError, FATAL_CODES } from "./errors.js";
+import { emptyInput, emptyInputAfterNormalization, unsupportedTransferSyntax } from "./fatals.js";
 import { parseFileMeta } from "./file-meta.js";
 import { parsePart10Header } from "./part10-header.js";
 import { TRANSFER_SYNTAX_PARSERS } from "./transfer-syntax.js";
 import type { OnWarningCallback, ParseContext, ParseOptions } from "./types.js";
 import type { DicomParseWarning } from "./warnings.js";
-
-/**
- * The four v1 Transfer Syntax UIDs, as a constant for the unsupported-syntax
- * message. A literal list is what lets that message stay useful without echoing
- * the UID the file actually carried.
- */
-const SUPPORTED_TRANSFER_SYNTAXES = Object.keys(TRANSFER_SYNTAX_PARSERS).join(", ");
 
 /**
  * Parse a DICOM Part 10 buffer into a structural {@link Dataset}.
@@ -105,19 +97,14 @@ export function parseDicom(
 ): Dataset {
   // First EMPTY_INPUT check - raw input length (D-13 dual-check, first half).
   if (rawInputIsEmpty(input)) {
-    throw new DicomParseError(FATAL_CODES.EMPTY_INPUT, "Input is empty.", 0, "");
+    throw emptyInput();
   }
 
   const buffer = normalizeInput(input);
 
   // Second EMPTY_INPUT check - after normalization (D-13 corner-case for views).
   if (buffer.length === 0) {
-    throw new DicomParseError(
-      FATAL_CODES.EMPTY_INPUT,
-      "Input is empty after normalization.",
-      0,
-      "",
-    );
+    throw emptyInputAfterNormalization();
   }
 
   // Build ParseContext. `copyValues: false` default per D-16. `onWarning` is
@@ -136,21 +123,13 @@ export function parseDicom(
   const tsUid = fileMeta.transferSyntaxUID;
   const strategy = TRANSFER_SYNTAX_PARSERS[tsUid];
   if (strategy === undefined) {
-    // The UID itself is NEVER interpolated. `(0002,0010)` is a `UI` a sender
-    // authored, this branch is reached precisely when it is not one of the four
-    // this build supports, and the message ends up in `err.message` and
-    // `err.stack`. What names it instead comes from a closed set the parser
-    // controls: the registry's own name for the UID when PS3.6 publishes one
-    // (so `JPEG Baseline (Process 1)` still reads usefully), and nothing at all
-    // when it does not.
-    const tsName = dictionaryUid(tsUid)?.name ?? "";
-    const named = tsName.length > 0 ? `Transfer Syntax ${tsName}` : "The Transfer Syntax UID";
-    throw new DicomParseError(
-      FATAL_CODES.UNSUPPORTED_TRANSFER_SYNTAX,
-      `${named} in (0002,0010) is not supported by @cosyte/dicom v1 (supported: ${SUPPORTED_TRANSFER_SYNTAXES}).`,
-      fileMetaEnd,
-      tsName.length > 0 ? tsName : buildSnippet(buffer, fileMetaEnd),
-    );
+    // The UID itself is NEVER interpolated, and since the fatal registry it is
+    // not even reachable from here: `unsupportedTransferSyntax` takes the UID
+    // and renders the PS3.6 registry's own name for it, so `JPEG Baseline
+    // (Process 1)` still reads usefully and a UID PS3.6 does not publish reads
+    // as nothing at all. The closed-set lookup that used to live at this call
+    // site now lives in the factory, where a future call site cannot skip it.
+    throw unsupportedTransferSyntax(buffer, fileMetaEnd, tsUid);
   }
 
   // Step 4: Parse the dataset with the chosen strategy.

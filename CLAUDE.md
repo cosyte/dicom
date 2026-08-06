@@ -58,10 +58,13 @@ in the same area - open the section first.**
   - A **failed CP-246 `UN` descent emits nothing**. The honest test for a consumer is
     `el.items === undefined`, **not** `ds.warnings`.
     [#dicom-implicit-sq-not-descended](documentation/agent-notes.md#dicom-implicit-sq-not-descended)
-  - The **Tier-3 fatal messages still interpolate a tag and a VR composed from input**
-    (`explicit-le.ts`, `implicit-le.ts`, `sequence.ts`), so `err.message` can carry four bytes of
-    document content. `PRE-EXISTING`; a registry for fatal messages is its own slice.
-    [#dicom-unrecognized-vr-short-form](documentation/agent-notes.md#dicom-unrecognized-vr-short-form)
+  - Tier-3 fatal messages are **registry-bound now** and the `{strict:true}` snippet is cut in the
+    frame its offset names. **The snippet is still 16 raw source bytes and still PHI - an honest
+    frame made it MORE certainly the named element's content.** The identical fabricated header
+    still reaches **Tier-2** `DICOM_PRIVATE_TAG_NO_CREATOR` (`"IN S"`) and
+    `embeddedAttributes[].hidden` (`"SMIT"`), so **`ds.warnings[].message` is NOT unconditionally
+    safe to log** - `PRE-EXISTING` product calls, disclosed not guarded.
+    [#dicom-fatal-message-registry](documentation/agent-notes.md#dicom-fatal-message-registry)
   - The **undefined-length item with no `(FFFE,E00D)`**, which has no declared length to disagree
     with, so no over-run is recordable.
     [#dicom-explicit-vr-unbounded-item-read](documentation/agent-notes.md#dicom-explicit-vr-unbounded-item-read)
@@ -243,7 +246,8 @@ not soften them. All anchors are in `documentation/agent-notes.md`.
   So the bound is the **factory signature** - no tag parameter, no raw length parameter - and
   `position.byteOffset` identifies the element. This bit three separate codes:
   `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE`, `DICOM_NONZERO_RESERVED_BYTES`,
-  `DICOM_ITEM_CROSSES_SEQUENCE_END`. **Do not put any of them back.**
+  `DICOM_ITEM_CROSSES_SEQUENCE_END`, and every Tier-3 message in `fatals.ts` (whose token type has no
+  tag slot at all). **Do not put any of them back.**
   [#dicom-carrier-leaf-leaks](documentation/agent-notes.md#dicom-carrier-leaf-leaks) ·
   [#dicom-unrecognized-vr-short-form](documentation/agent-notes.md#dicom-unrecognized-vr-short-form) ·
   [#dicom-explicit-vr-unbounded-item-read](documentation/agent-notes.md#dicom-explicit-vr-unbounded-item-read)
