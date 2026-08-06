@@ -1107,8 +1107,12 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       // and that is the whole predicate. The `OB` row is the deliberate residual:
       // separating a well-formed item stream from a legitimate binary blob needs
       // a content test on exactly the VRs arbitrary bytes are for, which is the
-      // `DICOM-BINARY-CARRIER-OVERDECLARE` trade the founder decided on
-      // 2026-08-05 to ACCEPT. Do not close this row by widening the guard.
+      // same reasoning the founder accepted `DICOM-BINARY-CARRIER-OVERDECLARE`
+      // on. 🛑 IT IS NOT THAT DECISION, AND A GRADED PASS REFUSED THE DRAFT THAT
+      // LABELLED IT ONE: that decision priced a measured OVER-DECLARE swallow,
+      // and this is an HONEST length reached through `RetainSafePrivate`. Open,
+      // disclosed and undecided. Do not close this row by widening the guard,
+      // and do not describe it as decided.
       const NESTED_NAME = "BOND^JAMES";
       const itemStream = ((): Buffer => {
         const body = Buffer.concat([
