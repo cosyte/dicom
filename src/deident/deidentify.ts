@@ -1134,9 +1134,12 @@ function declaredPrivateVr(
  *
  * 🩺 **That prose enumeration is DELETED rather than reworded a third time.** It
  * read "a profile entry declaring a binary VR (`OB`/`OW`/`UN`)", and the measured
- * set is wider: a profile entry declaring `LO` or `ST` over a carrier the sender
- * wrote `OB` leaks the identical nested name, because this branch asks one
- * question and every other answer falls through. The matrix in
+ * set is **neither narrower nor wider - the two are incomparable**: a profile
+ * entry declaring `LO` over a carrier the sender wrote `OB` leaks the identical
+ * nested name, while one declaring `OB` over a carrier the sender wrote `LO` is
+ * emptied by the scanner. **The predicate has two conjuncts and the deleted
+ * wording named neither** - this branch does not answer it, *and* the scanner
+ * cannot read it. The matrix in
  * `test/integration/deident-private-reservation.test.ts` is the enumeration now,
  * it is measured on every run, and no artifact carries a list.
  *

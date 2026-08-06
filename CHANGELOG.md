@@ -6,32 +6,39 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Fixed
 
-- **🩺 The surviving PHI leak on the `RetainSafePrivate` retain route was disclosed NARROWER than it
-  is, in six artifacts at once** (`DICOM-RETAIN-ROUTE-RESIDUALS`). `PRE-EXISTING` and unchanged in
+- **🩺 The surviving PHI leak on the `RetainSafePrivate` retain route was disclosed as the WRONG SET,
+  in six artifacts at once** (`DICOM-RETAIN-ROUTE-RESIDUALS`). `PRE-EXISTING` and unchanged in
   behaviour: **no `src/` predicate moves in this release entry**, and every cell described below
   leaks identically before and after it. What changed is the claim.
 
   Every artifact that described what the private-`SQ` closure leaves open said it was "a private
-  carrier whose **profile entry declares a binary VR** (`OB`/`OW`/`UN`)". That is not the predicate.
-  `keepRetainedPrivate` asks one question - does the `Profile` declare this attribute `SQ`? - and
-  **every other answer falls through to the ordinary keep path**, where the only thing between the
-  value and de-identified output is the embedded-attribute scanner. That scanner reads **string
-  carriers only**, and it decodes candidate Data Element headers in the **file's own encoding**. So
-  a profile entry declaring `LO` or `ST` over a carrier the sender wrote `OB` ships the identical
-  nested `(0010,0010)` Patient's Name, and so does a string carrier holding Explicit-VR-shaped bytes
-  inside an Implicit VR LE file. In every such case the output is stamped `(0012,0062) Patient
-Identity Removed = YES`, `report.unauditableSequences` is empty and `ds.warnings` is empty, because
-  none of these files is malformed: the carrier's Value Length is honest and its value is a
-  well-formed `(FFFE,E000)` item stream.
+  carrier whose **profile entry declares a binary VR** (`OB`/`OW`/`UN`)". That is not the predicate,
+  and the true set is **neither narrower nor wider than it - the two are incomparable**. A profile
+  entry declaring `LO` over a carrier the sender wrote `OB` leaks; a profile entry declaring `OB`
+  over a carrier the sender wrote `LO` does not. **There are two conjuncts and the deleted wording
+  named neither.** `keepRetainedPrivate` asks one question - does the `Profile` declare this
+  attribute `SQ`? - and every other answer falls through to the ordinary keep path, where the only
+  thing between the value and de-identified output is the embedded-attribute scanner. That scanner
+  reads **string carriers only**, and it decodes candidate Data Element headers in the **file's own
+  encoding**. So the value survives exactly when the profile does not say `SQ` **and** the scanner
+  cannot read it: a string carrier holding Explicit-VR-shaped bytes inside an Implicit VR LE file is
+  in the set for the same reason a binary carrier is. In every such case the carrier reaches output
+  **byte-identical to the file's own value**, stamped `(0012,0062) Patient Identity Removed = YES`,
+  with `report.unauditableSequences` and `ds.warnings` both empty, because none of these files is
+  malformed: the Value Length is honest and the value is a well-formed `(FFFE,E000)` item stream.
 
   **The enumeration is deleted rather than reworded a third time, and a measured matrix replaces it.**
-  `test/integration/deident-private-reservation.test.ts` now sweeps declared VR against wire VR
-  against transfer syntax with a name-bearing payload and asserts the **emptied** set exactly, so the
-  leaking set is whatever is left and cannot go stale in prose. The same sweep strengthens the
-  closure it sits beside: a profile-declared `SQ` is emptied and named on **all four** wire VRs and
-  **both** encodings, where the case it replaced measured one `OB`/Explicit cell. Non-vacuity is by
-  fixture and by mutation: the payload carries a real name, an otherwise identical name-free payload
-  reads clean, and disabling the closure's branch reds the matrix.
+  `test/integration/deident-private-reservation.test.ts` now sweeps the profile's declared VR against
+  the encoding and, under Explicit VR only, the wire VR, with a name-bearing payload, and asserts the
+  **emptied** set exactly - so the leaking set is whatever is left and cannot go stale in prose. It
+  pins the leaking cells as kept verbatim and silent rather than inferring it from a substring
+  search. **There is deliberately no wire-VR axis under Implicit VR LE**, which writes no VR at all
+  (PS3.5 2026c §7.1.3); crossing one in measures a single file four times. The same sweep strengthens
+  the closure it sits beside: a profile-declared `SQ` is emptied to zero bytes and named on all four
+  Explicit wire VRs and on the VR-less Implicit encoding, where the case it replaced measured one
+  `OB`/Explicit cell. Non-vacuity is by fixture and by mutation: the payload carries a real name,
+  every Explicit cell really does present a distinct VR to the parser, and disabling the closure's
+  branch reds the matrix.
 
   **Two remedies exist and both are product calls, so neither is taken here.** A content test on
   binary carriers is already priced in `src/deident/embedded.ts` at 11 grid cells to 0 while emptying

@@ -774,8 +774,11 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   nothing. So `ds.warnings` was never the channel for this class, and
   `report.unauditableSequences` is. Do not summarise either shape as "warned" or as "silent" without
   re-running both.
-  **▶ WHAT IS DELIBERATELY NOT CLOSED, AND DO NOT GROW THE GUARD FOR IT.** Everything the profile
-  does **not** declare `SQ`, over a value that happens to be a well-formed item stream. Nothing
+  **▶ WHAT IS DELIBERATELY NOT CLOSED, AND DO NOT GROW THE GUARD FOR IT.** A carrier the profile
+  does **not** declare `SQ` **and** whose value the embedded-attribute scanner cannot read, over a
+  value that happens to be a well-formed item stream. **Both conjuncts, or the sentence is wrong in
+  the other direction** - a graded pass refuted a draft of this very paragraph that named only the
+  first, because five non-`SQ` cells ARE emptied (the scanner reads them). Nothing
   declares a Data Set to be in there; separating one from a legitimate binary blob is a **content
   test on exactly the VRs arbitrary bytes are for**, which is the same reasoning the founder
   accepted `DICOM-BINARY-CARRIER-OVERDECLARE` on. **🛑 IT IS NOT THAT DECISION, AND A GRADED PASS
@@ -788,23 +791,34 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   TIME** (`DICOM-RETAIN-ROUTE-RESIDUALS`, 2026-08-06, base `92c0373`). Four artifacts - this
   section, `CLAUDE.md`, `README.md`, `docs-content/troubleshooting.md` - plus the `keepRetainedPrivate`
   JSDoc and the `CHANGELOG` all said the surviving shape was "a profile entry declaring a **binary**
-  VR (`OB`/`OW`/`UN`)". **It is not a statement about the profile's declaration at all.** The branch
-  asks one question, and every other answer falls through to `keepOrEmpty`, where the only thing
-  between the value and the output is the embedded-attribute scanner - which reads **string carriers
-  only** and decodes tiles in the **file's own encoding**. So a profile entry declaring `LO` or `ST`
-  over a carrier the sender wrote `OB` leaks the identical nested `(0010,0010)`, and so does a
-  string carrier holding Explicit-VR-shaped bytes inside an Implicit VR LE file. Same disease as
+  VR (`OB`/`OW`/`UN`)". **It is not a statement about the profile's declaration alone, and the
+  measured set is neither narrower nor wider than the deleted one - the two are INCOMPARABLE.** A
+  profile entry declaring `LO` over a carrier the sender wrote `OB` leaks; a profile entry declaring
+  `OB` over a carrier the sender wrote `LO` does not. **The predicate has TWO conjuncts and the
+  deleted wording named neither**: the profile does not declare `SQ`, so this branch does not answer
+  it, **and** the embedded-attribute scanner cannot read the value, so `keepOrEmpty` does not empty
+  it. That scanner reads **string carriers only** and decodes tiles in the **file's own encoding**,
+  which is also why a string carrier holding Explicit-VR-shaped bytes inside an Implicit VR LE file
+  leaks. Same disease as
   `#78`'s deleted count and `#77`'s "one shape is still exempt": **the enumeration was the defect and
   the guard was right.** No artifact carries a list now. The `it("the honest-length carrier surface
-  is a MATRIX...")` case in `deident-private-reservation.test.ts` sweeps declared VR x wire VR x
-  encoding with a name-bearing payload and asserts the **emptied** set exactly, so the leaking set is
-  whatever is left and cannot go stale in prose.
-  **▶ 🛑 AND `#77`'s PASS-1 `F2` IS CLOSED, NOT OPEN - ANY ARTIFACT STILL CALLING "AN HONEST-LENGTH
-  `OB`/`UN` CARRIER WRAPPING A WELL-FORMED ITEM STREAM" AN OPEN ROUTE IS QUOTING A STALE PREMISE.**
-  `F2` was the shape where the **profile declares `SQ`** and the wire says `OB`, and `#78` closed it;
-  the matrix now proves the closure on **all four** wire VRs and **both** encodings, not just the one
-  `OB`/Explicit cell that opened it. What survives is a different predicate, above, and it was never
-  `F2`. Read the matrix before re-filing this as an open leak route.
+  is a MATRIX...")` case in `deident-private-reservation.test.ts` asserts the **emptied** set
+  exactly, so the leaking set is whatever is left and cannot go stale in prose. It also pins the
+  leaking cells as **kept VERBATIM** (`rawBytes.equals` the file's own value) and **silent** (nothing
+  on `report.unauditableSequences`, nothing on `ds.warnings`, `(0012,0062) = YES`), because a
+  substring search alone does not distinguish "kept" from "partly rewritten".
+  **▶ 🛑 THE MATRIX HAS ASYMMETRIC AXES AND A GRADED PASS REFUSED THE DRAFT THAT CROSSED THEM.**
+  **Implicit VR LE writes no VR** (PS3.5 2026c §7.1.3), so there is no wire-VR axis there. The first
+  draft crossed one in anyway and produced **24 Implicit cells that were one file measured 24 times**
+  (identical sha256), then billed the closure as proven on "all four wire VRs and both encodings".
+  It is proven on **five distinct inputs**: four Explicit wire VRs plus the one VR-less Implicit
+  file, each run under six profiles. Never cross a wire-VR axis into Implicit VR LE.
+  **▶ 🛑 `#77`'s PASS-1 `F2` IS CLOSED, BUT THE BACKLOG'S WORDING FOR IT IS STILL TRUE AND MUST NOT
+  BE MARKED STALE.** `F2` was the shape where the **profile declares `SQ`** and the wire says `OB`,
+  and `#78` closed it. "An honest-length `OB`/`UN` carrier wrapping a well-formed item stream" is
+  **wider than `F2` was**, and in that wider reading it is still an open, live leak on every non-`SQ`
+  declaration. A draft of this paragraph called the phrase a stale premise and was refused for it.
+  What closed is the `declares-SQ` sub-case only. Read the matrix before concluding either way.
   **▶ 🩺 THE EVIDENCE THAT BEARS ON THE UNDECIDED CALL, WRITTEN DOWN RATHER THAN ACTED ON.** There
   are exactly two remedies and **both are product calls, neither is a bug fix**. (1) A content test
   on binary carriers: `SCANNABLE_CARRIER_VRS` is string-only by construction, and `embedded.ts`

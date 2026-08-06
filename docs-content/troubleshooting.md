@@ -238,8 +238,8 @@ Each is tracked as a future companion package, not a gap to be filled here:
   in every file. **Where a `Profile` does declare that private attribute `SQ`, the rule above
   reaches it** and empties it: that test does not look at the length field, so this residual is about
   elements no profile named.
-  **And the limit on that closure is wider than an earlier wording of this paragraph said, so the
-  wording is deleted rather than narrowed again**: the rule empties what a `Profile` declares `SQ`,
+  **And the limit on that closure is not what an earlier wording of this paragraph said - the two
+  sets are incomparable, not nested - so that wording is deleted rather than adjusted again**: the rule empties what a `Profile` declares `SQ`,
   and **every other declaration falls through and is kept verbatim** whenever the embedded-attribute
   scanner cannot read the value. That scanner reads **string carriers only**, and decodes candidate
   headers in the **file's own encoding** - so a carrier the sender wrote `OB`, `OW` or `UN` is never
