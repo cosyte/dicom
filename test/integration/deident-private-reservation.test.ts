@@ -113,6 +113,7 @@ import {
   profiles,
   serializeDicom,
 } from "../../src/index.js";
+import { WARNING_MESSAGES } from "../../src/parser/warnings.js";
 import { buildDicom } from "../helpers/build-dicom.js";
 
 const IMPLICIT_LE = "1.2.840.10008.1.2";
@@ -1184,6 +1185,152 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       expect(declaredOb.vr).toBe("OB");
       expect(declaredOb.leaks).toBe(true);
       expect(declaredOb.unauditable).toEqual([]);
+    });
+
+    it("a FABRICATED header matching the profile's own block keeps the tag-free diagnostic", () => {
+      // 🩺 THE BOUND A GRADED PASS CAUGHT THIS SLICE BREAKING, PINNED SO IT
+      // CANNOT BE REOPENED. `emptyUndefinedVrElement` is the one path in the
+      // module that deliberately names NO TAG, because the condition raising it
+      // is that the header was fabricated from bytes inside some element's
+      // value - so its four tag bytes ARE document content. Three warning codes
+      // have been refused for echoing exactly that.
+      //
+      // The new profile-declared-`SQ` branch sits in front of `keepOrEmpty` and
+      // would preempt it: an under-declared length upstream resynchronizes the
+      // reader onto four bytes that here spell `(0009,1001)`, the caller's own
+      // vendor block, whose Private Creator is genuine and whose position is
+      // inside the settled run. `!hasUndefinedVr(el)` is what keeps the tag-free
+      // route. Delete that conjunct and this test reds with the fabricated tag
+      // on both the warning and the report.
+      const NESTED_NAME = "BOND^JAMES";
+      const profile = defineProfile({
+        name: "acme-fabricated",
+        description: "Synthetic vendor block declared SQ.",
+        privateTags: {
+          ACME: { "0009XX01": { vr: "SQ", keyword: "AcmeSeq", name: "Acme Seq" } },
+        },
+      });
+      // A complete long-form header (tag + an unrecognized VR + reserved + a
+      // 32-bit length) followed by a name, all of it INSIDE a legitimate `LO`
+      // value that under-declares its own length by exactly that much.
+      const fabricated = Buffer.concat([
+        Buffer.from([0x09, 0x00, 0x01, 0x10]),
+        Buffer.from("Zz", "ascii"),
+        Buffer.from([0x00, 0x00]),
+        Buffer.from([NESTED_NAME.length, 0x00, 0x00, 0x00]),
+        Buffer.from(NESTED_NAME, "ascii"),
+      ]);
+      const buf = buildDicom({
+        transferSyntax: EXPLICIT_LE,
+        elements: [
+          nameEl,
+          { tag: "00090010", vr: "LO", value: ascii("ACME") },
+          {
+            tag: "00080080",
+            vr: "LO",
+            value: Buffer.concat([ascii("MERCY GENERAL HOSPITAL "), fabricated]),
+            declaredLengthDelta: -fabricated.length,
+          },
+        ],
+      });
+      const ds = parseDicom(buf);
+      // Non-vacuity: the reader really did resynchronize onto the fabricated
+      // header, and it really is the block this caller's profile declares `SQ`.
+      expect(ds.get("00091001")?.vr).toBe("Zz");
+      expect(serializeDicom(parseDicom(buf)).toString("latin1")).toContain(NESTED_NAME);
+
+      const { dataset, report } = deidentify(ds, { retain: ["RetainSafePrivate"], profile });
+      // Emptied either way, so nothing leaks whichever branch answers it.
+      expect(serializeDicom(dataset).toString("latin1")).not.toContain(NESTED_NAME);
+      // 🛑 AND ANSWERED BY THE TAG-FREE ROUTE. `undefinedVrElements` carries a
+      // byte offset and no tag; `unauditableSequences` would carry `00091001`.
+      expect(report.undefinedVrElements.map((f) => f.byteLength)).toEqual([NESTED_NAME.length]);
+      expect(report.unauditableSequences).toEqual([]);
+      for (const w of report.warnings) expect(w.message).not.toContain("00091001");
+    });
+
+    it("an undefined-length UN whose CP-246 descent was refused IS covered when a profile declared it SQ", () => {
+      // The enumeration a graded pass refused: this remedy has NO length
+      // condition, so it reaches the CP-246 shape too whenever a `Profile`
+      // declared that private attribute a Sequence. The undefined-length `UN`
+      // residual survives everywhere else - it is a statement about elements no
+      // profile named - and no artifact may call this shape exempt.
+      const NESTED_NAME = "BOND^JAMES";
+      const profile = defineProfile({
+        name: "acme-cp246",
+        description: "Synthetic vendor block declared SQ, written UN undefined-length.",
+        privateTags: {
+          ACME: { "0009XX01": { vr: "SQ", keyword: "AcmeSeq", name: "Acme Seq" } },
+        },
+      });
+      // An item header whose length is nonsense, so the CP-246 descent is
+      // refused and the element stays `UN` with no items.
+      const payload = Buffer.concat([
+        Buffer.from([0xfe, 0xff, 0x00, 0xe0]),
+        Buffer.from([0x99, 0x99, 0x99, 0x99]),
+        Buffer.from(NESTED_NAME, "ascii"),
+      ]);
+      const buf = Buffer.concat([
+        buildDicom({
+          transferSyntax: EXPLICIT_LE,
+          elements: [nameEl, { tag: "00090010", vr: "LO", value: ascii("ACME") }],
+        }),
+        Buffer.from([0x09, 0x00, 0x01, 0x10]),
+        Buffer.from("UN", "ascii"),
+        Buffer.from([0x00, 0x00]),
+        Buffer.from([0xff, 0xff, 0xff, 0xff]),
+        payload,
+      ]);
+      const ds = parseDicom(buf);
+      // Non-vacuity: this is the refused-descent shape, not a resolved one.
+      expect(ds.get("00091001")?.vr).toBe("UN");
+      expect(ds.get("00091001")?.items).toBeUndefined();
+      expect(ds.get("00091001")?.length).toBe(0xffffffff);
+
+      const { dataset, report } = deidentify(ds, { retain: ["RetainSafePrivate"], profile });
+      expect(serializeDicom(dataset).toString("latin1")).not.toContain(NESTED_NAME);
+      expect(report.unauditableSequences.map((f) => f.tag)).toEqual(["00091001"]);
+    });
+
+    it("de-identifying the output again reports no second drop", () => {
+      // `deidentify()` is a fixed point on its own output
+      // (`DICOM-DEIDENT-NOT-A-FIXED-POINT`), and that has to include the AUDIT
+      // and not just the bytes: the emptied carrier still satisfies every other
+      // conjunct of the new branch, so without the `el.length > 0` test pass two
+      // reports a drop where there is nothing left to drop. A report claiming
+      // work it did not do is the false-audit class this module has been refused
+      // for before.
+      const profile = defineProfile({
+        name: "acme-fixed-point",
+        description: "Synthetic vendor block declared SQ, written OB.",
+        privateTags: {
+          ACME: { "0009XX01": { vr: "SQ", keyword: "AcmeBlob", name: "Acme Blob" } },
+        },
+      });
+      const buf = buildDicom({
+        transferSyntax: EXPLICIT_LE,
+        elements: [
+          nameEl,
+          { tag: "00090010", vr: "LO", value: ascii("ACME") },
+          { tag: "00091001", vr: "OB", value: Buffer.from("PRIVATE-BLOB-BYTES!!", "ascii") },
+        ],
+      });
+      const options: DeidentifyOptions = { retain: ["RetainSafePrivate"], profile };
+      const first = deidentify(parseDicom(buf), options);
+      const second = deidentify(first.dataset, options);
+
+      expect(first.report.unauditableSequences.map((f) => f.tag)).toEqual(["00091001"]);
+      expect(second.report.unauditableSequences).toEqual([]);
+      expect(serializeDicom(second.dataset).equals(serializeDicom(first.dataset))).toBe(true);
+    });
+
+    it("the warning for this class names no VR, because its two producers disagree about it", () => {
+      // The message is shared by both producers and one of them is an element
+      // the profile declares a Sequence while the wire says `OB`. It used to
+      // read "is VR=SQ", which states a fact the file contradicts - on the one
+      // channel this class designates.
+      expect(WARNING_MESSAGES.DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE).not.toContain("VR=SQ");
+      expect(WARNING_MESSAGES.DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE).toContain("{tag}");
     });
 
     it("the rule empties only what the profile declares SQ - a declared LO is still kept verbatim", () => {

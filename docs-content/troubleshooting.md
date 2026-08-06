@@ -216,12 +216,14 @@ Each is tracked as a future companion package, not a gap to be filled here:
   re-typed to `SQ`. **On the Explicit VR shape `ds.warnings` is empty**, so the report is the only
   channel. **Pass the same profile to `parseDicom` as well as to `deidentify()`** and the sequence is
   walked and its non-PHI content retained, rather than dropped.
-  **One shape is still exempt and still leaks, and the closures above cover neither.** An
+  **One shape is still exempt and still leaks.** An
   undefined-length `UN` value the CP-246
   descent could not read as a sequence keeps `vr === "UN"` and raises nothing beyond a possible
-  `DICOM_VR_MISMATCH`. The rule cannot be extended to it, because every ordinary `UN` element
-  also has `items === undefined` and applying it there would empty every unknown-VR element in every
-  file.
+  `DICOM_VR_MISMATCH`. The rule cannot be extended to `UN` in general, because every ordinary `UN`
+  element also has `items === undefined` and applying it there would empty every unknown-VR element
+  in every file. **Where a `Profile` does declare that private attribute `SQ`, the rule above
+  reaches it** and empties it: that test carries no length condition, so this residual is about
+  elements no profile named.
   **And one deliberate limit on the closure**: a private carrier whose profile entry declares a
   **binary** VR (`OB`/`OW`/`UN`) is kept verbatim even when its value happens to be a well-formed
   item stream. Nothing declares a Data Set to be in there, and separating one from a legitimate

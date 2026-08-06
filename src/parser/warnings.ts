@@ -236,8 +236,12 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   // Deliberately short. One of these is raised per un-auditable element, so a
   // long message is multiplied by an element count the input controls; the
   // reasoning belongs in the docs, not in a string repeated thousands of times.
+  // 🛑 IT DOES NOT SAY "is VR=SQ", AND THAT IS NOT A WORDING PREFERENCE. One of
+  // its two producers is an element the profile declares a Sequence while the
+  // wire says UN or OB, so naming a VR here would state a fact about the file
+  // that the file contradicts - on the one channel this class designates.
   DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE:
-    "Element ({tag}) is VR=SQ with no parsed items, so its {n} value bytes could not be audited (PS3.15 E.1.1); emptied. See report.unauditableSequences.",
+    "Element ({tag}) is a Sequence carrier with no parsed items, so its {n} recorded bytes could not be audited (PS3.15 E.1.1); emptied. See report.unauditableSequences.",
   // Deliberately short for the same reason as the code above: one per element,
   // and the element count is chosen by the input.
   //
@@ -1113,27 +1117,45 @@ export function embeddedAttributeRemoved(
 
 /**
  * Build a `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` warning. Emitted by
- * `deidentify()` - never by the parser - when an `SQ` element the run was about
- * to **keep** carries no materialized `items`, so its value is an item stream
- * the de-identifier cannot walk.
+ * `deidentify()` - never by the parser - when an element the run was about to
+ * **keep** carries a Sequence of Items it has no materialized `items` for, so
+ * there is an item stream the de-identifier cannot walk.
  *
- * The shape that reaches it is announced by the parser first: a defined-length
- * Implicit VR LE value whose dictionary-resolved `SQ` was not a valid item
- * stream (`DICOM_SQ_NOT_DESCENDED`). PS3.5 section 7.5.1 says those bytes are
- * "a DICOM Data Set composed of Data Elements" and PS3.15 section E.1.1 obliges
- * the de-identifier to protect the listed Attributes "whether contained in the
- * top level Data Set or embedded in an Item of a Sequence of Items". Unable to
- * enumerate them, it empties the carrier.
+ * **Two producers, and only the first is an `SQ` on the parse tree.**
  *
- * **It does NOT cover the CP-246 `UN` shape, and that is a deliberate line.** An
- * undefined-length `UN` whose descent was refused keeps `vr === "UN"`, and every
- * ordinary `UN` element also has `items === undefined`, so the same test applied
- * there would empty every unknown-VR element in every file. Distinguishing a
- * refused descent from a plain `UN` needs a mark the parser does not currently
- * set. Measured, still leaking, and disclosed rather than guessed at.
+ * 1. An `SQ` element with no `items`. The parser announces that one first: a
+ *    defined-length Implicit VR LE value whose dictionary-resolved `SQ` was not
+ *    a valid item stream (`DICOM_SQ_NOT_DESCENDED`).
+ * 2. A private element retained under `RetainSafePrivate` whose `Profile` entry
+ *    declares it `SQ` while the parse tree says otherwise - `UN` under Implicit
+ *    VR LE when the profile did not reach `parseDicom`, or whatever VR the
+ *    sender wrote under Explicit VR, where the wire wins
+ *    (`DICOM-PRIVATE-SQ-PARSE-VR`). **That file may be entirely conformant and
+ *    raise nothing on `Dataset.warnings` at all**, so do not describe this code
+ *    as always following a parse warning.
  *
- * `tag` is this parser's own composed structural field and `n` is the value's
- * byte length; no decoded value travels through the message.
+ * PS3.5 section 7.5.1 says an Item Value is "a DICOM Data Set composed of Data
+ * Elements" and PS3.15 section E.1.1 obliges the de-identifier to protect the
+ * listed Attributes "whether contained in the top level Data Set or embedded in
+ * an Item of a Sequence of Items". Unable to enumerate them, it empties the
+ * carrier.
+ *
+ * **The message names no VR**, because producer 2's whole premise is that the
+ * parse tree and the profile disagree about which one it is.
+ *
+ * **The CP-246 `UN` shape is covered only where producer 2 reaches it**, i.e.
+ * only when a profile declared that private attribute a Sequence. It is not
+ * covered in general and cannot be: an undefined-length `UN` whose descent was
+ * refused keeps `vr === "UN"`, every ordinary `UN` element also has
+ * `items === undefined`, and the same test applied to all of them would empty
+ * every unknown-VR element in every file. Distinguishing a refused descent from
+ * a plain `UN` needs a mark the parser does not currently set. Measured, still
+ * leaking outside that route, and disclosed rather than guessed at.
+ *
+ * `tag` is this parser's own composed structural field and `n` is the byte span
+ * the parser recorded for the element (`Element.rawBytes.length`, which under
+ * Explicit VR includes the header for a full-span element); no decoded value
+ * travels through the message.
  *
  * @example
  * ```ts

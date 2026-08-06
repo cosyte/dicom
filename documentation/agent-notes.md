@@ -777,10 +777,39 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   **▶ WHAT IS DELIBERATELY NOT CLOSED, AND DO NOT GROW THE GUARD FOR IT.** A profile entry
   declaring a **binary** VR (`OB`/`OW`/`UN`) over a value that happens to be a well-formed item
   stream. Nothing declares a Data Set to be in there; separating one from a legitimate binary blob
-  is a **content test on exactly the VRs arbitrary bytes are for**, which is the
-  `DICOM-BINARY-CARRIER-OVERDECLARE` trade the founder decided on 2026-08-05 to **ACCEPT**. It is
-  pinned as the second row of the `OB` test - the two rows differ in the fixture's declared VR and
-  nothing else, which is the whole predicate stated as a fixture rather than as a sentence.
+  is a **content test on exactly the VRs arbitrary bytes are for**, which is the same reasoning the
+  founder accepted `DICOM-BINARY-CARRIER-OVERDECLARE` on. **🛑 IT IS NOT THAT DECISION, AND A GRADED
+  PASS REFUSED THE DRAFT THAT LABELLED IT ONE.** That decision priced a measured **over-declare
+  swallow** (11 grid cells, `delta=18`, remedy built and costed); this is an **honest** length
+  reached through `RetainSafePrivate`, which three prior artifacts each call a **different route**.
+  A leak nobody decided must not inherit a decision, because under the umbrella's BACKLOG rules a
+  decided leak leaves the list. **Open, disclosed, undecided.** It is pinned as the second row of
+  the `OB` test - the two rows differ in the fixture's declared VR and nothing else, which is the
+  whole predicate stated as a fixture rather than as a sentence.
+  **▶ 🛑 THE BRANCH HAS THREE CONJUNCTS AND TWO OF THEM WERE PUT THERE BY A GRADED PASS. NEITHER IS
+  A REFINEMENT OF THE RULE; EACH KEEPS A PROPERTY THE MODULE ALREADY HAD.** Each is pinned by
+  exactly one test, proven by dropping it.
+  1. **`!hasUndefinedVr(el)` FIRST.** The new branch sits ahead of `keepOrEmpty`, so without this it
+     preempts `emptyUndefinedVrElement` - **the one path in the module that deliberately names no
+     tag**, because the condition raising it is that the header was fabricated from bytes inside
+     some element's value. An under-declared length upstream can resynchronize the reader onto four
+     bytes that spell **the caller's own vendor block**, whose Private Creator is genuine and whose
+     position is inside the settled run, so every other conjunct holds. Measured: the fabricated tag
+     reached the warning and `report.unauditableSequences`, and `undefinedVrElements` went empty.
+     Both routes empty the element, so **no value moves either way** - what moved is the diagnostic,
+     which is the class `CLAUDE.md` says cost three warning codes. Do not reorder these two tests.
+  2. **`el.length > 0`.** The emptied carrier still satisfies every other conjunct, so a second
+     `deidentify()` over the first one's output reported a **second drop with `byteLength: 0`**
+     where nothing was left to drop. Bytes were already idempotent; the audit was not. The
+     parsed-`SQ` producer never had this, because `rebuildSequence` yields `items: []`.
+  **▶ THE WARNING MESSAGE NO LONGER SAYS `is VR=SQ`, AND THAT IS NOT A WORDING PREFERENCE.** The
+  frozen registry string is shared by both producers, and producer 2's whole premise is that the
+  parse tree and the profile disagree about the VR - so it stated a fact the file contradicts, on
+  the one channel this class designates, under `(0012,0062) = YES`. Measured saying `is VR=SQ` over
+  an `OB` carrier, over an `LO` carrier, over an unrecognized `Zz`, and over a CP-246 `UN`. It now
+  reads "is a Sequence carrier with no parsed items", and `{n}` is described as the **recorded span**
+  rather than the value length, because `rawBytes` is full-span under Explicit VR. Pinned by an
+  assertion that the template contains no `VR=SQ`.
   **▶ THE EMPTIED ELEMENT KEEPS ITS PARSED VR, and that is why `emptyUnauditableSequence` was split
   rather than reused whole.** `rebuildSequence` re-types to `SQ` and under Explicit VR that VR is
   two real bytes in the output, so emptying an `OB` through it would assert a type the sender never
@@ -794,16 +823,20 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   is over-removal against `0.0.10` and the remedy on the caller's side is one line: pass the profile
   to `parseDicom` too, and the sequence is walked, de-identified and retained. Stated in the
   changeset, the README and `troubleshooting.md` rather than discovered later.
-  **▶ THE BASE-RED FIGURE, PINNED PER-SHA AND MEASURED OVER THE FULL SUITE. Against base `src/` at
-  `369abbe`, replaced wholesale (`rm -rf src` then `git archive`, never `git checkout -- src/`,
-  which OVERLAYS): 2 of 1,077 run red** - the two that assert the closure. Suite `1074 -> 1076`
-  passing plus the 1 `todo`. **The third new test is GREEN on base by design**: it is the control
-  that a retained private element the profile declares `LO` is still kept **verbatim**, and it must
-  pass on both trees or the remedy has degenerated into "empty every retained private element".
-  **▶ THE CONTROL IS NON-VACUOUS AND IT WAS PROVEN BY MUTATION, NOT ASSERTED.** Widening the
+  **▶ THE BASE-RED FIGURE, PINNED PER-SHA AND MEASURED OVER THE FULL SUITE AFTER THE LAST TEST WAS
+  ADDED. Against base `src/` at `369abbe`, replaced wholesale (`rm -rf src` then `git archive`,
+  never `git checkout -- src/`, which OVERLAYS): 5 of 1,081 run red.** Suite `1074 -> 1080` passing
+  plus the 1 `todo`. **It read `2 of 1,077` before the graded pass added four more tests, and was
+  re-run rather than carried forward** - the trap this file already writes with a stop sign. **Two
+  of the seven new or rewritten tests are GREEN on base BY DESIGN, because they are controls**: that
+  a retained private element the profile declares `LO` is still kept **verbatim** (or the remedy has
+  degenerated into "empty every retained private element"), and that a fabricated header keeps the
+  tag-free diagnostic, which base already did.
+  **▶ EVERY CONJUNCT IS NON-VACUOUS AND EACH WAS PROVEN BY MUTATION, NOT ASSERTED.** Widening the
   predicate from `=== "SQ"` to `!== undefined` reds **14** tests in
-  `deident-private-reservation.test.ts`, the `LO` control among them. Re-derive it that way rather
-  than quoting the number.
+  `deident-private-reservation.test.ts`, the `LO` control among them; dropping `!hasUndefinedVr(el)`
+  reds exactly the fabricated-header test; dropping `el.length > 0` reds exactly the second-pass
+  test. Re-derive them that way rather than quoting the numbers.
   **▶ THE GRID WAS NOT RE-RUN, AND THAT IS A REASONED OMISSION RATHER THAN A SKIPPED STEP.**
   `scripts/measure-sq-bound-grid.ts` holds **no private-`SQ` cell at all** (`#77` measured 0 of
   83,037 differing for the carve-out itself, for the same reason: the `priv|` family builds an `LO`
@@ -1217,9 +1250,12 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   under `RetainSafePrivate` + a `Profile`, kept verbatim because the profile vouched for it - is
   **closed by `DICOM-PRIVATE-SQ-CARVE-OUT`**, and the parsed-VR half of it by
   `DICOM-PRIVATE-SQ-PARSE-VR` (its own section below), which added the profile's **declared** VR as
-  a second authority. **Do not read either as reaching this shape**: both are keyed on a `Profile`
-  entry and both carriers are **defined**-length, so CP-246 is never reached in them, and neither
-  relaxes the `UN` test that this shape would need.
+  a second authority. **🛑 THAT SECOND ONE DOES REACH THIS SHAPE, AND A GRADED PASS REFUSED THE
+  DRAFT THAT SAID OTHERWISE.** Its predicate carries **no length condition**, so an undefined-length
+  `UN` whose CP-246 descent was refused **is** emptied whenever a `Profile` declared that private
+  attribute `SQ`. The residual below is what survives outside that route - it is a statement about
+  elements **no profile named**, where the `UN` test genuinely cannot be relaxed. Do not restate it
+  as covering every `UN`.
 
 ## DICOM-OVERDECLARE-SWALLOWS-INTO-VALUE
 

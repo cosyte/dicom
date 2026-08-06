@@ -496,11 +496,14 @@ function hasUndefinedVr(el: Element): boolean {
  * into de-identified output unchanged**, which is what makes the two refusals
  * below unconditional rather than a promise: every other outcome (`X` remove,
  * `Z`/`C` empty, `D` dummy, `U` remap, and a private tag the Basic Profile
- * drops) has already replaced the value by the time it would matter. A **non-`SQ`**
- * private element a {@link Profile} vouches for under `RetainSafePrivate` does
- * route here, so it is covered too. Its `SQ` sibling no longer reaches this
- * function at all: {@link keepRetainedPrivate} sends a vouched-for private `SQ`
- * down the descent instead, which is `DICOM-PRIVATE-SQ-CARVE-OUT`.
+ * drops) has already replaced the value by the time it would matter. A private
+ * element a {@link Profile} vouches for under `RetainSafePrivate` routes here
+ * **unless the profile or the parse tree says it carries a Sequence of Items**,
+ * so it is covered too. A vouched-for private `SQ` goes down the descent
+ * instead (`DICOM-PRIVATE-SQ-CARVE-OUT`), and one the profile declares `SQ` that
+ * the tree did not resolve is emptied (`DICOM-PRIVATE-SQ-PARSE-VR`) - though an
+ * element whose on-wire VR is not one of the 34 still arrives here first, so
+ * that route keeps its tag-free diagnostic. See {@link keepRetainedPrivate}.
  *
  * Order matters and is not arbitrary. The undefined-VR test comes first because
  * it is the cheaper and the stronger of the two: it settles the element from a
@@ -1101,14 +1104,22 @@ function declaredPrivateVr(
  *
  * **What it still does not cover, and deliberately.** A private carrier whose
  * profile entry declares a **binary** VR (`OB`/`UN`/`OW`) and whose value
- * happens to be a well-formed item stream is kept verbatim. Telling that apart
- * from a legitimate binary blob needs a content test on exactly the VRs
- * arbitrary bytes are for - the `DICOM-BINARY-CARRIER-OVERDECLARE` trade, whose
- * leak the founder decided on 2026-08-05 to **accept** rather than pay for by
- * emptying conformant binary values. Do not grow the guard for it here. It is
- * also **not** the undefined-length `UN` residual: that one is a CP-246 descent
- * this parser refused, and these carriers have defined lengths, so CP-246 is
- * never reached.
+ * happens to be a well-formed item stream is kept verbatim. Nothing declares a
+ * Data Set to be in there, and telling one apart from a legitimate binary blob
+ * needs a content test on exactly the VRs arbitrary bytes are for. **That is the
+ * same reasoning the founder accepted `DICOM-BINARY-CARRIER-OVERDECLARE` on
+ * (2026-08-05), and it is NOT the same route** - that decision priced a measured
+ * over-declare swallow; this is an honest length reached through
+ * `RetainSafePrivate`. Do not describe it as decided, and do not grow the guard
+ * for it here.
+ *
+ * **What it DOES now cover that no artifact should call exempt: the CP-246 `UN`.**
+ * The test below has no length condition, so an undefined-length `UN` whose
+ * CP-246 descent this parser refused **is** emptied when a profile declares that
+ * private attribute `SQ`. The undefined-length `UN` residual survives everywhere
+ * else - it is a statement about elements no profile named - and the earlier
+ * enumeration here, which said these carriers all have defined lengths so CP-246
+ * is never reached, was false and is retracted.
  *
  * `reservationsUsable` is threaded through rather than assumed. Its only call
  * site today is already guarded by `reservationsUsable &&`, so it can only
@@ -1139,7 +1150,29 @@ function keepRetainedPrivate(
   // the carrier, exactly as it does for a parsed `SQ` with no items. See
   // {@link declaredPrivateVr} for the two encodings that produce the
   // disagreement.
-  if (declaredPrivateVr(el, ctx, creators) === "SQ") {
+  //
+  // 🛑 THE TWO CONJUNCTS AHEAD OF IT ARE LOAD-BEARING AND BOTH WERE ADDED BY A
+  // GRADED PASS. Neither is a refinement of the rule; each keeps a property this
+  // module already had.
+  //
+  // `hasUndefinedVr` FIRST, so an element whose on-wire VR is not one of the 34
+  // still reaches {@link emptyUndefinedVrElement} through {@link keepOrEmpty}.
+  // Both routes empty it, so no value moves either way - but that route is the
+  // one place in the module that deliberately names NO TAG, because the
+  // condition raising it is that the header itself was fabricated from bytes
+  // inside some element's value. An under-declared length upstream can
+  // resynchronize the reader onto four bytes that happen to match this caller's
+  // own private block, and answering that element here would put its fabricated
+  // tag on a warning and in the report. Three warning codes have been refused
+  // for exactly that; do not reorder these two tests.
+  //
+  // `el.length > 0` because a zero-length value hides nothing, and without it
+  // de-identifying an already de-identified object reports a second drop where
+  // there is nothing left to drop - the emptied element still satisfies every
+  // other conjunct. `deidentify()` is a fixed point on its own output
+  // (`DICOM-DEIDENT-NOT-A-FIXED-POINT`), and that has to include the audit, not
+  // just the bytes.
+  if (!hasUndefinedVr(el) && el.length > 0 && declaredPrivateVr(el, ctx, creators) === "SQ") {
     emptyUnauditableCarrier(el, ctx, contextPath, out, freshScalar(el, Buffer.alloc(0), 0));
     return;
   }

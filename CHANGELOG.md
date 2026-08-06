@@ -38,18 +38,37 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   shipping it unexamined. **Pass the same profile to `parseDicom`** and the sequence is walked, its
   Table E.1-1 attributes de-identified and the rest retained.
 
+  **It reaches the CP-246 `UN` too, wherever a profile named it.** The test carries no length
+  condition, so an undefined-length `UN` whose CP-246 descent this parser refused is emptied when a
+  `Profile` declares that private attribute `SQ`. The undefined-length `UN` residual is a statement
+  about elements **no profile named**, and survives only there.
+
+  **Two properties of the module are kept by conjuncts ahead of that test, and each is pinned by its
+  own test.** An element whose on-wire VR is not one of the 34 is still answered by the tag-free
+  `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` route, so a header fabricated from bytes inside some
+  element's value cannot put its tag on a diagnostic. And a zero-length value is left alone, so
+  de-identifying an already de-identified object reports no second drop.
+
+  `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE`'s message no longer reads "is VR=SQ". It is shared by both
+  producers, and the second one's premise is that the parse tree and the profile disagree about the
+  VR, so naming one stated a fact the file contradicts.
+
   **Deliberately not closed:** a private carrier whose profile entry declares a **binary** VR
   (`OB`/`OW`/`UN`) over a value that happens to be a well-formed item stream is still kept verbatim.
   Nothing declares a Data Set to be in there, and separating one from a legitimate binary blob needs
-  a content test on exactly the VRs arbitrary bytes are for - the `DICOM-BINARY-CARRIER-OVERDECLARE`
-  trade, accepted on 2026-08-05. It is pinned as a fixture row rather than described in prose.
+  a content test on exactly the VRs arbitrary bytes are for. That is the same reasoning
+  `DICOM-BINARY-CARRIER-OVERDECLARE` was accepted on, but it is **a different route** - that
+  decision priced a measured over-declare swallow, and this is an honest length reached through
+  `RetainSafePrivate`. It remains open and undecided, and is pinned as a fixture row rather than
+  described in prose.
 
-  Against base `src/` at `369abbe`, replaced wholesale: **2 of 1,077** tests run red over the full
-  suite, the two that assert this closure; suite 1074 to 1076 passing plus the 1 `todo`. A third new
-  test is green on both trees by design - the control that a retained private element the profile
-  declares `LO` is still kept **verbatim** - and its non-vacuity was proven by mutation rather than
-  asserted. `scripts/measure-sq-bound-grid.ts` was **not** re-run and holds no private-`SQ` cell in
-  any family; this remedy is reachable only from inside `keepRetainedPrivate`.
+  Against base `src/` at `369abbe`, replaced wholesale: **5 of 1,081** tests run red over the full
+  suite; suite 1074 to 1080 passing plus the 1 `todo`. Two of the seven new or rewritten tests are
+  green on both trees **by design**, because they are controls: that a retained private element the
+  profile declares `LO` is still kept **verbatim**, and that a fabricated header keeps the tag-free
+  diagnostic (base already withheld it). Every conjunct's non-vacuity was proven by mutation rather
+  than asserted. `scripts/measure-sq-bound-grid.ts` was **not** re-run and holds no
+  private-`SQ` cell in any family; this remedy is reachable only from inside `keepRetainedPrivate`.
 
 - **🩺 A private `SQ` a `Profile` vouched for under `RetainSafePrivate` was written into
   de-identified output verbatim, so nothing inside it was ever examined for PHI**
