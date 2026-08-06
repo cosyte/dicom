@@ -30,8 +30,8 @@ in the same area - open the section first.**
 - **🩺 Open PHI residuals - measured, disclosed, NOT closed. None of these is an all-clear:**
   - The **private-`SQ` carve-out** is CLOSED, and so is the **parsed-VR** route that left it open
     (`DICOM-PRIVATE-SQ-PARSE-VR`): the profile's **declared** VR is a second authority, so a
-    carrier it calls `SQ` is emptied where the tree says `UN`/`OB`. **Still exempt: a profile
-    entry declaring a BINARY VR** over an item stream - a content test, so not taken.
+    carrier it calls `SQ` is emptied where the tree says `UN`/`OB`. **LEAKS = not `SQ` AND the
+    scanner cannot read it; "BINARY VR" was WRONG, not narrow. The matrix is the list.**
     **A `Profile` vouches for a Private Attribute (PS3.15 §E.3.10), never for a Data Set nested in
     its value (§E.1.1).** **The grid holds no private-`SQ` cell**; the unit tests are the net.
     ABSORB and EJECT are closed too; EJECT needed a **second predicate** (Implicit VR LE records no

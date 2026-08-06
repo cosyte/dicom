@@ -238,11 +238,19 @@ Each is tracked as a future companion package, not a gap to be filled here:
   in every file. **Where a `Profile` does declare that private attribute `SQ`, the rule above
   reaches it** and empties it: that test does not look at the length field, so this residual is about
   elements no profile named.
-  **And one deliberate limit on the closure**: a private carrier whose profile entry declares a
-  **binary** VR (`OB`/`OW`/`UN`) is kept verbatim even when its value happens to be a well-formed
-  item stream. Nothing declares a Data Set to be in there, and separating one from a legitimate
-  binary blob needs a content test on exactly the VRs arbitrary bytes are for, which would empty
-  conformant binary values.
+  **And the limit on that closure is not what an earlier wording of this paragraph said - the two
+  sets are incomparable, not nested - so that wording is deleted rather than adjusted again**: the rule empties what a `Profile` declares `SQ`,
+  and **every other declaration falls through and is kept verbatim** whenever the embedded-attribute
+  scanner cannot read the value. That scanner reads **string carriers only**, and decodes candidate
+  headers in the **file's own encoding** - so a carrier the sender wrote `OB`, `OW` or `UN` is never
+  scanned whatever the profile calls it, and a string carrier holding Explicit-VR-shaped bytes
+  inside an Implicit VR LE file is not scanned either. A well-formed item stream carrying a
+  `(0010,0010)` Patient's Name survives into de-identified output in all of those cases, silently and
+  with an empty `report.unauditableSequences`. This is measured as a matrix rather than listed here,
+  because the list has been wrong twice. Closing any of it needs a content test on exactly the VRs
+  arbitrary bytes are for, which would also empty conformant binary values, so it is an open product
+  question rather than a defect with a known fix. **Pass your profile to `parseDicom` as well** and a
+  vendor sequence is walked instead of guessed at.
   So the reliable test is still `el.items === undefined`, and a report is a record
   of what was reached, not a proof that everything was.
 - **A private value vanishes under `RetainSafePrivate`, and `report.removedPrivateTags` names it.**
