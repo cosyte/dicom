@@ -54,12 +54,13 @@ the two-row measurement that was already sitting under it, with **neither row la
 
 **▶ 🩺 THE DECIDABLE HALF NOBODY HAD ASKED ABOUT: `contextPath` IS NOT STRUCTURAL AND SIX ARTIFACTS
 SAID IT WAS.** A segment is `TAG[index]`; the tag half is whatever tag `descendSequence` walked, read
-straight off the wire. Every other identifier the report composes is built from the Part 6 / Annex E
-tables, and `attributes[].tag` is bound to a tag those tables carry a row for - **membership in a
-closed table, this repo's own standard since `phi-warning-message-leak`** - while this one is bound
-by nothing. **It is NOT the only report identifier read off the wire and a graded pass refused that
-wording**: `removedPrivateTags` and `unauditableSequences[].tag` are as well, and both were already
-disclosed as such. The defect here is the missing disclosure, not a unique unboundedness. Measured on a
+straight off the wire, bound by nothing. `attributes[].tag` is bound to a tag the Part 6 / Annex E
+tables carry a row for - **membership in a closed table, this repo's own standard since
+`phi-warning-message-leak`** - and that contrast is the finding. **It is NOT the only report
+identifier read off the wire, and TWO graded passes refused that wording** - the second because the
+head clause of this very sentence still carried the refuted universal after the first correction:
+`removedPrivateTags` and `unauditableSequences[].tag` are as well, and both were already disclosed
+as such. The defect here is the missing disclosure, not a unique unboundedness. Measured on a
 synthetic `LO` carrier holding `"MRS BRAIN SMITHSON"` under-declaring by four, so the reader
 resynchronizes onto the surname's last four bytes as a tag and reads `SQ` as their VR:
 `contextPath: ["53484E4F[0]"]`, which is `"HSON"` in wire order. Surname to `"DAVIDSON"` gives

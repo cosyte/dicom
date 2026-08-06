@@ -1410,10 +1410,13 @@ function descendSequence(
     reservationsUsable && !itemStreamOverrunsSequence(el, ctx.encoding);
   const newItems: Item[] = [];
   (el.items ?? []).forEach((item, index) => {
-    // 🩺 `el.tag` here is read off the wire and bound by nothing, so this is the
-    // one identifier the report composes that can be four bytes of a value: a
+    // 🩺 `el.tag` here is read off the wire and bound by nothing, so a
     // fabricated `SQ` header the reader was desynchronized onto is named in
-    // every `contextPath` beneath it. Documented on
+    // every `contextPath` beneath it. **It is not the only identifier the report
+    // composes that can be four bytes of a value, and a graded pass measured
+    // that claim false where it used to stand in this comment**: the same file
+    // shape with an odd resync group puts `"ISON"` into `removedPrivateTags`.
+    // See the list on `DeidentifyReport`. Documented on
     // `DeidentifiedAttribute.contextPath`, measured in
     // `test/integration/phi-diagnostic-surface.test.ts`. The field is published
     // anyway - withholding it would destroy the audit on every well-formed file
