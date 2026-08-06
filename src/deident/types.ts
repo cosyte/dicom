@@ -147,8 +147,20 @@ export interface EmbeddedAttributeFinding {
 }
 
 /**
- * One `SQ` element that was emptied because the parser never materialized its
- * items, so the de-identifier had no Data Sets to walk.
+ * One Sequence-of-Items carrier that was emptied because this run had no item
+ * stream to walk, so the de-identifier had no Data Sets to reach.
+ *
+ * **Two producers, and the second is not a parsed `SQ`.** The ordinary one is an
+ * `SQ` element whose `items` the parser never materialized. The other is a
+ * private data element retained under `RetainSafePrivate` whose `Profile` entry
+ * declares it `SQ` while the parse tree says otherwise - `UN` under Implicit VR
+ * LE when the profile was passed to `deidentify()` but not to `parseDicom`, or
+ * whatever binary VR the sender wrote under Explicit VR, which wins in the
+ * parser. The profile is the authority that retained the element, and it has
+ * said the value is a Sequence of Items; with no items on the tree, the §E.1.1
+ * obligation below falls on the carrier just the same. Such an element keeps its
+ * parsed VR in the output and is emptied rather than re-typed to `SQ`
+ * (`DICOM-PRIVATE-SQ-PARSE-VR`).
  *
  * PS3.5 2026c §7.5.1 "Item Encoding Rules" states that "Each Item Value shall
  * contain a DICOM Data Set composed of Data Elements", so an `SQ` element's
@@ -170,9 +182,12 @@ export interface EmbeddedAttributeFinding {
  * declared size of the value that was dropped. No decoded value appears here,
  * so this is safe to log.
  *
- * The parser always announces the underlying refusal first, on
+ * For the first producer the parser announces the underlying refusal on
  * `Dataset.warnings`: `DICOM_SQ_NOT_DESCENDED` for a defined-length Implicit VR
- * LE value whose dictionary-resolved `SQ` was not a valid item stream.
+ * LE value whose dictionary-resolved `SQ` was not a valid item stream. **Do not
+ * generalise that to the second.** There the file may be entirely conformant -
+ * an honest defined-length `OB` carrier raises nothing at all - so this report
+ * field, not `Dataset.warnings`, is where that drop is visible.
  *
  * @example
  * ```ts

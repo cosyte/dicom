@@ -204,21 +204,30 @@ Each is tracked as a future companion package, not a gap to be filled here:
   PS3.15 §E.3.10 is over a **Private Attribute**, not over a Data Set nested in its value, so a
   vouched-for private `SQ` now takes the same two branches every other `SQ` takes: emptied and
   recorded when its items were never materialized, walked when they were.
-  **Two shapes are still exempt and still leak, and the closure above covers neither.**
-  (1) An undefined-length `UN` value the CP-246
+  **A private carrier the profile declares `SQ` is emptied even when the parse tree calls it
+  something else** (`DICOM-PRIVATE-SQ-PARSE-VR`, closed after `0.0.10`). The parse tree and the
+  profile disagree about the same bytes in two ordinary situations: under Implicit VR LE a private
+  tag carries **no VR on the wire**, so `SQ` there is an inference made **at parse time** and a
+  profile passed only to `deidentify()` leaves the element `UN`; and under Explicit VR the wire's VR
+  wins, so a sender who writes the attribute `OB` or `UN` yields that even on a fully conformant file
+  with an honest Value Length. In both cases the profile that retained the element has told us its
+  value is a Sequence of Items, there is no item stream on the tree to walk, and the carrier is
+  emptied and named in `report.unauditableSequences`. It keeps the VR the file carried; nothing is
+  re-typed to `SQ`. **On the Explicit VR shape `ds.warnings` is empty**, so the report is the only
+  channel. **Pass the same profile to `parseDicom` as well as to `deidentify()`** and the sequence is
+  walked and its non-PHI content retained, rather than dropped.
+  **One shape is still exempt and still leaks, and the closures above cover neither.** An
+  undefined-length `UN` value the CP-246
   descent could not read as a sequence keeps `vr === "UN"` and raises nothing beyond a possible
   `DICOM_VR_MISMATCH`. The rule cannot be extended to it, because every ordinary `UN` element
   also has `items === undefined` and applying it there would empty every unknown-VR element in every
   file.
-  (2) A private carrier your `Profile` declares as `SQ` but the **parser** never resolved, because
-  the profile reached `deidentify()` and not `parseDicom` (`DICOM-PRIVATE-SQ-PARSE-VR`). Under
-  Implicit VR LE a private tag carries no VR on the wire, so `SQ` there is a profile-driven
-  inference made **at parse time**: the same bytes arrive as `UN` with no items, take the non-`SQ`
-  branch, and are kept verbatim under `(0012,0062) = YES`, with
-  `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR` on `ds.warnings` as the only signal. Its Value
-  Length is **defined**, so CP-246 never runs and shape (1) is not it. **The fix on your side is to
-  pass the same profile to `parseDicom` as well as to `deidentify()`.**
-  So for both, the reliable test is still `el.items === undefined`, and a report is a record
+  **And one deliberate limit on the closure**: a private carrier whose profile entry declares a
+  **binary** VR (`OB`/`OW`/`UN`) is kept verbatim even when its value happens to be a well-formed
+  item stream. Nothing declares a Data Set to be in there, and separating one from a legitimate
+  binary blob needs a content test on exactly the VRs arbitrary bytes are for, which would empty
+  conformant binary values.
+  So the reliable test is still `el.items === undefined`, and a report is a record
   of what was reached, not a proof that everything was.
 - **A private value vanishes under `RetainSafePrivate`, and `report.removedPrivateTags` names it.**
   The file's own length fields contradict each other about where a Sequence Item ends: its
