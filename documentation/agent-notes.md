@@ -1698,18 +1698,31 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   gap here than a withdrawal there. Measured against both tables the mirror-only set is **empty**,
   and its size prints every run.
 - **Retirement stays a boolean; the `" (Retired)"` suffix is stripped into the field, and a name that
-  still spells it after the strip throws.** **🔴 BUT THE SUFFIX IS AN OBSERVATION OF THE TABLE, NOT
-  A RULE ANNEX A STATES, AND SAYING OTHERWISE WAS REFUTED.** Search the pinned bytes: no sentence
-  anywhere says a retired UID's name gets `" (Retired)"` appended. The retirement sentence Annex A
-  **does** state is about the fifth **Part** column, and `For retired UIDs` locates it at **exactly
-  one** place in the document: *"the edition of the Standard in parentheses is the edition in which
-  the item last appeared before it was retired."* The generator derives `retired` from the suffix
-  alone, so the column is read as a **corroboration in the test** rather than as the source, which
-  is the element registry's own call one table over and for the identical reason: that column also
-  carries `DICOS`/`DICONDE` markers, and reading it as a boolean retires live entries. **The two
-  signals agree on every Table A-1 row of this edition**, measured; A-2 has no Part column, so the
-  check is scoped to A-1. An edition that retires by column alone now reds instead of shipping
-  `retired: false`.
+  still spells it after the strip throws.** **🔴 BUT THE SUFFIX IS AN OBSERVATION OF TABLE A-1, NOT
+  A RULE STATED FOR UIDs, AND PS3.6 PUBLISHES THREE RETIREMENT SIGNALS, NOT ONE AND NOT TWO.**
+  **🛑 THIS PARAGRAPH WAS REFUTED TWICE - FIRST FOR SAYING ONE, THEN FOR SAYING TWO - AND THE
+  SECOND REFUSAL IS THE INSTRUCTIVE ONE: the "two" version reached its answer by grepping the
+  pinned bytes for ONE phrase chosen in advance (`For retired UIDs`), finding one hit, and
+  reporting a completed survey.** That phrase sits in Annex A's own intro, so the grep never
+  reached the clause that governs. **That is the first-match reading `CLAUDE.md` forbids, applied
+  to a search instead of to a section, and it is why the rule says collect the candidates and read
+  them WHOLE.** The governing clause is **PS3.6 2026c section 5, "Conventions"** (`chapter_5`),
+  and each of its three sentences has **exactly one** hit:
+  *"'RET' is used to indicate that the corresponding Data Element, SOP Class, or Transfer Syntax
+  has been retired."* / *"Retired items are shown italicized."* / *"When the name of a retired Data
+  Element has been reused, the retired element has the qualifier '(Retired)' added ..."*
+  Read whole, **the ITALIC is the marking, and section 5 names SOP Classes and Transfer Syntaxes,
+  so it reaches UIDs; the `(Retired)` qualifier sentence is scoped to a REUSED DATA ELEMENT NAME
+  and does not reach UIDs at all.** Annex A's intro adds the third, also one hit: *"For retired
+  UIDs, the edition of the Standard in parentheses is the edition in which the item last appeared
+  before it was retired"* - the fifth **Part** cell. The generator still derives `retired` from
+  the suffix alone, so italic and Part are **corroborations in the test**, never the source; the
+  Part column especially, because it is the element registry's own trap one table over, where
+  reading the sixth column as a boolean retired 391 live tags on `DICOS`/`DICONDE` markers.
+  **All three agree on every Table A-1 row of this edition (75 / 75 / 75, symmetric difference
+  empty)**, measured; A-2 has no Part column, italicizes nothing and carries no suffix, so the
+  check is scoped to A-1. An edition that retires by italic or column alone now reds instead of
+  shipping `retired: false`.
 - **The four toolkit short forms are DERIVED, never typed.** PS3.6 gives four Transfer Syntaxes a
   trailing `": Default Transfer Syntax for ..."` clause; those four names are cut at their first
   `": "`. A hand-written short form is exactly what rots silently when an edition rewords a name, and
@@ -1747,9 +1760,16 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   RETURNS PROTOTYPE MEMBERS.** `src/dictionary/index.ts` indexes a plain object with no own-property
   guard, so `Dictionary.uid("toString")?.name` is `"toString"` and `uid("constructor")?.name` is
   `"Object"`. Byte-identical on `3617034`, reachable from a file's `(0002,0010)` through
-  `renderTransferSyntax`. Not a mis-read of any real UID and not PHI. **Deliberately NOT taken
-  here:** the fix changes a public lookup's answer and `lookup`/`byKeyword` share the shape, so it is
-  its own slice with its own changeset, not a side effect of an overlay.
+  `renderTransferSyntax`; `uid("__proto__")` resolves too. Not a mis-read of any real UID and not
+  PHI: the echoed strings are a fixed set of JS builtin names, and the only path they reach is the
+  `UNSUPPORTED_TRANSFER_SYNTAX` **rejection**. **Deliberately NOT taken here:** the fix changes a
+  public lookup's answer, so it is its own slice with its own changeset, not a side effect of an
+  overlay. `lookup`/`byKeyword` return `undefined` on the same input, but only by accident of double
+  indirection, so do not read them as already guarded.
+  **AND IT FALSIFIES A SENTENCE IN SHIPPED SOURCE, WHICH IS THE HALF WORTH CARRYING:**
+  `src/parser/fatals.ts` says the Tier-3 transfer-syntax token comes from "a closed set the parser
+  controls". With `(0002,0010)` set to `toString` the message reads `Transfer Syntax toString` and
+  `err.snippet` carries it. `PRE-EXISTING`; correct the claim together with the guard.
 - **STILL NO STALENESS CLOCK, and there must not be one.** That rule did not change here.
 
 ## The changelog generator, and why the Unreleased heading may not come back
@@ -1852,14 +1872,31 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   rule a changeset must satisfy here is wider than the siblings': no markdown heading in ANY
   spelling, which includes a bare `---` under a line of prose, because that is a setext heading and
   not a thematic break.** Fenced code is exempt.
+- **🔴 AND THE CLOSING RULE IS COMMONMARK'S, BECAUSE A LOOSER ONE WENT WRONG IN BOTH DIRECTIONS - A
+  REFUTER PASS REPRODUCED ALL FOUR SHAPES ON THE FIRST FENCE-SKIPPING DRAFT.** Closing on any
+  fence-looking prefix let ` ```js ` "close" a block CommonMark leaves open, so the `#` lines after
+  it became headings: a Version PR wedge on legitimate content. And a fence that was never validly
+  closed swallowed **the rest of the region**, so a column-0 `## 0.0.99` after one passed every case
+  - a smuggling hole opened by the fix for the wedge, in the guard written to close smuggling.
+  A close must now use the **same character, be at least as long, and carry no info string**, and
+  **an unterminated fence is REFUSED rather than skipped**, which answers all four at once.
+  **This is a fence heuristic, NOT a CommonMark block model** - it knows nothing about the list item
+  containing a fence, so it cannot see that one opened inside a bullet ends at the first
+  non-indented line; refusing the unterminated case is what stands in for that. **And what actually
+  holds the line in CI is not the guard alone: every one of those shapes is non-Prettier-canonical,
+  so `format:check` reds first.** Say that when you quote this rule.
 - **RESIDUAL, NAMED NOT CLOSED: raw HTML.** A literal `<h2>0.0.99</h2>` above the divider renders as
   that heading and is invisible to `renderedHeadings`. Not reached for, because the guard is
   deliberately a markdown-shape rule rather than an HTML parser.
 - `test/scripts/changelog-generation.test.ts` pins all of the above against the real
-  `changeset version` in throwaway git trees. **Red on the parent `3617034` at 12 of 25**, and the
-  13 green there are green **legitimately**: they grade the RULE against a synthesized document, so
-  they mean the same thing on either tree. (The figure read 13 of 22, then 15 of 24, then this;
-  each is pinned to its own sha and to its own version of the file, and only the last is current.)
+  `changeset version` in throwaway git trees. **Red on the parent `3617034` at 12 of 26.** None of
+  the 14 green there is vacuous, but they are green for TWO different reasons and an earlier
+  wording collapsed them: most grade the RULE against a document the case synthesizes, so they mean
+  the same thing on either tree; the rest (`CHANGELOG.md` is in `files`, the `version` script runs
+  `changeset version`, the four Prettier cases, the generator-off control) were already true on the
+  parent. Only the second group would be worth deleting if it grew, and it has not. (The figure read
+  13 of 22, then 15 of 24, then 12 of 25, then this; each is pinned to its own sha AND to its own
+  version of the file, and only the last is current.)
 
 ## The PS3.15 Annex E action table generator
 

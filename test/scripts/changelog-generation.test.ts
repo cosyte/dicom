@@ -301,11 +301,21 @@ const LIST_MARKER = /^ {0,3}(?:[-*+]|\d{1,9}[.)])(?: |$)/;
  * heading would refuse ordinary release output), and raw HTML - a literal `<h2>0.0.99</h2>`
  * above the divider renders as that heading and is invisible here. Named, not closed.
  *
+ * AND THIS IS A FENCE HEURISTIC, NOT A COMMONMARK BLOCK MODEL. It tracks one fence at a time
+ * and knows nothing about the list item containing it, so it cannot tell that a fence opened
+ * inside a bullet ENDS at the first non-indented line. That case is answered by refusing an
+ * unterminated fence outright rather than by modelling it. What actually holds this line in CI
+ * is not this function alone: every shape below is non-Prettier-canonical, so `format:check`
+ * and the `keeps the committed changelog Prettier-canonical` case red on all of them first.
+ *
  * THE RULE THIS PUTS ON A CHANGESET, STATED WIDER THAN THE ONE THE SIBLINGS CARRY: a summary
  * must contain no markdown heading in ANY spelling, which includes a bare `---` under a line of
  * prose, because that is a setext heading and not a thematic break. Fenced code is exempt.
  */
-function renderedHeadings(region: readonly string[]): string[] {
+function renderedHeadings(region: readonly string[]): {
+  headings: string[];
+  unclosedFence: boolean;
+} {
   const out: string[] = [];
   let fence: string | undefined;
   for (let i = 0; i < region.length; i += 1) {
@@ -315,15 +325,28 @@ function renderedHeadings(region: readonly string[]): string[] {
     // region, and a shell comment inside one starts with `#`. Reading that as a heading would
     // red a Version PR on legitimate content, which is the same wedge this group refuses
     // elsewhere - the point is to refuse a heading a release did not write, not to refuse code.
-    const fenceOpen = /^ {0,3}(```+|~~~+)/.exec(line);
+    //
+    // 🔴 THE CLOSING RULE IS COMMONMARK'S, NOT "ANY FENCE-LOOKING LINE", BECAUSE A LOOSER ONE
+    // GOES WRONG IN BOTH DIRECTIONS AND A REFUTER PASS REPRODUCED BOTH. A close must use the
+    // SAME character, be at least as long, and carry NO info string. A first draft closed on
+    // any fence prefix, so ```` ```js ```` "closed" a block CommonMark leaves open and the `#`
+    // lines after it became headings - a Version PR wedge on legitimate content. And a fence
+    // that is never validly closed used to swallow the rest of the region, so a column-0
+    // `## 0.0.99` after an unclosed fence passed every case - a smuggling hole opened by the
+    // fix for the wedge. An unclosed fence is REPORTED rather than skipped for that reason.
+    const open = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    const marks = open?.[1];
     if (fence !== undefined) {
-      if (fenceOpen && fenceOpen[1] !== undefined && fenceOpen[1].startsWith(fence)) {
-        fence = undefined;
-      }
+      const closes =
+        marks !== undefined &&
+        marks[0] === fence[0] &&
+        marks.length >= fence.length &&
+        (open?.[2] ?? "").trim() === "";
+      if (closes) fence = undefined;
       continue;
     }
-    if (fenceOpen && fenceOpen[1] !== undefined) {
-      fence = fenceOpen[1];
+    if (marks !== undefined) {
+      fence = marks;
       continue;
     }
     if (/^ {0,3}#{1,6}(?: |$)/.test(line)) {
@@ -343,12 +366,12 @@ function renderedHeadings(region: readonly string[]): string[] {
       out.push(`${under.trimStart().startsWith("=") ? "#" : "##"} ${line.trim()}`);
     }
   }
-  return out;
+  return { headings: out, unclosedFence: fence !== undefined };
 }
 
 /**
  * A document shaped exactly like this repo's `CHANGELOG.md`, with the generated region SUPPLIED
- * rather than read off disk. `documentWith([])` is byte-identical to the committed file today.
+ * rather than read off disk, and the real archive block below it.
  *
  * 🔴 WHY EVERY CONTROL BELOW BUILDS ITS FIXTURE INSTEAD OF SPLICING INTO THE LIVE DOCUMENT, AND
  * WHY THIS IS THE SAME TRAP THE FILE ALREADY REFUSES ONE LEVEL UP. The first draft of the region
@@ -411,7 +434,10 @@ function generatedRegionViolation(text: string, packageVersion: string): string 
   const region = generatedRegion(text);
   // EVERY SPELLING, not `/^#{1,6} /`. See `renderedHeadings`: a single leading space and a
   // setext underline each defeat the naive filter, and both were reproduced on this document.
-  const found = renderedHeadings(region);
+  const { headings: found, unclosedFence } = renderedHeadings(region);
+  // A fence the region never validly closes is refused rather than skipped. Skipping it means
+  // everything after it goes unread, which is a smuggling hole; and a release never writes one.
+  if (unclosedFence) return "an unterminated code fence above the divider";
   const [h1, ...rest] = found;
   if (h1 !== "# Changelog") return `the region above the divider does not open on the H1`;
   for (const heading of rest) {
@@ -662,6 +688,51 @@ describe("the region ABOVE the divider, which the frozen digest cannot see", () 
     expect(generatedRegionViolation(documentWith([fenced]), "0.0.13")).toBeUndefined();
   });
 
+  it("refuses a fence the region never validly closes, rather than skipping past it", () => {
+    // 🔴 THE FOUR SHAPES A REFUTER PASS REPRODUCED AGAINST THE FIRST FENCE-SKIPPING DRAFT. Three
+    // are CommonMark non-closes that the draft treated as closes or that left the fence open and
+    // swallowed the rest of the region, so a column-0 `## 0.0.99` after one passed every case;
+    // the fourth is the opposite direction, a `close` carrying an info string, which CommonMark
+    // does not accept as a close. Refusing an unterminated fence answers all four in the same
+    // way, and none of them is a shape a release writes.
+    const smuggled = (fenceLines: readonly string[]): readonly string[] => [
+      "## 0.0.13",
+      "",
+      "### Patch Changes",
+      "",
+      "- deadbee: A real entry.",
+      "",
+      ...fenceLines,
+      "",
+      "## 0.0.99",
+      "",
+      "### Patch Changes",
+      "",
+      "- dead: A release that never happened.",
+      "",
+    ];
+
+    for (const [label, lines] of [
+      ["never closed", ["  ```sh", "  # inside"]],
+      ["closing fence too short", ["  ````sh", "  # inside", "  ```"]],
+      ["closing fence a different character", ["  ```sh", "  # inside", "  ~~~"]],
+      ["closing fence carries an info string", ["  ```sh", "  # inside", "  ```js"]],
+    ] as const) {
+      expect(generatedRegionViolation(documentWith([smuggled(lines)]), "0.0.13"), label).toBe(
+        "an unterminated code fence above the divider",
+      );
+    }
+
+    // And the properly closed twin is accepted, so the rule is about closure and not about
+    // fences existing at all.
+    expect(
+      generatedRegionViolation(
+        documentWith([smuggled(["  ```sh", "  # inside", "  ```"])]),
+        "0.0.13",
+      ),
+    ).toMatch(/not newest first/);
+  });
+
   it("rejects a hand-written narrative section above the divider", () => {
     // Both with and without a real release above it, so the case means the same thing before
     // and after the first `changeset version` this configuration runs.
@@ -806,8 +877,8 @@ describe("the shape that makes generated output land correctly", () => {
       // Fed a document with an EMPTY generated region, built rather than read: this case walks
       // a package deliberately backwards to `0.0.9` to reach the `0.0.10` boundary, so once the
       // live file carries a real release section the two would interleave out of order and the
-      // region assertion at the end would red on a Version PR. `documentWith([])` is the
-      // committed file today and stays that shape afterwards.
+      // region assertion at the end would red on a Version PR. `documentWith([])` has an empty
+      // generated region whatever the live file has grown, which is the property this needs.
       const first = runVersion({ changelogBody: documentWith([]), from: "0.0.9" });
       expect(first.version).toBe("0.0.10");
 

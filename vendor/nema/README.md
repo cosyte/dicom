@@ -213,15 +213,28 @@ The two deviations, both preserved and both asserted:
    Table A-1 row carries at the end of its UID Name. The suffix is stripped into the field; a name
    that still spells it after the strip fails the generator.
 
-   **That suffix is an observation of the table, not a rule Annex A states, and the distinction
-   earned a check.** The retirement sentence the annex does state is about the fifth "Part" column:
-   *"For retired UIDs, the edition of the Standard in parentheses is the edition in which the item
-   last appeared before it was retired."* The generator derives `retired` from the name suffix
-   alone, so the column is read as a **corroboration** in the test rather than as the source, which
-   is the same call the element registry makes about its own sixth column, and for the same reason:
-   that column also carries `DICOS` / `DICONDE` markers, and reading it as a boolean retires live
-   entries. The two signals agree on every Table A-1 row of this edition. Table A-2 has no Part
-   column, so the check is scoped to A-1.
+   **That suffix is an observation of Table A-1, not a rule PS3.6 states for UIDs, and the
+   distinction earned a check. PS3.6 publishes THREE retirement signals.** The governing clause is
+   **PS3.6 2026c section 5, "Conventions"**:
+
+   > "RET" is used to indicate that the corresponding Data Element, SOP Class, or Transfer Syntax
+   > has been retired. Retired items are shown italicized. For retired items, the edition of the
+   > Standard in parentheses is the edition in which the item last appeared before it was retired.
+   > When the name of a retired Data Element has been reused, the retired element has the qualifier
+   > "(Retired)" added ...
+
+   Read whole, that makes the **italic** the marking, and it names SOP Classes and Transfer
+   Syntaxes, so it reaches UIDs. The `(Retired)` qualifier sentence is scoped to a **reused Data
+   Element name** and does not reach UIDs at all. Annex A's own intro states the third, for the
+   fifth "Part" column: *"For retired UIDs, the edition of the Standard in parentheses is the
+   edition in which the item last appeared before it was retired."*
+
+   The generator derives `retired` from the name suffix alone, so italic and column are read as
+   **corroborations** in the test rather than as the source. The column especially: that is the
+   same call the element registry makes about its own sixth column, and for the same reason, since
+   it also carries `DICOS` / `DICONDE` markers and reading it as a boolean retires live entries.
+   All three signals agree on every Table A-1 row of this edition. Table A-2 has no Part column,
+   italicizes nothing and carries no suffix, so the check is scoped to A-1.
 2. **Four Transfer Syntax names keep the short form every DICOM toolkit prints**, cut from the
    normative name at its ": Default Transfer Syntax for ..." clause. The short form is **derived**
    from the normative text, never typed in the generator, so it cannot drift away from it, and a

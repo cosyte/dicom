@@ -52,17 +52,24 @@
  *        branches on a field rather than on a string match. A name that still
  *        spells "(Retired)" after the strip throws.
  *
- *        SAID AS AN OBSERVATION OF THE TABLE, WHICH IS WHAT IT IS. Annex A
- *        states no rule about the name suffix. The retirement sentence it DOES
- *        state is about the fifth column: "For retired UIDs, the edition of the
- *        Standard in parentheses is the edition in which the item last appeared
- *        before it was retired." That column is a CORROBORATION and not the
- *        source, for the reason the element registry learned one table over -
- *        it also carries DICOS/DICONDE markers, and reading it as a boolean
- *        retires live entries. The two signals agree on every A-1 row of this
- *        edition, and `test/dictionary/uids-normative.test.ts` measures that, so
- *        an edition which retires by column alone reds instead of shipping
- *        `retired: false`.
+ *        SAID AS AN OBSERVATION OF TABLE A-1, WHICH IS WHAT IT IS. PS3.6
+ *        publishes THREE retirement signals and this derives from one of them.
+ *        The governing clause is section 5, "Conventions": "'RET' is used to
+ *        indicate that the corresponding Data Element, SOP Class, or Transfer
+ *        Syntax has been retired. Retired items are shown ITALICIZED. ... When
+ *        the name of a retired DATA ELEMENT has been reused, the retired element
+ *        has the qualifier '(Retired)' added ..." So the italic is the marking
+ *        and it reaches UIDs; the "(Retired)" qualifier sentence is scoped to a
+ *        reused Data Element name and does not. Annex A's own intro adds the
+ *        third: "For retired UIDs, the edition of the Standard in parentheses is
+ *        the edition in which the item last appeared before it was retired" -
+ *        the fifth column. Italic and column are CORROBORATIONS and not the
+ *        source; the column especially, for the reason the element registry
+ *        learned one table over, where it also carries DICOS/DICONDE markers and
+ *        reading it as a boolean retires live entries. All three agree on every
+ *        A-1 row of this edition, and `test/dictionary/uids-normative.test.ts`
+ *        measures that, so an edition which retires by italic or column alone
+ *        reds instead of shipping `retired: false`.
  *     2. FOUR TRANSFER SYNTAX NAMES KEEP THEIR TOOLKIT SHORT FORM. PS3.6 gives
  *        four Transfer Syntaxes a name with a trailing ": Default Transfer
  *        Syntax for ..." clause that no DICOM toolkit prints and no consumer

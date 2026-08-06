@@ -115,6 +115,8 @@ interface AnnexARow {
   readonly rawType: string;
   /** Table A-1's fifth "Part" cell. Table A-2 has no such column, so `""` there. */
   readonly rawPart: string;
+  /** Whether the row's markup italicizes it, which is PS3.6 §5's retirement marking. */
+  readonly italic: boolean;
 }
 
 function rowsOf(id: string, columns: number, tableType?: string): AnnexARow[] {
@@ -129,6 +131,7 @@ function rowsOf(id: string, columns: number, tableType?: string): AnnexARow[] {
       rawName: cells[1] ?? "",
       rawType: tableType ?? cells[3] ?? "",
       rawPart: cells[4] ?? "",
+      italic: /role="italic"/.test(row),
     });
   }
   return out;
@@ -270,21 +273,39 @@ describe("deviation 1: retirement is a boolean, not a name suffix", () => {
     expect(shippedRetired).toBeLessThan(Object.keys(UIDS).length);
   });
 
-  it("agrees with Table A-1's OTHER retirement signal, which is the corroborating column", () => {
-    // 🔴 THE GENERATOR DERIVES `retired` FROM ONE SIGNAL AND ANNEX A PUBLISHES TWO, so the
-    // agreement is measured here rather than assumed. The name-suffix convention is an
-    // observation of the data: the pinned bytes nowhere say "a retired UID's name gets
-    // ' (Retired)' appended". What Annex A DOES state, in the paragraph immediately above Table
-    // A-1 and at exactly one place in the document ("For retired UIDs" - one hit, located per
-    // the whole-document rule rather than by first match), is the OTHER one:
+  it("agrees with BOTH of Table A-1's other retirement signals, all three of them", () => {
+    // 🔴 THE GENERATOR DERIVES `retired` FROM ONE SIGNAL AND PS3.6 PUBLISHES THREE, so the
+    // agreement is measured here rather than assumed.
+    //
+    // 🛑 AND THIS CASE ITSELF WAS REFUTED ONCE FOR SAYING "TWO". The first version grepped the
+    // pinned bytes for a single phrase chosen in advance ("For retired UIDs"), found one hit,
+    // and reported a completed survey. That is exactly the first-match reading this repo
+    // forbids: the phrase sat in Annex A's own intro, so the grep never reached the clause that
+    // actually governs. Collect the candidates, keep the ones carrying the normative sentence,
+    // and read them WHOLE.
+    //
+    // The governing clause is PS3.6 2026c section 5, "Conventions" (`chapter_5`). It carries
+    // three sentences, each at exactly one place in the document:
+    //
+    //   "'RET' is used to indicate that the corresponding Data Element, SOP Class, or Transfer
+    //    Syntax has been retired."
+    //   "Retired items are shown italicized."
+    //   "When the name of a retired Data Element has been reused, the retired element has the
+    //    qualifier '(Retired)' added ..."
+    //
+    // Read whole, that says the ITALIC is the marking, and it names SOP Classes and Transfer
+    // Syntaxes, so it reaches UIDs. The `(Retired)` qualifier sentence is scoped to a REUSED
+    // DATA ELEMENT NAME and does not reach UIDs at all - so the suffix the generator keys on is
+    // an observation of what Table A-1 carries, and the better-grounded signals are the other
+    // two. Annex A's own intro adds the third, also at exactly one place ("For retired UIDs"):
     //
     //   "For retired UIDs, the edition of the Standard in parentheses is the edition in which
     //    the item last appeared before it was retired."
     //
-    // That is the fifth "Part" cell. This is the element registry's own trap one table over:
-    // there, reading the sixth column as a boolean retired 391 live tags, because it also
-    // carries DICOS/DICONDE markers. Same here, so the column is a CORROBORATION and not the
-    // source. If a future edition retires a UID by the Part cell alone, this reds and the
+    // That is the fifth "Part" cell. Neither corroborating signal is used AS the source, and
+    // the Part column is the element registry's own trap one table over: there, reading the
+    // sixth column as a boolean retired 391 live tags, because it also carries DICOS/DICONDE
+    // markers. If a future edition retires a UID by italic or column alone, this reds and the
     // generator's single signal has to be re-decided rather than silently shipping
     // `retired: false`.
     const a1 = rowsOf("table_A-1", 5);
@@ -297,10 +318,15 @@ describe("deviation 1: retirement is a boolean, not a name suffix", () => {
       .filter((r) => EDITION.test(r.rawPart))
       .map((r) => r.uid)
       .sort();
+    const byItalic = a1
+      .filter((r) => r.italic)
+      .map((r) => r.uid)
+      .sort();
 
     expect(bySuffix.length).toBeGreaterThan(0);
     expect(bySuffix.length).toBeLessThan(a1.length);
     expect(byPart).toEqual(bySuffix);
+    expect(byItalic).toEqual(bySuffix);
 
     // And the reason the Part column cannot simply BE the flag: it carries other markers.
     const otherMarkers = [
@@ -311,10 +337,12 @@ describe("deviation 1: retirement is a boolean, not a name suffix", () => {
     expect(otherMarkers.length).toBeGreaterThan(0);
     expect(otherMarkers.some((m) => m.startsWith("DIC"))).toBe(true);
 
-    // Table A-2 has no Part column at all, which is why this case is scoped to A-1.
-    expect(
-      rowsOf("table_A-2", 4, "Well-known Frame of Reference").every((r) => r.rawPart === ""),
-    ).toBe(true);
+    // Table A-2 has no Part column at all, and italicizes nothing, which is why this case is
+    // scoped to A-1. Stated rather than left as an unexplained absence.
+    const a2 = rowsOf("table_A-2", 4, "Well-known Frame of Reference");
+    expect(a2.every((r) => r.rawPart === "")).toBe(true);
+    expect(a2.filter((r) => r.italic)).toEqual([]);
+    expect(a2.filter((r) => r.rawName.endsWith(RETIRED_SUFFIX))).toEqual([]);
   });
 
   it("spells retirement in no shipped name, which is the deviation", () => {
@@ -430,7 +458,9 @@ describe("the UIDs a current DICOM file can actually carry now resolve", () => {
     // And the expected name is not a string this file invented: it is what the pinned DocBook
     // publishes for that row.
     const row = named.find((r) => r.uid === uid);
-    expect(normative(row ?? { uid, rawName: "", rawType: "", rawPart: "" }).name).toBe(name);
+    expect(
+      normative(row ?? { uid, rawName: "", rawType: "", rawPart: "", italic: false }).name,
+    ).toBe(name);
   });
 
   it("resolves the Well-known Frames of Reference that live in Table A-2, not A-1", () => {
