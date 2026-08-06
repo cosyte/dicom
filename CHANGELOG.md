@@ -6,6 +6,42 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Fixed
 
+- **🩺 The surviving PHI leak on the `RetainSafePrivate` retain route was disclosed NARROWER than it
+  is, in six artifacts at once** (`DICOM-RETAIN-ROUTE-RESIDUALS`). `PRE-EXISTING` and unchanged in
+  behaviour: **no `src/` predicate moves in this release entry**, and every cell described below
+  leaks identically before and after it. What changed is the claim.
+
+  Every artifact that described what the private-`SQ` closure leaves open said it was "a private
+  carrier whose **profile entry declares a binary VR** (`OB`/`OW`/`UN`)". That is not the predicate.
+  `keepRetainedPrivate` asks one question - does the `Profile` declare this attribute `SQ`? - and
+  **every other answer falls through to the ordinary keep path**, where the only thing between the
+  value and de-identified output is the embedded-attribute scanner. That scanner reads **string
+  carriers only**, and it decodes candidate Data Element headers in the **file's own encoding**. So
+  a profile entry declaring `LO` or `ST` over a carrier the sender wrote `OB` ships the identical
+  nested `(0010,0010)` Patient's Name, and so does a string carrier holding Explicit-VR-shaped bytes
+  inside an Implicit VR LE file. In every such case the output is stamped `(0012,0062) Patient
+  Identity Removed = YES`, `report.unauditableSequences` is empty and `ds.warnings` is empty, because
+  none of these files is malformed: the carrier's Value Length is honest and its value is a
+  well-formed `(FFFE,E000)` item stream.
+
+  **The enumeration is deleted rather than reworded a third time, and a measured matrix replaces it.**
+  `test/integration/deident-private-reservation.test.ts` now sweeps declared VR against wire VR
+  against transfer syntax with a name-bearing payload and asserts the **emptied** set exactly, so the
+  leaking set is whatever is left and cannot go stale in prose. The same sweep strengthens the
+  closure it sits beside: a profile-declared `SQ` is emptied and named on **all four** wire VRs and
+  **both** encodings, where the case it replaced measured one `OB`/Explicit cell. Non-vacuity is by
+  fixture and by mutation: the payload carries a real name, an otherwise identical name-free payload
+  reads clean, and disabling the closure's branch reds the matrix.
+
+  **Two remedies exist and both are product calls, so neither is taken here.** A content test on
+  binary carriers is already priced in `src/deident/embedded.ts` at 11 grid cells to 0 while emptying
+  all 5 conformant binary tiling controls (`DICOM-DEIDENT-OVER-REDACTION`, open). Refusing retention
+  wherever the profile's declared VR and the parse tree disagree needs no content test, but a `UN`
+  carrier whose profile declares `LO` is the most ordinary real-world private element there is - an
+  intermediary without the private dictionary rewrote the VR, PS3.5 2026c §6.2.2 - so it would drop
+  vendor values out of a large share of conformant files. Both are recorded as evidence, neither is
+  recommended, and the call is not made here.
+
 - **🩺 A private carrier a `Profile` declared `SQ` was still written into de-identified output
   verbatim whenever the parse tree resolved it to anything else** (`DICOM-PRIVATE-SQ-PARSE-VR`).
   `PRE-EXISTING`, live through the published `0.0.10` and through the carve-out below, which closed
@@ -75,13 +111,13 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   producers, and the second one's premise is that the parse tree and the profile disagree about the
   VR, so naming one stated a fact the file contradicts.
 
-  **Deliberately not closed:** a private carrier whose profile entry declares a **binary** VR
-  (`OB`/`OW`/`UN`) over a value that happens to be a well-formed item stream is still kept verbatim.
-  Nothing declares a Data Set to be in there, and separating one from a legitimate binary blob needs
-  a content test on exactly the VRs arbitrary bytes are for. That is the same reasoning
+  **Deliberately not closed**, and see the entry above for why this paragraph no longer enumerates
+  the surviving shape: everything the profile does **not** declare `SQ`, over a value that happens
+  to be a well-formed item stream, is still kept verbatim. Closing any of it needs a content test on
+  exactly the VRs arbitrary bytes are for. That is the same reasoning
   `DICOM-BINARY-CARRIER-OVERDECLARE` was accepted on, but it is **a different route** - that
   decision priced a measured over-declare swallow, and this is an honest length reached through
-  `RetainSafePrivate`. It remains open and undecided, and is pinned as a fixture row rather than
+  `RetainSafePrivate`. It remains open and undecided, and is pinned as a measured matrix rather than
   described in prose.
 
   Against base `src/` at `369abbe`, replaced wholesale: **5 of 1,081** tests run red over the full

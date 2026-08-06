@@ -774,18 +774,49 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   nothing. So `ds.warnings` was never the channel for this class, and
   `report.unauditableSequences` is. Do not summarise either shape as "warned" or as "silent" without
   re-running both.
-  **▶ WHAT IS DELIBERATELY NOT CLOSED, AND DO NOT GROW THE GUARD FOR IT.** A profile entry
-  declaring a **binary** VR (`OB`/`OW`/`UN`) over a value that happens to be a well-formed item
-  stream. Nothing declares a Data Set to be in there; separating one from a legitimate binary blob
-  is a **content test on exactly the VRs arbitrary bytes are for**, which is the same reasoning the
-  founder accepted `DICOM-BINARY-CARRIER-OVERDECLARE` on. **🛑 IT IS NOT THAT DECISION, AND A GRADED
-  PASS REFUSED THE DRAFT THAT LABELLED IT ONE.** That decision priced a measured **over-declare
-  swallow** (11 grid cells, `delta=18`, remedy built and costed); this is an **honest** length
-  reached through `RetainSafePrivate`, which three prior artifacts each call a **different route**.
-  A leak nobody decided must not inherit a decision, because under the umbrella's BACKLOG rules a
-  decided leak leaves the list. **Open, disclosed, undecided.** It is pinned as the second row of
-  the `OB` test - the two rows differ in the fixture's declared VR and nothing else, which is the
-  whole predicate stated as a fixture rather than as a sentence.
+  **▶ WHAT IS DELIBERATELY NOT CLOSED, AND DO NOT GROW THE GUARD FOR IT.** Everything the profile
+  does **not** declare `SQ`, over a value that happens to be a well-formed item stream. Nothing
+  declares a Data Set to be in there; separating one from a legitimate binary blob is a **content
+  test on exactly the VRs arbitrary bytes are for**, which is the same reasoning the founder
+  accepted `DICOM-BINARY-CARRIER-OVERDECLARE` on. **🛑 IT IS NOT THAT DECISION, AND A GRADED PASS
+  REFUSED THE DRAFT THAT LABELLED IT ONE.** That decision priced a measured **over-declare swallow**
+  (11 grid cells, `delta=18`, remedy built and costed); this is an **honest** length reached through
+  `RetainSafePrivate`, which four prior artifacts each call a **different route**. A leak nobody
+  decided must not inherit a decision, because under the umbrella's BACKLOG rules a decided leak
+  leaves the list. **Open, disclosed, undecided.**
+  **▶ 🔴 THE "BINARY VR" WORDING OF THAT RESIDUAL WAS FALSE AND IS DELETED, NOT REWORDED A THIRD
+  TIME** (`DICOM-RETAIN-ROUTE-RESIDUALS`, 2026-08-06, base `92c0373`). Four artifacts - this
+  section, `CLAUDE.md`, `README.md`, `docs-content/troubleshooting.md` - plus the `keepRetainedPrivate`
+  JSDoc and the `CHANGELOG` all said the surviving shape was "a profile entry declaring a **binary**
+  VR (`OB`/`OW`/`UN`)". **It is not a statement about the profile's declaration at all.** The branch
+  asks one question, and every other answer falls through to `keepOrEmpty`, where the only thing
+  between the value and the output is the embedded-attribute scanner - which reads **string carriers
+  only** and decodes tiles in the **file's own encoding**. So a profile entry declaring `LO` or `ST`
+  over a carrier the sender wrote `OB` leaks the identical nested `(0010,0010)`, and so does a
+  string carrier holding Explicit-VR-shaped bytes inside an Implicit VR LE file. Same disease as
+  `#78`'s deleted count and `#77`'s "one shape is still exempt": **the enumeration was the defect and
+  the guard was right.** No artifact carries a list now. The `it("the honest-length carrier surface
+  is a MATRIX...")` case in `deident-private-reservation.test.ts` sweeps declared VR x wire VR x
+  encoding with a name-bearing payload and asserts the **emptied** set exactly, so the leaking set is
+  whatever is left and cannot go stale in prose.
+  **▶ 🛑 AND `#77`'s PASS-1 `F2` IS CLOSED, NOT OPEN - ANY ARTIFACT STILL CALLING "AN HONEST-LENGTH
+  `OB`/`UN` CARRIER WRAPPING A WELL-FORMED ITEM STREAM" AN OPEN ROUTE IS QUOTING A STALE PREMISE.**
+  `F2` was the shape where the **profile declares `SQ`** and the wire says `OB`, and `#78` closed it;
+  the matrix now proves the closure on **all four** wire VRs and **both** encodings, not just the one
+  `OB`/Explicit cell that opened it. What survives is a different predicate, above, and it was never
+  `F2`. Read the matrix before re-filing this as an open leak route.
+  **▶ 🩺 THE EVIDENCE THAT BEARS ON THE UNDECIDED CALL, WRITTEN DOWN RATHER THAN ACTED ON.** There
+  are exactly two remedies and **both are product calls, neither is a bug fix**. (1) A content test
+  on binary carriers: `SCANNABLE_CARRIER_VRS` is string-only by construction, and `embedded.ts`
+  already prices dropping that conjunct at **11 grid cells to 0 while emptying all 5 conformant
+  binary tiling controls** - `DICOM-DEIDENT-OVER-REDACTION`, still open. (2) The one remedy needing
+  **no** content test: refuse retention wherever the profile's **declared** VR and the **parse tree**
+  disagree. It is the natural extension of `#78`'s second-authority argument and it closes the
+  `decl=LO wire=OB` cells - **but a `UN` carrier whose profile declares `LO` is the single most
+  ordinary real-world private element there is** (an intermediary that lacked the private dictionary
+  rewrote the VR, PS3.5 §6.2.2), so it would drop the vendor value out of a large share of
+  conformant files. That is over-redaction, and `CLAUDE.md` binds it as a PRODUCT call. **Neither
+  was built here, deliberately.** Do not read this paragraph as a recommendation of either.
   **▶ 🛑 THE BRANCH HAS THREE CONJUNCTS AND TWO OF THEM WERE PUT THERE BY A GRADED PASS. NEITHER IS
   A REFINEMENT OF THE RULE; EACH KEEPS A PROPERTY THE MODULE ALREADY HAD.** Each is pinned by
   exactly one test, proven by dropping it.

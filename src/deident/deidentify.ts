@@ -1124,16 +1124,31 @@ function declaredPrivateVr(
  * one field off the profile the caller supplied, which is the same object that
  * decided to retain the element in the first place.
  *
- * **What it still does not cover, and deliberately.** A private carrier whose
- * profile entry declares a **binary** VR (`OB`/`UN`/`OW`) and whose value
- * happens to be a well-formed item stream is kept verbatim. Nothing declares a
- * Data Set to be in there, and telling one apart from a legitimate binary blob
- * needs a content test on exactly the VRs arbitrary bytes are for. **That is the
- * same reasoning the founder accepted `DICOM-BINARY-CARRIER-OVERDECLARE` on
- * (2026-08-05), and it is NOT the same route** - that decision priced a measured
- * over-declare swallow; this is an honest length reached through
- * `RetainSafePrivate`. Do not describe it as decided, and do not grow the guard
- * for it here.
+ * **What it still does not cover, and deliberately.** Every retained private
+ * carrier this branch does not answer falls through to {@link keepOrEmpty},
+ * where the only thing between the value and the output is the
+ * embedded-attribute scanner - and that scanner reads **string carriers only**,
+ * decoding tiles in the **file's own encoding**. So a value that is a well-formed
+ * item stream carrying a `(0010,0010)` is kept verbatim across a whole surface
+ * of cells, not on the one shape four artifacts used to name.
+ *
+ * 🩺 **That prose enumeration is DELETED rather than reworded a third time.** It
+ * read "a profile entry declaring a binary VR (`OB`/`OW`/`UN`)", and the measured
+ * set is wider: a profile entry declaring `LO` or `ST` over a carrier the sender
+ * wrote `OB` leaks the identical nested name, because this branch asks one
+ * question and every other answer falls through. The matrix in
+ * `test/integration/deident-private-reservation.test.ts` is the enumeration now,
+ * it is measured on every run, and no artifact carries a list.
+ *
+ * Closing any of those cells needs a content test on exactly the VRs arbitrary
+ * bytes are for. The one remedy that needs no content test - refusing retention
+ * wherever the profile's declared VR and the parse tree disagree - drops the
+ * vendor value out of every ordinary `UN`-converted private element, which is
+ * over-redaction (`DICOM-DEIDENT-OVER-REDACTION`), a **PRODUCT call** and not a
+ * bug fix. **It is NOT `DICOM-BINARY-CARRIER-OVERDECLARE`, which the founder
+ * accepted on 2026-08-05** - that decision priced a measured over-declare
+ * swallow; this is an honest length reached through `RetainSafePrivate`. Do not
+ * describe it as decided, and do not grow the guard for it here.
  *
  * **What it DOES now cover that no artifact should call exempt: the CP-246 `UN`.**
  * An undefined-length `UN` whose CP-246 descent this parser refused **is**

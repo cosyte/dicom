@@ -1092,103 +1092,155 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       expect(unresolved.codes).toEqual(["DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR"]);
     });
 
-    it("an honest defined-length OB carrier the profile declares SQ is emptied, and one it declares OB is not", () => {
+    it("the honest-length carrier surface is a MATRIX, and only a profile-declared SQ empties it", () => {
       // 🩺 THE SECOND SHAPE OF THE SAME RETAIN ROUTE (pass-1 `F2` of `#77`), and
-      // the residual it leaves. Nothing here is malformed: the carrier's Value
-      // Length is HONEST and its value is a well-formed `(FFFE,E000)` item
-      // stream. Under Explicit VR the wire VR wins in the parser, so the element
-      // arrives `OB` with no items however the profile describes it - which is
-      // why the parsed-VR branch alone never reached this and why the grid's
-      // `carrier|` family cannot either (it runs `deidentify()` with no options,
-      // and `RetainSafePrivate` + a `Profile` is the only route in the package
-      // that writes a private value into de-identified output).
+      // the residual it leaves - measured across the whole surface rather than
+      // enumerated in a sentence. Nothing in any cell is malformed: the
+      // carrier's Value Length is HONEST and its value is a well-formed
+      // `(FFFE,E000)` item stream. Under Explicit VR the wire VR wins in the
+      // parser, so the element arrives with the sender's VR and no items however
+      // the profile describes it - which is why the parsed-VR branch alone never
+      // reached this, and why the grid's `carrier|` family cannot either (it
+      // runs `deidentify()` with no options, and `RetainSafePrivate` + a
+      // `Profile` is the only route in the package that writes a private value
+      // into de-identified output).
       //
-      // The two rows differ in ONE character of the fixture - the declared VR -
-      // and that is the whole predicate. The `OB` row is the deliberate residual:
-      // separating a well-formed item stream from a legitimate binary blob needs
-      // a content test on exactly the VRs arbitrary bytes are for, which is the
-      // same reasoning the founder accepted `DICOM-BINARY-CARRIER-OVERDECLARE`
-      // on. 🛑 IT IS NOT THAT DECISION, AND A GRADED PASS REFUSED THE DRAFT THAT
-      // LABELLED IT ONE: that decision priced a measured OVER-DECLARE swallow,
-      // and this is an HONEST length reached through `RetainSafePrivate`. Open,
-      // disclosed and undecided. Do not close this row by widening the guard,
-      // and do not describe it as decided.
+      // 🛑 THE PROSE ENUMERATION THIS TEST REPLACES WAS WRONG, AND IT IS DELETED
+      // RATHER THAN REWORDED FOR A THIRD TIME. Four artifacts described the
+      // residual as "a profile entry that declares a BINARY VR (`OB`/`OW`/`UN`)".
+      // The measured set below is wider: a profile entry declaring `LO` or `ST`
+      // over a carrier the sender wrote `OB` leaks the same nested name, because
+      // the branch this remedy added asks one question - does the profile
+      // declare `SQ`? - and every other answer falls through to `keepOrEmpty`.
+      // `#78` was refused on exactly this shape of defect, where the enumeration
+      // was the defect and the guard was right; the fixture is the enumeration
+      // now, and no artifact carries a list.
+      //
+      // 🛑 THE SURVIVING SET IS NOT CLOSED HERE AND MUST NOT BE. Separating a
+      // well-formed item stream from a legitimate binary blob needs a content
+      // test on exactly the VRs arbitrary bytes are for, and the one remedy that
+      // does not need one - refusing retention wherever the profile's declared
+      // VR and the parse tree disagree - would drop the vendor value out of every
+      // ordinary `UN`-converted private element, which is over-redaction and a
+      // PRODUCT call (`DICOM-DEIDENT-OVER-REDACTION`), not a bug fix. Open,
+      // disclosed and undecided. Do not close a row here by widening the guard.
       const NESTED_NAME = "BOND^JAMES";
-      const itemStream = ((): Buffer => {
+      const itemise = (payload: string): Buffer => {
         const body = Buffer.concat([
           Buffer.from([0x10, 0x00, 0x10, 0x00]),
           Buffer.from("PN", "ascii"),
-          Buffer.from([NESTED_NAME.length, 0x00]),
-          Buffer.from(NESTED_NAME, "ascii"),
+          Buffer.from([payload.length, 0x00]),
+          Buffer.from(payload, "ascii"),
         ]);
         const header = Buffer.alloc(8);
         header.writeUInt16LE(0xfffe, 0);
         header.writeUInt16LE(0xe000, 2);
         header.writeUInt32LE(body.length, 4);
         return Buffer.concat([header, body]);
-      })();
+      };
+      const itemStream = itemise(NESTED_NAME);
+
+      interface Cell {
+        readonly key: string;
+        readonly parsedVr: string | undefined;
+        readonly declaredLength: number | undefined;
+        readonly rawLength: number | undefined;
+        readonly leaks: boolean;
+        readonly unauditable: readonly string[];
+      }
 
       const outcome = (
-        declaredVr: "SQ" | "OB",
-      ): {
-        vr: string | undefined;
-        rawLength: number | undefined;
-        declaredLength: number | undefined;
-        leaks: boolean;
-        codes: string[];
-        unauditable: readonly string[];
-      } => {
+        declaredVr: "SQ" | "OB" | "OW" | "UN" | "LO" | "ST",
+        wireVr: "OB" | "OW" | "UN" | "LO",
+        transferSyntax: string,
+        value: Buffer = itemStream,
+      ): Cell => {
         const profile = defineProfile({
           name: `acme-${declaredVr}`,
-          description: "Synthetic vendor block written OB with an honest length.",
+          description: "Synthetic vendor block, honest Value Length.",
           privateTags: {
             ACME: { "0009XX01": { vr: declaredVr, keyword: "AcmeBlob", name: "Acme Blob" } },
           },
         });
         const buf = buildDicom({
-          transferSyntax: EXPLICIT_LE,
+          transferSyntax,
           elements: [
             nameEl,
             { tag: "00090010", vr: "LO", value: ascii("ACME") },
-            { tag: "00091001", vr: "OB", value: itemStream },
+            { tag: PRIVATE_TAG, vr: wireVr, value },
           ],
-        });
+        } as never);
         const ds = parseDicom(buf, { profile });
-        const el = ds.get("00091001");
-        const { dataset, report } = deidentify(ds, {
-          retain: ["RetainSafePrivate"],
-          profile,
-        });
+        const el = ds.get(PRIVATE_TAG);
+        const { dataset, report } = deidentify(ds, { retain: ["RetainSafePrivate"], profile });
         return {
-          vr: el?.vr,
-          rawLength: el?.rawBytes.length,
+          key: `decl=${declaredVr} wire=${wireVr} ${transferSyntax === EXPLICIT_LE ? "ELE" : "ILE"}`,
+          parsedVr: el?.vr,
           declaredLength: el?.length,
+          rawLength: el?.rawBytes.length,
           leaks: serializeDicom(dataset).toString("latin1").includes(NESTED_NAME),
-          codes: ds.warnings.map((w) => w.code),
           unauditable: report.unauditableSequences.map((f) => f.tag),
         };
       };
 
-      const declaredSq = outcome("SQ");
-      // Non-vacuity, and the "honest" in the test name is measured rather than
-      // asserted in prose: the parser consumed exactly the bytes the element
-      // declared, so this is not an over-declare and no over-run is recordable.
-      expect(declaredSq.vr).toBe("OB");
-      expect(declaredSq.declaredLength).toBe(itemStream.length);
-      expect(declaredSq.rawLength).toBe(itemStream.length);
-      // 🛑 SILENT ON THE PARSE CHANNEL. A conformant `OB` element raises nothing,
-      // so unlike the Implicit VR LE shape above there is no warning to read.
-      expect(declaredSq.codes).toEqual([]);
-      expect(declaredSq.leaks).toBe(false);
-      expect(declaredSq.unauditable).toEqual(["00091001"]);
+      const cells = (["SQ", "OB", "OW", "UN", "LO", "ST"] as const).flatMap((declaredVr) =>
+        (["OB", "OW", "UN", "LO"] as const).flatMap((wireVr) =>
+          [EXPLICIT_LE, IMPLICIT_LE].map((ts) => outcome(declaredVr, wireVr, ts)),
+        ),
+      );
 
-      // The residual. Same bytes, same route, profile declares the vendor's own
-      // binary VR - so nothing in the profile says a Data Set is in there, and
-      // only the value's content could.
-      const declaredOb = outcome("OB");
-      expect(declaredOb.vr).toBe("OB");
-      expect(declaredOb.leaks).toBe(true);
-      expect(declaredOb.unauditable).toEqual([]);
+      // Non-vacuity by fixture, because a PHI test whose payload carries no name
+      // proves nothing: the value really does carry a `(0010,0010)`, and the
+      // detector really does key on the name rather than on the item structure.
+      expect(itemStream.toString("latin1")).toContain(NESTED_NAME);
+      const nameFree = outcome("OB", "OB", EXPLICIT_LE, itemise("AAAA^AAAAA"));
+      expect(nameFree.rawLength).toBe(itemStream.length);
+      expect(nameFree.leaks).toBe(false);
+
+      // "Honest" is measured, not asserted in prose: on every cell the parser
+      // consumed exactly the bytes the element declared, so no cell is an
+      // over-declare and no over-run is recordable on any of them.
+      for (const cell of cells) {
+        expect(cell.declaredLength, cell.key).toBe(itemStream.length);
+        expect(cell.rawLength, cell.key).toBe(itemStream.length);
+      }
+
+      // The closure (`DICOM-PRIVATE-SQ-PARSE-VR`), now proven on every wire VR
+      // and both encodings rather than on the single `OB`/Explicit cell that
+      // opened it: a profile-declared `SQ` is emptied and named, every time.
+      const declaredSq = cells.filter((cell) => cell.key.startsWith("decl=SQ "));
+      expect(declaredSq).toHaveLength(8);
+      for (const cell of declaredSq) {
+        expect(cell.leaks, cell.key).toBe(false);
+        expect(cell.unauditable, cell.key).toEqual([PRIVATE_TAG]);
+      }
+
+      // 🩺 THE RESIDUAL, AS A MEASURED SET. Every cell not listed here ships the
+      // nested `(0010,0010)` into output stamped `(0012,0062) = YES`. The five
+      // non-`SQ` rows that do NOT leak are the ones the embedded-attribute
+      // scanner could read: a parsed VR that is not binary, under the encoding
+      // the tiles were written for. That is a content test, and it is the only
+      // thing standing between a retained private value and output.
+      expect(
+        cells
+          .filter((cell) => !cell.leaks)
+          .map((cell) => cell.key)
+          .sort(),
+      ).toEqual([
+        "decl=LO wire=LO ELE",
+        "decl=OB wire=LO ELE",
+        "decl=OW wire=LO ELE",
+        "decl=SQ wire=LO ELE",
+        "decl=SQ wire=LO ILE",
+        "decl=SQ wire=OB ELE",
+        "decl=SQ wire=OB ILE",
+        "decl=SQ wire=OW ELE",
+        "decl=SQ wire=OW ILE",
+        "decl=SQ wire=UN ELE",
+        "decl=SQ wire=UN ILE",
+        "decl=ST wire=LO ELE",
+        "decl=UN wire=LO ELE",
+      ]);
     });
 
     it("a FABRICATED header keeps the tag-free diagnostic only when its VR is outside the 34", () => {
