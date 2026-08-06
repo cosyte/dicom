@@ -1304,9 +1304,12 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
     });
 
     it("an undefined-length UN whose CP-246 descent was refused IS covered when a profile declared it SQ", () => {
-      // The enumeration a graded pass refused: this remedy has NO length
-      // condition, so it reaches the CP-246 shape too whenever a `Profile`
-      // declared that private attribute a Sequence. The undefined-length `UN`
+      // The enumeration a graded pass refused: this remedy does not test the
+      // length FIELD, so it reaches the CP-246 shape too whenever a `Profile`
+      // declared that private attribute a Sequence. Say it that way and not "no
+      // length condition" - `el.length > 0` is one of the three conjuncts, and
+      // the assertion below shows why it passes here: a refused CP-246 descent
+      // carries 0xFFFFFFFF. The undefined-length `UN`
       // residual survives everywhere else - it is a statement about elements no
       // profile named - and no artifact may call this shape exempt.
       const NESTED_NAME = "BOND^JAMES";

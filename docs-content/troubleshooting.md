@@ -87,7 +87,8 @@ Two things that array does **not** cover:
   the same registry and are equally safe, but a logger that only reads `ds.warnings` will not see
   them at all.
 
-A `DeidentifyReport` is safe to log with **three** exceptions, not one. `uidMap`'s keys are the source
+A `DeidentifyReport` is **not** safe to log whole, and the exceptions are listed rather than counted:
+the count read one, then two, then three, and was wrong each time. `uidMap`'s keys are the source
 UIDs read out of the file: they are there so UID replacement stays consistent across a study, and a
 study UID is a unique identifier. `removedPrivateTags` is composed from tag numbers, which are
 structural on every conformant file but are read out of the document, so a **fabricated** odd-group
@@ -100,7 +101,11 @@ of the 34 PS3.5 §6.2 defines. It cannot when the fabricated VR is one of them, 
 `OB` header and a genuine one are byte-identical, and no bound can tell them apart. The alternative
 was keeping that carrier verbatim, which is what earlier releases did and what shipped the nested
 value itself, so this is the better of the two. The rest of the report (keywords, action codes,
-sequence context paths) is composed from static tables and carries nothing.
+sequence context paths) is composed from static tables and carries nothing - except
+`embeddedAttributes[].hidden`, whose entries are composed from four bytes found *inside* a value and
+are therefore document content on any file that populates the field at all. That one is
+`PRE-EXISTING` on every release that has shipped the field and its remedy is its own slice; it is
+named here so nobody logs it in the meantime.
 
 The field-by-field split between identifiers and values is in
 [Tolerance](./spec-notes-tolerance#the-model-fields-that-are-bounded-and-the-ones-that-are-values).
@@ -222,8 +227,8 @@ Each is tracked as a future companion package, not a gap to be filled here:
   value is a Sequence of Items, there is no item stream on the tree to walk, and the carrier is
   emptied and named in `report.unauditableSequences`. It keeps the VR the file carried; nothing is
   re-typed to `SQ`. **On the Explicit VR shape `ds.warnings` is empty**, so the report is the only
-  channel. **That naming is the third exception to "a report is safe to log"** described above, and
-  is why: the tag it records can itself be four bytes of another element's value. **Pass the same profile to `parseDicom` as well as to `deidentify()`** and the sequence is
+  channel. **That naming is one of the report fields that is not value-free**, listed above, and
+  this is why: the tag it records can itself be four bytes of another element's value. **Pass the same profile to `parseDicom` as well as to `deidentify()`** and the sequence is
   walked and its non-PHI content retained, rather than dropped.
   **One shape is still exempt and still leaks.** An
   undefined-length `UN` value the CP-246

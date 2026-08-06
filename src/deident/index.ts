@@ -5,8 +5,9 @@
  * Profile plus the metadata-affecting Annex E Options, returning a fresh
  * de-identified {@link Dataset} and a {@link DeidentifyReport} whose
  * non-value-free fields are named on {@link DeidentifyReport} itself: `uidMap`,
- * whose keys are the file's own source UIDs, and `removedPrivateTags` plus
- * `unauditableSequences[].tag`, whose entries are four source bytes each.
+ * whose keys are the file's own source UIDs, and `removedPrivateTags`,
+ * `unauditableSequences[].tag` and `embeddedAttributes[].hidden`, whose entries
+ * are four source bytes each. Read the list on that type, never a count.
  *
  * @module
  */

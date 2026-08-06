@@ -59,9 +59,11 @@ need a record of what was done, without mutating the original.
 
 `deidentify(ds)` applies the PS3.15 Annex E **Basic Application Level Confidentiality Profile**
 (replacing, emptying, or removing every attribute the standard lists as identifying) and returns a
-fresh `Dataset` plus a `DeidentifyReport`. Three of its fields are **not** value-free and are named
-on the type: `uidMap`, whose keys are the source UIDs the file carried, and `removedPrivateTags` plus
-`unauditableSequences[].tag`, whose entries are four source bytes each. It is a **pure function**: your input
+fresh `Dataset` plus a `DeidentifyReport`. Several of its fields are **not** value-free and are named
+on the type: `uidMap`, whose keys are the source UIDs the file carried, and `removedPrivateTags`,
+`unauditableSequences[].tag` and `embeddedAttributes[].hidden`, whose entries are four source bytes
+each. **Read that list on the type rather than a count quoted anywhere**, this one included: the
+number has been corrected twice. It is a **pure function**: your input
 dataset is never mutated.
 
 ```ts runnable
@@ -85,7 +87,8 @@ dataset.get("00100010")?.value.kind; // => "empty"
 // UIDs are remapped to deterministic 2.25 replacements that stay consistent across files.
 dataset.study.instanceUid?.startsWith("2.25."); // => true
 
-// The report lists what was acted on: safe to log, except report.uidMap.
+// The report lists what was acted on. It is NOT value-free: see the fields
+// named on DeidentifyReport before logging one whole.
 report.attributes.length > 0; // => true
 report.warnings.length; // => 0
 

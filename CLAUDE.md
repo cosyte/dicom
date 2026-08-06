@@ -47,7 +47,8 @@ in the same area - open the section first.**
   - `report.removedPrivateTags` can echo four bytes of document content from a **fabricated
     odd-group header**, identically on both trees. Structural, not closed; the **claim** was
     corrected rather than the guard widened. With `uidMap` and now `unauditableSequences[].tag`
-    that is **THREE value-bearing fields of `DeidentifyReport`, not two**; never "value-free".
+    plus `embeddedAttributes[].hidden`. **NEVER QUOTE A COUNT** - it read 1, 2, 3, wrong
+    each time. Read the list on the type.
     [#dicom-unrecognized-vr-short-form](documentation/agent-notes.md#dicom-unrecognized-vr-short-form) ·
     [#phi-warning-message-leak](documentation/agent-notes.md#phi-warning-message-leak)
   - `report.embeddedAttributes[].hidden` is **unbounded** (131,072 tag strings from a 1 MiB

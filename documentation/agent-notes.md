@@ -813,6 +813,17 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
      value-free surface.** Pinned as the second row of the fabricated-header test, which asserts the
      leak rather than lamenting it: if that row ever goes green the bound moved and these paragraphs
      are stale.
+     **▶ 🛑 AND DO NOT WRITE A COUNT OF `DeidentifyReport`'S VALUE-BEARING FIELDS. IT HAS READ 1,
+     THEN 2, THEN 3, AND WAS WRONG EVERY TIME IT WAS READ**, because each correction bumped the
+     numeral without re-deriving the list. A third graded pass caught the "three" this slice wrote,
+     by naming a fourth: `embeddedAttributes[].hidden`, whose entries are composed from four bytes
+     found **inside** a value, so on any file that populates the field at all they are document
+     content by construction. Measured on a `CS` carrier over-declaring across `"SABC"`:
+     `hidden: ["41534342"]`, `"SABC"` in wire order, **identical on both trees and on every release
+     that has shipped the field**. `PRE-EXISTING`, disclosed on the type and in troubleshooting, and
+     **its remedy is its own slice** - `DICOM-EMBEDDED-HIDDEN-NOT-VALUE-FREE`, which pairs naturally
+     with the cap that same field is already missing. Every artifact now names the LIST and no
+     artifact names a number.
   2. **`el.length > 0`.** The emptied carrier still satisfies every other conjunct, so a second
      `deidentify()` over the first one's output reported a **second drop with `byteLength: 0`**
      where nothing was left to drop. Bytes were already idempotent; the audit was not. The

@@ -62,6 +62,15 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   value-free surface and must not be treated as one.** Pinned as the second row of the
   fabricated-header test.
 
+  **The report's value-bearing fields are now a LIST on `DeidentifyReport`, with no count anywhere.**
+  The count read one, then two, then three, and was wrong each time, because each correction bumped
+  the numeral instead of re-deriving the list. Re-deriving it found a fourth that no release had
+  disclosed: `embeddedAttributes[].hidden`, whose entries are composed from four bytes found
+  **inside** a value, so on any file that populates that field they are document content by
+  construction, and whose own documentation said "safe to log". That is `PRE-EXISTING` and
+  byte-identical on every release that has shipped the field; it is **disclosed** here and on the
+  type, and narrowing or capping it is its own change.
+
   `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE`'s message no longer reads "is VR=SQ". It is shared by both
   producers, and the second one's premise is that the parse tree and the profile disagree about the
   VR, so naming one stated a fact the file contradicts.

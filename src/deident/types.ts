@@ -122,9 +122,15 @@ export interface DeidentifiedAttribute {
  * (PS3.15 §E.1 "all instances"; §E.3.5 is the standard's own precedent for
  * removing identifying information embedded inside a string attribute).
  *
- * Every field is structural: `tag` and `vr` are the carrier's, and `hidden`
- * holds tags composed from four bytes each. No decoded value appears here, so
- * this is safe to log.
+ * `tag` and `vr` are the carrier's own and are structural. **`hidden` is not,
+ * and calling this finding "safe to log" was wrong.** Each entry is composed
+ * from four bytes that were sitting *inside* the carrier's value - that is the
+ * whole reason the field exists - so on any file that populates it those bytes
+ * are document content. Measured: a `CS` carrier over-declaring over the bytes
+ * `"SABC"` reports `hidden: ["41534342"]`, which is `"SABC"` in wire order.
+ * `PRE-EXISTING` and identical on every release that has shipped the field.
+ * Treat `hidden` at the sensitivity of the file, and see
+ * {@link DeidentifyReport} for the other fields in this class.
  *
  * @example
  * ```ts
@@ -315,8 +321,12 @@ export interface UndefinedVrFinding {
  * The audit trail returned alongside the de-identified dataset.
  *
  * Most fields are composed from static tables: Part 6 keywords, Annex E action
- * codes, structural `TAG[index]` sequence paths, and registry warning messages.
- * **Three are not, and all three are named here rather than in a footnote.**
+ * **Several fields are not, and they are named here rather than in a footnote.**
+ * 🛑 **Do not quote a COUNT of them, here or anywhere else.** The count read
+ * "one" and then "two" and then "three", and was wrong every time it was read,
+ * because each correction bumped the numeral without re-deriving the list. What
+ * follows is the list; treat it as the current reading of a surface that has
+ * grown, not as a proof of exhaustiveness.
  *
  * 1. **`uidMap`** - its keys are the source UIDs read out of the file, kept so a
  *    caller can make UID replacement consistent across a study or an archive. A
@@ -335,10 +345,16 @@ export interface UndefinedVrFinding {
  *    answers it whenever the fabricated VR is outside the 34 PS3.5 §6.2
  *    defines. It cannot when the fabricated VR is one of them, because those
  *    two files are byte-identical.
+ * 4. **`embeddedAttributes[].hidden`** - see {@link EmbeddedAttributeFinding}.
+ *    Each entry is a tag composed from four bytes that were sitting **inside**
+ *    a value, which is the position this type exists to distrust, so on a file
+ *    that populates the field at all they are document content by
+ *    construction. `PRE-EXISTING` and identical on every release that has
+ *    shipped the field; it is disclosed here and its remedy is its own slice,
+ *    alongside the cap that field is also missing.
  *
  * So "the report is safe to log apart from `uidMap`" is **not** an accurate
- * description of this type, and was corrected rather than kept convenient. The
- * count has moved once already; read the list, never a numeral quoted elsewhere.
+ * description of this type, and was corrected rather than kept convenient.
  *
  * @example
  * ```ts
