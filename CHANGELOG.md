@@ -6,6 +6,58 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Fixed
 
+- **🩺 `DeidentifyReport`'s `contextPath` was documented as structural, and it is not: it can publish
+  four bytes of a value, silently** (`DICOM-ITEM-CROSSES-RESIDUALS`). A segment is `TAG[index]`, and
+  the tag half is whatever tag the descent walked, read straight off the wire, bound by neither a
+  shape test nor a closed table. `attributes[].tag` is bound - it is only populated for a tag Annex E
+  carries a row for - and that contrast is the finding. **It is not the only report identifier read
+  off the wire**: `removedPrivateTags` and `unauditableSequences[].tag` are as well. Those two were
+  already disclosed as such; this one was documented as structural. So a file whose
+  under-declared Value Length desynchronizes the reader onto four bytes sitting **inside** somebody's
+  value, where those four bytes are followed by `SQ`, gets that fabricated sequence descended and its
+  fabricated tag published in the `contextPath` of everything beneath it.
+
+  Measured on a synthetic `LO` carrier holding `"MRS BRAIN SMITHSON"` that under-declares by four:
+  the report reads `contextPath: ["53484E4F[0]"]`, which is `"HSON"` in wire order, recovered by
+  writing the two halves back with `writeUInt16LE`. Change the surname to `"DAVIDSON"` and the
+  published segment changes with it. **No warning is raised and every finding array on the report is
+  empty**, so a consumer following the old guidance had no signal at all. A conformant file's segment
+  is the tag the sender wrote, which is why the field is still published.
+
+  **🛑 REDACTING `contextPath` IS A LOGGING FIX AND NOT AN OBJECT FIX, AND A GRADED PASS REFUTED THE
+  FIRST DRAFT FOR SAYING OTHERWISE.** That draft claimed in six places that this field was "the only
+  trace of that header in the entire output". It is not: the de-identified `Dataset` still carries
+  the fabricated `(5348,4E4F)`, so `serializeDicom` writes its header back out in full, `"HSON"`
+  included, under `(0012,0062) Patient Identity Removed = YES` - and the re-emitted bytes track the
+  surname exactly as the log field does. That re-emission is the already-disclosed under-declared
+  carrier class, not this field's doing, and **neither one is a bound on the other.** Both rows are
+  now pinned.
+
+  **The claim was corrected and no guard was widened**, on the same footing as `removedPrivateTags`:
+  _where_ an attribute sat is the whole audit value of the field, and withholding it would destroy
+  that on every well-formed file in order to bound a malformed one. **`contextPath` is now named on
+  the report's list of fields that are not value-free** - a list whose numerals were deleted rather
+  than incremented, per this package's own rule - and corrected in the type, the tolerance table and
+  the troubleshooting guide, which all called it structural. **Treat it as PHI when the source is
+  untrusted.** `PRE-EXISTING` on every release that has shipped the field; no runtime behaviour
+  changes.
+
+  The shared PHI runner has swept this field from the start and could never have gone red on it: it
+  hunts a **verbatim** marker and a tag is a re-encoding, the same blind spot already documented for
+  `DicomParseError.snippet`. The pin is a purpose-built measurement with a name-bearing payload, a
+  mutation control and a conformant negative control.
+
+- **The `DICOM_ITEM_CROSSES_SEQUENCE_END` disclosure no longer claims `contextPath` names "an item it
+  was never in".** That sentence asserts which of two byte-identical files you have, which is the one
+  thing this package has repeatedly measured the wire as not carrying: the partner file, built from
+  the opposite intention, is the same bytes with the element genuinely inside the item, where the
+  identical `contextPath` is right. It had already been narrowed once in the troubleshooting guide
+  and left standing everywhere else; this package's rule for a disclosure reworded twice is to delete
+  it, so it is deleted rather than given a third wording. **What replaces it is the pair of
+  measurements that were already there** - one shape puts the element in the item with a
+  `contextPath`, the other leaves it at the root with none - **and neither is labelled the mistake.**
+  No reading, no warning and no report field moved.
+
 - **🩺 Tier-3 fatal messages are built from a frozen registry, and four of them were printing four
   bytes of the document each** (`DICOM-FATAL-MESSAGE-REGISTRY`). Tier-2 warnings have been
   registry-bound since the warning-message slice; Tier-3 messages were still assembled at the throw
@@ -1064,7 +1116,10 @@ Removed = YES` with `report.warnings` empty **and** `report.retained` `[]` - an 
   followed by a root `(0010,0020)` Patient ID that is 18 bytes on the wire (an 8-byte Explicit VR
   short-form header plus a 9-character value padded to 10). The Patient ID is **absent from the root**
   and present instead as an attribute of the item; the `DeidentifyReport` names it with a
-  `contextPath` pointing at a sequence item it was never in. It is swallowed once and relocated, not
+  `contextPath` pointing at that sequence item. (This entry said "pointing at a sequence item it was
+  never in" until `DICOM-ITEM-CROSSES-RESIDUALS` deleted that wording: it asserts which of two
+  byte-identical files you have. See the entry at the top of this file.) It is swallowed once and
+  relocated, not
   read twice: the parser resumes where the descent actually ended. The parse was silent about all of
   it, including under `{ strict: true }`, and that silence is what is fixed. The mis-structure itself
   is **not repaired here** and is pinned as a residual by a test.

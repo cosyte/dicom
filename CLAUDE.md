@@ -40,14 +40,15 @@ in the same area - open the section first.**
   - **11 grid cells** still leak through an over-declaring `OB`/`OW`/`US`/`UN` **leaf** carrier,
     silent. `PRE-EXISTING`.
     [#dicom-carrier-leaf-leaks](documentation/agent-notes.md#dicom-carrier-leaf-leaks)
-  - The **mis-structure itself** under `DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ`: an over-declaring
-    item still relocates the element that follows the sequence, and `contextPath` still names an item
-    it was never in.
-    [#dicom-explicit-vr-unbounded-item-read](documentation/agent-notes.md#dicom-explicit-vr-unbounded-item-read)
+  - The **relocation** under `DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ` stands and is **UNDECIDABLE**;
+    **"`contextPath` names an item it was never in" is DELETED, not reworded** - it asserts which of
+    two byte-identical files you have.
+    [#dicom-item-crosses-residuals](documentation/agent-notes.md#dicom-item-crosses-residuals)
   - `report.removedPrivateTags` can echo four bytes of document content from a **fabricated
     odd-group header**, identically on both trees. Structural, not closed; the **claim** was
-    corrected rather than the guard widened. With `uidMap` and now `unauditableSequences[].tag`
-    plus `embeddedAttributes[].hidden`. **NEVER QUOTE A COUNT** - it read 1, 2, 3, wrong
+    corrected rather than the guard widened. With `uidMap`, `unauditableSequences[].tag`,
+    `embeddedAttributes[].hidden`, and **`contextPath`, bound by nothing and uncorroborated by
+    anything else in the output**. **NEVER QUOTE A COUNT** - it read 1, 2, 3, wrong
     each time. Read the list on the type.
     [#dicom-unrecognized-vr-short-form](documentation/agent-notes.md#dicom-unrecognized-vr-short-form) ·
     [#phi-warning-message-leak](documentation/agent-notes.md#phi-warning-message-leak)
@@ -77,10 +78,8 @@ in the same area - open the section first.**
   - **This list is an index, not a census.** Each relocated section names its own residuals, and
     several are disclosed only there. Read the section before claiming a class is closed.
 - **🛑 A "N OF M TESTS RUN RED ON BASE" FIGURE HAS A MOVING BASE AND IS NOT A FACT.** Quote one only
-  with the sha you ran it on; re-run it after every test you add **or strengthen**; and **replace
-  `src/` rather than overlaying it** when you swap a base in. Two such claims here were wrong against
-  `main` in opposite directions at once, and one went stale at `6 of 9` inside a single draft. The
-  measured figures live in the sections, with their shas.
+  with its sha; re-run it after every test you add **or strengthen**; and **replace `src/` rather
+  than overlaying it**. The figures, and the evidence for this line, live in the sections.
   [#dicom-item-eject-route](documentation/agent-notes.md#dicom-item-eject-route) ·
   [#dicom-parse-creators-scope](documentation/agent-notes.md#dicom-parse-creators-scope)
 

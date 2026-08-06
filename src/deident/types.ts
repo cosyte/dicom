@@ -80,16 +80,23 @@ export const DEIDENTIFY_OPTIONS: readonly DeidentifyOption[] = Object.freeze([
 export type AppliedAction = "removed" | "emptied" | "dummied" | "uid-remapped" | "cleaned" | "kept";
 
 /**
- * One audited attribute outcome. Carries only structural facts - tag, keyword,
- * the resolved Annex E action code, and the SQ context path - **never** a
- * decoded value, so a report is always safe to log.
+ * One audited attribute outcome. `tag`, `keyword`, `action`, `applied` and
+ * `repeatingGroup` carry **never** a decoded value: `keyword`, `action` and
+ * `repeatingGroup` come from the Part 6 and Annex E tables, and `tag` is bound to
+ * a tag those tables carry a row for, which is membership in a closed table
+ * rather than a shape test.
+ *
+ * **🩺 `contextPath` is NOT in that class and this docstring used to say it was.**
+ * It is a chain of tags read off the wire, bound by nothing - see
+ * {@link DeidentifiedAttribute.contextPath} and the note on
+ * {@link DeidentifyReport}.
  *
  * @example
  * ```ts
  * import { deidentify, parseDicom, type DeidentifiedAttribute } from "@cosyte/dicom";
  * const { report } = deidentify(parseDicom(buf));
  * report.attributes.forEach((a: DeidentifiedAttribute) => {
- *   console.log(a.keyword, a.action, a.applied); // structural facts only - safe to log
+ *   console.log(a.keyword, a.action, a.applied); // composed from tables - safe to log
  * });
  * ```
  */
@@ -99,7 +106,45 @@ export interface DeidentifiedAttribute {
   /** The resolved single action after collapsing any conditional code. */
   readonly action: Exclude<AnnexEActionCode, `${string}/${string}`>;
   readonly applied: AppliedAction;
-  /** Tag/index chain for an attribute inside a sequence; omitted at the root. */
+  /**
+   * Tag/index chain for an attribute inside a sequence; omitted at the root.
+   *
+   * **🩺 Each segment is `TAG[index]`, and the `TAG` half is read off the wire
+   * with no table behind it.** It is whatever tag the descent walked, so it is
+   * bound by neither a shape test nor membership in a closed one - which is what
+   * separates it from `tag`, `keyword`, `action` and `repeatingGroup`. On a file
+   * where an under-declared Value Length desynchronized the reader onto four
+   * bytes sitting **inside** somebody's value, those four bytes become a segment
+   * here. It is not the only identifier on this report read off the wire -
+   * {@link DeidentifyReport.removedPrivateTags} and
+   * {@link UnauditableSequenceFinding.tag} are too - but those two are disclosed
+   * as such, and this one was documented as structural.
+   *
+   * Measured on a synthetic `LO` carrier holding `"MRS BRAIN SMITHSON"` that
+   * under-declares by four: the reader resynchronizes onto a fabricated `SQ`
+   * header, descends it, and the report reads `contextPath: ["53484E4F[0]"]` -
+   * `"HSON"` in wire order, recovered by writing the two halves back with
+   * `writeUInt16LE`. **No warning is raised and every finding array on the
+   * report is empty.** Change the surname and the published segment changes with
+   * it. `PRE-EXISTING`, on every release that has shipped the field.
+   *
+   * **🛑 IT IS NOT THE ONLY PLACE THOSE BYTES SURFACE, AND AN EARLIER DRAFT OF
+   * THIS NOTE SAID IT WAS. A GRADED PASS REFUTED THAT AND IT MUST NOT COME
+   * BACK.** On the same file the de-identified `Dataset` still carries the
+   * fabricated `(5348,4E4F)`, so `serializeDicom` writes its header back out in
+   * full - `"HSON"` included - inside an object stamped
+   * `(0012,0062) Patient Identity Removed = YES`. That re-emission belongs to
+   * the disclosed under-declare carrier class, not to this field, and neither is
+   * a bound on the other: **redacting `contextPath` from a log does not make the
+   * object safe to share.** Pinned in
+   * `test/integration/phi-diagnostic-surface.test.ts`.
+   *
+   * It is published anyway, on the same footing as
+   * {@link DeidentifyReport.removedPrivateTags}: **where** an attribute sat is
+   * the whole audit value of the field, and withholding it would destroy that on
+   * every well-formed file in order to bound a malformed one. **Treat it as PHI
+   * when the source is untrusted.**
+   */
   readonly contextPath?: readonly string[];
   /**
    * Present when the action came from a Table E.1-1 row that names a
@@ -148,7 +193,14 @@ export interface EmbeddedAttributeFinding {
   readonly vr: VR;
   /** The tags of the Data Elements found inside the carrier's value, in wire order. */
   readonly hidden: readonly Tag[];
-  /** Tag/index chain when the carrier is inside a sequence item; omitted at the root. */
+  /**
+   * Tag/index chain when the carrier is inside a sequence item; omitted at the
+   * root. **Built by the same descent as
+   * {@link DeidentifiedAttribute.contextPath} and carrying the same caveat:
+   * each segment's tag is read off the wire, bound by nothing, so on a
+   * desynchronized read it can be four bytes of a value.** Read that field's
+   * note before logging this one.
+   */
   readonly contextPath?: readonly string[];
 }
 
@@ -220,7 +272,14 @@ export interface UnauditableSequenceFinding {
   readonly tag: Tag;
   /** Byte length of the value field that was dropped. Structural, never a value. */
   readonly byteLength: number;
-  /** Tag/index chain when the carrier is inside a sequence item; omitted at the root. */
+  /**
+   * Tag/index chain when the carrier is inside a sequence item; omitted at the
+   * root. **Built by the same descent as
+   * {@link DeidentifiedAttribute.contextPath} and carrying the same caveat:
+   * each segment's tag is read off the wire, bound by nothing, so on a
+   * desynchronized read it can be four bytes of a value.** Read that field's
+   * note before logging this one.
+   */
   readonly contextPath?: readonly string[];
 }
 
@@ -281,8 +340,14 @@ export interface UnauditableSequenceFinding {
  * finding rather than an inconsistency.
  *
  * `byteOffset` locates the element instead - a position this parser counted.
- * Nothing here renders a document byte: an offset the parser counted, a decoded
- * length, and the structural `contextPath`. Safe to log.
+ *
+ * **🩺 THAT WITHHOLDING IS NOT WHOLE, AND THIS PARAGRAPH USED TO CLAIM IT WAS.**
+ * It said "nothing here renders a document byte ... and the structural
+ * `contextPath`. Safe to log." `contextPath` is not structural: its segments are
+ * tags read off the wire by the same descent, so the header this type refuses to
+ * name by `tag` can be named by the `contextPath` of a finding one level down.
+ * See {@link DeidentifiedAttribute.contextPath} for the measurement. `byteOffset`
+ * and `byteLength` are unaffected and the reasoning above them still stands.
  *
  * @example
  * ```ts
@@ -313,7 +378,14 @@ export interface UndefinedVrFinding {
    * as "structural, never a value" the way its siblings are described.
    */
   readonly byteLength: number;
-  /** Tag/index chain when the carrier is inside a sequence item; omitted at the root. */
+  /**
+   * Tag/index chain when the carrier is inside a sequence item; omitted at the
+   * root. **Built by the same descent as
+   * {@link DeidentifiedAttribute.contextPath} and carrying the same caveat:
+   * each segment's tag is read off the wire, bound by nothing, so on a
+   * desynchronized read it can be four bytes of a value.** Read that field's
+   * note before logging this one.
+   */
   readonly contextPath?: readonly string[];
 }
 
@@ -321,37 +393,48 @@ export interface UndefinedVrFinding {
  * The audit trail returned alongside the de-identified dataset.
  *
  * Most fields are composed from static tables: Part 6 keywords, Annex E action
+ * codes, the active option names.
  * **Several fields are not, and they are named here rather than in a footnote.**
  * 🛑 **Do not quote a COUNT of them, here or anywhere else.** The count read
  * "one" and then "two" and then "three", and was wrong every time it was read,
- * because each correction bumped the numeral without re-deriving the list. What
- * follows is the list; treat it as the current reading of a surface that has
- * grown, not as a proof of exhaustiveness.
+ * because each correction bumped the numeral without re-deriving the list.
+ * **The list below carried its own numerals until one had to be added, which is
+ * the same disease one step removed, so they are gone.** Treat it as the current
+ * reading of a surface that has grown, not as a proof of exhaustiveness.
  *
- * 1. **`uidMap`** - its keys are the source UIDs read out of the file, kept so a
- *    caller can make UID replacement consistent across a study or an archive. A
- *    Study or SOP Instance UID is a unique identifying number, so treat it as
- *    PHI.
- * 2. **`removedPrivateTags`** - see the field's own note. On a *well-formed*
- *    file these are the sender's own private tag numbers and carry nothing; on a
- *    malformed one a tag can be four bytes of a value, and it is measured, not
- *    theoretical.
- * 3. **`unauditableSequences[].tag`** - see
- *    {@link UnauditableSequenceFinding}. Same shape as 2 by a narrower route: a
- *    private carrier a {@link Profile} declares `SQ` is named there, and an
- *    under-declared length upstream can resynchronize the reader onto four
- *    bytes that spell such a block. The package's usual answer to a fabricated
- *    header, `undefinedVrElements`, carries a byte offset and no tag, and still
- *    answers it whenever the fabricated VR is outside the 34 PS3.5 §6.2
- *    defines. It cannot when the fabricated VR is one of them, because those
- *    two files are byte-identical.
- * 4. **`embeddedAttributes[].hidden`** - see {@link EmbeddedAttributeFinding}.
- *    Each entry is a tag composed from four bytes that were sitting **inside**
- *    a value, which is the position this type exists to distrust, so on a file
- *    that populates the field at all they are document content by
- *    construction. `PRE-EXISTING` and identical on every release that has
- *    shipped the field; it is disclosed here and its remedy is its own slice,
- *    alongside the cap that field is also missing.
+ * - **`uidMap`** - its keys are the source UIDs read out of the file, kept so a
+ *   caller can make UID replacement consistent across a study or an archive. A
+ *   Study or SOP Instance UID is a unique identifying number, so treat it as
+ *   PHI.
+ * - **`removedPrivateTags`** - see the field's own note. On a *well-formed*
+ *   file these are the sender's own private tag numbers and carry nothing; on a
+ *   malformed one a tag can be four bytes of a value, and it is measured, not
+ *   theoretical.
+ * - **`unauditableSequences[].tag`** - see
+ *   {@link UnauditableSequenceFinding}. Same shape as `removedPrivateTags` by a
+ *   narrower route: a private carrier a {@link Profile} declares `SQ` is named
+ *   there, and an under-declared length upstream can resynchronize the reader
+ *   onto four bytes that spell such a block. The package's usual answer to a
+ *   fabricated header, `undefinedVrElements`, carries a byte offset and no tag,
+ *   and still answers it whenever the fabricated VR is outside the 34 PS3.5
+ *   §6.2 defines. It cannot when the fabricated VR is one of them, because those
+ *   two files are byte-identical.
+ * - **`embeddedAttributes[].hidden`** - see {@link EmbeddedAttributeFinding}.
+ *   Each entry is a tag composed from four bytes that were sitting **inside**
+ *   a value, which is the position this type exists to distrust, so on a file
+ *   that populates the field at all they are document content by
+ *   construction. `PRE-EXISTING` and identical on every release that has
+ *   shipped the field; it is disclosed here and its remedy is its own slice,
+ *   alongside the cap that field is also missing.
+ * - **`contextPath`, on all four findings that carry one** - see
+ *   {@link DeidentifiedAttribute.contextPath}, which holds the measurement. The
+ *   segment tags come off the wire with no table behind them, so a fabricated
+ *   `SQ` header the reader descended is named there, `PRE-EXISTING`, with **no
+ *   warning and no finding array to correlate it with**. This is the field the
+ *   rest of this docstring, the tolerance table and the troubleshooting guide
+ *   all called structural. **It is a logging hazard and nothing more: on that
+ *   same file the de-identified object itself re-emits the fabricated header, so
+ *   redacting this field does not make the object safe.**
  *
  * So "the report is safe to log apart from `uidMap`" is **not** an accurate
  * description of this type, and was corrected rather than kept convenient.
