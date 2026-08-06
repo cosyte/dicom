@@ -54,16 +54,18 @@
  *
  *        SAID AS AN OBSERVATION OF TABLE A-1, WHICH IS WHAT IT IS. PS3.6
  *        publishes THREE retirement signals and this derives from one of them.
- *        The governing clause is section 5, "Conventions": "'RET' is used to
- *        indicate that the corresponding Data Element, SOP Class, or Transfer
- *        Syntax has been retired. Retired items are shown ITALICIZED. ... When
- *        the name of a retired DATA ELEMENT has been reused, the retired element
- *        has the qualifier '(Retired)' added ..." So the italic is the marking
- *        and it reaches UIDs; the "(Retired)" qualifier sentence is scoped to a
- *        reused Data Element name and does not. Annex A's own intro adds the
- *        third: "For retired UIDs, the edition of the Standard in parentheses is
- *        the edition in which the item last appeared before it was retired" -
- *        the fifth column. Italic and column are CORROBORATIONS and not the
+ *        The governing clause is section 5, "Conventions", one paragraph of four
+ *        sentences: "'RET' is used to indicate that the corresponding Data
+ *        Element, SOP Class, or Transfer Syntax has been retired. Retired items
+ *        are shown ITALICIZED. For retired items, the edition of the Standard in
+ *        parentheses is the edition in which the item last appeared before it
+ *        was retired. When the name of a retired DATA ELEMENT has been reused,
+ *        the retired element has the qualifier '(Retired)' added ..." So the
+ *        italic and the parenthesised edition are the markings and both reach
+ *        UIDs; the "(Retired)" qualifier sentence is scoped to a reused Data
+ *        Element name and does not. Annex A's own intro RESTATES the third
+ *        narrowed to UIDs ("For retired UIDs, ..."); it does not add it - the
+ *        fifth column. Italic and column are CORROBORATIONS and not the
  *        source; the column especially, for the reason the element registry
  *        learned one table over, where it also carries DICOS/DICONDE markers and
  *        reading it as a boolean retires live entries. All three agree on every

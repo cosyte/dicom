@@ -301,12 +301,20 @@ const LIST_MARKER = /^ {0,3}(?:[-*+]|\d{1,9}[.)])(?: |$)/;
  * heading would refuse ordinary release output), and raw HTML - a literal `<h2>0.0.99</h2>`
  * above the divider renders as that heading and is invisible here. Named, not closed.
  *
- * AND THIS IS A FENCE HEURISTIC, NOT A COMMONMARK BLOCK MODEL. It tracks one fence at a time
- * and knows nothing about the list item containing it, so it cannot tell that a fence opened
- * inside a bullet ENDS at the first non-indented line. That case is answered by refusing an
- * unterminated fence outright rather than by modelling it. What actually holds this line in CI
- * is not this function alone: every shape below is non-Prettier-canonical, so `format:check`
- * and the `keeps the committed changelog Prettier-canonical` case red on all of them first.
+ * AND THIS IS A FENCE HEURISTIC, NOT A COMMONMARK BLOCK MODEL. It tracks one fence at a time and
+ * knows nothing about the list item containing it, so it cannot tell that a fence opened inside a
+ * bullet ENDS at the first non-indented line.
+ *
+ * 🛑 REFUSING AN UNTERMINATED FENCE DOES NOT STAND IN FOR THAT, AND SAYING SO WAS REFUTED. A
+ * fence opened inside a bullet, a column-0 `## 0.0.99` after it, and ANY later valid close leaves
+ * `unclosedFence` false, so the fabricated heading is invisible and the document passes -
+ * reproduced against a real CommonMark implementation. A four-space-indented ATX inside a bullet
+ * renders as an `<h2>` and is missed the same way. Both are open residuals.
+ *
+ * 🔴 SO THIS FUNCTION IS THE SECOND NET, NOT THE NET. `format:check` is the net: every shape
+ * named here is non-Prettier-canonical, `CHANGELOG.md` is inside this repo's formatting gate, and
+ * the `keeps the committed changelog Prettier-canonical` case below reds on all of them first.
+ * Do not quote the region rule without that sentence.
  *
  * THE RULE THIS PUTS ON A CHANGESET, STATED WIDER THAN THE ONE THE SIBLINGS CARRY: a summary
  * must contain no markdown heading in ANY spelling, which includes a bare `---` under a line of

@@ -1707,15 +1707,19 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   reached the clause that governs. **That is the first-match reading `CLAUDE.md` forbids, applied
   to a search instead of to a section, and it is why the rule says collect the candidates and read
   them WHOLE.** The governing clause is **PS3.6 2026c section 5, "Conventions"** (`chapter_5`),
-  and each of its three sentences has **exactly one** hit:
+  **one paragraph of FOUR sentences**:
   *"'RET' is used to indicate that the corresponding Data Element, SOP Class, or Transfer Syntax
-  has been retired."* / *"Retired items are shown italicized."* / *"When the name of a retired Data
-  Element has been reused, the retired element has the qualifier '(Retired)' added ..."*
-  Read whole, **the ITALIC is the marking, and section 5 names SOP Classes and Transfer Syntaxes,
-  so it reaches UIDs; the `(Retired)` qualifier sentence is scoped to a REUSED DATA ELEMENT NAME
-  and does not reach UIDs at all.** Annex A's intro adds the third, also one hit: *"For retired
-  UIDs, the edition of the Standard in parentheses is the edition in which the item last appeared
-  before it was retired"* - the fifth **Part** cell. The generator still derives `retired` from
+  has been retired. Retired items are shown italicized. For retired items, the edition of the
+  Standard in parentheses is the edition in which the item last appeared before it was retired.
+  When the name of a retired Data Element has been reused, the retired element has the qualifier
+  '(Retired)' added ..."* **🛑 QUOTE ALL FOUR - a first wording of this very paragraph quoted three
+  and dropped the edition sentence, which is the partial read it exists to warn about, and a third
+  refuter pass caught it here.** Read whole, **the ITALIC and the PARENTHESISED EDITION are the
+  markings, and sentence 1 names Data Elements, SOP Classes and Transfer Syntaxes, so both reach
+  UIDs; the `(Retired)` qualifier sentence is scoped to a REUSED DATA ELEMENT NAME and does not
+  reach UIDs at all.** Annex A's intro **RESTATES** the third narrowed to UIDs, also one hit: *"For
+  retired UIDs, ..."* - the fifth **Part** cell. **It restates; it does not add. Saying "adds" was
+  corrected.** The generator still derives `retired` from
   the suffix alone, so italic and Part are **corroborations in the test**, never the source; the
   Part column especially, because it is the element registry's own trap one table over, where
   reading the sixth column as a boolean retired 391 live tags on `DICOS`/`DICONDE` markers.
@@ -1882,19 +1886,31 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   **an unterminated fence is REFUSED rather than skipped**, which answers all four at once.
   **This is a fence heuristic, NOT a CommonMark block model** - it knows nothing about the list item
   containing a fence, so it cannot see that one opened inside a bullet ends at the first
-  non-indented line; refusing the unterminated case is what stands in for that. **And what actually
-  holds the line in CI is not the guard alone: every one of those shapes is non-Prettier-canonical,
-  so `format:check` reds first.** Say that when you quote this rule.
+  non-indented line.
+- **🛑 AND "REFUSING THE UNTERMINATED FENCE STANDS IN FOR THE LIST-ITEM CASE" IS FALSE. THAT
+  SENTENCE WAS WRITTEN, THEN REFUTED AND DELETED - DO NOT WRITE IT AGAIN.** A fence opened inside a
+  bullet, a column-0 `## 0.0.99` after it (which ends the list AND the fence in CommonMark), and any
+  later valid close leaves `unclosedFence` FALSE, so the fabricated heading is invisible and the
+  document passes. Reproduced against a real CommonMark implementation. A **four-space-indented ATX
+  inside a bullet** renders as an `<h2>` and is missed the same way. **Both are `PRE-EXISTING`
+  residuals of the guard, not of the fence rule, and neither is closed.**
+- **🔴 SO THE GUARD IS THE SECOND NET, NOT THE NET. `format:check` IS THE NET.** Every shape above
+  is non-Prettier-canonical and `CHANGELOG.md` is inside this repo's formatting gate, so
+  `format:check` reds on all of them first. **Never quote the region rule without that sentence** -
+  and note it is the same `.prettierignore` fact that decides the `"prettier"` key, so a repo that
+  turns markdown formatting off loses this net silently.
 - **RESIDUAL, NAMED NOT CLOSED: raw HTML.** A literal `<h2>0.0.99</h2>` above the divider renders as
   that heading and is invisible to `renderedHeadings`. Not reached for, because the guard is
   deliberately a markdown-shape rule rather than an HTML parser.
 - `test/scripts/changelog-generation.test.ts` pins all of the above against the real
   `changeset version` in throwaway git trees. **Red on the parent `3617034` at 12 of 26.** None of
-  the 14 green there is vacuous, but they are green for TWO different reasons and an earlier
-  wording collapsed them: most grade the RULE against a document the case synthesizes, so they mean
-  the same thing on either tree; the rest (`CHANGELOG.md` is in `files`, the `version` script runs
-  `changeset version`, the four Prettier cases, the generator-off control) were already true on the
-  parent. Only the second group would be worth deleting if it grew, and it has not. (The figure read
+  the 14 green there is vacuous, but they are green for two different reasons and the split is
+  **8 / 6, measured** - an earlier wording said "most / the rest" and had it backwards. **6** grade
+  the RULE against a document the case synthesizes, so they mean the same thing on either tree.
+  **8** were already true on the parent: `CHANGELOG.md` is in `files`, the `version` script runs
+  `changeset version`, **`has no [Unreleased] link definition left behind`** (the parent never had
+  one - this reads the LIVE document and was missing from the first enumeration), the four Prettier
+  cases, and the generator-off control. Only the second group would be worth deleting if it grew. (The figure read
   13 of 22, then 15 of 24, then 12 of 25, then this; each is pinned to its own sha AND to its own
   version of the file, and only the last is current.)
 

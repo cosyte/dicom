@@ -223,11 +223,13 @@ The two deviations, both preserved and both asserted:
    > When the name of a retired Data Element has been reused, the retired element has the qualifier
    > "(Retired)" added ...
 
-   Read whole, that makes the **italic** the marking, and it names SOP Classes and Transfer
-   Syntaxes, so it reaches UIDs. The `(Retired)` qualifier sentence is scoped to a **reused Data
-   Element name** and does not reach UIDs at all. Annex A's own intro states the third, for the
-   fifth "Part" column: *"For retired UIDs, the edition of the Standard in parentheses is the
-   edition in which the item last appeared before it was retired."*
+   That is one paragraph of four sentences, and read whole it makes the **italic** and the
+   **parenthesised edition** the markings, while sentence 1 names Data Elements, SOP Classes and
+   Transfer Syntaxes, so both reach UIDs. The `(Retired)` qualifier sentence is scoped to a
+   **reused Data Element name** and does not reach UIDs at all. Annex A's own intro **restates**
+   the third narrowed to UIDs, for the fifth "Part" column: *"For retired UIDs, the edition of the
+   Standard in parentheses is the edition in which the item last appeared before it was retired."*
+   It restates rather than adds; section 5 already covers it.
 
    The generator derives `retired` from the name suffix alone, so italic and column are read as
    **corroborations** in the test rather than as the source. The column especially: that is the

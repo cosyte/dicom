@@ -284,20 +284,25 @@ describe("deviation 1: retirement is a boolean, not a name suffix", () => {
     // actually governs. Collect the candidates, keep the ones carrying the normative sentence,
     // and read them WHOLE.
     //
-    // The governing clause is PS3.6 2026c section 5, "Conventions" (`chapter_5`). It carries
-    // three sentences, each at exactly one place in the document:
+    // The governing clause is PS3.6 2026c section 5, "Conventions" (`chapter_5`), and it is ONE
+    // paragraph of FOUR sentences. Quoted whole, because quoting three of them is the same
+    // partial read this comment exists to warn about, and a refuter pass caught it here too:
     //
     //   "'RET' is used to indicate that the corresponding Data Element, SOP Class, or Transfer
-    //    Syntax has been retired."
-    //   "Retired items are shown italicized."
-    //   "When the name of a retired Data Element has been reused, the retired element has the
-    //    qualifier '(Retired)' added ..."
+    //    Syntax has been retired. Retired items are shown italicized. For retired items, the
+    //    edition of the Standard in parentheses is the edition in which the item last appeared
+    //    before it was retired. When the name of a retired Data Element has been reused, the
+    //    retired element has the qualifier '(Retired)' added, or '(Trial)' in the cases in which
+    //    the Data Element was used in a Draft For Trial Implementation but not standardized."
     //
-    // Read whole, that says the ITALIC is the marking, and it names SOP Classes and Transfer
-    // Syntaxes, so it reaches UIDs. The `(Retired)` qualifier sentence is scoped to a REUSED
-    // DATA ELEMENT NAME and does not reach UIDs at all - so the suffix the generator keys on is
-    // an observation of what Table A-1 carries, and the better-grounded signals are the other
-    // two. Annex A's own intro adds the third, also at exactly one place ("For retired UIDs"):
+    // Read whole, that says the ITALIC is the marking and the PARENTHESISED EDITION is the
+    // column, and sentence 1 names Data Elements, SOP Classes and Transfer Syntaxes, so both
+    // reach UIDs. The `(Retired)` qualifier sentence is scoped to a REUSED DATA ELEMENT NAME
+    // and does not reach UIDs at all, so the suffix the generator keys on is an observation of
+    // what Table A-1 carries and the two better-grounded signals are the other ones.
+    //
+    // Annex A's own intro RESTATES the third, narrowed to UIDs, at exactly one place ("For
+    // retired UIDs"). It does not add it - saying "adds" was itself corrected here:
     //
     //   "For retired UIDs, the edition of the Standard in parentheses is the edition in which
     //    the item last appeared before it was retired."
@@ -338,7 +343,9 @@ describe("deviation 1: retirement is a boolean, not a name suffix", () => {
     expect(otherMarkers.some((m) => m.startsWith("DIC"))).toBe(true);
 
     // Table A-2 has no Part column at all, and italicizes nothing, which is why this case is
-    // scoped to A-1. Stated rather than left as an unexplained absence.
+    // scoped to A-1. The `rawPart === ""` line is TRUE BY CONSTRUCTION and says so: `rowsOf`
+    // already asserts the four-cell shape, so a fifth cell cannot exist. The two lines after it
+    // are the ones that measure something.
     const a2 = rowsOf("table_A-2", 4, "Well-known Frame of Reference");
     expect(a2.every((r) => r.rawPart === "")).toBe(true);
     expect(a2.filter((r) => r.italic)).toEqual([]);
