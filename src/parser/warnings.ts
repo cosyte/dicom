@@ -19,8 +19,7 @@
  */
 
 import type { Tag, VR } from "../dictionary/types.js";
-import { KNOWN_VRS } from "./endian.js";
-import { WITHHELD } from "./tokens.js";
+import { WITHHELD, renderVr } from "./tokens.js";
 import type { DicomPosition } from "./types.js";
 
 /**
@@ -306,15 +305,6 @@ const TAG_SHAPE = /^[0-9A-F]{8}$/u;
  */
 function renderTag(tag: Tag | undefined): string {
   return tag !== undefined && TAG_SHAPE.test(tag) ? tag : WITHHELD;
-}
-
-/**
- * Render a VR token. Under Explicit VR the on-wire VR is two bytes a sender
- * chose, so it is checked against the closed set rather than trusted: two bytes
- * cannot carry much, but "cannot carry much" is not a bound.
- */
-function renderVr(vr: VR | undefined): string {
-  return vr !== undefined && KNOWN_VRS.has(vr) ? vr : WITHHELD;
 }
 
 /**

@@ -168,8 +168,11 @@ a vendor quirk.
 
 Every recoverable deviation collects on `ds.warnings` with a stable code and a byte offset; only the
 four fatal conditions throw. Each message is looked up in a frozen registry keyed by the code, with
-only structural substitutions (a tag, a VR, a number), so the whole array is safe to log. A thrown
-`DicomParseError` is not: it carries a 16-byte hex `snippet` of the source. See
+only structural substitutions (a tag, a VR, a number), so the array is safe to log on any well-formed
+file. **It is not unconditionally safe**: a tag slot is filled by a shape check, which cannot refuse a
+tag that a lying length field composed out of somebody's value. A thrown `DicomParseError`'s `message`
+comes from its own frozen registry, whose factories have no tag slot at all, but the error is still
+not safe to log whole: it carries a 16-byte hex `snippet` of the source. Both are covered in
 [Troubleshooting](./troubleshooting#keeping-phi-out-of-logs).
 
 ```ts runnable

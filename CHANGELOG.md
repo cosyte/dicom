@@ -6,6 +6,65 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Fixed
 
+- **🩺 Tier-3 fatal messages are built from a frozen registry, and four of them were printing four
+  bytes of the document each** (`DICOM-FATAL-MESSAGE-REGISTRY`). Tier-2 warnings have been
+  registry-bound since the warning-message slice; Tier-3 messages were still assembled at the throw
+  site out of template literals. That reads as harmless and is not, because the messages that
+  interpolated most were the ones raised **when a length field is lying** - the condition that makes
+  a reader read bytes inside somebody's value as a Data Element header, so the tag and the length it
+  then prints are that value.
+
+  Measured on a synthetic `"MR BRAIN SMITHSON "` carried in an `ST` whose Value Length under-declares:
+  `Element 41524E49 declared length=1330858068` is `"RAIN"` then `"THSO"`, eight consecutive payload
+  bytes in two fields, each recoverable with one `readUInt16LE` / `readUInt32LE`. Also
+  `Unexpected tag 524D4220 inside sequence` and `Item length=1109414477`, both `"MR B"`, and
+  `Unexpected FFFE marker FFFEE00D (length=1109414477)`, the same four bytes again.
+
+  **The bound is the factory signature, exactly as it was for the three Tier-2 codes that paid for
+  this lesson before it.** The new `FatalTokens` type has **no tag field and no wire-length field**,
+  so there is no slot for one to travel through, and a shape check would not have helped: a tag has
+  only a shape, so a renderer for one cannot refuse a fabricated tag. `err.byteOffset` identifies the
+  element instead, and it is a count the parser kept. What a fatal message may still carry is named
+  one registry entry at a time: a VR checked against the closed 34-VR set, a residual byte count
+  bounded by the buffer being read, a library constant, PS3.6's own registry name for an unsupported
+  Transfer Syntax UID, and a zlib error code checked against zlib's nine-name table.
+
+  **⚠ SOME FATAL MESSAGES ARE REWORDED, SO A CONSUMER STRING-MATCHING ONE STOPS MATCHING. NO COUNT IS
+  GIVEN, AND THAT IS DELIBERATE** - the first draft of this notice said "six", a graded pass measured
+  nine, and this repo's rule is to **delete a count rather than increment it**. The set is derivable
+  in one command and can never go stale: diff `FATAL_MESSAGES` in `src/parser/fatals.ts` against the
+  template literals in `git show 0a8c6e3 -- src/parser/`. **`err.code` is unchanged on every path,
+  and which files throw is unchanged.** Narrow on the code, never on the prose.
+
+- **🩺 The `{ strict: true }` snippet returned an unrelated element's bytes inside a defined-length
+  Sequence or Item.** `PRE-EXISTING`, found and disclosed by the `(0012,0063)` slice rather than
+  fixed, and closed here. `DicomParseError.snippet` is 16 raw source bytes cut at the diagnostic's own
+  `byteOffset`; that offset moves with the frame the element was read in, but the cut was always taken
+  from the whole file. So an escalation raised inside a defined-length Item cut the **file** at an
+  **item-relative** number and handed back whatever sat there - a diagnostic disclosing part of an
+  element the reader was never asked about, which in a de-identification library is a PHI surface
+  rather than a cosmetic offset bug. The parse context's buffer now follows the frame at all four
+  places this parser changes one; the deflate boundary already did, and the three sequence boundaries
+  did not.
+
+  **This does not make `snippet` safe to log, and nothing here should be read that way.** It is still
+  16 unredacted source bytes (the documented design), and making the frame honest makes them more
+  certainly the named element's own content, not less.
+
+  **Three residuals are named rather than closed, each with an asserted row in
+  `test/integration/fatal-diagnostic-surface.test.ts` so no artifact can read this entry as an
+  all-clear.** (1) The identical fabricated-header shape still reaches a **Tier-2** message: the same
+  desynchronized read lands on an odd group, so `DICOM_PRIVATE_TAG_NO_CREATOR` names the fabricated
+  tag (`4E495320`, `"IN S"`), through the shape-checking `renderTag` that cannot refuse one. (2)
+  `report.embeddedAttributes[].hidden` lists every tag in a run the embedded scanner found inside a
+  kept value, and a run needs only **one** actionable attribute to be reported, so a fabricated header
+  beside a real one is listed too: measured at `4D535449`, `"SMIT"` in wire order, beside the genuine
+  `00100020`. (3) Because of (1), **`ds.warnings[].message` is not unconditionally safe to log**, and
+  the docs that said so are corrected in this release rather than the guard being widened. All three
+  are the same product call as the one already filed for `report.removedPrivateTags`: on a well-formed
+  file these are the real tags of real attributes, and withholding them would destroy the field's
+  audit value to close a shape only a crafted file produces.
+
 - **🩺 The surviving PHI leak on the `RetainSafePrivate` retain route was disclosed as the WRONG SET,
   in six artifacts at once** (`DICOM-RETAIN-ROUTE-RESIDUALS`). `PRE-EXISTING` and unchanged in
   behaviour: **no `src/` predicate moves in this release entry**, and every cell described below

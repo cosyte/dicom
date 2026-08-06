@@ -72,15 +72,55 @@ the element header's four bytes, a VR checked against the closed 34-VR set, and 
 the file, so a value cannot be interpolated even by a future call site that tries. A token that fails
 its check renders as `<withheld>` rather than being echoed.
 
-So `w.code` and `w.position` are safe to log, and so is `w.message`.
+So `w.code` and `w.position` are safe to log. **`w.message` is safe on every well-formed file and is
+not unconditionally safe, and the difference is one shape.** The registry's `{tag}` slot is filled by
+`renderTag`, which validates a tag's *shape* and therefore cannot refuse one that a length field's lie
+composed out of somebody's value. Measured: a `(0008,4000)` `ST` carrying `"MR BRAIN SMITHSON "` whose
+Value Length under-declares by 12 desynchronizes the reader onto a fabricated header at an odd group,
+and `DICOM_PRIVATE_TAG_NO_CREATOR` names it `4E495320` - `"IN S"`, four bytes of the payload, in wire
+order. `PRE-EXISTING` on every release that has this code. It is disclosed rather than guarded because
+withholding the tag there would take it off every private element in every conformant file, which
+costs the diagnostic its whole purpose to close a shape only a crafted file produces; that is a
+product decision, not a defect fix. The same is true of `report.removedPrivateTags` and of
+`report.embeddedAttributes[].hidden`. **If you log warning messages from untrusted files verbatim,
+treat a tag in one as document-derived.**
 
-**A `DicomParseError` is different, and this is the one to read carefully.** It carries a `snippet`:
-up to 16 bytes of the source rendered as hex, attached so a structural failure is debuggable. Those
-are raw input bytes. On a real clinical file they can be part of a patient name or an identifier, and
-the library does not redact them. Log `err.code`, `err.byteOffset` and `err.message`; treat
-`err.snippet` as PHI and redact it at your own boundary if your compliance posture requires it. (The
-one exception is deliberate: for `UNSUPPORTED_TRANSFER_SYNTAX` the snippet slot carries the
-dictionary's _name_ for the UID when PS3.6 publishes one, which is a constant, not input.)
+**A Tier-3 fatal's `message` is bounded the same way, and it was not always.** Every message
+`parseDicom` throws now comes from a second frozen registry, keyed by the structural reason for the
+refusal rather than by the fatal code (the four codes are locked, and several of them are raised for
+more than one reason). Until this release four of those messages were assembled at the throw site out
+of template literals and printed the element's tag, its declared length, or both. That reads as
+harmless and is not: a fatal like "this element's Value Length reaches past the end of the buffer"
+fires precisely when a length field is lying, which is what makes the reader read bytes inside
+somebody's value as a Data Element header. Measured on a synthetic `"MR BRAIN SMITHSON "`, one such
+message printed `Element 41524E49 declared length=1330858068`: that is `"RAIN"` followed by
+`"THSO"`, eight consecutive bytes of the payload in two fields, each recoverable with a single typed
+read.
+
+The bound is the same one the Tier-2 registry uses, and it is structural rather than a discipline:
+**the factory signatures take no tag and no wire-length parameter at all**, so there is no slot for
+one to travel through. `position.byteOffset` identifies the element instead. What a fatal message can
+still carry is named one entry at a time: a VR checked against the closed 34-VR set, a byte count
+bounded by the buffer being read, a library constant, PS3.6's registry name for an unsupported
+Transfer Syntax UID, and a zlib error code checked against zlib's own nine-name table.
+
+**A `DicomParseError` is still different from a warning, and this is the one to read carefully.** It
+carries a `snippet`: up to 16 bytes of the source rendered as hex, attached so a structural failure
+is debuggable. Those are raw input bytes. On a real clinical file they can be part of a patient name
+or an identifier, and the library does not redact them. Log `err.code`, `err.byteOffset` and
+`err.message`; treat `err.snippet` as PHI and redact it at your own boundary if your compliance
+posture requires it. (The one exception is deliberate: for `UNSUPPORTED_TRANSFER_SYNTAX` the snippet
+slot carries the dictionary's _name_ for the UID when PS3.6 publishes one, which is a constant, not
+input.)
+
+**The snippet is now cut in the same frame its `byteOffset` is counted in.** It was not: the offset
+moved with the frame (file-absolute at the root, relative to the enclosing slice inside a
+defined-length Sequence or Item, into the inflated stream under Deflated Explicit VR LE) while the
+cut was always taken from the whole file, so a `{ strict: true }` escalation raised inside a
+defined-length Item returned the 16 bytes sitting at that item-relative number measured from byte 0
+of the file. That is a diagnostic handing back part of an element the reader was never asked about.
+Fixed. **It does not make the snippet safe**: the bytes are still raw source bytes, and the fix makes
+them more certainly the element's own content, not less.
 
 ### The model fields that are bounded, and the ones that are values
 

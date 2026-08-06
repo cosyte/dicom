@@ -334,7 +334,7 @@ The library throws five typed errors, all exported from the package barrel. Warn
 
 ### `DicomParseError`
 
-Thrown by `parseDicom` on one of the 4 Tier-3 fatal codes. Carries the byte position, a registry-composed message, and a 16-byte hex `snippet` of the source. The snippet is raw input: treat it as PHI and redact it at your own boundary.
+Thrown by `parseDicom` on one of the 4 Tier-3 fatal codes. Carries the byte position, a registry-composed message, and a 16-byte hex `snippet` of the source. **The message is looked up in a frozen registry and its factories take no tag and no wire-length parameter**, so neither can be interpolated: a fatal about a length field that lies fires precisely when bytes inside somebody's value are being read as a header, which is what used to make those two fields document content. `err.byteOffset` locates the element instead. The snippet is raw input and is cut in the frame that offset is counted in: treat it as PHI and redact it at your own boundary.
 
 ```ts
 import { parseDicom, DicomParseError, FATAL_CODES } from "@cosyte/dicom";

@@ -58,7 +58,12 @@ import {
   resolvePrivateCreator,
   safeModelCreator,
 } from "./element-header.js";
-import { buildSnippet, DicomParseError, FATAL_CODES } from "./errors.js";
+import {
+  elementLengthExceedsBuffer,
+  truncatedDatasetHeader,
+  undefinedLengthOnNonSqImplicit,
+  unexpectedFffeAtDatasetRoot,
+} from "./fatals.js";
 import { parseSequence, tryParseDefinedLengthSQ, tryParseUnAsSQ } from "./sequence.js";
 import type { ParseContext } from "./types.js";
 import { groupLengthInDataset, type DicomParseWarning } from "./warnings.js";
@@ -99,12 +104,7 @@ export function parseImplicitLE(
     } catch (err) {
       if (err instanceof RangeError) {
         // T-02-03-01 mitigation - truncated header.
-        throw new DicomParseError(
-          FATAL_CODES.INVALID_FILE_META,
-          "Truncated dataset (header read past buffer end).",
-          headerStart,
-          buildSnippet(buffer, headerStart),
-        );
+        throw truncatedDatasetHeader(buffer, headerStart);
       }
       throw err;
     }
@@ -121,12 +121,7 @@ export function parseImplicitLE(
         // cursor is now past the 8-byte ItemDelim marker.
         return { elements, endOffset: cursor.position };
       }
-      throw new DicomParseError(
-        FATAL_CODES.INVALID_FILE_META,
-        `Unexpected FFFE marker (${tag}) at dataset root.`,
-        headerStart,
-        buildSnippet(buffer, headerStart),
-      );
+      throw unexpectedFffeAtDatasetRoot(buffer, headerStart);
     }
 
     const position = { byteOffset: headerStart };
@@ -216,22 +211,12 @@ export function parseImplicitLE(
           continue;
         }
       }
-      throw new DicomParseError(
-        FATAL_CODES.INVALID_FILE_META,
-        `Undefined length on non-SQ element ${tag} (vr=${vr}) under Implicit VR LE.`,
-        headerStart,
-        buildSnippet(buffer, headerStart),
-      );
+      throw undefinedLengthOnNonSqImplicit(buffer, headerStart, vr);
     }
 
     // T-02-03-02 mitigation - bounds-check declared length before slice.
     if (cursor.position + length > buffer.length) {
-      throw new DicomParseError(
-        FATAL_CODES.INVALID_FILE_META,
-        `Element ${tag} declared length=${String(length)} exceeds remaining buffer (${String(buffer.length - cursor.position)} bytes).`,
-        headerStart,
-        buildSnippet(buffer, headerStart),
-      );
+      throw elementLengthExceedsBuffer(buffer, headerStart, buffer.length - cursor.position);
     }
 
     const valueStart = cursor.position;

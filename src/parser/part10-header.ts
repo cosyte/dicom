@@ -15,7 +15,7 @@
 
 import { Buffer } from "node:buffer";
 
-import { buildSnippet, DicomParseError, FATAL_CODES } from "./errors.js";
+import { notDicomPart10, notDicomPart10Required } from "./fatals.js";
 import type { ParseContext } from "./types.js";
 import type { DicomParseWarning } from "./warnings.js";
 import { missingPreamble } from "./warnings.js";
@@ -60,12 +60,7 @@ export function parsePart10Header(
   }
 
   if (ctx.stripPreamble === "require") {
-    throw new DicomParseError(
-      FATAL_CODES.NOT_DICOM_PART_10,
-      "Missing DICM magic at offset 128 (stripPreamble='require').",
-      0,
-      buildSnippet(buffer, 0),
-    );
+    throw notDicomPart10Required(buffer, 0);
   }
 
   // Default `stripPreamble === "tolerate"`: try detecting a bare File Meta
@@ -75,12 +70,7 @@ export function parsePart10Header(
     return { datasetStart: 0, hadPreamble: false };
   }
 
-  throw new DicomParseError(
-    FATAL_CODES.NOT_DICOM_PART_10,
-    "Input is not a DICOM Part 10 file (no DICM magic at offset 128 and no recognizable File Meta group at offset 0).",
-    0,
-    buildSnippet(buffer, 0),
-  );
+  throw notDicomPart10(buffer, 0);
 }
 
 /**

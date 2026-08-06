@@ -29,7 +29,11 @@ import type { Tag, VR } from "../dictionary/types.js";
 import { ByteCursor } from "./byte-cursor.js";
 import { LONG_FORM_VRS } from "./element-header.js";
 import { isRecognizedVr } from "./endian.js";
-import { buildSnippet, DicomParseError, FATAL_CODES } from "./errors.js";
+import {
+  fileMetaGroupLengthOverruns,
+  fileMetaTransferSyntaxMissing,
+  fileMetaTruncated,
+} from "./fatals.js";
 import type { ParseContext } from "./types.js";
 import type { DicomParseWarning } from "./warnings.js";
 import {
@@ -98,12 +102,7 @@ export function parseFileMeta(
     firstElement = readExplicitLeElement(cursor);
   } catch (err) {
     if (err instanceof RangeError) {
-      throw new DicomParseError(
-        FATAL_CODES.INVALID_FILE_META,
-        "File Meta is truncated.",
-        fmStart,
-        buildSnippet(buffer, fmStart),
-      );
+      throw fileMetaTruncated(buffer, fmStart);
     }
     throw err;
   }
@@ -120,12 +119,7 @@ export function parseFileMeta(
     declaredFmLength = firstElement.value.readUInt32LE(0);
     // T-02-02-01: declared length must fit in the remaining buffer.
     if (cursor.position + declaredFmLength > buffer.length) {
-      throw new DicomParseError(
-        FATAL_CODES.INVALID_FILE_META,
-        `File Meta group length declares ${String(declaredFmLength)} bytes but only ${String(buffer.length - cursor.position)} bytes remain.`,
-        fmStart,
-        buildSnippet(buffer, fmStart),
-      );
+      throw fileMetaGroupLengthOverruns(buffer, fmStart, buffer.length - cursor.position);
     }
   } else {
     // (0002,0000) absent - emit warning and treat the first element as the start of the FM body.
@@ -145,12 +139,7 @@ export function parseFileMeta(
       next = readExplicitLeElement(cursor);
     } catch (err) {
       if (err instanceof RangeError) {
-        throw new DicomParseError(
-          FATAL_CODES.INVALID_FILE_META,
-          "File Meta is truncated.",
-          fmStart,
-          buildSnippet(buffer, fmStart),
-        );
+        throw fileMetaTruncated(buffer, fmStart);
       }
       throw err;
     }
@@ -178,12 +167,7 @@ export function parseFileMeta(
         next = readExplicitLeElement(cursor);
       } catch (err) {
         if (err instanceof RangeError) {
-          throw new DicomParseError(
-            FATAL_CODES.INVALID_FILE_META,
-            "File Meta is truncated.",
-            fmStart,
-            buildSnippet(buffer, fmStart),
-          );
+          throw fileMetaTruncated(buffer, fmStart);
         }
         throw err;
       }
@@ -223,12 +207,7 @@ export function parseFileMeta(
   // Step 4: Project File Meta elements into the FileMeta interface.
   const tsElement = fmElements.find((e) => e.tag === "00020010");
   if (tsElement === undefined || tsElement.vr !== "UI") {
-    throw new DicomParseError(
-      FATAL_CODES.INVALID_FILE_META,
-      "Required File Meta element (0002,0010) Transfer Syntax UID is missing or not UI.",
-      fmStart,
-      buildSnippet(buffer, fmStart),
-    );
+    throw fileMetaTransferSyntaxMissing(buffer, fmStart);
   }
 
   // Any (0002,xxxx) element not projected into a typed field above is preserved

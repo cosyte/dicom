@@ -41,7 +41,7 @@ import { inflateRawSync } from "node:zlib";
 import type { Element } from "../dataset/element.js";
 import type { Tag } from "../dictionary/types.js";
 import { makeEmitter } from "./emit.js";
-import { buildSnippet, DicomParseError, FATAL_CODES } from "./errors.js";
+import { inflateFailed, inflatedPayloadExceedsCap } from "./fatals.js";
 import { parseExplicitLE } from "./explicit-le.js";
 import type { ParseContext } from "./types.js";
 import type { DicomParseWarning } from "./warnings.js";
@@ -116,24 +116,15 @@ export function parseDeflatedLEWithCap(
       code === "ERR_BUFFER_TOO_LARGE" ||
       (err instanceof RangeError && /maxOutputLength|too large/i.test(message))
     ) {
-      throw new DicomParseError(
-        FATAL_CODES.INVALID_FILE_META,
-        `Inflated Deflated TS payload exceeds ${String(maxInflatedBytes)}-byte cap.`,
-        datasetStart,
-        buildSnippet(buffer, datasetStart),
-      );
+      throw inflatedPayloadExceedsCap(buffer, datasetStart, maxInflatedBytes);
     }
     // `message` is zlib's, and it is deliberately not forwarded. It is an
     // `err.message` from a library handed the sender's bytes, which is the one
     // shape of third-party string this parser cannot vouch for; the zlib error
-    // `code` is a closed set and says the same thing safely.
-    const zlibCode = typeof code === "string" && code.length > 0 ? code : "unknown";
-    throw new DicomParseError(
-      FATAL_CODES.INVALID_FILE_META,
-      `Failed to inflate Deflated TS payload (zlib error code: ${zlibCode}).`,
-      datasetStart,
-      buildSnippet(buffer, datasetStart),
-    );
+    // `code` is a closed set and says the same thing safely. Since the fatal
+    // registry that closure is enforced rather than asserted: `inflateFailed`
+    // renders `code` only when it names one of the nine `zlib.codes` entries.
+    throw inflateFailed(buffer, datasetStart, code);
   }
 
   // Inner ParseContext over the inflated buffer. All other fields carry

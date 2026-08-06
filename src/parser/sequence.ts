@@ -69,10 +69,17 @@ import { Item } from "../dataset/item.js";
 import { joinTag } from "../dataset/tag.js";
 import type { Tag } from "../dictionary/types.js";
 import { ByteCursor } from "./byte-cursor.js";
-import { buildSnippet, DicomParseError, FATAL_CODES } from "./errors.js";
-import { WARNING_CODES } from "./warnings.js";
+import { DicomParseError } from "./errors.js";
+import {
+  encapsulatedFragmentExceedsBuffer,
+  itemLengthExceedsBuffer,
+  sqItemHeaderTruncated,
+  sqNestingDepthExceeded,
+  unexpectedTagInsideSequence,
+} from "./fatals.js";
 import type { ParseContext } from "./types.js";
 import {
+  WARNING_CODES,
   emptyItemInSequence,
   itemCrossesSequenceEnd,
   sqNotDescended,
@@ -168,12 +175,7 @@ export function parseSequence(
     // double-decremented (parseSequence's own try/finally below would
     // decrement again - but we throw BEFORE the try block, so do it here).
     ctx.nestingDepth -= 1;
-    throw new DicomParseError(
-      FATAL_CODES.INVALID_FILE_META,
-      `SQ nesting depth exceeds ${String(NESTING_DEPTH_LIMIT)}.`,
-      valueStart,
-      buildSnippet(buffer, valueStart),
-    );
+    throw sqNestingDepthExceeded(buffer, valueStart, NESTING_DEPTH_LIMIT);
   }
   ctx.encodingContextStack.push(
     opts.encapsulatedPixelData === true ? "EncapsulatedPixelData" : "SqItem",
@@ -236,12 +238,7 @@ export function parseSequence(
         itemLength = cursor.readUInt32();
       } catch (err) {
         if (err instanceof RangeError) {
-          throw new DicomParseError(
-            FATAL_CODES.INVALID_FILE_META,
-            "Truncated dataset (SQ item header read past buffer end).",
-            itemHeaderStart,
-            buildSnippet(buffer, itemHeaderStart),
-          );
+          throw sqItemHeaderTruncated(buffer, itemHeaderStart);
         }
         throw err;
       }
@@ -252,12 +249,7 @@ export function parseSequence(
         return { items, endOffset: cursor.position };
       }
       if (itemTag !== ITEM_TAG) {
-        throw new DicomParseError(
-          FATAL_CODES.INVALID_FILE_META,
-          `Unexpected tag ${itemTag} inside sequence (expected FFFE,E000 or FFFE,E0DD).`,
-          itemHeaderStart,
-          buildSnippet(buffer, itemHeaderStart),
-        );
+        throw unexpectedTagInsideSequence(buffer, itemHeaderStart);
       }
 
       // (FFFE,E000) Item header consumed. itemLength holds the value-area length.
@@ -279,12 +271,7 @@ export function parseSequence(
         // surfaces the bytes; Phase 2 records each fragment as a structural
         // (empty) Item and advances the cursor past its raw bytes.
         if (cursor.position + itemLength > buffer.length) {
-          throw new DicomParseError(
-            FATAL_CODES.INVALID_FILE_META,
-            `Encapsulated pixel data fragment length=${String(itemLength)} exceeds remaining buffer.`,
-            itemHeaderStart,
-            buildSnippet(buffer, itemHeaderStart),
-          );
+          throw encapsulatedFragmentExceedsBuffer(buffer, itemHeaderStart);
         }
         cursor.position += itemLength;
         items.push(new Item({ warnings: [], elements: new Map(), index: itemIndex }));
@@ -359,15 +346,24 @@ export function parseSequence(
           );
         }
         if (cursor.position + itemLength > buffer.length) {
-          throw new DicomParseError(
-            FATAL_CODES.INVALID_FILE_META,
-            `Item length=${String(itemLength)} exceeds remaining buffer.`,
-            itemHeaderStart,
-            buildSnippet(buffer, itemHeaderStart),
-          );
+          throw itemLengthExceedsBuffer(buffer, itemHeaderStart);
         }
         const itemSlice = buffer.subarray(cursor.position, cursor.position + itemLength);
-        const inner = opts.innerStrategy(itemSlice, 0, ctx, emit);
+        // The item is parsed from a SLICE, so every offset raised inside it is
+        // relative to that slice - including a warning's `position.byteOffset`.
+        // `ctx.buffer` is what `makeEmitter` cuts the `{ strict: true }` snippet
+        // from, so it has to name the same frame or the snippet is an unrelated
+        // element's bytes. Restored on the way out, and in a `finally` so a
+        // Tier-3 fatal thrown inside the item does not leave the frame dangling
+        // for the enclosing Data Set's own diagnostics.
+        const enclosingFrame = ctx.buffer;
+        let inner;
+        try {
+          ctx.buffer = itemSlice;
+          inner = opts.innerStrategy(itemSlice, 0, ctx, emit);
+        } finally {
+          ctx.buffer = enclosingFrame;
+        }
         items.push(new Item({ warnings: [], elements: inner.elements, index: itemIndex }));
         cursor.position += itemLength;
       }
@@ -471,11 +467,20 @@ export function tryParseDefinedLengthSQ(
     // The slice is the bound: nothing in the descent may read past the declared
     // Value Length (PS3.5 section 7.5.2). See the note above.
     const slice = buffer.subarray(valueStart, valueStart + valueLength);
-    const result = parseSequence(slice, 0, ctx, emit, {
-      explicitLength: valueLength,
-      littleEndian: true,
-      innerStrategy: implicitLeInner,
-    });
+    // The descent's offsets are slice-relative, so the frame `makeEmitter` cuts
+    // the strict snippet from moves with it. See `ParseContext.buffer`.
+    const enclosingFrame = ctx.buffer;
+    let result;
+    try {
+      ctx.buffer = slice;
+      result = parseSequence(slice, 0, ctx, emit, {
+        explicitLength: valueLength,
+        littleEndian: true,
+        innerStrategy: implicitLeInner,
+      });
+    } finally {
+      ctx.buffer = enclosingFrame;
+    }
     return { success: true, items: result.items };
   } catch (err) {
     if (isStrictEscalation(err)) throw err;
@@ -541,7 +546,17 @@ export function tryParseUnAsSQ(
       littleEndian: true, // CP-246: Implicit VR LE inner per D-30.
       innerStrategy: implicitLeInner,
     };
-    const result = parseSequence(slice, 0, ctx, emit, opts);
+    // Same frame swap as `tryParseDefinedLengthSQ`, and restored before the
+    // success warning below: that one is built from the caller's `valueStart`,
+    // so it belongs to the ENCLOSING frame, not the slice.
+    const enclosingFrame = ctx.buffer;
+    let result;
+    try {
+      ctx.buffer = slice;
+      result = parseSequence(slice, 0, ctx, emit, opts);
+    } finally {
+      ctx.buffer = enclosingFrame;
+    }
     emit(unParsedAsSQ({ byteOffset: valueStart }, tag));
     return {
       success: true,

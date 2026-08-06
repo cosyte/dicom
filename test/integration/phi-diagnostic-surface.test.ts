@@ -61,6 +61,14 @@
  * away. The fatal slots below exist to prove the *message* is clean, not the
  * snippet.
  *
+ * **The same blind spot covers a Tier-3 `err.message`, and it is answered
+ * elsewhere.** A tag is four document bytes rendered as hex and a declared length
+ * is four rendered as a decimal, so a planted marker cannot reach either shape
+ * and the runner cannot go red on one. `test/integration/fatal-diagnostic-surface.test.ts`
+ * asks that question with a purpose-built detector that enumerates the
+ * re-encodings instead of hunting a verbatim marker. Do not read a green run here
+ * as covering it.
+ *
  * @module
  */
 

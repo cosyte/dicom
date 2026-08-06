@@ -14,6 +14,12 @@
  *     decision (b)). Strict mode bypasses `ctx.warnings` entirely - no
  *     residue.
  *
+ * This module is the ONLY reader of {@link ParseContext.buffer}, and the
+ * snippet cut below is the reason that field is mutable and follows the frame
+ * rather than naming the file. See its JSDoc: an offset and the bytes cut at it
+ * have to be in the same frame, or a diagnostic hands back an element the
+ * reader was never asked about.
+ *
  * Threat model T-02-01-02: a consumer-supplied `onWarning` that throws
  * MUST NOT corrupt parser state - wrapped in try/catch with silent swallow.
  *

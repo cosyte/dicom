@@ -395,7 +395,11 @@ describe("parseExplicitLE - undefined length on a non-SQ VR is fatal", () => {
     } catch (err) {
       if (!(err instanceof DicomParseError)) throw err;
       expect(err.code).toBe("INVALID_FILE_META");
-      expect(err.message).toMatch(/non-SQ/);
+      // The tag is NOT in the message and must not come back; see
+      // `src/parser/fatals.ts`. The VR is, through the closed-set `renderVr`.
+      expect(err.message).toMatch(/declares undefined length \(0xFFFFFFFF\) under Explicit VR/u);
+      expect(err.message).toContain("VR=OB");
+      expect(err.message).not.toContain("00080008");
     }
   });
 });

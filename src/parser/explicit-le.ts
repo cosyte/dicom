@@ -45,7 +45,14 @@ import {
   resolvePrivateCreator,
   safeModelCreator,
 } from "./element-header.js";
-import { buildSnippet, DicomParseError, FATAL_CODES } from "./errors.js";
+import {
+  elementLengthExceedsBuffer,
+  truncatedDatasetHeader,
+  truncatedExplicitVrHeader,
+  truncatedFffeHeader,
+  undefinedLengthOnNonSqExplicit,
+  unexpectedFffeAtDatasetLevel,
+} from "./fatals.js";
 import { parseImplicitLE } from "./implicit-le.js";
 import {
   parseSequence,
@@ -97,12 +104,7 @@ export function _parseExplicit(
       peekGroup = cursor.readUInt16At(cursor.position);
     } catch (err) {
       if (err instanceof RangeError) {
-        throw new DicomParseError(
-          FATAL_CODES.INVALID_FILE_META,
-          "Truncated dataset (header read past buffer end).",
-          headerStart,
-          buildSnippet(buffer, headerStart),
-        );
+        throw truncatedDatasetHeader(buffer, headerStart);
       }
       throw err;
     }
@@ -111,19 +113,16 @@ export function _parseExplicit(
       // FFFE marker: 4-byte tag + 4-byte length, no VR.
       let grp: number;
       let ele: number;
-      let len: number;
       try {
         grp = cursor.readUInt16();
         ele = cursor.readUInt16();
-        len = cursor.readUInt32();
+        // Read to advance the cursor past the marker, and deliberately not bound
+        // to a name: the only thing that ever consumed it was the fatal message
+        // below, where it rendered four bytes of the document. See `./fatals.ts`.
+        cursor.readUInt32();
       } catch (err) {
         if (err instanceof RangeError) {
-          throw new DicomParseError(
-            FATAL_CODES.INVALID_FILE_META,
-            "Truncated dataset (FFFE header read past buffer end).",
-            headerStart,
-            buildSnippet(buffer, headerStart),
-          );
+          throw truncatedFffeHeader(buffer, headerStart);
         }
         throw err;
       }
@@ -132,12 +131,7 @@ export function _parseExplicit(
         // ItemDelim - cursor consumed past the 8-byte marker.
         return { elements, endOffset: cursor.position };
       }
-      throw new DicomParseError(
-        FATAL_CODES.INVALID_FILE_META,
-        `Unexpected FFFE marker ${fffeTag} (length=${String(len)}) at dataset level.`,
-        headerStart,
-        buildSnippet(buffer, headerStart),
-      );
+      throw unexpectedFffeAtDatasetLevel(buffer, headerStart);
     }
 
     // Standard Explicit-VR element header.
@@ -146,12 +140,7 @@ export function _parseExplicit(
       header = readExplicitElementHeader(cursor, ctx, emit);
     } catch (err) {
       if (err instanceof RangeError) {
-        throw new DicomParseError(
-          FATAL_CODES.INVALID_FILE_META,
-          "Truncated dataset (Explicit VR header read past buffer end).",
-          headerStart,
-          buildSnippet(buffer, headerStart),
-        );
+        throw truncatedExplicitVrHeader(buffer, headerStart);
       }
       throw err;
     }
@@ -322,20 +311,10 @@ export function _parseExplicit(
     if (length === UNDEFINED_LENGTH) {
       // Undefined length on a non-SQ / non-OB-encap / non-UN VR is
       // structurally invalid under Explicit VR.
-      throw new DicomParseError(
-        FATAL_CODES.INVALID_FILE_META,
-        `Undefined length on non-SQ element ${tag} (vr=${vr}) under Explicit VR.`,
-        headerStart,
-        buildSnippet(buffer, headerStart),
-      );
+      throw undefinedLengthOnNonSqExplicit(buffer, headerStart, vr);
     }
     if (cursor.position + length > buffer.length) {
-      throw new DicomParseError(
-        FATAL_CODES.INVALID_FILE_META,
-        `Element ${tag} declared length=${String(length)} exceeds remaining buffer (${String(buffer.length - cursor.position)} bytes).`,
-        headerStart,
-        buildSnippet(buffer, headerStart),
-      );
+      throw elementLengthExceedsBuffer(buffer, headerStart, buffer.length - cursor.position);
     }
     const valueStart = cursor.position;
     const valueEnd = valueStart + length;

@@ -279,7 +279,12 @@ describe("parseImplicitLE - undefined length on a non-SQ VR is fatal", () => {
     } catch (err) {
       if (!(err instanceof DicomParseError)) throw err;
       expect(err.code).toBe("INVALID_FILE_META");
-      expect(err.message).toMatch(/non-SQ/);
+      // The tag is NOT in the message and must not come back; see
+      // `src/parser/fatals.ts`. Under Implicit VR LE the VR was resolved by this
+      // parser rather than read off the wire, and the message says so.
+      expect(err.message).toMatch(/declares undefined length \(0xFFFFFFFF\) under Implicit VR LE/u);
+      expect(err.message).toContain("resolved to PN");
+      expect(err.message).not.toContain("00100010");
     }
   });
 });
