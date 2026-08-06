@@ -1747,7 +1747,10 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
 - **NEVER OPEN A CHANGESET SUMMARY LINE AT COLUMN 0 WITH AN ATX HEADING.** `getReleaseLine` indents
   continuation lines by two spaces, which is exactly the `- ` bullet's content column, so it becomes
   a permanent nested heading in the published release section. Write the divider as an inline code
-  span or as plain prose.
+  span or as plain prose. **In every sibling this rule is a doc comment and nothing else; here it is
+  MECHANICAL**, because the region rule below reads a heading indented up to three spaces as the
+  heading it renders as. A summary that does it reds in the Version PR rather than in a tarball.
+  The case runs one through the real generator rather than describing it.
 - **🔴 THE PRETTIER PASS STAYS ON HERE (no `"prettier"` key), DERIVED FOR THIS REPO AND NEVER
   RESYNCED FROM A SIBLING.** This value has gone four different ways across seven repos and it is
   wrong in BOTH directions. The discriminator is the repo's own markdown-formatting scope: `dicom`
@@ -1778,6 +1781,18 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   one, in correct descending order immediately above the divider, still passes. Closing that needs a
   source of truth about which versions really released, and git tags are one `push --delete` from
   making a released version look fabricated, which is the wrong direction to fail in.
+- **🔴 AND A `/^#{1,6} /` HEADING FILTER IS THE WRONG TOOL FOR THAT RULE - IT IS BYPASSED BY ONE
+  LEADING SPACE AND BY A SETEXT UNDERLINE, BOTH REPRODUCED HERE ON THIS DOCUMENT.** The first draft
+  of the region rule found headings that way, which is correct for asking what the generator WROTE
+  and wrong for asking what could have been SMUGGLED IN: CommonMark allows an ATX heading up to
+  three leading spaces, and a setext heading carries no `#` at all. So ` ## 0.0.99` and a `0.0.99`
+  over a row of dashes each passed every case in the group while rendering as an `<h2>` announcing
+  a release that never happened - the same hole the sibling had, one layer down. `renderedHeadings`
+  reads both spellings; `headings` stays naive on purpose and is used only for the other question.
+  **Three leading spaces spans the `- ` bullet's two-space content column**, which is why the
+  column-0-ATX rule above is mechanical here. **Still named for what it checks:** a setext underline
+  INSIDE a list item is not read, because the paragraph above it is the bullet's own text and
+  treating that as a heading would refuse ordinary release output.
 - **A release that publishes with an UNCHANGED changelog is a swallowed write failure, not a flag
   that reverted.** Changesets wraps the changelog write in a try/catch that only `console.warn`s; a
   tree whose declared Prettier config cannot be resolved bumps the version, consumes the changeset,
@@ -1788,7 +1803,9 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   exit 0. The shipping changeset was RENDERED through the real `prepare` and read; it carries no
   identifier at all, which dodges the defect rather than surviving it.
 - `test/scripts/changelog-generation.test.ts` pins all of the above against the real
-  `changeset version` in throwaway git trees. **Red on the parent `3617034` at 13 of 22.**
+  `changeset version` in throwaway git trees. **Red on the parent `3617034` at 15 of 24** (it was
+  13 of 22 before the two spelling-bypass cases; both of those are red on the parent too, and the
+  figure is re-measured on the same sha rather than carried).
 
 ## The PS3.15 Annex E action table generator
 
