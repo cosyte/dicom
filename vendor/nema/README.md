@@ -209,9 +209,19 @@ run.
 
 The two deviations, both preserved and both asserted:
 
-1. **Retirement is a structured `retired` boolean**, not the trailing " (Retired)" PS3.6 glues into
-   the UID Name. The suffix is stripped into the field; a name that still spells it after the strip
-   fails the generator.
+1. **Retirement is a structured `retired` boolean**, not the trailing " (Retired)" every retired
+   Table A-1 row carries at the end of its UID Name. The suffix is stripped into the field; a name
+   that still spells it after the strip fails the generator.
+
+   **That suffix is an observation of the table, not a rule Annex A states, and the distinction
+   earned a check.** The retirement sentence the annex does state is about the fifth "Part" column:
+   *"For retired UIDs, the edition of the Standard in parentheses is the edition in which the item
+   last appeared before it was retired."* The generator derives `retired` from the name suffix
+   alone, so the column is read as a **corroboration** in the test rather than as the source, which
+   is the same call the element registry makes about its own sixth column, and for the same reason:
+   that column also carries `DICOS` / `DICONDE` markers, and reading it as a boolean retires live
+   entries. The two signals agree on every Table A-1 row of this edition. Table A-2 has no Part
+   column, so the check is scoped to A-1.
 2. **Four Transfer Syntax names keep the short form every DICOM toolkit prints**, cut from the
    normative name at its ": Default Transfer Syntax for ..." clause. The short form is **derived**
    from the normative text, never typed in the generator, so it cannot drift away from it, and a

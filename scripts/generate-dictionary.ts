@@ -46,11 +46,23 @@
  *   UNDONE. This is the whole reason the UID half was previously kept off the
  *   overlay, and a naive overlay would in fact undo both:
  *
- *     1. RETIREMENT IS A STRUCTURED BOOLEAN, NOT A NAME SUFFIX. PS3.6 spells a
- *        retired UID by appending " (Retired)" to its UID Name. That suffix is
- *        stripped and carried in `retired` instead, so a consumer branches on a
- *        field rather than on a string match. A name that still spells
- *        "(Retired)" after the strip throws.
+ *     1. RETIREMENT IS A STRUCTURED BOOLEAN, NOT A NAME SUFFIX. Every retired
+ *        row in Table A-1 carries " (Retired)" at the end of its UID Name. That
+ *        suffix is stripped and carried in `retired` instead, so a consumer
+ *        branches on a field rather than on a string match. A name that still
+ *        spells "(Retired)" after the strip throws.
+ *
+ *        SAID AS AN OBSERVATION OF THE TABLE, WHICH IS WHAT IT IS. Annex A
+ *        states no rule about the name suffix. The retirement sentence it DOES
+ *        state is about the fifth column: "For retired UIDs, the edition of the
+ *        Standard in parentheses is the edition in which the item last appeared
+ *        before it was retired." That column is a CORROBORATION and not the
+ *        source, for the reason the element registry learned one table over -
+ *        it also carries DICOS/DICONDE markers, and reading it as a boolean
+ *        retires live entries. The two signals agree on every A-1 row of this
+ *        edition, and `test/dictionary/uids-normative.test.ts` measures that, so
+ *        an edition which retires by column alone reds instead of shipping
+ *        `retired: false`.
  *     2. FOUR TRANSFER SYNTAX NAMES KEEP THEIR TOOLKIT SHORT FORM. PS3.6 gives
  *        four Transfer Syntaxes a name with a trailing ": Default Transfer
  *        Syntax for ..." clause that no DICOM toolkit prints and no consumer
@@ -1030,7 +1042,10 @@ function buildUidsTs(
     // Appending " Storage" here produced "CT Image Storage Storage" for the 164
     // entries whose name already ends in "Storage", and an equally wrong
     // "... - For Presentation Storage" / "Macular Grid Thickness and Volume
-    // Report Storage" for the other 11. Every one of the 175 was wrong. The
+    // Report Storage" for the other 11. It touched 175 entries and 174 came out
+    // wrong: it landed on the right string for exactly one, whose PS3.6 name
+    // really is "Macular Grid Thickness and Volume Report Storage". "175 wrong"
+    // sat here contradicting the 174 stated everywhere else; the 174 is right. The
     // sibling `ciod` field is the bare CIOD name ("Computed Radiography Image");
     // `name` is not, and never needed a suffix. That defect is why this path is
     // now overlaid by the normative table instead of trusted.

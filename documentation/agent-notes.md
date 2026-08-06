@@ -1698,7 +1698,18 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   gap here than a withdrawal there. Measured against both tables the mirror-only set is **empty**,
   and its size prints every run.
 - **Retirement stays a boolean; the `" (Retired)"` suffix is stripped into the field, and a name that
-  still spells it after the strip throws.**
+  still spells it after the strip throws.** **🔴 BUT THE SUFFIX IS AN OBSERVATION OF THE TABLE, NOT
+  A RULE ANNEX A STATES, AND SAYING OTHERWISE WAS REFUTED.** Search the pinned bytes: no sentence
+  anywhere says a retired UID's name gets `" (Retired)"` appended. The retirement sentence Annex A
+  **does** state is about the fifth **Part** column, and `For retired UIDs` locates it at **exactly
+  one** place in the document: *"the edition of the Standard in parentheses is the edition in which
+  the item last appeared before it was retired."* The generator derives `retired` from the suffix
+  alone, so the column is read as a **corroboration in the test** rather than as the source, which
+  is the element registry's own call one table over and for the identical reason: that column also
+  carries `DICOS`/`DICONDE` markers, and reading it as a boolean retires live entries. **The two
+  signals agree on every Table A-1 row of this edition**, measured; A-2 has no Part column, so the
+  check is scoped to A-1. An edition that retires by column alone now reds instead of shipping
+  `retired: false`.
 - **The four toolkit short forms are DERIVED, never typed.** PS3.6 gives four Transfer Syntaxes a
   trailing `": Default Transfer Syntax for ..."` clause; those four names are cut at their first
   `": "`. A hand-written short form is exactly what rots silently when an edition rewords a name, and
@@ -1723,7 +1734,22 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   scope, stated rather than overlooked.
 - **The test does NOT call the generator.** It re-parses the pinned DocBook from scratch and grades
   what the package EXPORTS. A test that re-runs the generator proves the generator agrees with itself
-  and would keep passing through the change that broke it. **Red on the parent `3617034` at 8 of 19.**
+  and would keep passing through the change that broke it. **Red on the parent `3617034` at 8 of 20**
+  (8 of 19 before the Part-column corroboration case, which grades the DocBook and not the registry
+  and so passes on either tree).
+- **A CONTROL OVER AN EMPTY POPULATION IS NOT A CONTROL.** The "leaves every other shipped name
+  whole" case claimed it covered names carrying "a colon with no space"; that population has **zero**
+  members across A-1 and A-2, and the 73-member one is the dash clause. Corrected to name only the
+  population that exists. **And its red on the parent is a COVERAGE failure** (56 of those 73 were
+  absent from the parent registry), **not evidence that a name was ever cut wrongly** - it is a
+  forward-looking guard against the cut spreading, and must not be quoted as more.
+- **RESIDUAL, PRE-EXISTING, DISCLOSED HERE BECAUSE A REFUTER PASS FOUND IT: `Dictionary.uid()`
+  RETURNS PROTOTYPE MEMBERS.** `src/dictionary/index.ts` indexes a plain object with no own-property
+  guard, so `Dictionary.uid("toString")?.name` is `"toString"` and `uid("constructor")?.name` is
+  `"Object"`. Byte-identical on `3617034`, reachable from a file's `(0002,0010)` through
+  `renderTransferSyntax`. Not a mis-read of any real UID and not PHI. **Deliberately NOT taken
+  here:** the fix changes a public lookup's answer and `lookup`/`byKeyword` share the shape, so it is
+  its own slice with its own changeset, not a side effect of an overlay.
 - **STILL NO STALENESS CLOCK, and there must not be one.** That rule did not change here.
 
 ## The changelog generator, and why the Unreleased heading may not come back
@@ -1803,9 +1829,37 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   exit 0. The shipping changeset was RENDERED through the real `prepare` and read; it carries no
   identifier at all, which dodges the defect rather than surviving it.
 - `test/scripts/changelog-generation.test.ts` pins all of the above against the real
-  `changeset version` in throwaway git trees. **Red on the parent `3617034` at 15 of 24** (it was
-  13 of 22 before the two spelling-bypass cases; both of those are red on the parent too, and the
-  figure is re-measured on the same sha rather than carried).
+- **🔴 A CONTROL SPLICED INTO THE LIVE `CHANGELOG.md` IS TRAP 2 WEARING A FIXTURE, AND IT WEDGED THE
+  RELEASE. A refuter pass caught it; it was then REPRODUCED by running the real release.** The first
+  draft of the region group built every fabricated-section fixture by splicing at
+  `lines.indexOf(ARCHIVE_HEADING)` in the committed document, and asserted the `package.json says`
+  violation. That is only the violation you get while the generated region is **empty**. Run the
+  real `changeset version` once and a real `## 0.0.13` sits above the fabricated block, so the rule
+  reports the **ordering** violation instead: measured, **4 of 24 cases red on the released
+  document**, and the same suite runs on the Version PR (`ci.yml` on `pull_request`) and again under
+  `changeset publish` (`prepublishOnly`). It would have wedged the release AND the publish - the
+  exact failure this file's own header warns about one level up, arriving as a fixture defect rather
+  than as an assertion. **A fixture pinned to "what the committed file looks like today" is a
+  staleness clock in a different hat**: no date in it, fires on a known future event, reds a PR
+  nobody edited. **The case named "still passes ... which is today" was DELETED, not re-baselined.**
+  Every control now builds its own document (`documentWith`) at versions this package will never be
+  at, and the one case that must read the live file runs the real release **from `package.json`'s
+  version rather than a literal**. Proven by replaying two consecutive real releases: **25 of 25
+  green at `0.0.13` and again at `0.0.14`**, where the pre-fix file was 4 red.
+- **The heading guard SKIPS FENCED CODE, and that is a wedge guard, not a leak guard.** A changeset
+  summary may carry a fence, `getReleaseLine` indents it into the region, and a shell comment inside
+  one opens with `#`. Reading that as a heading would red a Version PR on legitimate content. **The
+  rule a changeset must satisfy here is wider than the siblings': no markdown heading in ANY
+  spelling, which includes a bare `---` under a line of prose, because that is a setext heading and
+  not a thematic break.** Fenced code is exempt.
+- **RESIDUAL, NAMED NOT CLOSED: raw HTML.** A literal `<h2>0.0.99</h2>` above the divider renders as
+  that heading and is invisible to `renderedHeadings`. Not reached for, because the guard is
+  deliberately a markdown-shape rule rather than an HTML parser.
+- `test/scripts/changelog-generation.test.ts` pins all of the above against the real
+  `changeset version` in throwaway git trees. **Red on the parent `3617034` at 12 of 25**, and the
+  13 green there are green **legitimately**: they grade the RULE against a synthesized document, so
+  they mean the same thing on either tree. (The figure read 13 of 22, then 15 of 24, then this;
+  each is pinned to its own sha and to its own version of the file, and only the last is current.)
 
 ## The PS3.15 Annex E action table generator
 

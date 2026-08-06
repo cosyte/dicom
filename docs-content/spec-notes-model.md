@@ -92,9 +92,9 @@ and Meta SOP Classes, well-known SOP Instances, coding schemes and the rest, cur
 alike, rather than a hand-picked subset. Two things are deliberately not PS3.6's spelling, and both
 are conveniences rather than corrections:
 
-- **Retirement is the `retired` boolean, not a suffix in the name.** PS3.6 marks a retired UID by
-  appending `(Retired)` to its UID Name; here that moves into a field you can branch on, and the
-  name stays a name.
+- **Retirement is the `retired` boolean, not a suffix in the name.** Every retired UID in Annex A
+  carries `(Retired)` at the end of its UID Name; here that moves into a field you can branch on,
+  and the name stays a name.
 - **Four transfer syntaxes keep the short form every toolkit prints.** PS3.6 gives them a trailing
   `: Default Transfer Syntax for ...` clause recording which storage class defaults to them, so you
   get `Implicit VR Little Endian` rather than

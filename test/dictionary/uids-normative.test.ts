@@ -113,6 +113,8 @@ interface AnnexARow {
   readonly rawName: string;
   /** The UID Type cell, or the table's own type for Table A-2. */
   readonly rawType: string;
+  /** Table A-1's fifth "Part" cell. Table A-2 has no such column, so `""` there. */
+  readonly rawPart: string;
 }
 
 function rowsOf(id: string, columns: number, tableType?: string): AnnexARow[] {
@@ -126,6 +128,7 @@ function rowsOf(id: string, columns: number, tableType?: string): AnnexARow[] {
       uid: cells[0] ?? "",
       rawName: cells[1] ?? "",
       rawType: tableType ?? cells[3] ?? "",
+      rawPart: cells[4] ?? "",
     });
   }
   return out;
@@ -267,6 +270,53 @@ describe("deviation 1: retirement is a boolean, not a name suffix", () => {
     expect(shippedRetired).toBeLessThan(Object.keys(UIDS).length);
   });
 
+  it("agrees with Table A-1's OTHER retirement signal, which is the corroborating column", () => {
+    // 🔴 THE GENERATOR DERIVES `retired` FROM ONE SIGNAL AND ANNEX A PUBLISHES TWO, so the
+    // agreement is measured here rather than assumed. The name-suffix convention is an
+    // observation of the data: the pinned bytes nowhere say "a retired UID's name gets
+    // ' (Retired)' appended". What Annex A DOES state, in the paragraph immediately above Table
+    // A-1 and at exactly one place in the document ("For retired UIDs" - one hit, located per
+    // the whole-document rule rather than by first match), is the OTHER one:
+    //
+    //   "For retired UIDs, the edition of the Standard in parentheses is the edition in which
+    //    the item last appeared before it was retired."
+    //
+    // That is the fifth "Part" cell. This is the element registry's own trap one table over:
+    // there, reading the sixth column as a boolean retired 391 live tags, because it also
+    // carries DICOS/DICONDE markers. Same here, so the column is a CORROBORATION and not the
+    // source. If a future edition retires a UID by the Part cell alone, this reds and the
+    // generator's single signal has to be re-decided rather than silently shipping
+    // `retired: false`.
+    const a1 = rowsOf("table_A-1", 5);
+    const EDITION = /^\(\d{4}[a-z]?\)$/;
+    const bySuffix = a1
+      .filter((r) => r.rawName.endsWith(RETIRED_SUFFIX) || r.rawName === UNNAMED_RETIRED)
+      .map((r) => r.uid)
+      .sort();
+    const byPart = a1
+      .filter((r) => EDITION.test(r.rawPart))
+      .map((r) => r.uid)
+      .sort();
+
+    expect(bySuffix.length).toBeGreaterThan(0);
+    expect(bySuffix.length).toBeLessThan(a1.length);
+    expect(byPart).toEqual(bySuffix);
+
+    // And the reason the Part column cannot simply BE the flag: it carries other markers.
+    const otherMarkers = [
+      ...new Set(
+        a1.filter((r) => r.rawPart !== "" && !EDITION.test(r.rawPart)).map((r) => r.rawPart),
+      ),
+    ];
+    expect(otherMarkers.length).toBeGreaterThan(0);
+    expect(otherMarkers.some((m) => m.startsWith("DIC"))).toBe(true);
+
+    // Table A-2 has no Part column at all, which is why this case is scoped to A-1.
+    expect(
+      rowsOf("table_A-2", 4, "Well-known Frame of Reference").every((r) => r.rawPart === ""),
+    ).toBe(true);
+  });
+
   it("spells retirement in no shipped name, which is the deviation", () => {
     // The control that gives the case above meaning: PS3.6 really does put the marker in the
     // name, so a registry that had simply copied the column would fail this.
@@ -325,12 +375,26 @@ describe("deviation 2: four Transfer Syntax names keep their toolkit short form"
     expect(carryClause).toEqual([...SHORT_FORM_UIDS].sort());
   });
 
-  it("leaves every other shipped name whole, cut at nothing", () => {
-    // The cut is applied per UID, not as a blanket transform. Names carrying other punctuation
-    // that a sloppier rule might have split on (a colon with no space, a dash clause) come
-    // through intact.
+  it("leaves the 73 dash-clause names whole, cut at nothing", () => {
+    // The cut is applied per UID, not as a blanket transform, and the dash clause is the
+    // population a blanket "cut at the first clause separator" rule would have eaten.
+    //
+    // NAMED FOR WHAT IT CHECKS, after a refuter pass corrected it. An earlier wording claimed
+    // this also covered "a colon with no space", and that population is EMPTY: measured over
+    // Tables A-1 and A-2 of this pinned edition, ZERO names contain a colon not followed by a
+    // space, and 73 contain " - ". A control over a population with no members is not a
+    // control. The colon question is answered by the preceding case instead, which pins the
+    // ": " clause set at exactly four.
+    //
+    // And what this case's red on the parent MEANS, stated so it is not over-read: on
+    // `3617034` it reds because 56 of these 73 UIDs were not in the registry at all, which is a
+    // COVERAGE failure. It is not evidence that a name was ever cut wrongly. Its value is
+    // forward-looking - it reds if the cut ever spreads.
+    const noSpaceColon = named.filter((r) => /:(?! )/.test(r.rawName));
+    expect(noSpaceColon).toEqual([]);
+
     const withDash = named.filter((r) => normative(r).name.includes(" - "));
-    expect(withDash.length).toBeGreaterThan(0);
+    expect(withDash.length).toBe(73);
     for (const row of withDash) expect(UIDS[row.uid]?.name).toBe(normative(row).name);
   });
 });
@@ -366,7 +430,7 @@ describe("the UIDs a current DICOM file can actually carry now resolve", () => {
     // And the expected name is not a string this file invented: it is what the pinned DocBook
     // publishes for that row.
     const row = named.find((r) => r.uid === uid);
-    expect(normative(row ?? { uid, rawName: "", rawType: "" }).name).toBe(name);
+    expect(normative(row ?? { uid, rawName: "", rawType: "", rawPart: "" }).name).toBe(name);
   });
 
   it("resolves the Well-known Frames of Reference that live in Table A-2, not A-1", () => {

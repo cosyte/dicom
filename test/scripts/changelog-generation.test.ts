@@ -295,14 +295,37 @@ const LIST_MARKER = /^ {0,3}(?:[-*+]|\d{1,9}[.)])(?: |$)/;
  * a setext underline under a top-level paragraph. Three leading spaces spans the `- ` bullet's
  * two-space content column, so a changeset summary that opens a line with an ATX heading is
  * refused BY THIS FILE and not only by a doc comment - the case at the end of this describe
- * block runs one through the real generator to prove it. What it does NOT read is a setext
- * underline inside a list item, because the paragraph above such an underline is the bullet's
- * own text and treating that as a heading would refuse ordinary release output.
+ * block runs one through the real generator to prove it. Fenced code is skipped, because a `#`
+ * inside a fence is a comment and not a heading. What it does NOT read: a setext underline
+ * INSIDE a list item (the paragraph above it is the bullet's own text, and treating that as a
+ * heading would refuse ordinary release output), and raw HTML - a literal `<h2>0.0.99</h2>`
+ * above the divider renders as that heading and is invisible here. Named, not closed.
+ *
+ * THE RULE THIS PUTS ON A CHANGESET, STATED WIDER THAN THE ONE THE SIBLINGS CARRY: a summary
+ * must contain no markdown heading in ANY spelling, which includes a bare `---` under a line of
+ * prose, because that is a setext heading and not a thematic break. Fenced code is exempt.
  */
 function renderedHeadings(region: readonly string[]): string[] {
   const out: string[] = [];
+  let fence: string | undefined;
   for (let i = 0; i < region.length; i += 1) {
     const line = region[i] ?? "";
+    // FENCED CODE IS NOT A HEADING, AND SKIPPING IT IS WHAT KEEPS THIS RULE OFF ORDINARY
+    // CHANGESET PROSE. A summary may carry a fenced block, `getReleaseLine` indents it into the
+    // region, and a shell comment inside one starts with `#`. Reading that as a heading would
+    // red a Version PR on legitimate content, which is the same wedge this group refuses
+    // elsewhere - the point is to refuse a heading a release did not write, not to refuse code.
+    const fenceOpen = /^ {0,3}(```+|~~~+)/.exec(line);
+    if (fence !== undefined) {
+      if (fenceOpen && fenceOpen[1] !== undefined && fenceOpen[1].startsWith(fence)) {
+        fence = undefined;
+      }
+      continue;
+    }
+    if (fenceOpen && fenceOpen[1] !== undefined) {
+      fence = fenceOpen[1];
+      continue;
+    }
     if (/^ {0,3}#{1,6}(?: |$)/.test(line)) {
       out.push(line.replace(/^ {0,3}/, "").trimEnd());
       continue;
@@ -322,6 +345,44 @@ function renderedHeadings(region: readonly string[]): string[] {
   }
   return out;
 }
+
+/**
+ * A document shaped exactly like this repo's `CHANGELOG.md`, with the generated region SUPPLIED
+ * rather than read off disk. `documentWith([])` is byte-identical to the committed file today.
+ *
+ * 🔴 WHY EVERY CONTROL BELOW BUILDS ITS FIXTURE INSTEAD OF SPLICING INTO THE LIVE DOCUMENT, AND
+ * WHY THIS IS THE SAME TRAP THE FILE ALREADY REFUSES ONE LEVEL UP. The first draft of the region
+ * group spliced a fabricated `## 0.0.99` in at `lines.indexOf(ARCHIVE_HEADING)` - the BOTTOM of
+ * the generated region - and asserted the `package.json says` violation. That is only the
+ * violation you get while the region is EMPTY. The moment the first `changeset version` this
+ * slice enables writes a real `## 0.0.13` above it, the fabricated section is no longer the
+ * topmost heading and the rule reports the ORDERING violation instead, so three cases go red on
+ * the Version PR. `.github/workflows/ci.yml` runs on that PR and `prepublishOnly` runs this same
+ * suite under `changeset publish`, so it would have wedged the release AND the publish.
+ *
+ * That is trap 2 - "a shape assertion WEDGES the release it enables" - reappearing as a fixture
+ * defect rather than as an assertion, and a fixture pinned to "what the committed file looks
+ * like today" is a staleness clock wearing a different hat: it fires on a known future event and
+ * reds a PR nobody edited. A control must mean the same thing on both sides of a release, so it
+ * gets a document of its own, at versions this package will never be at.
+ */
+function documentWith(releases: readonly (readonly string[])[]): string {
+  const region = releases.flat();
+  return ["# Changelog", "", ...region, archivedHistory(changelog)].join("\n");
+}
+
+/** A synthetic, well-formed generated release section. */
+const release = (version: string): readonly string[] => [
+  `## ${version}`,
+  "",
+  "### Patch Changes",
+  "",
+  "- deadbee: A real entry.",
+  "",
+];
+
+/** A release section for a version that never happened. */
+const FABRICATED: readonly string[] = release("0.0.99");
 
 const VERSION_HEADING = /^## (\d+)\.(\d+)\.(\d+)(?:[-+][0-9A-Za-z.-]+)?$/;
 
@@ -523,108 +584,126 @@ describe("the region ABOVE the divider, which the frozen digest cannot see", () 
    * making a released version look fabricated, and that is the wrong direction to fail in.
    */
   it("carries only generated headings above the divider, newest first, topped by this version", () => {
+    // The one case in this group that reads the LIVE document, and it is the one that must:
+    // it is the assertion about the file this repo actually ships. Every case below builds its
+    // own document instead, for the reason `documentWith` states.
     expect(pkg.version).toMatch(/^\d+\.\d+\.\d+/);
     expect(generatedRegionViolation(changelog, pkg.version ?? "")).toBeUndefined();
+  });
+
+  it("accepts an empty generated region, so the rule cannot wedge a FIRST release", () => {
+    // The rule is conditional on there BEING a version heading, deliberately: asserting that
+    // the archive heading comes second would wedge the first Version PR this configuration
+    // opens. Stated against a synthesized empty region rather than against "the committed file
+    // has no release section yet", which is a fact that expires the moment one does.
+    expect(generatedRegionViolation(documentWith([]), "0.0.12")).toBeUndefined();
+    expect(generatedRegionViolation(documentWith([]), "9.9.9")).toBeUndefined();
   });
 
   it("rejects a fabricated release section wherever it is placed (the control)", () => {
     // The rule proved load-bearing rather than asserted, on the exact shape the sibling
     // measured as passing. Both placements are reproduced.
-    const lines = changelog.split("\n");
-    const divider = lines.indexOf(ARCHIVE_HEADING);
-    const fabricated = [
-      "## 0.0.99",
-      "",
-      "### Patch Changes",
-      "",
-      "- deadbee: A release that never happened.",
-      "",
-    ];
-
-    const atTop = [...lines.slice(0, divider), ...fabricated, ...lines.slice(divider)].join("\n");
-    expect(generatedRegionViolation(atTop, pkg.version ?? "")).toMatch(/package\.json says/);
-
+    expect(generatedRegionViolation(documentWith([FABRICATED]), "0.0.13")).toMatch(
+      /package\.json says/,
+    );
     // And below a real release section, where the ordering rule is what catches it.
-    const released = runVersionCached();
-    const rl = released.split("\n");
-    const rd = rl.indexOf(ARCHIVE_HEADING);
-    const belowReal = [...rl.slice(0, rd), ...fabricated, ...rl.slice(rd)].join("\n");
-    expect(generatedRegionViolation(belowReal, "0.0.13")).toMatch(/not newest first/);
+    expect(
+      generatedRegionViolation(documentWith([release("0.0.13"), FABRICATED]), "0.0.13"),
+    ).toMatch(/not newest first/);
   });
 
   it("rejects a fabricated section spelled to dodge a column-0 heading filter", () => {
-    // 🔴 BOTH OF THESE WERE REPRODUCED AGAINST THIS DOCUMENT BEFORE THE GUARD READ THEM, and
-    // both render as an `<h2>` carrying the fabricated version. A `/^#{1,6} /` filter - the
-    // obvious way to write this rule, and what `headings()` above still uses for the different
-    // question of what the generator WROTE - sees neither, so the whole group passed on a
-    // document announcing a release that never happened. CommonMark allows an ATX heading up to
-    // three leading spaces, and a setext heading needs no `#` at all.
-    const lines = changelog.split("\n");
-    const divider = lines.indexOf(ARCHIVE_HEADING);
-    const smuggle = (frag: readonly string[]): string =>
-      [...lines.slice(0, divider), ...frag, ...lines.slice(divider)].join("\n");
-
+    // 🔴 BOTH OF THESE WERE REPRODUCED ON THIS DOCUMENT BEFORE THE GUARD READ THEM, and both
+    // render as an `<h2>` carrying the fabricated version. A `/^#{1,6} /` filter - the obvious
+    // way to write this rule, and what `headings()` above still uses for the different question
+    // of what the generator WROTE - sees neither, so the whole group passed on a document
+    // announcing a release that never happened. CommonMark allows an ATX heading up to three
+    // leading spaces, and a setext heading needs no `#` at all.
     for (const indent of [" ", "  ", "   "]) {
       expect(
         generatedRegionViolation(
-          smuggle([`${indent}## 0.0.99`, "", "### Patch Changes", "", "- deadbee: never.", ""]),
-          pkg.version ?? "",
+          documentWith([[`${indent}## 0.0.99`, "", "### Patch Changes", "", "- dead: never.", ""]]),
+          "0.0.13",
         ),
         `ATX indented by ${indent.length}`,
       ).toMatch(/package\.json says/);
     }
 
-    // The setext spelling, which carries no `#` anywhere.
+    // The setext spellings, which carry no `#` anywhere.
     expect(
       generatedRegionViolation(
-        smuggle(["0.0.99", "-------", "", "- deadbee: never.", ""]),
-        pkg.version ?? "",
+        documentWith([["0.0.99", "-------", "", "- dead: never.", ""]]),
+        "0.0.13",
       ),
     ).toMatch(/package\.json says/);
     expect(
-      generatedRegionViolation(smuggle(["Notes", "=====", "", "Prose.", ""]), pkg.version ?? ""),
+      generatedRegionViolation(documentWith([["Notes", "=====", "", "Prose.", ""]]), "0.0.13"),
     ).toMatch(/not generated output/);
   });
 
+  it("does not read a fenced code block as a heading (the false-positive control)", () => {
+    // The other direction, and it is a wedge rather than a leak: a changeset summary may carry
+    // a fenced block, `getReleaseLine` indents it into the region, and a shell comment inside
+    // one opens with `#`. Reading that as a heading would red a Version PR on legitimate
+    // content, which is the failure this whole group is written to avoid.
+    const fenced = [
+      "## 0.0.13",
+      "",
+      "### Patch Changes",
+      "",
+      "- deadbee: A real entry.",
+      "",
+      "  ```sh",
+      "  # not a heading",
+      "  ## nor this",
+      "  ```",
+      "",
+    ];
+    expect(generatedRegionViolation(documentWith([fenced]), "0.0.13")).toBeUndefined();
+  });
+
   it("rejects a hand-written narrative section above the divider", () => {
-    const lines = changelog.split("\n");
-    const divider = lines.indexOf(ARCHIVE_HEADING);
-    const smuggled = [
-      ...lines.slice(0, divider),
-      "## Notes",
-      "",
-      "Prose.",
-      "",
-      ...lines.slice(divider),
-    ].join("\n");
-    expect(generatedRegionViolation(smuggled, pkg.version ?? "")).toMatch(/not generated output/);
+    // Both with and without a real release above it, so the case means the same thing before
+    // and after the first `changeset version` this configuration runs.
+    const narrative = ["## Notes", "", "Prose.", ""];
+    expect(generatedRegionViolation(documentWith([narrative]), "0.0.13")).toMatch(
+      /not generated output/,
+    );
+    expect(
+      generatedRegionViolation(documentWith([release("0.0.13"), narrative]), "0.0.13"),
+    ).toMatch(/not generated output/);
   });
 
-  it("accepts what a real release actually produces, so the rule cannot wedge one", () => {
-    // The rule has to be satisfied by generated output or it reds the first Version PR this
-    // configuration ever opens, which is the failure mode a sibling's shape assertion had.
-    expect(generatedRegionViolation(runVersionCached(), "0.0.13")).toBeUndefined();
-  });
-
-  it("still passes before any release has been generated, which is today", () => {
-    // There are no version headings above the divider yet. The rule is conditional on there
-    // being one, deliberately: asserting the archive heading comes second would wedge the first
-    // release, which is the trap this whole shape exists to avoid.
-    expect(generatedRegion(changelog).filter((l) => VERSION_HEADING.test(l))).toEqual([]);
-    expect(generatedRegionViolation(changelog, pkg.version ?? "")).toBeUndefined();
-  });
+  it(
+    "accepts what a real release actually produces, so the rule cannot wedge one",
+    { timeout: 90_000 },
+    () => {
+      // The rule has to be satisfied by generated output or it reds the Version PR, which is the
+      // failure mode a sibling's shape assertion had. Run against the LIVE document at the LIVE
+      // version, so this asks "would the NEXT release satisfy the rule" on whatever release this
+      // package is at, rather than at the one it happened to be at when this was written.
+      const released = runVersionCached();
+      expect(released.version).not.toBe(pkg.version);
+      expect(generatedRegionViolation(released.changelog, released.version)).toBeUndefined();
+      // And the release it produces is itself a document the release after it lands cleanly on.
+      const next = runVersion({ changelogBody: released.changelog, from: released.version });
+      expect(generatedRegionViolation(next.changelog, next.version)).toBeUndefined();
+    },
+  );
 });
 
 /**
- * One real `changeset version` run, reused by the cases above.
+ * One real `changeset version` run off the LIVE document at the LIVE version, reused above.
  *
- * `runVersion` spawns git and Changesets, which is the expensive part of this file. Bumping
- * from `0.0.12` is what this package is actually at, so the section a release writes here is
- * `## 0.0.13`, the one the first real Version PR will write.
+ * `runVersion` spawns git and Changesets, which is the expensive part of this file. `from` is
+ * read from `package.json` rather than typed: a literal here would mean "the release after the
+ * one this package was at when this was written", so the run would prepend a version heading
+ * BELOW one the document already carried the moment a release landed, and the case reading it
+ * would red on a Version PR nobody could have edited.
  */
-let cachedRelease: string | undefined;
-function runVersionCached(): string {
-  cachedRelease ??= runVersion({ changelogBody: changelog, from: "0.0.12" }).changelog;
+let cachedRelease: { changelog: string; version: string } | undefined;
+function runVersionCached(): { changelog: string; version: string } {
+  cachedRelease ??= runVersion({ changelogBody: changelog, from: pkg.version ?? "0.0.0" });
   return cachedRelease;
 }
 
@@ -724,7 +803,12 @@ describe("the shape that makes generated output land correctly", () => {
       // substring search for a heading it does not have. An assertion written that way goes
       // wrong inside a Version PR with the changeset already consumed, and `prepublishOnly`
       // runs this same suite under `changeset publish`.
-      const first = runVersion({ changelogBody: changelog, from: "0.0.9" });
+      // Fed a document with an EMPTY generated region, built rather than read: this case walks
+      // a package deliberately backwards to `0.0.9` to reach the `0.0.10` boundary, so once the
+      // live file carries a real release section the two would interleave out of order and the
+      // region assertion at the end would red on a Version PR. `documentWith([])` is the
+      // committed file today and stays that shape afterwards.
+      const first = runVersion({ changelogBody: documentWith([]), from: "0.0.9" });
       expect(first.version).toBe("0.0.10");
 
       // The collision, demonstrated on real generator output rather than asserted.
