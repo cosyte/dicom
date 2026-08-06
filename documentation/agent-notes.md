@@ -1965,10 +1965,13 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   items conveyed by this Data Element"); section **7.5.1** governs the Item's own length. Both traced
   to the SHA-pinned `vendor/nema/part05/`. **Neither says what a decoder does when they disagree**,
   so no reading is derived from either.
-  **The harm is a wrong structure, not a missing one, and the report is where it becomes a false
-  statement:** a root `(0010,0020)` Patient ID exactly as long as the item over-declares vanishes from
-  the root, appears as a per-item attribute, and `deidentify()` reports it with a `contextPath`
-  naming a sequence item it was never in. Silent, and silent under `{ strict: true }`.
+  **The reading relocates an element:** a root `(0010,0020)` Patient ID exactly as long as the item
+  over-declares vanishes from the root, appears as a per-item attribute, and `deidentify()` reports it
+  with a `contextPath` naming that item. Silent, and silent under `{ strict: true }`.
+  **🛑 THIS PARAGRAPH USED TO CALL THAT "a false statement" AND "a `contextPath` naming a sequence
+  item it was never in", AND THAT WORDING IS DELETED BY `DICOM-ITEM-CROSSES-RESIDUALS`** - it asserts
+  which of two byte-identical files you have, and on the partner file the element genuinely **is** in
+  the item. Do not put it back; see that section.
   **▶ 🛑 WHAT SHIPPED IS A WARNING AND NOTHING ELSE, AFTER FIVE REFUSED ATTEMPTS AT A BOUND, AND THE
   REASON IS ONE LINE OF MEASUREMENT: A FILE WHOSE ITEM OVER-DECLARES AND A FILE WHOSE SEQUENCE
   UNDER-DECLARES ARE BYTE-IDENTICAL.** `test/integration/explicit-sq-item-bound.test.ts` builds both
@@ -2056,9 +2059,10 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   **🛑 THE PRE-REBASE FIGURES (76,611 cells, 442 newly warning, 402 strict fatals, 15,180) ARE DEAD**
   - they were taken against `164eb39`, before `#66` added the `priv|` family. And `cells whose
 READING differs` is **not** new here: `#66` added it, and a draft of this entry claimed the credit.
-    **▶ WHAT IS LEFT, NAMED:** the **mis-structure itself** (an over-declaring item still relocates the
-    element that follows the sequence, and the `contextPath` still names an item it was never in -
-    pinned by a test, and repairing it needs something the bytes do not carry); the
+    **▶ WHAT IS LEFT, NAMED:** the **relocation itself** (an over-declaring item still moves the
+    element that follows the sequence into it, pinned by a test; **UNDECIDABLE**, and the
+    "`contextPath` names an item it was never in" half of this line is DELETED by
+    `DICOM-ITEM-CROSSES-RESIDUALS`); the
     **undefined-length item with no `(FFFE,E00D)`**, which has no declared length to disagree with;
     and **11 grid cells still leaking** through the `OB`/`OW`/`US`/`UN` leaf carrier, `PRE-EXISTING`.
     **▶ `Element.byteOffset` INSIDE AN ITEM DISAGREES WITH ITSELF, ALWAYS HAS, AND A REFUTED DRAFT GOT
