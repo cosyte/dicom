@@ -124,10 +124,13 @@ any file that populates the field at all. And so does **`contextPath`, on every 
 one** - a segment is `TAG[index]` and the tag half is read off the wire with nothing behind it, so a
 fabricated `SQ` header the reader was desynchronized onto is named there. Measured on a synthetic
 `LO` carrier holding `MRS BRAIN SMITHSON` that under-declares by four: the report reads
-`contextPath: ["53484E4F[0]"]`, which is `HSON` in wire order, and **nothing else in the entire
-output records that header** - no warning at all, and every finding array empty. Both are
-`PRE-EXISTING` on every release that has shipped the field, and both are named here so nobody logs
-them in the meantime. What is left over - keywords, action codes, applied outcomes, repeating-group
+`contextPath: ["53484E4F[0]"]`, which is `HSON` in wire order, with **no warning at all and every
+finding array empty**. Both are `PRE-EXISTING` on every release that has shipped the field, and both
+are named here so nobody logs them in the meantime. **But redacting `contextPath` is a logging fix
+and not an object fix** - on that same file the de-identified object still carries the fabricated
+`(5348,4E4F)`, so the serializer writes `HSON` back out under a `Patient Identity Removed = YES`
+stamp. That re-emission is the under-declared-carrier class in the row above, not this field; neither
+one bounds the other. What is left over - keywords, action codes, applied outcomes, repeating-group
 masks, and the attribute tags, which are bound to tags Annex E carries a row for - is composed from
 static tables and carries nothing.
 

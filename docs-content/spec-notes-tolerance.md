@@ -127,8 +127,11 @@ them more certainly the element's own content, not less.
 A downstream package that reads this model and builds its own diagnostics from it needs to know which
 strings are identifiers this parser composed and which are bytes the sender wrote. These are
 identifiers, with the bound each one actually has. One of them is a length rather than a membership
-test, and its row says so. **And one of them has no bound at all** - `contextPath` was listed here as
-structural until it was measured, and it now has its own row saying what it really is:
+test, and its row says so. **And `contextPath` has no bound at all** - it was listed here as
+structural until it was measured, and it now has its own row saying what it really is. It is not the
+only entry read off the wire (`removedPrivateTags` and `UnauditableSequenceFinding.tag` are too, and
+are disclosed as such in [Troubleshooting](./troubleshooting)); it is the one that was described as
+though it were not:
 
 | Field                                                                                                  | Bound                                                                                                                                                                                                                                                                                               |
 | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

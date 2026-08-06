@@ -24,6 +24,10 @@ then the two gates.
 
 ## DICOM-ITEM-CROSSES-RESIDUALS
 
+**Provenance:** no new normative citation. Every claim below is a measurement taken on this repo at
+`b7a77fe` and re-runnable from `test/integration/phi-diagnostic-surface.test.ts`; the PS3.5 sections
+this lineage rests on were pinned by earlier slices under `vendor/nema/` and none moved here.
+
 The residual this item carried was undecidable; the one next door on the same field was not.
 
 **▶ THE EVIDENCE FOR `CLAUDE.md`'s BASE-RED TRAP LIVES HERE, RELOCATED RATHER THAN DELETED.** Two
@@ -51,22 +55,36 @@ the two-row measurement that was already sitting under it, with **neither row la
 **▶ 🩺 THE DECIDABLE HALF NOBODY HAD ASKED ABOUT: `contextPath` IS NOT STRUCTURAL AND SIX ARTIFACTS
 SAID IT WAS.** A segment is `TAG[index]`; the tag half is whatever tag `descendSequence` walked, read
 straight off the wire. Every other identifier the report composes is built from the Part 6 / Annex E
-tables or bound to a tag those tables carry a row for - **membership in a closed table, this repo's
-own standard since `phi-warning-message-leak`** - and this one is bound by nothing. Measured on a
+tables, and `attributes[].tag` is bound to a tag those tables carry a row for - **membership in a
+closed table, this repo's own standard since `phi-warning-message-leak`** - while this one is bound
+by nothing. **It is NOT the only report identifier read off the wire and a graded pass refused that
+wording**: `removedPrivateTags` and `unauditableSequences[].tag` are as well, and both were already
+disclosed as such. The defect here is the missing disclosure, not a unique unboundedness. Measured on a
 synthetic `LO` carrier holding `"MRS BRAIN SMITHSON"` under-declaring by four, so the reader
 resynchronizes onto the surname's last four bytes as a tag and reads `SQ` as their VR:
 `contextPath: ["53484E4F[0]"]`, which is `"HSON"` in wire order. Surname to `"DAVIDSON"` gives
 `"53444E4F[0]"` (`"DSON"`), which is the mutation control; a conformant file gives `"00081115[0]"`,
 the tag the sender wrote, which is the negative control and the reason the field is still published.
-**And it is the ONLY trace of that header in the whole output** - `ds.warnings` empty, every finding
-array empty - so the "structural fields are safe to log" guidance was all a consumer had.
+**No warning is raised and every finding array is empty**, so the "structural fields are safe to log"
+guidance was all a consumer had.
+
+**▶ 🛑 AND THE FIRST DRAFT'S SUPERLATIVE WAS REFUTED ON THE SLICE'S OWN FIXTURE. DO NOT WRITE IT
+AGAIN.** It said, in six artifacts including a public `.d.ts` docstring, that `contextPath` was **the
+only trace of that header in the whole output**. Run `deidentify` on that same file and the returned
+`Dataset` still holds the fabricated `(5348,4E4F)`, so `serializeDicom` writes the whole header back
+out - `"HSON"` at offset 352, and `"DSON"` there for the mutation control - inside an object stamped
+`(0012,0062) = YES`. The nested `(0010,0020)` **is** emptied, which is exactly why the report reads
+clean. So the re-emission is the already-disclosed under-declared-carrier class and not this field's
+doing, and **neither is a bound on the other: redacting `contextPath` from a log leaves the object
+carrying the same four bytes.** That was an `INTRODUCED` blocker because the superlative was the
+justification for the remedy being a log-side one. Both rows are pinned now.
 
 **▶ THE REMEDY IS THE CLAIM, NOT THE GUARD, AND THE ARGUMENT IS `removedPrivateTags`' OWN.** *Where*
 an attribute sat is the entire audit value of the field; withholding the tag would destroy it on
 every well-formed file in order to bound a malformed one. So `contextPath` joins the list of report
 fields that are not value-free - and **that list's numerals were deleted rather than incremented**,
 because having to add a fifth to a list whose count had already been wrong three times is the same
-disease one step removed. Corrected in `src/deident/types.ts` (five places), the construction site in
+disease one step removed. Corrected in `src/deident/types.ts`, the construction site in
 `deidentify.ts`, `docs-content/spec-notes-tolerance.md` (its own row, bound: *none*),
 `docs-content/troubleshooting.md`, and the sweep's own docstring.
 

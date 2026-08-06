@@ -115,17 +115,29 @@ export interface DeidentifiedAttribute {
    * separates it from `tag`, `keyword`, `action` and `repeatingGroup`. On a file
    * where an under-declared Value Length desynchronized the reader onto four
    * bytes sitting **inside** somebody's value, those four bytes become a segment
-   * here.
+   * here. It is not the only identifier on this report read off the wire -
+   * {@link DeidentifyReport.removedPrivateTags} and
+   * {@link UnauditableSequenceFinding.tag} are too - but those two are disclosed
+   * as such, and this one was documented as structural.
    *
    * Measured on a synthetic `LO` carrier holding `"MRS BRAIN SMITHSON"` that
    * under-declares by four: the reader resynchronizes onto a fabricated `SQ`
    * header, descends it, and the report reads `contextPath: ["53484E4F[0]"]` -
    * `"HSON"` in wire order, recovered by writing the two halves back with
-   * `writeUInt16LE`. The run is otherwise **silent**: `Dataset.warnings` is
-   * empty and so is every finding array on the report, so this field is the only
-   * trace of that header anywhere in the output. Change the surname and the
-   * published segment changes with it. `PRE-EXISTING`, on every release that has
-   * shipped the field.
+   * `writeUInt16LE`. **No warning is raised and every finding array on the
+   * report is empty.** Change the surname and the published segment changes with
+   * it. `PRE-EXISTING`, on every release that has shipped the field.
+   *
+   * **🛑 IT IS NOT THE ONLY PLACE THOSE BYTES SURFACE, AND AN EARLIER DRAFT OF
+   * THIS NOTE SAID IT WAS. A GRADED PASS REFUTED THAT AND IT MUST NOT COME
+   * BACK.** On the same file the de-identified `Dataset` still carries the
+   * fabricated `(5348,4E4F)`, so `serializeDicom` writes its header back out in
+   * full - `"HSON"` included - inside an object stamped
+   * `(0012,0062) Patient Identity Removed = YES`. That re-emission belongs to
+   * the disclosed under-declare carrier class, not to this field, and neither is
+   * a bound on the other: **redacting `contextPath` from a log does not make the
+   * object safe to share.** Pinned in
+   * `test/integration/phi-diagnostic-surface.test.ts`.
    *
    * It is published anyway, on the same footing as
    * {@link DeidentifyReport.removedPrivateTags}: **where** an attribute sat is
@@ -417,10 +429,12 @@ export interface UndefinedVrFinding {
  * - **`contextPath`, on all four findings that carry one** - see
  *   {@link DeidentifiedAttribute.contextPath}, which holds the measurement. The
  *   segment tags come off the wire with no table behind them, so a fabricated
- *   `SQ` header the reader descended is named there, `PRE-EXISTING` and
- *   **silently**: on the measured file nothing else in the whole output records
- *   that header. This is the field the rest of this docstring, the tolerance
- *   table and the troubleshooting guide all called structural.
+ *   `SQ` header the reader descended is named there, `PRE-EXISTING`, with **no
+ *   warning and no finding array to correlate it with**. This is the field the
+ *   rest of this docstring, the tolerance table and the troubleshooting guide
+ *   all called structural. **It is a logging hazard and nothing more: on that
+ *   same file the de-identified object itself re-emits the fabricated header, so
+ *   redacting this field does not make the object safe.**
  *
  * So "the report is safe to log apart from `uidMap`" is **not** an accurate
  * description of this type, and was corrected rather than kept convenient.

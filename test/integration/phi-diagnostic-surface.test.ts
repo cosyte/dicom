@@ -1221,10 +1221,10 @@ describe("PHI: report contextPath is not structural, and this is the measurement
     expect(CONTEXT_NAME).toContain("HSON");
   });
 
-  it("is the ONLY trace of that header anywhere in the output", () => {
-    // The reason this outranks a curiosity. A consumer has no other signal to
+  it("raises no diagnostic of any kind alongside it", () => {
+    // Why the field matters at all: there is no warning and no finding to
     // correlate it with, so "the report's structural fields are safe to log" was
-    // the only guidance they had, and it was wrong.
+    // the only guidance a consumer had, and it was wrong.
     const ds = parseDicom(fabricatedSequenceInsideAValue(CONTEXT_NAME));
     const { report } = deidentify(ds);
 
@@ -1234,6 +1234,41 @@ describe("PHI: report contextPath is not structural, and this is the measurement
     expect(report.unauditableSequences).toEqual([]);
     expect(report.removedPrivateTags).toEqual([]);
     expect(report.warnings).toEqual([]);
+  });
+
+  it("🛑 but it is NOT the only place those bytes surface: the de-identified OBJECT re-emits the whole header", () => {
+    // **A graded pass refuted the sentence this test replaces.** The first draft
+    // of this slice claimed in six artifacts that `contextPath` was "the only
+    // trace of that header anywhere in the output". It is not, and the miss
+    // mattered: a consumer who redacts `contextPath` on that advice still
+    // forwards a "de-identified" object carrying four bytes of the surname,
+    // stamped `Patient Identity Removed = YES`.
+    //
+    // The fabricated `(5348,4E4F)` survives into the output Data Set, so the
+    // spec-clean serializer writes its header back out in full. That re-emission
+    // is the already-disclosed under-declare carrier class
+    // (`DICOM-CARRIER-LEAF-LEAKS`), NOT this field's doing - the point of the row
+    // is that neither one is a bound on the other, and the diagnostic advice
+    // must not be read as covering the object.
+    const { dataset } = deidentify(parseDicom(fabricatedSequenceInsideAValue(CONTEXT_NAME)));
+    const out = serializeDicom(dataset);
+
+    expect([...dataset.elements()].map((el) => el.tag)).toContain("53484E4F");
+    expect(out.includes(Buffer.from("HSON", "latin1"))).toBe(true);
+    expect(dataset.get("00120062")?.rawBytes.toString("latin1")).toBe("YES");
+    // The nested `(0010,0020)` IS emptied, which is why the report reads clean.
+    expect(out.includes(Buffer.from("MRN-1", "latin1"))).toBe(false);
+  });
+
+  it("and the re-emitted bytes track the payload too", () => {
+    // The mutation control for the row above, so it cannot pass on a constant.
+    const { dataset } = deidentify(
+      parseDicom(fabricatedSequenceInsideAValue(CONTEXT_NAME_CONTROL)),
+    );
+    const out = serializeDicom(dataset);
+
+    expect(out.includes(Buffer.from("DSON", "latin1"))).toBe(true);
+    expect(out.includes(Buffer.from("HSON", "latin1"))).toBe(false);
   });
 
   it("tracks the payload: change the surname and the published bytes change with it", () => {

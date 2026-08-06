@@ -8,9 +8,11 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 - **🩺 `DeidentifyReport`'s `contextPath` was documented as structural, and it is not: it can publish
   four bytes of a value, silently** (`DICOM-ITEM-CROSSES-RESIDUALS`). A segment is `TAG[index]`, and
-  the tag half is whatever tag the descent walked, read straight off the wire. Every other identifier
-  the report composes is either built from the Part 6 / Annex E tables or bound to a tag those tables
-  carry a row for; this one is bound by neither a shape test nor a closed table. So a file whose
+  the tag half is whatever tag the descent walked, read straight off the wire, bound by neither a
+  shape test nor a closed table. `attributes[].tag` is bound - it is only populated for a tag Annex E
+  carries a row for - and that contrast is the finding. **It is not the only report identifier read
+  off the wire**: `removedPrivateTags` and `unauditableSequences[].tag` are as well. Those two were
+  already disclosed as such; this one was documented as structural. So a file whose
   under-declared Value Length desynchronizes the reader onto four bytes sitting **inside** somebody's
   value, where those four bytes are followed by `SQ`, gets that fabricated sequence descended and its
   fabricated tag published in the `contextPath` of everything beneath it.
@@ -18,10 +20,18 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   Measured on a synthetic `LO` carrier holding `"MRS BRAIN SMITHSON"` that under-declares by four:
   the report reads `contextPath: ["53484E4F[0]"]`, which is `"HSON"` in wire order, recovered by
   writing the two halves back with `writeUInt16LE`. Change the surname to `"DAVIDSON"` and the
-  published segment changes with it. **And it is the only trace of that header in the entire
-  output** - `ds.warnings` is empty, and so is every finding array on the report - so a consumer
-  following the old guidance had no signal at all. A conformant file's segment is the tag the sender
-  wrote, which is why the field is still published.
+  published segment changes with it. **No warning is raised and every finding array on the report is
+  empty**, so a consumer following the old guidance had no signal at all. A conformant file's segment
+  is the tag the sender wrote, which is why the field is still published.
+
+  **🛑 REDACTING `contextPath` IS A LOGGING FIX AND NOT AN OBJECT FIX, AND A GRADED PASS REFUTED THE
+  FIRST DRAFT FOR SAYING OTHERWISE.** That draft claimed in six places that this field was "the only
+  trace of that header in the entire output". It is not: the de-identified `Dataset` still carries
+  the fabricated `(5348,4E4F)`, so `serializeDicom` writes its header back out in full, `"HSON"`
+  included, under `(0012,0062) Patient Identity Removed = YES` - and the re-emitted bytes track the
+  surname exactly as the log field does. That re-emission is the already-disclosed under-declared
+  carrier class, not this field's doing, and **neither one is a bound on the other.** Both rows are
+  now pinned.
 
   **The claim was corrected and no guard was widened**, on the same footing as `removedPrivateTags`:
   _where_ an attribute sat is the whole audit value of the field, and withholding it would destroy
@@ -1106,7 +1116,10 @@ Removed = YES` with `report.warnings` empty **and** `report.retained` `[]` - an 
   followed by a root `(0010,0020)` Patient ID that is 18 bytes on the wire (an 8-byte Explicit VR
   short-form header plus a 9-character value padded to 10). The Patient ID is **absent from the root**
   and present instead as an attribute of the item; the `DeidentifyReport` names it with a
-  `contextPath` pointing at a sequence item it was never in. It is swallowed once and relocated, not
+  `contextPath` pointing at that sequence item. (This entry said "pointing at a sequence item it was
+  never in" until `DICOM-ITEM-CROSSES-RESIDUALS` deleted that wording: it asserts which of two
+  byte-identical files you have. See the entry at the top of this file.) It is swallowed once and
+  relocated, not
   read twice: the parser resumes where the descent actually ended. The parse was silent about all of
   it, including under `{ strict: true }`, and that silence is what is fixed. The mis-structure itself
   is **not repaired here** and is pinned as a residual by a test.
