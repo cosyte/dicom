@@ -38,16 +38,29 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   shipping it unexamined. **Pass the same profile to `parseDicom`** and the sequence is walked, its
   Table E.1-1 attributes de-identified and the rest retained.
 
-  **It reaches the CP-246 `UN` too, wherever a profile named it.** The test carries no length
-  condition, so an undefined-length `UN` whose CP-246 descent this parser refused is emptied when a
-  `Profile` declares that private attribute `SQ`. The undefined-length `UN` residual is a statement
-  about elements **no profile named**, and survives only there.
+  **It reaches the CP-246 `UN` too, wherever a profile named it.** The test does not look at the
+  length **field**, so an undefined-length `UN` whose CP-246 descent this parser refused is emptied
+  when a `Profile` declares that private attribute `SQ`. The undefined-length `UN` residual is a
+  statement about elements **no profile named**, and survives only there. (Read that as stated: the
+  predicate does have a length conjunct, `el.length > 0`, and a refused CP-246 descent carries
+  `0xFFFFFFFF`, so it passes.)
 
   **Two properties of the module are kept by conjuncts ahead of that test, and each is pinned by its
   own test.** An element whose on-wire VR is not one of the 34 is still answered by the tag-free
-  `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` route, so a header fabricated from bytes inside some
-  element's value cannot put its tag on a diagnostic. And a zero-length value is left alone, so
+  `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` route. And a zero-length value is left alone, so
   de-identifying an already de-identified object reports no second drop.
+
+  **🩺 The first of those is a PARTIAL bound, and it is disclosed rather than grown.** It keeps the
+  tag off the diagnostic only when the fabricated header's own VR bytes fall outside the 34. A
+  length under-declared upstream can resynchronize the reader onto four bytes that spell a genuine
+  private block, and if those bytes are followed by `OB` rather than something unrecognized, the
+  fabricated tag reaches `report.unauditableSequences` and the warning. There is nothing to key on:
+  a fabricated `OB` header and a genuine one are byte-identical. The direction is still a strict
+  improvement, because the previous behaviour kept that carrier **verbatim** and shipped the whole
+  nested name, and this one empties it. It joins `report.removedPrivateTags`, which can echo the
+  same four bytes from a fabricated odd-group header on both trees: **`DeidentifyReport` is not a
+  value-free surface and must not be treated as one.** Pinned as the second row of the
+  fabricated-header test.
 
   `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE`'s message no longer reads "is VR=SQ". It is shared by both
   producers, and the second one's premise is that the parse tree and the profile disagree about the

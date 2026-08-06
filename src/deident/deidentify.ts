@@ -5,8 +5,9 @@
  * nine *metadata-affecting* Annex E Options, driven by the generated Table E.1-1
  * action map ({@link annexE}). It is a **pure** function: the input {@link Dataset}
  * is never mutated; a fresh `Dataset` (with a rebuilt element map and File Meta)
- * is returned alongside a {@link DeidentifyReport} whose two non-value-free
- * fields are named on that type: `uidMap` and `removedPrivateTags`.
+ * is returned alongside a {@link DeidentifyReport} whose non-value-free fields
+ * are named on that type: `uidMap`, `removedPrivateTags` and
+ * `unauditableSequences[].tag`.
  *
  * **What it does**
  * - Resolves each attribute's action (basic profile, overridden by an active
@@ -696,13 +697,33 @@ function emptyUnauditableSequence(
  * new report field and no new warning code, the same choice `#66`, `#69` and
  * `#77` made.
  *
- * **On naming the tag.** This repo refuses a diagnostic that names an element
- * whose header might be fabricated, because there the trigger *is* "these bytes
- * are not what they claim to be". That is not this trigger, on either caller.
- * Both are reached only for an element inside the **settled** run of a Data Set
- * whose reservations are usable, and the retained-private caller reached it by
- * resolving a live Private Creator against the profile - so the tag is a
- * structural coordinate the parser counted, not four bytes found mid-value.
+ * **🩺 On naming the tag, and the residual that claim used to deny.** This repo
+ * refuses a diagnostic that names an element whose header might be fabricated,
+ * because there the trigger *is* "these bytes are not what they claim to be".
+ * An earlier draft of this block said that was "not this trigger, on either
+ * caller", and a graded pass measured it false for the retained-private caller.
+ * Being inside the **settled** run of a Data Set with usable reservations, and
+ * resolving a live Private Creator against the profile, is **not** proof the
+ * header was counted rather than found: an *under*-declared length upstream
+ * resynchronizes the reader mid-value, and the four bytes it lands on can spell
+ * this caller's own vendor block, whose Private Creator is genuine and whose
+ * position is inside that settled run. `!hasUndefinedVr(el)` in
+ * {@link keepRetainedPrivate} sends the fabricated headers whose fabricated VR
+ * is **outside the 34** back to the tag-free route, and that is all it does.
+ * **A fabricated header whose two VR bytes happen to spell `OB` (or any of the
+ * 34) is answered here, and its tag reaches this warning and
+ * `report.unauditableSequences`.** Measured; pinned as the second row of the
+ * fabricated-header test.
+ *
+ * **It is disclosed rather than guarded, and the guard must not be grown for
+ * it.** A fabricated `OB` header and a genuine one are byte-identical, which is
+ * this package's permanent fact and has stopped five slices. There is nothing
+ * to key on. On the same input the base tree kept the carrier **verbatim** and
+ * shipped the whole nested name, so the direction is a strict improvement: four
+ * bytes of tag on a diagnostic instead of a full `(0010,0010)` in the output.
+ * It joins `report.removedPrivateTags`, which can echo the same four bytes from
+ * a fabricated odd-group header on both trees. `DeidentifyReport` is not a
+ * value-free surface and must never be described as one.
  */
 function emptyUnauditableCarrier(
   el: Element,
@@ -1114,12 +1135,17 @@ function declaredPrivateVr(
  * for it here.
  *
  * **What it DOES now cover that no artifact should call exempt: the CP-246 `UN`.**
- * The test below has no length condition, so an undefined-length `UN` whose
- * CP-246 descent this parser refused **is** emptied when a profile declares that
- * private attribute `SQ`. The undefined-length `UN` residual survives everywhere
- * else - it is a statement about elements no profile named - and the earlier
- * enumeration here, which said these carriers all have defined lengths so CP-246
- * is never reached, was false and is retracted.
+ * An undefined-length `UN` whose CP-246 descent this parser refused **is**
+ * emptied when a profile declares that private attribute `SQ`. The undefined-
+ * length `UN` residual survives everywhere else - it is a statement about
+ * elements no profile named - and the earlier enumeration here, which said these
+ * carriers all have defined lengths so CP-246 is never reached, was false and is
+ * retracted. **The reason is that the predicate does not test the length
+ * *field*, not that it has no length condition at all**: `el.length > 0` is one
+ * of its conjuncts, and a refused CP-246 descent carries `0xFFFFFFFF` there, so
+ * it passes. Saying "no length condition" in the same commit that added
+ * `el.length > 0` was itself refused by a graded pass; the conclusion held and
+ * the stated reason did not.
  *
  * `reservationsUsable` is threaded through rather than assumed. Its only call
  * site today is already guarded by `reservationsUsable &&`, so it can only
@@ -1165,6 +1191,14 @@ function keepRetainedPrivate(
   // own private block, and answering that element here would put its fabricated
   // tag on a warning and in the report. Three warning codes have been refused
   // for exactly that; do not reorder these two tests.
+  //
+  // 🩺 IT IS A PARTIAL BOUND AND MUST NOT BE WRITTEN UP AS A CLOSURE. It keeps
+  // the tag-free route only for a fabricated header whose two VR bytes fall
+  // OUTSIDE the 34. Fabricate `OB` instead of `Zz` and the tag reaches the
+  // diagnostic here. That is disclosed, not guarded: a fabricated `OB` header
+  // and a genuine one are byte-identical, and on the same input base kept the
+  // carrier verbatim and shipped the whole nested name. See
+  // {@link emptyUnauditableCarrier}.
   //
   // `el.length > 0` because a zero-length value hides nothing, and without it
   // de-identifying an already de-identified object reports a second drop where

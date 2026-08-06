@@ -87,12 +87,20 @@ Two things that array does **not** cover:
   the same registry and are equally safe, but a logger that only reads `ds.warnings` will not see
   them at all.
 
-A `DeidentifyReport` is safe to log with **two** exceptions, not one. `uidMap`'s keys are the source
+A `DeidentifyReport` is safe to log with **three** exceptions, not one. `uidMap`'s keys are the source
 UIDs read out of the file: they are there so UID replacement stays consistent across a study, and a
-study UID is a unique identifier. And `removedPrivateTags` is composed from tag numbers, which are
+study UID is a unique identifier. `removedPrivateTags` is composed from tag numbers, which are
 structural on every conformant file but are read out of the document, so a **fabricated** odd-group
-header makes four bytes of somebody's value into a tag string there. The rest of the report (keywords,
-action codes, sequence context paths) is composed from static tables and carries nothing.
+header makes four bytes of somebody's value into a tag string there. And `unauditableSequences[].tag`
+joins them, for the same reason by a narrower route: a private carrier a `Profile` declares `SQ` is
+named there, and a length under-declared upstream can resynchronize the reader onto four bytes that
+spell such a block. The package normally answers a fabricated header with `undefinedVrElements`,
+which carries a byte offset and **no tag**, and it still does whenever the fabricated VR is not one
+of the 34 PS3.5 §6.2 defines. It cannot when the fabricated VR is one of them, because a fabricated
+`OB` header and a genuine one are byte-identical, and no bound can tell them apart. The alternative
+was keeping that carrier verbatim, which is what earlier releases did and what shipped the nested
+value itself, so this is the better of the two. The rest of the report (keywords, action codes,
+sequence context paths) is composed from static tables and carries nothing.
 
 The field-by-field split between identifiers and values is in
 [Tolerance](./spec-notes-tolerance#the-model-fields-that-are-bounded-and-the-ones-that-are-values).
@@ -214,7 +222,8 @@ Each is tracked as a future companion package, not a gap to be filled here:
   value is a Sequence of Items, there is no item stream on the tree to walk, and the carrier is
   emptied and named in `report.unauditableSequences`. It keeps the VR the file carried; nothing is
   re-typed to `SQ`. **On the Explicit VR shape `ds.warnings` is empty**, so the report is the only
-  channel. **Pass the same profile to `parseDicom` as well as to `deidentify()`** and the sequence is
+  channel. **That naming is the third exception to "a report is safe to log"** described above, and
+  is why: the tag it records can itself be four bytes of another element's value. **Pass the same profile to `parseDicom` as well as to `deidentify()`** and the sequence is
   walked and its non-PHI content retained, rather than dropped.
   **One shape is still exempt and still leaks.** An
   undefined-length `UN` value the CP-246
@@ -222,7 +231,7 @@ Each is tracked as a future companion package, not a gap to be filled here:
   `DICOM_VR_MISMATCH`. The rule cannot be extended to `UN` in general, because every ordinary `UN`
   element also has `items === undefined` and applying it there would empty every unknown-VR element
   in every file. **Where a `Profile` does declare that private attribute `SQ`, the rule above
-  reaches it** and empties it: that test carries no length condition, so this residual is about
+  reaches it** and empties it: that test does not look at the length field, so this residual is about
   elements no profile named.
   **And one deliberate limit on the closure**: a private carrier whose profile entry declares a
   **binary** VR (`OB`/`OW`/`UN`) is kept verbatim even when its value happens to be a well-formed

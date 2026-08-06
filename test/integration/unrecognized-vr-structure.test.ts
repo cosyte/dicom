@@ -487,7 +487,7 @@ describe("what the structure rule does to the fabricated-header shape", () => {
     //
     // It is reported anyway because *which* private tags were removed is the
     // field's whole audit value on a well-formed file. The CLAIM was corrected
-    // (`DeidentifyReport` names two non-value-free fields, not one); narrowing
+    // (`DeidentifyReport` names three non-value-free fields, not one); narrowing
     // the field is a product call that has not been made.
     const tail = Buffer.from([0x53, 0x41, 0x42, 0x43, 0x53, 0x48, 0x00, 0x00]);
     const raw = buildDicom({

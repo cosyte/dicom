@@ -798,6 +798,21 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
      reached the warning and `report.unauditableSequences`, and `undefinedVrElements` went empty.
      Both routes empty the element, so **no value moves either way** - what moved is the diagnostic,
      which is the class `CLAUDE.md` says cost three warning codes. Do not reorder these two tests.
+     **▶ 🩺 IT IS A PARTIAL BOUND, A SECOND GRADED PASS REFUSED THE FIVE ARTIFACTS THAT WROTE IT UP
+     AS A CLOSURE, AND THE REMEDY WAS THE CLAIM.** `hasUndefinedVr` only answers a fabricated header
+     whose own **VR bytes fall outside the 34**. Change the fixture's two fabricated VR bytes from
+     `Zz` to `OB` and every conjunct holds, this branch answers it, and the fabricated tag reaches
+     both the warning and `report.unauditableSequences`. Measured on the slice's own F2 fixture.
+     **The guard is NOT grown for it, for two measured reasons.** A fabricated `OB` header and a
+     genuine one are **byte-identical** - the permanent fact that has stopped five slices, so there
+     is nothing to key on. And on that identical input **base kept the carrier verbatim and shipped
+     the whole nested `(0010,0010)`**, so the direction is a strict improvement: four bytes of tag
+     on a report instead of a name in the output. It is the same shape as
+     `report.removedPrivateTags`' fabricated odd-group header, already disclosed and live on both
+     trees. **`DeidentifyReport` now has a third way to carry document content, and it is never a
+     value-free surface.** Pinned as the second row of the fabricated-header test, which asserts the
+     leak rather than lamenting it: if that row ever goes green the bound moved and these paragraphs
+     are stale.
   2. **`el.length > 0`.** The emptied carrier still satisfies every other conjunct, so a second
      `deidentify()` over the first one's output reported a **second drop with `byteLength: 0`**
      where nothing was left to drop. Bytes were already idempotent; the audit was not. The
@@ -1251,9 +1266,12 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   **closed by `DICOM-PRIVATE-SQ-CARVE-OUT`**, and the parsed-VR half of it by
   `DICOM-PRIVATE-SQ-PARSE-VR` (its own section below), which added the profile's **declared** VR as
   a second authority. **🛑 THAT SECOND ONE DOES REACH THIS SHAPE, AND A GRADED PASS REFUSED THE
-  DRAFT THAT SAID OTHERWISE.** Its predicate carries **no length condition**, so an undefined-length
-  `UN` whose CP-246 descent was refused **is** emptied whenever a `Profile` declared that private
-  attribute `SQ`. The residual below is what survives outside that route - it is a statement about
+  DRAFT THAT SAID OTHERWISE.** Its predicate does not test the length **field**, so an
+  undefined-length `UN` whose CP-246 descent was refused **is** emptied whenever a `Profile` declared
+  that private attribute `SQ`. **Say it that way and not "no length condition"** - `el.length > 0` is
+  one of its three conjuncts, a refused CP-246 descent carries `0xFFFFFFFF` there so it passes, and a
+  second graded pass refused the six artifacts that claimed the predicate had no length condition at
+  all in the same commit that added one. The conclusion held; the stated reason did not. The residual below is what survives outside that route - it is a statement about
   elements **no profile named**, where the `UN` test genuinely cannot be relaxed. Do not restate it
   as covering every `UN`.
 

@@ -46,9 +46,8 @@ in the same area - open the section first.**
     [#dicom-explicit-vr-unbounded-item-read](documentation/agent-notes.md#dicom-explicit-vr-unbounded-item-read)
   - `report.removedPrivateTags` can echo four bytes of document content from a **fabricated
     odd-group header**, identically on both trees. Structural, not closed; the **claim** was
-    corrected rather than the guard widened. With `uidMap` (the file's own source UIDs) it is the
-    second value-bearing field of `DeidentifyReport` - **two exceptions, not one**, and that report
-    is never "value-free".
+    corrected rather than the guard widened. With `uidMap` and now `unauditableSequences[].tag`
+    that is **THREE value-bearing fields of `DeidentifyReport`, not two**; never "value-free".
     [#dicom-unrecognized-vr-short-form](documentation/agent-notes.md#dicom-unrecognized-vr-short-form) ·
     [#phi-warning-message-leak](documentation/agent-notes.md#phi-warning-message-leak)
   - `report.embeddedAttributes[].hidden` is **unbounded** (131,072 tag strings from a 1 MiB

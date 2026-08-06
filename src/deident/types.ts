@@ -179,8 +179,19 @@ export interface EmbeddedAttributeFinding {
  * the carrier, not as a rule about this case.)
  *
  * Both fields are structural: `tag` is the carrier's and `byteLength` is the
- * declared size of the value that was dropped. No decoded value appears here,
- * so this is safe to log.
+ * recorded span of the value that was dropped. **No _decoded_ value appears
+ * here, and that is not the same as "safe to log".** On the second producer
+ * `tag` can be four bytes of another element's value: a length under-declared
+ * upstream resynchronizes the reader mid-value, and if the bytes it lands on
+ * spell a private block this caller's profile declares `SQ`, followed by a VR
+ * that is one of the 34, the fabricated header is what you get here. The
+ * package's answer to that class is normally `report.undefinedVrElements`,
+ * which names a byte offset and **no tag**, and it still answers the case where
+ * the fabricated VR is outside the 34 - but it cannot answer this one, because
+ * a fabricated `OB` header and a genuine one are byte-identical. So this shares
+ * the standing exception `report.removedPrivateTags` and `uidMap` already have:
+ * a `DeidentifyReport` is **not** a value-free surface. Treat it as document
+ * content, at the sensitivity of the file it came from.
  *
  * For the first producer the parser announces the underlying refusal on
  * `Dataset.warnings`: `DICOM_SQ_NOT_DESCENDED` for a defined-length Implicit VR
@@ -305,7 +316,7 @@ export interface UndefinedVrFinding {
  *
  * Most fields are composed from static tables: Part 6 keywords, Annex E action
  * codes, structural `TAG[index]` sequence paths, and registry warning messages.
- * **Two are not, and both are named here rather than in a footnote.**
+ * **Three are not, and all three are named here rather than in a footnote.**
  *
  * 1. **`uidMap`** - its keys are the source UIDs read out of the file, kept so a
  *    caller can make UID replacement consistent across a study or an archive. A
@@ -315,9 +326,19 @@ export interface UndefinedVrFinding {
  *    file these are the sender's own private tag numbers and carry nothing; on a
  *    malformed one a tag can be four bytes of a value, and it is measured, not
  *    theoretical.
+ * 3. **`unauditableSequences[].tag`** - see
+ *    {@link UnauditableSequenceFinding}. Same shape as 2 by a narrower route: a
+ *    private carrier a {@link Profile} declares `SQ` is named there, and an
+ *    under-declared length upstream can resynchronize the reader onto four
+ *    bytes that spell such a block. The package's usual answer to a fabricated
+ *    header, `undefinedVrElements`, carries a byte offset and no tag, and still
+ *    answers it whenever the fabricated VR is outside the 34 PS3.5 §6.2
+ *    defines. It cannot when the fabricated VR is one of them, because those
+ *    two files are byte-identical.
  *
  * So "the report is safe to log apart from `uidMap`" is **not** an accurate
- * description of this type, and was corrected rather than kept convenient.
+ * description of this type, and was corrected rather than kept convenient. The
+ * count has moved once already; read the list, never a numeral quoted elsewhere.
  *
  * @example
  * ```ts
