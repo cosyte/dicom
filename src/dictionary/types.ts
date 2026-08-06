@@ -96,7 +96,12 @@ export interface DictionaryEntry {
 }
 
 /**
- * One DICOM UID as published in PS3.6 / PS3.4 (UID registry).
+ * One DICOM UID as published in PS3.6 Annex A (Tables A-1 and A-2).
+ *
+ * `name` is the normative UID Name, with two deliberate conveniences. Retirement is carried in
+ * `retired` rather than as the trailing `(Retired)` PS3.6 appends to the name, and four transfer
+ * syntaxes carry the short form every DICOM toolkit prints rather than PS3.6's longer
+ * `...: Default Transfer Syntax for ...` form. Every other name is the normative text.
  *
  * @example
  *   import { Dictionary } from "@cosyte/dicom";

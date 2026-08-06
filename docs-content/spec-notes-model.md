@@ -86,10 +86,39 @@ Dictionary.lookup("30040012")?.retired; // => false
 Dictionary.lookup("30040010")?.retired; // => true
 ```
 
-UID names are a separate table with a smaller, curated scope: SOP Classes plus transfer syntaxes and
-the other well-known UIDs, and it carries the short forms toolkits use (`Implicit VR Little Endian`,
-not PS3.6's longer `...: Default Transfer Syntax for DICOM`), with retirement as the `retired`
-boolean rather than a suffix in the name.
+UID names come from the same edition, out of **PS3.6 Annex A**: Table A-1 (UID Values) and Table A-2
+(Well-known Frames of Reference). That is every UID the registry publishes, transfer syntaxes, SOP
+and Meta SOP Classes, well-known SOP Instances, coding schemes and the rest, current and retired
+alike, rather than a hand-picked subset. Two things are deliberately not PS3.6's spelling, and both
+are conveniences rather than corrections:
+
+- **Retirement is the `retired` boolean, not a suffix in the name.** PS3.6 marks a retired UID by
+  appending `(Retired)` to its UID Name; here that moves into a field you can branch on, and the
+  name stays a name.
+- **Four transfer syntaxes keep the short form every toolkit prints.** PS3.6 gives them a trailing
+  `: Default Transfer Syntax for ...` clause recording which storage class defaults to them, so you
+  get `Implicit VR Little Endian` rather than
+  `Implicit VR Little Endian: Default Transfer Syntax for DICOM`. The other four hundred odd names
+  are the normative text, unchanged.
+
+Two rows are absent on purpose: PS3.6 retired them and withdrew their names in the same edition, so
+there is no name to return and `uid` reports them as unknown rather than answering with an empty
+string.
+
+```ts runnable
+import { Dictionary } from "@cosyte/dicom";
+
+// A transfer syntax the current edition defines.
+Dictionary.uid("1.2.840.10008.1.2.4.203")?.name; // => "High-Throughput JPEG 2000 Image Compression"
+Dictionary.uid("1.2.840.10008.1.2.4.203")?.type; // => "TransferSyntax"
+
+// The short form, not PS3.6's longer name.
+Dictionary.uid("1.2.840.10008.1.2")?.name; // => "Implicit VR Little Endian"
+
+// Retirement is a field, and the name is left alone.
+Dictionary.uid("1.2.840.10008.1.2.2")?.name; // => "Explicit VR Big Endian"
+Dictionary.uid("1.2.840.10008.1.2.2")?.retired; // => true
+```
 
 ## Immutability
 

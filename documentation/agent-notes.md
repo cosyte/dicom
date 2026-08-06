@@ -1667,8 +1667,9 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   name / keyword / VR / VM / retired for any tag it publishes, PS3.6-only tags are added, mirror-only
   tags are **kept** (PS3.6 retires, it does not delete, so an absence is more likely a parse gap here
   than a withdrawal there). Registry: 5,309 tags, 5,214 keywords. Scoped to Tables 6-1/7-1/8-1/9-1;
-  **UIDs are deliberately not overlaid** (the short forms and the structured `retired` boolean are
-  intentional deviations from Table A-1), and PS3.15 Annex E is a different part and generator.
+  **the UID registry is overlaid too now, from Annex A** (see the next section; the sentence that sat
+  here saying UIDs are deliberately NOT overlaid is CORRECTED, not softened), and PS3.15 Annex E is a
+  different part and generator.
   The pin is a **precondition**: the generator re-hashes the file and refuses to run on a mismatch,
   reads the edition from the document's own `<subtitle>`, and fails loudly on a row that is not six
   cells, a malformed tag, a non-identifier keyword, an unknown VR token, or under 5,000 rows.
@@ -1678,6 +1679,116 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   live tags). **There is no staleness clock and must not be one** - a date gate fires the day it is
   written, demands an action nobody can take on demand, and reds unrelated PRs. "Has NEMA moved" is
   one content-comparing command in `vendor/nema/README.md`; CI gates byte-identical regen, offline.
+
+## The PS3.6 UID registry overlay
+
+- **The UID registry is overlaid from PS3.6 Annex A, and the two deliberate deviations are PRESERVED
+  BY CONSTRUCTION rather than protected by staying off the overlay.** The old arrangement was
+  `sops.json` plus a 560-line hand-typed table inside `scripts/generate-dictionary.ts`, kept off the
+  overlay on the argument that a normative overlay would undo the short forms and the structured
+  `retired` boolean. **That argument is true of a NAIVE overlay, and it is what this one is built to
+  avoid.** Both deviations are now derived from the normative text and asserted, and the hand table
+  is deleted rather than layered over.
+- **Annex A is TWO tables with DIFFERENT SHAPES, and reading the second with the first's column
+  contract takes its "Normative Reference" cell as a UID Type.** Table A-1 "UID Values" has five
+  columns and column 4 names the type; Table A-2 "Well-known Frames of Reference" has four and the
+  TABLE is the type. **Reading A-1 alone reported seven UIDs as dropped by the normative source.
+  They had not been dropped: they are in A-2.** That is the mirror-only rule earning its keep in the
+  exact direction it was written for, and it is why the rule says an absence is more likely a parse
+  gap here than a withdrawal there. Measured against both tables the mirror-only set is **empty**,
+  and its size prints every run.
+- **Retirement stays a boolean; the `" (Retired)"` suffix is stripped into the field, and a name that
+  still spells it after the strip throws.**
+- **The four toolkit short forms are DERIVED, never typed.** PS3.6 gives four Transfer Syntaxes a
+  trailing `": Default Transfer Syntax for ..."` clause; those four names are cut at their first
+  `": "`. A hand-written short form is exactly what rots silently when an edition rewords a name, and
+  **this package has already shipped 174 wrong UID names once** behind a hand-written naming rule. If
+  a listed UID stops carrying the clause the generator throws rather than keeping a stale string.
+  **Measured on 2026c those four are EXACTLY the Annex A names carrying such a clause**, so the
+  deviation is the complete set rather than a subset somebody chose.
+  `test/dictionary/uids-normative.test.ts` pins that as an equality, and it replaced a weaker first
+  draft that assumed other names carry the clause and would stay whole. None do.
+- **TWO ROWS ARE EXCLUDED AND IT IS A DIRECTION-OF-FAILURE CALL, NOT AN OVERSIGHT.**
+  `1.2.840.10008.5.1.4.1.1.12.77` and `1.2.840.10008.5.1.4.1.1.40` carry the retirement marker as
+  their WHOLE UID Name; PS3.6 withdrew the name with the class. An entry whose `name` is `""` is a
+  **successful** lookup, so a caller's `uid(x)?.name ?? "<unknown>"` prints nothing instead of
+  `<unknown>`. Inventing a name from another toolkit is not available either: this generator makes no
+  correction it cannot derive from the pinned bytes. The exclusion is counted and printed every run.
+- **The registry went 268 to 494 and ALL 268 PRIOR ENTRIES ARE BYTE IDENTICAL.** Quote that pair
+  together or neither: the overlay's whole safety argument is that it moved no shipped name, type or
+  retirement flag and only added coverage. Six Transfer Syntaxes the current edition defines
+  (`1.2.840.10008.1.2.4.201` through `205`, and `1.2.840.10008.1.2.8.1`) previously resolved to
+  `undefined`. **Nothing was ever mis-read**: dispatch is by UID value, never by name.
+- **Tables A-3 and A-4 (Context Group / Template UID Values) are deliberately NOT read.** Out of
+  scope, stated rather than overlooked.
+- **The test does NOT call the generator.** It re-parses the pinned DocBook from scratch and grades
+  what the package EXPORTS. A test that re-runs the generator proves the generator agrees with itself
+  and would keep passing through the change that broke it. **Red on the parent `3617034` at 8 of 19.**
+- **STILL NO STALENESS CLOCK, and there must not be one.** That rule did not change here.
+
+## The changelog generator, and why the Unreleased heading may not come back
+
+- **`.changeset/config.json` names a generator now, so DO NOT HAND-EDIT `CHANGELOG.md`.** It set
+  `"changelog": false` for this package's whole published history, so no release ever wrote a version
+  heading and the file was maintained by hand under one `[Unreleased]` heading that nothing rolled
+  over: **ten published versions shipped a tarball calling already-released work unreleased.** The
+  founder decision on this class is **fix the flag, not the files**. A changeset summary IS the
+  changelog entry.
+- **NEVER REINTRODUCE AN `[Unreleased]` HEADING.** With generation ON it is worse than before: the
+  release prepends its section ABOVE it, so released content sits under "Unreleased" permanently, in
+  the tarball.
+- **Nothing but the H1 may sit above the first heading.** Changesets prepends by replacing the FIRST
+  newline, so exactly one line can sit above generated output. The rule is deliberately NOT "the
+  archive heading comes second": a release puts its own version heading there, and that assertion
+  would WEDGE the first Version PR this configuration ever opens.
+- **`## 0.0.1` IS A SUBSTRING OF `## 0.0.10`.** Compare version headings as WHOLE LINES. A substring
+  check passes on the first release and reds on the second, inside a Version PR with the changeset
+  already consumed, and `prepublishOnly` runs the suite under `changeset publish`.
+- **NEVER OPEN A CHANGESET SUMMARY LINE AT COLUMN 0 WITH AN ATX HEADING.** `getReleaseLine` indents
+  continuation lines by two spaces, which is exactly the `- ` bullet's content column, so it becomes
+  a permanent nested heading in the published release section. Write the divider as an inline code
+  span or as plain prose.
+- **🔴 THE PRETTIER PASS STAYS ON HERE (no `"prettier"` key), DERIVED FOR THIS REPO AND NEVER
+  RESYNCED FROM A SIBLING.** This value has gone four different ways across seven repos and it is
+  wrong in BOTH directions. The discriminator is the repo's own markdown-formatting scope: `dicom`
+  HAS a `.prettierignore` but it does not cover markdown, and `format:check` globs
+  `"*.{json,md,yml,yaml}"`, so `CHANGELOG.md` is inside the formatting gate. **Asked of Prettier
+  itself via `getFileInfo`, not by pattern-matching the ignore file.** A sibling whose
+  `.prettierignore` lists `*.md` needs it OFF: leaving it ON there rewrote about 1,240 lines of
+  already-published text and ate the spaces around a backticked literal inside a bold span, in a
+  shipped tarball.
+- **AND THE ARGUMENT FOR ON IS STRONGER HERE THAN IN `deid`, `transform` or `synth`.** Their
+  `version` chain ends with a `prettier --write` naming `CHANGELOG.md`, a second net that repairs the
+  document, so ON is merely free there. **This repo's trailing pass names `package.json` and
+  `src/version.ts` and nothing else**, so with the pass off the Version PR really does open red on a
+  file no human touched. A test pins the ABSENCE of that second net, so adding `CHANGELOG.md` to the
+  list reds and forces the argument to be re-read rather than assumed.
+- **The archived history is frozen against a DIGEST, and re-baselining it to get green is the wrong
+  move.** Every other case compares an archive a release produced against the archive in the working
+  tree, which is exactly the comparison a hand-edit cancels out of. A red digest is either a hand-edit
+  that should have been a changeset, or a formatter reflowing already-published text.
+- **🔴 THE REGION ABOVE THE DIVIDER IS CHECKED HERE, WHICH `deid` MEASURED AS OPEN AND LEFT OPEN.**
+  Its frozen digest covers below the divider only, so a hand-written `## 0.0.99` block inserted
+  between the H1 and the divider passed every case there, which would ship a tarball announcing a
+  release that never happened. Here the region above the divider may carry only headings a release
+  generates (`## <version>` and `### <Major|Minor|Patch> Changes`), the version headings must run
+  newest first, and the topmost must equal `package.json`'s version. A fabricated `## 0.0.99` fails
+  whichever way it is placed. **NAMED FOR WHAT IT CHECKS, NOT AS A UNIVERSAL: these are shape and
+  ordering rules, not provenance.** A fabricated section carrying a version LOWER than every real
+  one, in correct descending order immediately above the divider, still passes. Closing that needs a
+  source of truth about which versions really released, and git tags are one `push --delete` from
+  making a released version look fabricated, which is the wrong direction to fail in.
+- **A release that publishes with an UNCHANGED changelog is a swallowed write failure, not a flag
+  that reverted.** Changesets wraps the changelog write in a try/catch that only `console.warn`s; a
+  tree whose declared Prettier config cannot be resolved bumps the version, consumes the changeset,
+  and writes nothing. Do not diagnose it as the flag.
+- **The release BODY is rendered by `release-notes.mjs` in `cosyte/.github`, which this repo does not
+  carry, so nothing here exercises it.** `DICOM` IS a registered prefix there, which means an item id
+  in the prose is stripped MID-CLAUSE and ships a broken sentence with both `prepare` and `assert` at
+  exit 0. The shipping changeset was RENDERED through the real `prepare` and read; it carries no
+  identifier at all, which dodges the defect rather than surviving it.
+- `test/scripts/changelog-generation.test.ts` pins all of the above against the real
+  `changeset version` in throwaway git trees. **Red on the parent `3617034` at 13 of 22.**
 
 ## The PS3.15 Annex E action table generator
 

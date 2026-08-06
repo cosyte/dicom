@@ -1,8 +1,23 @@
 # Changelog
 
-All notable changes to `@cosyte/dicom` will be documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## Released before this file was generated
 
-## [Unreleased]
+Every release section above this heading is written by
+[Changesets](https://github.com/changesets/changesets) from the changesets in `.changeset/`, newest
+release first. The release writes its own version heading, so nothing above this line is maintained
+by hand, and a change is recorded here by adding a changeset rather than by editing this file.
+
+Everything below this heading was maintained by hand, in the
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format, on the
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html) ladder this package still follows. Most
+of it sat under a single `[Unreleased]` heading that no release ever rolled over, which is why ten
+published versions of this package shipped a `CHANGELOG.md` describing already-released work as
+unreleased, inside the tarball, for as long as they did. That heading is gone; its entries are not.
+
+The text is left exactly as it was written rather than re-sorted into version sections. The file
+never recorded which release each of those entries went out in, so assigning them now would be a
+guess presented as a record, and this is the text that installed copies already carry on disk. Only
+the `[Unreleased]` heading itself and the preamble above it were removed.
 
 ### Fixed
 

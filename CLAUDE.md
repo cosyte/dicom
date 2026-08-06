@@ -119,10 +119,8 @@ not by copying files (Phase E migration). The source of truth is the meta-repo's
 - Fatal errors only for unrecoverable structural corruption (4 Tier-3 codes: `NOT_DICOM_PART_10`, `INVALID_FILE_META`, `UNSUPPORTED_TRANSFER_SYNTAX`, `EMPTY_INPUT`). Everything else is a warning.
 - Buffer-first API for binary values. String decoding respects `(0008,0005)` Specific Character Set.
 - Data dictionary is generated at build time from the official DICOM Part 6 source and committed; runtime has no network/filesystem dependency on it.
-- Coverage: per-directory gate **enabled** on `src/parser/`, `src/dataset/`, `src/dictionary/` (and
-  `src/helpers/` once it exists) via `pnpm test:coverage`. Canonical bar is ≥ 90%; early-phase floors
-  currently sit just below that as documented transient relaxations with TODOs. Raise them toward 90
-  as coverage fills in, never disable the gate. `vitest.config.ts` is the source of truth.
+- Coverage: per-directory gate, canonical bar ≥ 90%. Raise the transient floors toward 90, never
+  disable the gate. **`vitest.config.ts` is the source of truth** (this line does not restate it).
 
 ## Traps that cost a defect to learn
 
@@ -387,11 +385,15 @@ not soften them. All anchors are in `documentation/agent-notes.md`.
 ### Generators and gates
 
 - **The vendored DocBook pins are PRECONDITIONS**: each generator re-hashes its document, refuses to
-  run on a mismatch, reads the edition from the document's own `<subtitle>`, and fails loudly on a
-  malformed row. PS3.6 wins per field over the Innolitics mirror; **mirror-only tags are KEPT**,
-  because PS3.6 retires rather than deletes.
+  run on a mismatch, reads the edition from its own `<subtitle>`, and fails loudly on a malformed row.
+  PS3.6 wins per field over the mirror; **mirror-only entries are KEPT**, because PS3.6 retires
+  rather than deletes.
   [#the-ps36-element-registry-generator](documentation/agent-notes.md#the-ps36-element-registry-generator) ·
   [#the-ps315-annex-e-action-table-generator](documentation/agent-notes.md#the-ps315-annex-e-action-table-generator)
+- **🛑 UIDs ARE OVERLAID FROM ANNEX A NOW; "UIDs are deliberately not overlaid" is STALE. The short
+  forms and the `retired` boolean are preserved BY CONSTRUCTION, derived not typed.** A-2 is a
+  second table, shaped differently; reading A-1 alone reports 7 UIDs as withdrawn.
+  [#the-ps36-uid-registry-overlay](documentation/agent-notes.md#the-ps36-uid-registry-overlay)
 - **🛑 THERE IS NO STALENESS CLOCK AND THERE MUST NOT BE ONE.** A date gate fires the day it is
   written, demands an action nobody can take on demand, and reds unrelated PRs. "Has NEMA moved" is
   one content-comparing command in `vendor/nema/README.md`; CI gates byte-identical regen, offline.
@@ -415,28 +417,20 @@ not soften them. All anchors are in `documentation/agent-notes.md`.
 - **The minimal PDF reader in `generate-repeating-groups.ts` recovers ONE sentence. Do not grow it
   into a general PDF parser** - if it needs more, re-derive the bound from a current normative source.
   [#the-vendored-ps35-repeating-group-bound](documentation/agent-notes.md#the-vendored-ps35-repeating-group-bound)
-- **▶ `attw` SAYS "does not contain types" AND EXITS 0, SO THE `attw` SCRIPT IS A WRAPPER, NOT THE
-  BARE CLI.** `getExitCode.js` returns 0 before the problem list is consulted, so a broken publish is
-  reported as a pass. `scripts/attw.mjs` carries **two nets that catch different things**, and
-  **short options are refused by LETTER ANYWHERE IN THE CLUSTER, not by whole token** (`-fjson` gave
-  exit 0 with the gate silent). **Do not "simplify" that back to a token set**, and note that
-  **`lint` is deliberately NOT widened to `.mjs`** and **neither net covers the non-type entries of
-  `files`**. [#the-attw-wrapper-gate](documentation/agent-notes.md#the-attw-wrapper-gate)
-- **The em-dash gate scans EVERY TRACKED FILE, not just markdown** (a markdown-only survey called
-  this repo clean while six em dashes lived in four other files, including the npm `description`),
-  **and the PR title, body and commit messages.** It **deliberately omits `grep -I`** so that a
-  binary-classified file cannot pass in silence: **do not add `-I`, and do not remove the functional
-  NUL in `src/dataset/vr/charset.ts` to quiet it.** When it reds, rewrite with a period, colon, comma
-  or parentheses - **never re-encode the character**. Fix shared limitations in the script header,
-  which every copy shares.
+- **▶ `attw` SAYS "does not contain types" AND EXITS 0, SO USE `scripts/attw.mjs`, NOT THE BARE
+  CLI.** Two nets, catching different things; **short options are refused by LETTER ANYWHERE IN THE
+  CLUSTER** and must not be "simplified" to a token set.
+  [#the-attw-wrapper-gate](documentation/agent-notes.md#the-attw-wrapper-gate)
+- **The em-dash gate scans EVERY TRACKED FILE, plus the PR title, body and commit messages.** It
+  **deliberately omits `grep -I`**: do not add it, and do not remove the functional NUL in
+  `src/dataset/vr/charset.ts`. When it reds, rewrite with a period, colon, comma or parentheses,
+  **never re-encode the character**.
   [#the-em-dash-brand-gate](documentation/agent-notes.md#the-em-dash-brand-gate)
 
 ## Style Reference
 
-This project mirrors `@cosyte/hl7`'s tooling, artifact discipline, and engineering bar. Two deliberate divergences:
-
-1. **Runtime deps allowed (≤ 3)**. See Tech Stack above.
-2. **v1 scope narrower than the full standard**: metadata-first, no pixel decode, no network.
+Mirrors `@cosyte/hl7`'s tooling and engineering bar, with two deliberate divergences, both stated in
+Tech Stack and Scope above: runtime deps allowed (≤ 3), and a v1 scope narrower than the standard.
 
 ## Standing disciplines (every change)
 
@@ -447,7 +441,12 @@ These three bind every change in this repo (mirrored from the cosyte meta-repo's
    docs are: this package's own docs (`docs-content/` + JSDoc), and (in the meta-repo) its
    `documentation/repos/<repo>.md` and the `ecosystem-map.md` status table.
 2. **Version + changelog every meaningful change.** Add a Changeset (`pnpm changeset`, `patch`
-   during pre-alpha) and keep `CHANGELOG.md`'s `[Unreleased]` current. Stay on `0.0.x` until first alpha.
+   during pre-alpha); stay on `0.0.x` until first alpha. **🛑 `CHANGELOG.md` IS GENERATED - the
+   changeset summary IS the entry. Never hand-edit it, never reintroduce `[Unreleased]`, keep
+   nothing but the H1 above the first heading, compare version headings WHOLE (`## 0.0.1` is a
+   substring of `## 0.0.10`), never open a summary line at column 0 with an ATX heading, and the
+   Prettier pass stays ON (no `"prettier"` key) - DERIVED here, never resynced from a sibling.**
+   [#the-changelog-generator-and-why-the-unreleased-heading-may-not-come-back](documentation/agent-notes.md#the-changelog-generator-and-why-the-unreleased-heading-may-not-come-back)
 3. **Crew + knowledgebase feedback loop.** When a standard, decision, or public surface changes,
    flag whether a `crew` skill or `knowledgebase` doc needs creating/updating, never silently skip.
 

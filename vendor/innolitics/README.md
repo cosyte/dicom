@@ -2,7 +2,7 @@
 
 This directory pins the Innolitics [`dicom-standard`](https://github.com/innolitics/dicom-standard) repository at a specific commit SHA. The committed JSON files are the **input** to `scripts/generate-dictionary.ts` (run via `pnpm gen:dictionary`) and `scripts/generate-annex-e.ts` (run via `pnpm gen:annex-e`). Runtime has zero dependency on these files: only the generated TypeScript modules under `src/dictionary/generated/` are imported by the library at runtime.
 
-> **This is a mirror, not the standard.** For the element registry (`tags.ts` / `keywords.ts`) it is now the *base* layer only: NEMA's PS3.6 DocBook, pinned in `vendor/nema/part06/`, is applied over it as a normative per-field overlay and wins wherever the two disagree. Read `vendor/nema/README.md` for the authority model. This directory remains the sole source for the PS3.15 Annex E action table and for the SOP Class UID names in `uids.ts`.
+> **This is a mirror, not the standard.** For the element registry (`tags.ts` / `keywords.ts`) it is now the *base* layer only: NEMA's PS3.6 DocBook, pinned in `vendor/nema/part06/`, is applied over it as a normative per-field overlay and wins wherever the two disagree. Read `vendor/nema/README.md` for the authority model. The same is now true of the UID registry (`uids.ts`), which is overlaid from PS3.6 Annex A. This directory remains the sole source for the PS3.15 Annex E action table.
 
 ## Pinning
 
@@ -29,7 +29,7 @@ Compared the committed `src/dictionary/generated/` against the NEMA DocBook sour
 
 **Compare tag keys case-insensitively.** DICOM tag values are hexadecimal and their case is not semantic. PS3.6 prints them uniformly uppercase (`(50xx,200A)`; of its 5,309 tag strings, 1,619 contain `A-F` and none contain `a-f`), and `tags.ts` agrees on 1,540 of its own 5,129 keys. The trap is that `tags.ts` is not internally consistent: it lowercases the 8 repeating-group keys whose trailing digits are hex letters (`50xx200a`, `50xx200c`, `50xx200e`, `7fxx0010`, `7fxx0011`, `7fxx0020`, `7fxx0030`, `7fxx0040`) and no others. A verbatim comparison therefore mis-classifies exactly those 8, which is what the first run of this measurement did, reporting them as dropped from the standard when all 8 are still in Table 6-1. Lowercase both sides before comparing.
 
-Element figures are taken on `86ab6c1` (`origin/main` at the time of measurement); this slice does not modify `tags.ts` or `keywords.ts`, so they hold unchanged on the current tree. UID figures are taken on the current tree, after the corrections described below.
+Element figures are taken on `86ab6c1` (`origin/main` at the time of measurement); this slice does not modify `tags.ts` or `keywords.ts`, so they hold unchanged on the current tree. The UID figures that used to sit beside them are deleted rather than re-measured: the UID registry is overlaid from Annex A now, and `pnpm gen:dictionary` prints the live figures on every run. A count typed here is a count that goes stale on the next re-pin, and these ones already had.
 
 | Comparison | Result |
 | --- | --- |
@@ -68,29 +68,17 @@ All of it is closed, and none of it by hand. `scripts/generate-dictionary.ts` no
 | 180 tags gained by PS3.6, absent here | present |
 | 0 tags dropped | still 0; a mirror-only tag would be kept, not deleted, and the generator prints the count |
 
-The generator prints the overlay every run (shared / added / mirror-only, and the fields overridden broken out by field), so the next re-pin of *either* source shows exactly what moved instead of a 5,000-line diff. What this mirror is still solely responsible for is unchanged: the PS3.15 Annex E action table and the SOP Class UID names.
+The generator prints the overlay every run (shared / added / mirror-only, and the fields overridden broken out by field), so the next re-pin of *either* source shows exactly what moved instead of a 5,000-line diff. What this mirror is still solely responsible for is the PS3.15 Annex E action table.
 
 ### UIDs
 
-`uids.ts` merges `sops.json` with the curated PS3.6 table inside the generator. After the corrections in this slice, of the **261** UIDs shared with PS3.6 2026c Table A-1:
+`uids.ts` is now overlaid from **PS3.6 Annex A** (Tables A-1 and A-2) exactly as the element registry is overlaid from Tables 6-1 / 7-1 / 8-1 / 9-1, with `sops.json` as the base layer. The authority model, and the two deviations the overlay preserves rather than undoes, are written up once in `vendor/nema/README.md`; this section records only what changed on this mirror's side.
 
-- **240** match the `UID Name` column byte for byte.
-- **17** differ only in that Table A-1 writes retirement into the name as a trailing " (Retired)" where this dictionary carries a structured `retired` boolean instead. Reading that suffix as the flag it encodes, the two agree on **every** shared UID: **zero** retirement-flag disagreements. Counting these as matches gives the **257** figure quoted elsewhere.
-- **4** are the deliberate short forms tabulated below.
-- **0** are unexplained.
+**No shipped name, type or retirement flag moved.** Every one of the 268 entries the previous generator emitted comes through the overlay byte identical. What the overlay added is coverage: the registry was a subset of Annex A and is now the whole of it, and the entries it had were already right.
 
-All **7** well-known frames of reference match Table A-2 byte for byte.
+The figures are a **build output, not a line in this file**. `pnpm gen:dictionary` prints shared / added / mirror-only, the fields overridden broken out by field, the four toolkit short forms as they were applied, and the retired-and-unnamed rows it excluded. Read that rather than a number typed here: the previous version of this section carried six counts and every one of them was invalidated by this change.
 
-The four deviations: PS3.6 appends a descriptive clause after a colon, and this dictionary carries the short form that every DICOM toolkit uses.
-
-| UID | Here | PS3.6 2026c Table A-1 |
-| --- | --- | --- |
-| `1.2.840.10008.1.2` | Implicit VR Little Endian | Implicit VR Little Endian: Default Transfer Syntax for DICOM |
-| `1.2.840.10008.1.2.4.50` | JPEG Baseline (Process 1) | JPEG Baseline (Process 1): Default Transfer Syntax for Lossy JPEG 8 Bit Image Compression |
-| `1.2.840.10008.1.2.4.51` | JPEG Extended (Process 2 & 4) | JPEG Extended (Process 2 & 4): Default Transfer Syntax for Lossy JPEG 12 Bit Image Compression (Process 4 only) |
-| `1.2.840.10008.1.2.4.70` | JPEG Lossless, Non-Hierarchical, First-Order Prediction (Process 14 [Selection Value 1]) | ... : Default Transfer Syntax for Lossless JPEG Image Compression |
-
-PS3.6 2026c Table A-1 has 468 rows and Table A-2 has 28; this dictionary carries 268 UIDs in total, so coverage of the UID registry is partial by construction (SOP Classes plus a curated set), not a regression.
+The one thing worth stating rather than deriving is the direction the merge fails in, because it is the same one the element registry takes: a UID **this mirror carries and Annex A does not** is KEPT, never dropped, because PS3.6 retires rather than deletes and an absence is far more likely to be a parse gap here than a withdrawal there. That set is empty today, and its size prints every run.
 
 ### Re-pin policy
 
@@ -98,7 +86,7 @@ The old policy read "re-pin monthly, evaluated at minor releases". Nothing ran i
 
 - **Re-pin when upstream moves.** `git ls-remote` against `master` is the whole check, and it is one command. Today it returns this pin.
 - **Re-measure against PS3.6 when re-pinning.** The generator now does this for you on every run and prints the result, so the measurement is a build output rather than an errand.
-- **The durable fix was to stop depending on a dormant upstream for the semantics PS3.6 publishes,** and it is done: `vendor/nema/part06/` pins the DocBook and the element registry is overlaid from it. This mirror can now go quiet for another two years without the element registry drifting, because the element registry no longer comes from it. What still depends on this pin moving is the Annex E action table and the SOP Class UID names.
+- **The durable fix was to stop depending on a dormant upstream for the semantics PS3.6 publishes,** and it is done: `vendor/nema/part06/` pins the DocBook and the element registry is overlaid from it. This mirror can now go quiet for another two years without the element registry drifting, because the element registry no longer comes from it. What still depends on this pin moving is the Annex E action table.
 
 ## Files
 
@@ -109,7 +97,7 @@ The old policy read "re-pin monthly, evaluated at minor releases". Nothing ran i
 | `90571bc/confidentiality_profile_attributes.json` | PS3.15 Annex E action table input (per-attribute basicProfile + per-option-set overrides).      | 01-03   |
 | `90571bc/LICENSE`                             | Upstream MIT license, preserved verbatim.                                                          | 01-02   |
 
-> **Note on UIDs:** Innolitics' `90571bc` revision ships `sops.json` (SOP Class UIDs) but not a comprehensive `uids.json` covering Transfer Syntax UIDs, Well-Known UIDs, Coding Schemes, etc. Those canonical UID values are sourced from PS3.6 §A.1 / Table A-1 directly, hand-curated inside `scripts/generate-dictionary.ts` as a static const, and merged with `sops.json` at generation time. This curated table is small, stable across DICOM editions (the Transfer Syntax UID list almost never changes), and reviewable in PR diffs. See `scripts/generate-dictionary.ts` for the curated table.
+> **Note on UIDs:** Innolitics' `90571bc` revision ships `sops.json` (SOP Class UIDs) but not a comprehensive `uids.json` covering Transfer Syntax UIDs, Well-Known UIDs, Coding Schemes, etc. Those come from the pinned PS3.6 DocBook instead: `scripts/generate-dictionary.ts` reads Annex A Tables A-1 and A-2 and overlays them on `sops.json` per field. The hand-curated static table this note used to describe is gone, and with it the failure mode it carried, which is that a hand-typed name has nothing comparing it to the normative text. See `vendor/nema/README.md` for the authority model.
 
 ## Re-pinning procedure
 

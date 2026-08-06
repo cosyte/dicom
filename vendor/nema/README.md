@@ -186,14 +186,50 @@ elements rather than deleting them, so an absence is much more likely to be a pa
 withdrawal there, and dropping the entry would turn a decoded element into an unknown one. That set
 is empty today.
 
+### The UID registry: Annex A, Tables A-1 and A-2
+
+**The same rule, on the same terms.** `uids.ts` used to sit outside the overlay, on `sops.json`
+plus a hand-typed table inside the generator, because this dictionary deviates from Table A-1 on
+purpose and a naive overlay would have undone both deviations. It no longer sits outside it: the
+deviations are now applied **by construction, and derived rather than typed**, so the overlay
+preserves them.
+
+Annex A publishes UIDs in two tables with **different shapes**, and reading the second with the
+first's column contract would take its "Normative Reference" cell as a UID Type:
+
+- **Table A-1, "UID Values".** Five columns; column 4 names the UID Type.
+- **Table A-2, "Well-known Frames of Reference".** Four columns, and the **table** is the type. It
+  has no UID Type column at all. Leaving it out is what once made this dictionary look as though it
+  carried seven UIDs the normative source had dropped. It had not: they are in A-2. That is exactly
+  the failure direction the mirror-only rule above exists to avoid.
+
+The merge is the element registry's: `sops.json` is the base, Annex A wins per field on name, type
+and retirement, Annex-A-only UIDs are added, mirror-only UIDs are kept, and the counts print every
+run.
+
+The two deviations, both preserved and both asserted:
+
+1. **Retirement is a structured `retired` boolean**, not the trailing " (Retired)" PS3.6 glues into
+   the UID Name. The suffix is stripped into the field; a name that still spells it after the strip
+   fails the generator.
+2. **Four Transfer Syntax names keep the short form every DICOM toolkit prints**, cut from the
+   normative name at its ": Default Transfer Syntax for ..." clause. The short form is **derived**
+   from the normative text, never typed in the generator, so it cannot drift away from it, and a
+   listed UID whose name stops carrying that clause fails the generator rather than silently keeping
+   a stale string. Measured on 2026c: those four are **exactly** the Annex A names that carry such a
+   clause, so the deviation is the complete set rather than a subset somebody chose.
+
+Two Table A-1 rows carry the retirement marker as their **whole** UID Name, with no name at all.
+They are excluded rather than emitted with an empty `name`, because an entry whose name is `""` is a
+successful lookup and a caller's `?? "<unknown>"` fallback stops firing. The exclusion is counted
+and printed every run.
+
+Tables **A-3** (Context Group UID Values) and **A-4** (Template UID Values) are deliberately not
+read. They register the codes of the content mapping resource rather than the UIDs a Part 10 file's
+headers carry.
+
 Deliberately **not** overlaid:
 
-- **UIDs (Table A-1 / A-2).** `uids.ts` stays on `sops.json` + the curated table in
-  `scripts/generate-dictionary.ts`. Its deviations from Table A-1 are intentional: four short forms
-  every DICOM toolkit uses in place of PS3.6's "...: Default Transfer Syntax for ..." clauses, and
-  retirement carried as a structured `retired` boolean instead of a trailing " (Retired)" glued into
-  the name. An overlay would undo both, and PS3.6 Table A-1 is a superset this package covers only
-  in part by design. Measured agreement is tabulated in `vendor/innolitics/README.md`.
 - **PS3.15 Annex E.** A different part and a different generator; see its own section below.
 
 ### Verifying the pin
