@@ -5,8 +5,10 @@
  * nine *metadata-affecting* Annex E Options, driven by the generated Table E.1-1
  * action map ({@link annexE}). It is a **pure** function: the input {@link Dataset}
  * is never mutated; a fresh `Dataset` (with a rebuilt element map and File Meta)
- * is returned alongside a {@link DeidentifyReport} whose two non-value-free
- * fields are named on that type: `uidMap` and `removedPrivateTags`.
+ * is returned alongside a {@link DeidentifyReport} whose non-value-free fields
+ * are named on that type: `uidMap`, `removedPrivateTags`,
+ * `unauditableSequences[].tag` and `embeddedAttributes[].hidden`. Read the list
+ * there, never a count quoted elsewhere.
  *
  * **What it does**
  * - Resolves each attribute's action (basic profile, overridden by an active
@@ -44,14 +46,20 @@
  * - Pixel-level options (`CleanPixelData`, `CleanRecognizableVisual`) are out of
  *   scope; burned-in text is warned, never cleaned.
  * - A private data element kept under `RetainSafePrivate` is kept *verbatim*
- *   **unless it is a sequence**. A private `SQ` the profile vouches for is
- *   retained as an element but its items are **walked**, so standard PHI
- *   attributes nested inside it are de-identified like any others
+ *   **unless it carries a Sequence of Items**. A private `SQ` the profile
+ *   vouches for is retained as an element but its items are **walked**, so
+ *   standard PHI attributes nested inside it are de-identified like any others
  *   (`DICOM-PRIVATE-SQ-CARVE-OUT`; it was kept whole and unexamined through
  *   `0.0.10`). The profile vouches that the *private attribute* is safe, which
  *   PS3.15 §E.3.10 is about; it cannot vouch for a Data Set nested in its value,
  *   which §E.1.1 covers "whether contained in the top level Data Set or embedded
- *   in an Item of a Sequence of Items". See {@link keepRetainedPrivate}.
+ *   in an Item of a Sequence of Items". **"Carries a Sequence" is decided by the
+ *   profile as well as by the parse tree**, because the two disagree about the
+ *   same bytes whenever the profile did not reach `parseDicom` (Implicit VR LE
+ *   writes no VR) or the sender wrote a binary VR (Explicit VR, where the wire
+ *   wins). A carrier the profile declares `SQ` and the tree did not resolve is
+ *   emptied rather than kept, keeping its parsed VR
+ *   (`DICOM-PRIVATE-SQ-PARSE-VR`). See {@link keepRetainedPrivate}.
  * - A `SQ` whose `items` the parser did not
  *   materialize is **emptied**, not kept:
  *   its value is by PS3.5 §7.5.1 a stream of Data Sets, and a run that cannot
@@ -71,7 +79,10 @@
  *   the reliable consumer-side test remains `el.items === undefined` on a `UN`
  *   element you are trusting a report about. `RetainSafePrivate` no longer
  *   exempts anything from the rule above it - a vouched-for private `SQ` with no
- *   materialized items is emptied on the same terms as any other.
+ *   materialized items is emptied on the same terms as any other. The one place
+ *   a `UN` **is** answered is the retained-private route, and only because a
+ *   profile named it: a private `UN` whose profile entry declares `SQ` is
+ *   emptied there. That is a statement about that route and not about `UN`.
  * - An element whose **on-wire VR is not one of the 34** PS3.5 §6.2 defines is
  *   **emptied**, not kept (`DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` +
  *   `report.undefinedVrElements`). Such an element is what an *under*-declared
@@ -487,11 +498,14 @@ function hasUndefinedVr(el: Element): boolean {
  * into de-identified output unchanged**, which is what makes the two refusals
  * below unconditional rather than a promise: every other outcome (`X` remove,
  * `Z`/`C` empty, `D` dummy, `U` remap, and a private tag the Basic Profile
- * drops) has already replaced the value by the time it would matter. A **non-`SQ`**
- * private element a {@link Profile} vouches for under `RetainSafePrivate` does
- * route here, so it is covered too. Its `SQ` sibling no longer reaches this
- * function at all: {@link keepRetainedPrivate} sends a vouched-for private `SQ`
- * down the descent instead, which is `DICOM-PRIVATE-SQ-CARVE-OUT`.
+ * drops) has already replaced the value by the time it would matter. A private
+ * element a {@link Profile} vouches for under `RetainSafePrivate` routes here
+ * **unless the profile or the parse tree says it carries a Sequence of Items**,
+ * so it is covered too. A vouched-for private `SQ` goes down the descent
+ * instead (`DICOM-PRIVATE-SQ-CARVE-OUT`), and one the profile declares `SQ` that
+ * the tree did not resolve is emptied (`DICOM-PRIVATE-SQ-PARSE-VR`) - though an
+ * element whose on-wire VR is not one of the 34 still arrives here first, so
+ * that route keeps its tag-free diagnostic. See {@link keepRetainedPrivate}.
  *
  * Order matters and is not arbitrary. The undefined-VR test comes first because
  * it is the cheaper and the stronger of the two: it settles the element from a
@@ -657,10 +671,72 @@ function emptyUnauditableSequence(
   contextPath: readonly string[],
   out: ProcessResult,
 ): void {
+  emptyUnauditableCarrier(el, ctx, contextPath, out, rebuildSequence(el, [], ctx.encoding));
+}
+
+/**
+ * Write `replacement` back in `el`'s place and record that a Data-Set-bearing
+ * carrier was emptied because this run could not enumerate what is inside it.
+ *
+ * Split out of {@link emptyUnauditableSequence} so that
+ * {@link keepRetainedPrivate} can take the same action on a carrier whose
+ * **parsed** VR is not `SQ` - `DICOM-PRIVATE-SQ-PARSE-VR`. The two callers
+ * differ only in what is written back, and that difference is deliberate:
+ *
+ * - A parsed `SQ` is rebuilt as an `SQ` with zero items, because that is what it
+ *   already is on both the wire and the parse tree.
+ * - A carrier the **profile** declares `SQ` while the wire says `UN` or `OB` is
+ *   emptied with {@link freshScalar}, which keeps the VR the file actually
+ *   carried. Rewriting it to `SQ` would assert a type the sender never wrote
+ *   into the Data Set - under Explicit VR that VR is two real bytes in the
+ *   output - and this function's job is to remove a value, not to re-type an
+ *   element.
+ *
+ * The audit channel is shared and is not widened beyond that: one
+ * {@link UnauditableSequenceFinding} plus one
+ * `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE`, against the same per-run budget. No
+ * new report field and no new warning code, the same choice `#66`, `#69` and
+ * `#77` made.
+ *
+ * **🩺 On naming the tag, and the residual that claim used to deny.** This repo
+ * refuses a diagnostic that names an element whose header might be fabricated,
+ * because there the trigger *is* "these bytes are not what they claim to be".
+ * An earlier draft of this block said that was "not this trigger, on either
+ * caller", and a graded pass measured it false for the retained-private caller.
+ * Being inside the **settled** run of a Data Set with usable reservations, and
+ * resolving a live Private Creator against the profile, is **not** proof the
+ * header was counted rather than found: an *under*-declared length upstream
+ * resynchronizes the reader mid-value, and the four bytes it lands on can spell
+ * this caller's own vendor block, whose Private Creator is genuine and whose
+ * position is inside that settled run. `!hasUndefinedVr(el)` in
+ * {@link keepRetainedPrivate} sends the fabricated headers whose fabricated VR
+ * is **outside the 34** back to the tag-free route, and that is all it does.
+ * **A fabricated header whose two VR bytes happen to spell `OB` (or any of the
+ * 34) is answered here, and its tag reaches this warning and
+ * `report.unauditableSequences`.** Measured; pinned as the second row of the
+ * fabricated-header test.
+ *
+ * **It is disclosed rather than guarded, and the guard must not be grown for
+ * it.** A fabricated `OB` header and a genuine one are byte-identical, which is
+ * this package's permanent fact and has stopped five slices. There is nothing
+ * to key on. On the same input the base tree kept the carrier **verbatim** and
+ * shipped the whole nested name, so the direction is a strict improvement: four
+ * bytes of tag on a diagnostic instead of a full `(0010,0010)` in the output.
+ * It joins `report.removedPrivateTags`, which can echo the same four bytes from
+ * a fabricated odd-group header on both trees. `DeidentifyReport` is not a
+ * value-free surface and must never be described as one.
+ */
+function emptyUnauditableCarrier(
+  el: Element,
+  ctx: DeidentifyContext,
+  contextPath: readonly string[],
+  out: ProcessResult,
+  replacement: Element,
+): void {
   // The ACTION is never capped. Whatever the count, every un-auditable sequence
   // is emptied - a bound on how much we are willing to *say* must never become a
   // bound on what we are willing to *remove*.
-  out.elements.set(el.tag, rebuildSequence(el, [], ctx.encoding));
+  out.elements.set(el.tag, replacement);
 
   // The RECORD is capped, per `#48`'s discipline for consumer-controlled
   // diagnostics, against a budget that spans the whole run rather than this one
@@ -692,17 +768,18 @@ function emptyUnauditableSequence(
  * key, not a value on any surface.
  *
  * **🛑 THAT IS A STATEMENT ABOUT THE RESERVATION AND NOT ABOUT THE RUN, AND THE
- * WIDER READING IS RETRACTED.** It used to say `RetainSafePrivate` as a whole
- * behaves identically either way, which was true only while every retained
- * private element was kept verbatim. It is false now: under Implicit VR LE a
- * private tag carries no VR on the wire, so a profile-declared `SQ` is an
- * inference the **parser** makes. Parse with the profile and the element arrives
- * as an `SQ` with items and {@link keepRetainedPrivate} walks it; parse without
- * it and the same bytes arrive as `UN`, take the non-`SQ` branch, and are kept
- * verbatim. Same profile, same bytes, different outcome
- * (`DICOM-PRIVATE-SQ-PARSE-VR`, `PRE-EXISTING`, pinned as a residual test in
- * `test/integration/deident-private-reservation.test.ts`). Pass the profile to
- * `parseDicom` as well when you rely on `RetainSafePrivate`.
+ * WIDER READING STAYS RETRACTED.** It used to say `RetainSafePrivate` as a whole
+ * behaves identically either way. Do not restore that sentence: under Implicit
+ * VR LE a private tag carries no VR on the wire, so a profile-declared `SQ` is
+ * an inference the **parser** makes, and the two runs still differ. Parse with
+ * the profile and the element arrives as an `SQ` with items and
+ * {@link keepRetainedPrivate} **walks** it, de-identifying its contents and
+ * keeping the rest; parse without it and the same bytes arrive as `UN`, and the
+ * carrier is **emptied** on the profile's declared VR
+ * (`DICOM-PRIVATE-SQ-PARSE-VR`). Neither leaks now, and the difference is no
+ * longer between leaking and not - it is between retaining the vendor's
+ * de-identified content and dropping it. **Pass the profile to `parseDicom` as
+ * well when you rely on `RetainSafePrivate`**, or pay for it in content.
  *
  * **Per Data Set, not per run, and the difference is a PHI defect.** PS3.5 §7.5
  * makes each Sequence Item its own Data Set and §7.8.1 scopes a block
@@ -938,6 +1015,41 @@ function keepsPrivate(
 }
 
 /**
+ * The VR the {@link Profile} **declares** for a retained private data element,
+ * as opposed to the one the parse tree carries.
+ *
+ * The two can disagree, and the disagreement is the whole of
+ * `DICOM-PRIVATE-SQ-PARSE-VR`:
+ *
+ * - **Implicit VR LE puts no VR on the wire at all** (PS3.5 2026c §7.1.3), so
+ *   for a private tag the parser's `SQ` is an inference it draws from a profile
+ *   *it* was given. A caller who passes the profile to `deidentify()` but not to
+ *   `parseDicom` gets `UN` here, with no items.
+ * - Under Explicit VR the wire VR wins in the parser, so a sender who declares a
+ *   vendor attribute `SQ` in the profile and writes it `OB` (or `UN`) yields an
+ *   `OB` element - even with an honest defined length wrapping a well-formed
+ *   item stream.
+ *
+ * In both cases the profile is still the vouching authority, and what it vouched
+ * for is an attribute it has told us is a **Sequence of Items**. Returns
+ * `undefined` when the profile does not resolve the element, which for a
+ * non-creator private element cannot happen once {@link keepsPrivate} has
+ * answered `true` - it is the same lookup - and for a Private Creator element
+ * always does, since `(gggg,00EE)` is `LO` per PS3.5 §7.8.1 and the profile's
+ * private dictionary is keyed by the creator rather than containing it.
+ */
+function declaredPrivateVr(
+  el: Element,
+  ctx: DeidentifyContext,
+  creators: ReadonlyMap<string, string>,
+): VR | undefined {
+  if (ctx.profile === undefined || isPrivateCreatorElement(el.tag)) return undefined;
+  const creator = creatorFor(el.tag, creators);
+  if (creator === undefined) return undefined;
+  return resolvePrivateTag(ctx.profile, el.tag, creator)?.vr;
+}
+
+/**
  * Retain a private element the profile vouches for - **walking it first when it
  * is an `SQ`**.
  *
@@ -991,18 +1103,50 @@ function keepsPrivate(
  * element is untouched by this function and still routes to
  * {@link keepOrEmpty}.
  *
- * ## 🛑 The bound: `el.vr` is the PARSED VR, not the profile's declared one
+ * ## The second authority: the profile's DECLARED VR (`DICOM-PRIVATE-SQ-PARSE-VR`)
  *
- * The `SQ` branch keys on what the parse tree says, and under Implicit VR LE a
- * private tag has no VR on the wire at all - `SQ` there is an inference the
- * parser draws from a {@link Profile} it was given. So a caller who passes the
- * profile to `deidentify()` but **not** to `parseDicom` hands this function a
- * `UN` element with no items, it takes the non-`SQ` branch, and the carrier is
- * kept verbatim exactly as before this slice. That is `DICOM-PRIVATE-SQ-PARSE-VR`,
- * `PRE-EXISTING` and its own item, pinned as a residual test rather than
- * asserted away. **It is not the undefined-length `UN` residual**: that one is a
- * CP-246 descent this parser refused, and the carrier here has a defined length,
- * so CP-246 is never reached.
+ * The `SQ` branch keys on what the **parse tree** says, and the parse tree can
+ * disagree with the profile about the same bytes - see {@link declaredPrivateVr}
+ * for the two encodings that produce that. Keying on the parse tree alone left
+ * a route open through `0.0.10` and through `DICOM-PRIVATE-SQ-CARVE-OUT`: the
+ * identical file, the identical profile, `(0012,0062) = YES`, and the vendor's
+ * whole nested Data Set copied into the output unexamined.
+ *
+ * So this function now consults both. When the parse tree resolved an `SQ` the
+ * items are walked, which is strictly better than emptying and is unchanged.
+ * Otherwise, if the **profile** declares the attribute `SQ`, the value is a
+ * Sequence of Items that this run has no item stream for, and it is emptied
+ * through {@link emptyUnauditableCarrier} - the same answer, on the same
+ * channels, that a parsed `SQ` with no items already got. The parsed VR is
+ * preserved in the emptied element.
+ *
+ * That is not a content test: nothing here inspects the value's bytes. It reads
+ * one field off the profile the caller supplied, which is the same object that
+ * decided to retain the element in the first place.
+ *
+ * **What it still does not cover, and deliberately.** A private carrier whose
+ * profile entry declares a **binary** VR (`OB`/`UN`/`OW`) and whose value
+ * happens to be a well-formed item stream is kept verbatim. Nothing declares a
+ * Data Set to be in there, and telling one apart from a legitimate binary blob
+ * needs a content test on exactly the VRs arbitrary bytes are for. **That is the
+ * same reasoning the founder accepted `DICOM-BINARY-CARRIER-OVERDECLARE` on
+ * (2026-08-05), and it is NOT the same route** - that decision priced a measured
+ * over-declare swallow; this is an honest length reached through
+ * `RetainSafePrivate`. Do not describe it as decided, and do not grow the guard
+ * for it here.
+ *
+ * **What it DOES now cover that no artifact should call exempt: the CP-246 `UN`.**
+ * An undefined-length `UN` whose CP-246 descent this parser refused **is**
+ * emptied when a profile declares that private attribute `SQ`. The undefined-
+ * length `UN` residual survives everywhere else - it is a statement about
+ * elements no profile named - and the earlier enumeration here, which said these
+ * carriers all have defined lengths so CP-246 is never reached, was false and is
+ * retracted. **The reason is that the predicate does not test the length
+ * *field*, not that it has no length condition at all**: `el.length > 0` is one
+ * of its conjuncts, and a refused CP-246 descent carries `0xFFFFFFFF` there, so
+ * it passes. Saying "no length condition" in the same commit that added
+ * `el.length > 0` was itself refused by a graded pass; the conclusion held and
+ * the stated reason did not.
  *
  * `reservationsUsable` is threaded through rather than assumed. Its only call
  * site today is already guarded by `reservationsUsable &&`, so it can only
@@ -1016,16 +1160,58 @@ function keepRetainedPrivate(
   contextPath: readonly string[],
   out: ProcessResult,
   reservationsUsable: boolean,
+  creators: ReadonlyMap<string, string>,
 ): void {
-  if (el.vr !== "SQ") {
-    keepOrEmpty(el, ctx, contextPath, out);
+  if (el.vr === "SQ") {
+    if (isUnauditableSequence(el)) {
+      emptyUnauditableSequence(el, ctx, contextPath, out);
+      return;
+    }
+    out.elements.set(el.tag, descendSequence(el, ctx, contextPath, out, reservationsUsable));
     return;
   }
-  if (isUnauditableSequence(el)) {
-    emptyUnauditableSequence(el, ctx, contextPath, out);
+  // The parse tree says this is not a sequence, but the PROFILE - the same
+  // profile whose entry is the only reason this element is being retained at all
+  // - says it is. There is no item stream on the parse tree to walk, so the
+  // §E.1.1 obligation cannot be discharged attribute by attribute and falls on
+  // the carrier, exactly as it does for a parsed `SQ` with no items. See
+  // {@link declaredPrivateVr} for the two encodings that produce the
+  // disagreement.
+  //
+  // 🛑 THE TWO CONJUNCTS AHEAD OF IT ARE LOAD-BEARING AND BOTH WERE ADDED BY A
+  // GRADED PASS. Neither is a refinement of the rule; each keeps a property this
+  // module already had.
+  //
+  // `hasUndefinedVr` FIRST, so an element whose on-wire VR is not one of the 34
+  // still reaches {@link emptyUndefinedVrElement} through {@link keepOrEmpty}.
+  // Both routes empty it, so no value moves either way - but that route is the
+  // one place in the module that deliberately names NO TAG, because the
+  // condition raising it is that the header itself was fabricated from bytes
+  // inside some element's value. An under-declared length upstream can
+  // resynchronize the reader onto four bytes that happen to match this caller's
+  // own private block, and answering that element here would put its fabricated
+  // tag on a warning and in the report. Three warning codes have been refused
+  // for exactly that; do not reorder these two tests.
+  //
+  // 🩺 IT IS A PARTIAL BOUND AND MUST NOT BE WRITTEN UP AS A CLOSURE. It keeps
+  // the tag-free route only for a fabricated header whose two VR bytes fall
+  // OUTSIDE the 34. Fabricate `OB` instead of `Zz` and the tag reaches the
+  // diagnostic here. That is disclosed, not guarded: a fabricated `OB` header
+  // and a genuine one are byte-identical, and on the same input base kept the
+  // carrier verbatim and shipped the whole nested name. See
+  // {@link emptyUnauditableCarrier}.
+  //
+  // `el.length > 0` because a zero-length value hides nothing, and without it
+  // de-identifying an already de-identified object reports a second drop where
+  // there is nothing left to drop - the emptied element still satisfies every
+  // other conjunct. `deidentify()` is a fixed point on its own output
+  // (`DICOM-DEIDENT-NOT-A-FIXED-POINT`), and that has to include the audit, not
+  // just the bytes.
+  if (!hasUndefinedVr(el) && el.length > 0 && declaredPrivateVr(el, ctx, creators) === "SQ") {
+    emptyUnauditableCarrier(el, ctx, contextPath, out, freshScalar(el, Buffer.alloc(0), 0));
     return;
   }
-  out.elements.set(el.tag, descendSequence(el, ctx, contextPath, out, reservationsUsable));
+  keepOrEmpty(el, ctx, contextPath, out);
 }
 
 /**
@@ -1114,7 +1300,7 @@ function processElements(
   for (const [at, el] of source.entries()) {
     if (isPrivateTag(el.tag)) {
       if (reservationsUsable && isSettled(el, at, bound) && keepsPrivate(el, ctx, creators))
-        keepRetainedPrivate(el, ctx, contextPath, out, reservationsUsable);
+        keepRetainedPrivate(el, ctx, contextPath, out, reservationsUsable, creators);
       else out.removedPrivateTags.push(el.tag);
       continue;
     }

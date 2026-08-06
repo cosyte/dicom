@@ -719,6 +719,10 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   `report.removedPrivateTags` for a refused nested private element, `report.attributes` with a
   nested `contextPath` for a Table E.1-1 row acted on inside the carrier, and
   `report.unauditableSequences` + `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` for an un-walkable one.
+  **▶ 🛑 THE BOUND BELOW IS NOW CLOSED BY `DICOM-PRIVATE-SQ-PARSE-VR` (its own section, next).
+  READ THE REST OF THIS BULLET AS HISTORY, NOT AS STATUS** - the leak it describes is real, was live
+  through `0.0.10` and through this slice, and is what the next one keyed the profile's declared VR
+  on. Everything else here still stands.
   **▶ 🛑 THE BOUND, AND PASS 1 REFUSED THE SLICE FOR NOT STATING IT: `el.vr` IS THE PARSED VR, NOT
   THE PROFILE'S DECLARED ONE.** The `SQ` branch keys on the parse tree. Under Implicit VR LE a
   private tag has **no VR on the wire**, so `SQ` there is an inference the **parser** draws from a
@@ -744,6 +748,129 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   stream**, reached through the `RetainSafePrivate` retention route the grid's `carrier|` family
   never exercises (it runs `deidentify()` with no options). Adjacent to the accepted
   `DICOM-BINARY-CARRIER-OVERDECLARE` but not the same route; **do not grow the guard for it**.
+
+## DICOM-PRIVATE-SQ-PARSE-VR
+
+- **🩺 THE PROFILE'S DECLARED VR IS A SECOND AUTHORITY, AND WITHOUT IT THE CARVE-OUT CLOSED ONLY
+  WHAT THE PARSE TREE HAPPENED TO RESOLVE.** (`PRE-EXISTING`, opened by `#77`'s own pass-1 refuter
+  while closing `DICOM-PRIVATE-SQ-CARVE-OUT`, base `369abbe`.) `keepRetainedPrivate` branched on
+  `el.vr === "SQ"` alone. The remedy adds one more question, asked only of an element
+  `RetainSafePrivate` has already decided to retain: **does the `Profile` that vouched for it
+  declare it `SQ`?** If yes and the tree has no items, the carrier is emptied through the channel a
+  parsed `SQ` with no items already used. `keepsPrivate` is untouched, the retention decision is
+  untouched, no parser file is touched, and **no content test is added** - `declaredPrivateVr` reads
+  one field off the caller's own profile, which is the same lookup `keepsPrivate` already performs.
+  **▶ TWO ENCODINGS MAKE THE TREE AND THE PROFILE DISAGREE, AND ONLY ONE OF THEM IS MALFORMED -
+  NEITHER, IN FACT.** (1) **Implicit VR LE writes no VR at all** (PS3.5 2026c §7.1.3), so for a
+  private tag `SQ` is an inference the **parser** draws from a profile *it* was given; pass the
+  profile only to `deidentify()` and the identical bytes arrive `UN`. (2) **Under Explicit VR the
+  wire VR wins in the parser**, so a sender who writes a profile-declared `SQ` attribute as `OB`
+  yields `OB` - **with an honest defined length wrapping a well-formed `(FFFE,E000)` item stream**,
+  which is `#77`'s pass-1 `F2` and was filed as the second shape. Both were measured leaking on
+  `369abbe` with a name-bearing payload; both are closed here by the same four lines.
+  **▶ 🛑 THE EXPLICIT VR SHAPE IS SILENT ON `ds.warnings` - THE IMPLICIT ONE IS NOT, AND THE
+  DIFFERENCE IS PINNED ON BOTH ROWS.** The Implicit VR LE file raises
+  `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR`; the `OB` file is **fully conformant** and raises
+  nothing. So `ds.warnings` was never the channel for this class, and
+  `report.unauditableSequences` is. Do not summarise either shape as "warned" or as "silent" without
+  re-running both.
+  **▶ WHAT IS DELIBERATELY NOT CLOSED, AND DO NOT GROW THE GUARD FOR IT.** A profile entry
+  declaring a **binary** VR (`OB`/`OW`/`UN`) over a value that happens to be a well-formed item
+  stream. Nothing declares a Data Set to be in there; separating one from a legitimate binary blob
+  is a **content test on exactly the VRs arbitrary bytes are for**, which is the same reasoning the
+  founder accepted `DICOM-BINARY-CARRIER-OVERDECLARE` on. **🛑 IT IS NOT THAT DECISION, AND A GRADED
+  PASS REFUSED THE DRAFT THAT LABELLED IT ONE.** That decision priced a measured **over-declare
+  swallow** (11 grid cells, `delta=18`, remedy built and costed); this is an **honest** length
+  reached through `RetainSafePrivate`, which three prior artifacts each call a **different route**.
+  A leak nobody decided must not inherit a decision, because under the umbrella's BACKLOG rules a
+  decided leak leaves the list. **Open, disclosed, undecided.** It is pinned as the second row of
+  the `OB` test - the two rows differ in the fixture's declared VR and nothing else, which is the
+  whole predicate stated as a fixture rather than as a sentence.
+  **▶ 🛑 THE BRANCH HAS THREE CONJUNCTS AND TWO OF THEM WERE PUT THERE BY A GRADED PASS. NEITHER IS
+  A REFINEMENT OF THE RULE; EACH KEEPS A PROPERTY THE MODULE ALREADY HAD.** Each is pinned by
+  exactly one test, proven by dropping it.
+  1. **`!hasUndefinedVr(el)` FIRST.** The new branch sits ahead of `keepOrEmpty`, so without this it
+     preempts `emptyUndefinedVrElement` - **the one path in the module that deliberately names no
+     tag**, because the condition raising it is that the header was fabricated from bytes inside
+     some element's value. An under-declared length upstream can resynchronize the reader onto four
+     bytes that spell **the caller's own vendor block**, whose Private Creator is genuine and whose
+     position is inside the settled run, so every other conjunct holds. Measured: the fabricated tag
+     reached the warning and `report.unauditableSequences`, and `undefinedVrElements` went empty.
+     Both routes empty the element, so **no value moves either way** - what moved is the diagnostic,
+     which is the class `CLAUDE.md` says cost three warning codes. Do not reorder these two tests.
+     **▶ 🩺 IT IS A PARTIAL BOUND, A SECOND GRADED PASS REFUSED THE FIVE ARTIFACTS THAT WROTE IT UP
+     AS A CLOSURE, AND THE REMEDY WAS THE CLAIM.** `hasUndefinedVr` only answers a fabricated header
+     whose own **VR bytes fall outside the 34**. Change the fixture's two fabricated VR bytes from
+     `Zz` to `OB` and every conjunct holds, this branch answers it, and the fabricated tag reaches
+     both the warning and `report.unauditableSequences`. Measured on the slice's own F2 fixture.
+     **The guard is NOT grown for it, for two measured reasons.** A fabricated `OB` header and a
+     genuine one are **byte-identical** - the permanent fact that has stopped five slices, so there
+     is nothing to key on. And on that identical input **base kept the carrier verbatim and shipped
+     the whole nested `(0010,0010)`**, so the direction is a strict improvement: four bytes of tag
+     on a report instead of a name in the output. It is the same shape as
+     `report.removedPrivateTags`' fabricated odd-group header, already disclosed and live on both
+     trees. **`DeidentifyReport` now has a third way to carry document content, and it is never a
+     value-free surface.** Pinned as the second row of the fabricated-header test, which asserts the
+     leak rather than lamenting it: if that row ever goes green the bound moved and these paragraphs
+     are stale.
+     **▶ 🛑 AND DO NOT WRITE A COUNT OF `DeidentifyReport`'S VALUE-BEARING FIELDS. IT HAS READ 1,
+     THEN 2, THEN 3, AND WAS WRONG EVERY TIME IT WAS READ**, because each correction bumped the
+     numeral without re-deriving the list. A third graded pass caught the "three" this slice wrote,
+     by naming a fourth: `embeddedAttributes[].hidden`, whose entries are composed from four bytes
+     found **inside** a value, so on any file that populates the field at all they are document
+     content by construction. Measured on a `CS` carrier over-declaring across `"SABC"`:
+     `hidden: ["41534342"]`, `"SABC"` in wire order, **identical on both trees and on every release
+     that has shipped the field**. `PRE-EXISTING`, disclosed on the type and in troubleshooting, and
+     **its remedy is its own slice** - `DICOM-EMBEDDED-HIDDEN-NOT-VALUE-FREE`, which pairs naturally
+     with the cap that same field is already missing. Every artifact now names the LIST and no
+     artifact names a number.
+  2. **`el.length > 0`.** The emptied carrier still satisfies every other conjunct, so a second
+     `deidentify()` over the first one's output reported a **second drop with `byteLength: 0`**
+     where nothing was left to drop. Bytes were already idempotent; the audit was not. The
+     parsed-`SQ` producer never had this, because `rebuildSequence` yields `items: []`.
+  **▶ THE WARNING MESSAGE NO LONGER SAYS `is VR=SQ`, AND THAT IS NOT A WORDING PREFERENCE.** The
+  frozen registry string is shared by both producers, and producer 2's whole premise is that the
+  parse tree and the profile disagree about the VR - so it stated a fact the file contradicts, on
+  the one channel this class designates, under `(0012,0062) = YES`. Measured saying `is VR=SQ` over
+  an `OB` carrier, over an `LO` carrier, over an unrecognized `Zz`, and over a CP-246 `UN`. It now
+  reads "is a Sequence carrier with no parsed items", and `{n}` is described as the **recorded span**
+  rather than the value length, because `rawBytes` is full-span under Explicit VR. Pinned by an
+  assertion that the template contains no `VR=SQ`.
+  **▶ THE EMPTIED ELEMENT KEEPS ITS PARSED VR, and that is why `emptyUnauditableSequence` was split
+  rather than reused whole.** `rebuildSequence` re-types to `SQ` and under Explicit VR that VR is
+  two real bytes in the output, so emptying an `OB` through it would assert a type the sender never
+  wrote. The parsed-`SQ` caller still rebuilds; the new caller uses `freshScalar`. One audit
+  channel, one warning code, **no new public surface** - the same choice `#66`, `#69` and `#77` made.
+  `UnauditableSequenceFinding`'s JSDoc now names both producers, because the field's meaning is
+  wider than "a parsed `SQ`" and a consumer reading only the old sentence would mis-read it.
+  **▶ THE COST, AND IT IS NOT ZERO.** A caller who passes a profile to `deidentify()` but not to
+  `parseDicom` now **loses** the vendor sequence's content instead of shipping it verbatim. That is
+  the fail-safe direction and it is the same trade every un-auditable sequence already makes, but it
+  is over-removal against `0.0.10` and the remedy on the caller's side is one line: pass the profile
+  to `parseDicom` too, and the sequence is walked, de-identified and retained. Stated in the
+  changeset, the README and `troubleshooting.md` rather than discovered later.
+  **▶ THE BASE-RED FIGURE, PINNED PER-SHA AND MEASURED OVER THE FULL SUITE AFTER THE LAST TEST WAS
+  ADDED. Against base `src/` at `369abbe`, replaced wholesale (`rm -rf src` then `git archive`,
+  never `git checkout -- src/`, which OVERLAYS): 5 of 1,081 run red.** Suite `1074 -> 1080` passing
+  plus the 1 `todo`. **It read `2 of 1,077` before the graded pass added four more tests, and was
+  re-run rather than carried forward** - the trap this file already writes with a stop sign. **Two
+  of the seven new or rewritten tests are GREEN on base BY DESIGN, because they are controls**: that
+  a retained private element the profile declares `LO` is still kept **verbatim** (or the remedy has
+  degenerated into "empty every retained private element"), and that a fabricated header keeps the
+  tag-free diagnostic, which base already did.
+  **▶ EVERY CONJUNCT IS NON-VACUOUS AND EACH WAS PROVEN BY MUTATION, NOT ASSERTED.** Widening the
+  predicate from `=== "SQ"` to `!== undefined` reds **14** tests in
+  `deident-private-reservation.test.ts`, the `LO` control among them; dropping `!hasUndefinedVr(el)`
+  reds exactly the fabricated-header test; dropping `el.length > 0` reds exactly the second-pass
+  test. Re-derive them that way rather than quoting the numbers.
+  **▶ THE GRID WAS NOT RE-RUN, AND THAT IS A REASONED OMISSION RATHER THAN A SKIPPED STEP.**
+  `scripts/measure-sq-bound-grid.ts` holds **no private-`SQ` cell at all** (`#77` measured 0 of
+  83,037 differing for the carve-out itself, for the same reason: the `priv|` family builds an `LO`
+  behind a **public** carrier and every family runs `deidentify()` with no options, so
+  `RetainSafePrivate` + a `Profile` - the only route in the package that writes a private value into
+  de-identified output - is never on). This remedy is reachable **only** from inside
+  `keepRetainedPrivate`, which only that route reaches. **Never read that as coverage.** The net is
+  the unit tests.
 
 ## DICOM-PRIVATE-CREATOR-RESERVATION-LEAK
 
@@ -1147,9 +1274,17 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   file. It needs a parser-set mark, i.e. its own slice. Measured on a hand-built file: identifier in
   the output, no report entry, only `DICOM_VR_MISMATCH`. Its former companion - a **private** `SQ`
   under `RetainSafePrivate` + a `Profile`, kept verbatim because the profile vouched for it - is
-  **closed by `DICOM-PRIVATE-SQ-CARVE-OUT`**, but **only when the PARSER resolved it to `SQ`**:
-  `DICOM-PRIVATE-SQ-PARSE-VR` is the residual where the profile reached `deidentify()` and not
-  `parseDicom`, and it is a **defined**-length carrier, so this CP-246 shape does not cover it.
+  **closed by `DICOM-PRIVATE-SQ-CARVE-OUT`**, and the parsed-VR half of it by
+  `DICOM-PRIVATE-SQ-PARSE-VR` (its own section below), which added the profile's **declared** VR as
+  a second authority. **🛑 THAT SECOND ONE DOES REACH THIS SHAPE, AND A GRADED PASS REFUSED THE
+  DRAFT THAT SAID OTHERWISE.** Its predicate does not test the length **field**, so an
+  undefined-length `UN` whose CP-246 descent was refused **is** emptied whenever a `Profile` declared
+  that private attribute `SQ`. **Say it that way and not "no length condition"** - `el.length > 0` is
+  one of its three conjuncts, a refused CP-246 descent carries `0xFFFFFFFF` there so it passes, and a
+  second graded pass refused the six artifacts that claimed the predicate had no length condition at
+  all in the same commit that added one. The conclusion held; the stated reason did not. The residual below is what survives outside that route - it is a statement about
+  elements **no profile named**, where the `UN` test genuinely cannot be relaxed. Do not restate it
+  as covering every `UN`.
 
 ## DICOM-OVERDECLARE-SWALLOWS-INTO-VALUE
 

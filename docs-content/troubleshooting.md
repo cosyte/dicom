@@ -87,12 +87,25 @@ Two things that array does **not** cover:
   the same registry and are equally safe, but a logger that only reads `ds.warnings` will not see
   them at all.
 
-A `DeidentifyReport` is safe to log with **two** exceptions, not one. `uidMap`'s keys are the source
+A `DeidentifyReport` is **not** safe to log whole, and the exceptions are listed rather than counted:
+the count read one, then two, then three, and was wrong each time. `uidMap`'s keys are the source
 UIDs read out of the file: they are there so UID replacement stays consistent across a study, and a
-study UID is a unique identifier. And `removedPrivateTags` is composed from tag numbers, which are
+study UID is a unique identifier. `removedPrivateTags` is composed from tag numbers, which are
 structural on every conformant file but are read out of the document, so a **fabricated** odd-group
-header makes four bytes of somebody's value into a tag string there. The rest of the report (keywords,
-action codes, sequence context paths) is composed from static tables and carries nothing.
+header makes four bytes of somebody's value into a tag string there. And `unauditableSequences[].tag`
+joins them, for the same reason by a narrower route: a private carrier a `Profile` declares `SQ` is
+named there, and a length under-declared upstream can resynchronize the reader onto four bytes that
+spell such a block. The package normally answers a fabricated header with `undefinedVrElements`,
+which carries a byte offset and **no tag**, and it still does whenever the fabricated VR is not one
+of the 34 PS3.5 §6.2 defines. It cannot when the fabricated VR is one of them, because a fabricated
+`OB` header and a genuine one are byte-identical, and no bound can tell them apart. The alternative
+was keeping that carrier verbatim, which is what earlier releases did and what shipped the nested
+value itself, so this is the better of the two. The rest of the report (keywords, action codes,
+sequence context paths) is composed from static tables and carries nothing - except
+`embeddedAttributes[].hidden`, whose entries are composed from four bytes found *inside* a value and
+are therefore document content on any file that populates the field at all. That one is
+`PRE-EXISTING` on every release that has shipped the field and its remedy is its own slice; it is
+named here so nobody logs it in the meantime.
 
 The field-by-field split between identifiers and values is in
 [Tolerance](./spec-notes-tolerance#the-model-fields-that-are-bounded-and-the-ones-that-are-values).
@@ -204,21 +217,33 @@ Each is tracked as a future companion package, not a gap to be filled here:
   PS3.15 §E.3.10 is over a **Private Attribute**, not over a Data Set nested in its value, so a
   vouched-for private `SQ` now takes the same two branches every other `SQ` takes: emptied and
   recorded when its items were never materialized, walked when they were.
-  **Two shapes are still exempt and still leak, and the closure above covers neither.**
-  (1) An undefined-length `UN` value the CP-246
+  **A private carrier the profile declares `SQ` is emptied even when the parse tree calls it
+  something else** (`DICOM-PRIVATE-SQ-PARSE-VR`, closed after `0.0.10`). The parse tree and the
+  profile disagree about the same bytes in two ordinary situations: under Implicit VR LE a private
+  tag carries **no VR on the wire**, so `SQ` there is an inference made **at parse time** and a
+  profile passed only to `deidentify()` leaves the element `UN`; and under Explicit VR the wire's VR
+  wins, so a sender who writes the attribute `OB` or `UN` yields that even on a fully conformant file
+  with an honest Value Length. In both cases the profile that retained the element has told us its
+  value is a Sequence of Items, there is no item stream on the tree to walk, and the carrier is
+  emptied and named in `report.unauditableSequences`. It keeps the VR the file carried; nothing is
+  re-typed to `SQ`. **On the Explicit VR shape `ds.warnings` is empty**, so the report is the only
+  channel. **That naming is one of the report fields that is not value-free**, listed above, and
+  this is why: the tag it records can itself be four bytes of another element's value. **Pass the same profile to `parseDicom` as well as to `deidentify()`** and the sequence is
+  walked and its non-PHI content retained, rather than dropped.
+  **One shape is still exempt and still leaks.** An
+  undefined-length `UN` value the CP-246
   descent could not read as a sequence keeps `vr === "UN"` and raises nothing beyond a possible
-  `DICOM_VR_MISMATCH`. The rule cannot be extended to it, because every ordinary `UN` element
-  also has `items === undefined` and applying it there would empty every unknown-VR element in every
-  file.
-  (2) A private carrier your `Profile` declares as `SQ` but the **parser** never resolved, because
-  the profile reached `deidentify()` and not `parseDicom` (`DICOM-PRIVATE-SQ-PARSE-VR`). Under
-  Implicit VR LE a private tag carries no VR on the wire, so `SQ` there is a profile-driven
-  inference made **at parse time**: the same bytes arrive as `UN` with no items, take the non-`SQ`
-  branch, and are kept verbatim under `(0012,0062) = YES`, with
-  `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR` on `ds.warnings` as the only signal. Its Value
-  Length is **defined**, so CP-246 never runs and shape (1) is not it. **The fix on your side is to
-  pass the same profile to `parseDicom` as well as to `deidentify()`.**
-  So for both, the reliable test is still `el.items === undefined`, and a report is a record
+  `DICOM_VR_MISMATCH`. The rule cannot be extended to `UN` in general, because every ordinary `UN`
+  element also has `items === undefined` and applying it there would empty every unknown-VR element
+  in every file. **Where a `Profile` does declare that private attribute `SQ`, the rule above
+  reaches it** and empties it: that test does not look at the length field, so this residual is about
+  elements no profile named.
+  **And one deliberate limit on the closure**: a private carrier whose profile entry declares a
+  **binary** VR (`OB`/`OW`/`UN`) is kept verbatim even when its value happens to be a well-formed
+  item stream. Nothing declares a Data Set to be in there, and separating one from a legitimate
+  binary blob needs a content test on exactly the VRs arbitrary bytes are for, which would empty
+  conformant binary values.
+  So the reliable test is still `el.items === undefined`, and a report is a record
   of what was reached, not a proof that everything was.
 - **A private value vanishes under `RetainSafePrivate`, and `report.removedPrivateTags` names it.**
   The file's own length fields contradict each other about where a Sequence Item ends: its

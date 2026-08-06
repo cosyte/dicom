@@ -122,9 +122,15 @@ export interface DeidentifiedAttribute {
  * (PS3.15 §E.1 "all instances"; §E.3.5 is the standard's own precedent for
  * removing identifying information embedded inside a string attribute).
  *
- * Every field is structural: `tag` and `vr` are the carrier's, and `hidden`
- * holds tags composed from four bytes each. No decoded value appears here, so
- * this is safe to log.
+ * `tag` and `vr` are the carrier's own and are structural. **`hidden` is not,
+ * and calling this finding "safe to log" was wrong.** Each entry is composed
+ * from four bytes that were sitting *inside* the carrier's value - that is the
+ * whole reason the field exists - so on any file that populates it those bytes
+ * are document content. Measured: a `CS` carrier over-declaring over the bytes
+ * `"SABC"` reports `hidden: ["41534342"]`, which is `"SABC"` in wire order.
+ * `PRE-EXISTING` and identical on every release that has shipped the field.
+ * Treat `hidden` at the sensitivity of the file, and see
+ * {@link DeidentifyReport} for the other fields in this class.
  *
  * @example
  * ```ts
@@ -147,8 +153,20 @@ export interface EmbeddedAttributeFinding {
 }
 
 /**
- * One `SQ` element that was emptied because the parser never materialized its
- * items, so the de-identifier had no Data Sets to walk.
+ * One Sequence-of-Items carrier that was emptied because this run had no item
+ * stream to walk, so the de-identifier had no Data Sets to reach.
+ *
+ * **Two producers, and the second is not a parsed `SQ`.** The ordinary one is an
+ * `SQ` element whose `items` the parser never materialized. The other is a
+ * private data element retained under `RetainSafePrivate` whose `Profile` entry
+ * declares it `SQ` while the parse tree says otherwise - `UN` under Implicit VR
+ * LE when the profile was passed to `deidentify()` but not to `parseDicom`, or
+ * whatever binary VR the sender wrote under Explicit VR, which wins in the
+ * parser. The profile is the authority that retained the element, and it has
+ * said the value is a Sequence of Items; with no items on the tree, the §E.1.1
+ * obligation below falls on the carrier just the same. Such an element keeps its
+ * parsed VR in the output and is emptied rather than re-typed to `SQ`
+ * (`DICOM-PRIVATE-SQ-PARSE-VR`).
  *
  * PS3.5 2026c §7.5.1 "Item Encoding Rules" states that "Each Item Value shall
  * contain a DICOM Data Set composed of Data Elements", so an `SQ` element's
@@ -167,12 +185,26 @@ export interface EmbeddedAttributeFinding {
  * the carrier, not as a rule about this case.)
  *
  * Both fields are structural: `tag` is the carrier's and `byteLength` is the
- * declared size of the value that was dropped. No decoded value appears here,
- * so this is safe to log.
+ * recorded span of the value that was dropped. **No _decoded_ value appears
+ * here, and that is not the same as "safe to log".** On the second producer
+ * `tag` can be four bytes of another element's value: a length under-declared
+ * upstream resynchronizes the reader mid-value, and if the bytes it lands on
+ * spell a private block this caller's profile declares `SQ`, followed by a VR
+ * that is one of the 34, the fabricated header is what you get here. The
+ * package's answer to that class is normally `report.undefinedVrElements`,
+ * which names a byte offset and **no tag**, and it still answers the case where
+ * the fabricated VR is outside the 34 - but it cannot answer this one, because
+ * a fabricated `OB` header and a genuine one are byte-identical. So this shares
+ * the standing exception `report.removedPrivateTags` and `uidMap` already have:
+ * a `DeidentifyReport` is **not** a value-free surface. Treat it as document
+ * content, at the sensitivity of the file it came from.
  *
- * The parser always announces the underlying refusal first, on
+ * For the first producer the parser announces the underlying refusal on
  * `Dataset.warnings`: `DICOM_SQ_NOT_DESCENDED` for a defined-length Implicit VR
- * LE value whose dictionary-resolved `SQ` was not a valid item stream.
+ * LE value whose dictionary-resolved `SQ` was not a valid item stream. **Do not
+ * generalise that to the second.** There the file may be entirely conformant -
+ * an honest defined-length `OB` carrier raises nothing at all - so this report
+ * field, not `Dataset.warnings`, is where that drop is visible.
  *
  * @example
  * ```ts
@@ -289,8 +321,12 @@ export interface UndefinedVrFinding {
  * The audit trail returned alongside the de-identified dataset.
  *
  * Most fields are composed from static tables: Part 6 keywords, Annex E action
- * codes, structural `TAG[index]` sequence paths, and registry warning messages.
- * **Two are not, and both are named here rather than in a footnote.**
+ * **Several fields are not, and they are named here rather than in a footnote.**
+ * 🛑 **Do not quote a COUNT of them, here or anywhere else.** The count read
+ * "one" and then "two" and then "three", and was wrong every time it was read,
+ * because each correction bumped the numeral without re-deriving the list. What
+ * follows is the list; treat it as the current reading of a surface that has
+ * grown, not as a proof of exhaustiveness.
  *
  * 1. **`uidMap`** - its keys are the source UIDs read out of the file, kept so a
  *    caller can make UID replacement consistent across a study or an archive. A
@@ -300,6 +336,22 @@ export interface UndefinedVrFinding {
  *    file these are the sender's own private tag numbers and carry nothing; on a
  *    malformed one a tag can be four bytes of a value, and it is measured, not
  *    theoretical.
+ * 3. **`unauditableSequences[].tag`** - see
+ *    {@link UnauditableSequenceFinding}. Same shape as 2 by a narrower route: a
+ *    private carrier a {@link Profile} declares `SQ` is named there, and an
+ *    under-declared length upstream can resynchronize the reader onto four
+ *    bytes that spell such a block. The package's usual answer to a fabricated
+ *    header, `undefinedVrElements`, carries a byte offset and no tag, and still
+ *    answers it whenever the fabricated VR is outside the 34 PS3.5 §6.2
+ *    defines. It cannot when the fabricated VR is one of them, because those
+ *    two files are byte-identical.
+ * 4. **`embeddedAttributes[].hidden`** - see {@link EmbeddedAttributeFinding}.
+ *    Each entry is a tag composed from four bytes that were sitting **inside**
+ *    a value, which is the position this type exists to distrust, so on a file
+ *    that populates the field at all they are document content by
+ *    construction. `PRE-EXISTING` and identical on every release that has
+ *    shipped the field; it is disclosed here and its remedy is its own slice,
+ *    alongside the cap that field is also missing.
  *
  * So "the report is safe to log apart from `uidMap`" is **not** an accurate
  * description of this type, and was corrected rather than kept convenient.

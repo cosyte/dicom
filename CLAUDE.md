@@ -28,10 +28,10 @@ in the same area - open the section first.**
   file** - `npm view @cosyte/dicom version` is the only source of truth, and the meta-repo's ADR 0023
   carries the measured history of why. Do not re-derive it here; do not add a numeral to this bullet.
 - **🩺 Open PHI residuals - measured, disclosed, NOT closed. None of these is an all-clear:**
-  - The **private-`SQ` carve-out** is **CLOSED, BUT ONLY WHERE THE PARSER RESOLVED THE ELEMENT TO
-    `SQ`** - the branch keys on the PARSED VR, and Implicit VR LE carries none on the wire, so a
-    profile given to `deidentify()` but not `parseDicom` still leaks verbatim
-    (`DICOM-PRIVATE-SQ-PARSE-VR`; **defined** length, so the CP-246 `UN` residual is NOT it).
+  - The **private-`SQ` carve-out** is CLOSED, and so is the **parsed-VR** route that left it open
+    (`DICOM-PRIVATE-SQ-PARSE-VR`): the profile's **declared** VR is a second authority, so a
+    carrier it calls `SQ` is emptied where the tree says `UN`/`OB`. **Still exempt: a profile
+    entry declaring a BINARY VR** over an item stream - a content test, so not taken.
     **A `Profile` vouches for a Private Attribute (PS3.15 §E.3.10), never for a Data Set nested in
     its value (§E.1.1).** **The grid holds no private-`SQ` cell**; the unit tests are the net.
     ABSORB and EJECT are closed too; EJECT needed a **second predicate** (Implicit VR LE records no
@@ -46,9 +46,9 @@ in the same area - open the section first.**
     [#dicom-explicit-vr-unbounded-item-read](documentation/agent-notes.md#dicom-explicit-vr-unbounded-item-read)
   - `report.removedPrivateTags` can echo four bytes of document content from a **fabricated
     odd-group header**, identically on both trees. Structural, not closed; the **claim** was
-    corrected rather than the guard widened. With `uidMap` (the file's own source UIDs) it is the
-    second value-bearing field of `DeidentifyReport` - **two exceptions, not one**, and that report
-    is never "value-free".
+    corrected rather than the guard widened. With `uidMap` and now `unauditableSequences[].tag`
+    plus `embeddedAttributes[].hidden`. **NEVER QUOTE A COUNT** - it read 1, 2, 3, wrong
+    each time. Read the list on the type.
     [#dicom-unrecognized-vr-short-form](documentation/agent-notes.md#dicom-unrecognized-vr-short-form) ·
     [#phi-warning-message-leak](documentation/agent-notes.md#phi-warning-message-leak)
   - `report.embeddedAttributes[].hidden` is **unbounded** (131,072 tag strings from a 1 MiB

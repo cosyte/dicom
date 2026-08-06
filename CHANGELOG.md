@@ -6,6 +6,92 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
 
 ### Fixed
 
+- **🩺 A private carrier a `Profile` declared `SQ` was still written into de-identified output
+  verbatim whenever the parse tree resolved it to anything else** (`DICOM-PRIVATE-SQ-PARSE-VR`).
+  `PRE-EXISTING`, live through the published `0.0.10` and through the carve-out below, which closed
+  only what the parse tree happened to resolve. `keepRetainedPrivate` branched on `el.vr === "SQ"`,
+  and the parse tree and the profile disagree about the same bytes in **two ordinary, conformant
+  situations**: under **Implicit VR LE a private tag carries no VR on the wire** (PS3.5 2026c
+  §7.1.3), so `SQ` there is an inference the parser draws from a `Profile` _it_ was given and a
+  profile passed only to `deidentify()` leaves the element `UN`; and under **Explicit VR the wire's
+  VR wins in the parser**, so a sender who writes a profile-declared `SQ` attribute as `OB` or `UN`
+  yields that instead - with an honest defined length wrapping a well-formed `(FFFE,E000)` item
+  stream. Both were measured shipping a `(0010,0010)` Patient's Name into output stamped
+  `(0012,0062) Patient Identity Removed = YES` with an empty `report.unauditableSequences`.
+
+  **The remedy adds a second authority, not a content test.** The `Profile` that vouched for the
+  element also declares its VR, and that declaration is what `RetainSafePrivate` is trusting in the
+  first place. A retained private element the profile declares `SQ` whose parse tree carries no
+  items is now emptied through the same channel a parsed `SQ` with no items already used -
+  `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` plus a `report.unauditableSequences` entry - **keeping the
+  VR the file actually carried** rather than re-typing the element to `SQ`. Nothing inspects the
+  value's bytes, `keepsPrivate` and the retention decision are unchanged, no parser file is touched,
+  and there is no new public surface. `UnauditableSequenceFinding`'s documentation now names both
+  producers, because the field is no longer only about a parsed `SQ`.
+
+  **🛑 One of the two shapes is silent on `ds.warnings`.** The Implicit VR LE file raises
+  `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR`; the Explicit VR `OB` file is fully conformant and
+  raises nothing at all. `report.unauditableSequences`, not `ds.warnings`, is this class's channel.
+
+  **The cost, stated here rather than discovered later.** A caller who passes a profile to
+  `deidentify()` but not to `parseDicom` now **loses** that vendor sequence's content instead of
+  shipping it unexamined. **Pass the same profile to `parseDicom`** and the sequence is walked, its
+  Table E.1-1 attributes de-identified and the rest retained.
+
+  **It reaches the CP-246 `UN` too, wherever a profile named it.** The test does not look at the
+  length **field**, so an undefined-length `UN` whose CP-246 descent this parser refused is emptied
+  when a `Profile` declares that private attribute `SQ`. The undefined-length `UN` residual is a
+  statement about elements **no profile named**, and survives only there. (Read that as stated: the
+  predicate does have a length conjunct, `el.length > 0`, and a refused CP-246 descent carries
+  `0xFFFFFFFF`, so it passes.)
+
+  **Two properties of the module are kept by conjuncts ahead of that test, and each is pinned by its
+  own test.** An element whose on-wire VR is not one of the 34 is still answered by the tag-free
+  `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` route. And a zero-length value is left alone, so
+  de-identifying an already de-identified object reports no second drop.
+
+  **🩺 The first of those is a PARTIAL bound, and it is disclosed rather than grown.** It keeps the
+  tag off the diagnostic only when the fabricated header's own VR bytes fall outside the 34. A
+  length under-declared upstream can resynchronize the reader onto four bytes that spell a genuine
+  private block, and if those bytes are followed by `OB` rather than something unrecognized, the
+  fabricated tag reaches `report.unauditableSequences` and the warning. There is nothing to key on:
+  a fabricated `OB` header and a genuine one are byte-identical. The direction is still a strict
+  improvement, because the previous behaviour kept that carrier **verbatim** and shipped the whole
+  nested name, and this one empties it. It joins `report.removedPrivateTags`, which can echo the
+  same four bytes from a fabricated odd-group header on both trees: **`DeidentifyReport` is not a
+  value-free surface and must not be treated as one.** Pinned as the second row of the
+  fabricated-header test.
+
+  **The report's value-bearing fields are now a LIST on `DeidentifyReport`, with no count anywhere.**
+  The count read one, then two, then three, and was wrong each time, because each correction bumped
+  the numeral instead of re-deriving the list. Re-deriving it found a fourth that no release had
+  disclosed: `embeddedAttributes[].hidden`, whose entries are composed from four bytes found
+  **inside** a value, so on any file that populates that field they are document content by
+  construction, and whose own documentation said "safe to log". That is `PRE-EXISTING` and
+  byte-identical on every release that has shipped the field; it is **disclosed** here and on the
+  type, and narrowing or capping it is its own change.
+
+  `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE`'s message no longer reads "is VR=SQ". It is shared by both
+  producers, and the second one's premise is that the parse tree and the profile disagree about the
+  VR, so naming one stated a fact the file contradicts.
+
+  **Deliberately not closed:** a private carrier whose profile entry declares a **binary** VR
+  (`OB`/`OW`/`UN`) over a value that happens to be a well-formed item stream is still kept verbatim.
+  Nothing declares a Data Set to be in there, and separating one from a legitimate binary blob needs
+  a content test on exactly the VRs arbitrary bytes are for. That is the same reasoning
+  `DICOM-BINARY-CARRIER-OVERDECLARE` was accepted on, but it is **a different route** - that
+  decision priced a measured over-declare swallow, and this is an honest length reached through
+  `RetainSafePrivate`. It remains open and undecided, and is pinned as a fixture row rather than
+  described in prose.
+
+  Against base `src/` at `369abbe`, replaced wholesale: **5 of 1,081** tests run red over the full
+  suite; suite 1074 to 1080 passing plus the 1 `todo`. Two of the seven new or rewritten tests are
+  green on both trees **by design**, because they are controls: that a retained private element the
+  profile declares `LO` is still kept **verbatim**, and that a fabricated header keeps the tag-free
+  diagnostic (base already withheld it). Every conjunct's non-vacuity was proven by mutation rather
+  than asserted. `scripts/measure-sq-bound-grid.ts` was **not** re-run and holds no
+  private-`SQ` cell in any family; this remedy is reachable only from inside `keepRetainedPrivate`.
+
 - **🩺 A private `SQ` a `Profile` vouched for under `RetainSafePrivate` was written into
   de-identified output verbatim, so nothing inside it was ever examined for PHI**
   (`DICOM-PRIVATE-SQ-CARVE-OUT`). `PRE-EXISTING`, live through the published `0.0.10`, found by
@@ -59,8 +145,9 @@ Removed = YES`.
   design. Full suite 1071 to 1074 passing. The two residuals that asserted the leaking behaviour
   were rewritten to assert the closure, which is what those pins existed for.
 
-  **The bound, stated because a graded pass refused the draft that left it out: the branch keys on
-  the PARSED VR, not on the VR the profile declares.** Under Implicit VR LE a private tag carries no
+  **The bound below is CLOSED by the entry above (`DICOM-PRIVATE-SQ-PARSE-VR`), which ships in this
+  same release; it is kept because it is why that remedy needed a second authority.** The branch
+  keyed on the PARSED VR, not on the VR the profile declares. Under Implicit VR LE a private tag carries no
   VR on the wire, so `SQ` there is an inference the parser draws from a `Profile` it was given. Pass
   the profile to `parseDicom` and the element arrives as an `SQ` with items and is walked; pass it
   only to `deidentify()` and the identical bytes arrive as `UN` with no items, take the non-`SQ`
@@ -73,7 +160,8 @@ Removed = YES`.
   arrived at parse or at de-identification" is retracted for the same reason; it was true only while
   every retained private element was kept verbatim.
 
-  **Still open, and untouched here:** `DICOM-PRIVATE-SQ-PARSE-VR` above; the undefined-length `UN`
+  **Still open at the time this entry was written, and `DICOM-PRIVATE-SQ-PARSE-VR` has since been
+  closed by the entry above:** the undefined-length `UN`
   whose CP-246 descent was refused
   (it keeps `vr === "UN"`, so the rule cannot reach it without emptying every unknown-VR element in
   every file); and the 11 leaf-carrier cells of `DICOM-BINARY-CARRIER-OVERDECLARE` (11 to 11 on the

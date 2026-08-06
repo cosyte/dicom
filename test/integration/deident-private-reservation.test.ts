@@ -113,6 +113,7 @@ import {
   profiles,
   serializeDicom,
 } from "../../src/index.js";
+import { WARNING_MESSAGES } from "../../src/parser/warnings.js";
 import { buildDicom } from "../helpers/build-dicom.js";
 
 const IMPLICIT_LE = "1.2.840.10008.1.2";
@@ -997,24 +998,23 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       expect(inherited.secretInOutput).toBe(false);
     });
 
-    it("RESIDUAL - the rule keys on the PARSED VR, so a profile that arrives only at deidentify() still leaks", () => {
-      // 🩺 THE BOUND OF THIS SLICE, PINNED AS A RESIDUAL RATHER THAN ASSERTED
-      // AWAY, and found by this slice's pass-1 `conformance-refuter`.
-      // `keepRetainedPrivate` branches on `el.vr === "SQ"`, which is the VR on
-      // the PARSE TREE. Under Implicit VR LE a private tag has no VR on the
-      // wire, so `SQ` is a `Profile`-resolved inference made at parse time: pass
-      // the profile to `parseDicom` and the element arrives as an `SQ` with
-      // items and is walked; pass it only to `deidentify()` and the same bytes
-      // arrive as `UN` with no items, take the non-`SQ` branch to `keepOrEmpty`,
-      // and are kept verbatim. `DICOM-PRIVATE-SQ-PARSE-VR`, its own item.
+    it("a profile that arrives only at deidentify() no longer leaks the carrier it declared SQ", () => {
+      // 🩺 `DICOM-PRIVATE-SQ-PARSE-VR`, CLOSED. This test asserted the LEAK until
+      // the slice that closed it; it now asserts the closure, and the row that
+      // changed is `unresolved.leaks`.
       //
-      // It is NOT covered by the undefined-length `UN` residual named in the
-      // README and CLAUDE.md: that one is a CP-246 descent this parser refused,
-      // and this carrier's length is DEFINED, so CP-246 is never reached. Do not
-      // read "the private-`SQ` carve-out is closed" as covering this.
+      // `keepRetainedPrivate` used to branch on `el.vr === "SQ"` alone, which is
+      // the VR on the PARSE TREE. Under Implicit VR LE a private tag has no VR
+      // on the wire, so `SQ` is a `Profile`-resolved inference made at parse
+      // time: pass the profile to `parseDicom` and the element arrives as an
+      // `SQ` with items and is walked; pass it only to `deidentify()` and the
+      // same bytes arrive as `UN` with no items. The second authority is the
+      // profile's own DECLARED VR, which is identical on both rows because it is
+      // the same profile object, so the carrier is now emptied on the terms any
+      // un-auditable sequence is emptied.
       //
-      // Name-bearing payload and a control pair, because a residual asserting a
-      // leak is exactly where a vacuous fixture hides.
+      // Name-bearing payload and a control pair, because a fixture whose payload
+      // carries no name cannot fail for the reason it claims to.
       const NESTED_NAME = "BOND^JAMES";
       const profile = defineProfile({
         name: "acme-parse-vr",
@@ -1037,41 +1037,374 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       const deidOptions: DeidentifyOptions = { retain: ["RetainSafePrivate"], profile };
       const outcome = (
         parseOptions: { profile: typeof profile } | undefined,
-      ): { vr: string | undefined; items: number | undefined; leaks: boolean; codes: string[] } => {
+      ): {
+        vr: string | undefined;
+        items: number | undefined;
+        leaks: boolean;
+        codes: string[];
+        unauditable: readonly string[];
+        identityRemoved: string | undefined;
+      } => {
         const ds = parseOptions === undefined ? parseDicom(buf) : parseDicom(buf, parseOptions);
         const el = ds.get("00091001");
-        const { dataset } = deidentify(ds, deidOptions);
+        const { dataset, report } = deidentify(ds, deidOptions);
         return {
           vr: el?.vr,
           items: el?.items?.length,
           leaks: serializeDicom(dataset).toString("latin1").includes(NESTED_NAME),
           codes: ds.warnings.map((w) => w.code),
+          unauditable: report.unauditableSequences.map((f) => f.tag),
+          identityRemoved: dataset.get("00120062")?.rawBytes.toString("latin1").trimEnd(),
         };
       };
 
       // Non-vacuity: the name really is on the wire before either call.
       expect(serializeDicom(parseDicom(buf)).toString("latin1")).toContain(NESTED_NAME);
 
-      // Control: profile at parse time. The element resolves to `SQ`, is walked,
-      // and this slice's remedy scrubs the name. Nothing is warned.
+      // Control: profile at parse time. The element resolves to `SQ`, is WALKED
+      // rather than emptied - the more informative of the two answers, and the
+      // reason to keep passing the profile to `parseDicom`. Nothing is warned and
+      // nothing is reported un-auditable.
       const resolved = outcome({ profile });
       expect(resolved.vr).toBe("SQ");
       expect(resolved.items).toBe(1);
       expect(resolved.leaks).toBe(false);
       expect(resolved.codes).toEqual([]);
+      expect(resolved.unauditable).toEqual([]);
 
-      // Residual: identical bytes, profile withheld from the parse. The element
-      // is `UN`, the non-`SQ` branch keeps it verbatim, and the name ships.
+      // Identical bytes, profile withheld from the parse. The element is still
+      // `UN` with no items - no parser file is touched and no reading changes -
+      // but the profile still declares `(0009,xx01)` an `SQ`, so the carrier is
+      // emptied instead of kept verbatim, and the drop is named.
       const unresolved = outcome(undefined);
       expect(unresolved.vr).toBe("UN");
       expect(unresolved.items).toBeUndefined();
-      expect(unresolved.leaks).toBe(true);
-      // 🛑 PIN THE WARNING CHANNEL ON BOTH ROWS. It is NOT silent - a private tag
-      // with no VR on the wire and no profile to resolve it raises this code - but
-      // read it with the row above: the object is still stamped
-      // `PatientIdentityRemoved = YES`, so the warning is the only signal and is
-      // not an all-clear. Never call this shape silent without re-running it.
+      expect(unresolved.leaks).toBe(false);
+      expect(unresolved.unauditable).toEqual(["00091001"]);
+      // 🛑 THE STAMP IS STILL `YES` ON BOTH ROWS, and that is the point of
+      // reporting the drop: the attestation alone never distinguished them.
+      expect(resolved.identityRemoved).toBe("YES");
+      expect(unresolved.identityRemoved).toBe("YES");
+      // 🛑 PIN THE WARNING CHANNEL ON BOTH ROWS. Parsing a private tag with no VR
+      // on the wire and no profile to resolve it still raises this code, and it
+      // is unchanged by this remedy - the de-identify channel is where the drop
+      // is reported. Never call this shape silent without re-running it.
       expect(unresolved.codes).toEqual(["DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR"]);
+    });
+
+    it("an honest defined-length OB carrier the profile declares SQ is emptied, and one it declares OB is not", () => {
+      // 🩺 THE SECOND SHAPE OF THE SAME RETAIN ROUTE (pass-1 `F2` of `#77`), and
+      // the residual it leaves. Nothing here is malformed: the carrier's Value
+      // Length is HONEST and its value is a well-formed `(FFFE,E000)` item
+      // stream. Under Explicit VR the wire VR wins in the parser, so the element
+      // arrives `OB` with no items however the profile describes it - which is
+      // why the parsed-VR branch alone never reached this and why the grid's
+      // `carrier|` family cannot either (it runs `deidentify()` with no options,
+      // and `RetainSafePrivate` + a `Profile` is the only route in the package
+      // that writes a private value into de-identified output).
+      //
+      // The two rows differ in ONE character of the fixture - the declared VR -
+      // and that is the whole predicate. The `OB` row is the deliberate residual:
+      // separating a well-formed item stream from a legitimate binary blob needs
+      // a content test on exactly the VRs arbitrary bytes are for, which is the
+      // same reasoning the founder accepted `DICOM-BINARY-CARRIER-OVERDECLARE`
+      // on. 🛑 IT IS NOT THAT DECISION, AND A GRADED PASS REFUSED THE DRAFT THAT
+      // LABELLED IT ONE: that decision priced a measured OVER-DECLARE swallow,
+      // and this is an HONEST length reached through `RetainSafePrivate`. Open,
+      // disclosed and undecided. Do not close this row by widening the guard,
+      // and do not describe it as decided.
+      const NESTED_NAME = "BOND^JAMES";
+      const itemStream = ((): Buffer => {
+        const body = Buffer.concat([
+          Buffer.from([0x10, 0x00, 0x10, 0x00]),
+          Buffer.from("PN", "ascii"),
+          Buffer.from([NESTED_NAME.length, 0x00]),
+          Buffer.from(NESTED_NAME, "ascii"),
+        ]);
+        const header = Buffer.alloc(8);
+        header.writeUInt16LE(0xfffe, 0);
+        header.writeUInt16LE(0xe000, 2);
+        header.writeUInt32LE(body.length, 4);
+        return Buffer.concat([header, body]);
+      })();
+
+      const outcome = (
+        declaredVr: "SQ" | "OB",
+      ): {
+        vr: string | undefined;
+        rawLength: number | undefined;
+        declaredLength: number | undefined;
+        leaks: boolean;
+        codes: string[];
+        unauditable: readonly string[];
+      } => {
+        const profile = defineProfile({
+          name: `acme-${declaredVr}`,
+          description: "Synthetic vendor block written OB with an honest length.",
+          privateTags: {
+            ACME: { "0009XX01": { vr: declaredVr, keyword: "AcmeBlob", name: "Acme Blob" } },
+          },
+        });
+        const buf = buildDicom({
+          transferSyntax: EXPLICIT_LE,
+          elements: [
+            nameEl,
+            { tag: "00090010", vr: "LO", value: ascii("ACME") },
+            { tag: "00091001", vr: "OB", value: itemStream },
+          ],
+        });
+        const ds = parseDicom(buf, { profile });
+        const el = ds.get("00091001");
+        const { dataset, report } = deidentify(ds, {
+          retain: ["RetainSafePrivate"],
+          profile,
+        });
+        return {
+          vr: el?.vr,
+          rawLength: el?.rawBytes.length,
+          declaredLength: el?.length,
+          leaks: serializeDicom(dataset).toString("latin1").includes(NESTED_NAME),
+          codes: ds.warnings.map((w) => w.code),
+          unauditable: report.unauditableSequences.map((f) => f.tag),
+        };
+      };
+
+      const declaredSq = outcome("SQ");
+      // Non-vacuity, and the "honest" in the test name is measured rather than
+      // asserted in prose: the parser consumed exactly the bytes the element
+      // declared, so this is not an over-declare and no over-run is recordable.
+      expect(declaredSq.vr).toBe("OB");
+      expect(declaredSq.declaredLength).toBe(itemStream.length);
+      expect(declaredSq.rawLength).toBe(itemStream.length);
+      // 🛑 SILENT ON THE PARSE CHANNEL. A conformant `OB` element raises nothing,
+      // so unlike the Implicit VR LE shape above there is no warning to read.
+      expect(declaredSq.codes).toEqual([]);
+      expect(declaredSq.leaks).toBe(false);
+      expect(declaredSq.unauditable).toEqual(["00091001"]);
+
+      // The residual. Same bytes, same route, profile declares the vendor's own
+      // binary VR - so nothing in the profile says a Data Set is in there, and
+      // only the value's content could.
+      const declaredOb = outcome("OB");
+      expect(declaredOb.vr).toBe("OB");
+      expect(declaredOb.leaks).toBe(true);
+      expect(declaredOb.unauditable).toEqual([]);
+    });
+
+    it("a FABRICATED header keeps the tag-free diagnostic only when its VR is outside the 34", () => {
+      // 🩺 THE BOUND A GRADED PASS CAUGHT THIS SLICE BREAKING, AND THE HALF OF
+      // IT THAT IS STILL OPEN. `emptyUndefinedVrElement` is the one path in the
+      // module that deliberately names NO TAG, because the condition raising it
+      // is that the header was fabricated from bytes inside some element's
+      // value - so its four tag bytes ARE document content. Three warning codes
+      // have been refused for echoing exactly that.
+      //
+      // The profile-declared-`SQ` branch sits in front of `keepOrEmpty` and
+      // would preempt it: an under-declared length upstream resynchronizes the
+      // reader onto four bytes that here spell `(0009,1001)`, the caller's own
+      // vendor block, whose Private Creator is genuine and whose position is
+      // inside the settled run. `!hasUndefinedVr(el)` is what keeps the tag-free
+      // route - for the `Zz` row. Delete that conjunct and the `Zz` row reds
+      // with the fabricated tag on both the warning and the report.
+      //
+      // 🛑 THE TWO ROWS DIFFER IN TWO BYTES OF THE FABRICATED VR AND NOTHING
+      // ELSE, AND THAT IS THE POINT: the bound is partial. Fabricate `OB` and
+      // `hasUndefinedVr` is false, so this branch answers it and the fabricated
+      // tag DOES reach the diagnostic. It is disclosed rather than guarded,
+      // because a fabricated `OB` header and a genuine one are byte-identical -
+      // this package's permanent fact, five refused slices - and because on this
+      // very input the base tree kept the carrier VERBATIM and shipped the whole
+      // nested name. Four bytes of tag on a report beats a `(0010,0010)` in the
+      // output. Do not grow the guard for the `OB` row.
+      const NESTED_NAME = "BOND^JAMES";
+      const profile = defineProfile({
+        name: "acme-fabricated",
+        description: "Synthetic vendor block declared SQ.",
+        privateTags: {
+          ACME: { "0009XX01": { vr: "SQ", keyword: "AcmeSeq", name: "Acme Seq" } },
+        },
+      });
+
+      const outcome = (
+        fabricatedVr: "Zz" | "OB",
+      ): {
+        parsedVr: string | undefined;
+        leaksBeforeDeident: boolean;
+        leaks: boolean;
+        undefinedVrLengths: readonly number[];
+        unauditable: readonly string[];
+        warningsNamingTag: readonly string[];
+      } => {
+        // A complete long-form header (tag + VR + reserved + a 32-bit length)
+        // followed by a name, all of it INSIDE a legitimate `LO` value that
+        // under-declares its own length by exactly that much.
+        const fabricated = Buffer.concat([
+          Buffer.from([0x09, 0x00, 0x01, 0x10]),
+          Buffer.from(fabricatedVr, "ascii"),
+          Buffer.from([0x00, 0x00]),
+          Buffer.from([NESTED_NAME.length, 0x00, 0x00, 0x00]),
+          Buffer.from(NESTED_NAME, "ascii"),
+        ]);
+        const buf = buildDicom({
+          transferSyntax: EXPLICIT_LE,
+          elements: [
+            nameEl,
+            { tag: "00090010", vr: "LO", value: ascii("ACME") },
+            {
+              tag: "00080080",
+              vr: "LO",
+              value: Buffer.concat([ascii("MERCY GENERAL HOSPITAL "), fabricated]),
+              declaredLengthDelta: -fabricated.length,
+            },
+          ],
+        });
+        const ds = parseDicom(buf);
+        const { dataset, report } = deidentify(ds, { retain: ["RetainSafePrivate"], profile });
+        return {
+          parsedVr: ds.get("00091001")?.vr,
+          leaksBeforeDeident: serializeDicom(parseDicom(buf))
+            .toString("latin1")
+            .includes(NESTED_NAME),
+          leaks: serializeDicom(dataset).toString("latin1").includes(NESTED_NAME),
+          undefinedVrLengths: report.undefinedVrElements.map((f) => f.byteLength),
+          unauditable: report.unauditableSequences.map((f) => f.tag),
+          warningsNamingTag: report.warnings
+            .filter((w) => w.message.includes("00091001"))
+            .map((w) => w.code),
+        };
+      };
+
+      // The `Zz` row: the VR is outside the 34, so the tag-free route answers it.
+      const outside = outcome("Zz");
+      // Non-vacuity: the reader really did resynchronize onto the fabricated
+      // header, it really is the block this caller's profile declares `SQ`, and
+      // the name really is on the wire beforehand.
+      expect(outside.parsedVr).toBe("Zz");
+      expect(outside.leaksBeforeDeident).toBe(true);
+      expect(outside.leaks).toBe(false);
+      // 🛑 ANSWERED BY THE TAG-FREE ROUTE. `undefinedVrElements` carries a byte
+      // offset and no tag; `unauditableSequences` would carry `00091001`.
+      expect(outside.undefinedVrLengths).toEqual([NESTED_NAME.length]);
+      expect(outside.unauditable).toEqual([]);
+      expect(outside.warningsNamingTag).toEqual([]);
+
+      // The `OB` row: the residual. Same fixture, two bytes different.
+      const inside = outcome("OB");
+      expect(inside.parsedVr).toBe("OB");
+      expect(inside.leaksBeforeDeident).toBe(true);
+      // The value is still emptied - the improvement over base, which kept this
+      // carrier verbatim and shipped the name.
+      expect(inside.leaks).toBe(false);
+      // And the fabricated tag is on the diagnostic. Asserted, not lamented: if
+      // this ever goes green it means the bound moved, and the artifacts that
+      // describe it are stale.
+      expect(inside.undefinedVrLengths).toEqual([]);
+      expect(inside.unauditable).toEqual(["00091001"]);
+      expect(inside.warningsNamingTag).toEqual(["DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE"]);
+    });
+
+    it("an undefined-length UN whose CP-246 descent was refused IS covered when a profile declared it SQ", () => {
+      // The enumeration a graded pass refused: this remedy does not test the
+      // length FIELD, so it reaches the CP-246 shape too whenever a `Profile`
+      // declared that private attribute a Sequence. Say it that way and not "no
+      // length condition" - `el.length > 0` is one of the three conjuncts, and
+      // the assertion below shows why it passes here: a refused CP-246 descent
+      // carries 0xFFFFFFFF. The undefined-length `UN`
+      // residual survives everywhere else - it is a statement about elements no
+      // profile named - and no artifact may call this shape exempt.
+      const NESTED_NAME = "BOND^JAMES";
+      const profile = defineProfile({
+        name: "acme-cp246",
+        description: "Synthetic vendor block declared SQ, written UN undefined-length.",
+        privateTags: {
+          ACME: { "0009XX01": { vr: "SQ", keyword: "AcmeSeq", name: "Acme Seq" } },
+        },
+      });
+      // An item header whose length is nonsense, so the CP-246 descent is
+      // refused and the element stays `UN` with no items.
+      const payload = Buffer.concat([
+        Buffer.from([0xfe, 0xff, 0x00, 0xe0]),
+        Buffer.from([0x99, 0x99, 0x99, 0x99]),
+        Buffer.from(NESTED_NAME, "ascii"),
+      ]);
+      const buf = Buffer.concat([
+        buildDicom({
+          transferSyntax: EXPLICIT_LE,
+          elements: [nameEl, { tag: "00090010", vr: "LO", value: ascii("ACME") }],
+        }),
+        Buffer.from([0x09, 0x00, 0x01, 0x10]),
+        Buffer.from("UN", "ascii"),
+        Buffer.from([0x00, 0x00]),
+        Buffer.from([0xff, 0xff, 0xff, 0xff]),
+        payload,
+      ]);
+      const ds = parseDicom(buf);
+      // Non-vacuity: this is the refused-descent shape, not a resolved one.
+      expect(ds.get("00091001")?.vr).toBe("UN");
+      expect(ds.get("00091001")?.items).toBeUndefined();
+      expect(ds.get("00091001")?.length).toBe(0xffffffff);
+
+      const { dataset, report } = deidentify(ds, { retain: ["RetainSafePrivate"], profile });
+      expect(serializeDicom(dataset).toString("latin1")).not.toContain(NESTED_NAME);
+      expect(report.unauditableSequences.map((f) => f.tag)).toEqual(["00091001"]);
+    });
+
+    it("de-identifying the output again reports no second drop", () => {
+      // `deidentify()` is a fixed point on its own output
+      // (`DICOM-DEIDENT-NOT-A-FIXED-POINT`), and that has to include the AUDIT
+      // and not just the bytes: the emptied carrier still satisfies every other
+      // conjunct of the new branch, so without the `el.length > 0` test pass two
+      // reports a drop where there is nothing left to drop. A report claiming
+      // work it did not do is the false-audit class this module has been refused
+      // for before.
+      const profile = defineProfile({
+        name: "acme-fixed-point",
+        description: "Synthetic vendor block declared SQ, written OB.",
+        privateTags: {
+          ACME: { "0009XX01": { vr: "SQ", keyword: "AcmeBlob", name: "Acme Blob" } },
+        },
+      });
+      const buf = buildDicom({
+        transferSyntax: EXPLICIT_LE,
+        elements: [
+          nameEl,
+          { tag: "00090010", vr: "LO", value: ascii("ACME") },
+          { tag: "00091001", vr: "OB", value: Buffer.from("PRIVATE-BLOB-BYTES!!", "ascii") },
+        ],
+      });
+      const options: DeidentifyOptions = { retain: ["RetainSafePrivate"], profile };
+      const first = deidentify(parseDicom(buf), options);
+      const second = deidentify(first.dataset, options);
+
+      expect(first.report.unauditableSequences.map((f) => f.tag)).toEqual(["00091001"]);
+      expect(second.report.unauditableSequences).toEqual([]);
+      expect(serializeDicom(second.dataset).equals(serializeDicom(first.dataset))).toBe(true);
+    });
+
+    it("the warning for this class names no VR, because its two producers disagree about it", () => {
+      // The message is shared by both producers and one of them is an element
+      // the profile declares a Sequence while the wire says `OB`. It used to
+      // read "is VR=SQ", which states a fact the file contradicts - on the one
+      // channel this class designates.
+      expect(WARNING_MESSAGES.DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE).not.toContain("VR=SQ");
+      expect(WARNING_MESSAGES.DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE).toContain("{tag}");
+    });
+
+    it("the rule empties only what the profile declares SQ - a declared LO is still kept verbatim", () => {
+      // The control that stops the remedy degenerating into "empty every
+      // retained private element". `profiles.ge` documents `(0009,xx01)` as
+      // `LO`, the file writes `LO`, and the value ships exactly as before.
+      // Without this row the two above would pass against a guard that emptied
+      // everything `RetainSafePrivate` touches.
+      const buf = buildDicom({
+        transferSyntax: EXPLICIT_LE,
+        elements: [nameEl, creatorEl, secretEl],
+      });
+      const ds = parseDicom(buf);
+      const { dataset, report } = deidentify(ds, GE_RETAIN);
+      expect(serializeDicom(dataset).includes(ascii(SECRET))).toBe(true);
+      expect(report.unauditableSequences).toEqual([]);
+      expect(report.removedPrivateTags).toEqual([]);
     });
   });
 
