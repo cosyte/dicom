@@ -20,7 +20,7 @@ All notable changes to `@cosyte/dicom` will be documented in this file. The form
   a profile entry declaring `LO` or `ST` over a carrier the sender wrote `OB` ships the identical
   nested `(0010,0010)` Patient's Name, and so does a string carrier holding Explicit-VR-shaped bytes
   inside an Implicit VR LE file. In every such case the output is stamped `(0012,0062) Patient
-  Identity Removed = YES`, `report.unauditableSequences` is empty and `ds.warnings` is empty, because
+Identity Removed = YES`, `report.unauditableSequences` is empty and `ds.warnings` is empty, because
   none of these files is malformed: the carrier's Value Length is honest and its value is a
   well-formed `(FFFE,E000)` item stream.
 

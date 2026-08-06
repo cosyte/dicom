@@ -114,6 +114,7 @@ import {
   serializeDicom,
 } from "../../src/index.js";
 import { WARNING_MESSAGES } from "../../src/parser/warnings.js";
+import type { BuildDicomOptions } from "../helpers/build-dicom.js";
 import { buildDicom } from "../helpers/build-dicom.js";
 
 const IMPLICIT_LE = "1.2.840.10008.1.2";
@@ -1162,14 +1163,15 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
             ACME: { "0009XX01": { vr: declaredVr, keyword: "AcmeBlob", name: "Acme Blob" } },
           },
         });
-        const buf = buildDicom({
+        const options: BuildDicomOptions = {
           transferSyntax,
           elements: [
             nameEl,
             { tag: "00090010", vr: "LO", value: ascii("ACME") },
             { tag: PRIVATE_TAG, vr: wireVr, value },
           ],
-        } as never);
+        };
+        const buf = buildDicom(options);
         const ds = parseDicom(buf, { profile });
         const el = ds.get(PRIVATE_TAG);
         const { dataset, report } = deidentify(ds, { retain: ["RetainSafePrivate"], profile });
