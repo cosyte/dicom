@@ -46,7 +46,7 @@ import { defineProfile } from "../../src/profiles/index.js";
 import type { VR } from "../../src/dictionary/types.js";
 import { KNOWN_VRS } from "../../src/parser/endian.js";
 import { DicomParseError, FATAL_CODES } from "../../src/parser/errors.js";
-import { FATAL_MESSAGES } from "../../src/parser/fatals.js";
+import { FATAL_MESSAGES, elementLengthExceedsBuffer } from "../../src/parser/fatals.js";
 import { parseDicom } from "../../src/parser/index.js";
 import { renderTag } from "../../src/parser/tokens.js";
 import { WARNING_MESSAGES } from "../../src/parser/warnings.js";
@@ -383,6 +383,77 @@ function fileMetaGroupLengthOverruns(): Buffer {
   return patched;
 }
 
+/**
+ * The four bytes a fabricated **Item** Length is built from: two letters of the
+ * planted surname, then the two zero high bytes every reachable fabricated
+ * length carries. `"HS"` rather than `"SO"` because an Item Length is even on
+ * any file this parser will have got this far into, and `0x53` is odd.
+ */
+const ITEM_LEN_BYTES = Buffer.from([0x48, 0x53, 0x00, 0x00]);
+const FABRICATED_ITEM_LENGTH = ITEM_LEN_BYTES.readUInt32LE(0);
+
+/**
+ * A defined-length `SQ` holding one defined-length Item whose Value (Item)
+ * Length field is {@link ITEM_LEN_BYTES}, with an element inside the Item that
+ * over-declares past the Item's end.
+ *
+ * This is the frame the ninth instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`
+ * lives in. `parseSequence` parses a defined-length Item from a **slice**, so
+ * inside it `buffer.length` is the Item's own 32-bit declared length, and
+ * `ELEMENT_LENGTH_EXCEEDS_BUFFER` rendered `buffer.length - cursor.position`.
+ *
+ * `lead` is the size in bytes of a well-formed element placed **ahead** of the
+ * over-declaring one, which is what moves `cursor.position` and therefore makes
+ * the shift variable rather than the fixed 8 the eighth instance had.
+ */
+function overDeclareInsideAnItem(lead: number): { readonly raw: Buffer; readonly payload: string } {
+  const parts: Buffer[] = [];
+  if (lead > 0) {
+    const leadValue = Buffer.alloc(lead - 8, 0x41);
+    const header = Buffer.alloc(8);
+    header.writeUInt16LE(0x0008, 0);
+    header.writeUInt16LE(0x0080, 2);
+    header.write("LO", 4, "ascii");
+    header.writeUInt16LE(leadValue.length, 6);
+    parts.push(header, leadValue);
+  }
+  // The element that over-declares: a short-form Explicit VR header whose 16-bit
+  // Value Length reaches past the end of the Item's slice but not past the file.
+  const over = Buffer.alloc(8);
+  over.writeUInt16LE(0x0008, 0);
+  over.writeUInt16LE(0x0060, 2);
+  over.write("CS", 4, "ascii");
+  over.writeUInt16LE(0xfffe, 6);
+  parts.push(over);
+  const used = parts.reduce((n, b) => n + b.length, 0);
+  parts.push(Buffer.alloc(FABRICATED_ITEM_LENGTH - used, 0x41));
+
+  const itemHeader = Buffer.alloc(8);
+  itemHeader.writeUInt16LE(0xfffe, 0);
+  itemHeader.writeUInt16LE(0xe000, 2);
+  ITEM_LEN_BYTES.copy(itemHeader, 4);
+
+  const sqHeader = Buffer.alloc(12);
+  sqHeader.writeUInt16LE(0x0040, 0);
+  sqHeader.writeUInt16LE(0xa730, 2);
+  sqHeader.write("SQ", 4, "ascii");
+  sqHeader.writeUInt16LE(0, 6);
+  sqHeader.writeUInt32LE(ITEM_HEADER_BYTES + FABRICATED_ITEM_LENGTH, 8);
+
+  const itemBytes = Buffer.concat([itemHeader, ...parts]);
+  return {
+    raw: Buffer.concat([prefix(), sqHeader, itemBytes]),
+    // 🛑 THE PAYLOAD INCLUDES THE ITEM HEADER, AND IT HAS TO. The fabricated
+    // length's four bytes are contiguous only there: the two zero high bytes are
+    // not part of the surname, so a payload cut to `NAME` alone makes every
+    // `length` arm below vacuous - including the DIRECT-render control, measured.
+    payload: itemBytes.subarray(0, 128).toString("latin1"),
+  };
+}
+
+/** The offset of the Item Length field in {@link overDeclareInsideAnItem}'s output. */
+const ITEM_LENGTH_FIELD_AT = prefix().length + 12 + 4;
+
 // ---------------------------------------------------------------------------
 // The `deidentify()` channel. Both `DICOM_DEIDENT_*_NOT_AUDITABLE` codes are
 // raised there and nowhere else, so the `onWarning` sweep above cannot reach
@@ -516,6 +587,8 @@ const FIXTURES: readonly (readonly [string, Buffer])[] = [
   ["sequence over a name", sequenceOverAName()],
   ["item length from a name", itemLengthFromAName()],
   ["stray delimitation item", strayDelimiter()],
+  ["over-declare inside a defined-length item", overDeclareInsideAnItem(0).raw],
+  ["over-declare 40 bytes into a defined-length item", overDeclareInsideAnItem(40).raw],
   ["file meta group length over-declares", fileMetaGroupLengthOverruns()],
   [
     "truncated mid-name",
@@ -941,6 +1014,81 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
     // in this file reaches; `test/integration/explicit-sq-item-bound.test.ts`
     // carries that measurement with its own name-bearing payload and mutation
     // control. This row is about the detector.
+  });
+
+  it("elementLengthExceedsBufferNoLongerRendersTheItemLengthLessTheCursor", () => {
+    // 🩺 THE NINTH INSTANCE, AND THE FIRST WHOSE SHIFT IS NOT A CONSTANT.
+    // Through `0.0.14` `ELEMENT_LENGTH_EXCEEDS_BUFFER` rendered
+    // `buffer.length - cursor.position`, disclosed in `./fatals.ts` as bounded
+    // by bytes actually present. That bounds the number's MAGNITUDE. Both
+    // element loops also run over a defined-length Item's SLICE, where
+    // `buffer.length` IS that Item's 32-bit declared Value (Item) Length, and
+    // the message publishes `byteOffset` beside the count - so `n + byteOffset +
+    // 8` returns the declared length. The shift is `cursor.position`, so it
+    // moves with wherever inside the Item the over-declaring element sits.
+    //
+    // The reversal below is run over EVERY digit run of the message rather than
+    // over a slot this test names, so it cannot pass by looking at the wrong
+    // number.
+    const recovered = (message: string, byteOffset: number): readonly number[] =>
+      digitRuns(message)
+        .map((run) => Number(run) + byteOffset + ITEM_HEADER_BYTES)
+        .filter((value) => value === FABRICATED_ITEM_LENGTH);
+
+    // The planted length is read back OFF THE WIRE, not asserted against a
+    // literal: this is the field the recovery has to return.
+    const { raw: firstShape, payload } = overDeclareInsideAnItem(0);
+    expect(firstShape.readUInt32LE(ITEM_LENGTH_FIELD_AT)).toBe(FABRICATED_ITEM_LENGTH);
+    expect(NAME).toContain(ITEM_LEN_BYTES.subarray(0, 2).toString("latin1"));
+
+    // THE CLOSURE. Three positions inside the Item, three different shifts.
+    for (const lead of [0, 24, 40]) {
+      const err = fatalFrom(overDeclareInsideAnItem(lead).raw);
+      expect(err.code).toBe(FATAL_CODES.INVALID_FILE_META);
+      expect(err.byteOffset, `lead ${String(lead)}`).toBe(lead);
+      expect(recovered(err.message, err.byteOffset), `lead ${String(lead)}`).toStrictEqual([]);
+      expect(leaksIn(err.message, overDeclareInsideAnItem(lead).payload)).toStrictEqual([]);
+    }
+
+    // NON-VACUITY, AND IT IS THE ROW THAT MAKES THE THREE ABOVE MEAN ANYTHING:
+    // `0.0.14`'s own template, rebuilt per shape, IS reversed by the same
+    // arithmetic, and the two low bytes of what comes back are two letters of
+    // the planted surname.
+    const shippedTemplate = (lead: number): string =>
+      `An element declares a Value Length reaching past the end of the bytes being read; ${String(
+        FABRICATED_ITEM_LENGTH - lead - ITEM_HEADER_BYTES,
+      )} bytes remain. Its tag and its declared length are withheld; the byte offset locates it.`;
+    for (const lead of [0, 24, 40]) {
+      expect(recovered(shippedTemplate(lead), lead), `lead ${String(lead)}`).toStrictEqual([
+        FABRICATED_ITEM_LENGTH,
+      ]);
+    }
+    const back = Buffer.alloc(4);
+    back.writeUInt32LE(FABRICATED_ITEM_LENGTH, 0);
+    expect(back.equals(ITEM_LEN_BYTES)).toBe(true);
+    expect(NAME).toContain(back.subarray(0, 2).toString("latin1"));
+
+    // 🛑 AND WHAT THE DETECTOR CAN AND CANNOT SEE HERE, MEASURED RATHER THAN
+    // ASSUMED. `#92`'s `length-less-item-header` arm subtracts exactly
+    // {@link ITEM_HEADER_BYTES}, so it catches the shape where the
+    // over-declaring element is the Item's first and NOTHING else. The other two
+    // shapes are the same leak, on the same fixture, invisible to every arm.
+    // **A zero from this detector is a gap, not a clearance.**
+    expect(leaksIn(shippedTemplate(0), payload).map((l) => l.kind)).toContain(
+      "length-less-item-header",
+    );
+    expect(leaksIn(shippedTemplate(24), payload)).toStrictEqual([]);
+    expect(leaksIn(shippedTemplate(40), payload)).toStrictEqual([]);
+    // ...and the payload is not the reason: a DIRECT render of the same length
+    // is caught, so the two clean results above are the arms' limit.
+    expect(
+      leaksIn(`declared length=${String(FABRICATED_ITEM_LENGTH)}`, payload).map((l) => l.kind),
+    ).toContain("length");
+
+    // The closure itself, at the level that survives a refactor of the prose:
+    // the template has no numeric slot and the factory has no parameter for one.
+    expect(FATAL_MESSAGES.ELEMENT_LENGTH_EXCEEDS_BUFFER.message).not.toContain("{n}");
+    expect(elementLengthExceedsBuffer.length).toBe(2);
   });
 
   it("the deidentify() channel is swept, with the floor off, and the only tags left are PS3.6 rows", () => {

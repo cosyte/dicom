@@ -45,8 +45,7 @@ the shipped template returned no findings under the whole detector, while a DIRE
 length returned the `length` hit, so the detector was working and the miss was structural. A
 `length-less-item-header` arm returns `20299 == "SO\0\0"`. THAT ARM COVERS ONE OFFSET AND IS NOT A
 GENERAL NET, which is stated on the constant rather than left to be discovered: it hunts the first-item
-shift of 8, so on the 32-byte shape above it would still have read clean, and `fatals.ts` separately
-discloses a message rendering `buffer.length - cursor.position`, a variable shift. It is not widened to
+shift of 8, so on the 32-byte shape above it would still have read clean. It is not widened to
 a range, for the same reason the missing 2-byte-as-`uint16` arm beside it is still named rather than
 armed: a hunt with nothing to hunt has no non-vacuity control, and what clears this class is the
 factory signature, not the arm. A GUARD WITH A FLOOR HAS NOT CLEARED ANYTHING BELOW THE FLOOR, AND A

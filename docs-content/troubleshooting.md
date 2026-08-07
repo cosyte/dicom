@@ -89,8 +89,8 @@ Each substitution is bounded a different way, and the three ways are not interch
 
 `w.code` and `w.position` carry nothing from the document.
 
-**The exceptions are named in ONE place and are deliberately not restated here** - the
-`WARNING_MESSAGES` docblock in `src/parser/warnings.ts`. No count of the copies is quoted, here or
+**The exceptions are named in ONE place that is not a record of a past change, and are deliberately
+not restated here** - the `WARNING_MESSAGES` docblock in `src/parser/warnings.ts`. No count of the copies is quoted, here or
 there: this package deletes a count it has corrected twice rather than incrementing it.
 
 **What that closed, measured rather than argued.** An `ST` carrying `"MR BRAIN SMITHSON "` that
@@ -142,6 +142,13 @@ Two things that array does **not** cover:
   a lying length field would be reading out of somebody's value. `err.byteOffset` locates the
   element instead. A VR still reads, when it names one of the 34; anything else renders
   `<withheld>`.
+- **⚠ Two of those messages changed text in this release, so a string match on them stops matching.**
+  `ELEMENT_LENGTH_EXCEEDS_BUFFER` and `FILE_META_GROUP_LENGTH_OVERRUNS` printed how many bytes
+  remained in the buffer; they do not now, and the factories take no parameter for it. The reason is
+  the one above applied one level out: a defined-length Sequence Item is parsed from a **slice**, so
+  inside one that count is the Item's own declared length less an offset the message publishes, and
+  an addition puts it back. `err.code` is unchanged, which files throw is unchanged, and
+  `err.byteOffset` still locates the element.
 - **Value-decode deviations do not appear on `ds.warnings`.** Decode is lazy, so a `DA` in a legacy
   format or a `UI` with the wrong pad surfaces on the decoded value's own `warnings`
   (`el.value.warnings`), never folded into the frozen dataset array. Those messages are built from

@@ -39,11 +39,33 @@
  * document said.
  *
  * The numbers that do reach a template are named one at a time in
- * {@link FATAL_MESSAGES}, and every one of them is either a library constant or
- * a residual byte count bounded by the buffer the parse is holding. That is the
- * same asymmetry `itemCrossesSequenceEnd` already carries: a byte count inside
- * the file is the class this package's frozen-registry contract names, and a
- * raw 32-bit field a sender wrote is not.
+ * {@link FATAL_MESSAGES}, and every one of them is a library constant or a cap
+ * the caller passed in. **No template takes a count measured over the bytes
+ * being read**, and that is a property of the factory signatures rather than of
+ * any branch inside them.
+ *
+ * ## The ninth instance: a VARIABLE shift is still the wire number
+ *
+ * Through `0.0.14` two entries rendered `{n} = buffer.length - cursor.position`.
+ * At the root that is the caller's own input less a cursor the parser kept, and
+ * it is not document content. But `parseSequence` hands a defined-length
+ * Sequence Item's descent a **slice**, so inside one the buffer *is* that Item
+ * and `buffer.length` *is* the Item's 32-bit Value (Item) Length off its own
+ * header - four document bytes on exactly the files these fatals fire for, where
+ * a reader has desynchronized onto a fabricated Item header. The message
+ * publishes `byteOffset` beside the count and `cursor.position` is that offset
+ * plus the header just read, so an addition returns the declared length.
+ *
+ * Measured on `"MR BRAIN SMITHSON "` with a planted Item Length of `21320`
+ * (`"HS\0\0"`, two letters of the surname and the two zero high bytes every
+ * reachable fabricated length carries): the shipped messages read `21312`,
+ * `21288` and `21272` with the over-declaring element first in the Item, one
+ * 24-byte element in, and one 40-byte element in. **The shift is
+ * `cursor.position`, so it is variable**, which is why no fixed-offset arm on
+ * the detector in `test/integration/fatal-diagnostic-surface.test.ts` can hunt
+ * it: that arm covers the 8-byte case and says so on its own constant. The
+ * remedy does not depend on the shift's size, because the bound is the
+ * signature - the same conclusion `#88`, `#90`, `#91` and `#92` each reached.
  *
  * **There is no string parameter for a value to travel through.** The two
  * exceptions look like one and are not: {@link unsupportedTransferSyntax} takes
@@ -131,20 +153,12 @@ interface FatalMessageEntry {
  * Every `{...}` below is a {@link FatalTokens} field, and each entry that
  * carries one says what the number is:
  *
- * - `ELEMENT_LENGTH_EXCEEDS_BUFFER` / `FILE_META_GROUP_LENGTH_OVERRUNS`: `{n}`
- *   is `buffer.length - cursor.position`, the bytes left in the buffer the
- *   parse is holding. **The declared length that disagrees with it is absent**,
- *   and that absence is the point of this module. **What `{n}` is NOT is "never
- *   a field a sender wrote", and a graded pass refuted that wording.** In a
- *   nested frame the buffer IS the enclosing Item's slice, so `{n}` plus
- *   `byteOffset` recovers that Item's own 32-bit declared length. It is still
- *   bounded by bytes actually present and it is still not a Value Field, which
- *   is the property that matters here; it is not the stronger claim.
  * - `SQ_NESTING_DEPTH_EXCEEDED`: `{n}` is `NESTING_DEPTH_LIMIT`, this library's
  *   own bound and not PS3.5's.
  * - `INFLATED_PAYLOAD_EXCEEDS_CAP`: `{n}` is the cap the caller passed in.
  *
- * Nothing else takes a number, and no entry takes a tag.
+ * Nothing else takes a number, no entry takes a tag, and **no entry takes a
+ * count measured over the bytes being read**.
  */
 const FATAL_MESSAGES = Object.freeze({
   EMPTY_INPUT: {
@@ -180,7 +194,7 @@ const FATAL_MESSAGES = Object.freeze({
   FILE_META_GROUP_LENGTH_OVERRUNS: {
     code: FATAL_CODES.INVALID_FILE_META,
     message:
-      "(0002,0000) FileMetaInformationGroupLength declares more bytes than remain in the input; {n} bytes remain. The declared length is withheld; the byte offset locates the group.",
+      "(0002,0000) FileMetaInformationGroupLength declares more bytes than remain in the input. The declared length and the count of bytes that remain are withheld; the byte offset locates the group.",
   },
   FILE_META_TRANSFER_SYNTAX_MISSING: {
     code: FATAL_CODES.INVALID_FILE_META,
@@ -228,7 +242,7 @@ const FATAL_MESSAGES = Object.freeze({
   ELEMENT_LENGTH_EXCEEDS_BUFFER: {
     code: FATAL_CODES.INVALID_FILE_META,
     message:
-      "An element declares a Value Length reaching past the end of the bytes being read; {n} bytes remain. Its tag and its declared length are withheld; the byte offset locates it.",
+      "An element declares a Value Length reaching past the end of the bytes being read. Its tag, its declared length and the count of bytes that remain are withheld; the byte offset locates it.",
   },
   UNEXPECTED_TAG_INSIDE_SEQUENCE: {
     code: FATAL_CODES.INVALID_FILE_META,
@@ -266,14 +280,17 @@ const FATAL_MESSAGES = Object.freeze({
 /**
  * The substitutions a registry template may take.
  *
- * **There is no `tag` field and no wire-length field, and that is the design.**
- * `renderTag` in `./warnings.ts` is a membership test against PS3.6's registry
- * now, and it would refuse a fabricated tag - but a Tier-3 fatal is raised where
- * the structure has already failed, so the absence of the slot is the bound that
+ * **There is no `tag` field, no wire-length field and no field for a count
+ * measured over the bytes being read, and that is the design.** `renderTag` in
+ * `./warnings.ts` is a membership test against PS3.6's registry now, and it
+ * would refuse a fabricated tag - but a Tier-3 fatal is raised where the
+ * structure has already failed, so the absence of the slot is the bound that
  * does not depend on a table. A **wire length** has no such test available at
- * all, in either registry. Every field below is either a number this parser
- * counted or a token checked for membership in a closed table before it is
- * rendered.
+ * all, in either registry, and neither has a number derived from one: a count of
+ * the bytes left in the buffer is the enclosing frame's own declared length less
+ * an offset the same message publishes, wherever that frame is a slice. Every
+ * field below is either a constant this library or its caller chose, or a token
+ * checked for membership in a closed table before it is rendered.
  *
  * @internal
  */
@@ -284,7 +301,7 @@ interface FatalTokens {
   readonly ts?: string;
   /** A zlib error code, checked against `zlib.codes` before rendering. */
   readonly zlib?: string;
-  /** A library constant or a residual byte count bounded by the buffer. */
+  /** A library constant, or a cap the caller passed in. Never a count over the document. */
   readonly n?: number;
 }
 
@@ -451,22 +468,26 @@ export function fileMetaTruncated(buffer: Buffer, offset: number): DicomParseErr
  * the input holds.
  *
  * @remarks
- * `remaining` is `buffer.length - cursor.position`, a count this parser kept.
  * **The declared length is bound out of this signature**: it is four document
  * bytes read as a 32-bit integer, on the one element whose job is to say how
  * long the group is, raised exactly when those bytes are not what they claim.
  *
+ * **So is the count of bytes left in the buffer, which this message printed
+ * through `0.0.14`.** File Meta is read at the root today, where that count is
+ * the caller's own input less a cursor and leaks nothing - but that is a fact
+ * about the one call site, not about the factory, and the sibling that shares
+ * the expression is raised inside a Sequence Item's slice where the same
+ * subtraction publishes the Item's declared length. A bound that holds only
+ * where a function happens to be called from is the shape this module exists to
+ * refuse, so the slot is gone rather than conditioned.
+ *
  * @example
  * ```ts
- * throw fileMetaGroupLengthOverruns(buffer, fmStart, 42);
+ * throw fileMetaGroupLengthOverruns(buffer, fmStart);
  * ```
  */
-export function fileMetaGroupLengthOverruns(
-  buffer: Buffer,
-  offset: number,
-  remaining: number,
-): DicomParseError {
-  return at("FILE_META_GROUP_LENGTH_OVERRUNS", buffer, offset, { n: remaining });
+export function fileMetaGroupLengthOverruns(buffer: Buffer, offset: number): DicomParseError {
+  return at("FILE_META_GROUP_LENGTH_OVERRUNS", buffer, offset);
 }
 
 /**
@@ -625,26 +646,23 @@ export function undefinedLengthOnNonSqImplicit(
  * reversible with a single typed read. Identical remedy and reasoning to
  * `nonzeroReservedBytes`, `itemCrossesSequenceEnd` and `duplicateTagInDataSet`.
  *
- * `remaining` stays, and the asymmetry is that it is bounded by bytes actually
- * present: it is `buffer.length - cursor.position`, so no value of it can exceed
- * the input. **It is not "a number no sender chose", and saying so was refused.**
- * At the root the buffer is the input itself, but inside a defined-length Item
- * the buffer is that Item's slice, so `remaining` plus `byteOffset` recovers the
- * Item's declared length - a structural field the sender wrote. That is a
- * different class from a Value Field, which is why it stays; do not restate it
- * as the stronger claim.
+ * **🛑 AND SO IS THE COUNT OF BYTES LEFT IN THE BUFFER, WHICH THIS MESSAGE
+ * PRINTED THROUGH `0.0.14`.** It was `buffer.length - cursor.position`, and both
+ * loops raise this fatal inside a defined-length Sequence Item as well as at the
+ * root. Inside one the buffer *is* the Item's slice, so the count is the Item's
+ * own 32-bit declared length less a `cursor.position` the message publishes as
+ * `byteOffset` plus the header just read. Measured on `"MR BRAIN SMITHSON "`
+ * with a planted Item Length of `21320` (`"HS\0\0"`): `21312` first in the Item,
+ * `21288` behind one 24-byte element, `21272` behind one 40-byte element - **a
+ * variable shift**, which is why the bound is the signature and not a filter.
  *
  * @example
  * ```ts
- * throw elementLengthExceedsBuffer(buffer, headerStart, 12);
+ * throw elementLengthExceedsBuffer(buffer, headerStart);
  * ```
  */
-export function elementLengthExceedsBuffer(
-  buffer: Buffer,
-  offset: number,
-  remaining: number,
-): DicomParseError {
-  return at("ELEMENT_LENGTH_EXCEEDS_BUFFER", buffer, offset, { n: remaining });
+export function elementLengthExceedsBuffer(buffer: Buffer, offset: number): DicomParseError {
+  return at("ELEMENT_LENGTH_EXCEEDS_BUFFER", buffer, offset);
 }
 
 /**

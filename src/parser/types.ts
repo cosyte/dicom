@@ -163,9 +163,10 @@ export interface ParseOptions {
    * `DICOM_ITEM_CROSSES_SEQUENCE_END`'s remaining-bytes count, because **a raw
    * number shifted by a constant the reader can compute is that raw number**: it
    * was the enclosing sequence's declared Value Length less the bytes of that
-   * sequence already consumed. **The exceptions are named in one place and are
-   * deliberately not restated here** - the `WARNING_MESSAGES` docblock in
-   * `./warnings.ts`, which this JSDoc used to carry a copy of.
+   * sequence already consumed. **The exceptions are named in one place that is
+   * not a record of a past change, and are deliberately not restated here** -
+   * the `WARNING_MESSAGES` docblock in `./warnings.ts`, which this JSDoc used to
+   * carry a copy of.
    * **This is a statement about `w.message` and about nothing else**: the two
    * byte counts still exist on `report.undefinedVrElements[].byteLength` and
    * `report.unauditableSequences[].byteLength`, model fields on a type whose own

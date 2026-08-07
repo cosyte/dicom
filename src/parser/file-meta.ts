@@ -119,7 +119,11 @@ export function parseFileMeta(
     declaredFmLength = firstElement.value.readUInt32LE(0);
     // T-02-02-01: declared length must fit in the remaining buffer.
     if (cursor.position + declaredFmLength > buffer.length) {
-      throw fileMetaGroupLengthOverruns(buffer, fmStart, buffer.length - cursor.position);
+      // NEITHER length is passed. The declared one is four document bytes; the
+      // remaining count was `buffer.length - cursor.position`, which the factory
+      // no longer accepts - see `fileMetaGroupLengthOverruns` for why the bound
+      // is its signature and not this call site's frame.
+      throw fileMetaGroupLengthOverruns(buffer, fmStart);
     }
   } else {
     // (0002,0000) absent - emit warning and treat the first element as the start of the FM body.

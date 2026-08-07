@@ -216,7 +216,10 @@ export function parseImplicitLE(
 
     // T-02-03-02 mitigation - bounds-check declared length before slice.
     if (cursor.position + length > buffer.length) {
-      throw elementLengthExceedsBuffer(buffer, headerStart, buffer.length - cursor.position);
+      // Same bound as the Explicit VR loop's, and for the same reason: neither
+      // the declared length nor the count of bytes left in this frame has a
+      // slot. See `elementLengthExceedsBuffer`.
+      throw elementLengthExceedsBuffer(buffer, headerStart);
     }
 
     const valueStart = cursor.position;
