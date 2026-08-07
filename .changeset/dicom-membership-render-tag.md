@@ -4,8 +4,7 @@
 
 A tag in a warning message is checked for membership in PS3.6's element registry now, and the
 parser's own codes no longer render a raw number read off an element header. This closes the fifth
-and sixth instances of "a diagnostic about a PHI leak is itself a PHI surface", and names the three
-places a raw length is still printed rather than leaving them for a reader to find.
+and sixth instances of "a diagnostic about a PHI leak is itself a PHI surface".
 
 **⚠ BREAKING FOR STRING-MATCHERS, AND FOR ANYONE WHO PARSES A TAG BACK OUT OF A MESSAGE.**
 `w.code` is unchanged everywhere, which codes fire is unchanged, and no parse moves. What changes is
@@ -48,14 +47,6 @@ File Meta group length is still printed, and that one is argued as well as measu
 runs once per parse, from `parseDicom`, at the post-`DICM` offset, and is never nested, so those four
 bytes are that attribute's own Value Field at a structurally determined offset that no Data Set value
 can be read into. The desynchronized-read sweep reaches that code zero times.
-**The other two are a leak this release does not close.**
-`DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` and `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` render
-`Element.rawBytes.length`, which is **the declared Value Length for a value-only element** and
-declared-plus-header for a full-span one, so a fabricated header carrying `"SO\0\0"` renders `20307`
-and one `readUInt32LE` reverses it. Both are `PRE-EXISTING` and byte-identical on `0.0.14`; both are
-raised by `deidentify()`, so they reach `report.warnings` and `{ strict: true }` does not escalate
-them. They are disclosed and pinned, each by its own asserted test row, rather than closed: binding them is a second remedy on a leak this release did not introduce, and it
-belongs in its own unit.
 
 **What it costs you, stated rather than minimised.** On any file, well-formed or not, a message about
 a **private** element, a **Group Length** `(gggg,0000)`, or a **repeating-group member** such as

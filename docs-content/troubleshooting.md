@@ -96,11 +96,6 @@ numbers still exist on `report.undefinedVrElements[].byteLength` and
 `report.unauditableSequences[].byteLength`** - model fields, on a type documented as not value-free,
 and narrowing those is a product call rather than a defect fix: a bound empties the field on every
 well-formed file.
-**`DICOM_ITEM_CROSSES_SEQUENCE_END`'s remaining-bytes count is a second exception**, `PRE-EXISTING`
-and not closed: it is the enclosing Sequence's declared Value Length minus the reporting Item's offset into the sequence value, which for the FIRST Item is the 8-byte Item header PS3.5 7.5.1 fixes, so one addition on a published constant reverses it there. Measured on the same
-reachable length class: a `SQ` length field reading `"SO\0\0"` renders `20299`, and
-`20299 + 8 = 20307`. The parse survives, so it reaches `ds.warnings`. Asserted by a test row green on
-both trees.
 
 **What that closed, measured rather than argued.** An `ST` carrying `"MR BRAIN SMITHSON "` that
 under-declares by 12 desynchronizes the **Explicit VR LE** reader onto a fabricated header whose
