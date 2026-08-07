@@ -13,9 +13,9 @@
  * those files, and a reader that fails at module load takes its whole file with it.
  *
  * The window was measured on this repository rather than argued about. A probe
- * running the citation gate's own `readPinned` in a loop, against ten runs of the
- * two generator suites, logged 1,542 read cycles and saw the tree inconsistent in
- * four distinct ways:
+ * running the citation gate's `readPinned` in a loop over ALL FOUR vendored part
+ * directories, against ten runs of the two generator suites, logged 1,542 read
+ * cycles and saw the tree inconsistent in four distinct ways:
  *
  *   - `SHA.txt` holding `RESERVED` instead of a hash (the shape-check mutation),
  *   - `SHA.txt` naming a directory that does not exist yet, or no longer does,
@@ -24,6 +24,18 @@
  *     committed one.** A mutant is written into a directory named by its OWN hash,
  *     so re-hashing it SUCCEEDS. A reader's integrity check cannot see that at all;
  *     it resolves clauses against a mutated standard and reports green.
+ *
+ * 🛑 BE EXACT ABOUT WHICH PART A LIVE READER WAS ACTUALLY EXPOSED TO, because the
+ * first version of this header was not. The probe read four part directories; the
+ * citation gate reads THREE, and `VENDORED_PARTS` in
+ * `test/docs/spec-citations.test.ts` names them: `part05`, `part06`, `part15`. So
+ * the overlap between what that gate reads and what these two suites mutate is
+ * `part05` and `part15` only. `part05-2004` is mutated by the repeating-groups
+ * suite and opened by nothing else in the repository except the generator that
+ * mutates it, so its share of the count evidences an inconsistent tree but not an
+ * exposed reader; `part06` is the mirror error, re-hashed at module load by the
+ * gate and mutated by nobody. "A concurrent reader of exactly those files" was
+ * wrong in both directions and is not a phrasing to restore.
  *
  * 🛑 THE REMEDY IS NOT TO RELAX THE HASH PRECONDITION ON EITHER SIDE. The pin is the
  * integrity check on a vendored normative source, and the last of those four
@@ -43,8 +55,13 @@
  * argument on a script the byte-identical regen gate depends on, and that gate is
  * worth more than the convenience.
  *
- * The copy is ~5 MB and is taken once per test FILE, in a `beforeAll`, not once per
- * mutation. Each sandbox lives under `os.tmpdir()` in a `mkdtemp` directory, so two
+ * The copy is taken once per test FILE, in a `beforeAll`, not once per mutation.
+ * 🛑 DERIVE ITS COST, DO NOT READ A FIGURE OFF `du -sh`. `du -sb scripts src vendor`
+ * is the answer in one command (about 17.5 MiB at this writing, almost all of it
+ * `vendor/`, so two suites cost roughly 35 MiB of `os.tmpdir()` per run). An earlier
+ * draft of this header quoted "~5 MB", taken from `du -sh` on a compressing
+ * filesystem, which under-reported the bytes actually copied by more than three
+ * times. Each sandbox lives under `os.tmpdir()` in a `mkdtemp` directory, so two
  * suites - or two workers on one box - cannot collide, and a run killed mid-mutation
  * leaves a temp directory rather than a corrupted normative document in `git status`.
  */

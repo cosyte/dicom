@@ -126,7 +126,9 @@ describe("generate-annex-e", () => {
   // Well above the suite's 10s default: this hook parses a 3.5 MB DocBook in a
   // child process, and the whole point of doing it once is that the cost is paid
   // here. A shared default tuned for in-memory fixtures would make it flaky. It
-  // also takes the sandbox copy, which is ~5 MB and is paid once for the file.
+  // also takes the sandbox copy, which is paid once for the file; no size is quoted
+  // here, because the one that was got it wrong by more than three times. Derive it:
+  // `du -sb scripts src vendor`, and read `generator-sandbox.ts` for the trap.
   beforeAll(() => {
     sandbox = createGeneratorSandbox("annex-e");
     ARTIFACT = join(sandbox.root, "src", "dictionary", "generated", "annex-e.ts");
@@ -144,7 +146,12 @@ describe("generate-annex-e", () => {
   }, GENERATOR_TIMEOUT_MS);
 
   afterAll(() => {
-    sandbox.dispose();
+    // OPTIONAL-CHAINED ON PURPOSE. If `beforeAll` dies before the assignment - a
+    // `cpSync` that runs `os.tmpdir()` out of space is the plausible one, and this
+    // suite is not the only thing copying into it - then a bare `sandbox.dispose()`
+    // throws its own TypeError from the hook and buries the error that actually
+    // stopped the run.
+    sandbox?.dispose();
   });
 
   it("regenerates the committed artifact byte for byte", () => {

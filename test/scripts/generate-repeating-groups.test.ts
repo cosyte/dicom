@@ -222,7 +222,12 @@ describe("generate-repeating-groups", () => {
   }, GENERATOR_TIMEOUT_MS);
 
   afterAll(() => {
-    sandbox.dispose();
+    // OPTIONAL-CHAINED ON PURPOSE. If `beforeAll` dies before the assignment - a
+    // `cpSync` that runs `os.tmpdir()` out of space is the plausible one, and this
+    // suite is not the only thing copying into it - then a bare `sandbox.dispose()`
+    // throws its own TypeError from the hook and buries the error that actually
+    // stopped the run.
+    sandbox?.dispose();
   });
 
   it("regenerates the committed artifact byte for byte", () => {
