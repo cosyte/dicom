@@ -79,14 +79,37 @@ So `w.code` and `w.position` are safe to log. **`w.message` is safe on every wel
 not unconditionally safe, and the difference is one shape.** The registry's `{tag}` slot is filled by
 `renderTag`, which validates a tag's _shape_ and therefore cannot refuse one that a length field's lie
 composed out of somebody's value. Measured: a `(0008,4000)` `ST` carrying `"MR BRAIN SMITHSON "` whose
-Value Length under-declares by 12 desynchronizes the reader onto a fabricated header at an odd group,
-and `DICOM_PRIVATE_TAG_NO_CREATOR` names it `4E495320` - `"IN S"`, four bytes of the payload, in wire
-order. `PRE-EXISTING` on every release that has this code. It is disclosed rather than guarded because
-withholding the tag there would take it off every private element in every conformant file, which
-costs the diagnostic its whole purpose to close a shape only a crafted file produces; that is a
-product decision, not a defect fix. The same is true of `report.removedPrivateTags` and of
-`report.embeddedAttributes[].hidden`. **If you log warning messages from untrusted files verbatim,
-treat a tag in one as document-derived.**
+Value Length under-declares by 12 desynchronizes the **Explicit VR LE** reader onto a fabricated
+header whose declared length is odd, and `DICOM_ODD_LENGTH_VALUE_PADDED` renders four bytes of the
+payload as its tag - `4E495320`, `"IN S"` in wire order - **and four more as its decimal length**,
+eight consecutive payload bytes in one message. `PRE-EXISTING` on every release that has this code.
+It is disclosed rather than guarded because that code fires on **any** tag, so withholding it would
+take the tag off every element in every real-world file that pads an odd length. The membership
+remedy available - render a tag the closed public registry names, withhold one it does not - is a
+package-wide change to `renderTag` plus a separate answer for the raw `{n}`, so it is a product
+decision with its own slice, not a defect fix. The same is true of `report.removedPrivateTags`.
+**If you log warning messages from untrusted files verbatim, treat a tag or a length in one as
+document-derived.**
+
+**Which channel carries it is part of the answer, and the earlier wording put it on the wrong field.**
+Every fixture that produces this leak dies before a `Dataset` exists, so the message reaches a
+consumer through `onWarning` or through the `{ strict: true }` `DicomParseError` - not through a
+surviving `ds.warnings`. That no measured fixture put one on a surviving `ds.warnings` is a fact
+about those fixtures and not a promise about the parser.
+
+**Two carriers this page named until recently are now bound, by a signature and not by a branch.**
+`DICOM_PRIVATE_TAG_NO_CREATOR`, `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR` and
+`DICOM_PRIVATE_CREATOR_UNKNOWN` take no tag parameter at all: all three fire only on an **odd** group,
+and an odd group is the one class of tag no closed table this library holds can vouch for - PS3.6's
+registry is even-group and a `Profile`'s private dictionary is keyed by a creator string. The element
+stays in the object under its tag and `position.byteOffset` locates the header.
+`report.embeddedAttributes[].hidden` is bound too, by membership rather than by signature: an entry is
+a tag the run's own resolved Annex E action fired on that has a **literal row** in PS3.15 Table
+E.1-1 - 652 of them. **A repeating-group mask hit is excluded, and that is the load-bearing half**:
+`(50xx,xxxx)` Curve Data leaves the whole 16-bit element number free, so a mask match proves a rule
+exists without making the membership finite - a draft that stopped at "an even group" was measured
+admitting `500C5241`, four payload bytes recoverable with one typed read. `hidden` can be empty on a
+real finding, and it is still uncapped.
 
 **A Tier-3 fatal's `message` is bounded the same way, and it was not always.** Every message
 `parseDicom` throws now comes from a second frozen registry, keyed by the structural reason for the

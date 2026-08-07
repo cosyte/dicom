@@ -47,25 +47,24 @@ in the same area - open the section first.**
   - `report.removedPrivateTags` can echo four bytes of document content from a **fabricated
     odd-group header**, identically on both trees. Structural, not closed; the **claim** was
     corrected rather than the guard widened. With `uidMap`, `unauditableSequences[].tag`,
-    `embeddedAttributes[].hidden`, and **`contextPath`, bound by nothing and uncorroborated by
-    anything else in the output**. **NEVER QUOTE A COUNT** - it read 1, 2, 3, wrong
-    each time. Read the list on the type.
+    and **`contextPath`, bound by nothing and uncorroborated by anything else in the output**.
+    **NEVER QUOTE A COUNT** - it read 1, 2, 3, wrong each time. Read the list on the type.
     [#dicom-unrecognized-vr-short-form](documentation/agent-notes.md#dicom-unrecognized-vr-short-form) ·
     [#phi-warning-message-leak](documentation/agent-notes.md#phi-warning-message-leak)
-  - `report.embeddedAttributes[].hidden` is **unbounded** (131,072 tag strings from a 1 MiB
-    carrier). Linear, so not the CPU-DoS class - but it missed the cap every other
-    consumer-controlled diagnostic takes. Take it before the next `deident` slice.
-    [#dicom-overdeclare-swallows-into-value](documentation/agent-notes.md#dicom-overdeclare-swallows-into-value)
   - A **failed CP-246 `UN` descent emits nothing**. The honest test for a consumer is
     `el.items === undefined`, **not** `ds.warnings`.
     [#dicom-implicit-sq-not-descended](documentation/agent-notes.md#dicom-implicit-sq-not-descended)
   - Tier-3 fatal messages are **registry-bound now** and the `{strict:true}` snippet is cut in the
     frame its offset names. **The snippet is still 16 raw source bytes and still PHI - an honest
-    frame made it MORE certainly the named element's content.** The identical fabricated header
-    still reaches **Tier-2** `DICOM_PRIVATE_TAG_NO_CREATOR` (`"IN S"`) and
-    `embeddedAttributes[].hidden` (`"SMIT"`), so **`ds.warnings[].message` is NOT unconditionally
-    safe to log** - `PRE-EXISTING` product calls, disclosed not guarded.
+    frame made it MORE certainly the named element's content.**
     [#dicom-fatal-message-registry](documentation/agent-notes.md#dicom-fatal-message-registry)
+  - `DICOM_PRIVATE_TAG_NO_CREATOR` and `embeddedAttributes[].hidden` are **CLOSED, as DEFECTS: the
+    test is whether a FINITE table vouches for the tag - A REPEATING-GROUP MASK IS NOT ONE, and that
+    cost a pass** (`50xx` leaves 16 bits free; `500C5241` is `"\fPAR"`). `hidden` may read EMPTY and
+    is **STILL UNCAPPED**; cap it in `deident`. **`ds.warnings[].message` is STILL not
+    unconditionally safe** - `DICOM_ODD_LENGTH_VALUE_PADDED`, tag AND length, `onWarning`/strict
+    [#dicom-diagnostic-phi-residuals](documentation/agent-notes.md#dicom-diagnostic-phi-residuals) ·
+    [#dicom-overdeclare-swallows-into-value](documentation/agent-notes.md#dicom-overdeclare-swallows-into-value)
   - The **undefined-length item with no `(FFFE,E00D)`**, which has no declared length to disagree
     with, so no over-run is recordable.
     [#dicom-explicit-vr-unbounded-item-read](documentation/agent-notes.md#dicom-explicit-vr-unbounded-item-read)

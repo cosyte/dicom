@@ -84,15 +84,35 @@ structural fact about DICOM that no reader can resolve from the wire.
   tag half is read off the wire with nothing behind it, so a fabricated `SQ` header the reader was
   desynchronized onto is named there. **It is not safe to log.**
 
-- **`ds.warnings[].message` is safe to log on a well-formed file and is NOT unconditionally safe.**
-  The registry's `{tag}` slot is filled by a shape check, and a shape check cannot refuse a tag that a
-  lying Value Length composed out of somebody's value. Measured: an `ST` carrying a name whose Value
-  Length under-declares desynchronizes the reader onto a fabricated header at an odd group, and
-  `DICOM_PRIVATE_TAG_NO_CREATOR` renders four bytes of that payload as the tag. `report.removedPrivateTags`
-  and `report.embeddedAttributes[].hidden` carry the same property for the same reason. It is
-  disclosed rather than guarded because withholding the tag would take it off every private element in
-  every conformant file. `w.code` and `w.position` carry nothing from the document.
+- **A warning message is safe to log on a well-formed file and is NOT unconditionally safe, and the
+  channel matters as much as the field.** The registry's `{tag}` slot is filled by a shape check, and
+  a shape check cannot refuse a tag that a lying Value Length composed out of somebody's value.
+  Measured on an `ST` carrying `"MR BRAIN SMITHSON "` whose Value Length under-declares:
+  under **Explicit VR LE** the reader desynchronizes onto a fabricated header whose declared length is
+  odd, and `DICOM_ODD_LENGTH_VALUE_PADDED` renders **four bytes of the name as the tag and four more
+  as the decimal length** - eight payload bytes in one message, each reversible with one typed read.
+  It is disclosed rather than guarded because that code fires on any tag, and on a well-formed file
+  that tag is a registry entry a reader needs; narrowing it is a decision with its own slice.
+  **The fixtures that produce it all die before a `Dataset` exists**, so what actually carries the
+  message is `onWarning` and the `{ strict: true }` `DicomParseError` - not a surviving
+  `ds.warnings`. That no fixture here put one on a surviving `ds.warnings` is a fact about these
+  fixtures and not a promise about the parser; treat both channels the same way.
+  `w.code` and `w.position` carry nothing from the document.
   Full treatment: [Keeping PHI out of logs](./troubleshooting#keeping-phi-out-of-logs).
+
+- **Two carriers this list named at `0.0.13` are now bound, and neither bound is an all-clear.**
+  `DICOM_PRIVATE_TAG_NO_CREATOR` and its two sibling private-tag codes take no tag at all any more,
+  because an odd group is the one class of tag no closed table this library holds can vouch for; the
+  element is still in the object and `position.byteOffset` still locates it.
+  `report.embeddedAttributes[].hidden` now lists only tags this run acted on that have a **literal
+  row** in PS3.15 Table E.1-1 - 652 of them - rather than any four bytes a run tiled over. **A
+  repeating-group mask hit is excluded and that exclusion is the whole bound**: `(50xx,xxxx)` Curve
+  Data leaves the entire 16-bit element number free, so a mask match proves a rule exists without
+  making the membership finite, and a draft that stopped at "an even group" was measured admitting
+  `500C5241`. Two consequences: `hidden` can be **empty on a real finding**, which does not mean
+  nothing was hidden, and it is still **uncapped**. `report.removedPrivateTags` is deliberately
+  unchanged: narrowing it would empty the field on every well-formed file, which is what it exists to
+  record.
 
 - **A `DeidentifyReport` is not safe to log whole.** The value-bearing fields are named on the
   `DeidentifyReport` type. **Read the list on the type, never a count quoted anywhere** (including

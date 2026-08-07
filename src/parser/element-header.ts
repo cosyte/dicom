@@ -152,8 +152,8 @@ export function resolveImplicitVR(
     }
     const creator = resolvePrivateCreator(tag, ctx);
     if (creator === undefined) {
-      emit(privateTagNoCreator(position, tag));
-      emit(implicitVRForPrivateTagWithoutVR(position, tag));
+      emit(privateTagNoCreator(position));
+      emit(implicitVRForPrivateTagWithoutVR(position));
       return "UN";
     }
     // Phase 6 (D-45): an active profile's private-dictionary overlay may
@@ -165,10 +165,10 @@ export function resolveImplicitVR(
       const def = resolvePrivateTag(ctx.profile, tag, creator);
       if (def !== undefined) return def.vr;
       if (!ctx.profile.privateDictionary.has(creator)) {
-        emit(privateCreatorUnknown(position, tag));
+        emit(privateCreatorUnknown(position));
       }
     }
-    emit(implicitVRForPrivateTagWithoutVR(position, tag));
+    emit(implicitVRForPrivateTagWithoutVR(position));
     return "UN";
   }
 
@@ -213,7 +213,9 @@ export function resolveImplicitVR(
  * does not answer for a sibling item, and neither survives back out to the
  * enclosing Data Set. A private element in a Data Set that never claimed its
  * block therefore resolves to `undefined` here and degrades to `UN` plus
- * `DICOM_PRIVATE_TAG_NO_CREATOR`, rather than borrowing a neighbour's VR.
+ * `DICOM_PRIVATE_TAG_NO_CREATOR`, rather than borrowing a neighbour's VR. That
+ * warning names no tag: see `privateTagNoCreator` for why an odd group is the
+ * one class of tag this package has no closed table to vouch for.
  *
  * @internal
  */

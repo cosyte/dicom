@@ -167,15 +167,29 @@ export interface DeidentifiedAttribute {
  * (PS3.15 §E.1 "all instances"; §E.3.5 is the standard's own precedent for
  * removing identifying information embedded inside a string attribute).
  *
- * `tag` and `vr` are the carrier's own and are structural. **`hidden` is not,
- * and calling this finding "safe to log" was wrong.** Each entry is composed
- * from four bytes that were sitting *inside* the carrier's value - that is the
- * whole reason the field exists - so on any file that populates it those bytes
- * are document content. Measured: a `CS` carrier over-declaring over the bytes
- * `"SABC"` reports `hidden: ["41534342"]`, which is `"SABC"` in wire order.
- * `PRE-EXISTING` and identical on every release that has shipped the field.
- * Treat `hidden` at the sensitivity of the file, and see
- * {@link DeidentifyReport} for the other fields in this class.
+ * `tag` and `vr` are the carrier's own and are structural. **`hidden` was not,
+ * and it is bound now.** Every tag in an embedded run is composed from four
+ * bytes that were sitting *inside* the carrier's value - that is the whole
+ * reason this type exists - and a run needs only ONE actionable attribute to be
+ * reported, so through `0.0.13` the rest of the run was listed beside it.
+ * Measured: a `CS` carrier over-declaring across a fabricated `"SMIT"` header
+ * beside a genuine `(0010,0020)` reported `hidden: ["4D535449", "00100020"]`,
+ * and `4D535449` is `"SMIT"` in wire order.
+ *
+ * **An entry is now one of the 652 literal rows of PS3.15 Table E.1-1 that this
+ * run's options left actionable.** That is a **membership** bound rather than a
+ * shape one - the posture this package already takes for a VR and for a Private
+ * Creator - so what survives names a published table entry rather than a
+ * document byte, the same trade rendering a VR makes with the 34. **A
+ * repeating-group mask hit is NOT in that set and is excluded**: `(50xx,xxxx)`
+ * Curve Data leaves the whole 16-bit element number free, so a mask match proves
+ * a rule exists without making the membership finite. A graded pass caught a
+ * draft of this filter that admitted it.
+ *
+ * **🛑 THAT IS NOT AN ALL-CLEAR OVER THIS TYPE.** `contextPath` below is
+ * unbound and unchanged, `hidden` is uncapped, and
+ * {@link DeidentifyReport} names the report's other value-bearing fields. A
+ * `DeidentifyReport` is still not safe to log whole.
  *
  * @example
  * ```ts
@@ -191,7 +205,18 @@ export interface EmbeddedAttributeFinding {
   readonly tag: Tag;
   /** The carrier's VR. Always one of the string VRs; binary VRs are not scanned. */
   readonly vr: VR;
-  /** The tags of the Data Elements found inside the carrier's value, in wire order. */
+  /**
+   * The tags found inside the carrier's value **that this run acts on and that a
+   * published table names**, in wire order. **Not every tag in the run** - see
+   * this type's own remarks.
+   *
+   * **🩺 IT MAY BE EMPTY, AND EMPTY DOES NOT MEAN "NOTHING WAS HIDDEN HERE".**
+   * A run whose only actionable members are private attributes, Curve Data or
+   * Overlay elements reports a finding with no tags: the carrier was still
+   * emptied, and the accompanying `DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED`
+   * warning still counts the whole run. The presence of the finding is the fact;
+   * this list is the part of it that can be named.
+   */
   readonly hidden: readonly Tag[];
   /**
    * Tag/index chain when the carrier is inside a sequence item; omitted at the
@@ -419,13 +444,6 @@ export interface UndefinedVrFinding {
  *   and still answers it whenever the fabricated VR is outside the 34 PS3.5
  *   §6.2 defines. It cannot when the fabricated VR is one of them, because those
  *   two files are byte-identical.
- * - **`embeddedAttributes[].hidden`** - see {@link EmbeddedAttributeFinding}.
- *   Each entry is a tag composed from four bytes that were sitting **inside**
- *   a value, which is the position this type exists to distrust, so on a file
- *   that populates the field at all they are document content by
- *   construction. `PRE-EXISTING` and identical on every release that has
- *   shipped the field; it is disclosed here and its remedy is its own slice,
- *   alongside the cap that field is also missing.
  * - **`contextPath`, on all four findings that carry one** - see
  *   {@link DeidentifiedAttribute.contextPath}, which holds the measurement. The
  *   segment tags come off the wire with no table behind them, so a fabricated
@@ -436,8 +454,18 @@ export interface UndefinedVrFinding {
  *   same file the de-identified object itself re-emits the fabricated header, so
  *   redacting this field does not make the object safe.**
  *
+ * `embeddedAttributes[].hidden` **left that list** in
+ * `DICOM-DIAGNOSTIC-PHI-RESIDUALS` - an entry is now a literal PS3.15 Table
+ * E.1-1 row, so it is not value-bearing. Its own disclosure had been reworded
+ * twice by then, and this repo deletes a disclosure at that point rather than
+ * writing a third; what is true of the field is stated once, on
+ * {@link EmbeddedAttributeFinding}. The field is **still uncapped**.
+ *
  * So "the report is safe to log apart from `uidMap`" is **not** an accurate
  * description of this type, and was corrected rather than kept convenient.
+ * **This is the only copy of that list.** Two others lived in module docstrings,
+ * still naming `hidden` after it left and never naming `contextPath` at all; a
+ * graded pass found them and they were deleted rather than resynced.
  *
  * @example
  * ```ts

@@ -124,6 +124,7 @@
 import type { Buffer } from "node:buffer";
 
 import { joinTag } from "../dataset/tag.js";
+import { annexE } from "../dictionary/annex-e.js";
 import type { Tag, VR } from "../dictionary/types.js";
 import { KNOWN_VRS } from "../parser/endian.js";
 import { LONG_FORM_VRS } from "../parser/element-header.js";
@@ -325,12 +326,104 @@ function hasByteOutsideRepertoire(region: Buffer, carrierVr: VR): boolean {
 }
 
 /**
- * The tags of a complete Data Element run embedded at the end of `value`, or
- * `undefined` when the value shows no such run.
+ * `true` when this tag has a **literal row** in PS3.15 Table E.1-1, which is the
+ * second conjunct of {@link EmbeddedRun.hidden}'s bound.
+ *
+ * ## 🛑 IT IS "A LITERAL ROW", NOT "AN EVEN GROUP", AND THE DIFFERENCE IS SIX
+ * ORDERS OF MAGNITUDE
+ *
+ * `isActionable` is the caller's resolved Annex E action, and **two** classes of
+ * tag pass it without any finite table naming them:
+ *
+ *  - **Every odd group.** The Basic Profile removes private attributes as a
+ *    class rather than by naming them, so a fabricated odd-group header is
+ *    "actionable". Measured: `4D535449`, `"SMIT"` in wire order.
+ *  - **Every repeating-group mask hit**, and this is the one an even-group test
+ *    misses. `annexE()` falls through to `matchRepeatingRule`, and
+ *    `(50xx,xxxx)` Curve Data leaves the **whole 16-bit element number free** -
+ *    16 groups x 65,536 elements, against 652 literal rows. Measured on this
+ *    module's own fixture with only the four fabricated bytes changed:
+ *    `"\fPAR"` composes `500C5241`, which an even-group filter admits and which
+ *    returns all four bytes with one typed read. A **graded pass found this**,
+ *    against a first remedy that called an even group "PS3.15 Table E.1-1 as
+ *    this run resolved it". **A mask MATCH proves the table holds a rule; it
+ *    does not make the membership finite.**
+ *
+ * Requiring `annexE()` to resolve **without** a `repeatingGroup` is the finite
+ * test: 652 rows, published, and a fabricated window that spells one discloses a
+ * table entry rather than a document byte - the trade `renderVr` makes with the
+ * 34 VRs, which is only honest against a set of that size. It subsumes the
+ * odd-group case, since no literal row is odd-group (`ANNEX_E` is asserted
+ * even-group-only by a test rather than assumed here).
+ *
+ * **The cost, stated twice over.** A genuinely swallowed **private** attribute
+ * is not named here, and neither is a genuinely swallowed **Curve Data, Overlay
+ * Data or Overlay Comments** element. Both are still emptied - the carrier is
+ * emptied whole - and the warning still counts them. What is given up is their
+ * tag on the report, which is the same trade `privateTagNoCreator` makes.
+ */
+function isTableBound(tag: Tag): boolean {
+  const action = annexE(tag);
+  return action !== undefined && action.repeatingGroup === undefined;
+}
+
+/** What a scan found: the run's size, and only the tags the run acted on. */
+export interface EmbeddedRun {
+  /**
+   * The tags in the run that `isActionable` answered `true` for, in wire order.
+   *
+   * **🛑 THE NON-ACTIONABLE TAGS OF THE RUN ARE NOT HERE AND MUST NOT COME
+   * BACK.** Every tag in this run was composed from four bytes sitting *inside*
+   * another element's value - that is the position this module exists to
+   * distrust - so a run needing only ONE actionable attribute to be reported
+   * dragged its neighbours' four-byte windows onto the report with it. Measured
+   * through `0.0.13`: a `CS` carrier over-declaring across a fabricated
+   * `"SMIT"` header beside a genuine `(0010,0020)` reported
+   * `hidden: ["4D535449", "00100020"]`, and `4D535449` is four letters of the
+   * surname in wire order.
+   *
+   * The bound is a **membership** test rather than a shape test - the posture
+   * `renderVr` and `Element.privateCreator` already take in this package - and
+   * it has **two** conjuncts, each of which was measured necessary. A tag
+   * reaches this array only if `isActionable` fired on it **and**
+   * {@link isTableBound} holds, so a surviving entry is one of the **652 literal
+   * rows** of PS3.15 Table E.1-1 that this run's options left actionable. A
+   * fabricated window still reaches this array if it happens to spell one of
+   * those, which is the same trade `renderVr` makes with the 34 VRs: it
+   * discloses a table entry, not a document byte.
+   *
+   * **Two drafts of this filter were refuted before that sentence was true**,
+   * and {@link isTableBound} carries both counterexamples. `isActionable` alone
+   * admits every odd group; `isActionable` plus an even group still admits every
+   * repeating-group mask hit, which is a million tags whose free bits are raw
+   * document bytes.
+   *
+   * **It may be empty while the run is real** - a run whose only actionable
+   * members are private attributes, Curve Data or Overlay elements names none of
+   * them - and **it is still uncapped**, like every other consumer-controlled
+   * diagnostic this module has not yet reached. The filter narrows what an entry
+   * can be, not how many there are.
+   */
+  readonly hidden: readonly Tag[];
+  /**
+   * How many whole Data Elements the run holds, actionable or not, excluding
+   * `(FFFE,xxxx)` markers. It is a count this scan made, not a field a sender
+   * wrote, and it is what `DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED` reports as
+   * `{n}` - which is why narrowing `hidden` did not change that message.
+   */
+  readonly elementCount: number;
+}
+
+/**
+ * A complete Data Element run embedded at the end of `value`, or `undefined`
+ * when the value shows no such run.
  *
  * `isActionable` is supplied by the caller so the test is the run's own resolved
  * Annex E action - the same authority the Basic Profile and every active Retain
- * Option resolve through - rather than a second, drifting copy of it.
+ * Option resolve through - rather than a second, drifting copy of it. It decides
+ * two separate things: whether the run is reportable at all, and (since
+ * `DICOM-DIAGNOSTIC-PHI-RESIDUALS`) which of the run's tags reach
+ * {@link EmbeddedRun.hidden}.
  *
  * @param value        The carrier element's Value Field bytes.
  * @param carrierVr    The carrier's VR; decides the repertoire test.
@@ -339,8 +432,8 @@ function hasByteOutsideRepertoire(region: Buffer, carrierVr: VR): boolean {
  *
  * @example
  * ```ts
- * const hidden = findEmbeddedAttributes(el.rawBytes, "CS", "explicitLE", (t) => t === "00100020");
- * if (hidden !== undefined) {
+ * const run = findEmbeddedAttributes(el.rawBytes, "CS", "explicitLE", (t) => t === "00100020");
+ * if (run !== undefined) {
  *   // el's value ends with a whole (0010,0020) Patient ID - do not keep it
  * }
  * ```
@@ -350,7 +443,7 @@ export function findEmbeddedAttributes(
   carrierVr: VR,
   encoding: BodyEncoding,
   isActionable: (tag: Tag) => boolean,
-): readonly Tag[] | undefined {
+): EmbeddedRun | undefined {
   if (!isScannableCarrier(carrierVr)) return undefined;
   if (value.length < MIN_HEADER) return undefined;
 
@@ -392,16 +485,23 @@ export function findEmbeddedAttributes(
     // `(FFFE,xxxx)` marker bytes - would then cost O(n^2) on the de-identify
     // path. Same CPU-DoS class the sibling sequence slice was refused on twice.
     if (!hasByteOutsideRepertoire(window.subarray(off), carrierVr)) return undefined;
-    const tags: Tag[] = [];
+    const hidden: Tag[] = [];
+    let elementCount = 0;
     let pos = off;
     while (pos < n) {
       const decoded = decodeAt(window, pos, encoding);
       /* v8 ignore next -- unreachable: `hit` proves every step of this run decodes. */
       if (decoded === undefined) break;
-      if (decoded.tag !== undefined) tags.push(decoded.tag);
+      if (decoded.tag !== undefined) {
+        elementCount += 1;
+        // The filter, and the whole of this field's PHI bound. See
+        // `EmbeddedRun.hidden` for why it has two conjuncts and why neither is
+        // optional.
+        if (isActionable(decoded.tag) && isTableBound(decoded.tag)) hidden.push(decoded.tag);
+      }
       pos = decoded.next;
     }
-    return tags;
+    return { hidden, elementCount };
   }
   return undefined;
 }

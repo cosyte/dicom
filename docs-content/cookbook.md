@@ -281,9 +281,11 @@ a fresh `Dataset` plus a `DeidentifyReport`. It is a **pure function**: your inp
 mutated.
 
 Several report fields are **not** value-free and are named on the type: `uidMap`, whose keys are the
-source UIDs the file carried, and `removedPrivateTags`, `unauditableSequences[].tag`,
-`embeddedAttributes[].hidden` and `contextPath`, whose entries are four source bytes each. **Read
-that list on the type rather than a count quoted anywhere**, this one included: the number has been
+source UIDs the file carried, and `removedPrivateTags`, `unauditableSequences[].tag` and
+`contextPath`, whose entries are four source bytes each. `embeddedAttributes[].hidden` **left that
+list**: an entry is now a tag this run acted on that PS3.15 Table E.1-1 gives a literal row, with
+repeating-group mask hits excluded - which also means it can be empty on a real finding. **Read the
+list on the type rather than a count quoted anywhere**, this one included: the number has been
 corrected twice.
 
 ```ts runnable
@@ -525,12 +527,16 @@ Every recoverable deviation collects on `ds.warnings` with a stable code and a b
 four fatal conditions throw. Each message is looked up in a frozen registry keyed by the code, with
 only structural substitutions (a tag, a VR, a number).
 
-**`ds.warnings` is safe to log on a well-formed file and is not unconditionally safe.** The `{tag}`
-slot is filled by a shape check, and a shape check cannot refuse a tag that a lying Value Length
-composed out of somebody's value. A thrown `DicomParseError`'s `message` comes from its own frozen
-registry, whose factories have no tag slot at all, but the error is still not safe to log whole: it
-carries a 16-byte hex `snippet` of the source. Both are measured and covered in
-[Keeping PHI out of logs](./troubleshooting#keeping-phi-out-of-logs).
+**A warning message is safe to log on a well-formed file and is not unconditionally safe.** The
+`{tag}` slot is filled by a shape check, and a shape check cannot refuse a tag that a lying Value
+Length composed out of somebody's value; `DICOM_ODD_LENGTH_VALUE_PADDED` is measured rendering four
+bytes of a name as its tag and four more as its decimal length. **Every fixture that reaches it dies
+before a `Dataset` exists**, so that message arrives through `onWarning` or through the
+`{ strict: true }` error rather than on a surviving `ds.warnings` - review all three channels, and
+do not read the difference as a guarantee about `ds.warnings`. A thrown `DicomParseError`'s `message`
+comes from its own frozen registry, whose factories have no tag slot at all, but the error is still
+not safe to log whole: it carries a 16-byte hex `snippet` of the source. Both are measured and
+covered in [Keeping PHI out of logs](./troubleshooting#keeping-phi-out-of-logs).
 
 ```ts runnable
 import { parseDicom, WARNING_CODES } from "@cosyte/dicom";

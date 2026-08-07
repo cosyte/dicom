@@ -166,8 +166,12 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
     "Element ({tag}) has odd declared length {n}; cursor advanced by one padding byte to maintain alignment.",
   DICOM_VR_MISMATCH:
     "Element ({tag}) on-wire VR is {vr2}; dictionary lists {vr}. Trusting on-wire VR.",
+  // No tag, and the reason is the one `nonzeroReservedBytes` states: this code's
+  // three siblings below fire only on an ODD group, and an odd group is the one
+  // class of tag no closed table this library holds can ever vouch for. See
+  // `privateTagNoCreator`.
   DICOM_PRIVATE_TAG_NO_CREATOR:
-    "Private element ({tag}) has no Private Creator registered for its block; treating as VR=UN.",
+    "A private element has no Private Creator registered for its block; treating as VR=UN. Its tag is withheld; the byte offset identifies the element.",
   DICOM_GROUP_LENGTH_IN_DATASET:
     "Retired Group Length element ({tag}) encountered in dataset; preserved as-is.",
   // The tag is deliberately absent, and this is the only *parser* message where
@@ -225,13 +229,13 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   DICOM_PIXEL_DATA_LENGTH_MISMATCH:
     "(7FE0,0010) PixelData declared length {n} does not match computed {n2} bytes.",
   DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR:
-    "Private element ({tag}) under Implicit VR LE has no VR override; falling back to UN.",
+    "A private element under Implicit VR LE has no VR override; falling back to UN. Its tag is withheld; the byte offset identifies the element.",
   DICOM_PRIVATE_CREATOR_UNKNOWN:
-    "Private element ({tag}) has a Private Creator the active profile's private dictionary does not name; falling back to UN. The creator string is not reproduced here - read the (gggg,00EE) element if you need it.",
+    "A private element has a Private Creator the active profile's private dictionary does not name; falling back to UN. The creator string is not reproduced here - read the (gggg,00EE) element if you need it. Its tag is withheld; the byte offset identifies the element.",
   DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED:
     "Pixel Data is present and Burned In Annotation is not 'NO'; this metadata-only de-identifier cannot inspect or clean pixels. Recognizable text may remain burned into the image.",
   DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED:
-    "Element ({tag}) {vr} was kept by the action table, but its value ends with {n} whole Data Element(s) - an over-declared Value Length swallowed what followed it. Emptied rather than kept, because the action table cannot see an attribute encoded inside a value. Read report.embeddedAttributes for the tags that were hidden there.",
+    "Element ({tag}) {vr} was kept by the action table, but its value ends with {n} whole Data Element(s) - an over-declared Value Length swallowed what followed it. Emptied rather than kept, because the action table cannot see an attribute encoded inside a value. report.embeddedAttributes names the ones this run acts on that also have a literal Table E.1-1 row, which may be none of them.",
   // Deliberately short. One of these is raised per un-auditable element, so a
   // long message is multiplied by an element count the input controls; the
   // reasoning belongs in the docs, not in a string repeated thousands of times.
@@ -436,13 +440,45 @@ export function vrMismatch(
  * element `(gggg,EEFF)` is encountered without a preceding Private Creator
  * `(gggg,00EE)` registration in the same group (PITFALLS.md §7.1, D-33).
  *
+ * ## 🛑 THE TAG IS BOUND OUT OF THIS SIGNATURE AND MUST NOT COME BACK
+ *
+ * It shipped here as a `{tag}` slot through `0.0.13` and was measured leaking:
+ * an `ST` carrier holding `"MR BRAIN SMITHSON "` whose Value Length
+ * under-declares by 12 desynchronizes the Implicit VR LE reader onto a
+ * fabricated header at `(4E49,5320)` - `"IN S"` in wire order, four letters from
+ * inside the name - and `resolveImplicitVR` calls that odd group a private
+ * element, so this message rendered it. `renderTag` shape-checks a tag and
+ * therefore cannot refuse a fabricated one; identical remedy and identical
+ * reasoning to {@link nonzeroReservedBytes}, {@link itemCrossesSequenceEnd},
+ * {@link duplicateTagInDataSet} and {@link duplicateFileMetaElement}.
+ *
+ * **What is different here, and it is why this one is a bound rather than a
+ * product call.** The other five are bound because their *trigger* implies the
+ * header may be fabricated. This code's trigger does not: plenty of conformant
+ * senders write a private element with no creator, and on those files the tag
+ * was real. The bound holds anyway, from the tag's own class rather than from
+ * the trigger - **this code fires only on an ODD group, and an odd group is
+ * precisely the class of tag no closed table this library holds can vouch for.**
+ * PS3.6's registry is even-group; a `Profile`'s private dictionary is keyed by a
+ * creator string this code fires because it does not have. `renderVr` may render
+ * a VR because membership in the 34 is checkable; there is no such check
+ * available for a private tag, ever, so the shape check is the only thing that
+ * ever stood behind this slot and a shape check cannot refuse.
+ *
+ * **What it costs, stated rather than minimised.** On a well-formed file the tag
+ * this message used to carry was the sender's own private tag number, and it is
+ * no longer in the message. It has not left the object: the element is in the
+ * Data Set under that tag, and `position.byteOffset` - a count this parser kept -
+ * locates the header. That is the same trade {@link duplicateTagInDataSet}
+ * makes, with the same frame-of-reference caveat on the offset.
+ *
  * @example
  * ```ts
- * const w = privateTagNoCreator({ byteOffset: 800 }, "00191020");
+ * const w = privateTagNoCreator({ byteOffset: 800 });
  * ```
  */
-export function privateTagNoCreator(position: DicomPosition, tag: Tag): DicomParseWarning {
-  return build(WARNING_CODES.DICOM_PRIVATE_TAG_NO_CREATOR, position, { tag });
+export function privateTagNoCreator(position: DicomPosition): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_PRIVATE_TAG_NO_CREATOR, position);
 }
 
 /**
@@ -902,16 +938,21 @@ export function pixelDataLengthMismatch(
  * whose VR cannot be resolved (Phase 2 always falls back to UN; Phase 6
  * adds profile-supplied VR overrides per D-21 / D-34).
  *
+ * **The tag is bound out of this signature for the reason
+ * {@link privateTagNoCreator} states, and leaving it here would have made that
+ * bound decorative.** Both codes are emitted from the same branch of
+ * `resolveImplicitVR` on the same element, so the identical fixture that
+ * measured `"IN S"` into `DICOM_PRIVATE_TAG_NO_CREATOR` measured it into this
+ * message too, on the same parse. Closing one carrier of a pair is not closing
+ * the leak.
+ *
  * @example
  * ```ts
- * const w = implicitVRForPrivateTagWithoutVR({ byteOffset: 900 }, "00191020");
+ * const w = implicitVRForPrivateTagWithoutVR({ byteOffset: 900 });
  * ```
  */
-export function implicitVRForPrivateTagWithoutVR(
-  position: DicomPosition,
-  tag: Tag,
-): DicomParseWarning {
-  return build(WARNING_CODES.DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR, position, { tag });
+export function implicitVRForPrivateTagWithoutVR(position: DicomPosition): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR, position);
 }
 
 /**
@@ -923,16 +964,28 @@ export function implicitVRForPrivateTagWithoutVR(
  *
  * The creator string is **not** a parameter. It reads as a vendor schema
  * identifier and usually is one, but it is an `LO` a sender authored, and this
- * warning fires precisely when no closed set vouches for it. `position` and the
- * element tag say where to look; the bytes stay on the `(gggg,00EE)` element.
+ * warning fires precisely when no closed set vouches for it. `position` says
+ * where to look; the bytes stay on the `(gggg,00EE)` element.
+ *
+ * **The tag is bound out of this signature too, and it is the one of the three
+ * private-tag codes that is bound by ARGUMENT rather than by MEASUREMENT.** It
+ * needs an active {@link Profile} and a reserved block to fire at all, so the
+ * desynchronized-read sweep in
+ * `test/integration/phi-diagnostic-surface.test.ts` does not reach it and no
+ * fixture here renders a fabricated tag through it. It is bound because
+ * {@link privateTagNoCreator}'s reason is about the tag's *class* and not about
+ * the trigger: this code also fires only on an odd group, so no closed table
+ * this library holds can vouch for its tag either. Leaving the slot in one of
+ * three sibling codes because only two were caught is how a bound becomes a
+ * coincidence.
  *
  * @example
  * ```ts
- * const w = privateCreatorUnknown({ byteOffset: 900 }, "00191020");
+ * const w = privateCreatorUnknown({ byteOffset: 900 });
  * ```
  */
-export function privateCreatorUnknown(position: DicomPosition, tag: Tag): DicomParseWarning {
-  return build(WARNING_CODES.DICOM_PRIVATE_CREATOR_UNKNOWN, position, { tag });
+export function privateCreatorUnknown(position: DicomPosition): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_PRIVATE_CREATOR_UNKNOWN, position);
 }
 
 /**
