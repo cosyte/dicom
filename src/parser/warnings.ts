@@ -150,33 +150,55 @@ export interface DicomParseWarning {
  *
  * **🛑 THE `{n}` SLOTS ARE NOT ALL ALIKE, AND THE RULE THAT SEPARATES THEM IS THE
  * ONE THIS REGISTRY LOST A DEFECT TO.** A number may be rendered when this parser
- * **derived** it - a count it kept, an offset it counted, a remainder the buffer
- * bounds. A number it read **verbatim out of a header it may be reading out of
- * frame** is four (or one) document bytes wearing a decimal, reversible with one
- * typed read, and the bound available for it is the factory signature rather
- * than a check: a raw number has neither a shape nor a membership to test.
- * `renderTag` and `renderVr` are checks; there is no `renderLength` and there
- * must not be one.
+ * **derived** it - a count it kept, an offset it counted. A number it read
+ * **verbatim out of a header it may be reading out of frame** is four (or one)
+ * document bytes wearing a decimal, reversible with one typed read, and the
+ * bound available for it is the factory signature rather than a check: a raw
+ * number has neither a shape nor a membership to test. `renderTag` and
+ * `renderVr` are checks; there is no `renderLength` and there must not be one.
+ *
+ * **🛑 "A REMAINDER THE BUFFER BOUNDS" USED TO BE ON THAT DERIVED LIST. IT IS
+ * RETRACTED, AND IT COST THE EIGHTH INSTANCE OF
+ * `DICOM-DIAGNOSTIC-PHI-RESIDUALS`.** {@link itemCrossesSequenceEnd} rendered
+ * `endLimit - cursor.position`, kept under `buffer.length` by a conjunct at its
+ * emit site. That number is the enclosing **sequence's** declared Value Length
+ * less the 8-byte Item header PS3.5 7.5.1 fixes, so one addition returns the
+ * header's own field: measured, a fabricated length reading `"SO\0\0"` rendered
+ * `20299` and `20299 + 8` is `20307`, whose low two bytes are two letters of a
+ * planted surname. **A wire number shifted by a published structural constant is
+ * the wire number, and bounding a rendering's MAGNITUDE bounds nothing about its
+ * CONTENT.**
+ *
+ * ## The exceptions, named here and nowhere else
  *
  * **🔴 THE RULE IS NOT UNIFORMLY APPLIED, AND SAYING SO IS THE POINT - A GRADED
- * PASS REFUSED THE DRAFT THAT STATED IT AS AN ABSOLUTE.** The exceptions are
- * named rather than counted, because a count in prose is the thing this package
- * deletes:
+ * PASS REFUSED THE DRAFT THAT STATED IT AS AN ABSOLUTE.** They are named rather
+ * than counted, because a count in prose is the thing this package deletes - and
+ * they are named **once**. This list was carried in six places at the same time
+ * and every one of them was corrected twice; `README.md`,
+ * `docs-content/limitations.md`, `docs-content/troubleshooting.md`,
+ * `docs-content/spec-notes-tolerance.md` and `ParseOptions.strict`'s JSDoc point
+ * here now and restate nothing, because a copy is a claim that goes stale on its
+ * own.
  *
  * - {@link fileMetaGroupLengthMismatch}'s `{n}` is a raw declared length and
  *   stays, because `parseFileMeta` reads it in a frame nothing can
  *   desynchronize. Its own JSDoc carries the argument and the measurement.
  *
- * **{@link undefinedVrNotAuditable} and {@link sequenceNotAuditable} used to be
- * on the exception list and are not any more.** Their `{n}` was
- * `Element.rawBytes.length` - the declared Value Length for a value-only
- * element, declared-plus-header for a full-span one (`isFullSpanElement`), and
- * document-derived either way, so a fabricated header carrying `"SO\0\0"`
- * rendered `20307`. Both slots are bound out of the factory signatures now. The
- * numbers still exist on `report.unauditableSequences[].byteLength` and
+ * That bullet is the whole list.
+ *
+ * **{@link undefinedVrNotAuditable}, {@link sequenceNotAuditable} and
+ * {@link itemCrossesSequenceEnd} used to be exempt and are not any more.** The
+ * first two rendered `Element.rawBytes.length` - the declared Value Length for a
+ * value-only element, declared-plus-header for a full-span one
+ * (`isFullSpanElement`), and document-derived either way, so a fabricated header
+ * carrying `"SO\0\0"` rendered `20307`. The third is the shifted case above. All
+ * three slots are bound out of the factory signatures now. The first two numbers
+ * still exist on `report.unauditableSequences[].byteLength` and
  * `report.undefinedVrElements[].byteLength`, which are **model fields on a type
  * whose own docs say it is not a value-free surface** - a different surface from
- * a registry message, and deliberately not changed here.
+ * a registry message, and deliberately not changed here. The third has no model
+ * field and is simply gone.
  *
  * Two codes are declared and never emitted by this build:
  * `DICOM_CHARSET_AMBIGUOUS_SEPARATOR` and `DICOM_PIXEL_DATA_LENGTH_MISMATCH`.
@@ -270,11 +292,13 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   // text is the file's own. The tag is a constant of this code.
   DICOM_DEIDENT_METHOD_PRIOR_RETAINED:
     "A De-identification Method (0012,0063) value the source file already carried was kept beside the one this run recorded, as PS3.15 E.1.1 requires. That attribute is not in Table E.1-1, so no rule in this run inspected, audited or redacted those bytes: if the sender wrote identifying text there it is in the de-identified output, under (0012,0062) = YES. The text is withheld from this message.",
-  // The Item's own declared length is deliberately absent. See
-  // `itemCrossesSequenceEnd`; `{n2}` stays because the emit site's
-  // `endLimit < buffer.length` conjunct bounds it by the buffer.
+  // BOTH of the disagreeing length fields are deliberately absent, and the
+  // second one is the eighth instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`: the
+  // remaining-bytes count this string used to carry was the enclosing sequence's
+  // declared Value Length less the 8-byte Item header PS3.5 7.5.1 fixes. See
+  // `itemCrossesSequenceEnd`.
   DICOM_ITEM_CROSSES_SEQUENCE_END:
-    "Item ({tag}) declares a length reaching past its enclosing sequence's declared end, so it reads the enclosing Data Set's bytes; {n2} bytes remained inside the sequence. The file's two length fields disagree (PS3.5 7.5.1 and 7.5.2 govern them); the item's is used. The declared length is withheld; the byte offset locates the item.",
+    "Item ({tag}) declares a length reaching past its enclosing sequence's declared end, so it reads the enclosing Data Set's bytes. The file's two length fields disagree (PS3.5 7.5.1 and 7.5.2 govern them); the item's is used. Both declared lengths are withheld; the byte offset locates the item.",
   // Declared but not emitted by this build. The declared length is bound out
   // anyway: it is a raw 32-bit read off a header, so activating this code later
   // with the slot still here would ship the leak this slice closed one code
@@ -364,7 +388,10 @@ interface WarningTokens {
    * A count, index or byte span **this parser derived**. Never a length or a
    * byte value read verbatim off a header - see the registry's note above; those
    * are bound out of the factory signature instead, because a raw number has
-   * neither a shape nor a membership a renderer could test.
+   * neither a shape nor a membership a renderer could test. **Nor one of those
+   * shifted by a published structural constant**, which is the same number with
+   * an addition in front of it and is what the eighth instance of
+   * `DICOM-DIAGNOSTIC-PHI-RESIDUALS` shipped as.
    */
   readonly n?: number;
   /** A second such number. */
@@ -780,7 +807,8 @@ export function sqNotDescended(position: DicomPosition, tag: Tag): DicomParseWar
  * ## Slots, and what is input
  *
  * `{tag}` carries the Item tag `FFFEE000`, matching {@link emptyItemInSequence}:
- * a constant this parser recognised, not four bytes echoed back.
+ * a constant this parser recognised, not four bytes echoed back. It is the only
+ * slot left.
  *
  * `position.byteOffset` is the item header's offset **in the buffer
  * `parseSequence` was handed**, which is the file for a root-level sequence and
@@ -804,6 +832,38 @@ export function sqNotDescended(position: DicomPosition, tag: Tag): DicomParseWar
  * factory cannot be handed the value, so no future call site can put it back
  * without changing this signature.
  *
+ * ## 🛑 THE REMAINING-BYTES COUNT IS BOUND OUT TOO, AND IT IS THE EIGHTH INSTANCE
+ *
+ * Through `0.0.14` a third parameter carried
+ * `Math.max(0, endLimit - cursor.position)` into a `{n2}` slot reading "`{n2}`
+ * bytes remained inside the sequence", and both the code comment and a pinning
+ * test said it was safe **because the emit site's `endLimit < buffer.length`
+ * conjunct bounds it by the buffer**. That defence is retracted.
+ *
+ * `endLimit` is the enclosing **sequence's** declared Value Length off its own
+ * header, and `cursor.position` sits exactly one Item header past the value
+ * start, so the rendered count **is** that declared length less 8 - and 8 is the
+ * Item header size PS3.5 2026c section 7.5.1 fixes, a published constant, so one
+ * addition reverses the render. Bounding a number's magnitude bounds nothing
+ * about its content.
+ *
+ * **Its pinning test and its defence were both green BY FIXTURE**, which is the
+ * transferable half. They only ever fabricated the sequence length out of four
+ * **printable** bytes; every such window exceeds 538,976,288, so `endLimit`
+ * landed past the buffer and the conjunct refused. A length that big is
+ * unreachable by construction, because the buffer has to hold that many bytes -
+ * so every fabricated length that reaches this library has zero high-order bytes
+ * and a SHORT decimal. Measured on the reachable class, with the parse
+ * **surviving** so the message lands on `ds.warnings`: `"SO"` rendered 20299 of
+ * a declared 20307, `"ON"` 20039 of 20047, `"TH"` 18508 of 18516, each low pair
+ * two letters of a planted surname.
+ *
+ * The remedy is this signature, for the third time in one lineage: the factory
+ * takes no parameter for it, so no call site can put it back. There is no model
+ * field carrying the number, so unlike the two `deidentify()` codes nothing
+ * publishes it any more. A consumer that wants the remainder has
+ * `position.byteOffset` and the parsed sequence.
+ *
  * ## Two things it does NOT do
  *
  * **`profiles.strict` does not escalate it.** The `{ strict: true }` option
@@ -821,18 +881,11 @@ export function sqNotDescended(position: DicomPosition, tag: Tag): DicomParseWar
  *
  * @example
  * ```ts
- * const w = itemCrossesSequenceEnd({ byteOffset: 320 }, "FFFEE000", 12);
+ * const w = itemCrossesSequenceEnd({ byteOffset: 320 }, "FFFEE000");
  * ```
  */
-export function itemCrossesSequenceEnd(
-  position: DicomPosition,
-  tag: Tag,
-  availableLength: number,
-): DicomParseWarning {
-  return build(WARNING_CODES.DICOM_ITEM_CROSSES_SEQUENCE_END, position, {
-    tag,
-    n2: availableLength,
-  });
+export function itemCrossesSequenceEnd(position: DicomPosition, tag: Tag): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_ITEM_CROSSES_SEQUENCE_END, position, { tag });
 }
 
 /**

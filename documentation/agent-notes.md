@@ -312,7 +312,7 @@ than the missing `uint16` arm; and the seventh instance itself.
 TO ITS OWN LINEAGE.** `#80` wrote it once ("safe to log whole on any well-formed file"), the sibling
 half corrected it to "safe on a well-formed file and not unconditionally safe", and a third wording
 was due. Every carrier now states the **mechanism** - which slot is a membership test, which is a
-signature bound, and the one named exception - and states **no verdict**. That is `#79`'s remedy shape
+signature bound - and states **no verdict**. That is `#79`'s remedy shape
 (delete the prose enumeration, replace it with something that cannot go stale) applied to a sentence
 instead of a list. The carriers were found by **folding newlines** and windowing, not by `grep`:
 `README.md`, `docs-content/limitations.md`, `docs-content/troubleshooting.md`,

@@ -61,7 +61,7 @@ dictionary already has an entry for the tag.
 It was written as "safe to log whole on any well-formed file", then corrected to "safe on a
 well-formed file and not unconditionally safe", and this package deletes a disclosure it has reworded
 twice. Every carrier now states the mechanism - which slot is a membership test, which is a signature
-bound, and the named exceptions - and states no verdict.
+bound - and states no verdict.
 
 **Not taken, deliberately.** `report.removedPrivateTags` is untouched: it is a private-tag field by
 definition, so no closed table can ever vouch for its contents and a bound would empty it on every

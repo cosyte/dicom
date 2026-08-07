@@ -81,21 +81,17 @@ Each substitution is bounded a different way, and the three ways are not interch
 - **A raw number a header carries has neither a shape nor a membership to test, so where it is bound
   at all the bound is the absence of the slot.** There is no `renderLength` and there must not be
   one. `DICOM_ODD_LENGTH_VALUE_PADDED`, `DICOM_NONZERO_RESERVED_BYTES` and
-  `DICOM_PIXEL_DATA_LENGTH_MISMATCH` cannot be handed one.
+  `DICOM_PIXEL_DATA_LENGTH_MISMATCH` cannot be handed one. **And a raw number SHIFTED by a published
+  structural constant is that raw number**, because one addition puts it back, so a bound on a
+  rendering's magnitude bounds nothing about its content: `DICOM_ITEM_CROSSES_SEQUENCE_END` printed
+  the bytes that remained inside the sequence, which is the sequence's own declared Value Length less
+  the 8-byte Item header PS3.5 2026c §7.5.1 fixes. It cannot be handed either number now.
 
 `w.code` and `w.position` carry nothing from the document.
 
-**Exceptions, named rather than counted.** `(0002,0000)`'s own declared File Meta group length is
-still printed: `parseFileMeta` reads it at a structurally fixed offset, is never nested and runs once
-per parse, so no Data Set value can be read into that position. **`DICOM_DEIDENT_UNDEFINED_VR_NOT
-_AUDITABLE` and `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` LEFT this list.** Through `0.0.14` they
-rendered `Element.rawBytes.length`, which is the declared Value Length for a value-only element and
-declared-plus-header for a full-span one, document-derived either way, so a fabricated header
-carrying `"SO\0\0"` printed `20307`. Both slots are bound out of the factory signatures now. **The
-numbers still exist on `report.undefinedVrElements[].byteLength` and
-`report.unauditableSequences[].byteLength`** - model fields, on a type documented as not value-free,
-and narrowing those is a product call rather than a defect fix: a bound empties the field on every
-well-formed file.
+**The exceptions are named in ONE place and are deliberately not restated here** - the
+`WARNING_MESSAGES` docblock in `src/parser/warnings.ts`. This list used to be carried in six
+artifacts at once and every one of them was corrected twice, which is what a copy costs.
 
 **What that closed, measured rather than argued.** An `ST` carrying `"MR BRAIN SMITHSON "` that
 under-declares by 12 desynchronizes the **Explicit VR LE** reader onto a fabricated header whose

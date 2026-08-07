@@ -49,6 +49,7 @@ import { DicomParseError, FATAL_CODES } from "../../src/parser/errors.js";
 import { FATAL_MESSAGES } from "../../src/parser/fatals.js";
 import { parseDicom } from "../../src/parser/index.js";
 import { renderTag } from "../../src/parser/tokens.js";
+import { WARNING_MESSAGES } from "../../src/parser/warnings.js";
 import { buildDicom } from "../helpers/build-dicom.js";
 
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
@@ -73,10 +74,18 @@ function val(text: string): Buffer {
 // ---------------------------------------------------------------------------
 
 interface Leak {
-  readonly kind: "tag" | "length" | "vr" | "byte";
+  readonly kind: "tag" | "length" | "length-less-item-header" | "vr" | "byte";
   readonly rendered: string;
   readonly bytes: string;
 }
+
+/**
+ * The 8-byte Item header PS3.5 2026c section 7.5.1 fixes: `(FFFE,E000)` plus a
+ * 32-bit Item Length. It is the only structural constant any registry template
+ * has ever subtracted from a wire number, which is what makes the
+ * `length-less-item-header` arm a hunt rather than a fishing expedition.
+ */
+const ITEM_HEADER_BYTES = 8;
 
 /**
  * Every way four or two bytes of `payload` could surface in a message, and the
@@ -121,6 +130,25 @@ interface Leak {
  * caught, and a shorter one must equal a WHOLE maximal digit run of the message
  * rather than appear anywhere inside one. See {@link leaksIn}.
  *
+ * **🛑 AND THE `length-less-item-header` ARM EXISTS BECAUSE THE FLOOR'S REMOVAL
+ * WAS NOT ENOUGH: POINTED AT THE EIGHTH INSTANCE, THE WIDENED DETECTOR RETURNED
+ * CLEAN.** `DICOM_ITEM_CROSSES_SEQUENCE_END` rendered `endLimit -
+ * cursor.position`, which is the enclosing sequence's declared Value Length less
+ * {@link ITEM_HEADER_BYTES}. Every arm above hunts a rendering **equal** to a
+ * typed read of a payload window, so a rendering **shifted by a published
+ * constant** was invisible to all of them: measured on the `"SO\0\0"` payload
+ * this file already carries, the shipped template returned `[]` while a direct
+ * render of the same length returned the `length` hit. **A wire number shifted
+ * by a published structural constant is the wire number** - one addition puts it
+ * back - so this is the digit floor's disease one level up, and a detector that
+ * has never looked for a shape has not cleared it.
+ *
+ * The arm is scoped to the one constant a template ever subtracted rather than
+ * to a range, for the reason the `uint16` gap below is *not* an arm: a hunt with
+ * nothing to hunt has no non-vacuity control. Its control is the reconstructed
+ * `0.0.14` template in
+ * `itemCrossesSequenceEndNoLongerRendersTheSequenceLengthLessTheItemHeader`.
+ *
  * **🛑 THERE IS STILL NO 2-BYTE-AS-`uint16` ARM, AND THAT IS A STATED GAP RATHER
  * THAN A CLEARED ONE.** A short-form Explicit VR Value Length is exactly that
  * shape. No registry entry renders one today, so an arm for it would have
@@ -143,6 +171,12 @@ function renderings(payload: string): readonly Leak[] {
     // NO FLOOR. Every 4-byte window is hunted, however short its decimal, and
     // the collision question is settled in `leaksIn` by how the match is made.
     out.push({ kind: "length", rendered: String(bytes.readUInt32LE(i)), bytes: window });
+    // ...and the same window shifted by the one structural constant a registry
+    // template ever subtracted from a wire number. See the docblock above.
+    const shifted = bytes.readUInt32LE(i) - ITEM_HEADER_BYTES;
+    if (shifted >= 0) {
+      out.push({ kind: "length-less-item-header", rendered: String(shifted), bytes: window });
+    }
   }
   for (let i = 0; i + 2 <= bytes.length; i += 1) {
     out.push({
@@ -198,7 +232,9 @@ function renderings(payload: string): readonly Leak[] {
  * hit against `"its 20307 recorded bytes"` and not against `"offset=120307"`.
  * That is what keeps a five-digit rendering from matching a substring of some
  * unrelated count, without excluding the five-digit renderings that are the only
- * ones a real parse can reach.
+ * ones a real parse can reach. **`length-less-item-header` is matched exactly the
+ * same way**, for the same reason: the shifted renderings a real parse can reach
+ * are short too, because the unshifted one was.
  */
 function digitRuns(message: string): readonly string[] {
   return message.match(/[0-9]+/gu) ?? [];
@@ -219,7 +255,10 @@ function leaksIn(message: string, payload: string): readonly Leak[] {
     if (leak.kind === "byte") {
       return new RegExp(`(?:first|second) byte ${leak.rendered}(?![0-9])`, "u").test(message);
     }
-    if (leak.kind === "length" && leak.rendered.length < 7) {
+    if (
+      (leak.kind === "length" || leak.kind === "length-less-item-header") &&
+      leak.rendered.length < 7
+    ) {
       return runs.includes(leak.rendered);
     }
     return message.includes(leak.rendered);
@@ -832,6 +871,57 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
     expect(sequenceReport?.unauditableSequences.map((s) => s.byteLength)).toContain(
       FABRICATED_LENGTH,
     );
+  });
+
+  it("itemCrossesSequenceEndNoLongerRendersTheSequenceLengthLessTheItemHeader", () => {
+    // 🩺 THE EIGHTH INSTANCE, AND THE HALF THAT TRANSFERS IS THAT THE DETECTOR
+    // WAS CLEAN ON IT. Through `0.0.14` `DICOM_ITEM_CROSSES_SEQUENCE_END`
+    // rendered `endLimit - cursor.position` into a `{n2}` slot, defended by the
+    // emit site's `endLimit < buffer.length` conjunct "bounding it by the
+    // buffer". That bounds the number's MAGNITUDE. `endLimit` is the enclosing
+    // sequence's declared Value Length off its own header and `cursor.position`
+    // sits exactly one Item header past the value start, so the rendered count
+    // IS that declared length less 8 - and 8 is published in PS3.5 7.5.1.
+    //
+    // The floor's removal did not surface it, because every arm hunted a
+    // rendering EQUAL to a typed read of a payload window. This row measures
+    // that gap rather than describing it: the shipped template is clean under
+    // every other arm and caught only by `length-less-item-header`.
+    const shipped = `Item (FFFEE000) declares a length reaching past its enclosing sequence's declared end, so it reads the enclosing Data Set's bytes; ${String(FABRICATED_LENGTH - ITEM_HEADER_BYTES)} bytes remained inside the sequence. The file's two length fields disagree.`;
+
+    // Non-vacuity on the payload: `UNDEFINED_VR_PAYLOAD` really carries the four
+    // length bytes contiguously, and they really are two letters of a surname
+    // followed by the zero high bytes any reachable length must have.
+    expect(UNDEFINED_VR_PAYLOAD).toContain(LEN_BYTES.toString("latin1"));
+    expect(LEN_BYTES.subarray(0, 2).toString("latin1")).toBe("SO");
+    expect(NAME).toContain("SO");
+    expect(FABRICATED_LENGTH).toBe(20307);
+
+    // The gap, pinned: no OTHER arm sees the shipped template.
+    const onShipped = leaksIn(shipped, UNDEFINED_VR_PAYLOAD);
+    expect(onShipped.filter((l) => l.kind !== "length-less-item-header")).toStrictEqual([]);
+    // ...and the new arm does, on the right four bytes.
+    const shifted = onShipped.filter((l) => l.kind === "length-less-item-header");
+    expect(shifted.map((l) => l.rendered)).toContain(String(FABRICATED_LENGTH - ITEM_HEADER_BYTES));
+    expect(shifted.map((l) => l.bytes)).toContain("SO\0\0");
+
+    // And the arm is a hunt, not a wildcard: a DIRECT render of the same length
+    // is the `length` arm's, not this one's, so the two do not shadow each other.
+    const direct = leaksIn(
+      `... ${String(FABRICATED_LENGTH)} bytes remained ...`,
+      UNDEFINED_VR_PAYLOAD,
+    );
+    expect(direct.map((l) => l.kind)).toContain("length");
+    expect(direct.map((l) => l.kind)).not.toContain("length-less-item-header");
+
+    // The closure itself: the registry template has no numeric slot at all now,
+    // so there is nothing for any arm to find and no call site can put one back.
+    expect(WARNING_MESSAGES.DICOM_ITEM_CROSSES_SEQUENCE_END).not.toContain("{n}");
+    expect(WARNING_MESSAGES.DICOM_ITEM_CROSSES_SEQUENCE_END).not.toContain("{n2}");
+    // The live channel is `ds.warnings` on a SURVIVING parse, which no fixture
+    // in this file reaches; `test/integration/explicit-sq-item-bound.test.ts`
+    // carries that measurement with its own name-bearing payload and mutation
+    // control. This row is about the detector.
   });
 
   it("the deidentify() channel is swept, with the floor off, and the only tags left are PS3.6 rows", () => {

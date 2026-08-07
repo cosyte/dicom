@@ -1,12 +1,16 @@
+import { Buffer } from "node:buffer";
+
 import { describe, it, expect } from "vitest";
 
 import {
   WARNING_CODES,
+  WARNING_MESSAGES,
   emptyItemInSequence,
   fileMetaGroupLengthMismatch,
   fileMetaGroupLengthMissing,
   groupLengthInDataset,
   implicitVRForPrivateTagWithoutVR,
+  itemCrossesSequenceEnd,
   missingPreamble,
   nonzeroReservedBytes,
   oddLengthValuePadded,
@@ -200,6 +204,41 @@ describe("warning factories (D-12 - one named factory per active-emit code)", ()
       "Non-zero reserved bytes between VR and length (first byte 78, second byte 32); ignoring.";
     expect(/(?:first|second) byte \d/u.test(shipped)).toBe(true);
     expect(/(?:first|second) byte \d/u.test(w.message)).toBe(false);
+  });
+
+  it("itemCrossesSequenceEnd takes NEITHER length, not even the bounded remainder", () => {
+    // The EIGHTH instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`. The Item's own
+    // declared length was bound out first; the remaining-bytes count stayed,
+    // under a comment and a pinning test that both said the emit site's
+    // `endLimit < buffer.length` conjunct bounded it by the buffer. It does
+    // bound its MAGNITUDE. It says nothing about its CONTENT: the count is the
+    // enclosing sequence's declared Value Length less the 8-byte Item header
+    // PS3.5 7.5.1 fixes, so one addition returns the header's own field.
+    expect(itemCrossesSequenceEnd.length).toBe(2);
+    const w = itemCrossesSequenceEnd(pos, "FFFEE000");
+    expect(w.code).toBe(WARNING_CODES.DICOM_ITEM_CROSSES_SEQUENCE_END);
+    // The Item tag is a constant this parser recognised, so it still renders.
+    expect(w.message).toContain("FFFEE000");
+    expect(w.message).toContain("withheld");
+    // Non-vacuity, and it is the shifted form rather than the raw one: rebuild
+    // `0.0.14`'s own template over the number a fabricated sequence length
+    // reading `"SO\0\0"` supplies, and prove BOTH that the shipped string
+    // carried it and that this one does not. A green row must not mean there was
+    // never a number here to look for.
+    const shipped =
+      "Item (FFFEE000) declares a length reaching past its enclosing sequence's declared end, so it reads the enclosing Data Set's bytes; 20299 bytes remained inside the sequence.";
+    const shippedRuns: readonly string[] = shipped.match(/[0-9]+/gu) ?? [];
+    const runs: readonly string[] = w.message.match(/[0-9]+/gu) ?? [];
+    expect(shippedRuns).toContain("20299");
+    // 20299 + 8 IS the fabricated length, and its low two bytes ARE the letters.
+    expect(Buffer.from([(20299 + 8) & 0xff, ((20299 + 8) >> 8) & 0xff]).toString("latin1")).toBe(
+      "SO",
+    );
+    expect(runs).not.toContain("20299");
+    // ...and the registry template has no numeric slot at all now, so the bound
+    // is not one call site remembering to omit an argument.
+    expect(WARNING_MESSAGES.DICOM_ITEM_CROSSES_SEQUENCE_END).not.toContain("{n}");
+    expect(WARNING_MESSAGES.DICOM_ITEM_CROSSES_SEQUENCE_END).not.toContain("{n2}");
   });
 
   it("sequenceNotAuditable takes no byte span, so no call site can pass one", () => {

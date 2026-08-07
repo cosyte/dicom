@@ -517,16 +517,18 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the disagreement, disclosed", 
     expect(ds.warnings.map((w) => w.code)).toContain(WARNING_CODES.DICOM_ITEM_CROSSES_SEQUENCE_END);
   });
 
-  it("carries the bytes that remained and the constant Item tag, and NOT the declared length", () => {
+  it("carries the constant Item tag and NEITHER of the two disagreeing lengths", () => {
     const w = parseDicom(fixture(EXPLICIT_LE, TRAILING_ON_WIRE)).warnings.find(
       (x) => x.code === WARNING_CODES.DICOM_ITEM_CROSSES_SEQUENCE_END,
     );
 
     // The item declares its 16 bytes of content plus the 18-byte element that
-    // follows the sequence; only its own 16 remain inside the sequence. The 16
-    // is reported and the 34 is withheld - see the PHI test below.
+    // follows the sequence. The Item's declared 34 was withheld from the start;
+    // the 16 that remained inside the sequence went with it in the eighth
+    // instance, because that count is the SEQUENCE's declared length less the
+    // 8-byte Item header. Both are absent - see the two PHI rows below.
     expect(w?.message).not.toContain(String(ITEM_ON_WIRE + TRAILING_ON_WIRE));
-    expect(w?.message).toContain(String(ITEM_ON_WIRE));
+    expect(w?.message).not.toContain(String(ITEM_ON_WIRE));
     // The `{tag}` slot is the Item tag, a constant this parser recognised - not
     // four bytes read out of somebody's value, which is the trap
     // `DICOM_NONZERO_RESERVED_BYTES` and
@@ -602,16 +604,18 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the disagreement, disclosed", 
     // The two messages are IDENTICAL. Nothing the fabricated bytes changed
     // survives into the diagnostic, which is the whole property.
     expect(others[0]).toBe(messages[0]);
-    // And the registry entry itself has no slot for it, so the binding is not
-    // one call site remembering to omit an argument.
+    // And the registry entry itself has no numeric slot at all, so the binding
+    // is not one call site remembering to omit an argument.
     expect(WARNING_MESSAGES.DICOM_ITEM_CROSSES_SEQUENCE_END).not.toContain("{n}");
+    expect(WARNING_MESSAGES.DICOM_ITEM_CROSSES_SEQUENCE_END).not.toContain("{n2}");
   });
 
-  it("PHI: `{n2}` does NOT fire when the fabricated SQ length is PRINTABLE, and that class is unreachable", () => {
+  it("the emit site says nothing at all when the fabricated SQ length is PRINTABLE, and that class is unreachable", () => {
     // 🛑 THIS ROW USED TO BE TITLED "`{n2}` stays because the emit site's own
     // conjunct bounds it by the buffer" AND ITS CONCLUSION IS RETRACTED. What it
     // measures is true and is kept; what it was read as concluding is refuted by
-    // the row directly below, which a graded pass required.
+    // the row directly below, which a graded pass required and this slice then
+    // acted on: `{n2}` is gone from the registry entirely.
     //
     // What it really shows: a fabricated SEQUENCE length composed of four
     // PRINTABLE bytes exceeds 538,976,288, so `endLimit` lands past the buffer,
@@ -645,22 +649,23 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the disagreement, disclosed", 
       (x) => x.code === WARNING_CODES.DICOM_ITEM_CROSSES_SEQUENCE_END,
     );
     expect(control).toHaveLength(1);
-    // What `{n2}` rendered on that file is a count inside a 318-byte buffer.
-    expect(control[0]?.message).toContain(String(ITEM_ON_WIRE));
-    expect(ITEM_ON_WIRE).toBeLessThan(base.length);
+    // And the control's message is the frozen registry string with the constant
+    // Item tag substituted and nothing else, so "nothing was emitted" above is
+    // the only difference between the two runs.
+    expect(control[0]?.message).toBe(
+      WARNING_MESSAGES.DICOM_ITEM_CROSSES_SEQUENCE_END.replace("{tag}", "FFFEE000"),
+    );
   });
 
-  it("🔴 PHI RESIDUAL: `{n2}` IS the fabricated SQ length minus 8, on the REACHABLE class", () => {
-    // 🛑 `PRE-EXISTING`, MEASURED OPEN, AND DELIBERATELY NOT CLOSED. An eighth
-    // instance of "a diagnostic about a PHI leak is itself a PHI surface", found
-    // by a graded pass on the seventh, and it is the row that retracts the one
-    // above.
+  it("🩺 CLOSED: the remaining-bytes count is gone, on the REACHABLE class", () => {
+    // 🩺 THE EIGHTH INSTANCE OF "a diagnostic about a PHI leak is itself a PHI
+    // surface", CLOSED. Through `0.0.14` this row ASSERTED the leak.
     //
-    // `{n2}` is `endLimit - cursor.position`, and `endLimit` is the enclosing
+    // `{n2}` was `endLimit - cursor.position`, and `endLimit` is the enclosing
     // SEQUENCE's declared Value Length off its own header while `cursor.position`
-    // sits exactly one Item header past the value start. So `{n2} + 8` IS that
+    // sits exactly one Item header past the value start. So `{n2} + 8` WAS that
     // declared length, and 8 is the Item header size PS3.5 7.5.1 fixes: a
-    // published constant, so one addition reverses the render.
+    // published constant, so one addition reversed the render.
     //
     // The row above could never see this because it fabricated the length out of
     // four PRINTABLE bytes. Every such window exceeds 538,976,288 and the
@@ -668,16 +673,21 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the disagreement, disclosed", 
     // because the buffer has to hold that many bytes. The reachable class has
     // zero high-order bytes, so the decimal is SHORT.
     //
-    // Binding `{n2}` is a behaviour change on a leak this slice did not
-    // introduce. It is disclosed on `itemCrossesSequenceEnd` and in the registry
-    // module doc instead, and asserted here - green on BOTH trees, or it is not a
-    // residual pin.
+    // The slot is bound out of `itemCrossesSequenceEnd`'s signature now, which is
+    // the remedy this package takes every time: a raw wire number has neither a
+    // shape nor a membership for a renderer to check, and a wire number shifted
+    // by a published constant is the wire number. Every measurement this row made
+    // while it asserted the leak is kept, because the numbers are what make the
+    // absence below mean something.
     const RESIDUAL_NAME = "MR BRAIN SMITHSON ";
     const probe = (
       pair: string,
     ): {
       readonly declaredSq: number;
-      readonly n2: number;
+      /** The message as shipped, or `""` if the code did not fire. */
+      readonly message: string;
+      /** Every maximal digit run in that message. */
+      readonly digitRuns: readonly string[];
       /** True only when the message was found on a `Dataset` the parse RETURNED. */
       readonly fromDatasetWarnings: boolean;
       /** True only when the planted surname is really in the built buffer. */
@@ -728,10 +738,10 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the disagreement, disclosed", 
       const message = ds.warnings.find(
         (w) => w.code === WARNING_CODES.DICOM_ITEM_CROSSES_SEQUENCE_END,
       )?.message;
-      const n2 = Number(/; (\d+) bytes remained/u.exec(message ?? "")?.[1] ?? NaN);
       return {
         declaredSq,
-        n2,
+        message: message ?? "",
+        digitRuns: (message ?? "").match(/[0-9]+/gu) ?? [],
         fromDatasetWarnings: message !== undefined,
         plantedInBuffer: raw.includes(Buffer.from(RESIDUAL_NAME, "latin1")),
         lengthBytesOffTheWire,
@@ -749,31 +759,47 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the disagreement, disclosed", 
     expect(so.declaredSq).toBe(20307);
     expect(String(so.declaredSq).length).toBeLessThan(7);
 
-    // The leak, asserted: the rendered count plus the Item header size IS the
-    // fabricated length, and its low two bytes ARE the planted letters.
-    expect(so.n2).toBe(20299);
-    expect(so.n2 + 8).toBe(so.declaredSq);
-    expect(Buffer.from([(so.n2 + 8) & 0xff, ((so.n2 + 8) >> 8) & 0xff]).toString("latin1")).toBe(
-      "SO",
-    );
-    // And it survives the parse: the message came off the returned Dataset's own
-    // `warnings` array, not off an `onWarning` callback on a file that then died.
+    // It reaches `ds.warnings` on a SURVIVING parse, which is why this instance
+    // matters more than the two that only ever reached `onWarning`: the message
+    // came off the returned Dataset's own array, not off a callback on a file
+    // that then died. Assert that first, or an absent number below could just
+    // mean an absent message.
     expect(so.fromDatasetWarnings).toBe(true);
+    expect(so.message).toContain("FFFEE000");
+
+    // 🩺 THE CLOSURE. Neither the fabricated length nor that length shifted by
+    // the Item header size appears as a whole digit run of the message.
+    expect(so.digitRuns).not.toContain(String(so.declaredSq));
+    expect(so.digitRuns).not.toContain(String(so.declaredSq - 8));
+
+    // Non-vacuity on the search, rebuilt rather than borrowed: `0.0.14`'s own
+    // template really did carry `20299`, and `20299 + 8` really is `20307`,
+    // whose low two bytes really are the planted letters. So the two assertions
+    // above are ones that CAN go red.
+    const shipped = `Item (FFFEE000) declares a length reaching past its enclosing sequence's declared end, so it reads the enclosing Data Set's bytes; ${String(so.declaredSq - 8)} bytes remained inside the sequence.`;
+    expect(shipped.match(/[0-9]+/gu) ?? []).toContain("20299");
+    expect(so.declaredSq - 8).toBe(20299);
+    expect(
+      Buffer.from([so.declaredSq & 0xff, (so.declaredSq >> 8) & 0xff]).toString("latin1"),
+    ).toBe("SO");
 
     // The mutation control, so this cannot pass on a constant: change the two
-    // letters and the published number changes with them.
-    for (const [pair, declared, rendered] of [
-      ["ON", 20047, 20039],
-      ["TH", 18516, 18508],
+    // letters and the fabricated length changes with them, while the MESSAGE
+    // does not move at all. Byte-identical messages across three different
+    // planted payloads is the property; a message hard-coded to omit one number
+    // would pass the assertions above and fail here.
+    for (const [pair, declared] of [
+      ["ON", 20047],
+      ["TH", 18516],
     ] as const) {
       const r = probe(pair);
       expect(r.declaredSq).toBe(declared);
-      expect(r.n2).toBe(rendered);
-      expect(Buffer.from([(r.n2 + 8) & 0xff, ((r.n2 + 8) >> 8) & 0xff]).toString("latin1")).toBe(
-        pair,
-      );
+      expect(r.lengthBytesOffTheWire).toBe(`${pair}\0\0`);
+      expect(r.digitRuns).not.toContain(String(declared));
+      expect(r.digitRuns).not.toContain(String(declared - 8));
+      expect(r.message).toBe(so.message);
     }
-    expect(probe("ON").n2).not.toBe(so.n2);
+    expect(probe("ON").declaredSq).not.toBe(so.declaredSq);
   });
 
   it("emits once per sequence, which is a SHAPE and NOT an amplification bound", () => {
