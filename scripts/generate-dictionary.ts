@@ -1,7 +1,8 @@
 #!/usr/bin/env tsx
 /**
- * Phase 1 Plan 02 generator: Innolitics dicom-standard JSON + curated PS3.6 §A.1
- * UID table → committed TypeScript modules under `src/dictionary/generated/`.
+ * Phase 1 Plan 02 generator: Innolitics dicom-standard JSON, overlaid per field
+ * by the normative NEMA PS3.6 DocBook, → committed TypeScript modules under
+ * `src/dictionary/generated/`.
  *
  * Runs via `pnpm gen:dictionary` (devDep `tsx`). Writes:
  *   - src/dictionary/generated/tags.ts     (Tag → DictionaryEntry)
@@ -29,21 +30,66 @@
  *       dropping it would turn a decoded element into an unknown one. That is
  *       the wrong direction to fail in. (Today the set is empty.)
  *
- *   The overlay is scoped to the element registry. UIDs stay on the
- *   `sops.json` + CURATED_UIDS path deliberately: this dictionary's UID names
- *   deviate from Table A-1 on purpose (four short forms every DICOM toolkit
- *   uses, and retirement carried as a structured `retired` boolean rather than
- *   a trailing " (Retired)" in the name), and a normative overlay would undo
- *   both. See vendor/nema/README.md.
- *
  *   No entry is ever hand-corrected. A correction that cannot be derived from
  *   fetched normative bytes does not get made here.
  *
- * UIDs: Innolitics' current revision ships `sops.json` (SOP Class UIDs) but not a
- * comprehensive UID table covering Transfer Syntaxes, Well-Known UIDs, etc. The
- * canonical Transfer Syntax + Well-Known UIDs are sourced from PS3.6 §A.1 / Table A-1
- * directly, hand-curated below as `CURATED_UIDS`, and merged with `sops.json` at
- * generation time. See vendor/innolitics/README.md for rationale.
+ * Authority for the UID registry (uids.ts):
+ *   THE SAME RULE, ON THE SAME TERMS. PS3.6 Annex A is the normative registry of
+ *   DICOM UIDs: Table A-1 (UID Values) and Table A-2 (Well-known Frames of
+ *   Reference). Innolitics' `sops.json` covers SOP Classes only, so it is the
+ *   base and Annex A is the per-field overlay, exactly as above: shared entries
+ *   take the normative name, type and retirement; Annex-A-only entries are
+ *   ADDED; entries only the mirror carries are KEPT, and that count is printed
+ *   every run rather than assumed.
+ *
+ *   THE TWO DELIBERATE DEVIATIONS, PRESERVED BY CONSTRUCTION AND ASSERTED, NOT
+ *   UNDONE. This is the whole reason the UID half was previously kept off the
+ *   overlay, and a naive overlay would in fact undo both:
+ *
+ *     1. RETIREMENT IS A STRUCTURED BOOLEAN, NOT A NAME SUFFIX. Every retired
+ *        row in Table A-1 carries " (Retired)" at the end of its UID Name. That
+ *        suffix is stripped and carried in `retired` instead, so a consumer
+ *        branches on a field rather than on a string match. A name that still
+ *        spells "(Retired)" after the strip throws.
+ *
+ *        SAID AS AN OBSERVATION OF TABLE A-1, WHICH IS WHAT IT IS. PS3.6
+ *        publishes THREE retirement signals and this derives from one of them.
+ *        The governing clause is section 5, "Conventions", one paragraph of four
+ *        sentences: "'RET' is used to indicate that the corresponding Data
+ *        Element, SOP Class, or Transfer Syntax has been retired. Retired items
+ *        are shown ITALICIZED. For retired items, the edition of the Standard in
+ *        parentheses is the edition in which the item last appeared before it
+ *        was retired. When the name of a retired DATA ELEMENT has been reused,
+ *        the retired element has the qualifier '(Retired)' added ..." So the
+ *        italic and the parenthesised edition are the markings and both reach
+ *        UIDs; the "(Retired)" qualifier sentence is scoped to a reused Data
+ *        Element name and does not. Annex A's own intro RESTATES the third
+ *        narrowed to UIDs ("For retired UIDs, ..."); it does not add it - the
+ *        fifth column. Italic and column are CORROBORATIONS and not the
+ *        source; the column especially, for the reason the element registry
+ *        learned one table over, where it also carries DICOS/DICONDE markers and
+ *        reading it as a boolean retires live entries. All three agree on every
+ *        A-1 row of this edition, and `test/dictionary/uids-normative.test.ts`
+ *        measures that, so an edition which retires by italic or column alone
+ *        reds instead of shipping `retired: false`.
+ *     2. FOUR TRANSFER SYNTAX NAMES KEEP THEIR TOOLKIT SHORT FORM. PS3.6 gives
+ *        four Transfer Syntaxes a name with a trailing ": Default Transfer
+ *        Syntax for ..." clause that no DICOM toolkit prints and no consumer
+ *        expects. Those four, and only those four, are cut at their first ": ".
+ *        The short form is DERIVED from the normative name rather than typed
+ *        here, so it cannot drift away from it, and a listed UID whose normative
+ *        name stops carrying that clause throws instead of silently keeping a
+ *        stale hand-written string. See `TOOLKIT_SHORT_FORM_UIDS`.
+ *
+ *   Neither deviation is a correction of PS3.6, and neither is applied to any
+ *   other entry. Everything else in the file is the normative text.
+ *
+ *   Annex A's Table A-3 (Context Group UID Values) and Table A-4 (Template UID
+ *   Values) are deliberately NOT read. They register the codes of DICOM's
+ *   content mapping resource rather than the UIDs a Part 10 file's headers
+ *   carry, and folding thousands of them into the same flat lookup would bury
+ *   the entries this package exists to resolve. Out of scope, stated rather
+ *   than overlooked.
  *
  * Determinism (DICT-05):
  *   - The header comment uses ONLY the pinned Innolitics SHA + the input file
@@ -70,24 +116,13 @@ const NEMA_SHA_FILE = join(NEMA_PART06_ROOT, "SHA.txt");
 const OUT_DIR = join(REPO_ROOT, "src", "dictionary", "generated");
 
 // -----------------------------------------------------------------------------
-// Curated UID table - PS3.6 §A.1 / Table A-1.
+// UID types.
 //
-// Scope: Transfer Syntax UIDs + Well-Known UIDs + a handful of canonical
-// MetaSOPClass / Coding Scheme / Application Context UIDs. SOP Class UIDs come
-// from Innolitics sops.json and are merged at generation time.
-//
-// Stability: this table changes rarely (Transfer Syntax UIDs haven't changed
-// meaningfully in 20+ years; new ones are appended for new image compression
-// formats). When NEMA publishes a new edition, append entries here and bump the
-// pinned Innolitics SHA in the same PR.
+// The union this dictionary publishes. PS3.6's own "UID Type" column carries a
+// wider vocabulary than this (LDAP OID, Mapping Resource, Application Hosting
+// Model, ...); `NEMA_UID_TYPES` below is the closed translation, and a value it
+// does not name throws rather than silently becoming "Other".
 // -----------------------------------------------------------------------------
-
-interface CuratedUid {
-  readonly uid: string;
-  readonly name: string;
-  readonly type: UidType;
-  readonly retired: boolean;
-}
 
 type UidType =
   | "TransferSyntax"
@@ -99,566 +134,6 @@ type UidType =
   | "ApplicationContext"
   | "ServiceClass"
   | "Other";
-
-const CURATED_UIDS: readonly CuratedUid[] = [
-  // ---- Transfer Syntaxes (PS3.6 §A.1, PS3.5 §10) ----
-  {
-    uid: "1.2.840.10008.1.2",
-    name: "Implicit VR Little Endian",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.1",
-    name: "Explicit VR Little Endian",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.1.98",
-    name: "Encapsulated Uncompressed Explicit VR Little Endian",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.1.99",
-    name: "Deflated Explicit VR Little Endian",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.2",
-    name: "Explicit VR Big Endian",
-    type: "TransferSyntax",
-    retired: true,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.50",
-    name: "JPEG Baseline (Process 1)",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.51",
-    name: "JPEG Extended (Process 2 & 4)",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.52",
-    name: "JPEG Extended (Process 3 & 5)",
-    type: "TransferSyntax",
-    retired: true,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.53",
-    name: "JPEG Spectral Selection, Non-Hierarchical (Process 6 & 8)",
-    type: "TransferSyntax",
-    retired: true,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.54",
-    name: "JPEG Spectral Selection, Non-Hierarchical (Process 7 & 9)",
-    type: "TransferSyntax",
-    retired: true,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.55",
-    name: "JPEG Full Progression, Non-Hierarchical (Process 10 & 12)",
-    type: "TransferSyntax",
-    retired: true,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.56",
-    name: "JPEG Full Progression, Non-Hierarchical (Process 11 & 13)",
-    type: "TransferSyntax",
-    retired: true,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.57",
-    name: "JPEG Lossless, Non-Hierarchical (Process 14)",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.58",
-    name: "JPEG Lossless, Non-Hierarchical (Process 15)",
-    type: "TransferSyntax",
-    retired: true,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.59",
-    name: "JPEG Extended, Hierarchical (Process 16 & 18)",
-    type: "TransferSyntax",
-    retired: true,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.60",
-    name: "JPEG Extended, Hierarchical (Process 17 & 19)",
-    type: "TransferSyntax",
-    retired: true,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.61",
-    name: "JPEG Spectral Selection, Hierarchical (Process 20 & 22)",
-    type: "TransferSyntax",
-    retired: true,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.62",
-    name: "JPEG Spectral Selection, Hierarchical (Process 21 & 23)",
-    type: "TransferSyntax",
-    retired: true,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.63",
-    name: "JPEG Full Progression, Hierarchical (Process 24 & 26)",
-    type: "TransferSyntax",
-    retired: true,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.64",
-    name: "JPEG Full Progression, Hierarchical (Process 25 & 27)",
-    type: "TransferSyntax",
-    retired: true,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.65",
-    name: "JPEG Lossless, Hierarchical (Process 28)",
-    type: "TransferSyntax",
-    retired: true,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.66",
-    name: "JPEG Lossless, Hierarchical (Process 29)",
-    type: "TransferSyntax",
-    retired: true,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.70",
-    name: "JPEG Lossless, Non-Hierarchical, First-Order Prediction (Process 14 [Selection Value 1])",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.80",
-    name: "JPEG-LS Lossless Image Compression",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.81",
-    name: "JPEG-LS Lossy (Near-Lossless) Image Compression",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.90",
-    name: "JPEG 2000 Image Compression (Lossless Only)",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.91",
-    name: "JPEG 2000 Image Compression",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.92",
-    name: "JPEG 2000 Part 2 Multi-component Image Compression (Lossless Only)",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.93",
-    name: "JPEG 2000 Part 2 Multi-component Image Compression",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.94",
-    name: "JPIP Referenced",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.95",
-    name: "JPIP Referenced Deflate",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.100",
-    name: "MPEG2 Main Profile / Main Level",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.100.1",
-    name: "Fragmentable MPEG2 Main Profile / Main Level",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.101",
-    name: "MPEG2 Main Profile / High Level",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.101.1",
-    name: "Fragmentable MPEG2 Main Profile / High Level",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.102",
-    name: "MPEG-4 AVC/H.264 High Profile / Level 4.1",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.102.1",
-    name: "Fragmentable MPEG-4 AVC/H.264 High Profile / Level 4.1",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.103",
-    name: "MPEG-4 AVC/H.264 BD-compatible High Profile / Level 4.1",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.103.1",
-    name: "Fragmentable MPEG-4 AVC/H.264 BD-compatible High Profile / Level 4.1",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.104",
-    name: "MPEG-4 AVC/H.264 High Profile / Level 4.2 For 2D Video",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.104.1",
-    name: "Fragmentable MPEG-4 AVC/H.264 High Profile / Level 4.2 For 2D Video",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.105",
-    name: "MPEG-4 AVC/H.264 High Profile / Level 4.2 For 3D Video",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.105.1",
-    name: "Fragmentable MPEG-4 AVC/H.264 High Profile / Level 4.2 For 3D Video",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.106",
-    name: "MPEG-4 AVC/H.264 Stereo High Profile / Level 4.2",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.106.1",
-    name: "Fragmentable MPEG-4 AVC/H.264 Stereo High Profile / Level 4.2",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.107",
-    name: "HEVC/H.265 Main Profile / Level 5.1",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.108",
-    name: "HEVC/H.265 Main 10 Profile / Level 5.1",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.110",
-    name: "JPEG XL Lossless",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.111",
-    name: "JPEG XL JPEG Recompression",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.4.112",
-    name: "JPEG XL",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  { uid: "1.2.840.10008.1.2.5", name: "RLE Lossless", type: "TransferSyntax", retired: false },
-  {
-    uid: "1.2.840.10008.1.2.6.1",
-    // Lowercase "encapsulation" is what PS3.6 Table A-1 prints, verified against
-    // PS3.6 2026c. The capitalized form here was the only remaining name in this
-    // table that did not match the standard character for character.
-    name: "RFC 2557 MIME encapsulation",
-    type: "TransferSyntax",
-    retired: true,
-  },
-  { uid: "1.2.840.10008.1.2.6.2", name: "XML Encoding", type: "TransferSyntax", retired: true },
-  {
-    uid: "1.2.840.10008.1.2.7.1",
-    name: "SMPTE ST 2110-20 Uncompressed Progressive Active Video",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.7.2",
-    name: "SMPTE ST 2110-20 Uncompressed Interlaced Active Video",
-    type: "TransferSyntax",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.2.7.3",
-    name: "SMPTE ST 2110-30 PCM Digital Audio",
-    type: "TransferSyntax",
-    retired: false,
-  },
-
-  // ---- Application Contexts ----
-  {
-    uid: "1.2.840.10008.3.1.1.1",
-    name: "DICOM Application Context Name",
-    type: "ApplicationContext",
-    retired: false,
-  },
-
-  // ---- Well-Known SOP Instance UIDs (PS3.6 §A.1) ----
-  {
-    uid: "1.2.840.10008.1.1",
-    name: "Verification SOP Class",
-    type: "SOPClass",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.20.1",
-    name: "Storage Commitment Push Model SOP Class",
-    type: "SOPClass",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.20.1.1",
-    name: "Storage Commitment Push Model SOP Instance",
-    type: "WellKnownSOPInstance",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.40",
-    name: "Procedural Event Logging SOP Class",
-    type: "SOPClass",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.40.1",
-    name: "Procedural Event Logging SOP Instance",
-    type: "WellKnownSOPInstance",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.42",
-    name: "Substance Administration Logging SOP Class",
-    type: "SOPClass",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.42.1",
-    name: "Substance Administration Logging SOP Instance",
-    type: "WellKnownSOPInstance",
-    retired: false,
-  },
-
-  // ---- Well-Known Frame of Reference UIDs (PS3.6 §A.1) ----
-  {
-    uid: "1.2.840.10008.1.4.1.1",
-    name: "Talairach Brain Atlas Frame of Reference",
-    type: "WellKnownFrameOfReference",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.4.1.2",
-    name: "SPM2 T1 Frame of Reference",
-    type: "WellKnownFrameOfReference",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.4.1.3",
-    name: "SPM2 T2 Frame of Reference",
-    type: "WellKnownFrameOfReference",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.4.1.4",
-    name: "SPM2 PD Frame of Reference",
-    type: "WellKnownFrameOfReference",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.4.1.5",
-    name: "SPM2 EPI Frame of Reference",
-    type: "WellKnownFrameOfReference",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.4.2.1",
-    name: "ICBM 452 T1 Frame of Reference",
-    type: "WellKnownFrameOfReference",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.1.4.2.2",
-    name: "ICBM Single Subject MRI Frame of Reference",
-    type: "WellKnownFrameOfReference",
-    retired: false,
-  },
-
-  // ---- Coding Schemes (Part 16) ----
-  {
-    uid: "1.2.840.10008.2.16.4",
-    name: "DICOM Controlled Terminology",
-    type: "CodingScheme",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.2.16.5",
-    name: "Adult Mouse Anatomy Ontology",
-    type: "CodingScheme",
-    retired: false,
-  },
-  { uid: "1.2.840.10008.2.16.6", name: "Uberon Ontology", type: "CodingScheme", retired: false },
-  {
-    uid: "1.2.840.10008.2.16.7",
-    name: "Integrated Taxonomic Information System (ITIS) Taxonomic Serial Number (TSN)",
-    type: "CodingScheme",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.2.16.8",
-    name: "Mouse Genome Initiative (MGI)",
-    type: "CodingScheme",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.2.16.9",
-    name: "PubChem Compound CID",
-    type: "CodingScheme",
-    retired: false,
-  },
-  { uid: "1.2.840.10008.2.16.10", name: "Dublin Core", type: "CodingScheme", retired: false },
-  {
-    uid: "1.2.840.10008.2.16.11",
-    name: "New York University Melanoma Clinical Cooperative Group",
-    type: "CodingScheme",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.2.16.12",
-    name: "Mayo Clinic Non-radiological Images Specific Body Structure Anatomical Surface Region Guide",
-    type: "CodingScheme",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.2.16.13",
-    name: "Image Biomarker Standardisation Initiative",
-    type: "CodingScheme",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.2.16.14",
-    name: "Radiomics Ontology",
-    type: "CodingScheme",
-    retired: false,
-  },
-  { uid: "1.2.840.10008.2.16.15", name: "RadElement", type: "CodingScheme", retired: false },
-  { uid: "1.2.840.10008.2.16.16", name: "ICD-11", type: "CodingScheme", retired: false },
-  {
-    uid: "1.2.840.10008.2.16.17",
-    name: "Unified numbering system (UNS) for metals and alloys",
-    type: "CodingScheme",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.2.16.18",
-    name: "Research Resource Identification",
-    type: "CodingScheme",
-    retired: false,
-  },
-
-  // ---- SOP Classes whose sops.json name disagrees with PS3.6 Table A-1 ----
-  // Curated entries win on UID collision, so this is where a vendor-input name
-  // defect gets corrected against the standard rather than papered over with a
-  // blanket transform. One entry qualifies today: Innolitics' sops.json carries
-  // "Macular Grid Thickness and Volume Report" for this UID, identical to its
-  // `ciod` field and missing the "Storage" suffix that PS3.6 Table A-1 gives
-  // it. Every other sops.json name matches Table A-1 verbatim.
-  // Source: PS3.6 2026c, Annex A Table A-1 (UID Values), verified 2026-07-28.
-  {
-    uid: "1.2.840.10008.5.1.4.1.1.79.1",
-    name: "Macular Grid Thickness and Volume Report Storage",
-    type: "SOPClass",
-    retired: false,
-  },
-
-  // ---- Query/Retrieve, MWL, Print, Storage Service Classes (canonical SOP Classes) ----
-  {
-    uid: "1.2.840.10008.5.1.4.1.2.1.1",
-    name: "Patient Root Query/Retrieve Information Model - FIND",
-    type: "SOPClass",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.5.1.4.1.2.1.2",
-    name: "Patient Root Query/Retrieve Information Model - MOVE",
-    type: "SOPClass",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.5.1.4.1.2.1.3",
-    name: "Patient Root Query/Retrieve Information Model - GET",
-    type: "SOPClass",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.5.1.4.1.2.2.1",
-    name: "Study Root Query/Retrieve Information Model - FIND",
-    type: "SOPClass",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.5.1.4.1.2.2.2",
-    name: "Study Root Query/Retrieve Information Model - MOVE",
-    type: "SOPClass",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.5.1.4.1.2.2.3",
-    name: "Study Root Query/Retrieve Information Model - GET",
-    type: "SOPClass",
-    retired: false,
-  },
-  {
-    uid: "1.2.840.10008.5.1.4.31",
-    name: "Modality Worklist Information Model - FIND",
-    type: "SOPClass",
-    retired: false,
-  },
-];
 
 // -----------------------------------------------------------------------------
 // Standard VR set (PS3.5 §6.2). Includes 64-bit additions OV/SV/UV (DICOM 2018+).
@@ -800,6 +275,12 @@ function parseVr(raw: string): string[] {
 const EM_DASH = String.fromCodePoint(0x2014);
 
 const NEMA_REGISTRY_TABLES = ["table_6-1", "table_7-1", "table_8-1", "table_9-1"] as const;
+
+/** How the element registry's provenance header names its source tables. */
+const NEMA_ELEMENT_TABLES_LABEL = "Tables 6-1, 7-1, 8-1, 9-1";
+
+/** How the UID registry's provenance header names its source tables. */
+const NEMA_UID_TABLES_LABEL = "Annex A, Tables A-1 and A-2";
 
 /** Lower bound on total registry rows. 2026c has 5,309; a parse that silently
  *  matched a fraction of them must fail rather than quietly shrink the overlay. */
@@ -1078,6 +559,247 @@ function parseNemaRegistry(xml: string): Map<string, NormativeElement> {
 }
 
 // -----------------------------------------------------------------------------
+// NEMA PS3.6 Annex A reader (normative source for the UID registry).
+//
+// Two tables, and they do NOT have the same shape:
+//   Table A-1 "UID Values"                    - 5 columns, and column 4 names the UID Type.
+//   Table A-2 "Well-known Frames of Reference" - 4 columns, and the TABLE is the type: it has
+//                                                no UID Type column at all.
+// Reading A-2 with A-1's column contract would take its "Normative Reference" cell as a type.
+// So the column count and the type source are declared per table and asserted per row.
+//
+// A-2 is read because leaving it out is what made this dictionary look, on measurement, as
+// though it carried seven UIDs the normative source had dropped. It had not: they are in A-2.
+// That is the mirror-only rule doing its job, and it is why the rule says an absence is more
+// likely a parse gap here than a withdrawal there.
+// -----------------------------------------------------------------------------
+
+interface NemaUidTable {
+  readonly id: string;
+  readonly columns: number;
+  /** `undefined` means the row's UID Type cell decides; otherwise every row in the table is this. */
+  readonly type?: UidType;
+}
+
+const NEMA_UID_TABLES: readonly NemaUidTable[] = [
+  { id: "table_A-1", columns: 5 },
+  { id: "table_A-2", columns: 4, type: "WellKnownFrameOfReference" },
+];
+
+/** Lower bound on total Annex A rows. 2026c has 496; see `NEMA_MIN_ROWS` for the argument. */
+const NEMA_MIN_UIDS = 450;
+
+/**
+ * PS3.6's "UID Type" vocabulary to this dictionary's `UidType`, CLOSED.
+ *
+ * A cell this map does not name throws. The alternative - defaulting an unrecognized type to
+ * "Other" - is the shape that lets a future edition quietly reclassify a Transfer Syntax into
+ * the bucket a consumer filters out, with nothing to notice. Four of PS3.6's categories have no
+ * counterpart in the published union and map to "Other" DELIBERATELY and explicitly, which is a
+ * different act from defaulting there.
+ */
+const NEMA_UID_TYPES: Readonly<Record<string, UidType>> = {
+  "SOP Class": "SOPClass",
+  "Meta SOP Class": "MetaSOPClass",
+  "Transfer Syntax": "TransferSyntax",
+  "Well-known SOP Instance": "WellKnownSOPInstance",
+  "Coding Scheme": "CodingScheme",
+  // The registry of DICOM's own UIDs used as a coding scheme (`1.2.840.10008.2.6.1`, DCMUID).
+  // PS3.6 spells its type as a sentence; it is a coding scheme.
+  "DICOM UIDs as a Coding Scheme": "CodingScheme",
+  "Application Context Name": "ApplicationContext",
+  "Service Class": "ServiceClass",
+  // No counterpart in the published union. Mapped explicitly rather than by default.
+  "Application Hosting Model": "Other",
+  "Mapping Resource": "Other",
+  "LDAP OID": "Other",
+  "Synchronization Frame of Reference": "Other",
+};
+
+/**
+ * The Transfer Syntax UIDs whose PS3.6 name is cut at its first ": ".
+ *
+ * PS3.6 names these four with a trailing ": Default Transfer Syntax for ..." clause recording
+ * which Storage class defaults to them. No DICOM toolkit prints that clause and no consumer of
+ * this package expects it, so the short form is what ships. Deliberate, closed, and applied to
+ * nothing else in the file.
+ *
+ * The short form is DERIVED (cut at ": ") rather than typed here on purpose: a hand-written
+ * string is exactly what silently rots when a future edition rewords the name, and this package
+ * has already shipped 174 wrong UID names once. If a listed UID's normative name stops carrying
+ * the clause, `parseNemaUidRegistry` throws instead of keeping a stale short form.
+ */
+const TOOLKIT_SHORT_FORM_UIDS: ReadonlySet<string> = new Set([
+  "1.2.840.10008.1.2", // Implicit VR Little Endian
+  "1.2.840.10008.1.2.4.50", // JPEG Baseline (Process 1)
+  "1.2.840.10008.1.2.4.51", // JPEG Extended (Process 2 & 4)
+  "1.2.840.10008.1.2.4.70", // JPEG Lossless, Non-Hierarchical, First-Order Prediction (...)
+]);
+
+/** How PS3.6 spells a retired UID: the marker is IN the UID Name, not in a column of its own. */
+const RETIRED_SUFFIX = " (Retired)";
+
+/**
+ * Two Table A-1 rows carry the retirement marker AS their whole UID Name, with no name at all
+ * (`1.2.840.10008.5.1.4.1.1.12.77` and `1.2.840.10008.5.1.4.1.1.40`, both last published in
+ * 2015c). PS3.6 withdrew the name along with the class.
+ *
+ * They are EXCLUDED rather than emitted with an empty `name`, and the exclusion is counted and
+ * printed every run rather than silently dropped. The reason is the direction each option fails
+ * in: an entry whose `name` is `""` is a SUCCESSFUL lookup, so a consumer's
+ * `uid(x)?.name ?? "<unknown>"` fallback stops firing and it prints nothing at all, where
+ * `undefined` prints `<unknown>` and is true. Inventing a name from another toolkit's table is
+ * not available either: this generator makes no correction it cannot derive from the pinned
+ * normative bytes, and the bytes publish no name here.
+ */
+const UNNAMED_RETIRED_MARKER = "(Retired)";
+
+interface NormativeUid {
+  readonly uid: string;
+  readonly name: string;
+  readonly type: UidType;
+  readonly retired: boolean;
+}
+
+/** Parse PS3.6 Annex A Tables A-1 and A-2 into normative UID entries, keyed by UID value. */
+function parseNemaUidRegistry(xml: string): {
+  uids: Map<string, NormativeUid>;
+  unnamedRetired: readonly string[];
+} {
+  const out = new Map<string, NormativeUid>();
+  const shortFormsSeen = new Set<string>();
+  const unnamedRetired: string[] = [];
+
+  for (const { id, columns, type: tableType } of NEMA_UID_TABLES) {
+    const table = extractTable(xml, id);
+
+    // Same body/row accounting as the element registry: every `<tr>` is either a header row or
+    // a body row we matched, so a row in a second `<tbody>` or outside one cannot vanish.
+    const bodies: string[] = [];
+    const bodyScan = /<tbody\b[^>]*>([\s\S]*?)<\/tbody>/g;
+    let bm: RegExpExecArray | null;
+    while ((bm = bodyScan.exec(table)) !== null) bodies.push(bm[1] ?? "");
+    if (bodies.length === 0) throw new Error(`part06.xml: ${id} has no <tbody>`);
+    const bodyOpens = (table.match(/<tbody\b/g) ?? []).length;
+    if (bodyOpens !== bodies.length) {
+      throw new Error(
+        `part06.xml: ${id} has ${bodyOpens} <tbody> opens but ${bodies.length} closed sections`,
+      );
+    }
+
+    const rows: string[] = [];
+    for (const body of bodies) {
+      rows.push(...(body.match(/<tr\b[^>]*>[\s\S]*?<\/tr>/g) ?? []));
+    }
+    if (rows.length === 0) throw new Error(`part06.xml: ${id} has no <tr> rows`);
+
+    const headRows = (table.match(/<thead\b[^>]*>[\s\S]*?<\/thead>/g) ?? []).reduce(
+      (n, head) => n + (head.match(/<tr\b/g) ?? []).length,
+      0,
+    );
+    const trOpens = (table.match(/<tr\b/g) ?? []).length;
+    if (trOpens !== rows.length + headRows) {
+      throw new Error(
+        `part06.xml: ${id} has ${trOpens} <tr> opens but matched ${rows.length} body rows ` +
+          `plus ${headRows} header rows`,
+      );
+    }
+
+    for (const row of rows) {
+      const cells = (row.match(/<td\b[^>]*?(?:\/>|>[\s\S]*?<\/td>)/g) ?? []).map((c) =>
+        cellText(c, id),
+      );
+      if (cells.length !== columns) {
+        throw new Error(
+          `part06.xml: ${id} row has ${cells.length} cells, expected ${columns}: ` +
+            JSON.stringify(cells),
+        );
+      }
+      const [uidCell = "", rawName = ""] = cells;
+
+      // A UID is digits and dots. PS3.6 writes them with ZERO WIDTH SPACE line-break hints,
+      // which `cellText` has already removed; this proves it did.
+      if (!/^[0-9]+(?:\.[0-9]+)*$/.test(uidCell)) {
+        throw new Error(`part06.xml: ${id} has a malformed UID cell ${JSON.stringify(uidCell)}`);
+      }
+
+      let type: UidType;
+      if (tableType !== undefined) {
+        type = tableType;
+      } else {
+        const typeCell = cells[3] ?? "";
+        const mapped = NEMA_UID_TYPES[typeCell];
+        if (mapped === undefined) {
+          throw new Error(
+            `part06.xml: ${id} ${uidCell} has an unrecognized UID Type ${JSON.stringify(typeCell)}. ` +
+              `Add it to NEMA_UID_TYPES deliberately rather than defaulting it.`,
+          );
+        }
+        type = mapped;
+      }
+
+      // A row PS3.6 retired AND unnamed. Excluded deliberately; see UNNAMED_RETIRED_MARKER.
+      if (rawName === UNNAMED_RETIRED_MARKER) {
+        unnamedRetired.push(uidCell);
+        continue;
+      }
+
+      // DEVIATION 1: retirement becomes a boolean and leaves the name.
+      const retired = rawName.endsWith(RETIRED_SUFFIX);
+      let name = retired ? rawName.slice(0, -RETIRED_SUFFIX.length).trimEnd() : rawName;
+      if (name.includes("(Retired)")) {
+        throw new Error(
+          `part06.xml: ${id} ${uidCell} still spells retirement in its name after the strip: ` +
+            JSON.stringify(name),
+        );
+      }
+
+      // DEVIATION 2: the four toolkit short forms, derived rather than typed.
+      if (TOOLKIT_SHORT_FORM_UIDS.has(uidCell)) {
+        const cut = name.indexOf(": ");
+        if (cut < 0) {
+          throw new Error(
+            `part06.xml: ${id} ${uidCell} is listed in TOOLKIT_SHORT_FORM_UIDS but its normative ` +
+              `name carries no ": " clause to cut: ${JSON.stringify(name)}. The deviation is no ` +
+              `longer derivable from the normative text - re-decide it rather than hand-writing ` +
+              `the short form.`,
+          );
+        }
+        name = name.slice(0, cut);
+        shortFormsSeen.add(uidCell);
+      }
+
+      if (name === "") throw new Error(`part06.xml: ${id} ${uidCell} has an empty UID Name`);
+      if (name.includes(EM_DASH)) {
+        throw new Error(`part06.xml: ${id} ${uidCell} name carries a banned em dash: ${name}`);
+      }
+      if (out.has(uidCell)) throw new Error(`part06.xml: duplicate UID ${uidCell} in ${id}`);
+
+      out.set(uidCell, { uid: uidCell, name, type, retired });
+    }
+  }
+
+  // A short form that matched nothing is a rule that has stopped applying, and it would go on
+  // "passing" forever. Fail rather than carry a dead entry.
+  for (const uid of TOOLKIT_SHORT_FORM_UIDS) {
+    if (!shortFormsSeen.has(uid)) {
+      throw new Error(
+        `part06.xml: TOOLKIT_SHORT_FORM_UIDS names ${uid}, which Annex A does not carry. ` +
+          `Re-decide the deviation rather than leaving a rule that matches nothing.`,
+      );
+    }
+  }
+
+  if (out.size < NEMA_MIN_UIDS) {
+    throw new Error(
+      `part06.xml: parsed only ${out.size} Annex A UID rows, expected at least ${NEMA_MIN_UIDS}. ` +
+        `The DocBook table shape has probably changed; fix the parser rather than lowering this.`,
+    );
+  }
+  return { uids: out, unnamedRetired };
+}
+
+// -----------------------------------------------------------------------------
 // Emitters
 // -----------------------------------------------------------------------------
 
@@ -1085,7 +807,7 @@ function emitHeader(
   generatorName: string,
   sources: ReadonlyArray<{ path: string; sha256: string }>,
   innoSha: string,
-  normative?: { edition: string; sha256: string },
+  normative?: { edition: string; sha256: string; tables: string; subject: string },
 ): string {
   const lines: string[] = [
     "/* eslint-disable */",
@@ -1096,9 +818,9 @@ function emitHeader(
   ];
   if (normative) {
     lines.push(
-      `// Normative source: NEMA DICOM PS3.6 ${normative.edition} DocBook (Tables 6-1, 7-1, 8-1, 9-1).`,
+      `// Normative source: NEMA DICOM PS3.6 ${normative.edition} DocBook (${normative.tables}).`,
       `//   vendor/nema/part06/<sha>/part06.xml → ${normative.sha256}`,
-      "//   PS3.6 wins per field over the Innolitics mirror on every tag it publishes.",
+      `//   PS3.6 wins per field over the Innolitics mirror on every ${normative.subject} it publishes.`,
     );
   }
   lines.push("// Inputs (path → SHA-256):");
@@ -1264,7 +986,7 @@ function buildTagsTs(
       "generate-dictionary.ts",
       [{ path: "vendor/innolitics/<sha>/attributes.json", sha256: attrSha }],
       innoSha,
-      nema,
+      { ...nema, tables: NEMA_ELEMENT_TABLES_LABEL, subject: "tag" },
     ) +
     `import type { DictionaryEntry } from "../types.js";\n\n` +
     `export const TAGS: { readonly [tag: string]: DictionaryEntry } = {\n` +
@@ -1276,7 +998,7 @@ function buildTagsTs(
       "generate-dictionary.ts",
       [{ path: "vendor/innolitics/<sha>/attributes.json", sha256: attrSha }],
       innoSha,
-      nema,
+      { ...nema, tables: NEMA_ELEMENT_TABLES_LABEL, subject: "tag" },
     ) +
     `export const KEYWORDS: { readonly [keyword: string]: string } = {\n` +
     keywordPairs.map((p) => `  ${escape(p.keyword)}: ${escape(p.tag)},`).join("\n") +
@@ -1290,19 +1012,38 @@ function buildTagsTs(
   return { ts: tagsTs, tagCount: entries.length, keywordCount: keywordPairs.length, stats };
 }
 
+interface UidOverlayStats {
+  readonly shared: number;
+  readonly added: number;
+  readonly mirrorOnly: readonly string[];
+  readonly overridden: Readonly<Record<"name" | "type" | "retired", number>>;
+  readonly shortForms: readonly string[];
+}
+
 function buildUidsTs(
   sops: ReadonlyArray<InnoliticsSop>,
+  normative: ReadonlyMap<string, NormativeUid>,
   innoSha: string,
   sopsSha: string,
-): { ts: string; uidCount: number } {
-  // Merge curated UIDs with Innolitics SOP class UIDs (sops.json).
-  // Curated entries take precedence on UID collision (the curated table is
-  // authoritative for SOP classes that also carry a "retired" flag we know
-  // about).
-  const merged = new Map<string, CuratedUid>();
+  nema: { edition: string; sha256: string },
+): { ts: string; uidCount: number; stats: UidOverlayStats } {
+  interface BuiltUid {
+    readonly uid: string;
+    readonly name: string;
+    readonly type: UidType;
+    readonly retired: boolean;
+  }
+
+  // The Innolitics mirror supplies the base row. PS3.6 Annex A overrides every field it
+  // publishes, Annex-A-only UIDs are appended, and a UID only the mirror carries is KEPT.
+  const merged = new Map<string, BuiltUid>();
+  const consumed = new Set<string>();
+  const mirrorOnly: string[] = [];
+  const overridden = { name: 0, type: 0, retired: 0 };
+  let shared = 0;
 
   for (const s of sops) {
-    if (!/^[0-9.]+$/.test(s.id)) {
+    if (!/^[0-9]+(?:\.[0-9]+)*$/.test(s.id)) {
       throw new Error(`Invalid UID in sops.json: ${s.id}`);
     }
     // `sops.json`'s `name` is already the full PS3.6 Table A-1 "UID Name", e.g.
@@ -1310,17 +1051,48 @@ function buildUidsTs(
     // Appending " Storage" here produced "CT Image Storage Storage" for the 164
     // entries whose name already ends in "Storage", and an equally wrong
     // "... - For Presentation Storage" / "Macular Grid Thickness and Volume
-    // Report Storage" for the other 11. Every one of the 175 was wrong. The
+    // Report Storage" for the other 11. It touched 175 entries and 174 came out
+    // wrong: it landed on the right string for exactly one, whose PS3.6 name
+    // really is "Macular Grid Thickness and Volume Report Storage". "175 wrong"
+    // sat here contradicting the 174 stated everywhere else; the 174 is right. The
     // sibling `ciod` field is the bare CIOD name ("Computed Radiography Image");
-    // `name` is not, and never needed a suffix.
-    merged.set(s.id, { uid: s.id, name: s.name, type: "SOPClass", retired: false });
-  }
-  for (const c of CURATED_UIDS) {
-    if (!/^[0-9.]+$/.test(c.uid)) {
-      throw new Error(`Invalid UID in CURATED_UIDS: ${c.uid}`);
+    // `name` is not, and never needed a suffix. That defect is why this path is
+    // now overlaid by the normative table instead of trusted.
+    const base: BuiltUid = { uid: s.id, name: s.name, type: "SOPClass", retired: false };
+    const norm = normative.get(s.id);
+    if (!norm) {
+      mirrorOnly.push(s.id);
+      merged.set(s.id, base);
+      continue;
     }
-    merged.set(c.uid, c);
+    consumed.add(s.id);
+    shared += 1;
+    if (base.name !== norm.name) overridden.name += 1;
+    if (base.type !== norm.type) overridden.type += 1;
+    if (base.retired !== norm.retired) overridden.retired += 1;
+    merged.set(s.id, { uid: norm.uid, name: norm.name, type: norm.type, retired: norm.retired });
   }
+
+  let added = 0;
+  for (const [uid, norm] of normative) {
+    if (consumed.has(uid)) continue;
+    added += 1;
+    merged.set(uid, { uid: norm.uid, name: norm.name, type: norm.type, retired: norm.retired });
+  }
+
+  // The published shape of the two deviations, so a reader of the run log sees them applied
+  // rather than taking the docblock's word for it.
+  const shortForms = [...TOOLKIT_SHORT_FORM_UIDS]
+    .map((uid) => `${uid} -> ${merged.get(uid)?.name ?? "<missing>"}`)
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+
+  const stats: UidOverlayStats = {
+    shared,
+    added,
+    mirrorOnly: mirrorOnly.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)),
+    overridden,
+    shortForms,
+  };
 
   const sorted = [...merged.values()].sort((a, b) => (a.uid < b.uid ? -1 : a.uid > b.uid ? 1 : 0));
 
@@ -1339,13 +1111,14 @@ function buildUidsTs(
       "generate-dictionary.ts",
       [{ path: "vendor/innolitics/<sha>/sops.json", sha256: sopsSha }],
       innoSha,
+      { ...nema, tables: NEMA_UID_TABLES_LABEL, subject: "UID" },
     ) +
     `import type { UidEntry } from "../types.js";\n\n` +
     `export const UIDS: { readonly [uid: string]: UidEntry } = {\n` +
     lines.join("\n") +
     `\n};\n`;
 
-  return { ts, uidCount: sorted.length };
+  return { ts, uidCount: sorted.length, stats };
 }
 
 // -----------------------------------------------------------------------------
@@ -1397,6 +1170,11 @@ function main(): void {
   console.log(`[gen:dictionary] PS3.6 edition: ${edition} (sha256 ${nemaSha.slice(0, 12)})`);
   const normative = parseNemaRegistry(nemaXml);
   console.log(`[gen:dictionary] normative registry rows: ${normative.size}`);
+  const { uids: normativeUids, unnamedRetired } = parseNemaUidRegistry(nemaXml);
+  console.log(
+    `[gen:dictionary] normative Annex A UID rows: ${normativeUids.size} ` +
+      `(${unnamedRetired.length} retired-and-unnamed rows excluded: ${unnamedRetired.join(", ")})`,
+  );
 
   mkdirSync(OUT_DIR, { recursive: true });
 
@@ -1428,8 +1206,30 @@ function main(): void {
   }
 
   console.log("[gen:dictionary] building uids...");
-  const { ts: uidsTs, uidCount } = buildUidsTs(sops, full, sopsSha);
+  const {
+    ts: uidsTs,
+    uidCount,
+    stats: uidStats,
+  } = buildUidsTs(sops, normativeUids, full, sopsSha, { edition, sha256: nemaSha });
   writeFileSync(join(OUT_DIR, "uids.ts"), uidsTs, "utf8");
+
+  // The same printout the element overlay gets, for the same reason: a re-pin should show what
+  // the normative source moved rather than burying it in the diff. `mirror-only kept` is the
+  // assumption the authority rule rests on, so it is MEASURED every run rather than asserted.
+  console.log(
+    `[gen:dictionary] UID overlay vs PS3.6 ${edition} Annex A: ${uidStats.shared} shared, ` +
+      `${uidStats.added} added, ${uidStats.mirrorOnly.length} mirror-only kept`,
+  );
+  console.log(
+    `[gen:dictionary] UID fields overridden by PS3.6 - name: ${uidStats.overridden.name}, ` +
+      `type: ${uidStats.overridden.type}, retired: ${uidStats.overridden.retired}`,
+  );
+  for (const line of uidStats.shortForms) {
+    console.log(`[gen:dictionary]   toolkit short form ${line}`);
+  }
+  if (uidStats.mirrorOnly.length > 0) {
+    console.log(`[gen:dictionary]   mirror-only UIDs: ${uidStats.mirrorOnly.join(", ")}`);
+  }
 
   console.log(
     `[gen:dictionary] done - tags: ${tagCount}, keywords: ${keywordCount}, uids: ${uidCount}`,

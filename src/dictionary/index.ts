@@ -102,9 +102,11 @@ export function byKeyword(keyword: string): DictionaryEntry | undefined {
 /**
  * Look up a DICOM UID by its dotted-decimal value.
  *
- * Returns `undefined` for unknown UIDs or malformed input. Used by
- * `parseDicom()` (Phase 2) to render human-readable Transfer Syntax names
- * (DICT-06).
+ * Covers PS3.6 Annex A whole: transfer syntaxes, SOP and Meta SOP Classes,
+ * well-known SOP Instances and Frames of Reference, coding schemes and the
+ * rest, current and retired alike. Returns `undefined` for unknown UIDs or
+ * malformed input. Used by `parseDicom()` (Phase 2) to render human-readable
+ * Transfer Syntax names (DICT-06).
  *
  * @example
  *   import { Dictionary } from "@cosyte/dicom";
