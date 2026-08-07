@@ -370,15 +370,17 @@ function underDeclaringCarrier(
       },
     ],
   });
-  // The payload is the carrier's own value up to the end of the fabricated
-  // header: the region every rendering in these messages could have come from.
-  // The filler is left out because it is a constant byte and would only make the
-  // rendering set larger without making it more adversarial.
+  // 🛑 THE PAYLOAD IS THE CARRIER'S WHOLE VALUE, FILLER INCLUDED. A draft cut it
+  // at the end of the fabricated header "because the filler is a constant byte
+  // and would only make the rendering set larger without making it more
+  // adversarial" - and a graded pass measured that false: the sequence fixture's
+  // filler OPENS WITH A NAME (`"BOND^JAMES"`), so the narrowing excluded a
+  // name-bearing region of the very value under test. It hid nothing on this
+  // tree, which is exactly why it had to go: an unmeasured reason for narrowing
+  // a search is the shape this repo loses passes to.
   return {
     raw,
-    payload: Buffer.concat([Buffer.from(CARRIER_TEXT, "ascii"), fabricatedHeader]).toString(
-      "latin1",
-    ),
+    payload: Buffer.concat([Buffer.from(CARRIER_TEXT, "ascii"), tail]).toString("latin1"),
   };
 }
 

@@ -443,10 +443,15 @@ reached a parse and were counted as swept. The fixture is built outside the `try
 off the list, so a delta the helper cannot express fails loudly instead of reading as clean.
 
 **▶ FIGURES. BASE IS `b8a3fb5` AND NO HEAD SHA IS QUOTED, DELIBERATELY** - a pre-merge head sha is
-wrong the moment the PR squash-merges. Head, whole suite: **73 files, 1,219 passing + 1 todo, 0 red.**
-Head tests against base `src/` (**replaced**, not overlaid - `git stash push -- src/`, which leaves
-the committed tree exactly because this slice adds no `src/` file; all 73 files still collect):
-**5 of 1,220 red across 3 files.**
+wrong the moment the PR squash-merges. Head, whole suite: **73 files, 1,220 passing + 1 todo, 0 red.**
+Head tests against base `src/` (**replaced**, not overlaid - `rm -rf src && git checkout b8a3fb5 --
+src`; all 73 files still collect): **5 of 1,221 red across 3 files.** Re-run after the pass-1 remedy
+added the `{n2}` residual row rather than carried forward: it read 5 of 1,220 before.
+
+**🛑 A `git stash push -- src/` DOES NOT PRODUCE THIS FIGURE ONCE THE SLICE IS COMMITTED**, and a
+first attempt at the re-run reported the whole suite green off exactly that mistake: with the change
+already in a commit there is nothing in `src/` to stash, so it measured head against head. Replace the
+directory from the base sha.
 
 **🛑 THAT 5 IS NOT 5 BEHAVIOURAL FINDINGS.** Split it before quoting it.
 
@@ -461,11 +466,52 @@ the committed tree exactly because this slice adds no `src/` file; all 73 files 
   than `20307`, so those message assertions would have passed. They grade the new bound. They are
   **not** evidence that base leaked.
 
+**AND THE `{n2}` RESIDUAL ROW IS GREEN ON BASE BY DESIGN AND MUST STAY THAT WAY** - it pins a
+`PRE-EXISTING` leak, so it has to reproduce on both trees or it is not a residual pin. Confirmed in
+the same run.
+
 **The non-vacuity controls are on the rows that closed, not only on the outcome.** Each rebuilds
 `0.0.14`'s own template over the number the fixture really produces and asserts the widened detector
 still catches **that**; the tripwire finding is pinned directly, by asserting that `20307` is under
 seven digits and that its two high bytes are zero, so a future re-introduction of the floor cannot be
 argued as harmless.
+
+**▶ 🔴 REFUTER PASS 1 REFUTED THIS SLICE, ON A SENTENCE IT ADDED RATHER THAN ON THE GUARD, AND THE
+FINDING IS AN EIGHTH INSTANCE.** The draft's registry docstring listed the surviving `{n}`/`{n2}`
+slots and closed the list with *"Every one of those is a number this parser produced; none is read
+out of a header."* One measurement refuted it. `DICOM_ITEM_CROSSES_SEQUENCE_END`'s `{n2}` is
+`endLimit - cursor.position`, and `endLimit` is the enclosing **Sequence's** declared Value Length off
+its own header while `cursor.position` sits exactly one Item header past the value start - so
+`{n2} + 8` IS that declared length, and 8 is a constant PS3.5 7.5.1 fixes. Reproduced independently
+before the remedy, on the reachable class this very slice established: `"SO\0\0"` renders `20299`
+for `20307`, `"ON\0\0"` renders `20039` for `20047`, `"TH\0\0"` renders `18508` for `18516`, and
+the parse **survives**, so it reaches `Dataset.warnings` and not only `onWarning`.
+
+**🛑 THE WAY IT GOT THERE IS THE LESSON, AND IT IS THIS ITEM'S OWN DISEASE ONE SLOT OVER.** The slot
+had a shipped justification - *"bounded by the buffer"*, with a measurement showing that fabricating
+the `SQ`'s length over `"SMITHSON"` puts `endLimit` past the buffer so the code never fires - and that
+measurement used a **printable** four-byte window. This slice's entire finding is that the printable
+class is **unreachable**. So the slice proved the rule that defeats the argument, then wrote an
+affirmative all-clear over the slot instead of re-measuring it. **A guard whose only evidence is a
+payload class you have just proved unreachable has not been measured at all**, and its residual pin in
+`test/integration/explicit-sq-item-bound.test.ts` was green **by fixture** for exactly that reason.
+
+**The remedy is the CLAIM, not the guard**, which is what the item says and what the grade said.
+`{n2}` is untouched - binding it is a behaviour change and its own unit. The blanket sentence is
+deleted rather than reworded, the slot is named on the exception list in the registry docstring, on
+`itemCrossesSequenceEnd`, in `ParseOptions.strict`'s JSDoc and in the four consumer artifacts, and the
+green-by-fixture pin is retitled to say what it really measures with a new asserted row beside it that
+carries the reachable class, a name-bearing payload, a mutation control across three letter pairs and
+the surviving-parse channel. **`PRE-EXISTING`: `src/parser/sequence.ts` and the factory are
+byte-identical on `b8a3fb5`.**
+
+**▶ AND A MINOR IN THE SAME PASS, ALSO A REASON RATHER THAN A BEHAVIOUR.** The new deident sweep cut
+its payload at the end of the fabricated header, on the stated ground that the filler *"is a constant
+byte and would only make the rendering set larger without making it more adversarial"*. False for the
+sequence fixture, whose filler **opens with a name** (`"BOND^JAMES"`), so the narrowing excluded a
+name-bearing region of the value under test. Re-swept over the whole carrier value: no additional
+offenders, so it hid nothing - which is precisely why the reason had to go rather than be kept because
+it happened to be harmless.
 
 ---
 

@@ -159,9 +159,14 @@ export interface ParseOptions {
    * `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` and
    * `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` rendered `Element.rawBytes.length`
    * through `0.0.14`, which equals the declared Value Length and was reachable
-   * from a fabricated header, and both slots are gone. **The named exception is
-   * `(0002,0000)`'s own declared File Meta group length**, read at a
-   * structurally fixed offset no value can desynchronize the reader onto.
+   * from a fabricated header, and both slots are gone. **The exceptions are
+   * named rather than counted, and there is more than one.** `(0002,0000)`'s
+   * own declared File Meta group length is read at a structurally fixed offset
+   * no value can desynchronize the reader onto. And
+   * `DICOM_ITEM_CROSSES_SEQUENCE_END`'s remaining count is the enclosing
+   * Sequence's declared Value Length minus the 8-byte Item header PS3.5 7.5.1
+   * fixes, so one addition on a published constant reverses it: `PRE-EXISTING`,
+   * disclosed on `itemCrossesSequenceEnd` with its measurement, and not closed.
    * **This is a statement about `w.message` and about nothing else**: the two
    * byte counts still exist on `report.undefinedVrElements[].byteLength` and
    * `report.unauditableSequences[].byteLength`, model fields on a type whose own

@@ -104,6 +104,12 @@ structural fact about DICOM that no reader can resolve from the wire.
   `report.undefinedVrElements[].byteLength` and `report.unauditableSequences[].byteLength`** - model
   fields, on a type documented as not value-free. Narrowing those is a product call rather than a
   defect fix, because a bound empties the field on every well-formed file.
+  **`DICOM_ITEM_CROSSES_SEQUENCE_END`'s remaining-bytes count is a second exception**, `PRE-EXISTING`
+  and not closed: it is the enclosing Sequence's declared Value Length minus the 8-byte Item header
+  PS3.5 7.5.1 fixes, so one addition on a published constant reverses it. Measured on the same
+  reachable length class: a `SQ` length field reading `"SO\0\0"` renders `20299`, and
+  `20299 + 8 = 20307`. The parse survives, so it reaches `ds.warnings`. Asserted by a test row green
+  on both trees.
   **What that closed, measured on an `ST` carrying `"MR BRAIN SMITHSON "` whose Value Length
   under-declares:** under Explicit VR LE the reader desynchronizes onto a fabricated header whose
   declared length is odd, and through `0.0.14` `DICOM_ODD_LENGTH_VALUE_PADDED` rendered **four bytes

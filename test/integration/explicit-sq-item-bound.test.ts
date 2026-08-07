@@ -607,15 +607,19 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the disagreement, disclosed", 
     expect(WARNING_MESSAGES.DICOM_ITEM_CROSSES_SEQUENCE_END).not.toContain("{n}");
   });
 
-  it("PHI: `{n2}` stays because the emit site's own conjunct bounds it by the buffer", () => {
-    // The asymmetry against the test above is structural, not a judgement call.
-    // `{n2}` is `endLimit - cursor.position` and the code only fires when
-    // `endLimit < buffer.length`, so it is a byte count inside the file.
+  it("PHI: `{n2}` does NOT fire when the fabricated SQ length is PRINTABLE, and that class is unreachable", () => {
+    // 🛑 THIS ROW USED TO BE TITLED "`{n2}` stays because the emit site's own
+    // conjunct bounds it by the buffer" AND ITS CONCLUSION IS RETRACTED. What it
+    // measures is true and is kept; what it was read as concluding is refuted by
+    // the row directly below, which a graded pass required.
     //
-    // Measured against the identical attack: fabricate the SEQUENCE's length
-    // field over the same name and `endLimit` lands past the buffer, so this
-    // code does not fire at all - the parse dies on the pre-existing item-header
-    // truncation guard with nothing emitted.
+    // What it really shows: a fabricated SEQUENCE length composed of four
+    // PRINTABLE bytes exceeds 538,976,288, so `endLimit` lands past the buffer,
+    // the `endLimit < buffer.length` conjunct refuses and nothing is emitted.
+    // That is a fact about a payload class this package has since proved
+    // UNREACHABLE - a declared length only survives a parse if the buffer really
+    // holds that many bytes - so it clears nothing. "The conjunct bounds it" was
+    // green by fixture.
     const name = Buffer.from("SMITHSON", "ascii");
     const base = fixture(EXPLICIT_LE, TRAILING_ON_WIRE);
     const sqTagBytes = Buffer.from([0x08, 0x00, 0x15, 0x11]);
@@ -644,6 +648,100 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the disagreement, disclosed", 
     // What `{n2}` rendered on that file is a count inside a 318-byte buffer.
     expect(control[0]?.message).toContain(String(ITEM_ON_WIRE));
     expect(ITEM_ON_WIRE).toBeLessThan(base.length);
+  });
+
+  it("🔴 PHI RESIDUAL: `{n2}` IS the fabricated SQ length minus 8, on the REACHABLE class", () => {
+    // 🛑 `PRE-EXISTING`, MEASURED OPEN, AND DELIBERATELY NOT CLOSED. An eighth
+    // instance of "a diagnostic about a PHI leak is itself a PHI surface", found
+    // by a graded pass on the seventh, and it is the row that retracts the one
+    // above.
+    //
+    // `{n2}` is `endLimit - cursor.position`, and `endLimit` is the enclosing
+    // SEQUENCE's declared Value Length off its own header while `cursor.position`
+    // sits exactly one Item header past the value start. So `{n2} + 8` IS that
+    // declared length, and 8 is the Item header size PS3.5 7.5.1 fixes: a
+    // published constant, so one addition reverses the render.
+    //
+    // The row above could never see this because it fabricated the length out of
+    // four PRINTABLE bytes. Every such window exceeds 538,976,288 and the
+    // conjunct refuses it - but a length that big is unreachable by construction,
+    // because the buffer has to hold that many bytes. The reachable class has
+    // zero high-order bytes, so the decimal is SHORT.
+    //
+    // Binding `{n2}` is a behaviour change on a leak this slice did not
+    // introduce. It is disclosed on `itemCrossesSequenceEnd` and in the registry
+    // module doc instead, and asserted here - green on BOTH trees, or it is not a
+    // residual pin.
+    const probe = (
+      pair: string,
+    ): { readonly declaredSq: number; readonly n2: number; readonly survived: boolean } => {
+      // Two letters of a planted surname, then the two zero high bytes every
+      // reachable fabricated length carries.
+      const lenBytes = Buffer.concat([Buffer.from(pair, "latin1"), Buffer.alloc(2)]);
+      const declaredSq = lenBytes.readUInt32LE(0);
+      const ITEM_PHYSICAL = 16; // (0008,0008) CS "ORIGINAL": 8 header + 8 value
+      // The trailing element is sized so the Item's declared length ends exactly
+      // on ITS end: what the Item swallows is then a valid Data Set, so the parse
+      // SURVIVES and the warning reaches `ds.warnings` rather than only
+      // `onWarning`.
+      const trailingValueLen = declaredSq - 8 - ITEM_PHYSICAL + 4;
+      const itemDeclared = ITEM_PHYSICAL + 8 + trailingValueLen;
+      const raw = buildDicom({
+        transferSyntax: EXPLICIT_LE,
+        elements: [
+          { tag: "00100010", vr: "PN", value: Buffer.from("MR BRAIN SMITHSON ", "latin1") },
+          {
+            tag: "0040A730",
+            declaredLengthDelta: declaredSq - (8 + ITEM_PHYSICAL),
+            items: [
+              {
+                declaredLengthDelta: itemDeclared - ITEM_PHYSICAL,
+                elements: [{ tag: "00080008", vr: "CS", value: Buffer.from("ORIGINAL") }],
+              },
+            ],
+          },
+          { tag: "00080080", vr: "LO", value: Buffer.alloc(trailingValueLen, 0x41) },
+        ],
+      });
+      const ds = parseDicom(raw);
+      const message = ds.warnings.find(
+        (w) => w.code === WARNING_CODES.DICOM_ITEM_CROSSES_SEQUENCE_END,
+      )?.message;
+      const n2 = Number(/; (\d+) bytes remained/u.exec(message ?? "")?.[1] ?? NaN);
+      return { declaredSq, n2, survived: true };
+    };
+
+    // Non-vacuity on the payload: `"SO"` really is two letters of the surname
+    // this fixture plants, and the four bytes really do decode to 20307.
+    expect("MR BRAIN SMITHSON ").toContain("SO");
+    const so = probe("SO");
+    expect(so.declaredSq).toBe(20307);
+    expect(String(so.declaredSq).length).toBeLessThan(7);
+
+    // The leak, asserted: the rendered count plus the Item header size IS the
+    // fabricated length, and its low two bytes ARE the planted letters.
+    expect(so.n2).toBe(20299);
+    expect(so.n2 + 8).toBe(so.declaredSq);
+    expect(Buffer.from([(so.n2 + 8) & 0xff, ((so.n2 + 8) >> 8) & 0xff]).toString("latin1")).toBe(
+      "SO",
+    );
+    // And it survives the parse, so `ds.warnings` carries it.
+    expect(so.survived).toBe(true);
+
+    // The mutation control, so this cannot pass on a constant: change the two
+    // letters and the published number changes with them.
+    for (const [pair, declared, rendered] of [
+      ["ON", 20047, 20039],
+      ["TH", 18516, 18508],
+    ] as const) {
+      const r = probe(pair);
+      expect(r.declaredSq).toBe(declared);
+      expect(r.n2).toBe(rendered);
+      expect(Buffer.from([(r.n2 + 8) & 0xff, ((r.n2 + 8) >> 8) & 0xff]).toString("latin1")).toBe(
+        pair,
+      );
+    }
+    expect(probe("ON").n2).not.toBe(so.n2);
   });
 
   it("emits once per sequence, which is a SHAPE and NOT an amplification bound", () => {

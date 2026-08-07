@@ -166,14 +166,30 @@ export interface DicomParseWarning {
  * - {@link fileMetaGroupLengthMismatch}'s `{n}` is a raw declared length and
  *   stays, because `parseFileMeta` reads it in a frame nothing can
  *   desynchronize. Its own JSDoc carries the argument and the measurement.
+ * - **🔴 {@link itemCrossesSequenceEnd}'s `{n2}` IS A SECOND ONE, `PRE-EXISTING`,
+ *   AND A DRAFT OF THIS BULLET SAID IT WAS NOT.** It is `endLimit -
+ *   cursor.position`, and `endLimit` is the **enclosing Sequence's declared
+ *   Value Length off its own header**, so it is `declaredSqLength - 8` where 8
+ *   is the Item header PS3.5 7.5.1 fixes. One addition on a published constant
+ *   reverses it. Measured on a name-bearing payload, with the same reachable
+ *   length class this slice established: a `SQ` whose length field reads
+ *   `"SO\0\0"` renders `20299`, and `20299 + 8 = 20307 = readUInt32LE("SO\0\0")`.
+ *   It tracks - `"ON\0\0"` renders `20039` for `20047`, `"TH\0\0"` renders
+ *   `18508` for `18516` - and the parse **survives**, so it reaches
+ *   `Dataset.warnings` and not only `onWarning`. Binding it is a behaviour
+ *   change on a leak this slice did not introduce, so it is disclosed here and
+ *   in {@link itemCrossesSequenceEnd}, and asserted by a row in
+ *   `test/integration/explicit-sq-item-bound.test.ts` that is green on both
+ *   trees.
  * - {@link embeddedAttributeRemoved}'s `{n}` is how many whole Data Elements the
  *   embedded-attribute scanner counted inside a value, {@link
- *   itemCrossesSequenceEnd}'s `{n2}` is how many bytes remained inside the
- *   sequence, {@link pixelDataLengthMismatch}'s `{n2}` is a size this parser
- *   multiplied out of the image description attributes, {@link
- *   unsupportedCharset}'s `{n}` is a value index, and {@link
- *   undefinedVrNotAuditable}'s `{n2}` is a byte offset. Every one of those is a
- *   number this parser produced; none is read out of a header.
+ *   pixelDataLengthMismatch}'s `{n2}` is a size this parser multiplied out of
+ *   the image description attributes, {@link unsupportedCharset}'s `{n}` is a
+ *   value index, and {@link undefinedVrNotAuditable}'s `{n2}` is a byte offset.
+ *   **No sentence here says that list is exhaustive**: a draft wrote "every one
+ *   of those is a number this parser produced; none is read out of a header"
+ *   over exactly the slot above and a graded pass refuted it in one measurement.
+ *   The list is what has been measured, not a clearance.
  *
  * **{@link undefinedVrNotAuditable} and {@link sequenceNotAuditable} used to be
  * on the exception list and are not any more.** Their `{n}` was
@@ -812,16 +828,32 @@ export function sqNotDescended(position: DicomPosition, tag: Tag): DicomParseWar
  * factory cannot be handed the value, so no future call site can put it back
  * without changing this signature.
  *
- * **`{n2}` stays, and the asymmetry is structural rather than a judgement call.**
- * It is `endLimit - cursor.position` under the emit site's `endLimit <
- * buffer.length` conjunct, so it is bounded by the buffer: a byte count inside
- * the file, which is the class this package's frozen-registry contract already
- * names. Measured against the same attack: fabricating the **`SQ`**'s length
- * field over `"SMITHSON"` puts `endLimit` past the buffer, so this code does not
- * fire at all and the parse dies on the pre-existing item-header truncation
- * guard. Both measurements are pinned in
- * `test/integration/explicit-sq-item-bound.test.ts` with a name-bearing payload
- * and a mutation control, and
+ * **🔴 `{n2}` STAYS, AND THE ARGUMENT THAT IT IS STRUCTURAL IS RETRACTED. IT IS A
+ * DISCLOSED RESIDUAL NOW, NOT AN ASYMMETRY.** It is `endLimit -
+ * cursor.position` under the emit site's `endLimit < buffer.length` conjunct,
+ * and "bounded by the buffer" was read as "not read out of a header". It is:
+ * `endLimit` is the enclosing **Sequence's** declared Value Length off its own
+ * header, and `cursor.position` sits exactly one Item header past the value
+ * start, so `{n2} + 8` is that declared length and 8 is the Item header size
+ * PS3.5 7.5.1 fixes. One addition on a published constant reverses it.
+ *
+ * **The retracted measurement is the lesson, not the leak.** It fabricated the
+ * `SQ`'s length field over `"SMITHSON"` - four printable bytes, so `endLimit`
+ * landed past the buffer, the code did not fire, and the conjunct looked like a
+ * bound. That is the payload class this package has since proved **unreachable**:
+ * a declared length only survives a parse if the buffer really holds that many
+ * bytes, so every fabricated length that reaches this code has zero high-order
+ * bytes and a short decimal. Re-measured on that class: a `SQ` length field
+ * reading `"SO\0\0"` renders `20299`, and `20299 + 8 = 20307`, recovering
+ * `"SO"`; `"ON\0\0"` renders `20039`, `"TH\0\0"` renders `18508`; the parse
+ * **survives**, so it reaches `Dataset.warnings`, not only `onWarning`.
+ *
+ * `PRE-EXISTING` and deliberately not closed here: binding `{n2}` is a behaviour
+ * change, and this package's rule when a claim and a guard disagree is to
+ * correct the claim. Asserted by a row in
+ * `test/integration/explicit-sq-item-bound.test.ts` that is green on both trees,
+ * with a name-bearing payload and a mutation control, so no reader can take this
+ * paragraph for an all-clear;
  * `test/integration/phi-diagnostic-surface.test.ts` holds the slot.
  *
  * ## Two things it does NOT do
