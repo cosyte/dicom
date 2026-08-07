@@ -12,6 +12,13 @@ import { describe, expect, test } from "vitest";
  * have overwhelmingly been claim defects, so the citations are checked mechanically against the
  * SHA-pinned normative documents under `vendor/nema/` rather than read once by a human.
  *
+ * 🛑 WHAT IS CHECKED IS A CLAUSE WRITTEN WITH ITS PART BESIDE IT, and no name or comment in this
+ * file may round that up to "every citation". `CITATION_RE` keys on a label adjacent to its `PS3.N`
+ * token, so a second label in a list (`PS3.5 §7.5.1, §7.8.1`) and a bare `section X` whose part was
+ * named a sentence earlier are read by a human and not by this gate. Widening the regex to rescue
+ * the word "every" is the wrong direction and was refused deliberately; `docs-content/cookbook.md`
+ * states the same boundary where a reader meets it.
+ *
  * FOUR CHECKS, AND WHY EACH ONE EXISTS:
  *
  *  1. THE PIN IS A PRECONDITION. Every part is re-hashed before it is read, exactly as the
@@ -290,10 +297,11 @@ describe("documentation spec citations", () => {
     expect(FILES.length).toBeGreaterThan(1);
   });
 
-  test("every cited clause of a vendored PROSE part resolves to exactly one section", () => {
-    // The scope is stated in the name rather than in a comment, because a name that overstates is
-    // the thing this whole file is about. PS3.6 is a registry of tables, not numbered prose: the
-    // docs cite it for attribute identity, and that is checked by its own case below.
+  test("a clause cited WITH ITS PART, in a vendored prose part, resolves to exactly one section", () => {
+    // The scope is in the name rather than in a comment, because a name that overstates is the
+    // thing this whole file is about, and an earlier name here did: it said "every cited clause"
+    // over a check that never sees a label written away from its part. PS3.6 is a registry of
+    // tables, not numbered prose: the docs cite it for attribute identity, checked by its own case.
     const refusals: string[] = [];
     const seen = new Set<string>();
     let checked = 0;
@@ -348,9 +356,16 @@ describe("documentation spec citations", () => {
   });
 
   test("a PARENT clause is refused for a sentence that lives in its subsection", () => {
-    // The control for `bodyOf` reading own text only. Both pairs here are the exact confusions
+    // The control for `bodyOf` reading own text only. Both pairs are the exact confusions
     // `CLAUDE.md` records as having cost a refusal in this package: §7.5 quoted for a §7.5.2 fact,
-    // and §E.1 quoted for a §E.1.1 one. A body that swallowed subsections would pass both.
+    // and §E.1 quoted for an §E.1.1 one. A body that swallowed subsections would pass both.
+    //
+    // 🛑 THE CHILD MUST REALLY BE THE PARENT'S SUBSECTION, OR THE CONTROL IS INERT. A first draft
+    // paired §7.5 with §7.8.1, which is not under §7.5 at all, so the WIDE body a revert restores
+    // stops at §7.6 and answers `0` for it too: the case could not go red on a revert while three
+    // artifacts described it as the net for that class. Check the labels, not the story. Re-measure
+    // it by reverting `bodyOf` to same-or-shallower; with §7.5.2 this case reds, with §7.8.1 it did
+    // not.
     const cases: readonly {
       part: VendoredPart;
       parent: string;
@@ -360,8 +375,8 @@ describe("documentation spec citations", () => {
       {
         part: "PS3.5",
         parent: "7.5",
-        child: "7.8.1",
-        sentence: "The scope of the reservation is just within the Item",
+        child: "7.5.2",
+        sentence: "Delimitation of the last Item of a Sequence of Items",
       },
       { part: "PS3.15", parent: "E.1", child: "E.1.1", sentence: "inserted in or added to" },
     ];

@@ -26,12 +26,16 @@ name is deliberately narrow.
   re-reads it to confirm that every `(gggg,eeee) Name` pair written on this site is the registry's
   own.
 - **Encoding rules** are cited to **PS3.5 2026c** and **de-identification rules to PS3.15 2026c**,
-  both vendored and pinned the same way (`vendor/nema/part05/`, `vendor/nema/part15/`). Two different
-  strengths of check run over those, and the difference is worth stating rather than blurring:
-  **every** clause cited on this site is resolved in the pinned document by collecting all candidate
-  sections with that label and requiring exactly one, and each clause the text leans on for a
-  normative statement is additionally required to carry that sentence **in its own body, not in a
-  subsection**. A label proves the label exists; it does not prove the body says anything.
+  both vendored and pinned the same way (`vendor/nema/part05/`, `vendor/nema/part15/`). Two checks of
+  different strength run over those, and **what each one covers is worth stating exactly, because a
+  citation gate that is described as total is a claim of its own**. A clause written in the form
+  `PS3.N §X`, `PS3.N section X` or `PS3.N Annex X`, with the label next to its part, is resolved in
+  the pinned document by collecting all candidate sections carrying that label and requiring exactly
+  one. **A label the text writes away from its part is not covered**: a second label in a list
+  (`§7.5.1, §7.8.1`) and a bare `section X` whose part was named a sentence earlier are both read by
+  a human, not by the gate. On top of that, each clause the text leans on for a normative statement
+  is required to carry that sentence **in its own body, not in a subsection**, because a label proves
+  the label exists and proves nothing about what the body says.
 - **No numbered clause of PS3.3, PS3.4, PS3.10 or PS3.16 is cited anywhere on this site.** Those
   parts are not vendored here, so a clause number for one could not be checked against anything, and
   a citation nobody can check is worse than none. Where an IOD-level or file-format rule matters, the

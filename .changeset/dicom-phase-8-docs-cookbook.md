@@ -7,14 +7,20 @@ Docs, cookbook and examples: the roadmap's final phase, plus the gates that keep
 **A cookbook that covers the jobs a metadata parser is actually handed.** Four new recipes, every one
 executable in CI: extract metadata and index a folder of studies, build routing keys (hierarchy UIDs,
 Accession Number, Patient ID paired with its issuer), read pixel-interpretation metadata safely, and
-bridge to FHIR `ImagingStudy` and HL7 v2. The FHIR recipe cites the `ImagingStudy` "Mappings for
-DICOM" tab, which is the authoritative crosswalk.
+bridge to FHIR `ImagingStudy` and HL7 v2. The FHIR recipe works from the `ImagingStudy` "Mappings for
+DICOM" tab and says which FHIR that is: the URL is the continuous build, not a balloted release, so
+the recipe tells you to pin the mappings page for the FHIR version your integration targets.
 
-**The site's citations are checked against the SHA-pinned normative documents.** A new gate re-hashes
+**A clause citation written with its part beside it is checked against the SHA-pinned normative
+documents, and the gate's coverage is stated rather than rounded up.** A new gate re-hashes
 the vendored PS3.5, PS3.6 and PS3.15 2026c DocBook sources as a precondition, then runs two checks of
-different strength. Every clause citation of a vendored **prose** part (PS3.5, PS3.15) is resolved by
-collecting **every** candidate section carrying that label and requiring exactly one, so zero and two
-are both refusals and a first-match read cannot take the table of contents. Each clause the text leans
+different strength. A clause of a vendored **prose** part (PS3.5, PS3.15) written with its label next
+to its part (`PS3.N §X`, `PS3.N section X`, `PS3.N Annex X`) is resolved by collecting **every**
+candidate section carrying that label and requiring exactly one, so zero and two are both refusals and
+a first-match read cannot take the table of contents. **The gate's coverage is stated rather than
+rounded up to "every citation": a label the text writes away from its part**, a second label in a list
+or a bare `section X` whose part was named a sentence earlier, **is not seen**, and the cookbook says
+so where a reader will meet it. Each clause the text leans
 on for a normative statement is additionally required to carry that sentence **in its own body, not in
 a subsection** (a body that swallowed subsections would certify `§7.5` for a `§7.5.2` fact and `§E.1`
 for an `§E.1.1` one, which are the two confusions this package has already paid for; both are pinned
