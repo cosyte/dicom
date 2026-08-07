@@ -1,5 +1,285 @@
 # Changelog
 
+## 0.0.15
+
+### Patch Changes
+
+- 9273a9d: Two Tier-3 fatal messages stop rendering the bytes left in the buffer, because in a Sequence Item
+  that count is the Item's own declared length (`DICOM-DIAGNOSTIC-PHI-RESIDUALS`)
+
+  The ninth instance of "a diagnostic about a PHI leak is itself a PHI surface", and the first whose
+  shift is not a constant.
+
+  WHAT SHIPS. Through `0.0.14` `ELEMENT_LENGTH_EXCEEDS_BUFFER` and `FILE_META_GROUP_LENGTH_OVERRUNS`
+  each filled an `{n}` slot from `buffer.length - cursor.position`. Both slots are gone, and so are the
+  parameters: `elementLengthExceedsBuffer(buffer, offset)` and `fileMetaGroupLengthOverruns(buffer,
+offset)` take two arguments now, so no call site can put either number back. `{n}` still exists in the
+  registry and is filled by exactly two entries whose number nobody on the wire chose:
+  `SQ_NESTING_DEPTH_EXCEEDED` renders this library's own `NESTING_DEPTH_LIMIT`, and
+  `INFLATED_PAYLOAD_EXCEEDS_CAP` renders the cap the caller passed in. No parse moves, no file that
+  threw stops throwing, `err.code` is unchanged everywhere and `err.byteOffset` still locates the
+  element.
+
+  BREAKING FOR STRING-MATCHERS: the two message texts change. A consumer matching on either string
+  stops matching. Neither code changed.
+
+  WHY A COUNT BOUNDED BY BYTES PRESENT IS STILL THE SENDER'S NUMBER. The old defence was that
+  `buffer.length - cursor.position` cannot exceed the input, which bounds the number's MAGNITUDE and
+  says nothing about its CONTENT. `parseSequence` parses a defined-length Item from a SLICE, so inside
+  one the buffer IS that Item and `buffer.length` IS the Item's 32-bit Value (Item) Length off its own
+  header. The message publishes `byteOffset` beside the count and `cursor.position` is that offset plus
+  the header just read, so an addition returns the declared length. A raw 32-bit length field a sender
+  wrote is already the class this registry refuses everywhere else, and shifting one by an amount the
+  reader can compute does not change its class.
+
+  MEASURED, WITH THE DECLARED LENGTH READ BACK OFF THE WIRE RATHER THAN ASSERTED AGAINST A LITERAL. A
+  synthetic file declaring an Item Length of 21320: the message read 21312 with the over-declaring
+  element first in the Item, 21288 behind one 24-byte element, and 21272 behind one 40-byte element.
+  THE SHIFT IS `cursor.position`, SO IT IS VARIABLE, which is why the remedy is the factory signature
+  rather than a filter: a filter would have to know the frame, and the factory cannot.
+
+  WHAT THE DETECTOR CAN AND CANNOT SEE HERE, AND IT IS THE HALF THAT TRANSFERS. `#92` added a
+  `length-less-item-header` arm to the re-encoding detector in
+  `test/integration/fatal-diagnostic-surface.test.ts` that subtracts exactly 8, and said on the constant
+  that it covers ONE offset. Pointed at this leak it behaves exactly as documented: it returns the 21312
+  shape and reads CLEAN on 21288 and 21272, which are the same leak on the same fixture. Both results
+  are pinned as rows, beside a DIRECT render of 21320 that the `length` arm does catch, so the clean
+  results are the arms' limit rather than a payload carrying nothing. A ZERO FROM THIS DETECTOR IS A
+  GAP, NOT A CLEARANCE. The arm is still not widened to a range, for the reason `#92` gave: a hunt with
+  nothing to hunt has no non-vacuity control, and what clears the class is the signature.
+
+  THE COST IS STATED RATHER THAN GLOSSED. `FILE_META_GROUP_LENGTH_OVERRUNS` is raised at the root and
+  nowhere else, where `buffer.length` is the caller's own input and the count leaked nothing. It loses
+  the number anyway. A bound that holds only because of where a function happens to be called from is
+  not a bound, and the sibling that shares the expression is raised inside a slice, so leaving one slot
+  open is exactly the shape `#88` measured relocating a leak onto a sibling rendering the identical
+  fixture. Both diagnostics are correspondingly less informative: neither says how far the read got.
+
+  NOT IN SCOPE, AND NAMED SO IT IS NOT READ AS CLOSED. `report.removedPrivateTags`,
+  `report.unauditableSequences[].tag`, `uidMap`, `contextPath` and the two `byteLength` fields are model
+  fields on a type whose own docs say it is not a value-free surface, not messages, and a bound empties
+  them on every well-formed file. `DicomParseError.snippet` is still 16 raw source bytes and is still
+  documented as PHI. `ds.warnings[].message` is still NOT unconditionally safe to log.
+
+- 2cf2ab0: `DICOM_ITEM_CROSSES_SEQUENCE_END` stops printing how many bytes remained inside the sequence, because
+  that count was the sequence's own declared length shifted by an amount the reader can compute
+  (`DICOM-DIAGNOSTIC-PHI-RESIDUALS`)
+
+  The eighth instance of "a diagnostic about a PHI leak is itself a PHI surface". Its defence and its
+  pinning test were both green, and both were green BY FIXTURE, which is the more valuable half.
+
+  WHAT SHIPS. Through `0.0.14` the message read "`{n2}` bytes remained inside the sequence", filled from
+  `Math.max(0, endLimit - cursor.position)`. `endLimit` is `valueStart + explicitLength`, the enclosing
+  SEQUENCE's declared Value Length read off its own header, and `cursor.position` is the crossing item's
+  header start plus 8, so the rendered count IS that declared length less the bytes of the sequence
+  already consumed. An addition the reader can compute reverses it: on the sequence's FIRST item the
+  shift is just the 8-byte Item header (PS3.5 2026c section 7.1.1's 4-byte tag plus section 7.5.1's
+  4-byte Item Length), and with one 24-byte item ahead of it the same fixture renders 20275 against the
+  same declared 20307, a shift of 32. Both shapes are pinned; "less 8" as a universal was refused by a
+  graded pass. `itemCrossesSequenceEnd` takes
+  `(position, tag)` now; the Item's own declared length was already bound out of that signature, and
+  this is the second number to go the same way. The tag slot still carries the constant `FFFEE000`, and
+  `position.byteOffset` still locates the item. Which codes fire is unchanged and no parse moves.
+
+  A RAW WIRE NUMBER SHIFTED BY A CONSTANT THE READER CAN COMPUTE IS THE RAW WIRE NUMBER. The registry's
+  own rule allowed a number this parser "derived - a count it kept, an offset it counted, a remainder
+  the buffer bounds". The third clause is deleted rather than reworded: the `endLimit < buffer.length`
+  conjunct at the emit site bounds the rendered number's MAGNITUDE and says nothing about its CONTENT,
+  and that reading is what admitted this leak for four releases.
+
+  GREEN BY FIXTURE, TWICE, ON THE SAME PAYLOAD CLASS. The comment and the pinning row both rested on
+  that conjunct, and the fixture behind them only ever fabricated the sequence length out of four
+  PRINTABLE bytes. Every such window exceeds 538,976,288, so `endLimit` landed past the buffer and the
+  conjunct refused - but a length that big is unreachable by construction, because the buffer has to
+  hold that many bytes for the parse to get there. The reachable class has zero high-order bytes and
+  therefore a SHORT decimal. A TEST THAT PASSES BECAUSE ITS FIXTURE CANNOT REACH THE FAILING CASE IS
+  NOT EVIDENCE. The row is kept, because what it measures is true; what it was read as concluding is
+  retracted.
+
+  AND THE DETECTOR READ CLEAN ON IT, WHICH IS THE GAP THIS RELEASE ALSO CLOSES. Every arm of the
+  re-encoding detector in `test/integration/fatal-diagnostic-surface.test.ts` hunted a rendering EQUAL
+  to a typed read of a payload window, so a rendering SHIFTED by a constant was invisible to all of
+  them even with the digit floor removed. Measured on the `"SO\0\0"` payload that file already carries:
+  the shipped template returned no findings under the whole detector, while a DIRECT render of the same
+  length returned the `length` hit, so the detector was working and the miss was structural. A
+  `length-less-item-header` arm returns `20299 == "SO\0\0"`. THAT ARM COVERS ONE OFFSET AND IS NOT A
+  GENERAL NET, which is stated on the constant rather than left to be discovered: it hunts the first-item
+  shift of 8, so on the 32-byte shape above it would still have read clean. It is not widened to
+  a range, for the same reason the missing 2-byte-as-`uint16` arm beside it is still named rather than
+  armed: a hunt with nothing to hunt has no non-vacuity control, and what clears this class is the
+  factory signature, not the arm. A GUARD WITH A FLOOR HAS NOT CLEARED ANYTHING BELOW THE FLOOR, AND A
+  DETECTOR WITH NO OFFSET ARM HAS NOT CLEARED A SHIFTED RENDERING.
+
+  THIS ONE REACHES `ds.warnings` ON A SURVIVING PARSE, unlike the three instances before it, which
+  reached `onWarning` on a file the parse then refused or `report.warnings` on the de-identify channel.
+  So it lands on the channel a consumer is most likely to log. Measured on a synthetic, name-bearing
+  fixture whose planted letters are read back OFF THE WIRE rather than asserted against a literal:
+  `"SO"` rendered 20299 of a declared 20307, `"ON"` 20039 of 20047, `"TH"` 18508 of 18516, and the two
+  low bytes of each declared length are two letters of the planted surname.
+
+  WHAT IT COSTS, STATED RATHER THAN MINIMISED. A consumer reading the message no longer learns how much
+  of the sequence was left when the item over-ran it. Unlike the two `deidentify()` codes closed
+  alongside it, this number has no model field, so nothing publishes it any more; the parsed sequence
+  and `position.byteOffset` are what remain. The warning still says the file's two length fields
+  disagree, which is the disclosure it exists for.
+
+  THE EXCEPTION LIST STOPS BEING COPIED, AND NO COUNT OF THE COPIES IS QUOTED. "Which numeric slots are
+  exempt from the signature bound" is stated where the strings are - the `WARNING_MESSAGES` docblock in
+  `src/parser/warnings.ts` - and `README.md`, `docs-content/limitations.md`,
+  `docs-content/troubleshooting.md`, `docs-content/spec-notes-tolerance.md` and `ParseOptions.strict`'s
+  JSDoc name that docblock instead of carrying their own. A numeral is deliberately absent: this lineage
+  has already corrected such a count twice, and the rule it wrote is that a count corrected twice is
+  deleted rather than incremented. The pending `dicom-membership-render-tag.md` keeps its own statement,
+  which is not false; only the single clause this collapse falsified was deleted from it, and
+  `documentation/agent-notes.md` still argues the same exception in full, which is the record it exists
+  to be. Name the sink, do not restate its cost.
+
+  STILL A PRODUCT CALL AND UNTOUCHED: `report.removedPrivateTags`, `report.unauditableSequences[].tag`,
+  `report.uidMap`, `contextPath` and the two `byteLength` fields are model fields, not messages. A bound
+  on any of them empties the field on every well-formed file.
+
+  FIGURES. Base `ce33ec4`. Head, whole suite: 73 files, 1,223 passing + 1 todo, 0 red. Head tests
+  against base `src/` (replaced by file copy, not overlaid): 7 of 1,224 red across 3 files. Split before
+  quoting. FOUR are behavioural, because base really put the number in a live message: the two closure
+  pins, whose digit runs on base contain `20299` and `20275` respectively; the row asserting the message
+  carries neither length, which on base contains the remaining `16`; and the printable-class row, whose
+  live control message on base differs from the frozen template. TWO assert the registry template has no
+  `{n2}` slot. ONE is the factory-arity row, which fails on its arity line before reaching any message
+  assertion and is not evidence that base leaked. Re-measured after the graded pass, which is what added
+  the multi-item row.
+
+- b8a3fb5: A tag in a warning message is checked for membership in PS3.6's element registry now, and the
+  parser's own codes no longer render a raw number read off an element header. This closes the fifth
+  and sixth instances of "a diagnostic about a PHI leak is itself a PHI surface".
+
+  **⚠ BREAKING FOR STRING-MATCHERS, AND FOR ANYONE WHO PARSES A TAG BACK OUT OF A MESSAGE.**
+  `w.code` is unchanged everywhere, which codes fire is unchanged, and no parse moves. What changes is
+  the prose of six registry entries and what two of the slots contain.
+
+  **`renderTag` is a MEMBERSHIP test.** It renders a tag only when PS3.6's element registry carries a
+  **literal row** for it, and `<withheld>` otherwise. Through `0.0.14` it validated a tag's shape, and
+  a shape test admits all 2^32 tags, so it could not refuse a tag a lying Value Length composed out of
+  somebody's value. Measured on a synthetic, name-bearing payload: an `ST` carrying
+  `"MR BRAIN SMITHSON "` whose Value Length under-declares by 12 desynchronizes the Explicit VR LE
+  reader onto a fabricated header whose declared length is odd, and `DICOM_ODD_LENGTH_VALUE_PADDED`
+  rendered four bytes of the name as its tag (`4E495320`, `"IN S"` in wire order) **and four more as
+  its decimal length** - eight consecutive payload bytes in one message, each reversible with one typed
+  read. `renderVr` bounds two bytes against the 34 VRs PS3.5 2026c section 6.2 defines; this is the
+  same trade against a set of 5,221.
+
+  **A repeating-group family row does not count as membership, and that distinction is load-bearing.**
+  `(50xx,xxxx)` Curve Data leaves the whole 16-bit element number free, so a family test would admit
+  16 x 65,536 tags whose free bits are raw document bytes: `"\fPAR"` composes `500C5241` and returns
+  all four payload bytes with one typed read. Only tags the registry names one at a time are rendered.
+
+  **A raw wire number is bound out of the factory signature on the parser's codes, because there is
+  nothing to check.** A
+  declared Value Length has neither a shape nor a membership a renderer could test, so there is no
+  `renderLength` and there must not be one. `DICOM_ODD_LENGTH_VALUE_PADDED` no longer prints the odd
+  length. `DICOM_NONZERO_RESERVED_BYTES` no longer prints its two reserved bytes: that code already
+  withheld its **tag** on the reasoning that its trigger is "this header may not be a header", and it
+  then printed two bytes off the same header as decimals. Measured on the same payload, six
+  under-declare deltas each put two letters of the name into that message. **No detector in this
+  package had ever hunted a single byte rendered as a decimal**, which is why this instance had not
+  been filed. `DICOM_PIXEL_DATA_LENGTH_MISMATCH` loses its declared length too, although this build has
+  no call site for it: with none, the change costs nothing now and no later measurement would catch it
+  once a phase switches the code on. `DICOM_GROUP_LENGTH_IN_DATASET` loses its tag for a third reason,
+  which the membership rule produced rather than a judgement: PS3.6 carries exactly one literal row
+  ending `0000`, and it is File Meta, so that slot could never have rendered anything but `<withheld>`.
+
+  **The exceptions are named rather than counted, and rather than left as an unstated absolute.**
+  `(0002,0000)`'s own declared
+  File Meta group length is still printed, and that one is argued as well as measured: `parseFileMeta`
+  runs once per parse, from `parseDicom`, at the post-`DICM` offset, and is never nested, so those four
+  bytes are that attribute's own Value Field at a structurally determined offset that no Data Set value
+  can be read into. The desynchronized-read sweep reaches that code zero times.
+
+  **What it costs you, stated rather than minimised.** On any file, well-formed or not, a message about
+  a **private** element, a **Group Length** `(gggg,0000)`, or a **repeating-group member** such as
+  `(6000,3000)` Overlay Data no longer names its tag. The element is still in the Data Set under that
+  tag, and `position.byteOffset` locates the header, with the frame-of-reference caveat every offset in
+  this package carries. `DICOM_VR_MISMATCH` is unaffected by construction: it fires only where the
+  dictionary already has an entry for the tag.
+
+  **The "safe to log" sentence is deleted rather than reworded a third time**, in `README.md`,
+  `docs-content/limitations.md`, `docs-content/troubleshooting.md`,
+  `docs-content/spec-notes-tolerance.md`, `docs-content/cookbook.md` and `ParseOptions.strict`'s JSDoc.
+  It was written as "safe to log whole on any well-formed file", then corrected to "safe on a
+  well-formed file and not unconditionally safe", and this package deletes a disclosure it has reworded
+  twice. Every carrier now states the mechanism - which slot is a membership test, which is a signature
+  bound - and states no verdict.
+
+  **Not taken, deliberately.** `report.removedPrivateTags` is untouched: it is a private-tag field by
+  definition, so no closed table can ever vouch for its contents and a bound would empty it on every
+  well-formed file. That is a product call rather than a defect. `report.unauditableSequences[].tag`,
+  `report.uidMap` and `contextPath` are model fields rather than messages and are equally untouched.
+  A `DicomParseError` still carries `snippet`, 16 raw source bytes as hex.
+
+- ce33ec4: The two `deidentify()` diagnostics stop rendering a raw wire length, and the PHI detector's digit
+  floor that hid it is gone (`DICOM-DIAGNOSTIC-PHI-RESIDUALS`)
+
+  The seventh instance of "a diagnostic about a PHI leak is itself a PHI surface", plus the tripwire gap
+  that made it invisible. The gap is the more valuable half.
+
+  THE DETECTOR WAS WIDENED BEFORE ANY CODE WAS TOUCHED. The `length` arm of the re-encoding detector in
+  `test/integration/fatal-diagnostic-surface.test.ts` skipped any rendering under seven digits, and the
+  sentence beside it stated the defect without seeing it: "every 4-byte window of a printable-ASCII
+  payload exceeds 1,000,000,000, so nothing in this fixture set is skipped by the floor." That is true
+  and it is the whole problem. A declared Value Length is only reachable through a parse if the buffer
+  really holds that many bytes, so every fabricated length a fixture can drive through this library has
+  zero high-order bytes and therefore a SHORT decimal. `"SO\0\0"` renders `20307`: five digits, two of
+  them letters of a surname, structurally under the floor. The floor was not a conservative filter on an
+  arm that worked. It excluded the entire class of length leak that can actually happen. A GUARD WITH A
+  FLOOR HAS NOT CLEARED ANYTHING BELOW THE FLOOR.
+
+  The floor is removed and the collision it was for is answered by matching instead of skipping, so the
+  widening is strictly additive: a rendering of seven digits or more keeps the original substring
+  search, and a shorter one must equal a whole maximal digit run of the message.
+
+  WHAT THE WIDENED DETECTOR FOUND, POINTED AT THE `deidentify()` CHANNEL. That channel is the one the
+  standing desync sweep states it can never reach, because both codes are emitted by `deidentify()` and
+  by nothing else while every desync fixture dies at a Tier-3 fatal first. It returned the two `{n}`
+  slots this release closes and nothing else. It also returned `00080008`, a literal PS3.6 row that
+  `renderTag`'s membership test renders on every file by design, which is scoped out of the sweep
+  explicitly rather than left to pass quietly.
+
+  THE REMEDY IS THE FACTORY SIGNATURE, AS IT WAS THE LAST FIVE TIMES.
+  `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` and `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` rendered `{n}`
+  from `Element.rawBytes.length`, which is not a count this parser invented: it EQUALS the declared
+  Value Length off the element header. `sequenceNotAuditable` now takes `(position, tag)` and
+  `undefinedVrNotAuditable` takes `(position)`. A raw length has neither a shape nor a membership for a
+  renderer to test, so there is no `renderLength` and there must not be one. The second code is the
+  sharper case: it withheld its tag and its VR on the stated ground that the header may be fabricated,
+  then printed the length off that same header.
+
+  WHAT IT COSTS, STATED RATHER THAN MINIMISED. A consumer reading only the message no longer sees how
+  many bytes were emptied. The number is still on `report.unauditableSequences[].byteLength` and
+  `report.undefinedVrElements[].byteLength`, and `{tag}` and the byte offset still locate the element.
+  Those two model fields JOINED the `DeidentifyReport` not-value-free list rather than always having
+  been on it: binding the message left them as the number's only publisher, which is a smaller surface
+  and not a closed one.
+
+  STILL A PRODUCT CALL AND UNTOUCHED: `report.removedPrivateTags`, `report.unauditableSequences[].tag`,
+  `report.uidMap`, `contextPath` and the two `byteLength` fields are model fields, not messages. A bound
+  on any of them empties the field on every well-formed file, where the content is exactly the audit
+  information it exists to carry.
+
+  A MIS-TITLED ROW IS CORRECTED. `deident-unauditable-sequence.test.ts` carried a row titled "carrying
+  no value" for the very code disclosed as printing a header-derived length; its body only asserted that
+  values planted elsewhere were absent, which a message built from a frozen registry cannot carry in any
+  case. The title now matches what the code does and the row asserts the number's absence, with a
+  non-vacuity control that rebuilds the shipped template.
+
+  AND ONE MORE FIXTURE THAT HAD NEVER RUN. The standing desync sweep built its fixtures inside the `try`
+  that swallows the parse failures they are designed to end in, so the `-20` delta, which under-declares
+  an 18-byte payload past zero, threw during construction on both syntaxes and was counted as swept.
+  Construction moved outside the `try`.
+
+  FIGURES. Base `b8a3fb5`. Head, whole suite: 73 files, 1,220 passing + 1 todo, 0 red. Head tests
+  against base `src/` (replaced, not overlaid): 5 of 1,221 red across 3 files. THREE are behavioural;
+  TWO are the factory-arity rows, which fail on the arity line and whose message assertions would have
+  passed on base, so they grade the new bound and are not evidence that base leaked.
+
 ## 0.0.14
 
 ### Patch Changes
