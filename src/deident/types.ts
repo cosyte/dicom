@@ -395,12 +395,21 @@ export interface UndefinedVrFinding {
    *
    * **An input-derived count, and on this finding specifically that is not a
    * formality.** For the sibling findings the length came from a header the
-   * sender wrote; here the two length bytes can themselves be value bytes, like
-   * the tag bytes. What is published is the *number* they decode to, never the
-   * bytes - the same footing as every `{n}` in the warning registry, which is
-   * documented there as "an input-derived count". A number is not a rendering,
-   * and the reach is at most a character or so, but do not describe this field
-   * as "structural, never a value" the way its siblings are described.
+   * sender wrote; here the four length bytes can themselves be value bytes, like
+   * the tag bytes. What is published is the *number* they decode to, and one
+   * `readUInt32LE` puts the bytes back: a fabricated header reading `"SO\0\0"`
+   * publishes `20307`, two letters of a surname. Do not describe this field as
+   * "structural, never a value" the way its siblings are described.
+   *
+   * **🩺 IT IS NO LONGER "the same footing as every `{n}` in the warning
+   * registry", AND THAT SENTENCE WAS THE ONE THIS FIELD SHIPPED WITH.**
+   * `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` rendered exactly this number and
+   * does not any more - it is bound out of `undefinedVrNotAuditable`'s
+   * signature. So this field is now a **model field**, on the same standing
+   * exception as `removedPrivateTags`, `unauditableSequences[].tag`, `uidMap`
+   * and `contextPath`: narrowing it is a product call, because a bound empties
+   * it on every well-formed file, where it is exactly the audit number the field
+   * exists to carry. Deliberately unchanged; see this type's own summary.
    */
   readonly byteLength: number;
   /**
@@ -444,6 +453,18 @@ export interface UndefinedVrFinding {
  *   and still answers it whenever the fabricated VR is outside the 34 PS3.5
  *   §6.2 defines. It cannot when the fabricated VR is one of them, because those
  *   two files are byte-identical.
+ * - **`undefinedVrElements[].byteLength` and
+ *   `unauditableSequences[].byteLength`** - the declared Value Length read off
+ *   the element header, so on a fabricated header it is four document bytes
+ *   wearing a decimal: `"SO\0\0"` publishes `20307`, two letters of a surname,
+ *   put back with one `readUInt32LE`. **They JOINED this list rather than
+ *   always having been on it.** Through `0.0.14` the two
+ *   `DICOM_DEIDENT_*_NOT_AUDITABLE` **messages** rendered the same number;
+ *   binding it out of those factory signatures left these model fields as its
+ *   only publisher, which is a smaller surface and not a closed one. Narrowing
+ *   them is a product call rather than a defect fix: a bound empties the field
+ *   on every well-formed file, where the number is exactly the audit
+ *   information it exists to carry.
  * - **`contextPath`, on all four findings that carry one** - see
  *   {@link DeidentifiedAttribute.contextPath}, which holds the measurement. The
  *   segment tags come off the wire with no table behind them, so a fabricated

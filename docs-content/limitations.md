@@ -94,12 +94,16 @@ structural fact about DICOM that no reader can resolve from the wire.
   document.
   **Exceptions, named rather than counted.** `(0002,0000)`'s own declared File Meta group
   length is still printed, and it is read at a structurally fixed offset no value can desynchronize
-  the reader onto. And **`DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` and
-  `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` still print a length that IS the header's**: they render
-  `Element.rawBytes.length`: the declared Value Length for a value-only element, declared-plus-header
-  for a full-span one, and document-derived either way, so a fabricated header carrying `"SO\0\0"`
-  renders `20307`. `PRE-EXISTING`, identical on `0.0.14`, **not closed here**, each pinned by its own
-  asserted test row. Both codes are raised by `deidentify()`, so they reach `report.warnings`.
+  the reader onto. **`DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` and
+  `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` LEFT this list.** Through `0.0.14` they rendered
+  `Element.rawBytes.length`: the declared Value Length for a value-only element,
+  declared-plus-header for a full-span one, and document-derived either way, so a fabricated header
+  carrying `"SO\0\0"` printed `20307`. Both slots are bound out of the factory signatures now. Both
+  codes are raised by `deidentify()`, so they reach `report.warnings` and never a
+  `{ strict: true }` escalation. **The numbers still exist on
+  `report.undefinedVrElements[].byteLength` and `report.unauditableSequences[].byteLength`** - model
+  fields, on a type documented as not value-free. Narrowing those is a product call rather than a
+  defect fix, because a bound empties the field on every well-formed file.
   **What that closed, measured on an `ST` carrying `"MR BRAIN SMITHSON "` whose Value Length
   under-declares:** under Explicit VR LE the reader desynchronizes onto a fabricated header whose
   declared length is odd, and through `0.0.14` `DICOM_ODD_LENGTH_VALUE_PADDED` rendered **four bytes

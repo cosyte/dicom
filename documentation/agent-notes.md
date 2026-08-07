@@ -369,6 +369,108 @@ empties it on every well-formed file - the genuine product call the item names, 
 messages and are equally untouched; `#78`'s residual row now asserts **both halves separately**, so
 the message closing here cannot be read as the report's.
 
+### The seventh instance, and the digit floor that hid it
+
+The half above measured a **seventh** instance, disclosed it in six artifacts, pinned it as an
+asserted row and deliberately left it. This is the slice that takes it. **The more valuable half is
+not the instance: it is the tripwire gap that made the instance invisible**, and that gap is the
+transferable part.
+
+**▶ 🩺 THE DETECTOR WAS WIDENED BEFORE ANY CODE WAS TOUCHED, WHICH IS THE METHOD THE SIXTH INSTANCE
+ESTABLISHED AND THE ONLY REASON THE EXTENT HERE IS A MEASUREMENT.** `renderings()`'s `length` arm
+carried a **`>= 7` digit floor**, and the sentence beside it stated the defect without seeing it:
+_"every 4-byte window of a printable-ASCII payload exceeds 1,000,000,000, so nothing in this fixture
+set is skipped by the floor."_ That is true and it is the whole problem. **A declared Value Length is
+only reachable through a parse if the buffer really holds that many bytes**, so every fabricated
+length a fixture can drive through this library has zero high-order bytes and therefore a SHORT
+decimal. `"SO\0\0"` renders `20307`: five digits, two of them letters of a surname, and structurally
+under the floor. The floor was not a conservative filter on an arm that worked - **it excluded the
+entire class of length leak that can actually happen.**
+
+**A GUARD THAT HAS NEVER BEEN POINTED AT AN INPUT HAS NOT CLEARED THAT INPUT, AND A GUARD WITH A
+FLOOR HAS NOT CLEARED ANYTHING BELOW THE FLOOR.** Same shape as the `phi-scan` that printed clean over
+a root it never opened, and as the `byte` arm the sixth instance had to add.
+
+**▶ THE COLLISION THE FLOOR WAS FOR IS ANSWERED BY MATCHING, NOT BY SKIPPING, AND THE WIDENING IS
+STRICTLY ADDITIVE.** A rendering of seven digits or more keeps the original `String.includes` search
+unchanged, so nothing the shipped detector caught can stop being caught. A shorter one must equal a
+**whole maximal digit run** of the message, so `20307` hits `"its 20307 recorded bytes"` and not
+`"offset=120307"`, and `PS3.15` and a tag's own digits cannot answer the question by accident.
+
+**▶ 📏 WHAT THE WIDENED DETECTOR FOUND, POINTED AT THE `deidentify()` CHANNEL.** That channel is the
+one the standing desync sweep states it can never reach: both `DICOM_DEIDENT_*_NOT_AUDITABLE` codes
+are emitted by `deidentify()` and by nothing else, and every desync fixture dies at a Tier-3 fatal
+before `deidentify()` runs. With the floor off, over both producers: **the two `{n}` slots this slice
+closed, and nothing else.** The two `tag` hits it also returned are `00080008` - a **literal PS3.6
+row**, rendered by `renderTag`'s membership test on every file **by the decision `#90` ratified**, and
+scoped out of the sweep explicitly rather than left to pass quietly. The sweep pins that scoping is
+not a hole: a fabricated tag PS3.6 has no row for is still a finding.
+
+**▶ THE REMEDY IS THE ONE THIS PACKAGE KEEPS ARRIVING AT: THE FACTORY SIGNATURE.**
+`sequenceNotAuditable` takes `(position, tag)`, `undefinedVrNotAuditable` takes `(position)`. A raw
+length has neither a shape nor a membership for a renderer to test, so there is no `renderLength` and
+there must not be one. `undefinedVrNotAuditable` is the sharper of the two and always was: **it
+withheld the tag and the VR on the stated ground that the header may be fabricated, then printed the
+length off that same header** - it withheld the two fields a renderer could check and printed the one
+it could not.
+
+**▶ WHAT IT COSTS, STATED RATHER THAN MINIMISED.** A consumer reading only the message no longer sees
+how many bytes were emptied. The number is not lost: it is on
+`report.unauditableSequences[].byteLength` and `report.undefinedVrElements[].byteLength`, and the
+`{tag}` and `{n2}` byte offset still locate the element. **Those two model fields JOINED the
+`DeidentifyReport` not-value-free list rather than always having been on it** - binding the message
+left them as the number's only publisher, which is a smaller surface and not a closed one.
+
+**▶ 🔴 STILL A PRODUCT CALL, AND UNTOUCHED.** `report.removedPrivateTags`,
+`report.unauditableSequences[].tag`, `report.uidMap`, `contextPath` and the two `byteLength` fields
+are **model fields, not messages**. A bound on any of them empties the field on every well-formed
+file, where the content is exactly the audit information it exists to carry. Named, disclosed, and
+deliberately not narrowed here.
+
+**▶ AND THE MIS-TITLED ROW, WHICH IS A CLAIM DEFECT OF THE KIND THIS REPO GRADES HARDEST.**
+`deident-unauditable-sequence.test.ts` carried a row titled _"carrying no value"_ for the very code
+disclosed as printing a header-derived length. Its body asserted that three values planted elsewhere
+in the file were absent - which a message built from a frozen registry cannot carry in any case - so
+the title asserted the opposite of a live disclosure while the check underneath it could not have
+failed. **A test named for the thing it did not check occupies the slot.** Corrected rather than
+deleted, because after this slice the title is true and there is now something real for it to assert.
+
+**▶ ONE MORE FIXTURE THAT HAD NEVER RUN, FOUND IN THE SAME FILE AND THE SAME CLASS.** The standing
+desync sweep listed ten under-declare deltas per syntax, and `-20` under-declares an 18-byte payload
+past zero, so `buildDicom` threw while the FIXTURE was being constructed - **inside the `try` that
+exists to swallow the parse failures those fixtures are designed to end in**. Both `-20` rows never
+reached a parse and were counted as swept. The fixture is built outside the `try` now and `-20` is
+off the list, so a delta the helper cannot express fails loudly instead of reading as clean.
+
+**▶ FIGURES. BASE IS `b8a3fb5` AND NO HEAD SHA IS QUOTED, DELIBERATELY** - a pre-merge head sha is
+wrong the moment the PR squash-merges. Head, whole suite: **73 files, 1,220 passing + 1 todo, 0 red.**
+Head tests against base `src/` (**replaced**, not overlaid - `rm -rf src && git checkout b8a3fb5 --
+src`; all 73 files still collect): **5 of 1,221 red across 3 files.**
+
+**🛑 A `git stash push -- src/` DOES NOT PRODUCE THIS FIGURE ONCE THE SLICE IS COMMITTED**, and a
+first attempt at the re-run reported the whole suite green off exactly that mistake: with the change
+already in a commit there is nothing in `src/` to stash, so it measured head against head. Replace the
+directory from the base sha.
+
+**🛑 THAT 5 IS NOT 5 BEHAVIOURAL FINDINGS.** Split it before quoting it.
+
+- **THREE are behavioural**, and each asserted the leak's absence against a message base really did
+  render: `deidentUnauditableCodesNoLongerRenderARawWireLength` and _"the deidentify() channel is
+  swept, with the floor off"_ in `test/integration/fatal-diagnostic-surface.test.ts`, and the
+  corrected _"renders no number the header supplied"_ row in
+  `test/integration/deident-unauditable-sequence.test.ts`.
+- **TWO are red because the SIGNATURE differs on base, not because base rendered anything.** The two
+  factory rows in `test/parser/warnings.test.ts` fail on their arity assertion before reaching the
+  message check - and on base, called with the head arity, the missing argument renders `0` rather
+  than `20307`, so those message assertions would have passed. They grade the new bound. They are
+  **not** evidence that base leaked.
+
+**The non-vacuity controls are on the rows that closed, not only on the outcome.** Each rebuilds
+`0.0.14`'s own template over the number the fixture really produces and asserts the widened detector
+still catches **that**; the tripwire finding is pinned directly, by asserting that `20307` is under
+seven digits and that its two high bytes are zero, so a future re-introduction of the floor cannot be
+argued as harmless.
+
 ---
 
 ---
