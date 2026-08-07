@@ -92,13 +92,13 @@ structural fact about DICOM that no reader can resolve from the wire.
   of the factory signature where it is bound at all**, because a declared Value Length has neither a
   shape nor a membership a renderer could test. `w.code` and `w.position` carry nothing from the
   document.
-  **And a raw number SHIFTED by a published structural constant is that raw number**, which is the
+  **And a raw number SHIFTED by a constant the reader can compute is that raw number**, which is the
   eighth instance of this class: `DICOM_ITEM_CROSSES_SEQUENCE_END` printed the bytes that remained
-  inside the sequence, and that count is the sequence's own declared Value Length less the 8-byte
-  Item header PS3.5 2026c §7.5.1 fixes.
+  inside the sequence, and that count is the sequence's own declared Value Length less the bytes of
+  that sequence already consumed.
   **The exceptions are named in ONE place and are deliberately not restated here** - the
-  `WARNING_MESSAGES` docblock in `src/parser/warnings.ts`. This list used to be carried in six
-  artifacts at once and every one of them was corrected twice, which is what a copy costs.
+  `WARNING_MESSAGES` docblock in `src/parser/warnings.ts`. No count of the copies is quoted, here or
+  there: this package deletes a count it has corrected twice rather than incrementing it.
   **What that closed, measured on an `ST` carrying `"MR BRAIN SMITHSON "` whose Value Length
   under-declares:** under Explicit VR LE the reader desynchronizes onto a fabricated header whose
   declared length is odd, and through `0.0.14` `DICOM_ODD_LENGTH_VALUE_PADDED` rendered **four bytes

@@ -212,8 +212,10 @@ describe("warning factories (D-12 - one named factory per active-emit code)", ()
     // under a comment and a pinning test that both said the emit site's
     // `endLimit < buffer.length` conjunct bounded it by the buffer. It does
     // bound its MAGNITUDE. It says nothing about its CONTENT: the count is the
-    // enclosing sequence's declared Value Length less the 8-byte Item header
-    // PS3.5 7.5.1 fixes, so one addition returns the header's own field.
+    // enclosing sequence's declared Value Length less the bytes of that sequence
+    // already consumed, so an addition returns the header's own field. On the
+    // first item that is just the 8-byte Item header; with items ahead of it the
+    // shift is larger. Both are measured in `explicit-sq-item-bound.test.ts`.
     expect(itemCrossesSequenceEnd.length).toBe(2);
     const w = itemCrossesSequenceEnd(pos, "FFFEE000");
     expect(w.code).toBe(WARNING_CODES.DICOM_ITEM_CROSSES_SEQUENCE_END);

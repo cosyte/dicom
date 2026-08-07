@@ -80,10 +80,28 @@ interface Leak {
 }
 
 /**
- * The 8-byte Item header PS3.5 2026c section 7.5.1 fixes: `(FFFE,E000)` plus a
- * 32-bit Item Length. It is the only structural constant any registry template
- * has ever subtracted from a wire number, which is what makes the
- * `length-less-item-header` arm a hunt rather than a fishing expedition.
+ * The 8-byte Item header: PS3.5 2026c section 7.1.1's 4-byte Data Element Tag
+ * plus section 7.5.1's 4-byte Value (Item) Length. **Both citations are needed
+ * and a graded pass caught the draft that used only 7.5.1**, which fixes the
+ * length field alone.
+ *
+ * **🛑 THIS IS ONE OFFSET, NOT THE OFFSET, AND SAYING SO IS THE POINT.** The
+ * `length-less-item-header` arm hunts a rendering shifted by exactly this much,
+ * which is what `DICOM_ITEM_CROSSES_SEQUENCE_END` rendered **when the crossing
+ * item was its sequence's first**. Put one 24-byte item ahead of it and the
+ * shift is 32, and this arm would not have seen it - measured on base `src/`,
+ * the same `"SO\0\0"` sequence length rendered `20275` rather than `20299`. A
+ * draft of this constant claimed 8 was "the only structural constant any
+ * registry template has ever subtracted", and that was false twice over:
+ * `./fatals.ts` already discloses `{n} = buffer.length - cursor.position`, a
+ * **variable** shift the message publishes beside the offset it needs.
+ *
+ * The arm is not widened to a range, deliberately. A range has no non-vacuity
+ * control - the same reason the missing 2-byte-as-`uint16` arm below is named
+ * rather than armed - and the slot it hunted is gone from the registry, so a
+ * wider arm would be machinery guarding nothing. **What clears the class is the
+ * factory signature, not this arm; this arm is the measurement that the
+ * detector could not see the shift at all.**
  */
 const ITEM_HEADER_BYTES = 8;
 
@@ -135,18 +153,17 @@ const ITEM_HEADER_BYTES = 8;
  * CLEAN.** `DICOM_ITEM_CROSSES_SEQUENCE_END` rendered `endLimit -
  * cursor.position`, which is the enclosing sequence's declared Value Length less
  * {@link ITEM_HEADER_BYTES}. Every arm above hunts a rendering **equal** to a
- * typed read of a payload window, so a rendering **shifted by a published
- * constant** was invisible to all of them: measured on the `"SO\0\0"` payload
- * this file already carries, the shipped template returned `[]` while a direct
- * render of the same length returned the `length` hit. **A wire number shifted
- * by a published structural constant is the wire number** - one addition puts it
- * back - so this is the digit floor's disease one level up, and a detector that
- * has never looked for a shape has not cleared it.
+ * typed read of a payload window, so a **shifted** rendering was invisible to
+ * all of them: measured on the `"SO\0\0"` payload this file already carries, the
+ * shipped template returned `[]` while a direct render of the same length
+ * returned the `length` hit. **A wire number shifted by an amount the reader can
+ * compute is the wire number** - an addition puts it back - so this is the digit
+ * floor's disease one level up, and a detector that has never looked for a shape
+ * has not cleared it.
  *
- * The arm is scoped to the one constant a template ever subtracted rather than
- * to a range, for the reason the `uint16` gap below is *not* an arm: a hunt with
- * nothing to hunt has no non-vacuity control. Its control is the reconstructed
- * `0.0.14` template in
+ * **The arm covers ONE offset and is not a general shifted-rendering net** - see
+ * {@link ITEM_HEADER_BYTES}, which measures the case it would still miss. Its
+ * control is the reconstructed `0.0.14` template in
  * `itemCrossesSequenceEndNoLongerRendersTheSequenceLengthLessTheItemHeader`.
  *
  * **🛑 THERE IS STILL NO 2-BYTE-AS-`uint16` ARM, AND THAT IS A STATED GAP RATHER

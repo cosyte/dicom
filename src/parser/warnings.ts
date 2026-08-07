@@ -162,12 +162,15 @@ export interface DicomParseWarning {
  * `DICOM-DIAGNOSTIC-PHI-RESIDUALS`.** {@link itemCrossesSequenceEnd} rendered
  * `endLimit - cursor.position`, kept under `buffer.length` by a conjunct at its
  * emit site. That number is the enclosing **sequence's** declared Value Length
- * less the 8-byte Item header PS3.5 7.5.1 fixes, so one addition returns the
+ * less the bytes of that sequence already consumed, so an addition returns the
  * header's own field: measured, a fabricated length reading `"SO\0\0"` rendered
  * `20299` and `20299 + 8` is `20307`, whose low two bytes are two letters of a
- * planted surname. **A wire number shifted by a published structural constant is
- * the wire number, and bounding a rendering's MAGNITUDE bounds nothing about its
- * CONTENT.**
+ * planted surname. **A wire number shifted by a constant the reader can compute
+ * is the wire number, and bounding a rendering's MAGNITUDE bounds nothing about
+ * its CONTENT.** The shift is 8 - the Item header, PS3.5 2026c 7.1.1's 4-byte
+ * tag plus 7.5.1's 4-byte Item Length - **only when the crossing item is the
+ * sequence's first**; with one 24-byte item ahead of it the same fixture renders
+ * `20275`. Measured both ways, because "less 8" as a universal was refused.
  *
  * ## The exceptions, named here and nowhere else
  *
@@ -295,7 +298,7 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   // BOTH of the disagreeing length fields are deliberately absent, and the
   // second one is the eighth instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`: the
   // remaining-bytes count this string used to carry was the enclosing sequence's
-  // declared Value Length less the 8-byte Item header PS3.5 7.5.1 fixes. See
+  // declared Value Length less the bytes of that sequence already consumed. See
   // `itemCrossesSequenceEnd`.
   DICOM_ITEM_CROSSES_SEQUENCE_END:
     "Item ({tag}) declares a length reaching past its enclosing sequence's declared end, so it reads the enclosing Data Set's bytes. The file's two length fields disagree (PS3.5 7.5.1 and 7.5.2 govern them); the item's is used. Both declared lengths are withheld; the byte offset locates the item.",
@@ -389,7 +392,7 @@ interface WarningTokens {
    * byte value read verbatim off a header - see the registry's note above; those
    * are bound out of the factory signature instead, because a raw number has
    * neither a shape nor a membership a renderer could test. **Nor one of those
-   * shifted by a published structural constant**, which is the same number with
+   * shifted by an amount the reader can compute**, which is the same number with
    * an addition in front of it and is what the eighth instance of
    * `DICOM-DIAGNOSTIC-PHI-RESIDUALS` shipped as.
    */
@@ -840,12 +843,21 @@ export function sqNotDescended(position: DicomPosition, tag: Tag): DicomParseWar
  * test said it was safe **because the emit site's `endLimit < buffer.length`
  * conjunct bounds it by the buffer**. That defence is retracted.
  *
- * `endLimit` is the enclosing **sequence's** declared Value Length off its own
- * header, and `cursor.position` sits exactly one Item header past the value
- * start, so the rendered count **is** that declared length less 8 - and 8 is the
- * Item header size PS3.5 2026c section 7.5.1 fixes, a published constant, so one
- * addition reverses the render. Bounding a number's magnitude bounds nothing
- * about its content.
+ * `endLimit` is `valueStart + explicitLength`, the enclosing **sequence's**
+ * declared Value Length off its own header, and `cursor.position` is the
+ * crossing item's header start plus 8. So the rendered count is that declared
+ * length **less the bytes of the sequence already consumed**, and an addition
+ * the reader can compute reverses it. Bounding a number's magnitude bounds
+ * nothing about its content.
+ *
+ * **🛑 THE SHIFT IS 8 ONLY WHEN THE CROSSING ITEM IS THE SEQUENCE'S FIRST, AND
+ * "LESS 8" AS A UNIVERSAL WAS REFUSED BY A GRADED PASS.** On the first item
+ * `itemHeaderStart === valueStart`, so the shift is just the Item header - 8
+ * bytes, PS3.5 2026c section 7.1.1's 4-byte tag plus section 7.5.1's 4-byte Item
+ * Length. Put one 24-byte item ahead of it and the same fixture renders `20275`
+ * against the same declared `20307`, a shift of 32. The reversal is not harder,
+ * it is just a different addition: `position.byteOffset` names the item header
+ * and the sequence's own start is in the parsed object.
  *
  * **Its pinning test and its defence were both green BY FIXTURE**, which is the
  * transferable half. They only ever fabricated the sequence length out of four

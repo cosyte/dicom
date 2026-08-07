@@ -339,9 +339,11 @@ export function parseSequence(
           // wire read on a file whose length fields are by definition lying. So
           // is the remainder this call site used to compute:
           // `endLimit - cursor.position` is the enclosing SEQUENCE's declared
-          // Value Length less the 8-byte Item header PS3.5 7.5.1 fixes, so one
-          // addition returns it. The `endLimit < buffer.length` conjunct above
-          // bounds that remainder's MAGNITUDE and nothing about its CONTENT.
+          // Value Length less the bytes of that sequence already consumed - just
+          // the 8-byte Item header when this is the first item, more when items
+          // precede it - so an addition returns it. The `endLimit <
+          // buffer.length` conjunct above bounds that remainder's MAGNITUDE and
+          // nothing about its CONTENT.
           // The factory takes a parameter for neither. See
           // `itemCrossesSequenceEnd`.
           emit(itemCrossesSequenceEnd({ byteOffset: itemHeaderStart }, itemTag));

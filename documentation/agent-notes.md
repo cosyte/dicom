@@ -2830,13 +2830,8 @@ hold a sha256` thrown at module load. **Both controls were run, because a clean 
   `onWarning` on a file the parse then refuses. `itemCrossesSequenceEnd` takes no parameter for it,
   identical remedy and reasoning to `#64`'s `DICOM_NONZERO_RESERVED_BYTES` and `#55`'s
   `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE`: where `renderTag` checks a shape and `renderVr` a
-  closed set, a raw length has neither, so the bound has to be the signature. **`{n2}` stays and the
-  asymmetry is structural, not a judgement call**: it is `endLimit - cursor.position` under the emit
-  site's own `endLimit < buffer.length` conjunct, so it is a byte count bounded by the buffer.
-  Measured against the identical attack - fabricating the **`SQ`**'s length field over the same name
-  puts `endLimit` past the buffer and the code does not fire at all. Both pinned with a name-bearing
-  payload and a mutation control. **A PHI test whose payload carries no name is vacuous BY FIXTURE**
-  (`#55`'s was); this one goes red the moment the binding is removed.
+  closed set, a raw length has neither, so the bound has to be the signature.
+  **A PHI test whose payload carries no name is vacuous BY FIXTURE** (`#55`'s was).
   (2) **"At most one warning per sequence" is TRUE and is NOT an amplification bound.** A file may
   carry as many sequences as it can encode. `ds.warnings` is uncapped, `#48`'s pre-existing
   package-wide posture; pinned by a test that asserts the growth rather than a cap.

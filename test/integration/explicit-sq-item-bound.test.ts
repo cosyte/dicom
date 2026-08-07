@@ -526,7 +526,8 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the disagreement, disclosed", 
     // follows the sequence. The Item's declared 34 was withheld from the start;
     // the 16 that remained inside the sequence went with it in the eighth
     // instance, because that count is the SEQUENCE's declared length less the
-    // 8-byte Item header. Both are absent - see the two PHI rows below.
+    // bytes of the sequence already consumed. Both are absent - see the PHI rows
+    // below.
     expect(w?.message).not.toContain(String(ITEM_ON_WIRE + TRAILING_ON_WIRE));
     expect(w?.message).not.toContain(String(ITEM_ON_WIRE));
     // The `{tag}` slot is the Item tag, a constant this parser recognised - not
@@ -661,11 +662,15 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the disagreement, disclosed", 
     // 🩺 THE EIGHTH INSTANCE OF "a diagnostic about a PHI leak is itself a PHI
     // surface", CLOSED. Through `0.0.14` this row ASSERTED the leak.
     //
-    // `{n2}` was `endLimit - cursor.position`, and `endLimit` is the enclosing
-    // SEQUENCE's declared Value Length off its own header while `cursor.position`
-    // sits exactly one Item header past the value start. So `{n2} + 8` WAS that
-    // declared length, and 8 is the Item header size PS3.5 7.5.1 fixes: a
-    // published constant, so one addition reversed the render.
+    // `{n2}` was `endLimit - cursor.position`, and `endLimit` is
+    // `valueStart + explicitLength` - the enclosing SEQUENCE's declared Value
+    // Length off its own header - while `cursor.position` is the crossing item's
+    // header start plus 8. So `{n2}` WAS that declared length less the bytes of
+    // the sequence already consumed, and an addition the reader can compute
+    // reversed it. On the FIRST item the shift is just the 8-byte Item header
+    // (PS3.5 7.1.1's 4-byte tag plus 7.5.1's 4-byte Item Length); the row below
+    // measures a second item, where it is 32. "Less 8" as a universal was
+    // refused by a graded pass.
     //
     // The row above could never see this because it fabricated the length out of
     // four PRINTABLE bytes. Every such window exceeds 538,976,288 and the
@@ -676,7 +681,7 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the disagreement, disclosed", 
     // The slot is bound out of `itemCrossesSequenceEnd`'s signature now, which is
     // the remedy this package takes every time: a raw wire number has neither a
     // shape nor a membership for a renderer to check, and a wire number shifted
-    // by a published constant is the wire number. Every measurement this row made
+    // by a computable amount is the wire number. Every measurement this row made
     // while it asserted the leak is kept, because the numbers are what make the
     // absence below mean something.
     const RESIDUAL_NAME = "MR BRAIN SMITHSON ";
@@ -800,6 +805,79 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the disagreement, disclosed", 
       expect(r.message).toBe(so.message);
     }
     expect(probe("ON").declaredSq).not.toBe(so.declaredSq);
+  });
+
+  it("🩺 CLOSED for a crossing item that is NOT the first, where the shift is 32 and not 8", () => {
+    // 🛑 "THE COUNT IS THE DECLARED LENGTH LESS 8" WAS REFUSED AS A UNIVERSAL BY
+    // A GRADED PASS, AND THIS ROW IS WHY IT MATTERS. `endLimit` is
+    // `valueStart + explicitLength` and `cursor.position` is the crossing item's
+    // header start plus 8, so the shift is 8 ONLY when that item is the
+    // sequence's first. With one 24-byte item ahead of it the shift is 32 - and
+    // a guard scoped to a single offset would not have caught the base leak on
+    // this shape at all, which is the same disease as the digit floor.
+    //
+    // The remedy is the SIGNATURE, so it does not depend on the shift's size:
+    // there is no parameter to pass in either shape. That is what this row
+    // proves, on the class the single-item row cannot reach.
+    const RESIDUAL_NAME = "MR BRAIN SMITHSON ";
+    const lenBytes = Buffer.concat([Buffer.from("SO", "latin1"), Buffer.alloc(2)]);
+    const declaredSq = lenBytes.readUInt32LE(0);
+    const FIRST_PHYSICAL = 8 + 16; // Item header + (0008,0008) CS "ORIGINAL"
+    const ITEM_PHYSICAL = 16;
+    const trailingValueLen = declaredSq - FIRST_PHYSICAL - 8 - ITEM_PHYSICAL + 4;
+    const raw = buildDicom({
+      transferSyntax: EXPLICIT_LE,
+      elements: [
+        { tag: "00100010", vr: "PN", value: Buffer.from(RESIDUAL_NAME, "latin1") },
+        {
+          tag: "0040A730",
+          declaredLengthDelta: declaredSq - (FIRST_PHYSICAL + 8 + ITEM_PHYSICAL),
+          items: [
+            // An honest first item, which is what moves the crossing item's
+            // header away from the sequence's value start.
+            { elements: [{ tag: "00080008", vr: "CS", value: Buffer.from("ORIGINAL") }] },
+            {
+              declaredLengthDelta: ITEM_PHYSICAL + 8 + trailingValueLen - ITEM_PHYSICAL,
+              elements: [{ tag: "00080008", vr: "CS", value: Buffer.from("ORIGINAL") }],
+            },
+          ],
+        },
+        { tag: "00080080", vr: "LO", value: Buffer.alloc(trailingValueLen, 0x41) },
+      ],
+    });
+
+    // Read the SQ's length field back OFF THE WIRE rather than trusting the
+    // helper put it there, as the row above does.
+    const sqAt = raw.indexOf(Buffer.from([0x40, 0x00, 0x30, 0xa7]));
+    expect(sqAt).toBeGreaterThan(0);
+    expect(raw.subarray(sqAt + 8, sqAt + 12).toString("latin1")).toBe("SO\0\0");
+    expect(declaredSq).toBe(20307);
+
+    const ds = parseDicom(raw);
+    const w = ds.warnings.find((x) => x.code === WARNING_CODES.DICOM_ITEM_CROSSES_SEQUENCE_END);
+    // Non-vacuity: the code fires, on a parse that SURVIVED.
+    expect(w).toBeDefined();
+    const runs = w?.message.match(/[0-9]+/gu) ?? [];
+
+    // The shift really is 32 here, not 8, which is the whole point of the row.
+    const SHIFT = FIRST_PHYSICAL + 8;
+    expect(SHIFT).toBe(32);
+    expect(declaredSq - SHIFT).toBe(20275);
+    // Non-vacuity on the search: `0.0.14`'s template over the number THIS shape
+    // produced really did carry it, so the assertion below can go red.
+    expect(
+      `...; ${String(declaredSq - SHIFT)} bytes remained inside the sequence.`.match(/[0-9]+/gu) ??
+        [],
+    ).toContain("20275");
+    // ...and neither the shifted number nor the raw one is in the message.
+    expect(runs).not.toContain(String(declaredSq - SHIFT));
+    expect(runs).not.toContain(String(declaredSq - 8));
+    expect(runs).not.toContain(String(declaredSq));
+    // The message is the frozen template with the constant Item tag and nothing
+    // else, so it cannot depend on the shape at all.
+    expect(w?.message).toBe(
+      WARNING_MESSAGES.DICOM_ITEM_CROSSES_SEQUENCE_END.replace("{tag}", "FFFEE000"),
+    );
   });
 
   it("emits once per sequence, which is a SHAPE and NOT an amplification bound", () => {

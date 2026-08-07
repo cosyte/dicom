@@ -84,15 +84,15 @@ be interpolated even by a future call site that tries. A token that fails its ch
 - **A raw number a header carries has neither a shape nor a membership to test, so where it is
   bound at all the bound is the absence of the slot.** There is no `renderLength` and there must not
   be one. `DICOM_ODD_LENGTH_VALUE_PADDED`, `DICOM_NONZERO_RESERVED_BYTES` and
-  `DICOM_PIXEL_DATA_LENGTH_MISMATCH` cannot be handed one. **And a raw number SHIFTED by a published
-  structural constant is that raw number**, because one addition puts it back, so a bound on a
+  `DICOM_PIXEL_DATA_LENGTH_MISMATCH` cannot be handed one. **And a raw number SHIFTED by a constant the
+  reader can compute is that raw number**, because an addition puts it back, so a bound on a
   rendering's magnitude bounds nothing about its content: `DICOM_ITEM_CROSSES_SEQUENCE_END` printed
   the bytes that remained inside the sequence, which is the sequence's own declared Value Length less
-  the 8-byte Item header PS3.5 2026c §7.5.1 fixes. It cannot be handed either number now.
+  the bytes of that sequence already consumed. It cannot be handed either number now.
 
 **The exceptions are named in ONE place and are deliberately not restated here** - the
-`WARNING_MESSAGES` docblock in `src/parser/warnings.ts`. This list used to be carried in six
-artifacts at once and every one of them was corrected twice, which is what a copy costs.
+`WARNING_MESSAGES` docblock in `src/parser/warnings.ts`. No count of the copies is quoted, here or
+there: this package deletes a count it has corrected twice rather than incrementing it.
 
 **What the membership rule closed.** Through `0.0.14` `renderTag` validated a tag's _shape_, and a
 shape test admits all 2^32 tags. Measured: a `(0008,4000)` `ST` carrying `"MR BRAIN SMITHSON "` whose
