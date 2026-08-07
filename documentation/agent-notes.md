@@ -317,9 +317,10 @@ test - exactly where the sibling half's `652`/`0` measurement was put.
 
 **▶ FIGURES. BASE IS `ff1a64a` AND NO HEAD SHA IS QUOTED, DELIBERATELY** - a pre-merge head sha is
 wrong the moment the PR squash-merges. Base, whole suite: **72 files, 1,207 passing + 1 todo, 0 red.**
-Head: **73 files, 1,215 passing + 1 todo, 0 red.** Head tests against base `src/` (**replaced**, not
-overlaid - `rm -rf src && git checkout ff1a64a -- src`; all 73 files still collect): **14 of 1,216
-red across 4 files.** Re-run after the last test was added.
+Head: **73 files, 1,216 passing + 1 todo, 0 red.** Head tests against base `src/` (**replaced**, not
+overlaid - `rm -rf src && git checkout ff1a64a -- src`; all 73 files still collect): **14 of 1,217
+red across 4 files.** Re-run after the pass-1 remedy added a row rather than carried forward: it read
+14 of 1,216 before.
 
 **🛑 THAT 14 IS NOT 14 BEHAVIOURAL FINDINGS, AND SAYING SO WOULD BE THE `#78` DEFECT AGAIN.** Split it
 before quoting it.
@@ -337,8 +338,11 @@ before quoting it.
   that line before reaching its message assertion. They grade the new bound on head. They are **not**
   evidence that base leaked.
 
-**ONE ROW IS GREEN ON BASE BY DESIGN AND MUST STAY THAT WAY**: _"the closed set is enumerable"_ grades
-the generated registry, which this slice did not move.
+**TWO ROWS ARE GREEN ON BASE BY DESIGN AND MUST STAY THAT WAY**: _"the closed set is enumerable"_
+grades the generated registry, which this slice did not move; and
+`deidentUnauditableCodesStillRenderARawWireLength` pins a `PRE-EXISTING` residual, so it has to
+reproduce on both trees or it is not a residual pin. Both were confirmed green on `ff1a64a` in the
+same run that produced the 14.
 
 **The non-vacuity controls are on the rows that closed, not only on the outcome.** Each of the two
 inverted pins rebuilds `0.0.14`'s own message template over the bytes its fixture really lands on and
