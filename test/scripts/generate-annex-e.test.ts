@@ -16,22 +16,39 @@
  *      visible in the run that moves it.
  *
  * The generator is invoked through `test/helpers/run-script.ts`, like the other
- * script suites. It writes `src/dictionary/generated/annex-e.ts`; the run is
- * deterministic, so the file is asserted byte-identical afterwards, which is the
- * local mirror of the CI regen gate.
+ * script suites. It writes `annex-e.ts`; the run is deterministic, so the output is
+ * asserted byte-identical to the COMMITTED `src/dictionary/generated/annex-e.ts`,
+ * which is the local mirror of the CI regen gate.
+ *
+ * 🛑 EVERY BYTE THIS FILE WRITES GOES INTO A SANDBOX, AND THE WORKING TREE IS READ
+ * ONLY. Proving the pin means mutating the document the pin covers, and vitest runs
+ * test files in parallel, so an earlier shape of this file mutated
+ * `vendor/nema/part15/` in place while other workers were reading it -
+ * `DICOM-ANNEX-E-TEST-RACE`. `test/helpers/generator-sandbox.ts` carries the
+ * measurement and the reason the remedy is relocation rather than a softer pin on
+ * either side. Do not reach back into `REPO_ROOT` for anything this suite writes.
  */
 
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { createGeneratorSandbox, REPO_ROOT, type Sandbox } from "../helpers/generator-sandbox.js";
 import { runRepoScript, type ScriptResult } from "../helpers/run-script.js";
 
-const REPO_ROOT = process.cwd();
-const ARTIFACT = join(REPO_ROOT, "src", "dictionary", "generated", "annex-e.ts");
-const NEMA_ROOT = join(REPO_ROOT, "vendor", "nema", "part15");
-const NEMA_SHA_FILE = join(NEMA_ROOT, "SHA.txt");
+/** The committed artifact, in the real tree. READ ONLY: this is the regen gate's answer. */
+const COMMITTED_ARTIFACT = join(REPO_ROOT, "src", "dictionary", "generated", "annex-e.ts");
+
+/**
+ * The sandbox, and the paths inside it. They are `let` rather than `const` because
+ * the sandbox root is only known once `beforeAll` has made it, and every write in
+ * this file goes through one of them.
+ */
+let sandbox: Sandbox;
+let ARTIFACT: string;
+let NEMA_ROOT: string;
+let NEMA_SHA_FILE: string;
 
 /** Per-test budget for the generator run. See the sibling generator suite for why no
  * justification is stated here. */
@@ -44,7 +61,7 @@ const GENERATOR_TIMEOUT_MS = 120_000;
  * bottom of this file pins the failure so the exception cannot outlive its reason.
  */
 function runGenerator(): ScriptResult {
-  return runRepoScript("generate-annex-e.ts", [], { runner: "tsx" });
+  return runRepoScript("generate-annex-e.ts", [], { root: sandbox.root, runner: "tsx" });
 }
 
 /**
@@ -55,7 +72,13 @@ function runGenerator(): ScriptResult {
  * defeat it and assert the run goes red, which is the same proof the header-label
  * check uses: the pin is re-hashed, so the mutant is committed to its own
  * SHA-named directory with `SHA.txt` pointed at it, and both are removed after.
- * The committed artifact is restored verbatim regardless of outcome.
+ * The sandbox's copy of the artifact is restored verbatim regardless of outcome.
+ *
+ * All four paths here are SANDBOX paths. The restore in the `finally` is kept
+ * because the tests after this one read the sandbox and are entitled to find it as
+ * the committed tree left it, but it is no longer the only thing standing between a
+ * crashed run and a corrupted normative document on disk: nothing outside the
+ * sandbox is ever opened for writing.
  */
 function withMutatedDocBook<T>(
   mutate: (xml: string) => string,
@@ -102,12 +125,27 @@ describe("generate-annex-e", () => {
 
   // Well above the suite's 10s default: this hook parses a 3.5 MB DocBook in a
   // child process, and the whole point of doing it once is that the cost is paid
-  // here. A shared default tuned for in-memory fixtures would make it flaky.
+  // here. A shared default tuned for in-memory fixtures would make it flaky. It
+  // also takes the sandbox copy, which is ~5 MB and is paid once for the file.
   beforeAll(() => {
-    artifactBefore = readFileSync(ARTIFACT, "utf8");
+    sandbox = createGeneratorSandbox("annex-e");
+    ARTIFACT = join(sandbox.root, "src", "dictionary", "generated", "annex-e.ts");
+    NEMA_ROOT = join(sandbox.root, "vendor", "nema", "part15");
+    NEMA_SHA_FILE = join(NEMA_ROOT, "SHA.txt");
+
+    // 🛑 THE BASELINE IS THE COMMITTED FILE, NOT THE SANDBOX'S COPY OF IT. Reading
+    // the sandbox here would compare the generator's output against whatever this
+    // suite had already put there, which is a tautology the moment a mutation test
+    // leaves something behind. Read from the working tree, write into the sandbox,
+    // and the assertion still means "regenerates what is committed".
+    artifactBefore = readFileSync(COMMITTED_ARTIFACT, "utf8");
     happy = runGenerator();
     artifactAfter = readFileSync(ARTIFACT, "utf8");
   }, GENERATOR_TIMEOUT_MS);
+
+  afterAll(() => {
+    sandbox.dispose();
+  });
 
   it("regenerates the committed artifact byte for byte", () => {
     expect(happy.stderr, happy.stderr).toBe("");
@@ -265,8 +303,12 @@ describe("generate-annex-e", () => {
       } finally {
         writeFileSync(path, original);
       }
-      // This writes over the NORMATIVE DOCUMENT, not a pointer, so a short or failed
-      // restore leaves a corrupted standard on disk. Prove the restore by re-hashing.
+      // This writes over the document AT the pinned path rather than a pointer, so
+      // it is the one shape whose restore has to be proved rather than assumed. In
+      // the sandbox a failed restore costs the rest of this file and nothing else,
+      // which is the whole point of the sandbox; keep the re-hash anyway, because a
+      // silently half-restored document would make every later test in this file
+      // read a standard nobody verified. Prove the restore by re-hashing.
       expect(createHash("sha256").update(readFileSync(path)).digest("hex")).toBe(pinned);
       expect(readFileSync(ARTIFACT, "utf8")).toBe(before);
     },
@@ -296,14 +338,15 @@ describe("generate-annex-e", () => {
       // asserted in a comment. It fails at module resolution, before it opens the
       // DocBook, so nothing is generated and nothing is restored. The day Node
       // resolves the specifier this reds, and the carve-out goes with it.
-      const r = runRepoScript("generate-annex-e.ts", [], { runner: "node" });
+      const r = runRepoScript("generate-annex-e.ts", [], { root: sandbox.root, runner: "node" });
       expect(r.code).not.toBe(0);
       expect(r.stderr).toContain("ERR_MODULE_NOT_FOUND");
       // Naming the specifier is what makes this a pin on the carve-out's REASON
       // rather than on "node happens to fail". The sibling generator imports
       // nothing from `src/`, which is why the carve-out is one script and not
-      // "the generators"; it is not re-run here, because it writes into
-      // `src/dictionary/generated/` and this file already races that one.
+      // "the generators"; it is not re-run here because this file has no claim to
+      // make about it, and no longer because the two would collide - each suite
+      // now writes into its own sandbox.
       expect(r.stderr).toContain("repeating-groups.js");
     },
     GENERATOR_TIMEOUT_MS,

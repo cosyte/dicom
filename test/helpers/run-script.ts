@@ -32,6 +32,13 @@
  * measured green under `node` with byte-identical output.
  *
  * SECURITY: array args, `shell: false`. No exec, no shell-form.
+ *
+ * THE `root` OPTION, AND WHY IT IS NOT A `cwd`. Both generators resolve their own
+ * repository root from `import.meta.url`, so pointing a run at a relocated copy of
+ * the tree means running the COPY's script file, not this one with a different
+ * working directory. `root` moves the script path; `cwd` moves only the child's
+ * working directory, which neither generator reads. See
+ * `test/helpers/generator-sandbox.ts` for what that relocation is for.
  */
 
 import { spawnSync } from "node:child_process";
@@ -49,10 +56,17 @@ export interface ScriptResult {
 const REPO_ROOT = join(import.meta.dirname, "..", "..");
 
 export interface RunScriptOptions {
-  /** Working directory for the child. Defaults to the repository root. */
+  /** Working directory for the child. Defaults to `root`. */
   cwd?: string;
   /** Defaults to `node`. See the header before setting this to `tsx`. */
   runner?: ScriptRunner;
+  /**
+   * Tree to run the script FROM. Defaults to this repository. Set it to a
+   * `createGeneratorSandbox()` root to run a copy that no other worker can see.
+   * The `tsx` binary is still taken from this repository's `node_modules`, which a
+   * sandbox deliberately does not carry.
+   */
+  root?: string;
 }
 
 /**
@@ -66,9 +80,9 @@ export function runRepoScript(
   args: readonly string[] = [],
   options: RunScriptOptions = {},
 ): ScriptResult {
-  const { cwd = REPO_ROOT, runner = "node" } = options;
+  const { root = REPO_ROOT, cwd = root, runner = "node" } = options;
   const bin = runner === "tsx" ? join(REPO_ROOT, "node_modules", ".bin", "tsx") : process.execPath;
-  const r = spawnSync(bin, [join(REPO_ROOT, "scripts", name), ...args], {
+  const r = spawnSync(bin, [join(root, "scripts", name), ...args], {
     cwd,
     encoding: "utf8",
     shell: false,

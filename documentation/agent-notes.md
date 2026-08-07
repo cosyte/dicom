@@ -2025,6 +2025,69 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   re-deriving the bound from a current normative source. **No staleness clock here either**, same
   reasoning as PS3.6 and PS3.15.
 
+## DICOM-ANNEX-E-TEST-RACE
+
+- **🛑 A TEST THAT MUST DEFEAT A PRECONDITION RELOCATES THE TREE. IT NEVER SOFTENS THE PRECONDITION,
+  AND IT NEVER MUTATES `vendor/` IN PLACE.** Both generator suites prove their pins by mutation:
+  they repoint `vendor/nema/<part>/SHA.txt` at a mutant document, and one of them overwrites the
+  bytes **at** the pinned path, because corrupting those bytes is the only way to reach the content
+  re-hash at all. Vitest runs test files in parallel, so for as long as a mutation was live every
+  other worker saw it. `test/docs/spec-citations.test.ts` re-hashes PS3.5, PS3.6 and PS3.15 at
+  **module load**, which made it a fresh concurrent reader of exactly those files, and a reader that
+  throws at module load takes its whole file down with it rather than one case. The remedy is
+  `test/helpers/generator-sandbox.ts`: `scripts/`, `src/` and `vendor/` are copied into a
+  `mkdtemp` directory and the generator is run from **that** tree, so there is nothing for a
+  concurrent reader to observe. **Neither generator took a new input**, which is what makes this
+  affordable: both resolve their own root from `import.meta.url`, so relocating the script relocates
+  the document it reads and the artifact it writes, and the byte-identical regen gate keeps depending
+  on a script with no vendor-root and no output-path argument. `runRepoScript` grew a `root` option,
+  which is a TEST helper's input, not a script's.
+- **THE WINDOW WAS MEASURED, NOT ARGUED.** A probe running the citation gate's own `readPinned` in a
+  loop, against **10 runs** of the two generator suites, logged **1,542 read cycles** and **953
+  anomalous observations** in four distinct classes:
+  | What the reader saw | part05 | part05-2004 | part15 |
+  | --- | --- | --- | --- |
+  | `SHA.txt` holding `RESERVED` rather than a hash | 43 | 35 | 108 |
+  | `SHA.txt` naming a directory not on disk | 31 | 31 | 120 |
+  | the file at the pinned path not hashing to the pin | 36 | 43 | 91 |
+  | **a pin that VERIFIED against a document that is not the committed one** | 106 | 94 | 207 |
+  Plus **8** observations of `src/dictionary/generated/` transiently diverging (`annex-e.ts` 6,
+  `repeating-groups.ts` 2), which is the flake `generate-repeating-groups.test.ts` had disclosed and
+  declined to fix, and which reaches the WHOLE suite rather than the two generator files, because the
+  shipped library imports both artifacts.
+- **🛑 THE FOURTH ROW IS THE ONE TO UNDERSTAND, AND IT IS WHY "RELAX THE PIN" WAS NEVER ON THE
+  TABLE.** A mutant is written into a directory **named by its own hash**, so re-hashing it
+  **succeeds**. An integrity check cannot see that at all: the reader resolves clauses against a
+  mutated standard and reports green. **A SHA pin rewritten mid-run means the thing being corrupted
+  is the integrity check itself**, so a reader taught to tolerate a writer would have traded the
+  guarantee for a green board. That generalises to anything gated on a vendored normative source.
+- **THE FIX IS PROVED BY RE-RUNNING THE REPRODUCTION, NOT BY ONE GREEN PASS.** A flake that
+  reproduces once in ten is not answered by a change that passes once. Same probe, same 10 runs
+  after the change: **1,437 read cycles, ZERO observations of any class.** End to end at the vitest
+  level, looping the reader file against 10 runs of the two mutating suites: **10 of 31 reader runs
+  FAILED before, 0 of 30 after**, the failure reading `Error: vendor/nema/part15/SHA.txt does not
+hold a sha256` thrown at module load. **Both controls were run, because a clean after-figure is
+  also what a dead probe prints**: the probe alone for 20 s logged 419 cycles and zero anomalies
+  (negative), and a 1-second hand-injected `RESERVED` in `part15/SHA.txt` was caught **20 times in
+  247 cycles** (positive). Full suite 1,195 tests, 0 failed, before and after.
+- **THE PER-TEST BUDGETS WERE RE-CHECKED UNDER LOAD AND NOTHING NEEDED MOVING.** `#85` gave the
+  changelog Prettier-canonical assertion its own budget rather than raising the global, so the
+  question was whether a sibling was sitting just under its own ceiling for the same reason. Measured
+  on a box loaded until the suite's wall clock went from 35.9 s to 104.4 s: the worst headroom
+  anywhere is about **a quarter of the ceiling** (`attw-gate`'s slowest case, on its 60 s
+  `SPAWN_TIMEOUT`), every heavy `changelog-generation` case already carries its own `{ timeout }`,
+  and the slowest assertion still on the **10 s default** spends about a fifth of it. **No budget was
+  changed and no numeral was added to `vitest.config.ts`**, which refuses to enumerate these on
+  purpose: the measurement is the answer, and re-measuring under the load in front of you is the
+  rule, not reading a figure recorded here.
+- **NOT FIXED, AND NOT THE SAME SHAPE.** `test/scripts/phi-scan.test.ts` appends to the tracked
+  `phi-scan-overrides.md` and restores it in a `finally`. That is the same family, but it has **no
+  concurrent reader**: the only thing that reads that file is `scripts/phi-scan.ts`, invoked from
+  that suite's own cases, which vitest runs sequentially within a file, and `verify.sh` runs its
+  steps one at a time rather than beside the test run. The `.dcm` fixtures the same suite writes into
+  `test/fixtures/phi-scan/` are gitignored. `PRE-EXISTING`, unmeasured as a flake, and deliberately
+  left where it is.
+
 ## PHI-WARNING-MESSAGE-LEAK
 
 - **Diagnostics are built from a frozen registry, not from the document** (`PHI-WARNING-MESSAGE-LEAK`).
