@@ -6,9 +6,8 @@
  * action map ({@link annexE}). It is a **pure** function: the input {@link Dataset}
  * is never mutated; a fresh `Dataset` (with a rebuilt element map and File Meta)
  * is returned alongside a {@link DeidentifyReport} whose non-value-free fields
- * are named on that type: `uidMap`, `removedPrivateTags`,
- * `unauditableSequences[].tag` and `embeddedAttributes[].hidden`. Read the list
- * there, never a count quoted elsewhere.
+ * are named on that type. **The list is deliberately not copied here** - see
+ * `./index.ts` for what a third copy of it cost.
  *
  * **What it does**
  * - Resolves each attribute's action (basic profile, overridden by an active

@@ -159,11 +159,35 @@ carried the thing". The mask row carries its non-vacuity on the **premise** as w
 it asserts that `500C5241` really is actionable, really is an even group, and really resolves only
 through `50xxxxxx` - so it cannot pass because the counterexample stopped being one.
 
-**▶ REFUTER PASSES: 2** (`REFUTED`, then the remedy graded). Pass 1's blocker is instance 2's draft 2
-above, and its two minor findings are here too: the `DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED`
-message's closing sentence, and the `hidden` disclosure on `DeidentifyReport` - which had been
-reworded twice by then, so it was **deleted from that list** rather than given a third wording, per
-this repo's own rule. What is true of the field is stated once, on `EmbeddedAttributeFinding`.
+**▶ REFUTER PASSES: 2** - `REFUTED`, then `NOT REFUTED` on the remedy. Pass 1's blocker is instance
+2's draft 2 above, and its two minor findings are here too: the
+`DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED` message's closing sentence, and the `hidden` disclosure on
+`DeidentifyReport` - which had been reworded twice by then, so it was **deleted from that list**
+rather than given a third wording, per this repo's own rule.
+
+**▶ 🛑 PASS 2 PASSED THE SLICE AND STILL FOUND TWO MINORS INSIDE THE REMEDY, BOTH OF THEM CLAIM
+DEFECTS OF THE SHAPE THIS REPO LOSES PASSES TO. THE LESSON IS THE SECOND ONE.**
+
+1. **The residual list existed in THREE places in `src/`,** and deleting `hidden` from the
+   authoritative copy on `DeidentifyReport` left `src/deident/index.ts` and `src/deident/deidentify.ts`
+   still naming it with the retracted wording. Worse, and older: **neither of those copies ever named
+   `contextPath`** - so the drift had already been pointing the *unsafe* way before this slice pointed
+   it the safe way. Both copies are **deleted**, not resynced, and `DeidentifyReport` now says it is
+   the only copy. A list in three places drifts in three directions.
+2. **The reworded warning string dropped one of the filter's two conjuncts.** "names the ones with a
+   literal Table E.1-1 row" promises a superset: `hidden` is `isActionable && isTableBound`, so under
+   `RetainUIDs` a swallowed `(0020,000D)` **has** a literal row and is still unnamed, and a reader
+   would wrongly infer it had none. Measured by the pass on a synthetic file. A message is
+   consumer-facing, so a bound stated in one is the claim - the same rule that keeps a citation out of
+   `DICOM_DUPLICATE_FILE_META_ELEMENT`. Both conjuncts are in the string now, matching
+   `troubleshooting.md`, which had them right.
+
+**▶ WHAT PASS 2 COULD NOT BREAK, RECORDED BECAUSE IT IS STRONGER THAN THE CLAIM.** It counted the
+table in the vendored source rather than trusting the figure - `vendor/nema/part15/.../part15.xml`,
+`table_E.1-1`: **652 literal rows and exactly 3 masks**. And it measured something the docs do not
+claim and should not start claiming loosely: **0 of the 652 rows are all-printable ASCII**, so an
+admitted entry always contains a non-printable byte. That is a property of the current edition's
+table, not a bound this package enforces, which is why it is recorded here and not in a docstring.
 
 ---
 

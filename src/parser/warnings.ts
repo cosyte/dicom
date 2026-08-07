@@ -235,7 +235,7 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED:
     "Pixel Data is present and Burned In Annotation is not 'NO'; this metadata-only de-identifier cannot inspect or clean pixels. Recognizable text may remain burned into the image.",
   DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED:
-    "Element ({tag}) {vr} was kept by the action table, but its value ends with {n} whole Data Element(s) - an over-declared Value Length swallowed what followed it. Emptied rather than kept, because the action table cannot see an attribute encoded inside a value. report.embeddedAttributes names the ones with a literal Table E.1-1 row, which may be none of them.",
+    "Element ({tag}) {vr} was kept by the action table, but its value ends with {n} whole Data Element(s) - an over-declared Value Length swallowed what followed it. Emptied rather than kept, because the action table cannot see an attribute encoded inside a value. report.embeddedAttributes names the ones this run acts on that also have a literal Table E.1-1 row, which may be none of them.",
   // Deliberately short. One of these is raised per un-auditable element, so a
   // long message is multiplied by an element count the input controls; the
   // reasoning belongs in the docs, not in a string repeated thousands of times.

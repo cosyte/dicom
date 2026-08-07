@@ -444,12 +444,6 @@ export interface UndefinedVrFinding {
  *   and still answers it whenever the fabricated VR is outside the 34 PS3.5
  *   §6.2 defines. It cannot when the fabricated VR is one of them, because those
  *   two files are byte-identical.
- * `embeddedAttributes[].hidden` **left this list** in
- * `DICOM-DIAGNOSTIC-PHI-RESIDUALS` - an entry is now a literal PS3.15 Table
- * E.1-1 row, so it is not value-bearing. Its own disclosure had been reworded
- * twice by then, and this repo deletes a disclosure at that point rather than
- * writing a third; what is true of the field is stated once, on
- * {@link EmbeddedAttributeFinding}. The field is **still uncapped**.
  * - **`contextPath`, on all four findings that carry one** - see
  *   {@link DeidentifiedAttribute.contextPath}, which holds the measurement. The
  *   segment tags come off the wire with no table behind them, so a fabricated
@@ -460,8 +454,18 @@ export interface UndefinedVrFinding {
  *   same file the de-identified object itself re-emits the fabricated header, so
  *   redacting this field does not make the object safe.**
  *
+ * `embeddedAttributes[].hidden` **left that list** in
+ * `DICOM-DIAGNOSTIC-PHI-RESIDUALS` - an entry is now a literal PS3.15 Table
+ * E.1-1 row, so it is not value-bearing. Its own disclosure had been reworded
+ * twice by then, and this repo deletes a disclosure at that point rather than
+ * writing a third; what is true of the field is stated once, on
+ * {@link EmbeddedAttributeFinding}. The field is **still uncapped**.
+ *
  * So "the report is safe to log apart from `uidMap`" is **not** an accurate
  * description of this type, and was corrected rather than kept convenient.
+ * **This is the only copy of that list.** Two others lived in module docstrings,
+ * still naming `hidden` after it left and never naming `contextPath` at all; a
+ * graded pass found them and they were deleted rather than resynced.
  *
  * @example
  * ```ts
