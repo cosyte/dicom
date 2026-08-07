@@ -172,17 +172,18 @@ export interface DicomParseWarning {
  * sequence's first**; with one 24-byte item ahead of it the same fixture renders
  * `20275`. Measured both ways, because "less 8" as a universal was refused.
  *
- * ## The exceptions, named here and nowhere else
+ * ## The exceptions, and the surfaces that point here instead of copying them
  *
  * **🔴 THE RULE IS NOT UNIFORMLY APPLIED, AND SAYING SO IS THE POINT - A GRADED
  * PASS REFUSED THE DRAFT THAT STATED IT AS AN ABSOLUTE.** They are named rather
- * than counted, because a count in prose is the thing this package deletes - and
- * they are named **once**. This list was carried in six places at the same time
- * and every one of them was corrected twice; `README.md`,
- * `docs-content/limitations.md`, `docs-content/troubleshooting.md`,
+ * than counted, because a count in prose is the thing this package deletes.
+ * `README.md`, `docs-content/limitations.md`, `docs-content/troubleshooting.md`,
  * `docs-content/spec-notes-tolerance.md` and `ParseOptions.strict`'s JSDoc point
- * here now and restate nothing, because a copy is a claim that goes stale on its
- * own.
+ * here and restate nothing, because a copy is a claim that goes stale on its
+ * own. **That is a statement about the consumer surfaces and not about the
+ * repo:** `documentation/agent-notes.md` and a pending changeset each argue the
+ * same exception in full, deliberately, because they are the record of the
+ * slices that took it rather than live documentation.
  *
  * - {@link fileMetaGroupLengthMismatch}'s `{n}` is a raw declared length and
  *   stays, because `parseFileMeta` reads it in a frame nothing can

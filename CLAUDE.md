@@ -61,7 +61,7 @@ in the same area - open the section first.**
   - **`renderTag` IS MEMBERSHIP: a LITERAL PS3.6 row or `<withheld>`.
     A MASK IS NOT ONE, that cost a pass** (`50xx` leaves 16 bits free; `500C5241` is `"\fPAR"`). Costs
     PRIVATE, `(gggg,0000)` and `60xx` tags their name in EVERY message. **A raw wire number, or one
-    SHIFTED BY A COMPUTABLE AMT, is bound out of the SIGNATURE; exceptions named ONCE in
+    SHIFTED BY A COMPUTABLE AMT, is bound out of the SIGNATURE; the exceptions live in
     `warnings.ts`. A FLOOR CLEARS NOTHING BELOW IT; NO OFFSET ARM CLEARS A SHIFT.** "safe to log" DELETED; `hidden` UNCAPPED
     [#dicom-diagnostic-phi-residuals](documentation/agent-notes.md#dicom-diagnostic-phi-residuals) ·
     [#dicom-overdeclare-swallows-into-value](documentation/agent-notes.md#dicom-overdeclare-swallows-into-value)

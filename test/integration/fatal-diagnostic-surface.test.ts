@@ -188,8 +188,8 @@ function renderings(payload: string): readonly Leak[] {
     // NO FLOOR. Every 4-byte window is hunted, however short its decimal, and
     // the collision question is settled in `leaksIn` by how the match is made.
     out.push({ kind: "length", rendered: String(bytes.readUInt32LE(i)), bytes: window });
-    // ...and the same window shifted by the one structural constant a registry
-    // template ever subtracted from a wire number. See the docblock above.
+    // ...and the same window shifted by {@link ITEM_HEADER_BYTES}, which states
+    // both what that covers and what it does not.
     const shifted = bytes.readUInt32LE(i) - ITEM_HEADER_BYTES;
     if (shifted >= 0) {
       out.push({ kind: "length-less-item-header", rendered: String(shifted), bytes: window });
@@ -896,9 +896,11 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
     // rendered `endLimit - cursor.position` into a `{n2}` slot, defended by the
     // emit site's `endLimit < buffer.length` conjunct "bounding it by the
     // buffer". That bounds the number's MAGNITUDE. `endLimit` is the enclosing
-    // sequence's declared Value Length off its own header and `cursor.position`
-    // sits exactly one Item header past the value start, so the rendered count
-    // IS that declared length less 8 - and 8 is published in PS3.5 7.5.1.
+    // sequence's declared Value Length off its own header, so the rendered count
+    // is that declared length less the bytes of the sequence already consumed -
+    // {@link ITEM_HEADER_BYTES} when the crossing item is the first, and more
+    // when items precede it, which that constant states rather than hides. The
+    // template rebuilt below is the first-item case.
     //
     // The floor's removal did not surface it, because every arm hunted a
     // rendering EQUAL to a typed read of a payload window. This row measures
