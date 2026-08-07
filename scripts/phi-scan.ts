@@ -117,11 +117,29 @@ const DOC_ROOTS = [join(REPO_ROOT, "README.md"), join(REPO_ROOT, "docs-content")
 const DOC_SCOPE = ["README.md", "docs-content"];
 
 /**
- * A base64 run long enough to be a Part 10 object rather than an identifier or a hash. The smallest
- * fixture the docs ship decodes to 202 bytes, so the floor is set well below that and the decode
- * itself does the real filtering: a run that does not decode to something DICOM-shaped is dropped.
+ * The shortest base64 run worth decoding: enough characters to encode ONE Explicit VR LE short-form
+ * Data Element header, which is the least that `fileMetaStart` could ever recognize.
+ *
+ * 🛑 THE FLOOR IS NOT THE FILTER, AND SETTING IT AS THOUGH IT WERE IS HOW THIS ROUTE FIRST SHIPPED
+ * BLIND. A first draft floored the run at 120 characters on the reasoning that a Part 10 object is
+ * big; the preamble-less fixture `docs-content/cookbook.md` ships to demonstrate
+ * `DICOM_MISSING_PREAMBLE` is 88, so the one file the route's own comments named as its reason was
+ * the one file it never opened, and the gate printed `OK - no hits` over a name-bearing payload in
+ * exactly that shape. The decode does the filtering now: a run that does not decode to something
+ * `fileMetaStart` recognizes is dropped, and nothing about a doc fixture's SIZE is assumed. No
+ * measured length is written here either, because a doc fixture's length is whatever the next recipe
+ * needs it to be.
  */
-const MIN_BASE64_RUN = 120;
+const MIN_BASE64_RUN = 16;
+
+/**
+ * Built from the floor so the two cannot drift: a hardcoded quantifier made the constant dead, and a
+ * dead constant is the shape where changing the number changes nothing. A fresh `RegExp` per call
+ * rather than one module-level object, so no `lastIndex` can be carried between files.
+ */
+function base64RunRe(): RegExp {
+  return new RegExp(`[A-Za-z0-9+/]{${String(MIN_BASE64_RUN)},}={0,2}`, "g");
+}
 
 // Hardcoded PN/DA/DT tags. We intentionally avoid depending on the generated
 // Dictionary (which may regenerate within the same CI build). Tags are stored
@@ -776,7 +794,17 @@ function inspectElement(
  */
 function fileMetaStart(buf: Buffer): number | null {
   if (isDicom(buf)) return 132;
-  if (buf.length >= 8 && buf.readUInt16LE(0) === 0x0002) return 0;
+  // The preamble-less branch has no magic number to key on, so it keys on the shape the File Meta
+  // group always has in this package's reader and writer: group `0002` in Explicit VR LE, which
+  // puts two ASCII letters where the VR belongs. Requiring the VR as well as the group is what
+  // keeps the low run floor above from turning ordinary prose into candidate objects.
+  if (
+    buf.length >= 8 &&
+    buf.readUInt16LE(0) === 0x0002 &&
+    /^[A-Z]{2}$/.test(buf.toString("latin1", 4, 6))
+  ) {
+    return 0;
+  }
   return null;
 }
 
@@ -904,9 +932,8 @@ function scanText(target: Target, content: string, allow: AllowList, hits: Hit[]
  * its credibility on false hits over checksums and image data.
  */
 function scanEmbeddedObjects(target: Target, text: string, allow: AllowList, hits: Hit[]): void {
-  for (const m of text.matchAll(/[A-Za-z0-9+/]{120,}={0,2}/g)) {
+  for (const m of text.matchAll(base64RunRe())) {
     const run = m[0];
-    if (run.length < MIN_BASE64_RUN) continue;
     let decoded: Buffer;
     try {
       decoded = Buffer.from(run, "base64");

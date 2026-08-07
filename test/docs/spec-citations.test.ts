@@ -102,20 +102,20 @@ function readSections(text: string): Section[] {
 }
 
 /**
- * The body of `sections[index]`: everything up to the next division at the same or a shallower
- * depth. Depth is the dotted-label component count, which is what DocBook's own labelling encodes.
+ * The OWN text of `sections[index]`: everything up to the very next division, whatever its depth.
+ *
+ * 🛑 IT MUST NOT INCLUDE SUBSECTIONS, AND A FIRST DRAFT OF THIS FILE DID. Running to the next
+ * same-or-shallower division makes a parent's body a superset of every child's, so `PS3.5 §7.5`
+ * passes for a sentence that lives in §7.5.2 and `PS3.15 §E.1` passes for one that lives in §E.1.1:
+ * verbatim the two confusions `CLAUDE.md` records as having each cost a refusal here, certified
+ * green by the very check written to catch them. Own-text-only is what makes "the CITED clause
+ * carries the sentence" mean the cited clause. Both parent cases are pinned as controls below.
  */
 function bodyOf(doc: PinnedDoc, index: number): string {
   const self = doc.sections[index];
   if (self === undefined) return "";
-  const depth = self.label.split(".").length;
-  for (let j = index + 1; j < doc.sections.length; j++) {
-    const next = doc.sections[j];
-    if (next !== undefined && next.label.split(".").length <= depth) {
-      return doc.text.slice(self.start, next.start);
-    }
-  }
-  return doc.text.slice(self.start);
+  const next = doc.sections[index + 1];
+  return next === undefined ? doc.text.slice(self.start) : doc.text.slice(self.start, next.start);
 }
 
 /** Strip DocBook markup and collapse whitespace, so a sentence match is not defeated by tagging. */
@@ -171,6 +171,22 @@ const LOAD_BEARING: readonly { part: VendoredPart; clause: string; sentence: str
     clause: "E.1.1",
     sentence: "inserted in or added to",
   },
+  {
+    // The overlay half of the repeating-group bound, and ONLY the overlay half: this clause retires
+    // curve encoding and delegates the `50xx` bound to PS3.5-2004 by URL, which is why that edition
+    // is vendored beside the current one. Any text citing this clause for the curve range is wrong.
+    part: "PS3.5",
+    clause: "7.6",
+    sentence: "Repeating Groups shall only be allowed in the even numbered Groups 6000-601E",
+  },
+  {
+    // 🛑 QUOTE THIS CLAUSE WHOLE: it has two branches and a gate caught it truncated at "removed",
+    // which reads a permissive clause as an absolute. The second branch is the one this library does
+    // not implement, so the sentence pinned here is the one that names it.
+    part: "PS3.15",
+    clause: "E.3.10",
+    sentence: "Private Data Element Characteristics Sequence",
+  },
 ];
 
 /** Markdown the gate covers: the npm-visible README plus everything the docs site ships. */
@@ -186,9 +202,18 @@ function docFiles(): string[] {
 
 const FILES = docFiles();
 
-/** `PS3.5 §7.8.1`, `PS3.15 2026c section E.1.1`, `PS3.6 Annex A`: the citation forms the docs use. */
+/**
+ * `PS3.5 §7.8.1`, `PS3.15 2026c section E.1.1`, `PS3.15 Annex E`: the citation forms the docs use.
+ *
+ * 🛑 THE LABEL ALTERNATIVE MUST ADMIT AN ANNEX LABEL. A first draft required a digit in second
+ * position (`[A-Z]?[0-9]...`), which matches `7.8.1` and `6.2` and cannot match `E.1.1`, `E.2` or
+ * `E.3.10`. Every PS3.15 Annex E citation on the site was therefore invisible to this gate,
+ * including `§E.3.10`, the one clause `CLAUDE.md` singles out as having been caught truncated, and
+ * a fabricated `§E.99.99` passed. The `checked` floor did not catch it either: the PS3.5 citations
+ * alone carried it.
+ */
 const CITATION_RE =
-  /\bPS3\.(5|6|15)\b(?:\s+\d{4}[a-z])?\s*(?:§|section\s+)([A-Z]?[0-9][0-9A-Za-z.]*)/g;
+  /\bPS3\.(5|6|15)\b(?:\s+\d{4}[a-z])?\s*(?:(?:§|section\s+)([A-Z0-9][0-9A-Za-z.]*)|Annex\s+([A-Z])\b)/g;
 
 /** `(0010,0020) Patient ID`. Repeating-group masks (`60xx`) and bare tags are not name claims. */
 const TAG_NAME_RE =
@@ -265,18 +290,21 @@ describe("documentation spec citations", () => {
     expect(FILES.length).toBeGreaterThan(1);
   });
 
-  test("every cited clause of a vendored part resolves to exactly one section", () => {
+  test("every cited clause of a vendored PROSE part resolves to exactly one section", () => {
+    // The scope is stated in the name rather than in a comment, because a name that overstates is
+    // the thing this whole file is about. PS3.6 is a registry of tables, not numbered prose: the
+    // docs cite it for attribute identity, and that is checked by its own case below.
     const refusals: string[] = [];
+    const seen = new Set<string>();
     let checked = 0;
     for (const file of FILES) {
       const text = readFileSync(file, "utf8");
       for (const m of text.matchAll(CITATION_RE)) {
         const part = `PS3.${m[1] ?? ""}` as VendoredPart;
-        const clause = (m[2] ?? "").replace(/\.$/, "");
-        // PS3.6 is a registry of tables rather than prose sections; its Annex labels resolve, its
-        // table labels do not, and the docs cite it for attribute identity, checked below.
+        const clause = (m[2] ?? m[3] ?? "").replace(/\.$/, "");
         if (part === "PS3.6") continue;
         checked++;
+        seen.add(`${part} ${clause}`);
         const found = candidates(part, clause);
         if (found.length !== 1) {
           refusals.push(
@@ -286,6 +314,11 @@ describe("documentation spec citations", () => {
       }
     }
     expect(checked).toBeGreaterThan(5);
+    // The docs cite BOTH prose parts, and an Annex-labelled clause among them. A `checked` floor
+    // alone is carried by whichever part happens to be cited most, which is how every PS3.15 Annex
+    // E citation went unseen behind a regex that could not match one.
+    expect([...seen].some((c) => c.startsWith("PS3.5 "))).toBe(true);
+    expect([...seen].some((c) => c.startsWith("PS3.15 E"))).toBe(true);
     expect(refusals).toStrictEqual([]);
   });
 
@@ -312,6 +345,42 @@ describe("documentation spec citations", () => {
       plainText(bodyOf(DOCS["PS3.5"], i)).includes("The scope of the reservation is just within"),
     );
     expect(carrying).toStrictEqual([]);
+  });
+
+  test("a PARENT clause is refused for a sentence that lives in its subsection", () => {
+    // The control for `bodyOf` reading own text only. Both pairs here are the exact confusions
+    // `CLAUDE.md` records as having cost a refusal in this package: §7.5 quoted for a §7.5.2 fact,
+    // and §E.1 quoted for a §E.1.1 one. A body that swallowed subsections would pass both.
+    const cases: readonly {
+      part: VendoredPart;
+      parent: string;
+      child: string;
+      sentence: string;
+    }[] = [
+      {
+        part: "PS3.5",
+        parent: "7.5",
+        child: "7.8.1",
+        sentence: "The scope of the reservation is just within the Item",
+      },
+      { part: "PS3.15", parent: "E.1", child: "E.1.1", sentence: "inserted in or added to" },
+    ];
+    for (const { part, parent, child, sentence } of cases) {
+      const parents = candidates(part, parent);
+      const children = candidates(part, child);
+      expect(parents).toHaveLength(1);
+      expect(children).toHaveLength(1);
+      const inParent = parents.filter((i) => plainText(bodyOf(DOCS[part], i)).includes(sentence));
+      const inChild = children.filter((i) => plainText(bodyOf(DOCS[part], i)).includes(sentence));
+      expect({ clause: `${part} ${parent}`, carrying: inParent.length }).toStrictEqual({
+        clause: `${part} ${parent}`,
+        carrying: 0,
+      });
+      expect({ clause: `${part} ${child}`, carrying: inChild.length }).toStrictEqual({
+        clause: `${part} ${child}`,
+        carrying: 1,
+      });
+    }
   });
 
   test("every documented attribute is named the way the registry names it", () => {

@@ -299,6 +299,41 @@ describe("phi-scan: doc fixtures (base64 DICOM inside markdown)", () => {
     expect(r.stderr).toMatch(/\(0010,0010\)/);
   });
 
+  /**
+   * 🛑 THE SHAPE THE COOKBOOK ACTUALLY SHIPS, TAKEN FROM THE COOKBOOK.
+   *
+   * The case above builds its preamble-less object with `buildDicomFixture`, whose File Meta group
+   * is larger than the doc's. A first draft of this route floored a base64 run at 120 characters;
+   * the cookbook's own preamble-less fixture encodes to 88, so the route skipped the exact file its
+   * comments named as the reason it existed, and every test here still passed. A fixture built by
+   * the test cannot catch that. This one reads the shipped doc, takes its shortest DICOM-shaped run,
+   * appends a name-bearing element to it, and requires the scanner to find it.
+   */
+  it("reaches the SHORTEST real fixture in docs-content, not just a test-built one", () => {
+    const cookbook = readFileSync(join(REPO_ROOT, "docs-content", "cookbook.md"), "utf8");
+    const objects = [...cookbook.matchAll(/[A-Za-z0-9+/]{16,}={0,2}/g)]
+      .map((m) => Buffer.from(m[0], "base64"))
+      .filter((b) => b.length >= 8 && b.readUInt16LE(0) === 0x0002)
+      .sort((a, b) => a.length - b.length);
+
+    const shortest = objects[0];
+    expect(shortest, "cookbook.md ships no preamble-less object any more").toBeDefined();
+    if (shortest === undefined) return;
+
+    // Explicit VR LE `(0010,0010) PN 10 "SMITH^JOHN"`, appended to the real object's dataset.
+    const header = Buffer.alloc(8);
+    header.writeUInt16LE(0x0010, 0);
+    header.writeUInt16LE(0x0010, 2);
+    header.write("PN", 4, "ascii");
+    header.writeUInt16LE(10, 6);
+    const seeded = Buffer.concat([shortest, header, Buffer.from("SMITH^JOHN", "latin1")]);
+
+    const path = writeDoc("shortest-real.md", seeded);
+    const r = runScanner([path]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/\(0010,0010\)/);
+  });
+
   it("the same doc with an allow-listed payload scans clean (exit 0)", () => {
     const path = writeDoc("clean.md", buildDicomFixture("19000101", "ANON^PATIENT"));
     const r = runScanner([path]);

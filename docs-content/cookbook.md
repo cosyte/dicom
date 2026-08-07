@@ -26,9 +26,12 @@ name is deliberately narrow.
   re-reads it to confirm that every `(gggg,eeee) Name` pair written on this site is the registry's
   own.
 - **Encoding rules** are cited to **PS3.5 2026c** and **de-identification rules to PS3.15 2026c**,
-  both vendored and pinned the same way (`vendor/nema/part05/`, `vendor/nema/part15/`). A citation
-  is only written here after the clause has been resolved in the pinned document and found to carry
-  the sentence the text relies on.
+  both vendored and pinned the same way (`vendor/nema/part05/`, `vendor/nema/part15/`). Two different
+  strengths of check run over those, and the difference is worth stating rather than blurring:
+  **every** clause cited on this site is resolved in the pinned document by collecting all candidate
+  sections with that label and requiring exactly one, and each clause the text leans on for a
+  normative statement is additionally required to carry that sentence **in its own body, not in a
+  subsection**. A label proves the label exists; it does not prove the body says anything.
 - **No numbered clause of PS3.3, PS3.4, PS3.10 or PS3.16 is cited anywhere on this site.** Those
   parts are not vendored here, so a clause number for one could not be checked against anything, and
   a citation nobody can check is worse than none. Where an IOD-level or file-format rule matters, the
@@ -91,7 +94,8 @@ const sopClass = ds.get("00080016")?.value;
 const sopClassUid = sopClass?.kind === "strings" ? sopClass.values[0] : undefined;
 Dictionary.uid(sopClassUid ?? "")?.name; // => "CT Image Storage"
 
-// Nothing about this object was tolerated: it is spec-clean.
+// The parser recorded no deviation. That is a statement about what THIS reader tolerated,
+// not a conformance verdict: PS3.10 governs the file format and is not vendored here.
 ds.warnings.length; // => 0
 ```
 
@@ -185,13 +189,14 @@ Three things worth being explicit about, because getting any of them wrong is a 
 ## 3. Read pixel-interpretation metadata safely
 
 **The problem:** you (or a downstream renderer) will touch the pixels, and the interpretation
-attributes decide what the stored numbers *mean*. The dangerous DICOM failure is the confident,
+attributes decide what the stored numbers _mean_. The dangerous DICOM failure is the confident,
 wrong image, so none of these views defaults a missing value.
 
 **Attributes read** (PS3.6 2026c): `(0028,0002)` Samples per Pixel, `(0028,0004)` Photometric
 Interpretation, `(0028,0010)` Rows, `(0028,0011)` Columns, `(0028,0030)` Pixel Spacing,
-`(0028,0100)` Bits Allocated, `(0028,0101)` Bits Stored, `(0028,0102)` High Bit, `(0028,0103)` Pixel
-Representation, `(0028,1052)` Rescale Intercept, `(0028,1053)` Rescale Slope.
+`(0018,1164)` Imager Pixel Spacing, `(0028,0100)` Bits Allocated, `(0028,0101)` Bits Stored,
+`(0028,0102)` High Bit, `(0028,0103)` Pixel Representation, `(0028,1052)` Rescale Intercept,
+`(0028,1053)` Rescale Slope.
 
 ```ts runnable
 import { parseDicom } from "@cosyte/dicom";
@@ -329,8 +334,12 @@ the `(0010,004x)` gender-identity and sex-parameters attributes, and `EthnicGrou
 of Table E.1-1 name a family rather than a single tag (`(50xx,xxxx)` Curve Data, `(60xx,3000)` and
 `(60xx,4000)` Overlay Data and Comments, and the odd-group private-attribute row). All four are
 acted on: private attributes are removed through their own path, and the three repeating-group rows
-are matched by mask across the sixteen even groups PS3.5 2026c §7.6 bounds them to, removed, and
-reported with the mask that matched:
+are matched by mask across the sixteen even groups the standard bounds them to, removed, and
+reported with the mask that matched. **That bound is stated across two editions, and citing only the
+current one would be wrong**: PS3.5 2026c §7.6 gives the overlay range (`6000`-`601E`) and, in the
+same clause, retires curve encoding and delegates the curve range to PS3.5-2004 by URL. Both
+editions are vendored and SHA-pinned here, and the generator proves the delegation link rather than
+assuming it.
 
 ```ts
 const { report } = deidentify(parseDicom(buf));
@@ -347,10 +356,13 @@ report.attributes
 **The problem:** the imaging study has to join the rest of the record, and someone has asked you for
 a FHIR resource or an HL7 v2 field mapping.
 
-The authoritative crosswalk is the FHIR
+The crosswalk to work from is the FHIR
 [`ImagingStudy` "Mappings for DICOM"](https://build.fhir.org/imagingstudy-mappings.html) tab, which
-maps each `ImagingStudy` element to the DICOM attribute it comes from. This library's job is to
-surface those attributes correctly; it does not build FHIR resources for you.
+maps each `ImagingStudy` element to the DICOM attribute it comes from. **Say which FHIR you mean:**
+that URL is `build.fhir.org`, the continuous build, not a balloted release, so pin the mappings page
+for the FHIR version your integration targets (R4 / R4B / R5) rather than treating the build as
+stable. Nothing in this package is versioned against FHIR; this library's job is to surface the DICOM
+attributes correctly, and it does not build FHIR resources for you.
 
 **Attributes read** (PS3.6 2026c): `(0020,000D)` Study Instance UID, `(0020,000E)` Series Instance
 UID, `(0008,0018)` SOP Instance UID, `(0008,0016)` SOP Class UID, `(0008,0060)` Modality,

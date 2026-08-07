@@ -31,11 +31,14 @@ import type { Tag, VR } from "../dictionary/types.js";
  * const ds = parseDicom(buf);
  * // Anything the typed FileMeta fields do not model, in ascending tag order.
  * for (const raw of ds.fileMeta?.extraElements ?? []) {
- *   raw.tag; // e.g. "00020017" Source Application Entity Title
+ *   raw.tag; // e.g. "00020017" Sending Application Entity Title
  *   raw.vr; // the VR the source wrote (File Meta is always Explicit VR LE)
  *   raw.value.length; // even, per PS3.5 2026c section 7.1.1
  * }
  * ```
+ *
+ * `(0002,0016)` Source Application Entity Title is deliberately NOT the example: it is one of the
+ * typed fields, so it never reaches this array.
  */
 export interface FileMetaRawElement {
   /** 8-char uppercase hex tag, e.g. `"00020100"`. */

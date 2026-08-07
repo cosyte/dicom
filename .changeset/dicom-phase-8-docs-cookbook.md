@@ -10,14 +10,19 @@ Accession Number, Patient ID paired with its issuer), read pixel-interpretation 
 bridge to FHIR `ImagingStudy` and HL7 v2. The FHIR recipe cites the `ImagingStudy` "Mappings for
 DICOM" tab, which is the authoritative crosswalk.
 
-**Every citation on the site is now checked against the SHA-pinned normative document.** A new gate
-re-hashes the vendored PS3.5, PS3.6 and PS3.15 2026c DocBook sources, resolves every clause the docs
-cite by collecting **every** candidate section with that label and requiring exactly one (zero and two
-are both refusals), requires each load-bearing clause's own body to carry the sentence the text relies
-on, and checks that every `(gggg,eeee) Some Name` pair written anywhere in the docs is the registry's
-own name for that tag. **A numbered clause of a part this repository does not vendor may no longer be
-cited at all**: two such citations were in the README and are replaced by prose that names the part and
-says what is and is not claimed.
+**The site's citations are checked against the SHA-pinned normative documents.** A new gate re-hashes
+the vendored PS3.5, PS3.6 and PS3.15 2026c DocBook sources as a precondition, then runs two checks of
+different strength. Every clause citation of a vendored **prose** part (PS3.5, PS3.15) is resolved by
+collecting **every** candidate section carrying that label and requiring exactly one, so zero and two
+are both refusals and a first-match read cannot take the table of contents. Each clause the text leans
+on for a normative statement is additionally required to carry that sentence **in its own body, not in
+a subsection** (a body that swallowed subsections would certify `§7.5` for a `§7.5.2` fact and `§E.1`
+for an `§E.1.1` one, which are the two confusions this package has already paid for; both are pinned
+as controls). PS3.6 is cited for attribute identity rather than for prose, and is checked by its own
+case: every `(gggg,eeee) Some Name` pair written anywhere in the docs must be the registry's own name
+for that tag. **A numbered clause of a part this repository does not vendor may no longer be cited at
+all**: two such citations were in the README and are replaced by prose that names the part and says
+what is and is not claimed.
 
 **`@example` on every public export is a gate rather than a convention.** Two exports were missing one
 and now have it. The checker walks the public barrel through the compiler, so a namespace export and a
@@ -28,7 +33,13 @@ buffers inline in markdown, and until now the scanner never opened one: to a tex
 a single alphanumeric token with no `FAMILY^GIVEN` and no `YYYYMMDD` in it. `README.md` and
 `docs-content/**` are now a second corpus, embedded objects are decoded and walked as DICOM, and both
 the preamble-bearing and the preamble-less shape are recognized, the latter being what the cookbook
-ships to demonstrate `DICOM_MISSING_PREAMBLE`. **It found real content the moment it ran**: every
+ships to demonstrate `DICOM_MISSING_PREAMBLE`. **The run floor is not the filter, and a first draft
+that treated it as one shipped blind**: it required 120 base64 characters on the reasoning that a Part
+10 object is big, and the cookbook's preamble-less fixture encodes to 88, so the one file the route's
+own comments named as its reason was the one file it never opened while every test still passed. The
+floor is now the shortest run that could encode a single Data Element header, the decode does the
+filtering, and a regression case takes the **shortest real object out of the shipped cookbook** rather
+than building its own. **It found real content the moment it ran**: every
 sample object on the site carried a Study Date inside the 120-year window. Each is now `19000101`, and
 the docs say why rather than leaving it as an unexplained oddity.
 
