@@ -1,5 +1,183 @@
 # Changelog
 
+## 0.0.14
+
+### Patch Changes
+
+- 0c53142: Test infrastructure: the generator suites prove their pins in a sandbox, so nothing mutates the
+  vendored standards while another worker is reading them.
+
+  **The pin is not relaxed. The mutation is relocated.** Both generator suites prove their vendored
+  DocBook pins are preconditions rather than comments, and the only way to prove that is to defeat one:
+  repoint `vendor/nema/<part>/SHA.txt` at a mutant document, and, for the check that re-hashes the
+  CONTENT rather than the pointer, overwrite the bytes at the pinned path itself. Vitest runs test files
+  in parallel, so for as long as a mutation was live every other worker saw it. The documentation
+  citation gate re-hashes PS3.5, PS3.6 and PS3.15 at **module load**, which made it a fresh concurrent
+  reader of two of the parts those suites mutate, and a reader that throws at module load takes its
+  whole file down rather than one case. (Two, not all of them: the gate does not read `part05-2004`,
+  which the repeating-groups suite mutates, and nothing mutates `part06`, which the gate does read.)
+  The generators now run against a `mkdtemp` copy of `scripts/`, `src/` and `vendor/`, so there is
+  nothing for a concurrent reader to observe.
+
+  **Neither generator took a new input, which is what makes this affordable.** Both resolve their own
+  repository root from `import.meta.url`, so relocating the script relocates the document it reads and
+  the artifact it writes. The byte-identical regen gate keeps depending on a script with no vendor-root
+  argument and no output-path argument; the new `root` option is on the test helper that spawns them,
+  not on the scripts. The artifact comparison still reads the **committed**
+  `src/dictionary/generated/` file as its baseline, so "regenerates what is committed" still means that.
+
+  **The window was measured, and so was the fix.** A probe running the citation gate's `readPinned` in
+  a loop over all four vendored part directories, against ten runs of the two generator suites, logged
+  1,542 read cycles and 945 anomalous observations in four classes: `SHA.txt` holding a non-hash,
+  `SHA.txt` naming a directory not on disk, the file at the pinned path not hashing to its pin, and the
+  one that matters most, **a pin that verified against a document that is not the committed one**. 742
+  of those 945 are on the two parts the citation gate actually reads. A mutant is written into a directory
+  named by its own hash, so re-hashing it succeeds: an integrity check cannot see that at all, and the
+  reader resolves clauses against a mutated standard and reports green. A SHA pin rewritten mid-run
+  means the thing being corrupted is the integrity check itself, which is why teaching a reader to
+  tolerate a writer was never on the table. Same probe after the change: 1,437 read cycles, zero
+  observations of any class. End to end, looping the reader file against ten runs of the two mutating
+  suites: ten of 31 reader runs failed before, zero of 30 after. Both controls were run, because a clean
+  after-figure is also what a dead probe prints.
+
+  **This also closes a flake the repeating-groups suite had disclosed and declined to fix**, and its
+  disclosure is deleted rather than reworded: the two generator suites raced each other through
+  `src/dictionary/generated/`, which reaches the whole test run and not just those two files, because
+  the shipped library imports both artifacts. It was declined then because the obvious fix was an
+  output-path override on a script the regen gate depends on. Relocating the tree costs the generators
+  no new input at all, so that trade is not the one on the table any more.
+
+  No library code changed, and no public surface moved.
+
+- 023b22d: A diagnostic about a PHI leak is itself a PHI surface: two of the four measured instances are closed,
+  and the claim that tied them together is corrected on every surface that carried it.
+
+  **The three private-tag Tier-2 codes take no tag parameter at all.**
+  `DICOM_PRIVATE_TAG_NO_CREATOR`, `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR` and
+  `DICOM_PRIVATE_CREATOR_UNKNOWN` are built from `position` alone. Measured on a synthetic,
+  name-bearing payload: an `ST` carrying `"MR BRAIN SMITHSON "` whose Value Length under-declares by 12
+  desynchronizes the Implicit VR LE reader onto a fabricated header at an odd group, and the first two
+  of those codes rendered its tag as `4E495320` - `"IN S"` in wire order, four letters from inside the
+  name - on the same parse, from the same branch of `resolveImplicitVR`. `renderTag` validates a tag's
+  shape and therefore cannot refuse a fabricated one, so the bound is the **factory signature**, the
+  same remedy `DICOM_NONZERO_RESERVED_BYTES`, `DICOM_ITEM_CROSSES_SEQUENCE_END`,
+  `DICOM_DUPLICATE_TAG_IN_DATA_SET` and `DICOM_DUPLICATE_FILE_META_ELEMENT` already take. **What is
+  specific here is why it is a bound and not a product call:** all three fire only on an **odd** group,
+  and an odd group is the one class of tag no closed table this library holds can vouch for - PS3.6's
+  registry is even-group and a `Profile`'s private dictionary is keyed by a creator string this code
+  fires because it does not have. The third of the three is bound by that argument rather than by a
+  measurement, and is described that way. **The cost, stated:** on a well-formed file with an unclaimed
+  private block the tag is no longer in the message. It is still the element's key in the parsed Data
+  Set, and `position.byteOffset` locates the header.
+
+  **`report.embeddedAttributes[].hidden` carries only the tags the run acted on.** The embedded scanner
+  listed **every** tag in a run it found inside a kept carrier's Value Field, and a run needs only one
+  actionable attribute to be reported - so a fabricated header sitting beside a real one was listed
+  too. Measured: a `CS` carrier over-declaring across a fabricated `"SMIT"` header beside a genuine
+  `(0010,0020)` reported `hidden: ["4D535449", "00100020"]`. An entry is now one of the **652 literal
+  rows** of PS3.15 Table E.1-1 that this run's options left actionable, and **two drafts of that filter
+  were refuted before the sentence was true**. Filtering on the resolved Annex E action alone admits
+  every odd group, because the Basic Profile removes private attributes as a class. Adding "and an even
+  group" still admits every **repeating-group mask hit**: `annexE()` falls through to the family rows,
+  and `(50xx,xxxx)` Curve Data leaves the whole 16-bit element number free - 16 groups x 65,536
+  elements against 652 literal rows - so `"\fPAR"` composes `500C5241` and returns all four payload
+  bytes with one typed read. A mask match proves a rule exists; it does not make the membership finite.
+  The shipped test is "the tag has a literal row", which subsumes the odd-group case, since no literal
+  row is odd-group. **Two consequences that travel with the field:** it can now be **empty on a real
+  finding** (a run whose only actionable members are private attributes, Curve Data or Overlay elements
+  names none of them, and the carrier is still emptied and still counted), and it is **still uncapped**.
+  `DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED`'s `{n}` is unchanged and still counts the whole run, so
+  narrowing `hidden` did not silently re-scope a shipped message; its closing sentence was reworded,
+  because it pointed at a field that can now be empty.
+
+  **`report.removedPrivateTags` is deliberately unchanged.** It is a private-tag field, so no table can
+  vouch for its entries and a bound would empty it on every well-formed file - which is what it exists
+  to record. That is a product call, and the earlier reading that grouped all three as one call is
+  retracted: the test that decides it is whether a closed table can vouch for the tag, not whether the
+  tag is real on a good file.
+
+  **The "safe to log" claim is corrected, and a fifth instance was found correcting it.** Sweeping every
+  under-declare delta on both transfer syntaxes for every 4-byte window of the payload rendered as a
+  tag, every 4-byte window rendered as a `readUInt32LE` decimal and every 2-byte window rendered as a
+  VR, found a third leaking Tier-2 code on the base tree: **`DICOM_ODD_LENGTH_VALUE_PADDED` under
+  Explicit VR LE renders a fabricated tag AND a fabricated 32-bit declared length** - eight consecutive
+  payload bytes in one message, each reversible with one typed read. It is `PRE-EXISTING`, it is **not
+  closed here**, and it is why `ds.warnings[].message` is still not unconditionally safe: that code
+  fires on any tag, so the remedy is a membership `renderTag` plus a separate answer for the raw
+  length, which is a package-wide decision rather than a rider. It is pinned by an asserted row.
+  The claim was also attached to the wrong field: every fixture that produces the leak dies before a
+  `Dataset` exists, so the carrier is `onWarning` and the `{ strict: true }` `DicomParseError`, not a
+  surviving `ds.warnings` - and that no measured fixture put one on a surviving `ds.warnings` is stated
+  as a fact about those fixtures, never as a guarantee. Carriers of the old wording were found by
+  folding newlines rather than by a line-based search, since a sentence that wraps is invisible to one:
+  `README.md`, `limitations.md`, `troubleshooting.md`, `spec-notes-tolerance.md`, `cookbook.md` and the
+  JSDoc on `EmbeddedAttributeFinding`, `DeidentifyReport` and the three factories.
+
+  **Consumer-visible:** four warning message strings are reworded (no code, no `position` and no
+  `err.code` changes), and `embeddedAttributes[].hidden` may be shorter or empty on a file where it was
+  populated before. A consumer that string-matched those messages or read `hidden` as the whole run
+  should read the code and the warning's count instead.
+
+- 3f41849: Docs, cookbook and examples: the roadmap's final phase, plus the gates that keep them honest.
+
+  **A cookbook that covers the jobs a metadata parser is actually handed.** Four new recipes, every one
+  executable in CI: extract metadata and index a folder of studies, build routing keys (hierarchy UIDs,
+  Accession Number, Patient ID paired with its issuer), read pixel-interpretation metadata safely, and
+  bridge to FHIR `ImagingStudy` and HL7 v2. The FHIR recipe works from the `ImagingStudy` "Mappings for
+  DICOM" tab and says which FHIR that is: the URL is the continuous build, not a balloted release, so
+  the recipe tells you to pin the mappings page for the FHIR version your integration targets.
+
+  **A clause citation written with its part beside it is checked against the SHA-pinned normative
+  documents, and the gate's coverage is stated rather than rounded up.** A new gate re-hashes
+  the vendored PS3.5, PS3.6 and PS3.15 2026c DocBook sources as a precondition, then runs two checks of
+  different strength. A clause of a vendored **prose** part (PS3.5, PS3.15) written with its label next
+  to its part (`PS3.N §X`, `PS3.N section X`, `PS3.N Annex X`) is resolved by collecting **every**
+  candidate section carrying that label and requiring exactly one, so zero and two are both refusals and
+  a first-match read cannot take the table of contents. **The gate's coverage is stated rather than
+  rounded up to "every citation": a label the text writes away from its part**, a second label in a list
+  or a bare `section X` whose part was named a sentence earlier, **is not seen**, and the cookbook says
+  so where a reader will meet it. Each clause the text leans
+  on for a normative statement is additionally required to carry that sentence **in its own body, not in
+  a subsection** (a body that swallowed subsections would certify `§7.5` for a `§7.5.2` fact and `§E.1`
+  for an `§E.1.1` one, which are the two confusions this package has already paid for; both are pinned
+  as controls). PS3.6 is cited for attribute identity rather than for prose, and is checked by its own
+  case: every `(gggg,eeee) Some Name` pair written anywhere in the docs must be the registry's own name
+  for that tag. **A numbered clause of a part this repository does not vendor may no longer be cited at
+  all**: two such citations were in the README and are replaced by prose that names the part and says
+  what is and is not claimed.
+
+  **`@example` on every public export is a gate rather than a convention.** Two exports were missing one
+  and now have it. The checker walks the public barrel through the compiler, so a namespace export and a
+  type count the same as a function does, and it carries a mutation control that proves it can go red.
+
+  **The PHI scanner reads doc fixtures.** The documentation ships DICOM objects as base64-encoded Part 10
+  buffers inline in markdown, and until now the scanner never opened one: to a text sweep a base64 run is
+  a single alphanumeric token with no `FAMILY^GIVEN` and no `YYYYMMDD` in it. `README.md` and
+  `docs-content/**` are now a second corpus, embedded objects are decoded and walked as DICOM, and both
+  the preamble-bearing and the preamble-less shape are recognized, the latter being what the cookbook
+  ships to demonstrate `DICOM_MISSING_PREAMBLE`. **The run floor is not the filter, and a first draft
+  that treated it as one shipped blind**: it required 120 base64 characters on the reasoning that a Part
+  10 object is big, and the cookbook's preamble-less fixture encodes to 88, so the one file the route's
+  own comments named as its reason was the one file it never opened while every test still passed. The
+  floor is now the shortest run that could encode a single Data Element header, the decode does the
+  filtering, and a regression case takes the **shortest real object out of the shipped cookbook** rather
+  than building its own. **It found real content the moment it ran**: every
+  sample object on the site carried a Study Date inside the 120-year window. Each is now `19000101`, and
+  the docs say why rather than leaving it as an unexplained oddity.
+
+  **A prominent "do not over-trust" page.** Known limitations moves out of the end of a long
+  troubleshooting page and into its own entry near the top of the navigation, linked from the README's
+  opening and from Getting started. It is an index rather than a second copy: scope non-goals, the open
+  PHI residuals (the retain-route leak whose extent is a matrix, the over-long `LO` in `(0012,0063)` that
+  this library is the likeliest writer of, `contextPath` being inert and not safe to log), the structural
+  facts no reader can resolve, and what is deliberately never defaulted.
+
+  **Two owed corrections.** The README described a Tier-2 warning message as "never composed from the
+  document", and `ParseOptions.strict`'s JSDoc called one "safe to log whole". Neither is true without a
+  qualifier: the registry's tag slot is filled by a shape check, which cannot refuse a tag a lying Value
+  Length composed out of somebody's value. Both now say safe on a well-formed file and not
+  unconditionally safe, which is what the measurement supports.
+
 ## 0.0.13
 
 ### Patch Changes
