@@ -19,7 +19,7 @@
  */
 
 import type { Tag, VR } from "../dictionary/types.js";
-import { WITHHELD, renderVr } from "./tokens.js";
+import { renderTag, renderVr } from "./tokens.js";
 import type { DicomPosition } from "./types.js";
 
 /**
@@ -148,6 +148,36 @@ export interface DicomParseWarning {
  * A token a check refuses renders as {@link WITHHELD} rather than being echoed
  * or dropped, so a message never silently loses a field it claims to carry.
  *
+ * **🛑 THE `{n}` SLOTS ARE NOT ALL ALIKE, AND THE RULE THAT SEPARATES THEM IS THE
+ * ONE THIS REGISTRY LOST A DEFECT TO.** A number may be rendered when this parser
+ * **derived** it - a count it kept, an offset it counted, a remainder the buffer
+ * bounds. A number it read **verbatim out of a header it may be reading out of
+ * frame** is four (or one) document bytes wearing a decimal, reversible with one
+ * typed read, and the bound available for it is the factory signature rather
+ * than a check: a raw number has neither a shape nor a membership to test.
+ * `renderTag` and `renderVr` are checks; there is no `renderLength` and there
+ * must not be one.
+ *
+ * **🔴 THE RULE IS NOT UNIFORMLY APPLIED, AND SAYING SO IS THE POINT - A GRADED
+ * PASS REFUSED THE DRAFT THAT STATED IT AS AN ABSOLUTE.** The exceptions are
+ * named rather than counted, because a count in prose is the thing this package
+ * deletes:
+ *
+ * - {@link fileMetaGroupLengthMismatch}'s `{n}` is a raw declared length and
+ *   stays, because `parseFileMeta` reads it in a frame nothing can
+ *   desynchronize. Its own JSDoc carries the argument and the measurement.
+ * - {@link undefinedVrNotAuditable}'s `{n}` and {@link sequenceNotAuditable}'s
+ *   `{n}` are `Element.rawBytes.length`: the declared Value Length for a
+ *   value-only element, declared-plus-header for a full-span one
+ *   (`isFullSpanElement`), and document-derived either way - so a fabricated
+ *   header carrying `"SO\0\0"` renders `20307`, reversible with one
+ *   `readUInt32LE`. Both are `PRE-EXISTING`, both reproduce byte-identically on
+ *   `0.0.14`, and neither is closed here: binding them is a second remedy on a
+ *   leak this slice did not introduce, and it belongs in its own unit. Each is
+ *   pinned by its own asserted row in
+ *   `test/integration/fatal-diagnostic-surface.test.ts`, green on both trees,
+ *   so no artifact can read this registry as an all-clear.
+ *
  * Two codes are declared and never emitted by this build:
  * `DICOM_CHARSET_AMBIGUOUS_SEPARATOR` and `DICOM_PIXEL_DATA_LENGTH_MISMATCH`.
  * They still carry a registry entry so the record stays total over
@@ -162,8 +192,13 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
     "(0002,0000) FileMetaInformationGroupLength declared {n} bytes; actual File Meta group size is {n2} bytes. Trusting actual.",
   DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR:
     "Element ({tag}) uses undefined length (0xFFFFFFFF) under an Explicit VR transfer syntax.",
+  // The declared length is gone from this string and the reason is measured, not
+  // cautious: this code fires on ANY element header, including one a lying Value
+  // Length upstream composed out of somebody's value, and it then rendered four
+  // payload bytes as {tag} and four more as the decimal {n} - eight consecutive
+  // bytes of a name in one message. See `oddLengthValuePadded`.
   DICOM_ODD_LENGTH_VALUE_PADDED:
-    "Element ({tag}) has odd declared length {n}; cursor advanced by one padding byte to maintain alignment.",
+    "Element ({tag}) has an odd declared length; cursor advanced by one padding byte to maintain alignment. The declared length is withheld; the byte offset identifies the element.",
   DICOM_VR_MISMATCH:
     "Element ({tag}) on-wire VR is {vr2}; dictionary lists {vr}. Trusting on-wire VR.",
   // No tag, and the reason is the one `nonzeroReservedBytes` states: this code's
@@ -172,14 +207,28 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   // `privateTagNoCreator`.
   DICOM_PRIVATE_TAG_NO_CREATOR:
     "A private element has no Private Creator registered for its block; treating as VR=UN. Its tag is withheld; the byte offset identifies the element.",
+  // No tag, and it is the membership bound in `renderTag` that made the slot
+  // dead rather than a judgement here: this code fires on a (gggg,0000), the
+  // element number is a constant of the code, and PS3.6 carries a literal row
+  // for exactly one such tag - (0002,0000), which is File Meta and never
+  // reaches this code. So every tag this slot could ever have rendered was one
+  // no closed table names, leaving the group number as sixteen free bits of a
+  // header that may itself be fabricated. See `groupLengthInDataset`.
   DICOM_GROUP_LENGTH_IN_DATASET:
-    "Retired Group Length element ({tag}) encountered in dataset; preserved as-is.",
+    "A retired Group Length element (gggg,0000) was encountered in the dataset; preserved as-is. Its group number is withheld; the byte offset identifies the element.",
   // The tag is deliberately absent, and this is the only *parser* message where
   // that is true. See `nonzeroReservedBytes`. Kept terse for the same reason the
   // de-identify messages are: it is emitted once per element, and element count
   // is attacker-chosen.
+  // 🩺 THE TWO BYTE VALUES ARE GONE FOR THE REASON THE TAG WAS ALREADY GONE, AND
+  // LEAVING THEM MADE THAT BOUND HALF A BOUND. This code's trigger is "these two
+  // bytes are not what PS3.5 7.1.2 says they must be", so the header may not be
+  // a header - and then the reserved pair is two bytes from inside some
+  // element's value, printed as two decimals that reverse with no work at all.
+  // Measured on a name-bearing payload across six under-declare deltas. See
+  // `nonzeroReservedBytes`.
   DICOM_NONZERO_RESERVED_BYTES:
-    "Non-zero reserved bytes between VR and length (first byte {n}, second byte {n2}); ignoring. Tag withheld; the byte offset identifies the element.",
+    "Non-zero reserved bytes between VR and length; ignoring. Their two values are withheld with the tag; the byte offset identifies the element.",
   DICOM_SQ_NOT_DESCENDED:
     "Element ({tag}) resolved to VR=SQ from the dictionary but its defined-length value is not a valid item stream; kept as opaque bytes and NOT descended, so nothing nested inside it is visible to navigation, and deidentify() cannot audit it. See DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE.",
   DICOM_UN_PARSED_AS_SQ:
@@ -226,8 +275,13 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   // `endLimit < buffer.length` conjunct bounds it by the buffer.
   DICOM_ITEM_CROSSES_SEQUENCE_END:
     "Item ({tag}) declares a length reaching past its enclosing sequence's declared end, so it reads the enclosing Data Set's bytes; {n2} bytes remained inside the sequence. The file's two length fields disagree (PS3.5 7.5.1 and 7.5.2 govern them); the item's is used. The declared length is withheld; the byte offset locates the item.",
+  // Declared but not emitted by this build. The declared length is bound out
+  // anyway: it is a raw 32-bit read off a header, so activating this code later
+  // with the slot still here would ship the leak this slice closed one code
+  // over. `{n2}` stays - it is the product this parser computed from the image
+  // description attributes, not a number it read. The tag is a constant.
   DICOM_PIXEL_DATA_LENGTH_MISMATCH:
-    "(7FE0,0010) PixelData declared length {n} does not match computed {n2} bytes.",
+    "(7FE0,0010) PixelData declared length does not match the computed {n2} bytes. The declared length is withheld; the byte offset identifies the element.",
   DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR:
     "A private element under Implicit VR LE has no VR override; falling back to UN. Its tag is withheld; the byte offset identifies the element.",
   DICOM_PRIVATE_CREATOR_UNKNOWN:
@@ -252,8 +306,10 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   // rather than caution. Every other factory's {tag} is composed from a real
   // Data Element header; the condition that raises THIS one is that the header
   // was fabricated from bytes inside some element's value, so its four tag bytes
-  // and its two VR bytes are document content. `renderTag` shape-checks a tag
-  // and cannot refuse one, so the withholding has to happen at the call site.
+  // and its two VR bytes are document content. `renderTag` is a membership test
+  // against PS3.6's registry and would refuse this one - but a slot that has to
+  // rely on that is a slot a future call site can still be handed, so the
+  // withholding stays at the call site where it does not depend on a table.
   // The byte offset locates the element instead, and is a position this parser
   // counted rather than anything the document said.
   DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE:
@@ -285,30 +341,24 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
  * @internal
  */
 interface WarningTokens {
-  /** An 8-hex-char tag this parser composed from the element header's four bytes. */
+  /**
+   * An 8-hex-char tag this parser composed from the element header's four bytes,
+   * checked against PS3.6's element registry before rendering.
+   */
   readonly tag?: Tag;
   /** A VR, checked against the closed 34-VR set before rendering. */
   readonly vr?: VR;
   /** A second VR, for the code that reports a dictionary/on-wire divergence. */
   readonly vr2?: VR;
-  /** An input-derived count, length, index or byte value. */
+  /**
+   * A count, index or byte span **this parser derived**. Never a length or a
+   * byte value read verbatim off a header - see the registry's note above; those
+   * are bound out of the factory signature instead, because a raw number has
+   * neither a shape nor a membership a renderer could test.
+   */
   readonly n?: number;
   /** A second such number. */
   readonly n2?: number;
-}
-
-/** An 8-hex-char tag as this parser composes it: uppercase, exactly four bytes. */
-const TAG_SHAPE = /^[0-9A-F]{8}$/u;
-
-/**
- * Render a tag token. A tag reaching a factory is always composed here (two
- * `uint16` reads, hex-padded, upper-cased), so the check can never fire on
- * correct code; it is the guard that keeps that true if a future call site
- * passes something else, which is precisely how `unParsedAsSQ` came to be
- * passing the string `"UN"` in the tag slot.
- */
-function renderTag(tag: Tag | undefined): string {
-  return tag !== undefined && TAG_SHAPE.test(tag) ? tag : WITHHELD;
 }
 
 /**
@@ -364,6 +414,24 @@ export function fileMetaGroupLengthMissing(position: DicomPosition): DicomParseW
  * `(0002,0000)` declares a byte count that does not match the actual size
  * of the File Meta group; the parser trusts the actual size (D-18).
  *
+ * ## `{n}` is a raw declared length and it STAYS. The asymmetry is structural
+ *
+ * {@link oddLengthValuePadded} and {@link nonzeroReservedBytes} lose theirs
+ * because the header those numbers come off may itself be four bytes of somebody
+ * else's value - a lying Value Length upstream leaves the reader mid-value.
+ * **There is no upstream here.** `parseFileMeta` is called exactly once per
+ * parse, from `parseDicom`, at the post-`DICM` offset, and it is never nested;
+ * `(0002,0000)` is the first element it reads or this code does not fire at all
+ * (the absence raises `DICOM_FILE_META_GROUP_LENGTH_MISSING` instead). So
+ * `declared` is the Value Field of the group-length attribute itself, read at a
+ * structurally determined offset, and no Data Set value can be read into that
+ * position. It is the same argument {@link duplicateFileMetaElement} makes for
+ * its offset being file-absolute.
+ *
+ * Measured rather than argued alone: the desynchronized-read sweep over both
+ * transfer syntaxes and ten under-declare deltas reaches this code zero times.
+ * `{n2}` is `consumedAfterGroupLength`, a byte count this parser kept.
+ *
  * @example
  * ```ts
  * const w = fileMetaGroupLengthMismatch({ byteOffset: 132, fileMeta: true }, 200, 208);
@@ -400,20 +468,43 @@ export function undefinedLengthInExplicitVR(position: DicomPosition, tag: Tag): 
  * declared length is odd and the parser pads forward by one byte to keep
  * cursor alignment (PITFALLS.md §6.1).
  *
+ * ## 🛑 THE DECLARED LENGTH IS BOUND OUT OF THIS SIGNATURE AND MUST NOT COME BACK
+ *
+ * This is the code the fifth instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS` was
+ * measured on, and it rendered **eight consecutive payload bytes in one
+ * message** - the worst of the six the item's sweeps found. An `ST` carrier
+ * holding `"MR BRAIN SMITHSON "` whose Value Length under-declares by 12
+ * desynchronizes the Explicit VR LE reader onto a fabricated header whose
+ * declared length happens to be odd, and this message printed `4E495320`
+ * (`"IN S"`) in `{tag}` beside the decimal `542003027` (`"SON "`) in `{n}`. At
+ * delta -16 the pair is `42204152` (`" BRA"`) and `1213483341` (`"MITH"`).
+ *
+ * The two halves have **different** remedies, and that is the whole shape of
+ * this slice:
+ *
+ * - `{tag}` survives, because `renderTag` is a **membership** test now - PS3.6's
+ *   registry either carries a literal row for the tag or it does not, and
+ *   `4E495320` is not one of the 5,221 it does. On a well-formed file the tag a
+ *   consumer wants is still printed.
+ * - `{n}` cannot survive, because **a raw length has neither a shape nor a
+ *   membership to test**. There is no set of "lengths PS3.6 names". So the bound
+ *   is the signature, exactly as in {@link itemCrossesSequenceEnd},
+ *   {@link nonzeroReservedBytes} and every Tier-3 message in `./fatals.ts`: the
+ *   factory cannot be handed the value, so no future call site can put it back
+ *   without changing this signature.
+ *
+ * **What it costs, stated rather than minimised.** On a well-formed file the
+ * message no longer says *how* odd the length was. The element is in the Data
+ * Set under the tag this message still prints, its `rawBytes` carry the value
+ * the length described, and `position.byteOffset` locates the header.
+ *
  * @example
  * ```ts
- * const w = oddLengthValuePadded({ byteOffset: 240 }, "00100010", 9);
+ * const w = oddLengthValuePadded({ byteOffset: 240 }, "00100010");
  * ```
  */
-export function oddLengthValuePadded(
-  position: DicomPosition,
-  tag: Tag,
-  declaredLength: number,
-): DicomParseWarning {
-  return build(WARNING_CODES.DICOM_ODD_LENGTH_VALUE_PADDED, position, {
-    tag,
-    n: declaredLength,
-  });
+export function oddLengthValuePadded(position: DicomPosition, tag: Tag): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_ODD_LENGTH_VALUE_PADDED, position, { tag });
 }
 
 /**
@@ -447,10 +538,11 @@ export function vrMismatch(
  * under-declares by 12 desynchronizes the Implicit VR LE reader onto a
  * fabricated header at `(4E49,5320)` - `"IN S"` in wire order, four letters from
  * inside the name - and `resolveImplicitVR` calls that odd group a private
- * element, so this message rendered it. `renderTag` shape-checks a tag and
- * therefore cannot refuse a fabricated one; identical remedy and identical
- * reasoning to {@link nonzeroReservedBytes}, {@link itemCrossesSequenceEnd},
- * {@link duplicateTagInDataSet} and {@link duplicateFileMetaElement}.
+ * element, so this message rendered it, because `renderTag` was a shape check
+ * then and a shape check cannot refuse a fabricated tag; identical remedy and
+ * identical reasoning to {@link nonzeroReservedBytes},
+ * {@link itemCrossesSequenceEnd}, {@link duplicateTagInDataSet} and
+ * {@link duplicateFileMetaElement}.
  *
  * **What is different here, and it is why this one is a bound rather than a
  * product call.** The other five are bound because their *trigger* implies the
@@ -462,8 +554,13 @@ export function vrMismatch(
  * PS3.6's registry is even-group; a `Profile`'s private dictionary is keyed by a
  * creator string this code fires because it does not have. `renderVr` may render
  * a VR because membership in the 34 is checkable; there is no such check
- * available for a private tag, ever, so the shape check is the only thing that
- * ever stood behind this slot and a shape check cannot refuse.
+ * available for a private tag, ever.
+ *
+ * **`renderTag` is a membership test now and would withhold every tag this code
+ * could carry, and the signature bound still stands.** The two are not
+ * alternatives. A renderer refuses what a published table does not name; the
+ * absence of a slot refuses what a future edition might start naming, and it
+ * survives a call site being added by someone who has not read this paragraph.
  *
  * **What it costs, stated rather than minimised.** On a well-formed file the tag
  * this message used to carry was the sender's own private tag number, and it is
@@ -487,13 +584,29 @@ export function privateTagNoCreator(position: DicomPosition): DicomParseWarning 
  * standard retired group-length elements in PS3.5 §7.2 but real-world
  * encoders still emit them.
  *
+ * ## The tag is bound out of this signature, and the membership rule is what
+ * emptied the slot rather than a judgement taken here
+ *
+ * `renderTag` renders a tag PS3.6's registry carries a literal row for.
+ * Group Length elements were retired, and the registry carries exactly one row
+ * ending `0000` - `(0002,0000)` FileMetaInformationGroupLength, which is File
+ * Meta and never reaches this code. So **every** tag this slot could ever have
+ * rendered was one no closed table names, measured over this repo's own suite:
+ * four distinct tags reached it and all four withheld.
+ *
+ * A slot that can never render is worse than no slot: it invites a future call
+ * site to pass a tag and leaves the reader thinking one is available. And the
+ * sixteen bits it would carry are not free of the leak this item is about - the
+ * element number is a constant of the code, so the whole tag is the group
+ * number, off a header a lying Value Length upstream may have fabricated.
+ *
  * @example
  * ```ts
- * const w = groupLengthInDataset({ byteOffset: 400 }, "00080000");
+ * const w = groupLengthInDataset({ byteOffset: 400 });
  * ```
  */
-export function groupLengthInDataset(position: DicomPosition, tag: Tag): DicomParseWarning {
-  return build(WARNING_CODES.DICOM_GROUP_LENGTH_IN_DATASET, position, { tag });
+export function groupLengthInDataset(position: DicomPosition): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_GROUP_LENGTH_IN_DATASET, position);
 }
 
 /**
@@ -503,10 +616,11 @@ export function groupLengthInDataset(position: DicomPosition, tag: Tag): DicomPa
  *
  * ## It takes no tag, uniquely among the parser's factories
  *
- * `renderTag` validates a tag's SHAPE and therefore cannot refuse one, so
  * `WarningTokens`' "structural by construction" property has to be kept at the
  * call site wherever the trigger is itself "these bytes are not what they claim
- * to be". **That is exactly this code's trigger.** PS3.5 §7.1.2 requires those
+ * to be" - `renderTag` was a shape check when this bound was taken, and a shape
+ * check cannot refuse a fabricated tag. **That is exactly this code's trigger**,
+ * and the signature bound outlives `renderTag` becoming a membership test. PS3.5 §7.1.2 requires those
  * two bytes to be `0x0000`; a header where they are not may not be a header at
  * all, in which case the four bytes this message would call a tag are four bytes
  * of some element's value.
@@ -521,27 +635,36 @@ export function groupLengthInDataset(position: DicomPosition, tag: Tag): DicomPa
  * withheld on both rather than on a guess. `position.byteOffset` locates the
  * element and is a count the parser kept.
  *
- * The two reserved bytes are reported as the **numbers** they are, in wire
- * order, rather than as a hex echo: an input-derived number is the prescribed
- * shape here, and a re-rendered slice of input is not, however short. They are
- * reported separately because composing them into one 16-bit value would have
- * to pick an endianness, and the reserved field has none: the message would then
- * read unambiguously and be wrong under one of the two transfer syntaxes.
+ * ## 🛑 THE TWO BYTE VALUES ARE BOUND OUT OF THIS SIGNATURE TOO, AND THAT IS THE
+ * SIXTH INSTANCE OF THIS ITEM
+ *
+ * They shipped here through `0.0.14` as `{n}` and `{n2}`, on the reasoning that
+ * "an input-derived number is the prescribed shape here, and a re-rendered slice
+ * of input is not, however short". **That reasoning was wrong, and it was wrong
+ * against this factory's own argument two paragraphs up.** The bytes are not
+ * *derived* from input; they *are* input - the two bytes at `headerStart + 6` -
+ * and printing them as decimals is a re-encoding a reader reverses by looking at
+ * them. The tag was withheld here because the header may not be a header; the
+ * reserved pair comes off that same header.
+ *
+ * Measured on a name-bearing payload, `"MR BRAIN SMITHSON "` under Explicit VR
+ * LE: six under-declare deltas each put two letters of the name into this
+ * message, `-8` through `-18` (`" N"`, `"SO"`, `"TH"`, `"MI"`, `" S"`, `"IN"`).
+ * The shipped PHI detector could not see it - it hunts four-byte windows as tags
+ * and as 32-bit decimals and two-byte windows as VRs, and nothing hunted a
+ * **single** byte as a decimal. A detector that has never looked for a shape has
+ * not cleared it.
+ *
+ * The endianness paragraph this replaces is retired with the slots: there is no
+ * longer a pair to compose, so there is no endianness to pick.
  *
  * @example
  * ```ts
- * const w = nonzeroReservedBytes({ byteOffset: 500 }, 0x00, 0xff);
+ * const w = nonzeroReservedBytes({ byteOffset: 500 });
  * ```
  */
-export function nonzeroReservedBytes(
-  position: DicomPosition,
-  first: number,
-  second: number,
-): DicomParseWarning {
-  return build(WARNING_CODES.DICOM_NONZERO_RESERVED_BYTES, position, {
-    n: first,
-    n2: second,
-  });
+export function nonzeroReservedBytes(position: DicomPosition): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_NONZERO_RESERVED_BYTES, position);
 }
 
 /**
@@ -665,8 +788,9 @@ export function sqNotDescended(position: DicomPosition, tag: Tag): DicomParseWar
  * with one `readUInt32LE` - and it is emitted **above** the truncation guard, so
  * the message reaches `onWarning` on a file the parse then refuses. Identical
  * remedy and identical reasoning to {@link nonzeroReservedBytes} and to `#55`:
- * where `renderTag` and `renderVr` check a shape or a closed set and a raw length
- * has neither, the bound has to be **the signature** rather than a branch. The
+ * where `renderTag` and `renderVr` each check membership in a closed set and a
+ * raw length has no such set to check, the bound has to be **the signature**
+ * rather than a branch. The
  * factory cannot be handed the value, so no future call site can put it back
  * without changing this signature.
  *
@@ -759,8 +883,8 @@ export function emptyItemInSequence(position: DicomPosition, tag: Tag): DicomPar
  * ordinary way a Data Set comes to hold one tag twice is not a sender typing it
  * twice: it is a length field that lies, so bytes inside somebody's value are
  * read as a Data Element header. The four tag bytes are then document content,
- * and `renderTag` shape-checks a tag and therefore cannot refuse one. Identical
- * remedy and reasoning to {@link nonzeroReservedBytes} and
+ * and `renderTag` was a shape check when this bound was taken, so it could not
+ * refuse one. Identical remedy and reasoning to {@link nonzeroReservedBytes} and
  * {@link itemCrossesSequenceEnd}: the bound is the signature, so no future call
  * site can put it back without changing it.
  *
@@ -858,9 +982,10 @@ export function duplicateTagInDataSet(position: DicomPosition): DicomParseWarnin
  * `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE`: the trigger is "a header appeared
  * where the group did not expect one", and a header that should not be there may
  * be composed of somebody's value bytes, so the four tag bytes are input.
- * `renderTag` shape-checks a tag and therefore cannot refuse one. The bound is
- * the **factory signature** - position only - so no future call site can put it
- * back without changing it.
+ * `renderTag` was a shape check when this bound was taken and could not refuse
+ * one; it is a membership test now and would, and the bound stays where it is
+ * anyway. The bound is the **factory signature** - position only - so no future
+ * call site can put it back without changing it.
  *
  * ## `position.byteOffset` here IS file-absolute, and that is structural
  *
@@ -916,18 +1041,25 @@ export function duplicateFileMetaElement(position: DicomPosition): DicomParseWar
  * Declared but **not emitted** by this build: no call site exists in `src/`.
  * Kept so the code and its shape stay stable for the phase that activates it.
  *
+ * **The declared length is bound out of the signature anyway, and "it is not
+ * emitted" is the reason to do it now rather than a reason to skip it.** It is a
+ * raw 32-bit read off an element header, the same class as
+ * {@link oddLengthValuePadded}'s, so a later phase that switched this code on
+ * would ship the leak this slice just closed one code over - with no call site
+ * today, the change costs nothing and no measurement can catch it later.
+ * `{n2}` stays: it is `rows x columns x samplesPerPixel x bitsAllocated/8 x
+ * numberOfFrames`, a product this parser computes, not a number it reads.
+ *
  * @example
  * ```ts
- * const w = pixelDataLengthMismatch({ byteOffset: 1024 }, 524288, 524300);
+ * const w = pixelDataLengthMismatch({ byteOffset: 1024 }, 524300);
  * ```
  */
 export function pixelDataLengthMismatch(
   position: DicomPosition,
-  declared: number,
   computed: number,
 ): DicomParseWarning {
   return build(WARNING_CODES.DICOM_PIXEL_DATA_LENGTH_MISMATCH, position, {
-    n: declared,
     n2: computed,
   });
 }
@@ -1239,10 +1371,11 @@ export function sequenceNotAuditable(
  * mid-value, so the four tag bytes and the two VR bytes are content out of some
  * element's Value Field. Measured on a synthetic `ST` carrier holding
  * `"MR BRAIN SMITHSON"`, the fabricated tag renders as `48544F53` - four bytes
- * of the surname. `renderTag` validates a tag's *shape* and so cannot refuse
- * one, unlike `renderVr`, which means this factory is the one place the
- * "structural by construction" property of {@link WarningTokens} has to be kept
- * by not passing the field at all.
+ * of the surname. `renderTag` was a shape check when this bound was taken and so
+ * could not refuse one, unlike `renderVr`, which means this factory is one of the
+ * places the "structural by construction" property of {@link WarningTokens} has
+ * to be kept by not passing the field at all. It is a membership test now; the
+ * signature bound is kept because it does not depend on a table.
  *
  * `byteOffset` locates the element in its place: a count this parser kept, not
  * anything the document said.

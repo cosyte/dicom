@@ -58,11 +58,11 @@ in the same area - open the section first.**
     frame its offset names. **The snippet is still 16 raw source bytes and still PHI - an honest
     frame made it MORE certainly the named element's content.**
     [#dicom-fatal-message-registry](documentation/agent-notes.md#dicom-fatal-message-registry)
-  - `DICOM_PRIVATE_TAG_NO_CREATOR` and `embeddedAttributes[].hidden` are **CLOSED, as DEFECTS: the
-    test is whether a FINITE table vouches for the tag - A REPEATING-GROUP MASK IS NOT ONE, and that
-    cost a pass** (`50xx` leaves 16 bits free; `500C5241` is `"\fPAR"`). `hidden` may read EMPTY and
-    is **STILL UNCAPPED**; cap it in `deident`. **`ds.warnings[].message` is STILL not
-    unconditionally safe** - `DICOM_ODD_LENGTH_VALUE_PADDED`, tag AND length, `onWarning`/strict
+  - **`renderTag` IS MEMBERSHIP: a LITERAL PS3.6 row or `<withheld>`.
+    A REPEATING-GROUP MASK IS NOT ONE, that cost a pass** (`50xx` leaves 16 bits free; `500C5241` is `"\fPAR"`). Costs
+    PRIVATE, `(gggg,0000)` and `60xx` tags their name in EVERY message. **A raw wire number is
+    bound out of the SIGNATURE on PARSER codes ONLY - NAME the exceptions, two are `deident` LEAKS
+    (`rawBytes.length` = declared len).** "safe to log" DELETED; `hidden` STILL UNCAPPED
     [#dicom-diagnostic-phi-residuals](documentation/agent-notes.md#dicom-diagnostic-phi-residuals) ·
     [#dicom-overdeclare-swallows-into-value](documentation/agent-notes.md#dicom-overdeclare-swallows-into-value)
   - The **undefined-length item with no `(FFFE,E00D)`**, which has no declared length to disagree
@@ -238,12 +238,11 @@ not soften them. All anchors are in `documentation/agent-notes.md`.
 
 - **🩺 A DIAGNOSTIC MUST NOT NAME AN ELEMENT WHOSE HEADER MIGHT BE FABRICATED. Where the trigger IS
   "these bytes are not what they claim to be", the fields naming the element ARE INPUT.** `renderTag`
-  validates a tag's _shape_ and therefore cannot refuse one; `renderVr` checks a closed set and can.
-  So the bound is the **factory signature** - no tag parameter, no raw length parameter - and
-  `position.byteOffset` identifies the element. This bit three separate codes:
-  `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE`, `DICOM_NONZERO_RESERVED_BYTES`,
-  `DICOM_ITEM_CROSSES_SEQUENCE_END`, and every Tier-3 message in `fatals.ts` (whose token type has no
-  tag slot at all). **Do not put any of them back.**
+  and `renderVr` check MEMBERSHIP in a closed table; **a raw length or byte value has no table**, so
+  where bound at all its bound is the **signature**; `position.byteOffset` names it.
+  This bit `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE`, `DICOM_NONZERO_RESERVED_BYTES` (tag AND both
+  bytes), `DICOM_ITEM_CROSSES_SEQUENCE_END`, `DICOM_ODD_LENGTH_VALUE_PADDED` (length
+  only), `DICOM_GROUP_LENGTH_IN_DATASET`, and every Tier-3 message in `fatals.ts` (no tag slot). **Do not put any of them back.**
   [#dicom-carrier-leaf-leaks](documentation/agent-notes.md#dicom-carrier-leaf-leaks) ·
   [#dicom-unrecognized-vr-short-form](documentation/agent-notes.md#dicom-unrecognized-vr-short-form) ·
   [#dicom-explicit-vr-unbounded-item-read](documentation/agent-notes.md#dicom-explicit-vr-unbounded-item-read)

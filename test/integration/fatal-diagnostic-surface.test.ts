@@ -41,6 +41,7 @@ import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
 import { deidentify } from "../../src/deident/index.js";
+import { defineProfile } from "../../src/profiles/index.js";
 import type { VR } from "../../src/dictionary/types.js";
 import { KNOWN_VRS } from "../../src/parser/endian.js";
 import { DicomParseError, FATAL_CODES } from "../../src/parser/errors.js";
@@ -70,7 +71,7 @@ function val(text: string): Buffer {
 // ---------------------------------------------------------------------------
 
 interface Leak {
-  readonly kind: "tag" | "length" | "vr";
+  readonly kind: "tag" | "length" | "vr" | "byte";
   readonly rendered: string;
   readonly bytes: string;
 }
@@ -84,6 +85,22 @@ interface Leak {
  * - **length**: `readUInt32LE(i)`, printed as a decimal. Reversible with one
  *   typed read, which is why "it is only a number" was never an argument.
  * - **vr**: two bytes as ASCII, in a `VR=` slot.
+ * - **byte**: ONE byte as a decimal, in a slot that carries a raw header byte.
+ *   Added by the sixth instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`, which this
+ *   detector could not see for the whole of its previous life:
+ *   `DICOM_NONZERO_RESERVED_BYTES` printed the two reserved bytes as
+ *   `first byte 78, second byte 32` - two letters of a surname - and nothing
+ *   here hunted a single byte. **A detector that has never looked for a shape
+ *   has not cleared it.**
+ *
+ * **🛑 THERE IS STILL NO 2-BYTE-AS-`uint16` ARM, AND THAT IS A STATED GAP RATHER
+ * THAN A CLEARED ONE.** A short-form Explicit VR Value Length is exactly that
+ * shape. No registry entry renders one today, so an arm for it would have
+ * nothing to hunt and no non-vacuity control; a bare 0-65535 decimal search
+ * cannot be told from a legitimate count either, which is the same problem the
+ * `byte` arm's slot-scoping answers. If a future call site renders a short-form
+ * length, this detector will not see it. Named here so the next reader does not
+ * infer coverage from silence.
  */
 function renderings(payload: string): readonly Leak[] {
   const bytes = Buffer.from(payload, "latin1");
@@ -112,6 +129,13 @@ function renderings(payload: string): readonly Leak[] {
       bytes: bytes.subarray(i, i + 2).toString("latin1"),
     });
   }
+  for (let i = 0; i < bytes.length; i += 1) {
+    out.push({
+      kind: "byte",
+      rendered: String(bytes[i]),
+      bytes: bytes.subarray(i, i + 1).toString("latin1"),
+    });
+  }
   return out;
 }
 
@@ -132,17 +156,34 @@ function renderings(payload: string): readonly Leak[] {
  * entry and as `resolved to xx` in the other, and a first draft of this function
  * knew only the first, so a document byte in the Implicit VR LE message would
  * have read clean. A graded pass caught it.
+ *
+ * **The `byte` arm is SLOT-SCOPED, and that is a stated limit rather than a
+ * quiet one.** A single byte is a decimal between 0 and 255, so a bare-number
+ * search cannot tell one from a legitimate count - `DICOM_DEIDENT_SEQUENCE_NOT_
+ * AUDITABLE` prints a byte span, `DICOM_UNSUPPORTED_CHARSET` prints a value
+ * index, and both are small. So this arm hunts the phrasings that carry a raw
+ * header byte, which is what the shipped registry had. The structural net for
+ * the same class is not here at all: it is the FACTORY SIGNATURES asserted in
+ * `test/parser/warnings.test.ts`, where a slot that does not exist cannot be
+ * filled by any call site. This arm is the measurement; the signature is the
+ * bound.
  */
 function leaksIn(message: string, payload: string): readonly Leak[] {
-  return renderings(payload).filter((leak) =>
-    leak.kind === "vr"
-      ? !KNOWN_VRS.has(leak.rendered) &&
+  return renderings(payload).filter((leak) => {
+    if (leak.kind === "vr") {
+      return (
+        !KNOWN_VRS.has(leak.rendered) &&
         new RegExp(
           `VR=${leak.rendered}(?![A-Za-z])|resolved to ${leak.rendered}(?![A-Za-z])`,
           "u",
         ).test(message)
-      : message.includes(leak.rendered),
-  );
+      );
+    }
+    if (leak.kind === "byte") {
+      return new RegExp(`(?:first|second) byte ${leak.rendered}(?![0-9])`, "u").test(message);
+    }
+    return message.includes(leak.rendered);
+  });
 }
 
 /** The registry entries as anchored patterns, with the structural slots opened up. */
@@ -409,41 +450,248 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
     }
   });
 
-  it("oddLengthValuePaddedStillNamesAFabricatedTagAndLength", () => {
-    // 🛑 PRE-EXISTING, MEASURED OPEN, AND DELIBERATELY NOT CLOSED HERE. It is a
-    // FIFTH instance, found by this slice's own sweep and not named on the item,
-    // and it is why `ds.warnings[].message` is still not unconditionally safe
-    // after the two the item did name were closed.
+  it("oddLengthValuePaddedNoLongerNamesAFabricatedTagOrLength", () => {
+    // 🩺 CLOSED. This is the FIFTH instance the sibling half of
+    // `DICOM-DIAGNOSTIC-PHI-RESIDUALS` measured open and deliberately left,
+    // because closing it needed a package-wide change rather than a rider.
+    // Through `0.0.14` this row ASSERTED the leak.
     //
-    // Under Explicit VR LE the same under-declare desynchronizes onto a
-    // fabricated header whose declared length is odd, and
-    // `DICOM_ODD_LENGTH_VALUE_PADDED` renders BOTH four bytes as `{tag}` and a
+    // Under Explicit VR LE an under-declare desynchronizes the reader onto a
+    // fabricated header whose declared length happens to be odd, and
+    // `DICOM_ODD_LENGTH_VALUE_PADDED` rendered BOTH four bytes as `{tag}` and a
     // further four as the decimal `{n}` - eight consecutive payload bytes in one
-    // message, each reversible with one typed read.
+    // message, each reversible with one typed read. It was the worst of the six.
     //
-    // It is not this slice's to take, and the reason is the one that separates
-    // it from the private-tag pair above: this code fires on ANY tag, and on a
-    // well-formed file that tag is a PS3.6 registry entry a reader needs. The
-    // remedy available is a MEMBERSHIP check - render a tag the closed public
-    // registry names, withhold one it does not - which is a package-wide change
-    // to `renderTag` affecting every message, plus the separate question of the
-    // raw `{n}`. That is a decision with its own slice, not a rider on this one.
-    // Pinned as an asserted row so no artifact can read this file as an
-    // all-clear over the Tier-2 channel.
+    // The two halves closed differently, and that split is the slice:
+    //   `{tag}` - `renderTag` is a MEMBERSHIP test now. PS3.6's registry either
+    //     carries a literal row for the tag or it does not, and `4E495320` is
+    //     not one of the 5,221 it does. This code fires on ANY tag, so a
+    //     withhold-always bound was never available; a membership bound is,
+    //     and it keeps the tag on every well-formed file.
+    //   `{n}` - bound out of the FACTORY SIGNATURE. A raw length has neither a
+    //     shape nor a membership to test, so there is nothing for a renderer to
+    //     check and the only bound available is the absence of the slot.
     const seen: string[] = [];
     try {
       parseDicom(desynchronized(TS_EXPLICIT_LE, -12), {
-        onWarning: (w) => seen.push(`${w.code} ${w.message}`),
+        onWarning: (w) => seen.push(`${w.code} ${w.message}`),
       });
     } catch {
       // Designed: the parse dies after the warning is handed to `onWarning`.
     }
-    const padded = seen.find((entry) => entry.startsWith("DICOM_ODD_LENGTH_VALUE_PADDED "));
+    const padded = seen.find((entry) => entry.startsWith("DICOM_ODD_LENGTH_VALUE_PADDED "));
+    // Non-vacuity, first half: the code really does still fire on this fixture,
+    // so an empty leak list below cannot mean the message stopped existing.
     expect(padded).toBeDefined();
-    const message = (padded ?? "").slice((padded ?? "").indexOf(" ") + 1);
-    const leaks = leaksIn(message, NAME);
-    expect(leaks.map((l) => l.bytes)).toContain("IN S");
-    expect(leaks.map((l) => l.kind)).toContain("length");
+    const message = (padded ?? "").slice((padded ?? "").indexOf(" ") + 1);
+    expect(leaksIn(message, NAME)).toStrictEqual([]);
+
+    // Non-vacuity, second half: rebuild `0.0.14`'s own template over the bytes
+    // this fixture really lands on and assert the detector still catches THAT,
+    // on both slots. A green row must not mean the search is broken.
+    const bytes = Buffer.from(NAME, "latin1");
+    expect(bytes.subarray(6, 10).toString("latin1")).toBe("IN S");
+    const fabricatedTag =
+      bytes.readUInt16LE(6).toString(16).padStart(4, "0").toUpperCase() +
+      bytes.readUInt16LE(8).toString(16).padStart(4, "0").toUpperCase();
+    expect(fabricatedTag).toBe("4E495320");
+    // The fabricated header is long-form: tag at [6,10), an unrecognized VR
+    // "MI" at [10,12), the reserved pair "TH" at [12,14), and the 32-bit length
+    // at [14,18). Every offset here is measured off this fixture, not typed.
+    expect(bytes.subarray(14, 18).toString("latin1")).toBe("SON ");
+    const fabricatedLength = String(bytes.readUInt32LE(14));
+    expect(fabricatedLength).toBe("542003027");
+    const shipped = `Element (${fabricatedTag}) has odd declared length ${fabricatedLength}; cursor advanced by one padding byte to maintain alignment.`;
+    const wouldLeak = leaksIn(shipped, NAME);
+    expect(wouldLeak.map((l) => l.kind)).toContain("tag");
+    expect(wouldLeak.map((l) => l.kind)).toContain("length");
+    expect(wouldLeak.map((l) => l.bytes)).toContain("IN S");
+    expect(wouldLeak.map((l) => l.bytes)).toContain("SON ");
+  });
+
+  it("nonzeroReservedBytesNoLongerNamesItsTwoRawHeaderBytes", () => {
+    // 🔴 THE SIXTH INSTANCE, FILED NOWHERE BEFORE THIS SLICE AND FOUND ONLY
+    // BECAUSE THE DETECTOR WAS WIDENED BEFORE THE CODE WAS TOUCHED.
+    //
+    // `DICOM_NONZERO_RESERVED_BYTES` already withheld its tag, and the reason it
+    // gave was that its trigger IS "this header may not be a header". It then
+    // printed the two reserved bytes off that same header as two decimals. The
+    // bound was half a bound, and no shipped detector could see the other half:
+    // this file hunted four-byte and two-byte windows, never a single byte.
+    //
+    // Measured on `0.0.14`: six under-declare deltas each put two letters of the
+    // name into this message. Delta -8 is the row pinned here.
+    const seen: string[] = [];
+    try {
+      parseDicom(desynchronized(TS_EXPLICIT_LE, -8), {
+        onWarning: (w) => seen.push(`${w.code} ${w.message}`),
+      });
+    } catch {
+      // Designed: the parse dies after the warning is handed to `onWarning`.
+    }
+    const reserved = seen.find((entry) => entry.startsWith("DICOM_NONZERO_RESERVED_BYTES "));
+    expect(reserved).toBeDefined();
+    const message = (reserved ?? "").slice((reserved ?? "").indexOf(" ") + 1);
+    expect(leaksIn(message, NAME)).toStrictEqual([]);
+
+    // Non-vacuity: `0.0.14`'s template over the bytes this delta really lands
+    // on. At delta -8 the fabricated long-form header starts at NAME[10], so its
+    // reserved pair is NAME[16..18) - `"N "`, the last letter of the surname and
+    // the pad byte after it. Measured off the fixture, not typed from memory.
+    const bytes = Buffer.from(NAME, "latin1");
+    expect(bytes.subarray(16, 18).toString("latin1")).toBe("N ");
+    expect([bytes[16], bytes[17]]).toStrictEqual([78, 32]);
+    const shipped = `Non-zero reserved bytes between VR and length (first byte ${String(bytes[16])}, second byte ${String(bytes[17])}); ignoring. Tag withheld; the byte offset identifies the element.`;
+    const wouldLeak = leaksIn(shipped, NAME);
+    expect(wouldLeak.map((l) => l.kind)).toContain("byte");
+    expect([...new Set(wouldLeak.map((l) => l.bytes))].sort()).toStrictEqual([" ", "N"]);
+  });
+
+  it("every PARSER Tier-2 warning this desync sweep reaches is clean, on both syntaxes", () => {
+    // The sweep that found instance six, kept as the standing net rather than
+    // thrown away with the finding. Ten under-declare deltas x two transfer
+    // syntaxes, every warning that reaches `onWarning`, every rendering arm.
+    //
+    // 🛑 ITS CHANNEL IS `parseDicom` AND ONLY `parseDicom`, AND THAT LIMIT IS
+    // STATED BECAUSE A GRADED PASS FOUND IT UNSTATED. Several registry codes are
+    // emitted by `deidentify()` and by nothing else, so no `onWarning` sweep can
+    // ever reach them - and two of those still render a raw wire length. Do not
+    // read a green run here as a fact about the registry. The row directly below
+    // is what covers that channel, and it asserts the leak rather than its
+    // absence.
+    const offenders: string[] = [];
+    let messagesSeen = 0;
+    for (const ts of [TS_EXPLICIT_LE, TS_IMPLICIT_LE]) {
+      for (const delta of [-2, -4, -6, -8, -10, -12, -14, -16, -18, -20]) {
+        try {
+          parseDicom(desynchronized(ts, delta), {
+            onWarning: (w) => {
+              messagesSeen += 1;
+              const leaks = leaksIn(w.message, NAME);
+              if (leaks.length > 0) {
+                offenders.push(
+                  `${w.code} @ ${ts} ${String(delta)}: ${leaks
+                    .map((l) => `${l.kind} ${JSON.stringify(l.bytes)}`)
+                    .join(", ")}`,
+                );
+              }
+            },
+          });
+        } catch {
+          // Most of these fixtures are designed to die; the warnings are graded.
+        }
+      }
+    }
+    // Non-vacuity: the sweep really did exercise messages. On `0.0.14` it
+    // produced eight offending rows across two codes.
+    expect(messagesSeen).toBeGreaterThan(20);
+    expect(offenders).toStrictEqual([]);
+  });
+
+  it("deidentUnauditableCodesStillRenderARawWireLength", () => {
+    // 🛑 PRE-EXISTING, MEASURED OPEN, AND DELIBERATELY NOT CLOSED HERE. It is a
+    // SEVENTH instance of "a diagnostic about a PHI leak is itself a PHI
+    // surface", found by the graded pass on the membership slice and filed
+    // nowhere before it.
+    //
+    // `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` and
+    // `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` render `{n}` from
+    // `Element.rawBytes.length`, which is not a count this parser invented: it
+    // EQUALS the declared Value Length off the element header. When that header
+    // is fabricated - the same under-declare construction every instance of this
+    // item uses - the decimal is four document bytes, reversible with one
+    // `readUInt32LE`. The first message is the sharper one: it withholds tag and
+    // VR on the stated ground that the header may be fabricated, then prints the
+    // length off that same header.
+    //
+    // It is NOT this slice's to take. Binding those two signatures is a second
+    // remedy on a leak that reproduces byte-identically on `0.0.14`, and the
+    // repo's own rule is that a slice is not obliged to fix everything it merely
+    // fails to fix. Pinned as an asserted row - green on BOTH trees, or it is
+    // not a residual pin - so no artifact can read the registry as an all-clear.
+    const LEN_BYTES = Buffer.from([0x53, 0x4f, 0x00, 0x00]);
+    // Non-vacuity on the payload: those four bytes really are "SO" out of
+    // "SMITHSON" followed by two NULs, and they really do render as 20307.
+    expect(LEN_BYTES.subarray(0, 2).toString("latin1")).toBe("SO");
+    expect(NAME).toContain("SO");
+    const fabricatedLength = LEN_BYTES.readUInt32LE(0);
+    expect(fabricatedLength).toBe(20307);
+
+    const fabricated = Buffer.concat([
+      Buffer.from([0x08, 0x00, 0x08, 0x00]),
+      Buffer.from("Zz", "ascii"),
+      Buffer.from([0x00, 0x00]),
+      LEN_BYTES,
+    ]);
+    const filler = Buffer.alloc(fabricatedLength, 0x41);
+    const raw = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      elements: [
+        { tag: "00100010", vr: "PN" as VR, value: val(NAME) },
+        {
+          tag: "00080080",
+          vr: "LO" as VR,
+          value: Buffer.concat([
+            Buffer.from("MERCY GENERAL HOSPITALS ", "ascii"),
+            fabricated,
+            filler,
+          ]),
+          declaredLengthDelta: -(fabricated.length + filler.length),
+        },
+      ],
+    });
+    const { report } = deidentify(parseDicom(raw));
+    const carriers = report.warnings
+      .filter((w) => w.message.includes(String(fabricatedLength)))
+      .map((w) => w.code);
+    expect(carriers).toContain("DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE");
+
+    // The SECOND code needs its own fixture, and it gets one rather than being
+    // inferred from the first. A graded pass caught the draft of this row
+    // asserting one code while five artifacts said the PAIR was pinned: the two
+    // are reached by different producers, so one fixture cannot exercise both.
+    // Producer 2 is a private element a caller Profile declares `SQ` while the
+    // wire says otherwise, so the profile and the retain option are required.
+    const profile = defineProfile({
+      name: "acme-fabricated",
+      description: "Synthetic vendor block declared SQ.",
+      privateTags: { ACME: { "0009XX01": { vr: "SQ", keyword: "AcmeSeq", name: "Acme Seq" } } },
+    });
+    const seqFabricated = Buffer.concat([
+      Buffer.from([0x09, 0x00, 0x01, 0x10]),
+      Buffer.from("OB", "ascii"),
+      Buffer.from([0x00, 0x00]),
+      LEN_BYTES,
+    ]);
+    const seqFiller = Buffer.concat([
+      Buffer.from("BOND^JAMES", "ascii"),
+      Buffer.alloc(fabricatedLength - 10, 0x41),
+    ]);
+    const seqRaw = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      elements: [
+        { tag: "00100010", vr: "PN" as VR, value: val(NAME) },
+        { tag: "00090010", vr: "LO" as VR, value: Buffer.from("ACME", "ascii") },
+        {
+          tag: "00080080",
+          vr: "LO" as VR,
+          value: Buffer.concat([
+            Buffer.from("MERCY GENERAL HOSPITALS ", "ascii"),
+            seqFabricated,
+            seqFiller,
+          ]),
+          declaredLengthDelta: -(seqFabricated.length + seqFiller.length),
+        },
+      ],
+    });
+    const seqReport = deidentify(parseDicom(seqRaw), {
+      retain: ["RetainSafePrivate"],
+      profile,
+    }).report;
+    const seqCarriers = seqReport.warnings
+      .filter((w) => w.message.includes(String(fabricatedLength)))
+      .map((w) => w.code);
+    expect(seqCarriers).toContain("DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE");
   });
 
   it("embeddedAttributesHiddenNoLongerCarriesValueBytes", () => {

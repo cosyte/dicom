@@ -70,7 +70,7 @@ RULE EXISTS; IT DOES NOT MAKE THE MEMBERSHIP FINITE.**
   admits is a mask whose free bits are raw document bytes. `"\fPAR"` - a form feed plus three letters
   of a surname - composes `500C5241`, which draft 2 admitted and which returns all four bytes with
   one typed read, exactly as `"SMIT"` did. **The draft's own JSDoc wrote the counterexample into the
-  sentence** ("the action table has to name the tag, *or a repeating-group mask has to*") and called
+  sentence** ("the action table has to name the tag, _or a repeating-group mask has to_") and called
   the result closed anyway. This is `#80`'s label-versus-body rule one level up, applied to a table
   instead of a spec section.
 - **Draft 3, shipped - `isActionable` + a LITERAL Table E.1-1 row** (`annexE(tag)` resolves with no
@@ -140,9 +140,9 @@ casualty, no behaviour in them. The **sixteen** that are behavioural evidence:
 - Instance 1 - `tierTwoEscalationNoLongerNamesAFabricatedTag`, `bothPrivateTagCodesAreClosed`, and
   the three `takes no tag at all` factory rows in `test/parser/warnings.test.ts`.
 - Instance 2 - `embeddedAttributesHiddenNoLongerCarriesValueBytes`, `the fabricated neighbour is not
-  named`, `a REPEATING-GROUP MASK hit is excluded`, `an odd group is excluded even when the run's own
-  action table acts on it`, `a run whose only actionable tags are private`, `elementCount counts the
-  whole run`, `non-vacuity`, plus the four detector rows whose fixtures carry a tag with no literal
+named`, `a REPEATING-GROUP MASK hit is excluded`, `an odd group is excluded even when the run's own
+action table acts on it`, `a run whose only actionable tags are private`, `elementCount counts the
+whole run`, `non-vacuity`, plus the four detector rows whose fixtures carry a tag with no literal
   Table E.1-1 row.
 
 **Three rows are GREEN ON BASE BY DESIGN and must stay that way**: `oddLengthValuePaddedStillNamesA
@@ -171,7 +171,7 @@ DEFECTS OF THE SHAPE THIS REPO LOSES PASSES TO. THE LESSON IS THE SECOND ONE.**
 1. **The residual list existed in THREE places in `src/`,** and deleting `hidden` from the
    authoritative copy on `DeidentifyReport` left `src/deident/index.ts` and `src/deident/deidentify.ts`
    still naming it with the retracted wording. Worse, and older: **neither of those copies ever named
-   `contextPath`** - so the drift had already been pointing the *unsafe* way before this slice pointed
+   `contextPath`** - so the drift had already been pointing the _unsafe_ way before this slice pointed
    it the safe way. Both copies are **deleted**, not resynced, and `DeidentifyReport` now says it is
    the only copy. A list in three places drifts in three directions.
 2. **The reworded warning string dropped one of the filter's two conjuncts.** "names the ones with a
@@ -188,6 +188,186 @@ table in the vendored source rather than trusting the figure - `vendor/nema/part
 claim and should not start claiming loosely: **0 of the 652 rows are all-printable ASCII**, so an
 admitted entry always contains a non-printable byte. That is a property of the current edition's
 table, not a bound this package enforces, which is why it is recorded here and not in a docstring.
+
+### The fifth and sixth instances: `renderTag` is a membership test, and a raw wire number has no test at all
+
+The sibling half above closed instances 1 and 2, measured a **fifth** nobody had filed, and named its
+remedy without taking it: _a membership `renderTag`, plus a separate answer for the raw `{n}`,
+package-wide, not a rider on another slice._ This is that slice. It also found a **sixth** instance in
+the same family, on the way.
+
+**▶ THE PREMISE WAS MEASURED BEFORE ANY CODE WAS WRITTEN, WHICH IS WHY THERE IS A SIXTH.** The sweep
+that reproduced instance 5 was widened by one arm before it was run: every 4-byte window of the
+payload rendered as a tag and as a `readUInt32LE` decimal, every 2-byte window as a VR - and, new,
+**every single byte as a decimal.** Ten under-declare deltas x two transfer syntaxes produced **eight
+leaking rows across two codes**, not one:
+
+- `DICOM_ODD_LENGTH_VALUE_PADDED`, **2 rows**, tag AND 32-bit length: `4E495320` (`"IN S"`) with
+  `542003027` (`"SON "`) at delta -12, and `42204152` (`" BRA"`) with `1213483341` (`"MITH"`) at -16.
+  The known fifth instance.
+- `DICOM_NONZERO_RESERVED_BYTES`, **6 rows**, the two reserved bytes as two decimals: `" N"`, `"SO"`,
+  `"TH"`, `"MI"`, `" S"`, `"IN"` at deltas -8 through -18. **The sixth instance, filed nowhere.** This
+  code already withheld its **tag**, and the reason it gave was that its trigger IS "this header may
+  not be a header". It then printed two bytes off that same header. **The bound was half a bound, and
+  no detector in this repo had ever looked for a single byte as a decimal.** A detector that has never
+  looked for a shape has not cleared it.
+
+**▶ 🩺 THE TWO HALVES CLOSE DIFFERENTLY, AND THAT SPLIT IS THE WHOLE SLICE.** The item's deciding test
+is _can a FINITE table vouch for this?_
+
+- **A tag can be vouched for.** `renderTag` moves to `tokens.ts` beside `renderVr` and tests
+  membership in **PS3.6's element registry**: `Dictionary.lookup` answers, or the token renders
+  `<withheld>`. 5,221 literal rows, against the 34 `renderVr` checks. The module doc that said
+  `renderTag` was _deliberately not here, because a tag has only a shape to test_ is corrected rather
+  than left standing.
+- **A raw number cannot.** There is no set of "lengths PS3.6 names", so nothing is available to check
+  and the bound has to be **the factory signature**, the remedy this package keeps arriving at. No
+  count is written here: the factories that take one are the ones whose JSDoc says so. `oddLengthValuePadded` loses its declared length; `nonzeroReservedBytes` loses both byte
+  values; `pixelDataLengthMismatch` loses its declared length **although it has no call site** -
+  with none, the change costs nothing today and no later measurement would catch it once a phase
+  switches the code on.
+
+**▶ 🛑 LITERAL ROWS ONLY. THE MASK RULE IS INHERITED FROM THE SIBLING HALF AND IT COST A PASS THERE.**
+`Dictionary.lookup` answers `undefined` for a tag that resolves only through a repeating-group family,
+and that exclusion is load-bearing rather than incidental: `(50xx,xxxx)` Curve Data leaves the whole
+16-bit element number free, so a family test admits 16 x 65,536 tags whose free bits are raw document
+bytes. `"\fPAR"` composes `500C5241`, which a family test admits and which returns all four payload
+bytes with one typed read. The row that pins this asserts the **premise** too - that `500C5241` really
+does resolve through `50xx` and really is not a literal row - so it cannot pass because the
+counterexample stopped being one.
+
+**▶ ONE MORE SLOT WAS EMPTIED BY THE RULE, NOT A JUDGEMENT, AND THE HONEST ANSWER WAS TO DELETE IT.**
+`DICOM_GROUP_LENGTH_IN_DATASET` fires on a `(gggg,0000)` outside File Meta. PS3.6 carries
+**exactly one** literal row ending `0000` - `(0002,0000)`, which is File Meta and never reaches this
+code - so **every** tag that slot could ever have rendered was already `<withheld>`. Measured over the
+suite: four distinct tags reached it, four withheld. A slot that can never render is not harmless; it
+invites a future call site to pass one. Bound out of the signature.
+
+**▶ 📏 THE COST, MEASURED OVER THE SUITE RATHER THAN ARGUED.** A probe on the single construction
+point recorded every `(code, tag)` pair the suite renders: **50 pairs unaffected, 14 withheld.** Of the 14, **2** are the fabricated tags this slice exists for; **8** are private tags
+(`DICOM_ODD_LENGTH_VALUE_PADDED`, `DICOM_UN_PARSED_AS_SQ`, `DICOM_SQ_NOT_DESCENDED` and the two
+`deident` codes); **4** are Group Length tags. `DICOM_VR_MISMATCH` is **12 rendered, 0 withheld**, and
+that is structural rather than lucky: it fires only where the dictionary already has an entry for the
+tag. **No repeating-group member appears in the suite at all**, so `(6000,3000)` Overlay Data losing
+its name in a message is a real cost that this repo's fixtures do not exercise - it is pinned by a
+direct unit row instead, and stated in the consumer docs rather than left to be discovered.
+
+**▶ `(0002,0000)`'s DECLARED GROUP LENGTH STAYS, AND THE ASYMMETRY IS STRUCTURAL.** `parseFileMeta`
+runs **once** per parse, from `parseDicom`, at the post-`DICM` offset, and is never nested;
+`(0002,0000)` is the first element it reads or the code does not fire at all (its absence raises
+`DICOM_FILE_META_GROUP_LENGTH_MISSING`). So the four bytes are that attribute's own Value Field at a
+structurally determined offset, and no Data Set value can be read into that position - the same
+argument `duplicateFileMetaElement` already makes for its offset being file-absolute. Measured as
+well as argued: the desync sweep reaches that code **zero** times.
+
+**▶ 🔴 THE PASS-1 BLOCKER, AND IT IS THE LESSON OF THIS SLICE: THE DRAFT DELETED A VERDICT AND
+REPLACED IT WITH AN ABSOLUTE MECHANISM STATEMENT THAT WAS FALSE.** Six artifacts, five of them
+consumer-facing and one of them the public `ParseOptions.strict` JSDoc, said the one raw declared
+length still printed anywhere was `(0002,0000)`'s. **Two more are.**
+`DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` and `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` render
+`Element.rawBytes.length`, which is not a count this parser invented: it **equals the declared Value
+Length** off the element header. Reproduced independently before the remedy, on the same
+under-declare construction every instance of this item uses - a fabricated header whose length field
+is `"SO\0\0"` renders **`20307`**, and one `readUInt32LE` reverses it. The first of the two is the
+sharper: **it withholds tag and VR on the stated ground that the header may be fabricated, then
+prints the length off that same header.** The second renders `<withheld>` for its tag _because of
+this slice_ and still prints the length.
+
+**A SEVENTH INSTANCE, THEREFORE, AND IT IS `PRE-EXISTING`**: byte-identical templates and signatures
+on `ff1a64a`, parse path untouched. **Not this slice's to take** - binding those signatures is a
+second remedy on a leak it did not introduce, and the grade said so. **The remedy was to CORRECT THE
+CLAIM, NEVER WIDEN THE GUARD**, in all six artifacts plus the registry module doc, plus
+`deidentUnauditableCodesStillRenderARawWireLength`, an asserted row **green on both trees** with a
+non-vacuity assertion. **A disclosure that names a test must name one that exists.**
+
+**▶ 🩺 AND THE SWEEP'S CHANNEL WAS UNSTATED, WHICH IS WHY THE ARTIFACTS COULD READ IT AS PACKAGE-WIDE.**
+It calls **only `parseDicom`**, so it can never reach a code `deidentify()` alone emits, and two of
+those are the seventh instance. Renamed to say `PARSER`, its docstring states the limit, and the
+residual row sits beneath it. A second gap is named rather than closed: `renderings()` has **no
+2-byte-as-`uint16` arm**, which is exactly a short-form Value Length. No entry renders one today, so
+the arm would have nothing to hunt and no non-vacuity control. Stated so nobody infers coverage from
+silence.
+
+**▶ AND A COUNT WENT INTO CONSUMER PROSE AND WAS WRONG IN THE SAME PARAGRAPH THAT LISTED IT.**
+`troubleshooting.md` said "Five codes take no tag parameter at all" and then named six, one of which
+this slice had just added. **Deleted, not incremented** - the rule this item enforces, and
+`CLAUDE.md`'s own "do not write a warning-code COUNT into prose".
+
+**▶ 🛑 PASS 2 PASSED THE SLICE AND STILL FOUND TWO MINORS IN THE REMEDY, AND THE FIRST IS THIS
+DISEASE A THIRD TIME IN ONE SLICE: THE REMEDY FOR A FALSE COUNT WAS TWO MORE COUNTS THAT DISAGREED.**
+"Two exceptions" in four consumer artifacts against "Three" in the changeset and the registry doc,
+over the identical codes. **Every numeral deleted, none renumbered.** The second: **the pin was
+singular and the claim was plural** - one row asserted `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE`
+while five artifacts said the pair was pinned, and the two have **different producers**, so one
+fixture cannot reach both. A second fixture was written rather than the claim narrowed. It also corrected a wording exact only where `rawBytes` is value-only:
+`isFullSpanElement` makes it declared-plus-header for an undefined-length element and for a
+defined-length `SQ` under Explicit VR.
+
+**▶ PASS 2 FILED AS BACKLOG RATHER THAN GATED**, all with the seventh instance: `deident-unauditable-sequence.test.ts`'s row titled _"carrying no value"_ for the very code
+now disclosed as printing a header-derived length; the `length` arm's **`>= 7` digit floor** in
+`renderings()`, which is why the 5-digit `20307` is invisible to that detector and is a wider gap
+than the missing `uint16` arm; and the seventh instance itself.
+
+**▶ 🛑 THE "SAFE TO LOG" SENTENCE IS DELETED, NOT REWORDED A THIRD TIME - THIS REPO'S OWN RULE, APPLIED
+TO ITS OWN LINEAGE.** `#80` wrote it once ("safe to log whole on any well-formed file"), the sibling
+half corrected it to "safe on a well-formed file and not unconditionally safe", and a third wording
+was due. Every carrier now states the **mechanism** - which slot is a membership test, which is a
+signature bound, and the one named exception - and states **no verdict**. That is `#79`'s remedy shape
+(delete the prose enumeration, replace it with something that cannot go stale) applied to a sentence
+instead of a list. The carriers were found by **folding newlines** and windowing, not by `grep`:
+`README.md`, `docs-content/limitations.md`, `docs-content/troubleshooting.md`,
+`docs-content/spec-notes-tolerance.md`, `docs-content/cookbook.md`, `src/parser/types.ts`. Eight more
+`src/` JSDoc paragraphs asserting _"`renderTag` shape-checks a tag and therefore cannot refuse one"_
+were corrected to the past tense in the same pass - a claim that was true when each bound was taken
+and is false now, in `warnings.ts` and `fatals.ts`.
+
+**▶ RECORDED BECAUSE IT IS STRONGER THAN ANYTHING CLAIMED, AND FOR THE SAME REASON THE `E.1-1` FIGURE
+IS: 0 of the 5,221 literal rows have all four WIRE bytes in printable ASCII.** So a fabricated window
+over printable text cannot spell an admitted tag on this edition. **That is a property of the pinned
+PS3.6 2026c, not a bound this package enforces**, which is why it is here and not in a docstring or a
+test - exactly where the sibling half's `652`/`0` measurement was put.
+
+**▶ FIGURES. BASE IS `ff1a64a` AND NO HEAD SHA IS QUOTED, DELIBERATELY** - a pre-merge head sha is
+wrong the moment the PR squash-merges. Base, whole suite: **72 files, 1,207 passing + 1 todo, 0 red.**
+Head: **73 files, 1,216 passing + 1 todo, 0 red.** Head tests against base `src/` (**replaced**, not
+overlaid - `rm -rf src && git checkout ff1a64a -- src`; all 73 files still collect): **14 of 1,217
+red across 4 files.** Re-run after the pass-1 remedy added a row rather than carried forward: it read
+14 of 1,216 before.
+
+**🛑 THAT 14 IS NOT 14 BEHAVIOURAL FINDINGS, AND SAYING SO WOULD BE THE `#78` DEFECT AGAIN.** Split it
+before quoting it.
+
+- **FOUR are behavioural**, and each asserted the leak before it asserted its absence:
+  `oddLengthValuePaddedNoLongerNamesAFabricatedTagOrLength` and
+  `nonzeroReservedBytesNoLongerNamesItsTwoRawHeaderBytes` in
+  `test/integration/fatal-diagnostic-surface.test.ts`, the standing desync sweep beside them, and the
+  `OB` half of _"a FABRICATED header keeps the tag-free diagnostic"_ in
+  `test/integration/deident-private-reservation.test.ts`.
+- **TEN are red because the surface does not exist on base, not because base rendered anything.** Six
+  in the new `test/parser/tokens.test.ts` - `renderTag` is module-private to `warnings.ts` at base, so
+  every row that calls it throws on the import rather than on a string - and four factory rows in
+  `test/parser/warnings.test.ts`, each of which asserts an arity that differs at base and fails on
+  that line before reaching its message assertion. They grade the new bound on head. They are **not**
+  evidence that base leaked.
+
+**TWO ROWS ARE GREEN ON BASE BY DESIGN AND MUST STAY THAT WAY**: _"the closed set is enumerable"_
+grades the generated registry, which this slice did not move; and
+`deidentUnauditableCodesStillRenderARawWireLength` pins a `PRE-EXISTING` residual, so it has to
+reproduce on both trees or it is not a residual pin. Both confirmed green on `ff1a64a` in the same
+run.
+
+**The non-vacuity controls are on the rows that closed, not only on the outcome.** Each of the two
+inverted pins rebuilds `0.0.14`'s own message template over the bytes its fixture really lands on and
+asserts the detector still catches **that** - so a green run cannot mean the search broke. Every
+offset in them is measured off the fixture rather than typed: a first draft of both asserted the wrong
+windows from memory and was caught by its own assertions.
+
+**▶ WHAT WAS DELIBERATELY NOT TAKEN.** `report.removedPrivateTags` is untouched. It is a
+**private**-tag field by definition, so no closed table can ever vouch for its contents and a bound
+empties it on every well-formed file - the genuine product call the item names, and not this slice's.
+`report.unauditableSequences[].tag`, `report.uidMap` and `contextPath` are model fields rather than
+messages and are equally untouched; `#78`'s residual row now asserts **both halves separately**, so
+the message closing here cannot be read as the report's.
 
 ---
 
@@ -213,7 +393,7 @@ none. Nothing was stale. What the measurement changed was the reading of what th
 
 **▶ 🛑 "NAMES AN ITEM IT WAS NEVER IN" IS A CLAIM DEFECT, AND IT IS DELETED, NOT REWORDED A THIRD
 TIME.** The sentence asserts which of two byte-identical files you have. On the partner file -
-`sqUnderDeclares()` in `test/integration/explicit-sq-item-bound.test.ts`, the *same bytes* assembled
+`sqUnderDeclares()` in `test/integration/explicit-sq-item-bound.test.ts`, the _same bytes_ assembled
 from the opposite intention - the element genuinely **is** inside the item and the identical
 `contextPath` is exactly right. So there is no fact of the matter to be wrong about, calling it an
 unfixed residual promises a repair that must invent the distinction five graded attempts at a bound
@@ -251,13 +431,13 @@ doing, and **neither is a bound on the other: redacting `contextPath` from a log
 carrying the same four bytes.** That was an `INTRODUCED` blocker because the superlative was the
 justification for the remedy being a log-side one. Both rows are pinned now.
 
-**▶ THE REMEDY IS THE CLAIM, NOT THE GUARD, AND THE ARGUMENT IS `removedPrivateTags`' OWN.** *Where*
+**▶ THE REMEDY IS THE CLAIM, NOT THE GUARD, AND THE ARGUMENT IS `removedPrivateTags`' OWN.** _Where_
 an attribute sat is the entire audit value of the field; withholding the tag would destroy it on
 every well-formed file in order to bound a malformed one. So `contextPath` joins the list of report
 fields that are not value-free - and **that list's numerals were deleted rather than incremented**,
 because having to add a fifth to a list whose count had already been wrong three times is the same
 disease one step removed. Corrected in `src/deident/types.ts`, the construction site in
-`deidentify.ts`, `docs-content/spec-notes-tolerance.md` (its own row, bound: *none*),
+`deidentify.ts`, `docs-content/spec-notes-tolerance.md` (its own row, bound: _none_),
 `docs-content/troubleshooting.md`, and the sweep's own docstring.
 
 **▶ THE PHI RUNNER SWEPT THIS FIELD FROM THE START AND COULD NEVER HAVE GONE RED ON IT.**
@@ -295,7 +475,7 @@ eight consecutive payload bytes in two fields. Implicit VR LE reaches the identi
 mirrors `warnings.ts`, with one deliberate difference: `FatalTokens` has **no tag field and no
 wire-length field at all**, where `WarningTokens` still carries a `tag` and a shape-checking
 `renderTag`. That is not extra caution, it is the same conclusion `#55`, `#64` and
-`DICOM_ITEM_CROSSES_SEQUENCE_END` each reached separately - `renderTag` validates a tag's *shape* and
+`DICOM_ITEM_CROSSES_SEQUENCE_END` each reached separately - `renderTag` validates a tag's _shape_ and
 therefore cannot refuse a fabricated one, so the only bound that holds is the absence of the slot.
 `renderVr` **can** refuse, because it tests membership in a closed set, so a VR still renders; it was
 moved to `tokens.ts` so both registries share one definition.
@@ -368,7 +548,7 @@ reproducible on this section's own merge commit rather than pinned to a sha that
 Base, which is what a moving figure actually moves against, is pinned. Head: **1,119 passing + 1 todo across 68 files**. Base with the head `test/` tree:
 **4 of 1,081 red**, and **2 test files could not collect at all** because they import a module that
 does not exist there. That second number is why the behavioural figure was taken separately, by
-copying only the two new *non-behavioural* modules (`fatals.ts`, and `tokens.ts` whose diff is purely
+copying only the two new _non-behavioural_ modules (`fatals.ts`, and `tokens.ts` whose diff is purely
 additive) onto base `src/`: **14 of the 39 new tests go red on base** - 11 PHI rows, the
 registry-shape test, and 2 of the 4 snippet-frame tests. **Three of the 39 are GREEN on base BY
 DESIGN, because they are controls or residual pins**: "the fixture really does collide" grades the
@@ -395,10 +575,10 @@ withholding; a test pinning a message this item exists to change is pinning the 
 
 **▶ THE CITATION IN A MESSAGE IS A CITATION, AND ONE SHIPPED WRONG TWICE IN ONE SLICE.** A draft of
 `UNDEFINED_LENGTH_ON_NON_SQ_EXPLICIT` attributed all three of its undefined-length exceptions to
-"PS3.5 7.5". **None of the three is there.** Encapsulated Pixel Data is **A.4** (*Transfer Syntaxes
-for Encapsulation of Encoded Pixel Data*), the `UN` form CP-246 addresses is **6.2.2** (*Unknown (UN)
-Value Representation*), and the Sequence one is **7.5.2** (*Delimitation of The Sequence of Items*),
-not §7.5 (*Nesting of Data Sets*, its parent). **The second correction is the interesting one: the
+"PS3.5 7.5". **None of the three is there.** Encapsulated Pixel Data is **A.4** (_Transfer Syntaxes
+for Encapsulation of Encoded Pixel Data_), the `UN` form CP-246 addresses is **6.2.2** (_Unknown (UN)
+Value Representation_), and the Sequence one is **7.5.2** (_Delimitation of The Sequence of Items_),
+not §7.5 (_Nesting of Data Sets_, its parent). **The second correction is the interesting one: the
 first fix located sections BY LABEL, and a label proves the label exists, not that its body carries
 the normative sentence.** Re-derived the way `CLAUDE.md` requires - search for the sentence
 ("The Value (Sequence) Length Field shall contain a Value FFFFFFFFH"), collect every candidate,
@@ -415,7 +595,7 @@ which is the property that matters and the reason it stays; not the absolute the
 
 **Provenance:** PS3.5 read from the SHA-pinned
 `vendor/nema/part05/4dfd7b8cbc7c368b7cf03e9c4b8a0773bed91266fcdb0bbf8ed634b7287cacca/part05.xml`,
-whose own `<subtitle>` reads *DICOM PS3.5 2026c - Data Structures and Encoding*. **Located by the
+whose own `<subtitle>` reads _DICOM PS3.5 2026c - Data Structures and Encoding_. **Located by the
 normative SENTENCE, then by the innermost enclosing labelled section - not by label**, because
 matching a label is what put §7.5 in the string in the first place.
 
@@ -1054,7 +1234,7 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
 
 - **🩺 A `Profile` vouching for a private attribute no longer decides the fate of the Data Sets
   nested inside its value.** (`PRE-EXISTING`, live through the published `0.0.10`, found by `#66`'s
-  refuter, base `495c9fc`.) `keepsPrivate` still decides retention *before* the descent, and that is
+  refuter, base `495c9fc`.) `keepsPrivate` still decides retention _before_ the descent, and that is
   not what was wrong. What was wrong is that "yes, retain" routed the element to `keepOrEmpty`,
   **the only path in the module that writes a source value into output unchanged** - so a private
   `SQ` was blitted whole and **nothing inside it was ever examined for PHI**. The remedy is four
@@ -1103,7 +1283,7 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   against this one.
   Full suite `1071 -> 1074` passing.
   **🛑 THIS FIGURE READ `4 of the 56` AND `1071 -> 1073` UNTIL PASS 2 REFUSED IT.** The pass-1
-  remedy added a test *after* the figure was taken and the figure was not re-run - the exact trap
+  remedy added a test _after_ the figure was taken and the figure was not re-run - the exact trap
   `CLAUDE.md` writes with a 🛑, inside the slice that quotes it. Re-measured in a clean tree
   (`git archive b02e3a5`, then `src/` replaced wholesale from `495c9fc`), not patched in place.
   **▶ THE PRICE, MEASURED AND PINNED, AND IT IS PS3.5 §7.8.1's AND NOT A CHOICE MADE HERE.** Walking
@@ -1161,7 +1341,7 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   one field off the caller's own profile, which is the same lookup `keepsPrivate` already performs.
   **▶ TWO ENCODINGS MAKE THE TREE AND THE PROFILE DISAGREE, AND ONLY ONE OF THEM IS MALFORMED -
   NEITHER, IN FACT.** (1) **Implicit VR LE writes no VR at all** (PS3.5 2026c §7.1.3), so for a
-  private tag `SQ` is an inference the **parser** draws from a profile *it* was given; pass the
+  private tag `SQ` is an inference the **parser** draws from a profile _it_ was given; pass the
   profile only to `deidentify()` and the identical bytes arrive `UN`. (2) **Under Explicit VR the
   wire VR wins in the parser**, so a sender who writes a profile-declared `SQ` attribute as `OB`
   yields `OB` - **with an honest defined length wrapping a well-formed `(FFFE,E000)` item stream**,
@@ -1201,7 +1381,7 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   leaks. Same disease as
   `#78`'s deleted count and `#77`'s "one shape is still exempt": **the enumeration was the defect and
   the guard was right.** No artifact carries a list now. The `it("the honest-length carrier surface
-  is a MATRIX...")` case in `deident-private-reservation.test.ts` asserts the **emptied** set
+is a MATRIX...")` case in `deident-private-reservation.test.ts` asserts the **emptied** set
   exactly, so the leaking set is whatever is left and cannot go stale in prose. It also pins the
   leaking cells as **kept VERBATIM** (`rawBytes.equals` the file's own value) and **silent** (nothing
   on `report.unauditableSequences`, nothing on `ds.warnings`, `(0012,0062) = YES`), because a
@@ -1272,49 +1452,49 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
      `deidentify()` over the first one's output reported a **second drop with `byteLength: 0`**
      where nothing was left to drop. Bytes were already idempotent; the audit was not. The
      parsed-`SQ` producer never had this, because `rebuildSequence` yields `items: []`.
-  **▶ THE WARNING MESSAGE NO LONGER SAYS `is VR=SQ`, AND THAT IS NOT A WORDING PREFERENCE.** The
-  frozen registry string is shared by both producers, and producer 2's whole premise is that the
-  parse tree and the profile disagree about the VR - so it stated a fact the file contradicts, on
-  the one channel this class designates, under `(0012,0062) = YES`. Measured saying `is VR=SQ` over
-  an `OB` carrier, over an `LO` carrier, over an unrecognized `Zz`, and over a CP-246 `UN`. It now
-  reads "is a Sequence carrier with no parsed items", and `{n}` is described as the **recorded span**
-  rather than the value length, because `rawBytes` is full-span under Explicit VR. Pinned by an
-  assertion that the template contains no `VR=SQ`.
-  **▶ THE EMPTIED ELEMENT KEEPS ITS PARSED VR, and that is why `emptyUnauditableSequence` was split
-  rather than reused whole.** `rebuildSequence` re-types to `SQ` and under Explicit VR that VR is
-  two real bytes in the output, so emptying an `OB` through it would assert a type the sender never
-  wrote. The parsed-`SQ` caller still rebuilds; the new caller uses `freshScalar`. One audit
-  channel, one warning code, **no new public surface** - the same choice `#66`, `#69` and `#77` made.
-  `UnauditableSequenceFinding`'s JSDoc now names both producers, because the field's meaning is
-  wider than "a parsed `SQ`" and a consumer reading only the old sentence would mis-read it.
-  **▶ THE COST, AND IT IS NOT ZERO.** A caller who passes a profile to `deidentify()` but not to
-  `parseDicom` now **loses** the vendor sequence's content instead of shipping it verbatim. That is
-  the fail-safe direction and it is the same trade every un-auditable sequence already makes, but it
-  is over-removal against `0.0.10` and the remedy on the caller's side is one line: pass the profile
-  to `parseDicom` too, and the sequence is walked, de-identified and retained. Stated in the
-  changeset, the README and `troubleshooting.md` rather than discovered later.
-  **▶ THE BASE-RED FIGURE, PINNED PER-SHA AND MEASURED OVER THE FULL SUITE AFTER THE LAST TEST WAS
-  ADDED. Against base `src/` at `369abbe`, replaced wholesale (`rm -rf src` then `git archive`,
-  never `git checkout -- src/`, which OVERLAYS): 5 of 1,081 run red.** Suite `1074 -> 1080` passing
-  plus the 1 `todo`. **It read `2 of 1,077` before the graded pass added four more tests, and was
-  re-run rather than carried forward** - the trap this file already writes with a stop sign. **Two
-  of the seven new or rewritten tests are GREEN on base BY DESIGN, because they are controls**: that
-  a retained private element the profile declares `LO` is still kept **verbatim** (or the remedy has
-  degenerated into "empty every retained private element"), and that a fabricated header keeps the
-  tag-free diagnostic, which base already did.
-  **▶ EVERY CONJUNCT IS NON-VACUOUS AND EACH WAS PROVEN BY MUTATION, NOT ASSERTED.** Widening the
-  predicate from `=== "SQ"` to `!== undefined` reds **14** tests in
-  `deident-private-reservation.test.ts`, the `LO` control among them; dropping `!hasUndefinedVr(el)`
-  reds exactly the fabricated-header test; dropping `el.length > 0` reds exactly the second-pass
-  test. Re-derive them that way rather than quoting the numbers.
-  **▶ THE GRID WAS NOT RE-RUN, AND THAT IS A REASONED OMISSION RATHER THAN A SKIPPED STEP.**
-  `scripts/measure-sq-bound-grid.ts` holds **no private-`SQ` cell at all** (`#77` measured 0 of
-  83,037 differing for the carve-out itself, for the same reason: the `priv|` family builds an `LO`
-  behind a **public** carrier and every family runs `deidentify()` with no options, so
-  `RetainSafePrivate` + a `Profile` - the only route in the package that writes a private value into
-  de-identified output - is never on). This remedy is reachable **only** from inside
-  `keepRetainedPrivate`, which only that route reaches. **Never read that as coverage.** The net is
-  the unit tests.
+     **▶ THE WARNING MESSAGE NO LONGER SAYS `is VR=SQ`, AND THAT IS NOT A WORDING PREFERENCE.** The
+     frozen registry string is shared by both producers, and producer 2's whole premise is that the
+     parse tree and the profile disagree about the VR - so it stated a fact the file contradicts, on
+     the one channel this class designates, under `(0012,0062) = YES`. Measured saying `is VR=SQ` over
+     an `OB` carrier, over an `LO` carrier, over an unrecognized `Zz`, and over a CP-246 `UN`. It now
+     reads "is a Sequence carrier with no parsed items", and `{n}` is described as the **recorded span**
+     rather than the value length, because `rawBytes` is full-span under Explicit VR. Pinned by an
+     assertion that the template contains no `VR=SQ`.
+     **▶ THE EMPTIED ELEMENT KEEPS ITS PARSED VR, and that is why `emptyUnauditableSequence` was split
+     rather than reused whole.** `rebuildSequence` re-types to `SQ` and under Explicit VR that VR is
+     two real bytes in the output, so emptying an `OB` through it would assert a type the sender never
+     wrote. The parsed-`SQ` caller still rebuilds; the new caller uses `freshScalar`. One audit
+     channel, one warning code, **no new public surface** - the same choice `#66`, `#69` and `#77` made.
+     `UnauditableSequenceFinding`'s JSDoc now names both producers, because the field's meaning is
+     wider than "a parsed `SQ`" and a consumer reading only the old sentence would mis-read it.
+     **▶ THE COST, AND IT IS NOT ZERO.** A caller who passes a profile to `deidentify()` but not to
+     `parseDicom` now **loses** the vendor sequence's content instead of shipping it verbatim. That is
+     the fail-safe direction and it is the same trade every un-auditable sequence already makes, but it
+     is over-removal against `0.0.10` and the remedy on the caller's side is one line: pass the profile
+     to `parseDicom` too, and the sequence is walked, de-identified and retained. Stated in the
+     changeset, the README and `troubleshooting.md` rather than discovered later.
+     **▶ THE BASE-RED FIGURE, PINNED PER-SHA AND MEASURED OVER THE FULL SUITE AFTER THE LAST TEST WAS
+     ADDED. Against base `src/` at `369abbe`, replaced wholesale (`rm -rf src` then `git archive`,
+     never `git checkout -- src/`, which OVERLAYS): 5 of 1,081 run red.** Suite `1074 -> 1080` passing
+     plus the 1 `todo`. **It read `2 of 1,077` before the graded pass added four more tests, and was
+     re-run rather than carried forward** - the trap this file already writes with a stop sign. **Two
+     of the seven new or rewritten tests are GREEN on base BY DESIGN, because they are controls**: that
+     a retained private element the profile declares `LO` is still kept **verbatim** (or the remedy has
+     degenerated into "empty every retained private element"), and that a fabricated header keeps the
+     tag-free diagnostic, which base already did.
+     **▶ EVERY CONJUNCT IS NON-VACUOUS AND EACH WAS PROVEN BY MUTATION, NOT ASSERTED.** Widening the
+     predicate from `=== "SQ"` to `!== undefined` reds **14** tests in
+     `deident-private-reservation.test.ts`, the `LO` control among them; dropping `!hasUndefinedVr(el)`
+     reds exactly the fabricated-header test; dropping `el.length > 0` reds exactly the second-pass
+     test. Re-derive them that way rather than quoting the numbers.
+     **▶ THE GRID WAS NOT RE-RUN, AND THAT IS A REASONED OMISSION RATHER THAN A SKIPPED STEP.**
+     `scripts/measure-sq-bound-grid.ts` holds **no private-`SQ` cell at all** (`#77` measured 0 of
+     83,037 differing for the carve-out itself, for the same reason: the `priv|` family builds an `LO`
+     behind a **public** carrier and every family runs `deidentify()` with no options, so
+     `RetainSafePrivate` + a `Profile` - the only route in the package that writes a private value into
+     de-identified output - is never on). This remedy is reachable **only** from inside
+     `keepRetainedPrivate`, which only that route reaches. **Never read that as coverage.** The net is
+     the unit tests.
 
 ## DICOM-PRIVATE-CREATOR-RESERVATION-LEAK
 
@@ -1885,17 +2065,17 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   to a search instead of to a section, and it is why the rule says collect the candidates and read
   them WHOLE.** The governing clause is **PS3.6 2026c section 5, "Conventions"** (`chapter_5`),
   **one paragraph of FOUR sentences**:
-  *"'RET' is used to indicate that the corresponding Data Element, SOP Class, or Transfer Syntax
+  _"'RET' is used to indicate that the corresponding Data Element, SOP Class, or Transfer Syntax
   has been retired. Retired items are shown italicized. For retired items, the edition of the
   Standard in parentheses is the edition in which the item last appeared before it was retired.
   When the name of a retired Data Element has been reused, the retired element has the qualifier
-  '(Retired)' added ..."* **🛑 QUOTE ALL FOUR - a first wording of this very paragraph quoted three
+  '(Retired)' added ..."_ **🛑 QUOTE ALL FOUR - a first wording of this very paragraph quoted three
   and dropped the edition sentence, which is the partial read it exists to warn about, and a third
   refuter pass caught it here.** Read whole, **the ITALIC and the PARENTHESISED EDITION are the
   markings, and sentence 1 names Data Elements, SOP Classes and Transfer Syntaxes, so both reach
   UIDs; the `(Retired)` qualifier sentence is scoped to a REUSED DATA ELEMENT NAME and does not
-  reach UIDs at all.** Annex A's intro **RESTATES** the third narrowed to UIDs, also one hit: *"For
-  retired UIDs, ..."* - the fifth **Part** cell. **It restates; it does not add. Saying "adds" was
+  reach UIDs at all.** Annex A's intro **RESTATES** the third narrowed to UIDs, also one hit: _"For
+  retired UIDs, ..."_ - the fifth **Part** cell. **It restates; it does not add. Saying "adds" was
   corrected.** The generator still derives `retired` from
   the suffix alone, so italic and Part are **corroborations in the test**, never the source; the
   Part column especially, because it is the element registry's own trap one table over, where
@@ -2059,11 +2239,11 @@ ROOT, file CONTRADICTS` **78 -> 0**, of which the eject leaks are **22 -> 0** an
   it became headings: a Version PR wedge on legitimate content. And a fence that was never validly
   closed swallowed **the rest of the region**, so a column-0 `## 0.0.99` after one passed every case
   - a smuggling hole opened by the fix for the wedge, in the guard written to close smuggling.
-  A close must now use the **same character, be at least as long, and carry no info string**, and
-  **an unterminated fence is REFUSED rather than skipped**, which answers all four at once.
-  **This is a fence heuristic, NOT a CommonMark block model** - it knows nothing about the list item
-  containing a fence, so it cannot see that one opened inside a bullet ends at the first
-  non-indented line.
+    A close must now use the **same character, be at least as long, and carry no info string**, and
+    **an unterminated fence is REFUSED rather than skipped**, which answers all four at once.
+    **This is a fence heuristic, NOT a CommonMark block model** - it knows nothing about the list item
+    containing a fence, so it cannot see that one opened inside a bullet ends at the first
+    non-indented line.
 - **🛑 AND "REFUSING THE UNTERMINATED FENCE STANDS IN FOR THE LIST-ITEM CASE" IS FALSE. THAT
   SENTENCE WAS WRITTEN, THEN REFUTED AND DELETED - DO NOT WRITE IT AGAIN.** A fence opened inside a
   bullet, a column-0 `## 0.0.99` after it (which ends the list AND the fence in CommonMark), and any

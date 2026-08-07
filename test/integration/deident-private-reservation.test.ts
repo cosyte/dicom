@@ -1316,6 +1316,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
         undefinedVrLengths: readonly number[];
         unauditable: readonly string[];
         warningsNamingTag: readonly string[];
+        allWarningCodes: readonly string[];
       } => {
         // A complete long-form header (tag + VR + reserved + a 32-bit length)
         // followed by a name, all of it INSIDE a legitimate `LO` value that
@@ -1353,6 +1354,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
           warningsNamingTag: report.warnings
             .filter((w) => w.message.includes("00091001"))
             .map((w) => w.code),
+          allWarningCodes: report.warnings.map((w) => w.code),
         };
       };
 
@@ -1377,12 +1379,21 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       // The value is still emptied - the improvement over base, which kept this
       // carrier verbatim and shipped the name.
       expect(inside.leaks).toBe(false);
-      // And the fabricated tag is on the diagnostic. Asserted, not lamented: if
-      // this ever goes green it means the bound moved, and the artifacts that
-      // describe it are stale.
+      // The bound DID move, deliberately, and this row records which half moved.
+      // `DICOM-DIAGNOSTIC-PHI-RESIDUALS` made `renderTag` a MEMBERSHIP test, so
+      // no message renders a tag PS3.6's registry does not carry a literal row
+      // for - and `00091001` is private, so no closed table can vouch for it.
+      // The REPORT field is untouched: `report.unauditableSequences[].tag` still
+      // carries the fabricated tag, it is a model field rather than a message,
+      // and it sits in the item's open residual list beside
+      // `report.removedPrivateTags`. Asserting both halves separately is what
+      // stops one closure being read as the other's.
       expect(inside.undefinedVrLengths).toEqual([]);
       expect(inside.unauditable).toEqual(["00091001"]);
-      expect(inside.warningsNamingTag).toEqual(["DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE"]);
+      expect(inside.warningsNamingTag).toEqual([]);
+      // Non-vacuity on the half that closed: the run really did raise that code,
+      // so the empty list above is a withheld tag and not an absent warning.
+      expect(inside.allWarningCodes).toContain("DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE");
     });
 
     it("an undefined-length UN whose CP-246 descent was refused IS covered when a profile declared it SQ", () => {

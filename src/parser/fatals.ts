@@ -31,10 +31,12 @@
  *
  * {@link FatalTokens} **has no tag field and no wire-length field**, so a tag
  * cannot be rendered here even by a call site that wants to: there is nothing to
- * shape-check, because there is no slot. That is stronger than `renderTag` in
- * `./warnings.ts`, which validates a tag's *shape* and therefore cannot refuse a
- * fabricated one. `position.byteOffset` identifies the element instead, and it
- * is a count this parser kept rather than anything the document said.
+ * check, because there is no slot. **That is still stronger than `renderTag` in
+ * `./warnings.ts`, and it stayed stronger when `renderTag` became a membership
+ * test.** A membership test refuses a tag PS3.6's registry does not name; the
+ * absence of a slot refuses one it does. `position.byteOffset` identifies the
+ * element instead, and it is a count this parser kept rather than anything the
+ * document said.
  *
  * The numbers that do reach a template are named one at a time in
  * {@link FATAL_MESSAGES}, and every one of them is either a library constant or
@@ -265,10 +267,13 @@ const FATAL_MESSAGES = Object.freeze({
  * The substitutions a registry template may take.
  *
  * **There is no `tag` field and no wire-length field, and that is the design.**
- * `renderTag` in `./warnings.ts` checks a tag's shape and therefore cannot
- * refuse a fabricated one, so the only bound that holds is the absence of the
- * slot. Every field below is either a number this parser counted or a token
- * checked for membership in a closed table before it is rendered.
+ * `renderTag` in `./warnings.ts` is a membership test against PS3.6's registry
+ * now, and it would refuse a fabricated tag - but a Tier-3 fatal is raised where
+ * the structure has already failed, so the absence of the slot is the bound that
+ * does not depend on a table. A **wire length** has no such test available at
+ * all, in either registry. Every field below is either a number this parser
+ * counted or a token checked for membership in a closed table before it is
+ * rendered.
  *
  * @internal
  */
@@ -565,8 +570,10 @@ export function unexpectedFffeAtDatasetRoot(buffer: Buffer, offset: number): Dic
  * @remarks
  * The tag is bound out; the VR is not. Under Explicit VR those two bytes are a
  * sender's, so they are checked against the closed 34-VR set by `renderVr` and
- * render as `<withheld>` when they miss it - the bound `renderVr` can enforce
- * and `renderTag` cannot, which is the whole reason the tag has no slot.
+ * render as `<withheld>` when they miss it. `renderTag` enforces the same kind
+ * of bound in `./warnings.ts` against PS3.6's registry; the tag has no slot here
+ * because a Tier-3 fatal fires where the structure has already failed, so the
+ * bound that does not depend on a table is the one to take.
  *
  * @example
  * ```ts

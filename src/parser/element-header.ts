@@ -421,9 +421,11 @@ export function readExplicitElementHeader(
     const reserved1 = cursor.buffer[cursor.position + 1];
     cursor.position += 2;
     if ((reserved0 ?? 0) !== 0x00 || (reserved1 ?? 0) !== 0x00) {
-      // No tag: when the reserved bytes are not zero, this may not be a header,
-      // so the four bytes that would render as one are input. See the factory.
-      emit(nonzeroReservedBytes({ byteOffset: headerStart }, reserved0 ?? 0, reserved1 ?? 0));
+      // No tag AND no byte values: when the reserved bytes are not zero, this
+      // may not be a header at all, so the four bytes that would render as a tag
+      // AND the two reserved bytes themselves are input. The second half of that
+      // was measured leaking after the first was bound. See the factory.
+      emit(nonzeroReservedBytes({ byteOffset: headerStart }));
     }
     length = cursor.readUInt32();
     headerLength = 12;

@@ -84,20 +84,35 @@ structural fact about DICOM that no reader can resolve from the wire.
   tag half is read off the wire with nothing behind it, so a fabricated `SQ` header the reader was
   desynchronized onto is named there. **It is not safe to log.**
 
-- **A warning message is safe to log on a well-formed file and is NOT unconditionally safe, and the
-  channel matters as much as the field.** The registry's `{tag}` slot is filled by a shape check, and
-  a shape check cannot refuse a tag that a lying Value Length composed out of somebody's value.
-  Measured on an `ST` carrying `"MR BRAIN SMITHSON "` whose Value Length under-declares:
-  under **Explicit VR LE** the reader desynchronizes onto a fabricated header whose declared length is
-  odd, and `DICOM_ODD_LENGTH_VALUE_PADDED` renders **four bytes of the name as the tag and four more
-  as the decimal length** - eight payload bytes in one message, each reversible with one typed read.
-  It is disclosed rather than guarded because that code fires on any tag, and on a well-formed file
-  that tag is a registry entry a reader needs; narrowing it is a decision with its own slice.
-  **The fixtures that produce it all die before a `Dataset` exists**, so what actually carries the
-  message is `onWarning` and the `{ strict: true }` `DicomParseError` - not a surviving
-  `ds.warnings`. That no fixture here put one on a surviving `ds.warnings` is a fact about these
-  fixtures and not a promise about the parser; treat both channels the same way.
-  `w.code` and `w.position` carry nothing from the document.
+- **What a warning message may contain, as a mechanism rather than as a verdict.** The verdict form
+  of this bullet ("safe on a well-formed file, not unconditionally safe") was corrected twice, so it
+  is deleted rather than given a third wording. The registry's `{tag}` slot renders **only a tag
+  PS3.6's element registry carries a literal row for**, and `<withheld>` otherwise; `{vr}` renders
+  only one of the 34 VRs PS3.5 2026c §6.2 defines; and **a raw number a header carries is bound out
+  of the factory signature where it is bound at all**, because a declared Value Length has neither a
+  shape nor a membership a renderer could test. `w.code` and `w.position` carry nothing from the
+  document.
+  **Exceptions, named rather than counted.** `(0002,0000)`'s own declared File Meta group
+  length is still printed, and it is read at a structurally fixed offset no value can desynchronize
+  the reader onto. And **`DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` and
+  `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` still print a length that IS the header's**: they render
+  `Element.rawBytes.length`: the declared Value Length for a value-only element, declared-plus-header
+  for a full-span one, and document-derived either way, so a fabricated header carrying `"SO\0\0"`
+  renders `20307`. `PRE-EXISTING`, identical on `0.0.14`, **not closed here**, each pinned by its own
+  asserted test row. Both codes are raised by `deidentify()`, so they reach `report.warnings`.
+  **What that closed, measured on an `ST` carrying `"MR BRAIN SMITHSON "` whose Value Length
+  under-declares:** under Explicit VR LE the reader desynchronizes onto a fabricated header whose
+  declared length is odd, and through `0.0.14` `DICOM_ODD_LENGTH_VALUE_PADDED` rendered **four bytes
+  of the name as the tag and four more as the decimal length** - eight payload bytes in one message.
+  `DICOM_NONZERO_RESERVED_BYTES` printed two more as decimals on six other deltas. Both are closed.
+  **What it costs, stated rather than minimised:** a message about a **private** element, a **Group
+  Length** `(gggg,0000)` or a **repeating-group member** such as `(6000,3000)` Overlay Data no longer
+  names its tag on any file, well-formed or not. The element is still in the Data Set under that tag,
+  and `position.byteOffset` locates the header.
+  **The channel still matters as much as the field.** The fixtures that produce a desynchronized read
+  mostly die before a `Dataset` exists, so what carries their messages is `onWarning` and the
+  `{ strict: true }` `DicomParseError` rather than a surviving `ds.warnings` - a fact about those
+  fixtures and not a promise about the parser. Treat both channels the same way.
   Full treatment: [Keeping PHI out of logs](./troubleshooting#keeping-phi-out-of-logs).
 
 - **Two carriers this list named at `0.0.13` are now bound, and neither bound is an all-clear.**

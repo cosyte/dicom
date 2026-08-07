@@ -527,16 +527,18 @@ Every recoverable deviation collects on `ds.warnings` with a stable code and a b
 four fatal conditions throw. Each message is looked up in a frozen registry keyed by the code, with
 only structural substitutions (a tag, a VR, a number).
 
-**A warning message is safe to log on a well-formed file and is not unconditionally safe.** The
-`{tag}` slot is filled by a shape check, and a shape check cannot refuse a tag that a lying Value
-Length composed out of somebody's value; `DICOM_ODD_LENGTH_VALUE_PADDED` is measured rendering four
-bytes of a name as its tag and four more as its decimal length. **Every fixture that reaches it dies
-before a `Dataset` exists**, so that message arrives through `onWarning` or through the
-`{ strict: true }` error rather than on a surviving `ds.warnings` - review all three channels, and
-do not read the difference as a guarantee about `ds.warnings`. A thrown `DicomParseError`'s `message`
-comes from its own frozen registry, whose factories have no tag slot at all, but the error is still
-not safe to log whole: it carries a 16-byte hex `snippet` of the source. Both are measured and
-covered in [Keeping PHI out of logs](./troubleshooting#keeping-phi-out-of-logs).
+**What a message may contain is a mechanism, not a verdict**, and the verdict form of this paragraph
+was corrected twice, so it is gone rather than tried a third time. `{tag}` renders only a tag PS3.6's
+element registry carries a **literal row** for and `<withheld>` otherwise; `{vr}` renders only one of
+the 34 VRs PS3.5 defines; and a raw number a header carries is bound out of the factory signature
+where it is bound at all, so `DICOM_ODD_LENGTH_VALUE_PADDED` no longer prints the odd length and
+`DICOM_NONZERO_RESERVED_BYTES` no longer prints its two reserved bytes. **Two `deidentify()` codes
+still print a length that is the header's own, `PRE-EXISTING` and disclosed rather than closed** -
+see the troubleshooting page. The cost is that a message about a private, Group Length or
+repeating-group element no longer names its tag. A thrown `DicomParseError`'s `message` comes from
+its own frozen registry, whose factories have no tag slot at all, but the error still carries a
+16-byte hex `snippet` of the source. All of it is measured and covered in
+[Keeping PHI out of logs](./troubleshooting#keeping-phi-out-of-logs).
 
 ```ts runnable
 import { parseDicom, WARNING_CODES } from "@cosyte/dicom";

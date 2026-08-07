@@ -69,33 +69,51 @@ code === FATAL_CODES.EMPTY_INPUT; // => true
 ## What a diagnostic carries, and what it does not
 
 A Tier-2 warning's `message` is looked up in a frozen registry keyed by the warning code, and the
-only substitutions are structural: a tag this parser composed from
-the element header's four bytes, a VR checked against the closed 34-VR set, and input-derived
-**numbers** (a declared length, a byte count, a value index). No factory takes a string read out of
-the file, so a value cannot be interpolated even by a future call site that tries. A token that fails
-its check renders as `<withheld>` rather than being echoed.
+only substitutions are structural. No factory takes a string read out of the file, so a value cannot
+be interpolated even by a future call site that tries. A token that fails its check renders as
+`<withheld>` rather than being echoed. `w.code` and `w.position` carry nothing from the document.
 
-So `w.code` and `w.position` are safe to log. **`w.message` is safe on every well-formed file and is
-not unconditionally safe, and the difference is one shape.** The registry's `{tag}` slot is filled by
-`renderTag`, which validates a tag's _shape_ and therefore cannot refuse one that a length field's lie
-composed out of somebody's value. Measured: a `(0008,4000)` `ST` carrying `"MR BRAIN SMITHSON "` whose
+**The three substitutions are bounded three different ways, and they are not interchangeable.**
+
+- **`{tag}` is a MEMBERSHIP test.** `renderTag` renders a tag only when PS3.6's element registry
+  carries a **literal row** for it. A repeating-group family row is not membership: `(50xx,xxxx)`
+  Curve Data leaves the whole 16-bit element number free, so a family test admits 16 x 65,536 tags
+  whose free bits are raw document bytes - `"\fPAR"` composes `500C5241` and returns all four
+  payload bytes with one typed read.
+- **`{vr}` is a membership test** against the 34 VRs PS3.5 2026c §6.2 defines.
+- **A raw number a header carries has neither a shape nor a membership to test, so where it is
+  bound at all the bound is the absence of the slot.** There is no `renderLength` and there must not
+  be one. `DICOM_ODD_LENGTH_VALUE_PADDED`, `DICOM_NONZERO_RESERVED_BYTES` and
+  `DICOM_PIXEL_DATA_LENGTH_MISMATCH` cannot be handed one.
+
+**Exceptions, named rather than counted.** `(0002,0000)`'s own declared File Meta group length is
+still printed: `parseFileMeta` reads it at a structurally fixed offset, is never nested and runs once
+per parse, so no Data Set value can be read into that position. And **`DICOM_DEIDENT_UNDEFINED_VR_NOT
+_AUDITABLE` and `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` still print a length that came off the
+header** - they render `Element.rawBytes.length`, which is the declared Value Length for a value-only
+element and declared-plus-header for a full-span one, document-derived either way, so a fabricated
+header carrying `"SO\0\0"` renders `20307`. That is `PRE-EXISTING`, it reproduces identically on
+`0.0.14`, it is **not closed here**, and each code is pinned by its own asserted test row rather than
+implied shut.
+
+**What the membership rule closed.** Through `0.0.14` `renderTag` validated a tag's _shape_, and a
+shape test admits all 2^32 tags. Measured: a `(0008,4000)` `ST` carrying `"MR BRAIN SMITHSON "` whose
 Value Length under-declares by 12 desynchronizes the **Explicit VR LE** reader onto a fabricated
-header whose declared length is odd, and `DICOM_ODD_LENGTH_VALUE_PADDED` renders four bytes of the
+header whose declared length is odd, and `DICOM_ODD_LENGTH_VALUE_PADDED` rendered four bytes of the
 payload as its tag - `4E495320`, `"IN S"` in wire order - **and four more as its decimal length**,
-eight consecutive payload bytes in one message. `PRE-EXISTING` on every release that has this code.
-It is disclosed rather than guarded because that code fires on **any** tag, so withholding it would
-take the tag off every element in every real-world file that pads an odd length. The membership
-remedy available - render a tag the closed public registry names, withhold one it does not - is a
-package-wide change to `renderTag` plus a separate answer for the raw `{n}`, so it is a product
-decision with its own slice, not a defect fix. The same is true of `report.removedPrivateTags`.
-**If you log warning messages from untrusted files verbatim, treat a tag or a length in one as
-document-derived.**
+eight consecutive payload bytes in one message. On six other under-declare deltas
+`DICOM_NONZERO_RESERVED_BYTES` printed two more bytes of the same name as two decimals.
 
-**Which channel carries it is part of the answer, and the earlier wording put it on the wrong field.**
-Every fixture that produces this leak dies before a `Dataset` exists, so the message reaches a
-consumer through `onWarning` or through the `{ strict: true }` `DicomParseError` - not through a
-surviving `ds.warnings`. That no measured fixture put one on a surviving `ds.warnings` is a fact
-about those fixtures and not a promise about the parser.
+**What it costs, stated rather than minimised.** A tag PS3.6 does not name one at a time stops
+appearing in every message: **private** tags, **Group Length** `(gggg,0000)` tags, and
+**repeating-group members** such as `(6000,3000)` Overlay Data. The element is still in the Data Set
+under that tag, and `position.byteOffset` locates the header.
+
+**Which channel carries a message is part of the answer.** The fixtures that produce a desynchronized
+read mostly die before a `Dataset` exists, so their messages reach a consumer through `onWarning` or
+through the `{ strict: true }` `DicomParseError` rather than a surviving `ds.warnings`. That no
+measured fixture put one on a surviving `ds.warnings` is a fact about those fixtures and not a
+promise about the parser.
 
 **Two carriers this page named until recently are now bound, by a signature and not by a branch.**
 `DICOM_PRIVATE_TAG_NO_CREATOR`, `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR` and
