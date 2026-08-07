@@ -2,9 +2,10 @@
 "@cosyte/dicom": patch
 ---
 
-A tag in a warning message is checked for membership in PS3.6's element registry now, and a raw
-number a header carries is not rendered at all. This closes the fifth and sixth instances of
-"a diagnostic about a PHI leak is itself a PHI surface".
+A tag in a warning message is checked for membership in PS3.6's element registry now, and the
+parser's own codes no longer render a raw number read off an element header. This closes the fifth
+and sixth instances of "a diagnostic about a PHI leak is itself a PHI surface", and names the three
+places a raw length is still printed rather than leaving them for a reader to find.
 
 **⚠ BREAKING FOR STRING-MATCHERS, AND FOR ANYONE WHO PARSES A TAG BACK OUT OF A MESSAGE.**
 `w.code` is unchanged everywhere, which codes fire is unchanged, and no parse moves. What changes is
@@ -26,7 +27,8 @@ same trade against a set of 5,221.
 16 x 65,536 tags whose free bits are raw document bytes: `"\fPAR"` composes `500C5241` and returns
 all four payload bytes with one typed read. Only tags the registry names one at a time are rendered.
 
-**A raw wire number is bound out of the factory signature, because there is nothing to check.** A
+**A raw wire number is bound out of the factory signature on the parser's codes, because there is
+nothing to check.** A
 declared Value Length has neither a shape nor a membership a renderer could test, so there is no
 `renderLength` and there must not be one. `DICOM_ODD_LENGTH_VALUE_PADDED` no longer prints the odd
 length. `DICOM_NONZERO_RESERVED_BYTES` no longer prints its two reserved bytes: that code already
@@ -40,11 +42,19 @@ once a phase switches the code on. `DICOM_GROUP_LENGTH_IN_DATASET` loses its tag
 which the membership rule produced rather than a judgement: PS3.6 carries exactly one literal row
 ending `0000`, and it is File Meta, so that slot could never have rendered anything but `<withheld>`.
 
-**The one declared length still printed anywhere is `(0002,0000)`'s own File Meta group length**, and
-the exception is named rather than left as an unstated absolute. `parseFileMeta` runs once per parse,
-from `parseDicom`, at the post-`DICM` offset, and is never nested, so those four bytes are that
-attribute's own Value Field at a structurally determined offset and no Data Set value can be read
-into that position. The desynchronized-read sweep reaches that code zero times.
+**Three exceptions, named rather than left as an unstated absolute.** `(0002,0000)`'s own declared
+File Meta group length is still printed, and that one is argued as well as measured: `parseFileMeta`
+runs once per parse, from `parseDicom`, at the post-`DICM` offset, and is never nested, so those four
+bytes are that attribute's own Value Field at a structurally determined offset that no Data Set value
+can be read into. The desynchronized-read sweep reaches that code zero times.
+**The other two are a leak this release does not close.**
+`DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` and `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` render
+`Element.rawBytes.length`, which **equals the declared Value Length**, so a fabricated header
+carrying `"SO\0\0"` renders `20307` and one `readUInt32LE` reverses it. Both are `PRE-EXISTING` and
+byte-identical on `0.0.14`; both are raised by `deidentify()`, so they reach `report.warnings` and
+`{ strict: true }` does not escalate them. They are disclosed and pinned by an asserted test row
+rather than closed: binding them is a second remedy on a leak this release did not introduce, and it
+belongs in its own unit.
 
 **What it costs you, stated rather than minimised.** On any file, well-formed or not, a message about
 a **private** element, a **Group Length** `(gggg,0000)`, or a **repeating-group member** such as
@@ -59,7 +69,7 @@ dictionary already has an entry for the tag.
 It was written as "safe to log whole on any well-formed file", then corrected to "safe on a
 well-formed file and not unconditionally safe", and this package deletes a disclosure it has reworded
 twice. Every carrier now states the mechanism - which slot is a membership test, which is a signature
-bound, and the one named exception - and states no verdict.
+bound, and the three named exceptions - and states no verdict.
 
 **Not taken, deliberately.** `report.removedPrivateTags` is untouched: it is a private-tag field by
 definition, so no closed table can ever vouch for its contents and a bound would empty it on every

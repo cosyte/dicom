@@ -253,15 +253,48 @@ tag. **No repeating-group member appears in the suite at all**, so `(6000,3000)`
 its name in a message is a real cost that this repo's fixtures do not exercise - it is pinned by a
 direct unit row instead, and stated in the consumer docs rather than left to be discovered.
 
-**▶ `(0002,0000)`'s DECLARED GROUP LENGTH STAYS, AND THE ASYMMETRY IS STRUCTURAL.** It is the one raw
-declared length still printed anywhere in the registry. `parseFileMeta` runs **once** per parse, from
-`parseDicom`, at the post-`DICM` offset, and is never nested; `(0002,0000)` is the first element it
-reads or the code does not fire at all (its absence raises `DICOM_FILE_META_GROUP_LENGTH_MISSING`).
-So the four bytes are that attribute's own Value Field at a structurally determined offset, and no
-Data Set value can be read into that position - the same argument `duplicateFileMetaElement` already
-makes for its offset being file-absolute. Measured as well as argued: the desync sweep reaches that
-code **zero** times. Naming the exception is deliberate; writing "no message carries a raw length"
-would have been an absolute that is false.
+**▶ `(0002,0000)`'s DECLARED GROUP LENGTH STAYS, AND THE ASYMMETRY IS STRUCTURAL.** `parseFileMeta`
+runs **once** per parse, from `parseDicom`, at the post-`DICM` offset, and is never nested;
+`(0002,0000)` is the first element it reads or the code does not fire at all (its absence raises
+`DICOM_FILE_META_GROUP_LENGTH_MISSING`). So the four bytes are that attribute's own Value Field at a
+structurally determined offset, and no Data Set value can be read into that position - the same
+argument `duplicateFileMetaElement` already makes for its offset being file-absolute. Measured as
+well as argued: the desync sweep reaches that code **zero** times.
+
+**▶ 🔴 THE PASS-1 BLOCKER, AND IT IS THE LESSON OF THIS SLICE: THE DRAFT DELETED A VERDICT AND
+REPLACED IT WITH AN ABSOLUTE MECHANISM STATEMENT THAT WAS FALSE.** Six artifacts, five of them
+consumer-facing and one of them the public `ParseOptions.strict` JSDoc, said the one raw declared
+length still printed anywhere was `(0002,0000)`'s. **Two more are.**
+`DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` and `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` render
+`Element.rawBytes.length`, which is not a count this parser invented: it **equals the declared Value
+Length** off the element header. Reproduced independently before the remedy, on the same
+under-declare construction every instance of this item uses - a fabricated header whose length field
+is `"SO\0\0"` renders **`20307`**, and one `readUInt32LE` reverses it. The first of the two is the
+sharper: **it withholds tag and VR on the stated ground that the header may be fabricated, then
+prints the length off that same header.** The second renders `<withheld>` for its tag _because of
+this slice_ and still prints the length.
+
+**A SEVENTH INSTANCE, THEREFORE, AND IT IS `PRE-EXISTING`**: byte-identical templates and signatures
+on `ff1a64a`, and the parse path is untouched. **It is not this slice's to take** - binding those two
+signatures is a second remedy on a leak the slice did not introduce, and the grade said so
+explicitly. **The remedy taken was to CORRECT THE CLAIM, NEVER WIDEN THE GUARD** - this repo's own
+first rule - in all six artifacts plus the registry's own module doc, and to add
+`deidentUnauditableCodesStillRenderARawWireLength`, an asserted row **green on both trees** with a
+non-vacuity assertion on the payload. **A disclosure that names a test must name one that exists.**
+
+**▶ 🩺 AND THE SWEEP'S CHANNEL WAS UNSTATED, WHICH IS WHY THE ARTIFACTS COULD READ IT AS PACKAGE-WIDE.**
+The new standing sweep calls **only `parseDicom`**, so it can never reach a code `deidentify()` alone
+emits - and two of those are the seventh instance. The row is renamed to say `PARSER`, its docstring
+states the limit, and the residual row sits directly beneath it. A second gap is named rather than
+closed: `renderings()` has a 4-byte-as-`uint32` arm and a 1-byte-as-decimal arm and **no
+2-byte-as-`uint16` arm**, which is exactly a short-form Value Length. No registry entry renders one
+today, so such an arm would have nothing to hunt and no non-vacuity control, and a bare 0-65535
+search cannot be told from a legitimate count. Stated so nobody infers coverage from silence.
+
+**▶ AND A COUNT WENT INTO CONSUMER PROSE AND WAS WRONG IN THE SAME PARAGRAPH THAT LISTED IT.**
+`troubleshooting.md` said "Five codes take no tag parameter at all" and then named six, one of which
+this slice had just added. **Deleted, not incremented** - the rule this item enforces, and
+`CLAUDE.md`'s own "do not write a warning-code COUNT into prose".
 
 **▶ 🛑 THE "SAFE TO LOG" SENTENCE IS DELETED, NOT REWORDED A THIRD TIME - THIS REPO'S OWN RULE, APPLIED
 TO ITS OWN LINEAGE.** `#80` wrote it once ("safe to log whole on any well-formed file"), the sibling

@@ -153,9 +153,27 @@ export interface DicomParseWarning {
  * **derived** it - a count it kept, an offset it counted, a remainder the buffer
  * bounds. A number it read **verbatim out of a header it may be reading out of
  * frame** is four (or one) document bytes wearing a decimal, reversible with one
- * typed read, and it is bound out of the factory signature rather than checked:
- * a raw number has neither a shape nor a membership to test. `renderTag` and
- * `renderVr` are checks; there is no `renderLength` and there must not be one.
+ * typed read, and the bound available for it is the factory signature rather
+ * than a check: a raw number has neither a shape nor a membership to test.
+ * `renderTag` and `renderVr` are checks; there is no `renderLength` and there
+ * must not be one.
+ *
+ * **🔴 THE RULE IS NOT UNIFORMLY APPLIED, AND SAYING SO IS THE POINT - A GRADED
+ * PASS REFUSED THE DRAFT THAT STATED IT AS AN ABSOLUTE.** Three exceptions, each
+ * named rather than left for a reader to discover:
+ *
+ * 1. {@link fileMetaGroupLengthMismatch}'s `{n}` is a raw declared length and
+ *    stays, because `parseFileMeta` reads it in a frame nothing can
+ *    desynchronize. Its own JSDoc carries the argument and the measurement.
+ * 2. {@link undefinedVrNotAuditable}'s `{n}` and
+ * 3. {@link sequenceNotAuditable}'s `{n}` are `Element.rawBytes.length`, which
+ *    **equals the declared Value Length** - so a fabricated header carrying
+ *    `"SO\0\0"` renders `20307`, reversible with one `readUInt32LE`. Both are
+ *    `PRE-EXISTING`, both reproduce byte-identically on `0.0.14`, and neither is
+ *    closed here: binding them is a second remedy on a leak this slice did not
+ *    introduce, and it belongs in its own unit. Pinned by an asserted row in
+ *    `test/integration/fatal-diagnostic-surface.test.ts` that is green on both
+ *    trees, so no artifact can read this registry as an all-clear.
  *
  * Two codes are declared and never emitted by this build:
  * `DICOM_CHARSET_AMBIGUOUS_SEPARATOR` and `DICOM_PIXEL_DATA_LENGTH_MISMATCH`.

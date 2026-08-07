@@ -154,7 +154,13 @@ export interface ParseOptions {
    * structural tokens filled in: `{tag}` renders only a tag PS3.6's element
    * registry carries a literal row for, `{vr}` only one of the 34 VRs PS3.5
    * section 6.2 defines, and a raw length or byte value a header carries is
-   * bound out of the factory signature rather than rendered at all. **No
+   * bound out of the factory signature rather than rendered - **on the parser's
+   * codes. Two `deidentify()` codes are not bound and are disclosed rather than
+   * implied shut**: `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` and
+   * `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` render `Element.rawBytes.length`,
+   * which equals the declared Value Length, `PRE-EXISTING` and reachable from a
+   * fabricated header. They are raised by `deidentify()`, so `{ strict: true }`
+   * does not escalate them. **No
    * safe-to-log verdict is stated here** - that sentence was corrected twice and
    * is deleted rather than tried a third time; the mechanism is above and the
    * treatment is in the package's troubleshooting docs. The `DicomParseError`

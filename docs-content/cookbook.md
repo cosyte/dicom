@@ -530,9 +530,11 @@ only structural substitutions (a tag, a VR, a number).
 **What a message may contain is a mechanism, not a verdict**, and the verdict form of this paragraph
 was corrected twice, so it is gone rather than tried a third time. `{tag}` renders only a tag PS3.6's
 element registry carries a **literal row** for and `<withheld>` otherwise; `{vr}` renders only one of
-the 34 VRs PS3.5 defines; and a raw number a header carries is bound out of the factory signature,
-so `DICOM_ODD_LENGTH_VALUE_PADDED` no longer prints the odd length and `DICOM_NONZERO_RESERVED_BYTES`
-no longer prints its two reserved bytes. The cost is that a message about a private, Group Length or
+the 34 VRs PS3.5 defines; and a raw number a header carries is bound out of the factory signature
+where it is bound at all, so `DICOM_ODD_LENGTH_VALUE_PADDED` no longer prints the odd length and
+`DICOM_NONZERO_RESERVED_BYTES` no longer prints its two reserved bytes. **Two `deidentify()` codes
+still print a length that is the header's own, `PRE-EXISTING` and disclosed rather than closed** -
+see the troubleshooting page. The cost is that a message about a private, Group Length or
 repeating-group element no longer names its tag. A thrown `DicomParseError`'s `message` comes from
 its own frozen registry, whose factories have no tag slot at all, but the error still carries a
 16-byte hex `snippet` of the source. All of it is measured and covered in

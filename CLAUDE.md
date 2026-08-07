@@ -58,11 +58,11 @@ in the same area - open the section first.**
     frame its offset names. **The snippet is still 16 raw source bytes and still PHI - an honest
     frame made it MORE certainly the named element's content.**
     [#dicom-fatal-message-registry](documentation/agent-notes.md#dicom-fatal-message-registry)
-  - **`renderTag` IS MEMBERSHIP: a LITERAL PS3.6 row or `<withheld>`. A REPEATING-GROUP
-    MASK IS NOT ONE, and that cost a pass** (`50xx` leaves 16 bits free; `500C5241` is `"\fPAR"`). It
-    costs PRIVATE, `(gggg,0000)` and `60xx` tags their name in EVERY message. **A raw wire number is
-    bound out of the SIGNATURE - there is no `renderLength`.** The "safe to log" VERDICT is DELETED,
-    a third wording; `hidden` may read EMPTY, is STILL UNCAPPED, cap it in `deident`
+  - **`renderTag` IS MEMBERSHIP: a LITERAL PS3.6 row or `<withheld>`.
+    A REPEATING-GROUP MASK IS NOT ONE, that cost a pass** (`50xx` leaves 16 bits free; `500C5241` is `"\fPAR"`). Costs
+    PRIVATE, `(gggg,0000)` and `60xx` tags their name in EVERY message. **A raw wire number is
+    bound out of the SIGNATURE on PARSER codes ONLY - NAME the exceptions, two are `deident` LEAKS
+    (`rawBytes.length` = declared len).** "safe to log" DELETED; `hidden` STILL UNCAPPED
     [#dicom-diagnostic-phi-residuals](documentation/agent-notes.md#dicom-diagnostic-phi-residuals) ·
     [#dicom-overdeclare-swallows-into-value](documentation/agent-notes.md#dicom-overdeclare-swallows-into-value)
   - The **undefined-length item with no `(FFFE,E00D)`**, which has no declared length to disagree
@@ -239,7 +239,7 @@ not soften them. All anchors are in `documentation/agent-notes.md`.
 - **🩺 A DIAGNOSTIC MUST NOT NAME AN ELEMENT WHOSE HEADER MIGHT BE FABRICATED. Where the trigger IS
   "these bytes are not what they claim to be", the fields naming the element ARE INPUT.** `renderTag`
   and `renderVr` check MEMBERSHIP in a closed table; **a raw length or byte value has no table**, so
-  its only bound is the **factory signature** - and `position.byteOffset` identifies the element.
+  where bound at all its bound is the **signature**; `position.byteOffset` names it.
   This bit `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE`, `DICOM_NONZERO_RESERVED_BYTES` (tag AND both
   bytes), `DICOM_ITEM_CROSSES_SEQUENCE_END`, `DICOM_ODD_LENGTH_VALUE_PADDED` (length
   only), `DICOM_GROUP_LENGTH_IN_DATASET`, and every Tier-3 message in `fatals.ts` (no tag slot). **Do not put any of them back.**

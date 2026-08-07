@@ -78,13 +78,21 @@ Each substitution is bounded a different way, and the three ways are not interch
   `(50xx,xxxx)` Curve Data leaves the whole 16-bit element number free, so admitting a family match
   would admit 16 x 65,536 tags whose free bits are raw document bytes.
 - **`{vr}` is a membership test** against the 34 VRs PS3.5 2026c §6.2 defines.
-- **A raw number a header carries is bound out of the factory signature.** A declared Value Length
-  has neither a shape nor a membership to test, so there is nothing for a renderer to check and the
-  bound is the absence of the slot. The one declared length still printed anywhere is
-  `(0002,0000)`'s own File Meta group length, read at a structurally fixed offset no value can
-  desynchronize the reader onto.
+- **A raw number a header carries has neither a shape nor a membership to test, so where it is bound
+  at all the bound is the absence of the slot.** There is no `renderLength` and there must not be
+  one. `DICOM_ODD_LENGTH_VALUE_PADDED`, `DICOM_NONZERO_RESERVED_BYTES` and
+  `DICOM_PIXEL_DATA_LENGTH_MISMATCH` cannot be handed one.
 
 `w.code` and `w.position` carry nothing from the document.
+
+**Two exceptions, named rather than left implicit.** `(0002,0000)`'s own declared File Meta group
+length is still printed: `parseFileMeta` reads it at a structurally fixed offset, is never nested and
+runs once per parse, so no Data Set value can be read into that position. And **two `deidentify()`
+codes still print a length that IS the header's** - `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` and
+`DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` render `Element.rawBytes.length`, which equals the declared
+Value Length, so a fabricated header carrying `"SO\0\0"` renders `20307`. That is `PRE-EXISTING`, it
+reproduces identically on `0.0.14`, it is **not closed here**, and it is pinned by an asserted test
+row rather than implied shut.
 
 **What that closed, measured rather than argued.** An `ST` carrying `"MR BRAIN SMITHSON "` that
 under-declares by 12 desynchronizes the **Explicit VR LE** reader onto a fabricated header whose
@@ -105,7 +113,8 @@ desynchronized read mostly die before a `Dataset` exists, so their messages reac
 `ds.warnings`. That no measured fixture put one on a surviving `ds.warnings` is a fact about those
 fixtures, not a promise about the parser - review all three channels the same way.
 
-**Five codes take no tag parameter at all, which is a stronger bound than any renderer.**
+**Several codes take no tag parameter at all, which is a stronger bound than any renderer. No count
+is written here; the factories that take one say so in their own JSDoc.**
 `DICOM_PRIVATE_TAG_NO_CREATOR`, `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR` and
 `DICOM_PRIVATE_CREATOR_UNKNOWN` fire only on an odd group, which no closed table this library holds
 can vouch for. `DICOM_NONZERO_RESERVED_BYTES` and `DICOM_DUPLICATE_TAG_IN_DATA_SET` fire where the
