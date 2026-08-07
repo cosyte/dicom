@@ -171,17 +171,20 @@ export interface DeidentifiedAttribute {
  * and it is bound now.** Every tag in an embedded run is composed from four
  * bytes that were sitting *inside* the carrier's value - that is the whole
  * reason this type exists - and a run needs only ONE actionable attribute to be
- * reported, so through `0.0.13` the non-actionable tags of the run were listed
- * beside it. Measured: a `CS` carrier over-declaring across a fabricated
- * `"SMIT"` header beside a genuine `(0010,0020)` reported
- * `hidden: ["4D535449", "00100020"]`, and `4D535449` is `"SMIT"` in wire order.
- * `hidden` now carries **only the tags this run's own resolved Annex E action
- * fired on**, so an entry is a member of PS3.15 Table E.1-1 as the caller's
- * options resolved it. That is a **membership** bound, not a shape one - the
- * posture this package already takes for a VR and for a Private Creator - so
- * what survives it names a published table entry rather than a document byte. A
- * fabricated four-byte window still reaches this array if it happens to spell
- * such a tag, and that is the same trade rendering a VR makes with the 34.
+ * reported, so through `0.0.13` the rest of the run was listed beside it.
+ * Measured: a `CS` carrier over-declaring across a fabricated `"SMIT"` header
+ * beside a genuine `(0010,0020)` reported `hidden: ["4D535449", "00100020"]`,
+ * and `4D535449` is `"SMIT"` in wire order.
+ *
+ * **An entry is now one of the 652 literal rows of PS3.15 Table E.1-1 that this
+ * run's options left actionable.** That is a **membership** bound rather than a
+ * shape one - the posture this package already takes for a VR and for a Private
+ * Creator - so what survives names a published table entry rather than a
+ * document byte, the same trade rendering a VR makes with the 34. **A
+ * repeating-group mask hit is NOT in that set and is excluded**: `(50xx,xxxx)`
+ * Curve Data leaves the whole 16-bit element number free, so a mask match proves
+ * a rule exists without making the membership finite. A graded pass caught a
+ * draft of this filter that admitted it.
  *
  * **🛑 THAT IS NOT AN ALL-CLEAR OVER THIS TYPE.** `contextPath` below is
  * unbound and unchanged, `hidden` is uncapped, and
@@ -208,11 +211,11 @@ export interface EmbeddedAttributeFinding {
    * this type's own remarks.
    *
    * **🩺 IT MAY BE EMPTY, AND EMPTY DOES NOT MEAN "NOTHING WAS HIDDEN HERE".**
-   * A run whose only actionable members are private attributes reports a finding
-   * with no tags: the carrier was still emptied, and the accompanying
-   * `DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED` warning still counts the whole
-   * run. The presence of the finding is the fact; this list is the part of it
-   * that can be named.
+   * A run whose only actionable members are private attributes, Curve Data or
+   * Overlay elements reports a finding with no tags: the carrier was still
+   * emptied, and the accompanying `DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED`
+   * warning still counts the whole run. The presence of the finding is the fact;
+   * this list is the part of it that can be named.
    */
   readonly hidden: readonly Tag[];
   /**
@@ -441,12 +444,12 @@ export interface UndefinedVrFinding {
  *   and still answers it whenever the fabricated VR is outside the 34 PS3.5
  *   §6.2 defines. It cannot when the fabricated VR is one of them, because those
  *   two files are byte-identical.
- * - **`embeddedAttributes[].hidden`** - see {@link EmbeddedAttributeFinding}.
- *   **Bound since `DICOM-DIAGNOSTIC-PHI-RESIDUALS`**, and it is the one field in
- *   this list that moved: an entry is now a tag this run's own resolved Annex E
- *   action fired on, so it names a member of PS3.15 Table E.1-1 rather than any
- *   four bytes the run happened to tile over. It is **still uncapped**, and the
- *   bound is on what an entry can be, not on how many there are.
+ * `embeddedAttributes[].hidden` **left this list** in
+ * `DICOM-DIAGNOSTIC-PHI-RESIDUALS` - an entry is now a literal PS3.15 Table
+ * E.1-1 row, so it is not value-bearing. Its own disclosure had been reworded
+ * twice by then, and this repo deletes a disclosure at that point rather than
+ * writing a third; what is true of the field is stated once, on
+ * {@link EmbeddedAttributeFinding}. The field is **still uncapped**.
  * - **`contextPath`, on all four findings that carry one** - see
  *   {@link DeidentifiedAttribute.contextPath}, which holds the measurement. The
  *   segment tags come off the wire with no table behind them, so a fabricated

@@ -14,6 +14,8 @@ import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
 import { findEmbeddedAttributes, MAX_SCAN_BYTES } from "../../src/deident/embedded.js";
+import { annexE } from "../../src/dictionary/annex-e.js";
+import { ANNEX_E } from "../../src/dictionary/generated/annex-e.js";
 import type { Tag, VR } from "../../src/dictionary/types.js";
 
 const PATIENT_ID_TAG: Tag = "00100020";
@@ -260,6 +262,56 @@ describe("findEmbeddedAttributes: hidden carries only the tags the run acts on",
     const run = findEmbeddedAttributes(fabricatedBesideGenuine(), "CS", "explicitLE", always);
     expect(run?.elementCount).toBe(2);
     expect(run?.hidden).toEqual([PATIENT_ID_TAG]);
+  });
+
+  it("a REPEATING-GROUP MASK hit is excluded, and an even group alone would have admitted it", () => {
+    // 🩺 THE COUNTEREXAMPLE A GRADED PASS FOUND, against a draft of this filter
+    // whose second conjunct was "the group is even". `annexE()` falls through to
+    // the repeating-group rules, and `(50xx,xxxx)` Curve Data leaves the whole
+    // 16-bit element number free: 16 groups x 65,536 elements against 652
+    // literal rows. So an even-group test admits a million tags whose free bits
+    // are raw document bytes, and this window is one of them.
+    //
+    // `"\fPAR"` is a form feed (one of the five C0 controls PS3.5 Table 6.1-1
+    // admits) plus three letters of a synthetic surname. It composes `500C5241`,
+    // and the composition is a bijection, so admitting it returns all four bytes
+    // with one typed read - exactly the leak `"SMIT"` was.
+    const window = "\fPAR";
+    const bytes = Buffer.from(window, "latin1");
+    const composed =
+      bytes.readUInt16LE(0).toString(16).padStart(4, "0").toUpperCase() +
+      bytes.readUInt16LE(2).toString(16).padStart(4, "0").toUpperCase();
+    expect(composed).toBe("500C5241");
+    // Non-vacuity on the premise, not just on the outcome: this tag really is
+    // actionable, really is an EVEN group, and really resolves only by a mask.
+    expect(parseInt(composed.slice(0, 4), 16) % 2).toBe(0);
+    const action = annexE(composed);
+    expect(action).toBeDefined();
+    expect(action?.repeatingGroup).toBe("50xxxxxx");
+
+    const value = Buffer.concat([
+      Buffer.from("BRAIN ", "latin1"),
+      shortForm(
+        bytes.readUInt16LE(0),
+        bytes.readUInt16LE(2),
+        "SH",
+        Buffer.from("ASHTON", "latin1"),
+      ),
+      shortForm(0x0010, 0x0020, "LO", ID),
+    ]);
+    const run = findEmbeddedAttributes(value, "CS", "explicitLE", always);
+    expect(run?.elementCount).toBe(2);
+    expect(run?.hidden).not.toContain(composed);
+    expect(run?.hidden).toEqual([PATIENT_ID_TAG]);
+  });
+
+  it("no literal Table E.1-1 row is an odd group, so the bound needs no second test for private", () => {
+    // The filter is one conjunct rather than two because of this fact about the
+    // generated table. Asserted rather than assumed: if a future edition adds an
+    // odd-group literal row, this reds and the reasoning gets re-derived.
+    const odd = Object.keys(ANNEX_E).filter((tag) => parseInt(tag.slice(0, 4), 16) % 2 === 1);
+    expect(odd).toStrictEqual([]);
+    expect(Object.keys(ANNEX_E).length).toBeGreaterThan(600);
   });
 
   it("an odd group is excluded even when the run's own action table acts on it", () => {

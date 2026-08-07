@@ -27,15 +27,21 @@ Set, and `position.byteOffset` locates the header.
 listed **every** tag in a run it found inside a kept carrier's Value Field, and a run needs only one
 actionable attribute to be reported - so a fabricated header sitting beside a real one was listed
 too. Measured: a `CS` carrier over-declaring across a fabricated `"SMIT"` header beside a genuine
-`(0010,0020)` reported `hidden: ["4D535449", "00100020"]`. The filter has **two** conjuncts, because
-one was measured insufficient: the Basic Profile removes private attributes as a class, so the
-caller's resolved Annex E action answers `true` for every odd-group tag and the first draft still
-listed `4D535449`. With `isActionable` **and** an even group, a surviving entry is an entry in PS3.15
-Table E.1-1 as this run resolved it - a published, closed table. **Two consequences that travel with
-the field:** it can now be **empty on a real finding** (a run whose only actionable members are
-private names none of them, and the carrier is still emptied and still counted), and it is **still
-uncapped**. `DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED`'s `{n}` is unchanged and still counts the
-whole run, so narrowing `hidden` did not silently re-scope a shipped message.
+`(0010,0020)` reported `hidden: ["4D535449", "00100020"]`. An entry is now one of the **652 literal
+rows** of PS3.15 Table E.1-1 that this run's options left actionable, and **two drafts of that filter
+were refuted before the sentence was true**. Filtering on the resolved Annex E action alone admits
+every odd group, because the Basic Profile removes private attributes as a class. Adding "and an even
+group" still admits every **repeating-group mask hit**: `annexE()` falls through to the family rows,
+and `(50xx,xxxx)` Curve Data leaves the whole 16-bit element number free - 16 groups x 65,536
+elements against 652 literal rows - so `"\fPAR"` composes `500C5241` and returns all four payload
+bytes with one typed read. A mask match proves a rule exists; it does not make the membership finite.
+The shipped test is "the tag has a literal row", which subsumes the odd-group case, since no literal
+row is odd-group. **Two consequences that travel with the field:** it can now be **empty on a real
+finding** (a run whose only actionable members are private attributes, Curve Data or Overlay elements
+names none of them, and the carrier is still emptied and still counted), and it is **still uncapped**.
+`DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED`'s `{n}` is unchanged and still counts the whole run, so
+narrowing `hidden` did not silently re-scope a shipped message; its closing sentence was reworded,
+because it pointed at a field that can now be empty.
 
 **`report.removedPrivateTags` is deliberately unchanged.** It is a private-tag field, so no table can
 vouch for its entries and a bound would empty it on every well-formed file - which is what it exists
@@ -60,7 +66,7 @@ folding newlines rather than by a line-based search, since a sentence that wraps
 `README.md`, `limitations.md`, `troubleshooting.md`, `spec-notes-tolerance.md`, `cookbook.md` and the
 JSDoc on `EmbeddedAttributeFinding`, `DeidentifyReport` and the three factories.
 
-**Consumer-visible:** three warning message strings are reworded (no code, no `position` and no
+**Consumer-visible:** four warning message strings are reworded (no code, no `position` and no
 `err.code` changes), and `embeddedAttributes[].hidden` may be shorter or empty on a file where it was
 populated before. A consumer that string-matched those messages or read `hidden` as the whole run
 should read the code and the warning's count instead.

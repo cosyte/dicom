@@ -124,6 +124,7 @@
 import type { Buffer } from "node:buffer";
 
 import { joinTag } from "../dataset/tag.js";
+import { annexE } from "../dictionary/annex-e.js";
 import type { Tag, VR } from "../dictionary/types.js";
 import { KNOWN_VRS } from "../parser/endian.js";
 import { LONG_FORM_VRS } from "../parser/element-header.js";
@@ -325,27 +326,45 @@ function hasByteOutsideRepertoire(region: Buffer, carrierVr: VR): boolean {
 }
 
 /**
- * `true` when a published table can vouch for this tag, which is the second
- * conjunct of {@link EmbeddedRun.hidden}'s bound.
+ * `true` when this tag has a **literal row** in PS3.15 Table E.1-1, which is the
+ * second conjunct of {@link EmbeddedRun.hidden}'s bound.
  *
- * **An EVEN group is the test, and it is not a proxy for "in the dictionary".**
- * `isActionable` is the caller's resolved Annex E action, and that action is
- * `true` for **any** odd-group tag, because the Basic Profile removes private
- * attributes as a class rather than by naming them. So `isActionable` alone
- * admits a fabricated odd-group header - measured, and the shape that made this
- * bound necessary rather than merely tidy. For an **even** group the action
- * table has to name the tag (or a repeating-group mask has to), so
- * `isActionable && even` is exactly "PS3.15 Table E.1-1 as this run resolved
- * it", a published, closed set whose members carry nothing about the file.
+ * ## 🛑 IT IS "A LITERAL ROW", NOT "AN EVEN GROUP", AND THE DIFFERENCE IS SIX
+ * ORDERS OF MAGNITUDE
  *
- * The cost, stated: a genuinely swallowed **private** attribute is no longer
- * named here. It is still emptied - the carrier is emptied whole - and the
- * warning still counts it. What is given up is its tag on the report, which is
- * the same trade `privateTagNoCreator` makes and for the identical reason: an
- * odd group is the one class of tag this package has no closed table to check.
+ * `isActionable` is the caller's resolved Annex E action, and **two** classes of
+ * tag pass it without any finite table naming them:
+ *
+ *  - **Every odd group.** The Basic Profile removes private attributes as a
+ *    class rather than by naming them, so a fabricated odd-group header is
+ *    "actionable". Measured: `4D535449`, `"SMIT"` in wire order.
+ *  - **Every repeating-group mask hit**, and this is the one an even-group test
+ *    misses. `annexE()` falls through to `matchRepeatingRule`, and
+ *    `(50xx,xxxx)` Curve Data leaves the **whole 16-bit element number free** -
+ *    16 groups x 65,536 elements, against 652 literal rows. Measured on this
+ *    module's own fixture with only the four fabricated bytes changed:
+ *    `"\fPAR"` composes `500C5241`, which an even-group filter admits and which
+ *    returns all four bytes with one typed read. A **graded pass found this**,
+ *    against a first remedy that called an even group "PS3.15 Table E.1-1 as
+ *    this run resolved it". **A mask MATCH proves the table holds a rule; it
+ *    does not make the membership finite.**
+ *
+ * Requiring `annexE()` to resolve **without** a `repeatingGroup` is the finite
+ * test: 652 rows, published, and a fabricated window that spells one discloses a
+ * table entry rather than a document byte - the trade `renderVr` makes with the
+ * 34 VRs, which is only honest against a set of that size. It subsumes the
+ * odd-group case, since no literal row is odd-group (`ANNEX_E` is asserted
+ * even-group-only by a test rather than assumed here).
+ *
+ * **The cost, stated twice over.** A genuinely swallowed **private** attribute
+ * is not named here, and neither is a genuinely swallowed **Curve Data, Overlay
+ * Data or Overlay Comments** element. Both are still emptied - the carrier is
+ * emptied whole - and the warning still counts them. What is given up is their
+ * tag on the report, which is the same trade `privateTagNoCreator` makes.
  */
 function isTableBound(tag: Tag): boolean {
-  return parseInt(tag.slice(0, 4), 16) % 2 === 0;
+  const action = annexE(tag);
+  return action !== undefined && action.repeatingGroup === undefined;
 }
 
 /** What a scan found: the run's size, and only the tags the run acted on. */
@@ -365,22 +384,25 @@ export interface EmbeddedRun {
    *
    * The bound is a **membership** test rather than a shape test - the posture
    * `renderVr` and `Element.privateCreator` already take in this package - and
-   * it has **two** conjuncts, because one was measured insufficient. A tag
+   * it has **two** conjuncts, each of which was measured necessary. A tag
    * reaches this array only if `isActionable` fired on it **and**
-   * {@link isTableBound} holds: `isActionable` alone answers `true` for every
-   * odd-group tag, since the Basic Profile removes private attributes as a
-   * class, so the `"SMIT"` header above survived the first draft of this filter.
-   * With both, a surviving entry is an entry in PS3.15 Table E.1-1 as this run
-   * resolved it: a published, closed table whose members carry nothing about the
-   * file. A fabricated window still reaches this array if it happens to spell
-   * one of those tags, and that is the same trade `renderVr` makes with the 34
-   * VRs - it discloses a table entry, not a document byte.
+   * {@link isTableBound} holds, so a surviving entry is one of the **652 literal
+   * rows** of PS3.15 Table E.1-1 that this run's options left actionable. A
+   * fabricated window still reaches this array if it happens to spell one of
+   * those, which is the same trade `renderVr` makes with the 34 VRs: it
+   * discloses a table entry, not a document byte.
+   *
+   * **Two drafts of this filter were refuted before that sentence was true**,
+   * and {@link isTableBound} carries both counterexamples. `isActionable` alone
+   * admits every odd group; `isActionable` plus an even group still admits every
+   * repeating-group mask hit, which is a million tags whose free bits are raw
+   * document bytes.
    *
    * **It may be empty while the run is real** - a run whose only actionable
-   * members are private attributes names none of them - and **it is still
-   * uncapped**, like every other consumer-controlled diagnostic this module has
-   * not yet reached. The filter narrows what an entry can be, not how many there
-   * are.
+   * members are private attributes, Curve Data or Overlay elements names none of
+   * them - and **it is still uncapped**, like every other consumer-controlled
+   * diagnostic this module has not yet reached. The filter narrows what an entry
+   * can be, not how many there are.
    */
   readonly hidden: readonly Tag[];
   /**

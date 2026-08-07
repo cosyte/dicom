@@ -37,7 +37,9 @@ it is: **can any closed, published table vouch for this tag?**
 - `removedPrivateTags` is a **private**-tag field by definition. PS3.6's registry is even-group and a
   `Profile`'s private dictionary is keyed by a creator string, so nothing can vouch, and a bound
   empties the field on every well-formed file. **Genuine product call, deliberately untaken.**
-- `embeddedAttributes[].hidden` had a bound available and was not taking it. **Defect.**
+- `embeddedAttributes[].hidden` had a bound available and was not taking it. **Defect.** But the
+  bound is the **literal** rows of Table E.1-1, not "the table" - see instance 2, where calling a
+  repeating-group mask part of the closed set cost a refuted pass.
 - `DICOM_PRIVATE_TAG_NO_CREATOR` names a private tag, so it has no membership bound - but the
   **signature** bound is available, and the tag is not lost, it moves to the model. **Defect.**
 
@@ -54,18 +56,37 @@ rather than by measurement** - stated that way rather than implied to be measure
 tag is no longer in the message. It is still the element's key in the Data Set, and
 `position.byteOffset` locates the header, with the frame-of-reference caveat every offset here has.
 
-**▶ INSTANCE 2: `hidden` NEEDED TWO CONJUNCTS, AND THE FIRST DRAFT OF THE FILTER WAS MEASURED
-INSUFFICIENT.** Filtering the run on the caller's `isActionable` alone looked like the whole answer -
-it is the run's own resolved Annex E action, one authority - and it **still listed `4D535449`**. The
-reason is that the Basic Profile removes private attributes **as a class**, so `isActionable` answers
-`true` for every odd-group tag, and a fabricated header lands on an odd group about half the time.
-The second conjunct is `isTableBound`: an **even** group. `isActionable && even` is exactly "an entry
-in PS3.15 Table E.1-1 as this run resolved it", because for an even group the table has to name the
-tag (or a repeating-group mask has to). **Consequences that must travel with the field:** `hidden` can
-now be **empty on a real finding** (a run whose only actionable members are private), and it is
-**still uncapped** - the bound is on what an entry can be, not on how many there are. The warning's
-`{n}` is `elementCount`, deliberately, so narrowing `hidden` did not silently re-scope a shipped
-message from "how many elements were swallowed" to "how many this run acts on".
+**▶ 🛑 INSTANCE 2 TOOK THREE DRAFTS, AND THE TWO THAT FAILED ARE THE FINDING. A MASK MATCH PROVES A
+RULE EXISTS; IT DOES NOT MAKE THE MEMBERSHIP FINITE.**
+
+- **Draft 1 - `isActionable` alone.** The run's own resolved Annex E action, one authority, no second
+  drifting copy. It **still listed `4D535449`**: the Basic Profile removes private attributes **as a
+  class**, so `isActionable` answers `true` for every odd-group tag, and a fabricated header lands on
+  an odd group about half the time.
+- **Draft 2 - `isActionable` + an even group.** Refuted by a graded pass, on this module's own
+  shipped fixture with only the four fabricated bytes changed. `annexE()` falls through to
+  `matchRepeatingRule`, and `(50xx,xxxx)` Curve Data leaves the **whole 16-bit element number free**:
+  16 groups x 65,536 elements against **652** literal rows, so 99.9% of what an even-group test
+  admits is a mask whose free bits are raw document bytes. `"\fPAR"` - a form feed plus three letters
+  of a surname - composes `500C5241`, which draft 2 admitted and which returns all four bytes with
+  one typed read, exactly as `"SMIT"` did. **The draft's own JSDoc wrote the counterexample into the
+  sentence** ("the action table has to name the tag, *or a repeating-group mask has to*") and called
+  the result closed anyway. This is `#80`'s label-versus-body rule one level up, applied to a table
+  instead of a spec section.
+- **Draft 3, shipped - `isActionable` + a LITERAL Table E.1-1 row** (`annexE(tag)` resolves with no
+  `repeatingGroup`). 652 rows, finite and published, so a fabricated window that spells one discloses
+  a table entry rather than a document byte - the `renderVr`-with-34-VRs trade, which is only honest
+  against a set of that size. It **subsumes** the odd-group case: `ANNEX_E` has **0** odd-group
+  literal rows, asserted by a test rather than assumed, so a future edition that adds one reds.
+
+**Consequences that must travel with the field:** `hidden` can be **empty on a real finding** - a run
+whose only actionable members are private attributes, Curve Data or Overlay elements names none of
+them - and it is **still uncapped**; the bound is on what an entry can be, not how many. Both costs
+are real and stated rather than minimised: a genuinely swallowed private attribute and a genuinely
+swallowed `(60xx,3000)` are emptied and counted but not named. The warning's `{n}` is `elementCount`,
+deliberately, so narrowing `hidden` did not silently re-scope a shipped message from "how many
+elements were swallowed" to "how many this run acts on" - and its closing sentence was reworded too,
+because it pointed at a field that can now be empty.
 
 **▶ 🔴 INSTANCE 3 IS THE HALF WITH THE MOST IN IT, AND THE SWEEP FOUND A FIFTH INSTANCE NOBODY HAD
 FILED.** The docs claim was already corrected once by `#80` to "safe on a well-formed file, not
@@ -106,33 +127,43 @@ and `embeddedAttributes`, over every tracked `.md` and `.ts`. Corrected: `README
 quoted here for the same reason no other count in this file is.
 
 **▶ FIGURES. BASE IS `8b40b32` AND NO HEAD SHA IS QUOTED, DELIBERATELY** - a pre-merge head sha is
-wrong the moment the PR squash-merges. Head: **1,205 passing + 1 todo across 72 files, 0 red**. Base
-`src/` with the head `test/` tree (replaced, not overlaid; all 72 files still collect): **25 of 1,206
-red across 4 files.**
+wrong the moment the PR squash-merges. Head: **1,207 passing + 1 todo across 72 files, 0 red**. Base
+`src/` with the head `test/` tree (replaced, not overlaid; all 72 files still collect): **26 of 1,208
+red across 4 files.** Re-run after the graded pass added tests rather than carried forward - it read
+25 of 1,206 before.
 
-**🛑 THAT 25 IS NOT 25 BEHAVIOURAL FINDINGS, AND SAYING SO WOULD BE THE `#78` DEFECT AGAIN.** Split
+**🛑 THAT 26 IS NOT 26 BEHAVIOURAL FINDINGS, AND SAYING SO WOULD BE THE `#78` DEFECT AGAIN.** Split
 it before quoting it. **Ten** are decoder rows that grade the repertoire and header conjuncts and are
 red only because `findEmbeddedAttributes` returns a record where base returned an array - an API-shape
-casualty, no behaviour in them. The **fifteen** that are behavioural evidence:
+casualty, no behaviour in them. The **sixteen** that are behavioural evidence:
 
 - Instance 1 - `tierTwoEscalationNoLongerNamesAFabricatedTag`, `bothPrivateTagCodesAreClosed`, and
   the three `takes no tag at all` factory rows in `test/parser/warnings.test.ts`.
 - Instance 2 - `embeddedAttributesHiddenNoLongerCarriesValueBytes`, `the fabricated neighbour is not
-  named`, `an odd group is excluded even when the run's own action table acts on it`, `a run whose
-  only actionable tags are private`, `elementCount counts the whole run`, `non-vacuity`, plus the
-  four detector rows whose fixtures carry an odd-group tag.
+  named`, `a REPEATING-GROUP MASK hit is excluded`, `an odd group is excluded even when the run's own
+  action table acts on it`, `a run whose only actionable tags are private`, `elementCount counts the
+  whole run`, `non-vacuity`, plus the four detector rows whose fixtures carry a tag with no literal
+  Table E.1-1 row.
 
-**Two rows are GREEN ON BASE BY DESIGN and must stay that way**: `oddLengthValuePaddedStillNamesA
+**Three rows are GREEN ON BASE BY DESIGN and must stay that way**: `oddLengthValuePaddedStillNamesA
 FabricatedTagAndLength` pins a `PRE-EXISTING` residual, so it has to reproduce on both trees or it is
-not a residual pin; and `the filter does not decide WHETHER a run is reported` grades an invariant
-this slice did not move.
+not a residual pin; `the filter does not decide WHETHER a run is reported` grades an invariant this
+slice did not move; and `no literal Table E.1-1 row is an odd group` grades the generated table.
 
 **The RED-before evidence is structural rather than incidental**: the two `#80` residual rows
 **asserted the leaks** and now assert their absence, so each is red on base by construction. Both keep
 a non-vacuity control - instance 1 rebuilds `0.0.13`'s own message template and asserts the detector
 still catches **that**; instance 2 asserts the run really holds two elements while `hidden` names one,
 and that the fixture's bytes really do spell the surname. A green run cannot mean "the fixture never
-carried the thing".
+carried the thing". The mask row carries its non-vacuity on the **premise** as well as the outcome:
+it asserts that `500C5241` really is actionable, really is an even group, and really resolves only
+through `50xxxxxx` - so it cannot pass because the counterexample stopped being one.
+
+**▶ REFUTER PASSES: 2** (`REFUTED`, then the remedy graded). Pass 1's blocker is instance 2's draft 2
+above, and its two minor findings are here too: the `DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED`
+message's closing sentence, and the `hidden` disclosure on `DeidentifyReport` - which had been
+reworded twice by then, so it was **deleted from that list** rather than given a third wording, per
+this repo's own rule. What is true of the field is stated once, on `EmbeddedAttributeFinding`.
 
 ---
 

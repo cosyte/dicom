@@ -306,9 +306,13 @@ describe("deidentify: an over-declared Value Length that swallowed the next elem
   it("...and the same bytes with a single NUL in them are", () => {
     const value = controlByteFreeEmbedding();
     value[value.length - 1] = 0x00;
-    expect(findEmbeddedAttributes(value, "SH", "explicitLE", () => true)?.hidden).toEqual([
-      "20202020",
-    ]);
+    // Detection is graded by the count, not by `hidden`: `(2020,2020)` has no
+    // literal PS3.15 Table E.1-1 row, so it is a tag this report cannot name
+    // even though the caller's predicate calls it actionable. The row is about
+    // the repertoire conjunct, and the count is what carries it.
+    const run = findEmbeddedAttributes(value, "SH", "explicitLE", () => true);
+    expect(run?.elementCount).toBe(1);
+    expect(run?.hidden).toStrictEqual([]);
   });
 
   it("a tail that does not reach the end of the value is not a swallow", () => {

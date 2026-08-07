@@ -35,7 +35,23 @@ import { tmpdir } from "node:os";
 
 import { runRepoScript } from "../helpers/run-script.js";
 
-const REPO_ROOT = process.cwd();
+/**
+ * This repository's root, from **this file's own location** rather than from
+ * `process.cwd()`.
+ *
+ * It was `process.cwd()`, and that is a real defect rather than a style point:
+ * the fixtures below are WRITTEN to `join(REPO_ROOT, "test/fixtures/phi-scan")`,
+ * so a `vitest` invoked from anywhere other than the package root planted seven
+ * synthetic `.dcm`/`.json`/`.txt` files in **that** directory instead - outside
+ * the tree `.gitignore` exempts them in, where they are untracked and un-ignored
+ * and the next `git add -A` sweeps them up. Measured: a run whose cwd was the
+ * enclosing meta-repo left them at `<meta-repo>/test/fixtures/phi-scan/`.
+ *
+ * `test/helpers/run-script.ts` already derives its root this way and defaults the
+ * child's `cwd` to it, so the scanner subprocess was always rooted correctly;
+ * this line is what made the two disagree.
+ */
+const REPO_ROOT = join(import.meta.dirname, "..", "..");
 const FIX_DIR = join(REPO_ROOT, "test", "fixtures", "phi-scan");
 const SCANNER_PATH = join(REPO_ROOT, "scripts", "phi-scan.ts");
 const OVERRIDES_PATH = join(REPO_ROOT, "phi-scan-overrides.md");

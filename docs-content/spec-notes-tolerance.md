@@ -103,9 +103,13 @@ about those fixtures and not a promise about the parser.
 and an odd group is the one class of tag no closed table this library holds can vouch for - PS3.6's
 registry is even-group and a `Profile`'s private dictionary is keyed by a creator string. The element
 stays in the object under its tag and `position.byteOffset` locates the header.
-`report.embeddedAttributes[].hidden` is bound too, by membership rather than by signature: an entry
-is a tag the run's own resolved Annex E action fired on **and** an even group, so it names a PS3.15
-Table E.1-1 member. It can be empty on a real finding, and it is still uncapped.
+`report.embeddedAttributes[].hidden` is bound too, by membership rather than by signature: an entry is
+a tag the run's own resolved Annex E action fired on that has a **literal row** in PS3.15 Table
+E.1-1 - 652 of them. **A repeating-group mask hit is excluded, and that is the load-bearing half**:
+`(50xx,xxxx)` Curve Data leaves the whole 16-bit element number free, so a mask match proves a rule
+exists without making the membership finite - a draft that stopped at "an even group" was measured
+admitting `500C5241`, four payload bytes recoverable with one typed read. `hidden` can be empty on a
+real finding, and it is still uncapped.
 
 **A Tier-3 fatal's `message` is bounded the same way, and it was not always.** Every message
 `parseDicom` throws now comes from a second frozen registry, keyed by the structural reason for the

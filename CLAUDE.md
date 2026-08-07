@@ -59,10 +59,10 @@ in the same area - open the section first.**
     frame made it MORE certainly the named element's content.**
     [#dicom-fatal-message-registry](documentation/agent-notes.md#dicom-fatal-message-registry)
   - `DICOM_PRIVATE_TAG_NO_CREATOR` and `embeddedAttributes[].hidden` are **CLOSED, as DEFECTS: the
-    test is whether a CLOSED TABLE vouches for the tag.** `hidden` may read EMPTY on a real finding
-    and is **STILL UNCAPPED** (131,072 tag strings from a 1 MiB carrier), so take the cap before the
-    next `deident` slice. **`ds.warnings[].message` is STILL not unconditionally safe** -
-    `DICOM_ODD_LENGTH_VALUE_PADDED`, tag AND length, on `onWarning`/strict.
+    test is whether a FINITE table vouches for the tag - A REPEATING-GROUP MASK IS NOT ONE, and that
+    cost a pass** (`50xx` leaves 16 bits free; `500C5241` is `"\fPAR"`). `hidden` may read EMPTY and
+    is **STILL UNCAPPED**; cap it in `deident`. **`ds.warnings[].message` is STILL not
+    unconditionally safe** - `DICOM_ODD_LENGTH_VALUE_PADDED`, tag AND length, `onWarning`/strict
     [#dicom-diagnostic-phi-residuals](documentation/agent-notes.md#dicom-diagnostic-phi-residuals) ·
     [#dicom-overdeclare-swallows-into-value](documentation/agent-notes.md#dicom-overdeclare-swallows-into-value)
   - The **undefined-length item with no `(FFFE,E00D)`**, which has no declared length to disagree
