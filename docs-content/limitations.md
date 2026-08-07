@@ -25,17 +25,17 @@ been corrected twice and then deleted.
 
 These are non-goals, not gaps. Each is a companion package or another tool's job.
 
-| Not in v1                                                                                                                                                            | Where it goes                                                                    |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| **Pixel decode or decompression** of any compressed transfer syntax (JPEG, JPEG-LS, JPEG2000, RLE, HTJ2K), rendering, windowing, or any measurement computed from pixels | `@cosyte/dicom-pixel`                                                            |
-| **Reading a pixel-compressed object at all.** A transfer syntax outside the four supported ones is the fatal `UNSUPPORTED_TRANSFER_SYNTAX`, so such an object does not parse, not even structurally | `@cosyte/dicom-pixel`                                                            |
-| **Burned-in annotation removal / Clean Pixel Data.** A de-identified output from this package is **metadata-de-identified only**, and it warns rather than claiming otherwise | `@cosyte/dicom-pixel`                                                            |
-| **Networking.** No DIMSE: no C-STORE, C-FIND, C-MOVE, MWL or MPPS                                                                                                    | `@cosyte/dicom-net`                                                              |
-| **Web services.** No DICOMweb: no QIDO, WADO or STOW                                                                                                                 | `@cosyte/dicomweb`                                                               |
-| **Transcoding.** The serializer re-emits in the dataset's source transfer syntax only                                                                                | out of scope                                                                     |
-| **Terminology resolution.** Coded values are surfaced with their designator and canonical source but are never validated, looked up, or cross-mapped; `SRT` is not normalized to `SCT` | `@cosyte/terminology`                                                            |
-| **Typed SR and RT models.** SR content trees and RT objects are navigable as raw structure, with no clinical model over them. Deliberately flagged and deferred rather than half-built | out of scope for v1                                                              |
-| **Patient matching.** Patient ID is surfaced with its issuer; the library never decides that two identifiers are the same person                                     | out of scope                                                                     |
+| Not in v1                                                                                                                                                                                           | Where it goes         |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| **Pixel decode or decompression** of any compressed transfer syntax (JPEG, JPEG-LS, JPEG2000, RLE, HTJ2K), rendering, windowing, or any measurement computed from pixels                            | `@cosyte/dicom-pixel` |
+| **Reading a pixel-compressed object at all.** A transfer syntax outside the four supported ones is the fatal `UNSUPPORTED_TRANSFER_SYNTAX`, so such an object does not parse, not even structurally | `@cosyte/dicom-pixel` |
+| **Burned-in annotation removal / Clean Pixel Data.** A de-identified output from this package is **metadata-de-identified only**, and it warns rather than claiming otherwise                       | `@cosyte/dicom-pixel` |
+| **Networking.** No DIMSE: no C-STORE, C-FIND, C-MOVE, MWL or MPPS                                                                                                                                   | `@cosyte/dicom-net`   |
+| **Web services.** No DICOMweb: no QIDO, WADO or STOW                                                                                                                                                | `@cosyte/dicomweb`    |
+| **Transcoding.** The serializer re-emits in the dataset's source transfer syntax only                                                                                                               | out of scope          |
+| **Terminology resolution.** Coded values are surfaced with their designator and canonical source but are never validated, looked up, or cross-mapped; `SRT` is not normalized to `SCT`              | `@cosyte/terminology` |
+| **Typed SR and RT models.** SR content trees and RT objects are navigable as raw structure, with no clinical model over them. Deliberately flagged and deferred rather than half-built              | out of scope for v1   |
+| **Patient matching.** Patient ID is surfaced with its issuer; the library never decides that two identifiers are the same person                                                                    | out of scope          |
 
 Supported transfer syntaxes, and exactly these four: Implicit VR LE `1.2.840.10008.1.2`, Explicit VR
 LE `...1.2.1`, Deflated Explicit VR LE `...1.2.1.99`, Explicit VR BE `...1.2.2` (retired,
@@ -145,13 +145,13 @@ than substituting a plausible value. `undefined` means the object did not carry 
 
 ## 5. Where the detail lives
 
-| Topic                                                    | Page                                                                              |
-| -------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| The error model, symptom-by-symptom triage, and the full boundary narrative | [Troubleshooting](./troubleshooting)                                              |
-| What a diagnostic carries and what it does not            | [Tolerance](./spec-notes-tolerance)                                               |
-| Keeping PHI out of logs                                   | [Keeping PHI out of logs](./troubleshooting#keeping-phi-out-of-logs)              |
-| The safety-critical views and their fail-safe rules       | [Safety](./spec-notes-safety)                                                     |
-| Working recipes, each citing the PS3 clause it reads      | [Cookbook](./cookbook)                                                            |
+| Topic                                                                       | Page                                                                 |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| The error model, symptom-by-symptom triage, and the full boundary narrative | [Troubleshooting](./troubleshooting)                                 |
+| What a diagnostic carries and what it does not                              | [Tolerance](./spec-notes-tolerance)                                  |
+| Keeping PHI out of logs                                                     | [Keeping PHI out of logs](./troubleshooting#keeping-phi-out-of-logs) |
+| The safety-critical views and their fail-safe rules                         | [Safety](./spec-notes-safety)                                        |
+| Working recipes, each citing the PS3 clause it reads                        | [Cookbook](./cookbook)                                               |
 
 Everything on this page is a documented boundary rather than a bug. Where a limitation applies, the
 raw bytes are preserved (usually with a warning); they are simply not interpreted further.
