@@ -59,10 +59,10 @@ in the same area - open the section first.**
     frame made it MORE certainly the named element's content.**
     [#dicom-fatal-message-registry](documentation/agent-notes.md#dicom-fatal-message-registry)
   - **`renderTag` IS MEMBERSHIP: a LITERAL PS3.6 row or `<withheld>`.
-    A REPEATING-GROUP MASK IS NOT ONE, that cost a pass** (`50xx` leaves 16 bits free; `500C5241` is `"\fPAR"`). Costs
-    PRIVATE, `(gggg,0000)` and `60xx` tags their name in EVERY message. **A raw wire number is
-    bound out of the SIGNATURE on PARSER codes ONLY - NAME the exceptions, two are `deident` LEAKS
-    (`rawBytes.length` = declared len).** "safe to log" DELETED; `hidden` STILL UNCAPPED
+    A MASK IS NOT ONE, that cost a pass** (`50xx` leaves 16 bits free; `500C5241` is `"\fPAR"`). Costs
+    PRIVATE, `(gggg,0000)` and `60xx` tags their name in EVERY message. **A raw wire number is bound
+    out of the SIGNATURE, `deident` too now; NAMED exception `(0002,0000)`. A FLOOR CLEARS NOTHING
+    BELOW IT** - `>=7` digits hid every REACHABLE len. "safe to log" DELETED; `hidden` UNCAPPED
     [#dicom-diagnostic-phi-residuals](documentation/agent-notes.md#dicom-diagnostic-phi-residuals) ·
     [#dicom-overdeclare-swallows-into-value](documentation/agent-notes.md#dicom-overdeclare-swallows-into-value)
   - The **undefined-length item with no `(FFFE,E00D)`**, which has no declared length to disagree

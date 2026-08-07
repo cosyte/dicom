@@ -13,7 +13,9 @@ import {
   pixelDataLengthMismatch,
   privateCreatorUnknown,
   privateTagNoCreator,
+  sequenceNotAuditable,
   unParsedAsSQ,
+  undefinedVrNotAuditable,
   undefinedLengthInExplicitVR,
   vrMismatch,
 } from "../../src/parser/warnings.js";
@@ -198,6 +200,51 @@ describe("warning factories (D-12 - one named factory per active-emit code)", ()
       "Non-zero reserved bytes between VR and length (first byte 78, second byte 32); ignoring.";
     expect(/(?:first|second) byte \d/u.test(shipped)).toBe(true);
     expect(/(?:first|second) byte \d/u.test(w.message)).toBe(false);
+  });
+
+  it("sequenceNotAuditable takes no byte span, so no call site can pass one", () => {
+    // The SEVENTH instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`. `{n}` was
+    // `Element.rawBytes.length`, which EQUALS the declared Value Length off the
+    // element header - and one of this code's two producers is a carrier whose
+    // header the file's own length fields may have composed out of somebody's
+    // value. The tag survives because `renderTag` is a membership test; the
+    // length cannot, so the bound is the SIGNATURE.
+    expect(sequenceNotAuditable.length).toBe(2);
+    const w = sequenceNotAuditable(pos, "00081115");
+    expect(w.code).toBe(WARNING_CODES.DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE);
+    // A literal PS3.6 row still renders: the bound must not cost a well-formed
+    // file its tag.
+    expect(w.message).toContain("00081115");
+    expect(w.message).toContain("withheld");
+    // Non-vacuity: `0.0.14`'s own template, over the number a fabricated header
+    // reading `"SO\0\0"` supplies.
+    const shipped =
+      "Element (00081115) is a Sequence carrier with no parsed items, so its 20307 recorded bytes could not be audited (PS3.15 E.1.1); emptied.";
+    const shippedRuns: readonly string[] = shipped.match(/[0-9]+/gu) ?? [];
+    const runs: readonly string[] = w.message.match(/[0-9]+/gu) ?? [];
+    expect(shippedRuns).toContain("20307");
+    expect(runs).not.toContain("20307");
+  });
+
+  it("undefinedVrNotAuditable takes NOTHING but a position", () => {
+    // The sharpest case in the item: this code withholds its tag and its VR on
+    // the stated ground that the header may be fabricated, and then rendered the
+    // declared length off that same header. It withheld the two fields a
+    // renderer could check and printed the one it could not. The byte offset
+    // stays - a position this parser counted - and is derived from the argument
+    // rather than passed beside it, so the two can never disagree.
+    expect(undefinedVrNotAuditable.length).toBe(1);
+    const w = undefinedVrNotAuditable({ byteOffset: 230 });
+    expect(w.code).toBe(WARNING_CODES.DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE);
+    expect(w.message).not.toMatch(/[0-9A-F]{8}/u);
+    expect(w.message).toContain("withheld");
+    expect(w.message).toContain("230");
+    const shipped =
+      "An element at byte offset 230 carries an on-wire VR that is not one of the 34 PS3.5 6.2 defines, so its 20307 value bytes are not a Value Field this library decoded.";
+    const shippedRuns: readonly string[] = shipped.match(/[0-9]+/gu) ?? [];
+    const runs: readonly string[] = w.message.match(/[0-9]+/gu) ?? [];
+    expect(shippedRuns).toContain("20307");
+    expect(runs).not.toContain("20307");
   });
 
   it("unParsedAsSQ", () => {

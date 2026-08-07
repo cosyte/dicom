@@ -87,13 +87,15 @@ Each substitution is bounded a different way, and the three ways are not interch
 
 **Exceptions, named rather than counted.** `(0002,0000)`'s own declared File Meta group length is
 still printed: `parseFileMeta` reads it at a structurally fixed offset, is never nested and runs once
-per parse, so no Data Set value can be read into that position. And **`DICOM_DEIDENT_UNDEFINED_VR_NOT
-_AUDITABLE` and `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` still print a length that came off the
-header** - they render `Element.rawBytes.length`, which is the declared Value Length for a value-only
-element and declared-plus-header for a full-span one, document-derived either way, so a fabricated
-header carrying `"SO\0\0"` renders `20307`. That is `PRE-EXISTING`, it reproduces identically on
-`0.0.14`, it is **not closed here**, and each code is pinned by its own asserted test row rather than
-implied shut.
+per parse, so no Data Set value can be read into that position. **`DICOM_DEIDENT_UNDEFINED_VR_NOT
+_AUDITABLE` and `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` LEFT this list.** Through `0.0.14` they
+rendered `Element.rawBytes.length`, which is the declared Value Length for a value-only element and
+declared-plus-header for a full-span one, document-derived either way, so a fabricated header
+carrying `"SO\0\0"` printed `20307`. Both slots are bound out of the factory signatures now. **The
+numbers still exist on `report.undefinedVrElements[].byteLength` and
+`report.unauditableSequences[].byteLength`** - model fields, on a type documented as not value-free,
+and narrowing those is a product call rather than a defect fix: a bound empties the field on every
+well-formed file.
 
 **What that closed, measured rather than argued.** An `ST` carrying `"MR BRAIN SMITHSON "` that
 under-declares by 12 desynchronizes the **Explicit VR LE** reader onto a fabricated header whose
@@ -163,7 +165,13 @@ which carries a byte offset and **no tag**, and it still does whenever the fabri
 of the 34 PS3.5 §6.2 defines. It cannot when the fabricated VR is one of them, because a fabricated
 `OB` header and a genuine one are byte-identical, and no bound can tell them apart. The alternative
 was keeping that carrier verbatim, which is what earlier releases did and what shipped the nested
-value itself, so this is the better of the two. `embeddedAttributes[].hidden` **used to join them and
+value itself, so this is the better of the two. **`undefinedVrElements[].byteLength` and
+`unauditableSequences[].byteLength` joined the list** when the two `DICOM_DEIDENT_*_NOT_AUDITABLE`
+messages stopped rendering it: the number is `Element.rawBytes.length`, which equals the declared
+Value Length off the element header, so on a fabricated header `"SO\0\0"` publishes `20307`. Moving
+it off the message left these fields its only publisher, which is a smaller surface and not a closed
+one - a bound here would empty the field on every well-formed file, where it is the audit number the
+field exists to carry. `embeddedAttributes[].hidden` **used to join them and
 no longer does**: an entry is now a tag this run's own resolved Annex E action fired on that has a
 **literal row** in PS3.15 Table E.1-1, of which there are 652 - not any four bytes the scanner tiled
 over. **A repeating-group mask hit is excluded on purpose**, because `(50xx,xxxx)` Curve Data leaves

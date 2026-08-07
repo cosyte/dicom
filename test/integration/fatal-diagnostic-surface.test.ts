@@ -41,12 +41,14 @@ import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
 import { deidentify } from "../../src/deident/index.js";
+import type { DeidentifyReport } from "../../src/deident/types.js";
 import { defineProfile } from "../../src/profiles/index.js";
 import type { VR } from "../../src/dictionary/types.js";
 import { KNOWN_VRS } from "../../src/parser/endian.js";
 import { DicomParseError, FATAL_CODES } from "../../src/parser/errors.js";
 import { FATAL_MESSAGES } from "../../src/parser/fatals.js";
 import { parseDicom } from "../../src/parser/index.js";
+import { renderTag } from "../../src/parser/tokens.js";
 import { buildDicom } from "../helpers/build-dicom.js";
 
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
@@ -93,14 +95,38 @@ interface Leak {
  *   here hunted a single byte. **A detector that has never looked for a shape
  *   has not cleared it.**
  *
+ * **🛑 THE `length` ARM'S 7-DIGIT FLOOR IS GONE, AND ITS REMOVAL IS WHY THE
+ * SEVENTH INSTANCE OF `DICOM-DIAGNOSTIC-PHI-RESIDUALS` BECAME VISIBLE.** The
+ * floor read "a short decimal could collide with a legitimate byte count", and
+ * the sentence beside it - "every 4-byte window of a printable-ASCII payload
+ * exceeds 1,000,000,000, so nothing in this fixture set is skipped" - was true
+ * and was the whole defect. A declared Value Length is only *reachable* through
+ * a parse if the buffer really holds that many bytes, so every fabricated length
+ * a fixture can drive through this library has **high-order zero bytes** and
+ * therefore a SHORT decimal. `"SO\0\0"` renders `20307`: five digits, two of
+ * them letters of a surname, and structurally under the floor. The floor was not
+ * a conservative filter on an arm that worked; it excluded the entire class of
+ * length leak that can actually happen.
+ *
+ * **A GUARD THAT HAS NEVER BEEN POINTED AT AN INPUT HAS NOT CLEARED THAT INPUT,
+ * AND A GUARD WITH A FLOOR HAS NOT CLEARED ANYTHING BELOW THE FLOOR.** The same
+ * shape has now cost this ecosystem a `phi-scan` printing clean over a root it
+ * never opened and an em-dash gate accounting skipped paths into an unreconciled
+ * bucket. Widening the detector before touching any code is how instance six was
+ * found and how instance seven's real extent was measured.
+ *
+ * The collision the floor was worried about is answered by MATCHING, not by
+ * skipping: a rendering of seven digits or more keeps the original substring
+ * search unchanged, so nothing this detector caught before can stop being
+ * caught, and a shorter one must equal a WHOLE maximal digit run of the message
+ * rather than appear anywhere inside one. See {@link leaksIn}.
+ *
  * **🛑 THERE IS STILL NO 2-BYTE-AS-`uint16` ARM, AND THAT IS A STATED GAP RATHER
  * THAN A CLEARED ONE.** A short-form Explicit VR Value Length is exactly that
  * shape. No registry entry renders one today, so an arm for it would have
- * nothing to hunt and no non-vacuity control; a bare 0-65535 decimal search
- * cannot be told from a legitimate count either, which is the same problem the
- * `byte` arm's slot-scoping answers. If a future call site renders a short-form
- * length, this detector will not see it. Named here so the next reader does not
- * infer coverage from silence.
+ * nothing to hunt and no non-vacuity control. If a future call site renders a
+ * short-form length, this detector will not see it. Named here so the next
+ * reader does not infer coverage from silence.
  */
 function renderings(payload: string): readonly Leak[] {
   const bytes = Buffer.from(payload, "latin1");
@@ -114,13 +140,9 @@ function renderings(payload: string): readonly Leak[] {
       .toUpperCase();
     const window = bytes.subarray(i, i + 4).toString("latin1");
     out.push({ kind: "tag", rendered: group + element, bytes: window });
-    // A short decimal could collide with a legitimate byte count, so only
-    // renderings too long to be one are searched for. Every 4-byte window of a
-    // printable-ASCII payload exceeds 1,000,000,000 in this direction, so
-    // nothing in this fixture set is skipped by the floor - it is there so the
-    // detector stays honest if a future payload includes control bytes.
-    const asLength = String(bytes.readUInt32LE(i));
-    if (asLength.length >= 7) out.push({ kind: "length", rendered: asLength, bytes: window });
+    // NO FLOOR. Every 4-byte window is hunted, however short its decimal, and
+    // the collision question is settled in `leaksIn` by how the match is made.
+    out.push({ kind: "length", rendered: String(bytes.readUInt32LE(i)), bytes: window });
   }
   for (let i = 0; i + 2 <= bytes.length; i += 1) {
     out.push({
@@ -167,8 +189,23 @@ function renderings(payload: string): readonly Leak[] {
  * `test/parser/warnings.test.ts`, where a slot that does not exist cannot be
  * filled by any call site. This arm is the measurement; the signature is the
  * bound.
+ *
+ * **The `length` arm is ADDITIVE over what it did before, which is the property
+ * that makes the floor's removal safe to reason about.** A rendering of seven
+ * digits or more is still hunted with the same `String.includes` search, so
+ * every leak the shipped detector could catch it still catches. A shorter one is
+ * new, and it must equal a whole maximal digit run of the message: `20307` is a
+ * hit against `"its 20307 recorded bytes"` and not against `"offset=120307"`.
+ * That is what keeps a five-digit rendering from matching a substring of some
+ * unrelated count, without excluding the five-digit renderings that are the only
+ * ones a real parse can reach.
  */
+function digitRuns(message: string): readonly string[] {
+  return message.match(/[0-9]+/gu) ?? [];
+}
+
 function leaksIn(message: string, payload: string): readonly Leak[] {
+  const runs = digitRuns(message);
   return renderings(payload).filter((leak) => {
     if (leak.kind === "vr") {
       return (
@@ -181,6 +218,9 @@ function leaksIn(message: string, payload: string): readonly Leak[] {
     }
     if (leak.kind === "byte") {
       return new RegExp(`(?:first|second) byte ${leak.rendered}(?![0-9])`, "u").test(message);
+    }
+    if (leak.kind === "length" && leak.rendered.length < 7) {
+      return runs.includes(leak.rendered);
     }
     return message.includes(leak.rendered);
   });
@@ -285,6 +325,123 @@ function fileMetaGroupLengthOverruns(): Buffer {
   const patched = Buffer.from(raw);
   patched.writeUInt32LE(0xffff, groupLengthValueAt);
   return patched;
+}
+
+// ---------------------------------------------------------------------------
+// The `deidentify()` channel. Both `DICOM_DEIDENT_*_NOT_AUDITABLE` codes are
+// raised there and nowhere else, so the `onWarning` sweep above cannot reach
+// either, and each has its own producer - a graded pass caught a draft asserting
+// one code while five artifacts said the PAIR was pinned.
+// ---------------------------------------------------------------------------
+
+/**
+ * The four bytes a fabricated Value Length is built from here: two letters of
+ * the planted surname, then the two zero high bytes **every reachable
+ * fabricated length must carry**, because the buffer has to hold that many
+ * bytes for the parse to reach the element at all.
+ */
+const LEN_BYTES = Buffer.from([0x53, 0x4f, 0x00, 0x00]);
+const FABRICATED_LENGTH = LEN_BYTES.readUInt32LE(0);
+
+/** The institution-name carrier the fabricated headers are written inside. */
+const CARRIER_TEXT = "MERCY GENERAL HOSPITALS ";
+
+/**
+ * A root `LO` carrier whose Value Length under-declares by exactly the tail that
+ * follows it, so the reader finishes the carrier early and resynchronizes onto
+ * `fabricatedHeader` as though it were the next Data Element.
+ */
+function underDeclaringCarrier(
+  fabricatedHeader: Buffer,
+  filler: Buffer,
+  extra: readonly { tag: string; vr: string; value: Buffer }[] = [],
+): { readonly raw: Buffer; readonly payload: string } {
+  const tail = Buffer.concat([fabricatedHeader, filler]);
+  const raw = buildDicom({
+    transferSyntax: TS_EXPLICIT_LE,
+    elements: [
+      { tag: "00100010", vr: "PN" as VR, value: val(NAME) },
+      ...extra.map((e) => ({ tag: e.tag, vr: e.vr as VR, value: e.value })),
+      {
+        tag: "00080080",
+        vr: "LO" as VR,
+        value: Buffer.concat([Buffer.from(CARRIER_TEXT, "ascii"), tail]),
+        declaredLengthDelta: -tail.length,
+      },
+    ],
+  });
+  // The payload is the carrier's own value up to the end of the fabricated
+  // header: the region every rendering in these messages could have come from.
+  // The filler is left out because it is a constant byte and would only make the
+  // rendering set larger without making it more adversarial.
+  return {
+    raw,
+    payload: Buffer.concat([Buffer.from(CARRIER_TEXT, "ascii"), fabricatedHeader]).toString(
+      "latin1",
+    ),
+  };
+}
+
+/** Producer 1's payload, hoisted so the reconstructed templates can search it. */
+const UNDEFINED_VR_PAYLOAD = underDeclaringCarrier(
+  Buffer.concat([
+    Buffer.from([0x08, 0x00, 0x08, 0x00]),
+    Buffer.from("Zz", "ascii"),
+    Buffer.from([0x00, 0x00]),
+    LEN_BYTES,
+  ]),
+  Buffer.alloc(0),
+).payload;
+
+interface UnauditableFixture {
+  readonly report: DeidentifyReport;
+  readonly payload: string;
+}
+
+/**
+ * One fixture per code, keyed by the code it must raise.
+ *
+ * Producer 1 is an element whose on-wire VR is outside the 34; producer 2 is a
+ * private element a caller `Profile` declares `SQ` while the wire says `OB`, so
+ * it needs the profile and the retain option. Both fabricated headers carry the
+ * same {@link LEN_BYTES}, so one payload shape covers both.
+ */
+function unauditableFixtures(): Readonly<Record<string, UnauditableFixture>> {
+  const undefinedVr = underDeclaringCarrier(
+    Buffer.concat([
+      Buffer.from([0x08, 0x00, 0x08, 0x00]),
+      Buffer.from("Zz", "ascii"),
+      Buffer.from([0x00, 0x00]),
+      LEN_BYTES,
+    ]),
+    Buffer.alloc(FABRICATED_LENGTH, 0x41),
+  );
+  const profile = defineProfile({
+    name: "acme-fabricated",
+    description: "Synthetic vendor block declared SQ.",
+    privateTags: { ACME: { "0009XX01": { vr: "SQ", keyword: "AcmeSeq", name: "Acme Seq" } } },
+  });
+  const sequence = underDeclaringCarrier(
+    Buffer.concat([
+      Buffer.from([0x09, 0x00, 0x01, 0x10]),
+      Buffer.from("OB", "ascii"),
+      Buffer.from([0x00, 0x00]),
+      LEN_BYTES,
+    ]),
+    Buffer.concat([Buffer.from("BOND^JAMES", "ascii"), Buffer.alloc(FABRICATED_LENGTH - 10, 0x41)]),
+    [{ tag: "00090010", vr: "LO", value: Buffer.from("ACME", "ascii") }],
+  );
+  return {
+    DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE: {
+      report: deidentify(parseDicom(undefinedVr.raw)).report,
+      payload: undefinedVr.payload,
+    },
+    DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE: {
+      report: deidentify(parseDicom(sequence.raw), { retain: ["RetainSafePrivate"], profile })
+        .report,
+      payload: sequence.payload,
+    },
+  };
 }
 
 const FIXTURES: readonly (readonly [string, Buffer])[] = [
@@ -559,12 +716,22 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
     // read a green run here as a fact about the registry. The row directly below
     // is what covers that channel, and it asserts the leak rather than its
     // absence.
+    //
+    // 🩺 `-20` LEFT THE DELTA LIST, AND THE REASON IS THE SAME CLASS OF DEFECT
+    // AS THE DIGIT FLOOR. The payload is 18 bytes, so `-20` asks `buildDicom`
+    // for a negative Value Length and it throws while the FIXTURE is being
+    // built - inside the `try`, which was there to swallow the parse failures
+    // these fixtures are designed to end in. So both `-20` rows never reached a
+    // parse and were counted as swept. The fixture is built outside the `try`
+    // now, so a delta this helper cannot express fails loudly instead of
+    // reading as clean.
     const offenders: string[] = [];
     let messagesSeen = 0;
     for (const ts of [TS_EXPLICIT_LE, TS_IMPLICIT_LE]) {
-      for (const delta of [-2, -4, -6, -8, -10, -12, -14, -16, -18, -20]) {
+      for (const delta of [-2, -4, -6, -8, -10, -12, -14, -16, -18]) {
+        const raw = desynchronized(ts, delta);
         try {
-          parseDicom(desynchronized(ts, delta), {
+          parseDicom(raw, {
             onWarning: (w) => {
               messagesSeen += 1;
               const leaks = leaksIn(w.message, NAME);
@@ -588,110 +755,130 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
     expect(offenders).toStrictEqual([]);
   });
 
-  it("deidentUnauditableCodesStillRenderARawWireLength", () => {
-    // 🛑 PRE-EXISTING, MEASURED OPEN, AND DELIBERATELY NOT CLOSED HERE. It is a
-    // SEVENTH instance of "a diagnostic about a PHI leak is itself a PHI
-    // surface", found by the graded pass on the membership slice and filed
-    // nowhere before it.
+  it("deidentUnauditableCodesNoLongerRenderARawWireLength", () => {
+    // 🩺 THE SEVENTH INSTANCE OF "a diagnostic about a PHI leak is itself a PHI
+    // surface", CLOSED. Through `0.0.14` this row ASSERTED the leak.
     //
     // `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` and
-    // `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` render `{n}` from
+    // `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` rendered `{n}` from
     // `Element.rawBytes.length`, which is not a count this parser invented: it
     // EQUALS the declared Value Length off the element header. When that header
     // is fabricated - the same under-declare construction every instance of this
     // item uses - the decimal is four document bytes, reversible with one
-    // `readUInt32LE`. The first message is the sharper one: it withholds tag and
-    // VR on the stated ground that the header may be fabricated, then prints the
-    // length off that same header.
+    // `readUInt32LE`. The first message was the sharper one: it withheld tag and
+    // VR on the stated ground that the header may be fabricated, then printed
+    // the length off that same header.
     //
-    // It is NOT this slice's to take. Binding those two signatures is a second
-    // remedy on a leak that reproduces byte-identically on `0.0.14`, and the
-    // repo's own rule is that a slice is not obliged to fix everything it merely
-    // fails to fix. Pinned as an asserted row - green on BOTH trees, or it is
-    // not a residual pin - so no artifact can read the registry as an all-clear.
-    const LEN_BYTES = Buffer.from([0x53, 0x4f, 0x00, 0x00]);
+    // Both are bound out of the factory signatures now, which is the remedy this
+    // package has taken every time: a raw length has neither a shape nor a
+    // membership for a renderer to check, so the only bound available is the
+    // absence of the parameter.
+    for (const [code, { report, payload }] of Object.entries(unauditableFixtures())) {
+      const warning = report.warnings.find((w) => w.code === code);
+      expect(warning, code).toBeDefined();
+      const leaks = leaksIn(warning?.message ?? "", payload).filter((l) => l.kind === "length");
+      expect(
+        leaks,
+        `${code} leaked ${leaks.map((l) => `${l.rendered} == ${JSON.stringify(l.bytes)}`).join("; ")}`,
+      ).toStrictEqual([]);
+    }
+
     // Non-vacuity on the payload: those four bytes really are "SO" out of
-    // "SMITHSON" followed by two NULs, and they really do render as 20307.
+    // "SMITHSON" followed by the zero high bytes any reachable length carries,
+    // and they really do render as 20307.
     expect(LEN_BYTES.subarray(0, 2).toString("latin1")).toBe("SO");
     expect(NAME).toContain("SO");
-    const fabricatedLength = LEN_BYTES.readUInt32LE(0);
-    expect(fabricatedLength).toBe(20307);
+    expect(FABRICATED_LENGTH).toBe(20307);
 
-    const fabricated = Buffer.concat([
-      Buffer.from([0x08, 0x00, 0x08, 0x00]),
-      Buffer.from("Zz", "ascii"),
-      Buffer.from([0x00, 0x00]),
-      LEN_BYTES,
-    ]);
-    const filler = Buffer.alloc(fabricatedLength, 0x41);
-    const raw = buildDicom({
-      transferSyntax: TS_EXPLICIT_LE,
-      elements: [
-        { tag: "00100010", vr: "PN" as VR, value: val(NAME) },
-        {
-          tag: "00080080",
-          vr: "LO" as VR,
-          value: Buffer.concat([
-            Buffer.from("MERCY GENERAL HOSPITALS ", "ascii"),
-            fabricated,
-            filler,
-          ]),
-          declaredLengthDelta: -(fabricated.length + filler.length),
-        },
-      ],
-    });
-    const { report } = deidentify(parseDicom(raw));
-    const carriers = report.warnings
-      .filter((w) => w.message.includes(String(fabricatedLength)))
-      .map((w) => w.code);
-    expect(carriers).toContain("DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE");
+    // Non-vacuity on the search: rebuild `0.0.14`'s own templates and assert the
+    // detector catches THEM. A green row must not mean the search is broken.
+    const shippedUndefinedVr = `An element at byte offset 230 carries an on-wire VR that is not one of the 34 PS3.5 6.2 defines, so its ${String(FABRICATED_LENGTH)} value bytes are not a Value Field this library decoded; emptied (PS3.15 E.1.1).`;
+    const shippedSequence = `Element (00090110) is a Sequence carrier with no parsed items, so its ${String(FABRICATED_LENGTH)} recorded bytes could not be audited (PS3.15 E.1.1); emptied.`;
+    for (const shipped of [shippedUndefinedVr, shippedSequence]) {
+      const wouldLeak = leaksIn(shipped, UNDEFINED_VR_PAYLOAD).filter((l) => l.kind === "length");
+      expect(
+        wouldLeak.map((l) => l.rendered),
+        shipped,
+      ).toContain(String(FABRICATED_LENGTH));
+      expect(wouldLeak.map((l) => l.bytes)).toContain("SO\0\0");
+    }
 
-    // The SECOND code needs its own fixture, and it gets one rather than being
-    // inferred from the first. A graded pass caught the draft of this row
-    // asserting one code while five artifacts said the PAIR was pinned: the two
-    // are reached by different producers, so one fixture cannot exercise both.
-    // Producer 2 is a private element a caller Profile declares `SQ` while the
-    // wire says otherwise, so the profile and the retain option are required.
-    const profile = defineProfile({
-      name: "acme-fabricated",
-      description: "Synthetic vendor block declared SQ.",
-      privateTags: { ACME: { "0009XX01": { vr: "SQ", keyword: "AcmeSeq", name: "Acme Seq" } } },
-    });
-    const seqFabricated = Buffer.concat([
-      Buffer.from([0x09, 0x00, 0x01, 0x10]),
-      Buffer.from("OB", "ascii"),
-      Buffer.from([0x00, 0x00]),
-      LEN_BYTES,
-    ]);
-    const seqFiller = Buffer.concat([
-      Buffer.from("BOND^JAMES", "ascii"),
-      Buffer.alloc(fabricatedLength - 10, 0x41),
-    ]);
-    const seqRaw = buildDicom({
-      transferSyntax: TS_EXPLICIT_LE,
-      elements: [
-        { tag: "00100010", vr: "PN" as VR, value: val(NAME) },
-        { tag: "00090010", vr: "LO" as VR, value: Buffer.from("ACME", "ascii") },
-        {
-          tag: "00080080",
-          vr: "LO" as VR,
-          value: Buffer.concat([
-            Buffer.from("MERCY GENERAL HOSPITALS ", "ascii"),
-            seqFabricated,
-            seqFiller,
-          ]),
-          declaredLengthDelta: -(seqFabricated.length + seqFiller.length),
-        },
-      ],
-    });
-    const seqReport = deidentify(parseDicom(seqRaw), {
-      retain: ["RetainSafePrivate"],
-      profile,
-    }).report;
-    const seqCarriers = seqReport.warnings
-      .filter((w) => w.message.includes(String(fabricatedLength)))
-      .map((w) => w.code);
-    expect(seqCarriers).toContain("DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE");
+    // 🩺 AND THE TRIPWIRE FINDING, PINNED SO IT CANNOT COME BACK. The shipped
+    // detector's `length` arm skipped any rendering under seven digits, and
+    // `20307` is five, so neither template above could ever have gone red here.
+    // That was not a conservative filter on an arm that worked: a declared
+    // length only survives a parse if the buffer really holds that many bytes,
+    // so every fabricated length a fixture can drive through this library has
+    // zero high-order bytes and therefore a SHORT decimal. The floor excluded
+    // the whole reachable class.
+    expect(String(FABRICATED_LENGTH).length).toBeLessThan(7);
+    expect(LEN_BYTES[2]).toBe(0);
+    expect(LEN_BYTES[3]).toBe(0);
+
+    // The deferred half, asserted rather than implied shut: the number is still
+    // published on the MODEL. `report.undefinedVrElements[].byteLength` and
+    // `report.unauditableSequences[].byteLength` are model fields on the same
+    // standing product call as `removedPrivateTags` and `contextPath` - a bound
+    // there empties the field on every well-formed file - so this slice moved
+    // the number off the message and left the fields alone, and says so.
+    const fixtures = unauditableFixtures();
+    const undefinedVrReport = fixtures["DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE"]?.report;
+    const sequenceReport = fixtures["DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE"]?.report;
+    expect(undefinedVrReport?.undefinedVrElements.map((u) => u.byteLength)).toContain(
+      FABRICATED_LENGTH,
+    );
+    expect(sequenceReport?.unauditableSequences.map((s) => s.byteLength)).toContain(
+      FABRICATED_LENGTH,
+    );
+  });
+
+  it("the deidentify() channel is swept, with the floor off, and the only tags left are PS3.6 rows", () => {
+    // 🩺 THE SWEEP THE `parseDicom` ONE ABOVE STATES IT CANNOT DO, AND THE
+    // REASON THIS SLICE EXISTS. Every code these two producers raise travels on
+    // `report.warnings` and on nothing else, so no `onWarning` sweep reaches
+    // them; the desync family dies at a Tier-3 fatal before `deidentify()` ever
+    // runs. Pointed here with the seven-digit floor removed, the detector
+    // returned exactly the two `{n}` slots this slice closed and nothing else.
+    //
+    // 🛑 A `tag` HIT WHOSE FOUR BYTES ARE A LITERAL PS3.6 ROW IS OUT OF SCOPE,
+    // BY THE DECISION `#90` RATIFIED, and it is excluded here rather than
+    // quietly passing. `renderTag` is a MEMBERSHIP test: a tag PS3.6 carries a
+    // literal row for is rendered on every file, deliberately, because refusing
+    // it would cost every message its tag while withholding nothing an attacker
+    // could not have read off the closed registry. These fixtures plant
+    // `(0008,0008)` as the fabricated tag precisely so the fabricated header
+    // parses, so that membership hit is designed behaviour. Anything else - a
+    // tag PS3.6 has no row for, a length, a VR, a raw byte - is a finding.
+    const offenders: string[] = [];
+    let messagesSeen = 0;
+    for (const [code, { report, payload }] of Object.entries(unauditableFixtures())) {
+      for (const w of report.warnings) {
+        messagesSeen += 1;
+        const leaks = leaksIn(w.message, payload).filter(
+          (l) => !(l.kind === "tag" && renderTag(l.rendered) !== "<withheld>"),
+        );
+        if (leaks.length > 0) {
+          offenders.push(
+            `${code}/${w.code}: ${leaks.map((l) => `${l.kind} ${l.rendered} == ${JSON.stringify(l.bytes)}`).join(", ")}`,
+          );
+        }
+      }
+    }
+    // Non-vacuity: the sweep really did exercise messages on this channel.
+    expect(messagesSeen).toBeGreaterThan(0);
+    expect(offenders).toStrictEqual([]);
+
+    // And the exclusion is a scope, not a hole: a fabricated tag PS3.6 has no
+    // row for is still a finding, which is what stops the filter above from
+    // being a way to pass.
+    expect(renderTag("4E495320")).toBe("<withheld>");
+    expect(renderTag("00080008")).toBe("00080008");
+    const fabricatedTagMessage = "Element (4E495320) was emptied.";
+    expect(
+      leaksIn(fabricatedTagMessage, NAME)
+        .filter((l) => !(l.kind === "tag" && renderTag(l.rendered) !== "<withheld>"))
+        .map((l) => l.bytes),
+    ).toContain("IN S");
   });
 
   it("embeddedAttributesHiddenNoLongerCarriesValueBytes", () => {

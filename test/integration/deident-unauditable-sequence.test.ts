@@ -199,18 +199,42 @@ describe("DICOM-DEIDENT-RAWBYTES-PASSTHROUGH: an undescended sequence is not pas
     expect(report.attributes.map((a) => a.tag)).not.toContain(TRAILING);
   });
 
-  it("and raises DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE, carrying no value", () => {
+  it("and raises DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE, which renders no number the header supplied", () => {
+    // 🩺 THIS ROW WAS TITLED "carrying no value" AND DID NOT CHECK THE ONE
+    // THING THE CODE WAS DISCLOSED AS PUBLISHING. It asserted that three values
+    // planted elsewhere in the file were absent, which a message built from a
+    // frozen registry cannot carry in any case, while the message rendered
+    // `Element.rawBytes.length` - the declared Value Length off the element
+    // header, and on a fabricated header four document bytes. A title asserting
+    // the opposite of a live disclosure occupies the slot a real check would
+    // have. The number is bound out of `sequenceNotAuditable`'s signature now
+    // and the row asks about it.
     const { report } = deidentify(parseDicom(fixture(IMPLICIT_LE, 18)));
     const warning = report.warnings.find(
       (w) => w.code === WARNING_CODES.DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE,
     );
     expect(warning).toBeDefined();
     expect(warning?.message).toContain(CARRIER);
-    // PHI discipline: the message is composed from the registry plus structural
-    // parameters, so no document value can travel on it.
+    // The message is composed from the registry plus structural parameters, so
+    // no document value can travel on it verbatim.
     expect(warning?.message).not.toContain(PATIENT_ID);
     expect(warning?.message).not.toContain(ROOT_NAME);
     expect(warning?.message).not.toContain(ITEM_VALUE);
+
+    // The row that was missing. The dropped byte span is a header-derived
+    // number, and it is not a whole digit run of the message any more. Matching
+    // whole runs rather than substrings is what stops `PS3.15` and the tag's own
+    // digits from answering this question by accident.
+    const dropped = report.unauditableSequences[0]?.byteLength;
+    expect(dropped).toBeGreaterThan(0);
+    const runs = warning?.message.match(/[0-9]+/gu) ?? [];
+    expect(runs).not.toContain(String(dropped));
+
+    // Non-vacuity: rebuild `0.0.14`'s own template over this fixture's number
+    // and assert the same search still finds it there. A green row must not be
+    // able to mean "the number stopped existing" or "the search is broken".
+    const shipped = `Element (${CARRIER}) is a Sequence carrier with no parsed items, so its ${String(dropped)} recorded bytes could not be audited (PS3.15 E.1.1); emptied. See report.unauditableSequences.`;
+    expect(shipped.match(/[0-9]+/gu) ?? []).toContain(String(dropped));
   });
 
   it("empties the carrier rather than removing it, so the attribute still exists", () => {

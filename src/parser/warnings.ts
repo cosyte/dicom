@@ -166,17 +166,25 @@ export interface DicomParseWarning {
  * - {@link fileMetaGroupLengthMismatch}'s `{n}` is a raw declared length and
  *   stays, because `parseFileMeta` reads it in a frame nothing can
  *   desynchronize. Its own JSDoc carries the argument and the measurement.
- * - {@link undefinedVrNotAuditable}'s `{n}` and {@link sequenceNotAuditable}'s
- *   `{n}` are `Element.rawBytes.length`: the declared Value Length for a
- *   value-only element, declared-plus-header for a full-span one
- *   (`isFullSpanElement`), and document-derived either way - so a fabricated
- *   header carrying `"SO\0\0"` renders `20307`, reversible with one
- *   `readUInt32LE`. Both are `PRE-EXISTING`, both reproduce byte-identically on
- *   `0.0.14`, and neither is closed here: binding them is a second remedy on a
- *   leak this slice did not introduce, and it belongs in its own unit. Each is
- *   pinned by its own asserted row in
- *   `test/integration/fatal-diagnostic-surface.test.ts`, green on both trees,
- *   so no artifact can read this registry as an all-clear.
+ * - {@link embeddedAttributeRemoved}'s `{n}` is how many whole Data Elements the
+ *   embedded-attribute scanner counted inside a value, {@link
+ *   itemCrossesSequenceEnd}'s `{n2}` is how many bytes remained inside the
+ *   sequence, {@link pixelDataLengthMismatch}'s `{n2}` is a size this parser
+ *   multiplied out of the image description attributes, {@link
+ *   unsupportedCharset}'s `{n}` is a value index, and {@link
+ *   undefinedVrNotAuditable}'s `{n2}` is a byte offset. Every one of those is a
+ *   number this parser produced; none is read out of a header.
+ *
+ * **{@link undefinedVrNotAuditable} and {@link sequenceNotAuditable} used to be
+ * on the exception list and are not any more.** Their `{n}` was
+ * `Element.rawBytes.length` - the declared Value Length for a value-only
+ * element, declared-plus-header for a full-span one (`isFullSpanElement`), and
+ * document-derived either way, so a fabricated header carrying `"SO\0\0"`
+ * rendered `20307`. Both slots are bound out of the factory signatures now. The
+ * numbers still exist on `report.unauditableSequences[].byteLength` and
+ * `report.undefinedVrElements[].byteLength`, which are **model fields on a type
+ * whose own docs say it is not a value-free surface** - a different surface from
+ * a registry message, and deliberately not changed here.
  *
  * Two codes are declared and never emitted by this build:
  * `DICOM_CHARSET_AMBIGUOUS_SEPARATOR` and `DICOM_PIXEL_DATA_LENGTH_MISMATCH`.
@@ -297,23 +305,33 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   // its two producers is an element the profile declares a Sequence while the
   // wire says UN or OB, so naming a VR here would state a fact about the file
   // that the file contradicts - on the one channel this class designates.
+  // The recorded byte count is gone from this string, and the reason is the same
+  // one that took the declared length out of `DICOM_ODD_LENGTH_VALUE_PADDED`:
+  // `Element.rawBytes.length` EQUALS the Value Length off the element header, so
+  // when that header is fabricated the decimal is four document bytes. See
+  // `sequenceNotAuditable`. `report.unauditableSequences[].byteLength` still
+  // carries it, on a type documented as not value-free.
   DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE:
-    "Element ({tag}) is a Sequence carrier with no parsed items, so its {n} recorded bytes could not be audited (PS3.15 E.1.1); emptied. See report.unauditableSequences.",
+    "Element ({tag}) is a Sequence carrier with no parsed items, so its recorded bytes could not be audited (PS3.15 E.1.1); emptied. The byte count is withheld; see report.unauditableSequences.",
   // Deliberately short for the same reason as the code above: one per element,
   // and the element count is chosen by the input.
   //
-  // NEITHER THE TAG NOR THE VR IS ECHOED, and that is specific to this code
-  // rather than caution. Every other factory's {tag} is composed from a real
-  // Data Element header; the condition that raises THIS one is that the header
-  // was fabricated from bytes inside some element's value, so its four tag bytes
-  // and its two VR bytes are document content. `renderTag` is a membership test
-  // against PS3.6's registry and would refuse this one - but a slot that has to
-  // rely on that is a slot a future call site can still be handed, so the
-  // withholding stays at the call site where it does not depend on a table.
+  // NEITHER THE TAG NOR THE VR NOR THE BYTE COUNT IS ECHOED, and that is
+  // specific to this code rather than caution. Every other factory's {tag} is
+  // composed from a real Data Element header; the condition that raises THIS one
+  // is that the header was fabricated from bytes inside some element's value, so
+  // its four tag bytes, its two VR bytes AND its four length bytes are document
+  // content. `renderTag` is a membership test against PS3.6's registry and would
+  // refuse this one - but a slot that has to rely on that is a slot a future
+  // call site can still be handed, so the withholding stays at the call site
+  // where it does not depend on a table. The length had no table to fall back on
+  // at all: the message withheld the two fields a renderer could check and then
+  // printed the one it could not, which is the shape this code was already
+  // written to refuse.
   // The byte offset locates the element instead, and is a position this parser
   // counted rather than anything the document said.
   DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE:
-    "An element at byte offset {n2} carries an on-wire VR that is not one of the 34 PS3.5 6.2 defines, so its {n} value bytes are not a Value Field this library decoded; emptied (PS3.15 E.1.1). Its tag and VR are withheld: an earlier under-declared length can make them fragments of some element's value. See report.undefinedVrElements.",
+    "An element at byte offset {n2} carries an on-wire VR that is not one of the 34 PS3.5 6.2 defines, so its value bytes are not a Value Field this library decoded; emptied (PS3.15 E.1.1). Its tag, VR and byte count are withheld: an earlier under-declared length can make them fragments of some element's value. See report.undefinedVrElements.",
   DICOM_BOM_IN_TEXT_VR: "Element ({tag}) {vr} value begins with a UTF-8 BOM; stripped on decode.",
   DICOM_TRAILING_NULL_IN_TEXT_VR:
     "Element ({tag}) {vr} value has a trailing NULL pad where SPACE is expected; trimmed.",
@@ -1327,25 +1345,31 @@ export function embeddedAttributeRemoved(
  * a plain `UN` needs a mark the parser does not currently set. Measured, still
  * leaking outside that route, and disclosed rather than guessed at.
  *
- * `tag` is this parser's own composed structural field and `n` is the byte span
- * the parser recorded for the element (`Element.rawBytes.length`, which under
- * Explicit VR includes the header for a full-span element); no decoded value
- * travels through the message.
+ * **🩺 THE BYTE SPAN IS BOUND OUT OF THIS SIGNATURE, AND IT IS THE SEVENTH
+ * INSTANCE OF "A DIAGNOSTIC ABOUT A PHI LEAK IS ITSELF A PHI SURFACE".** Through
+ * `0.0.14` this factory took a `byteLength` and rendered it as `{n}`. That
+ * number is `Element.rawBytes.length`, which is not a count this parser
+ * invented: it EQUALS the Value Length read off the element header, and
+ * producer 2's whole premise is that the header may have been composed out of
+ * somebody's value by an under-declared length upstream. Measured on a
+ * fabricated header whose length field is `"SO\0\0"` - two letters of a planted
+ * surname followed by the zero high bytes any reachable length must have - the
+ * message printed `20307`, reversible with one `readUInt32LE`. A raw length has
+ * neither a shape nor a membership for a renderer to test, so the bound is the
+ * absence of the parameter; there is no `renderLength` and there must not be one.
+ *
+ * `tag` stays and is `renderTag`'s membership test against PS3.6's element
+ * registry, which is what keeps the audit useful on a well-formed file.
+ * `report.unauditableSequences[].byteLength` still carries the number, on a type
+ * whose docs say it is not a value-free surface.
  *
  * @example
  * ```ts
- * const w = sequenceNotAuditable({ byteOffset: 320 }, "00081115", 48);
+ * const w = sequenceNotAuditable({ byteOffset: 320 }, "00081115");
  * ```
  */
-export function sequenceNotAuditable(
-  position: DicomPosition,
-  tag: Tag,
-  byteLength: number,
-): DicomParseWarning {
-  return build(WARNING_CODES.DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE, position, {
-    tag,
-    n: byteLength,
-  });
+export function sequenceNotAuditable(position: DicomPosition, tag: Tag): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE, position, { tag });
 }
 
 /**
@@ -1364,33 +1388,48 @@ export function sequenceNotAuditable(
  * and PS3.15 section E.1.1's obligation over what is inside them cannot be
  * discharged attribute by attribute. Emptying is the fail-safe answer.
  *
- * **Neither the tag nor the VR is passed in, and that is the point.** Every
- * other factory in this file names the element by tag because the tag came from
- * a real Data Element header. The condition that raises *this* code is that the
- * header did not: an under-declared Value Length upstream leaves the reader
- * mid-value, so the four tag bytes and the two VR bytes are content out of some
- * element's Value Field. Measured on a synthetic `ST` carrier holding
- * `"MR BRAIN SMITHSON"`, the fabricated tag renders as `48544F53` - four bytes
- * of the surname. `renderTag` was a shape check when this bound was taken and so
- * could not refuse one, unlike `renderVr`, which means this factory is one of the
- * places the "structural by construction" property of {@link WarningTokens} has
- * to be kept by not passing the field at all. It is a membership test now; the
- * signature bound is kept because it does not depend on a table.
+ * **Neither the tag nor the VR nor the byte count is passed in, and that is the
+ * point.** Every other factory in this file names the element by tag because the
+ * tag came from a real Data Element header. The condition that raises *this*
+ * code is that the header did not: an under-declared Value Length upstream
+ * leaves the reader mid-value, so the four tag bytes, the two VR bytes **and the
+ * four length bytes** are content out of some element's Value Field. Measured on
+ * a synthetic `ST` carrier holding `"MR BRAIN SMITHSON"`, the fabricated tag
+ * renders as `48544F53` - four bytes of the surname. `renderTag` was a shape
+ * check when that bound was taken and so could not refuse one, unlike
+ * `renderVr`, which means this factory is one of the places the "structural by
+ * construction" property of {@link WarningTokens} has to be kept by not passing
+ * the field at all. It is a membership test now; the signature bound is kept
+ * because it does not depend on a table.
+ *
+ * **🩺 THE LENGTH WAS THE SEVENTH INSTANCE, AND THIS FACTORY IS THE SHARPEST
+ * CASE OF IT.** Through `0.0.14` a `byteLength` was passed and rendered as
+ * `{n}` - on the one code whose stated reason for withholding tag and VR is that
+ * the header may be fabricated. It withheld the two fields a renderer could
+ * check and printed the one it could not. `Element.rawBytes.length` EQUALS the
+ * declared Value Length, so a fabricated header whose length field reads
+ * `"SO\0\0"` published `20307`: two letters of a surname and the zero high bytes
+ * every reachable fabricated length carries, reversible with one `readUInt32LE`.
+ * `report.undefinedVrElements[].byteLength` still carries the number, on a type
+ * documented as not value-free.
+ *
+ * **That leak was invisible to this package's own PHI detector for its whole
+ * life**, because the `length` arm in
+ * `test/integration/fatal-diagnostic-surface.test.ts` skipped any rendering
+ * under seven digits, and a length a parse can actually reach is short by
+ * construction: the buffer has to hold that many bytes, so its high-order bytes
+ * are zero. The floor is gone.
  *
  * `byteOffset` locates the element in its place: a count this parser kept, not
  * anything the document said.
  *
  * @example
  * ```ts
- * const w = undefinedVrNotAuditable({ byteOffset: 320 }, 16);
+ * const w = undefinedVrNotAuditable({ byteOffset: 320 });
  * ```
  */
-export function undefinedVrNotAuditable(
-  position: DicomPosition,
-  byteLength: number,
-): DicomParseWarning {
+export function undefinedVrNotAuditable(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE, position, {
-    n: byteLength,
     n2: position.byteOffset,
   });
 }

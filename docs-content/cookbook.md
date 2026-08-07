@@ -282,7 +282,9 @@ mutated.
 
 Several report fields are **not** value-free and are named on the type: `uidMap`, whose keys are the
 source UIDs the file carried, and `removedPrivateTags`, `unauditableSequences[].tag` and
-`contextPath`, whose entries are four source bytes each. `embeddedAttributes[].hidden` **left that
+`contextPath`, whose entries are four source bytes each, and
+`unauditableSequences[].byteLength` / `undefinedVrElements[].byteLength`, each the declared Value
+Length off an element header that may itself have been fabricated. `embeddedAttributes[].hidden` **left that
 list**: an entry is now a tag this run acted on that PS3.15 Table E.1-1 gives a literal row, with
 repeating-group mask hits excluded - which also means it can be empty on a real finding. **Read the
 list on the type rather than a count quoted anywhere**, this one included: the number has been

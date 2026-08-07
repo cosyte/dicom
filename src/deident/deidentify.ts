@@ -588,7 +588,11 @@ function emptyUndefinedVrElement(
     byteLength: el.rawBytes.length,
     ...(contextPath.length > 0 ? { contextPath: [...contextPath] } : {}),
   });
-  out.warnings.push(undefinedVrNotAuditable({ byteOffset: el.byteOffset }, el.rawBytes.length));
+  // NO BYTE COUNT ON THE MESSAGE EITHER, for the same reason as the tag:
+  // `el.rawBytes.length` equals the Value Length off that same fabricated
+  // header. It stays on the finding above, which the type documents as not
+  // value-free; it is bound out of the warning factory's signature.
+  out.warnings.push(undefinedVrNotAuditable({ byteOffset: el.byteOffset }));
 }
 
 /**
@@ -752,9 +756,10 @@ function emptyUnauditableCarrier(
     byteLength: el.rawBytes.length,
     ...(contextPath.length > 0 ? { contextPath: [...contextPath] } : {}),
   });
-  out.warnings.push(
-    sequenceNotAuditable({ byteOffset: el.byteOffset }, el.tag, el.rawBytes.length),
-  );
+  // The byte count goes on the finding and NOT into the message: producer 2's
+  // carrier may be a header an under-declared length composed out of a value, so
+  // `el.rawBytes.length` is that header's declared Value Length.
+  out.warnings.push(sequenceNotAuditable({ byteOffset: el.byteOffset }, el.tag));
 }
 
 /**
