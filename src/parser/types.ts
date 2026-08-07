@@ -159,10 +159,13 @@ export interface ParseOptions {
    * `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` and
    * `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` rendered `Element.rawBytes.length`
    * through `0.0.14`, which equals the declared Value Length and was reachable
-   * from a fabricated header, and both slots are gone. **The exceptions are
-   * named rather than counted.** `(0002,0000)`'s
-   * own declared File Meta group length is read at a structurally fixed offset
-   * no value can desynchronize the reader onto.
+   * from a fabricated header, and both slots are gone. So is
+   * `DICOM_ITEM_CROSSES_SEQUENCE_END`'s remaining-bytes count, because **a raw
+   * number shifted by a constant the reader can compute is that raw number**: it
+   * was the enclosing sequence's declared Value Length less the bytes of that
+   * sequence already consumed. **The exceptions are named in one place and are
+   * deliberately not restated here** - the `WARNING_MESSAGES` docblock in
+   * `./warnings.ts`, which this JSDoc used to carry a copy of.
    * **This is a statement about `w.message` and about nothing else**: the two
    * byte counts still exist on `report.undefinedVrElements[].byteLength` and
    * `report.unauditableSequences[].byteLength`, model fields on a type whose own

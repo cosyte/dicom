@@ -334,16 +334,19 @@ export function parseSequence(
           endLimit < buffer.length &&
           cursor.position + itemLength > endLimit
         ) {
-          // `itemLength` is deliberately NOT passed: it is a raw 32-bit wire
-          // read on a file whose length fields are by definition lying, so the
-          // factory takes no parameter for it. See `itemCrossesSequenceEnd`.
-          emit(
-            itemCrossesSequenceEnd(
-              { byteOffset: itemHeaderStart },
-              itemTag,
-              Math.max(0, endLimit - cursor.position),
-            ),
-          );
+          // NEITHER length is passed, and the second one is the eighth instance
+          // of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`. `itemLength` is a raw 32-bit
+          // wire read on a file whose length fields are by definition lying. So
+          // is the remainder this call site used to compute:
+          // `endLimit - cursor.position` is the enclosing SEQUENCE's declared
+          // Value Length less the bytes of that sequence already consumed - just
+          // the 8-byte Item header when this is the first item, more when items
+          // precede it - so an addition returns it. The `endLimit <
+          // buffer.length` conjunct above bounds that remainder's MAGNITUDE and
+          // nothing about its CONTENT.
+          // The factory takes a parameter for neither. See
+          // `itemCrossesSequenceEnd`.
+          emit(itemCrossesSequenceEnd({ byteOffset: itemHeaderStart }, itemTag));
         }
         if (cursor.position + itemLength > buffer.length) {
           throw itemLengthExceedsBuffer(buffer, itemHeaderStart);
