@@ -306,7 +306,9 @@ describe("deidentify: an over-declared Value Length that swallowed the next elem
   it("...and the same bytes with a single NUL in them are", () => {
     const value = controlByteFreeEmbedding();
     value[value.length - 1] = 0x00;
-    expect(findEmbeddedAttributes(value, "SH", "explicitLE", () => true)).toEqual(["20202020"]);
+    expect(findEmbeddedAttributes(value, "SH", "explicitLE", () => true)?.hidden).toEqual([
+      "20202020",
+    ]);
   });
 
   it("a tail that does not reach the end of the value is not a swallow", () => {

@@ -11,6 +11,7 @@ import {
   nonzeroReservedBytes,
   oddLengthValuePadded,
   pixelDataLengthMismatch,
+  privateCreatorUnknown,
   privateTagNoCreator,
   unParsedAsSQ,
   undefinedLengthInExplicitVR,
@@ -123,8 +124,26 @@ describe("warning factories (D-12 - one named factory per active-emit code)", ()
   });
 
   it("privateTagNoCreator", () => {
-    const w = privateTagNoCreator(pos, "00191020");
+    const w = privateTagNoCreator(pos);
     expect(w.code).toBe(WARNING_CODES.DICOM_PRIVATE_TAG_NO_CREATOR);
+  });
+
+  it.each([
+    ["privateTagNoCreator", privateTagNoCreator],
+    ["implicitVRForPrivateTagWithoutVR", implicitVRForPrivateTagWithoutVR],
+    ["privateCreatorUnknown", privateCreatorUnknown],
+  ] as const)("%s takes no tag at all, so no call site can pass one", (_name, factory) => {
+    // The bound is the SIGNATURE, as it is for `nonzeroReservedBytes` - but the
+    // reason is the tag's CLASS rather than the trigger. All three fire only on
+    // an ODD group, and an odd group is the one class of tag no closed table
+    // this library holds can vouch for: PS3.6's registry is even-group, and a
+    // Profile's private dictionary is keyed by a creator string. `renderTag`
+    // checks shape and therefore cannot refuse a fabricated one.
+    expect(factory.length).toBe(1);
+    const w = factory({ byteOffset: 284 });
+    expect(w.message).not.toMatch(/[0-9A-F]{8}/u);
+    expect(w.message).toContain("withheld");
+    expect(w.message).toContain("byte offset");
   });
 
   it("groupLengthInDataset", () => {
@@ -170,7 +189,7 @@ describe("warning factories (D-12 - one named factory per active-emit code)", ()
   });
 
   it("implicitVRForPrivateTagWithoutVR", () => {
-    const w = implicitVRForPrivateTagWithoutVR(pos, "00191020");
+    const w = implicitVRForPrivateTagWithoutVR(pos);
     expect(w.code).toBe(WARNING_CODES.DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR);
   });
 });

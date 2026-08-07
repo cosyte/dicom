@@ -325,12 +325,83 @@ function hasByteOutsideRepertoire(region: Buffer, carrierVr: VR): boolean {
 }
 
 /**
- * The tags of a complete Data Element run embedded at the end of `value`, or
- * `undefined` when the value shows no such run.
+ * `true` when a published table can vouch for this tag, which is the second
+ * conjunct of {@link EmbeddedRun.hidden}'s bound.
+ *
+ * **An EVEN group is the test, and it is not a proxy for "in the dictionary".**
+ * `isActionable` is the caller's resolved Annex E action, and that action is
+ * `true` for **any** odd-group tag, because the Basic Profile removes private
+ * attributes as a class rather than by naming them. So `isActionable` alone
+ * admits a fabricated odd-group header - measured, and the shape that made this
+ * bound necessary rather than merely tidy. For an **even** group the action
+ * table has to name the tag (or a repeating-group mask has to), so
+ * `isActionable && even` is exactly "PS3.15 Table E.1-1 as this run resolved
+ * it", a published, closed set whose members carry nothing about the file.
+ *
+ * The cost, stated: a genuinely swallowed **private** attribute is no longer
+ * named here. It is still emptied - the carrier is emptied whole - and the
+ * warning still counts it. What is given up is its tag on the report, which is
+ * the same trade `privateTagNoCreator` makes and for the identical reason: an
+ * odd group is the one class of tag this package has no closed table to check.
+ */
+function isTableBound(tag: Tag): boolean {
+  return parseInt(tag.slice(0, 4), 16) % 2 === 0;
+}
+
+/** What a scan found: the run's size, and only the tags the run acted on. */
+export interface EmbeddedRun {
+  /**
+   * The tags in the run that `isActionable` answered `true` for, in wire order.
+   *
+   * **🛑 THE NON-ACTIONABLE TAGS OF THE RUN ARE NOT HERE AND MUST NOT COME
+   * BACK.** Every tag in this run was composed from four bytes sitting *inside*
+   * another element's value - that is the position this module exists to
+   * distrust - so a run needing only ONE actionable attribute to be reported
+   * dragged its neighbours' four-byte windows onto the report with it. Measured
+   * through `0.0.13`: a `CS` carrier over-declaring across a fabricated
+   * `"SMIT"` header beside a genuine `(0010,0020)` reported
+   * `hidden: ["4D535449", "00100020"]`, and `4D535449` is four letters of the
+   * surname in wire order.
+   *
+   * The bound is a **membership** test rather than a shape test - the posture
+   * `renderVr` and `Element.privateCreator` already take in this package - and
+   * it has **two** conjuncts, because one was measured insufficient. A tag
+   * reaches this array only if `isActionable` fired on it **and**
+   * {@link isTableBound} holds: `isActionable` alone answers `true` for every
+   * odd-group tag, since the Basic Profile removes private attributes as a
+   * class, so the `"SMIT"` header above survived the first draft of this filter.
+   * With both, a surviving entry is an entry in PS3.15 Table E.1-1 as this run
+   * resolved it: a published, closed table whose members carry nothing about the
+   * file. A fabricated window still reaches this array if it happens to spell
+   * one of those tags, and that is the same trade `renderVr` makes with the 34
+   * VRs - it discloses a table entry, not a document byte.
+   *
+   * **It may be empty while the run is real** - a run whose only actionable
+   * members are private attributes names none of them - and **it is still
+   * uncapped**, like every other consumer-controlled diagnostic this module has
+   * not yet reached. The filter narrows what an entry can be, not how many there
+   * are.
+   */
+  readonly hidden: readonly Tag[];
+  /**
+   * How many whole Data Elements the run holds, actionable or not, excluding
+   * `(FFFE,xxxx)` markers. It is a count this scan made, not a field a sender
+   * wrote, and it is what `DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED` reports as
+   * `{n}` - which is why narrowing `hidden` did not change that message.
+   */
+  readonly elementCount: number;
+}
+
+/**
+ * A complete Data Element run embedded at the end of `value`, or `undefined`
+ * when the value shows no such run.
  *
  * `isActionable` is supplied by the caller so the test is the run's own resolved
  * Annex E action - the same authority the Basic Profile and every active Retain
- * Option resolve through - rather than a second, drifting copy of it.
+ * Option resolve through - rather than a second, drifting copy of it. It decides
+ * two separate things: whether the run is reportable at all, and (since
+ * `DICOM-DIAGNOSTIC-PHI-RESIDUALS`) which of the run's tags reach
+ * {@link EmbeddedRun.hidden}.
  *
  * @param value        The carrier element's Value Field bytes.
  * @param carrierVr    The carrier's VR; decides the repertoire test.
@@ -339,8 +410,8 @@ function hasByteOutsideRepertoire(region: Buffer, carrierVr: VR): boolean {
  *
  * @example
  * ```ts
- * const hidden = findEmbeddedAttributes(el.rawBytes, "CS", "explicitLE", (t) => t === "00100020");
- * if (hidden !== undefined) {
+ * const run = findEmbeddedAttributes(el.rawBytes, "CS", "explicitLE", (t) => t === "00100020");
+ * if (run !== undefined) {
  *   // el's value ends with a whole (0010,0020) Patient ID - do not keep it
  * }
  * ```
@@ -350,7 +421,7 @@ export function findEmbeddedAttributes(
   carrierVr: VR,
   encoding: BodyEncoding,
   isActionable: (tag: Tag) => boolean,
-): readonly Tag[] | undefined {
+): EmbeddedRun | undefined {
   if (!isScannableCarrier(carrierVr)) return undefined;
   if (value.length < MIN_HEADER) return undefined;
 
@@ -392,16 +463,23 @@ export function findEmbeddedAttributes(
     // `(FFFE,xxxx)` marker bytes - would then cost O(n^2) on the de-identify
     // path. Same CPU-DoS class the sibling sequence slice was refused on twice.
     if (!hasByteOutsideRepertoire(window.subarray(off), carrierVr)) return undefined;
-    const tags: Tag[] = [];
+    const hidden: Tag[] = [];
+    let elementCount = 0;
     let pos = off;
     while (pos < n) {
       const decoded = decodeAt(window, pos, encoding);
       /* v8 ignore next -- unreachable: `hit` proves every step of this run decodes. */
       if (decoded === undefined) break;
-      if (decoded.tag !== undefined) tags.push(decoded.tag);
+      if (decoded.tag !== undefined) {
+        elementCount += 1;
+        // The filter, and the whole of this field's PHI bound. See
+        // `EmbeddedRun.hidden` for why it has two conjuncts and why neither is
+        // optional.
+        if (isActionable(decoded.tag) && isTableBound(decoded.tag)) hidden.push(decoded.tag);
+      }
       pos = decoded.next;
     }
-    return tags;
+    return { hidden, elementCount };
   }
   return undefined;
 }

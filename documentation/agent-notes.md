@@ -22,6 +22,122 @@ then the two gates.
 
 ---
 
+## DICOM-DIAGNOSTIC-PHI-RESIDUALS
+
+Two of the four instances the item filed are **CLOSED**, one is **left on purpose** as the product
+call the item names, and the claim that ties them together is corrected on every surface that carried
+it. Base for every figure below is `8b40b32`.
+
+**▶ 🩺 THE TEST THAT DECIDES WHETHER A LEAKING TAG IS A DEFECT OR A PRODUCT CALL, AND IT IS NOT THE
+ONE `#80` USED.** `#80` grouped `DICOM_PRIVATE_TAG_NO_CREATOR`, `embeddedAttributes[].hidden` and
+`removedPrivateTags` as one product call, on the reasoning that all three name real tags on a
+well-formed file. That is true of all three and settles none of them. The question that does settle
+it is: **can any closed, published table vouch for this tag?**
+
+- `removedPrivateTags` is a **private**-tag field by definition. PS3.6's registry is even-group and a
+  `Profile`'s private dictionary is keyed by a creator string, so nothing can vouch, and a bound
+  empties the field on every well-formed file. **Genuine product call, deliberately untaken.**
+- `embeddedAttributes[].hidden` had a bound available and was not taking it. **Defect.**
+- `DICOM_PRIVATE_TAG_NO_CREATOR` names a private tag, so it has no membership bound - but the
+  **signature** bound is available, and the tag is not lost, it moves to the model. **Defect.**
+
+**▶ INSTANCE 1: THE PRIVATE-TAG TIER-2 FAMILY TAKES NO TAG. THREE CODES, NOT ONE, AND THAT IS THE
+FINDING.** `resolveImplicitVR` emits `DICOM_PRIVATE_TAG_NO_CREATOR` and
+`DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR` from the **same branch on the same element**, so the
+fixture the item cites rendered `"IN S"` into **both** messages on one parse. Closing only the code
+the item named would have relocated the leak. `DICOM_PRIVATE_CREATOR_UNKNOWN` is the third: it needs
+an active `Profile` and a reserved block, so **no fixture here reaches it and it is bound by argument
+rather than by measurement** - stated that way rather than implied to be measured. All three now take
+`position` only, which is the ratified remedy (`nonzeroReservedBytes`, `itemCrossesSequenceEnd`,
+`duplicateTagInDataSet`, `duplicateFileMetaElement`, `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE`).
+**What it costs, and this is a real cost:** on a well-formed file with an unclaimed private block the
+tag is no longer in the message. It is still the element's key in the Data Set, and
+`position.byteOffset` locates the header, with the frame-of-reference caveat every offset here has.
+
+**▶ INSTANCE 2: `hidden` NEEDED TWO CONJUNCTS, AND THE FIRST DRAFT OF THE FILTER WAS MEASURED
+INSUFFICIENT.** Filtering the run on the caller's `isActionable` alone looked like the whole answer -
+it is the run's own resolved Annex E action, one authority - and it **still listed `4D535449`**. The
+reason is that the Basic Profile removes private attributes **as a class**, so `isActionable` answers
+`true` for every odd-group tag, and a fabricated header lands on an odd group about half the time.
+The second conjunct is `isTableBound`: an **even** group. `isActionable && even` is exactly "an entry
+in PS3.15 Table E.1-1 as this run resolved it", because for an even group the table has to name the
+tag (or a repeating-group mask has to). **Consequences that must travel with the field:** `hidden` can
+now be **empty on a real finding** (a run whose only actionable members are private), and it is
+**still uncapped** - the bound is on what an entry can be, not on how many there are. The warning's
+`{n}` is `elementCount`, deliberately, so narrowing `hidden` did not silently re-scope a shipped
+message from "how many elements were swallowed" to "how many this run acts on".
+
+**▶ 🔴 INSTANCE 3 IS THE HALF WITH THE MOST IN IT, AND THE SWEEP FOUND A FIFTH INSTANCE NOBODY HAD
+FILED.** The docs claim was already corrected once by `#80` to "safe on a well-formed file, not
+unconditionally safe" - so this is its **second** wording, and a third means the sentence is deleted
+rather than tried again. Two things were wrong with it, both found by measuring rather than reading:
+
+1. **The named carrier is not the only one, and after this slice it is not a carrier at all.** A
+   sweep of every under-declare delta on both transfer syntaxes, hunting every 4-byte window of the
+   payload rendered as a tag, every 4-byte window rendered as a `readUInt32LE` decimal and every
+   2-byte window rendered as a VR, found **three** leaking Tier-2 codes on base, not one:
+   `DICOM_PRIVATE_TAG_NO_CREATOR` and `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR` under Implicit
+   VR LE, and **`DICOM_ODD_LENGTH_VALUE_PADDED` under Explicit VR LE**. The third is the worse one:
+   it renders a fabricated tag **and** a fabricated 32-bit declared length, eight consecutive payload
+   bytes in one message - `4E495320` (`"IN S"`) with `542003027` (`"SON "`) at delta -12, and
+   `42204152` (`" BRA"`) with `1213483341` (`"MITH"`) at -16. **It is `PRE-EXISTING`, it is left
+   open, and it is why the claim stays conditional after two instances closed.** It is not this
+   item's to take: that code fires on **any** tag, so withholding unconditionally costs every
+   real-world odd-length pad its tag. The remedy that would work is a **membership** `renderTag` -
+   render a tag PS3.6's registry names, withhold one it does not - which is a package-wide change to
+   every message plus a separate answer for the raw `{n}`. Its own slice, pinned meanwhile by
+   `oddLengthValuePaddedStillNamesAFabricatedTagAndLength`.
+2. **The claim was attached to the wrong field.** Every fixture that produces this leak **dies before
+   a `Dataset` exists**: the parse reaches the truncation guard, so the message travels on
+   `onWarning` and on the `{ strict: true }` `DicomParseError`, never onto a surviving `ds.warnings`.
+   Nine desync deltas x two syntaxes x four tail lengths, plus a 4 KiB/20 KiB/70 KiB padded tail set
+   and a defined-length-sequence-item variant, produced **zero** surviving `ds.warnings` carrying a
+   leak. **That is a fact about those fixtures and NOT a claim that `ds.warnings` is safe** - the
+   docs say so in those words, because the difference between "not measured" and "cannot happen" is
+   exactly what this repo's refusals have been about.
+
+**▶ THE CARRIERS OF THE CLAIM WERE FOUND BY FOLDING NEWLINES, NOT BY `grep`.** A line-based search
+misses a sentence that wraps, and `#85`'s cookbook had just added a fresh one. The sweep collapses
+all whitespace per file and then windows around `safe to log`, `PHI-free`, `PRIVATE_TAG_NO_CREATOR`
+and `embeddedAttributes`, over every tracked `.md` and `.ts`. Corrected: `README.md`,
+`docs-content/limitations.md`, `docs-content/troubleshooting.md`,
+`docs-content/spec-notes-tolerance.md`, `docs-content/cookbook.md`, `src/deident/types.ts`,
+`src/deident/embedded.ts`, `src/parser/warnings.ts`, `src/parser/element-header.ts`. A count is not
+quoted here for the same reason no other count in this file is.
+
+**▶ FIGURES. BASE IS `8b40b32` AND NO HEAD SHA IS QUOTED, DELIBERATELY** - a pre-merge head sha is
+wrong the moment the PR squash-merges. Head: **1,205 passing + 1 todo across 72 files, 0 red**. Base
+`src/` with the head `test/` tree (replaced, not overlaid; all 72 files still collect): **25 of 1,206
+red across 4 files.**
+
+**🛑 THAT 25 IS NOT 25 BEHAVIOURAL FINDINGS, AND SAYING SO WOULD BE THE `#78` DEFECT AGAIN.** Split
+it before quoting it. **Ten** are decoder rows that grade the repertoire and header conjuncts and are
+red only because `findEmbeddedAttributes` returns a record where base returned an array - an API-shape
+casualty, no behaviour in them. The **fifteen** that are behavioural evidence:
+
+- Instance 1 - `tierTwoEscalationNoLongerNamesAFabricatedTag`, `bothPrivateTagCodesAreClosed`, and
+  the three `takes no tag at all` factory rows in `test/parser/warnings.test.ts`.
+- Instance 2 - `embeddedAttributesHiddenNoLongerCarriesValueBytes`, `the fabricated neighbour is not
+  named`, `an odd group is excluded even when the run's own action table acts on it`, `a run whose
+  only actionable tags are private`, `elementCount counts the whole run`, `non-vacuity`, plus the
+  four detector rows whose fixtures carry an odd-group tag.
+
+**Two rows are GREEN ON BASE BY DESIGN and must stay that way**: `oddLengthValuePaddedStillNamesA
+FabricatedTagAndLength` pins a `PRE-EXISTING` residual, so it has to reproduce on both trees or it is
+not a residual pin; and `the filter does not decide WHETHER a run is reported` grades an invariant
+this slice did not move.
+
+**The RED-before evidence is structural rather than incidental**: the two `#80` residual rows
+**asserted the leaks** and now assert their absence, so each is red on base by construction. Both keep
+a non-vacuity control - instance 1 rebuilds `0.0.13`'s own message template and asserts the detector
+still catches **that**; instance 2 asserts the run really holds two elements while `hidden` names one,
+and that the fixture's bytes really do spell the surname. A green run cannot mean "the fixture never
+carried the thing".
+
+---
+
+---
+
 ## DICOM-ITEM-CROSSES-RESIDUALS
 
 **Provenance:** no new normative citation. Every claim below is a measurement taken on this repo at
@@ -161,23 +277,29 @@ source bytes (D-10), and an honest frame makes them **more** certainly the named
 content. `test/integration/fatal-diagnostic-surface.test.ts` carries a test whose entire job is to
 assert that, so the claim cannot quietly drift.
 
-**▶ THREE RESIDUALS THIS REGISTRY DOES NOT CLOSE, EACH WITH AN ASSERTED ROW IN
-`test/integration/fatal-diagnostic-surface.test.ts`.** All three are `PRE-EXISTING` and all three are
-the same **product call** already filed for `report.removedPrivateTags`: on a well-formed file these
-are the real tags of real attributes, so withholding them destroys the field's audit value to close a
-shape only a crafted file produces.
+**▶ THREE RESIDUALS THIS REGISTRY DID NOT CLOSE, EACH WITH AN ASSERTED ROW IN
+`test/integration/fatal-diagnostic-surface.test.ts`. TWO OF THE THREE WERE CLOSED BY
+`DICOM-DIAGNOSTIC-PHI-RESIDUALS`; READ THAT SECTION, WHICH ALSO CORRECTS THE ARGUMENT RECORDED HERE.**
 
 1. The identical desynchronized read that fed the Tier-3 leaks lands on an **odd** group, so
    `resolveImplicitVR` calls the fabricated header a private element and the **Tier-2**
    `DICOM_PRIVATE_TAG_NO_CREATOR` names its tag: `4E495320`, `"IN S"`. Byte-identical on `0a8c6e3`.
-   It is the `#78` fabricated-header residual one layer up.
+   It is the `#78` fabricated-header residual one layer up. **CLOSED.**
 2. `report.embeddedAttributes[].hidden` lists **every** tag in the run the embedded scanner found,
    and a run needs only **one** actionable attribute to be reported - so a fabricated header sitting
    beside a real one is listed too. Measured: `4D535449`, `"SMIT"` in wire order, beside the genuine
-   `00100020` that made the run reportable.
+   `00100020` that made the run reportable. **CLOSED.**
 3. Because of (1), **`ds.warnings[].message` is not unconditionally safe to log**, and
    `spec-notes-tolerance.md` and `cookbook.md` said it was. **The CLAIM is corrected, the guard is
-   not widened** - this repo's own rule, and the shape `#55` paid a blocker for.
+   not widened** - this repo's own rule, and the shape `#55` paid a blocker for. **STILL OPEN, on a
+   carrier this section never named** - see `DICOM-DIAGNOSTIC-PHI-RESIDUALS`.
+
+**🛑 THIS SECTION'S "ALL THREE ARE THE SAME PRODUCT CALL AS `report.removedPrivateTags`" IS
+RETRACTED, AND IT WAS THE WRONG TEST.** It read the three as one because the tags they name are real
+on a well-formed file. The distinction that actually decides it is **whether any closed table can
+vouch for the tag**, and it splits the three: `removedPrivateTags` is a private-tag field, so nothing
+can and narrowing empties it; the two above had a bound available and were not taking it. Do not
+restate them as one call.
 
 **🛑 A DISCLOSURE THAT NAMES A TEST MUST NAME ONE THAT EXISTS.** The first draft of this section, the
 CHANGELOG and the commit body all said "both pinned as asserted rows" when only (1) had a row. That is

@@ -527,8 +527,8 @@ function keepOrEmpty(
     emptyUndefinedVrElement(el, ctx, contextPath, out);
     return false;
   }
-  const hidden = findEmbeddedAttributes(el.rawBytes, el.vr, ctx.encoding, (t) => actsOnTag(t, ctx));
-  if (hidden === undefined) {
+  const run = findEmbeddedAttributes(el.rawBytes, el.vr, ctx.encoding, (t) => actsOnTag(t, ctx));
+  if (run === undefined) {
     out.elements.set(el.tag, el);
     return true;
   }
@@ -536,11 +536,15 @@ function keepOrEmpty(
   out.embeddedAttributes.push({
     tag: el.tag,
     vr: el.vr,
-    hidden,
+    hidden: run.hidden,
     ...(contextPath.length > 0 ? { contextPath: [...contextPath] } : {}),
   });
+  // `{n}` is `elementCount`, not `hidden.length`, and the difference is the
+  // point: narrowing `hidden` to the actionable tags must not quietly re-scope
+  // a shipped message from "how many elements were swallowed" to "how many of
+  // them this run acts on".
   out.warnings.push(
-    embeddedAttributeRemoved({ byteOffset: el.byteOffset }, el.tag, el.vr, hidden.length),
+    embeddedAttributeRemoved({ byteOffset: el.byteOffset }, el.tag, el.vr, run.elementCount),
   );
   return false;
 }

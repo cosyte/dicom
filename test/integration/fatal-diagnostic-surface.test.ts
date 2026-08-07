@@ -340,50 +340,129 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
     }
   });
 
-  it("tierTwoEscalationStillNamesAFabricatedTag", () => {
-    // 🛑 PRE-EXISTING, MEASURED OPEN, AND THIS REGISTRY DOES NOT CLOSE IT.
-    //
-    // The exact same desynchronized read that used to put `"RAIN"` into a
-    // Tier-3 message also lands on an ODD group, so `resolveImplicitVR` calls
+  it("tierTwoEscalationNoLongerNamesAFabricatedTag", () => {
+    // 🩺 CLOSED by `DICOM-DIAGNOSTIC-PHI-RESIDUALS`. Through `0.0.13` this row
+    // asserted the leak: the same desynchronized read that used to put `"RAIN"`
+    // into a Tier-3 message lands on an ODD group, so `resolveImplicitVR` calls
     // the fabricated header a private element and `DICOM_PRIVATE_TAG_NO_CREATOR`
-    // names its tag: `4E495320` is `"IN S"`. That is a **Tier-2** message, built
-    // from `./warnings.ts`'s registry through `renderTag` - which shape-checks a
-    // tag and therefore cannot refuse a fabricated one. It reproduces
-    // byte-identically on `0a8c6e3`.
+    // rendered its tag - `4E495320`, `"IN S"`, four bytes from inside the name.
     //
-    // It is the `#78` fabricated-header residual, one layer up, and it is NOT
-    // this slice's to close: narrowing `DICOM_PRIVATE_TAG_NO_CREATOR` would
-    // withhold the tag from every private element in every well-formed file,
-    // which is the same product call the item names for
-    // `report.removedPrivateTags` and explicitly does not take. Pinned as an
-    // asserted row so no artifact can read this file as an all-clear over the
-    // strict channel.
+    // The remedy is the one this package has taken five times: the tag is bound
+    // out of the FACTORY SIGNATURE rather than behind a branch, because
+    // `renderTag` shape-checks and cannot refuse. What is specific here is the
+    // reason it is a bound and not the product call the item leaves open for
+    // `report.removedPrivateTags`: this code fires only on an ODD group, and an
+    // odd group is the one class of tag no closed table this library holds can
+    // vouch for. See `privateTagNoCreator`'s JSDoc.
+    //
+    // The row still asserts the CODE, so the escalation channel is unchanged and
+    // this file cannot quietly stop exercising it.
     const err = errorFrom(desynchronized(TS_IMPLICIT_LE, -12), true);
     expect(err.code).toBe("DICOM_PRIVATE_TAG_NO_CREATOR");
     expect(isTierThree(err)).toBe(false);
-    const leaks = leaksIn(err.message, NAME);
-    expect(leaks.map((l) => l.bytes)).toContain("IN S");
+    expect(leaksIn(err.message, NAME)).toStrictEqual([]);
+    // Non-vacuity, and it is the whole point of the row: the payload really does
+    // reach this parse, and `"IN S"` really is four of its bytes. Rebuild the
+    // template `0.0.13` shipped and assert the detector still catches THAT.
+    const bytes = Buffer.from(NAME, "latin1");
+    // `"IN S"` is `NAME[6..10)` - the four bytes the desynchronized reader lands
+    // on at delta -12. Composed the way the parser composes a tag, not typed.
+    expect(bytes.subarray(6, 10).toString("latin1")).toBe("IN S");
+    const fabricated =
+      bytes.readUInt16LE(6).toString(16).padStart(4, "0").toUpperCase() +
+      bytes.readUInt16LE(8).toString(16).padStart(4, "0").toUpperCase();
+    expect(fabricated).toBe("4E495320");
+    const oldTemplate = `Private element (${fabricated}) has no Private Creator registered for its block; treating as VR=UN.`;
+    expect(leaksIn(oldTemplate, NAME).map((l) => l.bytes)).toContain("IN S");
   });
 
-  it("embeddedAttributesHiddenStillCarriesValueBytes", () => {
-    // 🛑 PRE-EXISTING, MEASURED OPEN, AND UNTOUCHED BY THIS SLICE. The second of
-    // the two residuals filed under this item, and it is here because a graded
-    // pass caught the disclosure claiming it was pinned when it was not - which
-    // is `#78`'s own defect, a residual written up as guarded with no guard.
+  it("bothPrivateTagCodesAreClosed, not just the one that was named", () => {
+    // The trap this slice would otherwise have walked into. `resolveImplicitVR`
+    // emits `DICOM_PRIVATE_TAG_NO_CREATOR` and
+    // `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR` from the SAME branch on the
+    // SAME element, so the fixture above rendered `"IN S"` into both messages on
+    // one parse. Closing the code the item named and leaving its twin would have
+    // relocated the leak, not closed it - the code-level form of "a line-based
+    // grep corrects two carriers of four".
     //
-    // `report.embeddedAttributes[].hidden` lists every tag in the run the
-    // scanner found inside a kept carrier's Value Field. A run only has to
-    // contain ONE actionable attribute to be reported, so a fabricated header
-    // sitting beside a real one is listed too - and a fabricated header's four
-    // tag bytes are bytes from inside that value. Measured here: `"SMIT"` in
-    // wire order renders as `4D535449`, four letters of a surname, beside the
-    // genuine `00100020` that made the run actionable.
+    // Non-strict, through `onWarning`, because that is the channel the leak
+    // actually travels on: the fixture's parse dies at the truncation guard, so
+    // the warnings never land on a surviving `ds.warnings`.
+    const seen: string[] = [];
+    try {
+      parseDicom(desynchronized(TS_IMPLICIT_LE, -12), {
+        onWarning: (w) => seen.push(`${w.code} ${w.message}`),
+      });
+    } catch {
+      // The fatal is this fixture's designed end; the warnings are what is graded.
+    }
+    const codes = seen.map((entry) => entry.split(" ")[0]);
+    expect(codes).toContain("DICOM_PRIVATE_TAG_NO_CREATOR");
+    expect(codes).toContain("DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR");
+    for (const entry of seen) {
+      const message = entry.slice(entry.indexOf(" ") + 1);
+      const leaks = leaksIn(message, NAME);
+      expect(
+        leaks,
+        `${entry.split(" ")[0]} leaked ${leaks.map((l) => JSON.stringify(l.bytes)).join(", ")}`,
+      ).toStrictEqual([]);
+    }
+  });
+
+  it("oddLengthValuePaddedStillNamesAFabricatedTagAndLength", () => {
+    // 🛑 PRE-EXISTING, MEASURED OPEN, AND DELIBERATELY NOT CLOSED HERE. It is a
+    // FIFTH instance, found by this slice's own sweep and not named on the item,
+    // and it is why `ds.warnings[].message` is still not unconditionally safe
+    // after the two the item did name were closed.
     //
-    // Not narrowed, for the same reason as the Tier-2 row above and as
-    // `report.removedPrivateTags`: on every well-formed file these are the real
-    // tags of real swallowed attributes, and withholding them would destroy the
-    // field's audit value to close a shape that only a crafted file produces.
-    // That is a product call.
+    // Under Explicit VR LE the same under-declare desynchronizes onto a
+    // fabricated header whose declared length is odd, and
+    // `DICOM_ODD_LENGTH_VALUE_PADDED` renders BOTH four bytes as `{tag}` and a
+    // further four as the decimal `{n}` - eight consecutive payload bytes in one
+    // message, each reversible with one typed read.
+    //
+    // It is not this slice's to take, and the reason is the one that separates
+    // it from the private-tag pair above: this code fires on ANY tag, and on a
+    // well-formed file that tag is a PS3.6 registry entry a reader needs. The
+    // remedy available is a MEMBERSHIP check - render a tag the closed public
+    // registry names, withhold one it does not - which is a package-wide change
+    // to `renderTag` affecting every message, plus the separate question of the
+    // raw `{n}`. That is a decision with its own slice, not a rider on this one.
+    // Pinned as an asserted row so no artifact can read this file as an
+    // all-clear over the Tier-2 channel.
+    const seen: string[] = [];
+    try {
+      parseDicom(desynchronized(TS_EXPLICIT_LE, -12), {
+        onWarning: (w) => seen.push(`${w.code} ${w.message}`),
+      });
+    } catch {
+      // Designed: the parse dies after the warning is handed to `onWarning`.
+    }
+    const padded = seen.find((entry) => entry.startsWith("DICOM_ODD_LENGTH_VALUE_PADDED "));
+    expect(padded).toBeDefined();
+    const message = (padded ?? "").slice((padded ?? "").indexOf(" ") + 1);
+    const leaks = leaksIn(message, NAME);
+    expect(leaks.map((l) => l.bytes)).toContain("IN S");
+    expect(leaks.map((l) => l.kind)).toContain("length");
+  });
+
+  it("embeddedAttributesHiddenNoLongerCarriesValueBytes", () => {
+    // 🩺 CLOSED by `DICOM-DIAGNOSTIC-PHI-RESIDUALS`. Through `0.0.13`
+    // `report.embeddedAttributes[].hidden` listed EVERY tag in the run the
+    // scanner found inside a kept carrier's Value Field, and a run needs only
+    // ONE actionable attribute to be reported - so a fabricated header sitting
+    // beside a real one was listed too, and its four tag bytes are bytes from
+    // inside that value. Measured: `"SMIT"` in wire order rendered as
+    // `4D535449`, four letters of a surname, beside the genuine `00100020`.
+    //
+    // `hidden` now carries only the tags the run's own resolved Annex E action
+    // fired on. That is a MEMBERSHIP bound, not a shape one: a surviving entry
+    // names a member of PS3.15 Table E.1-1 as this run resolved it, which is a
+    // published table. It is NOT the `report.removedPrivateTags` product call -
+    // there, narrowing would empty the field on every well-formed file, because
+    // a private tag is in no such table. Here the field's whole job is "which
+    // actionable attributes were hidden in this value", and the neighbours it
+    // used to list were attributes this run would have KEPT.
     const embedded = (tag: Buffer, vr: string, value: Buffer): Buffer => {
       const length = Buffer.alloc(2);
       length.writeUInt16LE(value.length, 0);
@@ -402,7 +481,7 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
             // A fabricated header whose tag bytes are four letters of a surname.
             embedded(Buffer.from("SMIT", "latin1"), "SH", Buffer.from("ASHTON", "latin1")),
             // A genuine, actionable `(0010,0020)`, which is what makes the run
-            // reportable and drags the fabricated tag along with it.
+            // reportable and used to drag the fabricated tag along with it.
             embedded(
               Buffer.from([0x10, 0x00, 0x20, 0x00]),
               "LO",
@@ -416,9 +495,16 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
 
     const { report } = deidentify(parseDicom(raw));
     const hidden = report.embeddedAttributes.flatMap((found) => found.hidden);
+    // The genuine, actionable attribute is still named: the field keeps the
+    // audit value it exists for.
     expect(hidden).toContain("00100020");
-    // The row that matters: four bytes of the value, wearing a tag's clothes.
-    expect(hidden).toContain("4D535449");
+    // The row that matters: four bytes of the value, wearing a tag's clothes,
+    // are no longer on the report.
+    expect(hidden).not.toContain("4D535449");
+    // ...and the whole run is still counted, on the warning rather than here.
+    expect(
+      report.warnings.filter((w) => w.code === "DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED"),
+    ).not.toStrictEqual([]);
     // Non-vacuity: those four bytes really are the planted surname's, recovered
     // the same way the parser composed them.
     const smit = Buffer.from("SMIT", "latin1");

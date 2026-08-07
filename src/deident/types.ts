@@ -167,15 +167,26 @@ export interface DeidentifiedAttribute {
  * (PS3.15 §E.1 "all instances"; §E.3.5 is the standard's own precedent for
  * removing identifying information embedded inside a string attribute).
  *
- * `tag` and `vr` are the carrier's own and are structural. **`hidden` is not,
- * and calling this finding "safe to log" was wrong.** Each entry is composed
- * from four bytes that were sitting *inside* the carrier's value - that is the
- * whole reason the field exists - so on any file that populates it those bytes
- * are document content. Measured: a `CS` carrier over-declaring over the bytes
- * `"SABC"` reports `hidden: ["41534342"]`, which is `"SABC"` in wire order.
- * `PRE-EXISTING` and identical on every release that has shipped the field.
- * Treat `hidden` at the sensitivity of the file, and see
- * {@link DeidentifyReport} for the other fields in this class.
+ * `tag` and `vr` are the carrier's own and are structural. **`hidden` was not,
+ * and it is bound now.** Every tag in an embedded run is composed from four
+ * bytes that were sitting *inside* the carrier's value - that is the whole
+ * reason this type exists - and a run needs only ONE actionable attribute to be
+ * reported, so through `0.0.13` the non-actionable tags of the run were listed
+ * beside it. Measured: a `CS` carrier over-declaring across a fabricated
+ * `"SMIT"` header beside a genuine `(0010,0020)` reported
+ * `hidden: ["4D535449", "00100020"]`, and `4D535449` is `"SMIT"` in wire order.
+ * `hidden` now carries **only the tags this run's own resolved Annex E action
+ * fired on**, so an entry is a member of PS3.15 Table E.1-1 as the caller's
+ * options resolved it. That is a **membership** bound, not a shape one - the
+ * posture this package already takes for a VR and for a Private Creator - so
+ * what survives it names a published table entry rather than a document byte. A
+ * fabricated four-byte window still reaches this array if it happens to spell
+ * such a tag, and that is the same trade rendering a VR makes with the 34.
+ *
+ * **🛑 THAT IS NOT AN ALL-CLEAR OVER THIS TYPE.** `contextPath` below is
+ * unbound and unchanged, `hidden` is uncapped, and
+ * {@link DeidentifyReport} names the report's other value-bearing fields. A
+ * `DeidentifyReport` is still not safe to log whole.
  *
  * @example
  * ```ts
@@ -191,7 +202,18 @@ export interface EmbeddedAttributeFinding {
   readonly tag: Tag;
   /** The carrier's VR. Always one of the string VRs; binary VRs are not scanned. */
   readonly vr: VR;
-  /** The tags of the Data Elements found inside the carrier's value, in wire order. */
+  /**
+   * The tags found inside the carrier's value **that this run acts on and that a
+   * published table names**, in wire order. **Not every tag in the run** - see
+   * this type's own remarks.
+   *
+   * **🩺 IT MAY BE EMPTY, AND EMPTY DOES NOT MEAN "NOTHING WAS HIDDEN HERE".**
+   * A run whose only actionable members are private attributes reports a finding
+   * with no tags: the carrier was still emptied, and the accompanying
+   * `DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED` warning still counts the whole
+   * run. The presence of the finding is the fact; this list is the part of it
+   * that can be named.
+   */
   readonly hidden: readonly Tag[];
   /**
    * Tag/index chain when the carrier is inside a sequence item; omitted at the
@@ -420,12 +442,11 @@ export interface UndefinedVrFinding {
  *   §6.2 defines. It cannot when the fabricated VR is one of them, because those
  *   two files are byte-identical.
  * - **`embeddedAttributes[].hidden`** - see {@link EmbeddedAttributeFinding}.
- *   Each entry is a tag composed from four bytes that were sitting **inside**
- *   a value, which is the position this type exists to distrust, so on a file
- *   that populates the field at all they are document content by
- *   construction. `PRE-EXISTING` and identical on every release that has
- *   shipped the field; it is disclosed here and its remedy is its own slice,
- *   alongside the cap that field is also missing.
+ *   **Bound since `DICOM-DIAGNOSTIC-PHI-RESIDUALS`**, and it is the one field in
+ *   this list that moved: an entry is now a tag this run's own resolved Annex E
+ *   action fired on, so it names a member of PS3.15 Table E.1-1 rather than any
+ *   four bytes the run happened to tile over. It is **still uncapped**, and the
+ *   bound is on what an entry can be, not on how many there are.
  * - **`contextPath`, on all four findings that carry one** - see
  *   {@link DeidentifiedAttribute.contextPath}, which holds the measurement. The
  *   segment tags come off the wire with no table behind them, so a fabricated
