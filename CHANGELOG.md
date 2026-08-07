@@ -1,5 +1,122 @@
 # Changelog
 
+## 0.0.13
+
+### Patch Changes
+
+- b7a77fe: Build every Tier-3 fatal message from a frozen registry, and cut the `{ strict: true }` snippet in
+  the frame its offset names (`DICOM-FATAL-MESSAGE-REGISTRY`).
+
+  Tier-2 warnings have been registry-bound for several releases; Tier-3 messages were still assembled
+  at the throw site out of template literals, and four of them printed four bytes of the document each.
+  The messages that interpolated most were the ones raised **when a length field is lying**, which is
+  the condition that makes a reader read bytes inside somebody's value as a Data Element header, so the
+  tag and the length they printed were that value. Measured on a synthetic `"MR BRAIN SMITHSON "`:
+  `Element 41524E49 declared length=1330858068` is `"RAIN"` then `"THSO"`, eight consecutive payload
+  bytes, each recoverable with one typed read.
+
+  The bound is the factory signature, matching the three Tier-2 codes that paid for this lesson before
+  it: the token type has **no tag field and no wire-length field**, so there is no slot for one to
+  travel through, and `err.byteOffset` identifies the element instead. A VR still renders when it names
+  one of the 34; a byte count still renders when it is bounded by the buffer being read.
+
+  Separately, `DicomParseError.snippet` is 16 raw source bytes cut at the diagnostic's own
+  `byteOffset`. That offset moves with the frame the element was read in, but the cut was always taken
+  from the whole file, so a strict-mode escalation raised inside a defined-length Sequence Item cut the
+  file at an item-relative number and returned **an unrelated element's** bytes. The parse context's
+  buffer now follows the frame at all four places this parser changes one. **The snippet is still
+  unredacted source bytes and is still PHI.**
+
+  **⚠ Some fatal messages are reworded, so a consumer string-matching one stops matching.** No count is
+  given, deliberately: a first draft said "six", a graded pass measured nine, and the honest remedy for
+  a count corrected once is to delete it rather than increment it. Diff `FATAL_MESSAGES` against the
+  previous release's template literals if you need the set. **`err.code` is unchanged on every path and
+  which files throw is unchanged.** Narrow on the code, never on the prose.
+
+  Three residuals are named rather than closed, each with an asserted test row: the same fabricated
+  header still reaches the Tier-2 `DICOM_PRIVATE_TAG_NO_CREATOR` message;
+  `report.embeddedAttributes[].hidden` still lists a fabricated tag alongside the real one that made
+  its run reportable; and because of the first, `ds.warnings[].message` is **not** unconditionally safe
+  to log, which the docs now say. Narrowing any of the three is a product call, not a fix.
+
+- 3617034: 🩺 `DeidentifyReport`'s `contextPath` was documented as structural and it is not: a segment is
+  `TAG[index]` and the tag half is read off the wire, bound by neither a shape test nor a closed table.
+  A file whose under-declared Value Length desynchronizes the reader onto four bytes inside somebody's
+  value, followed by `SQ`, gets that fabricated sequence descended and its fabricated tag published in
+  every `contextPath` beneath it. Measured on a synthetic `LO` carrier holding `"MRS BRAIN SMITHSON"`:
+  `contextPath: ["53484E4F[0]"]`, which is `"HSON"` in wire order, with no warning raised and every
+  finding array empty. **Redacting it is a logging fix and not an object fix**: on that same file the
+  de-identified object still carries the fabricated `(5348,4E4F)` and the serializer writes `"HSON"`
+  back out under a `Patient Identity Removed = YES` stamp, which is the already-disclosed
+  under-declared carrier class and not this field. The claim is corrected in the type, the tolerance table and the
+  troubleshooting guide, and `contextPath` is added to the report's list of fields that are not
+  value-free; no guard was widened, because withholding the tag would destroy the audit on every
+  well-formed file to bound a malformed one. `PRE-EXISTING`; no runtime behaviour changes. **Treat
+  `contextPath` as PHI when the source is untrusted.**
+
+  The `DICOM_ITEM_CROSSES_SEQUENCE_END` disclosure no longer says `contextPath` names "an item it was
+  never in" - that asserts which of two byte-identical files you have. It is deleted rather than
+  reworded a third time, and replaced by the two measurements that were already pinned.
+
+- 369abbe: 🩺 A private `SQ` a `Profile` vouched for under `RetainSafePrivate` is no longer written into de-identified output verbatim (`DICOM-PRIVATE-SQ-CARVE-OUT`, `PRE-EXISTING`, live through the published `0.0.10`).
+
+  `keepsPrivate` decided retention before the descent and routed a "yes" to `keepOrEmpty`, the only path in the module that writes a source value into output unchanged. So the whole vendor sequence was kept without anything inside it being examined: Table E.1-1 attributes the vendor encoded in its items, UIDs inside it, and any private element the file's own length fields pulled into it, all with `report.removedPrivateTags` reading `[]` and the object stamped `(0012,0062) Patient Identity Removed = YES`. On a fully conformant file, a `(0010,0010)` Patient's Name inside such a carrier was copied straight through.
+
+  PS3.15 2026c §E.3.10 licenses retention for "Private Attributes that are known by the de-identifier to be safe from identity leakage", which is knowledge about one Private Attribute and not about a Data Set nested in its value; PS3.5 2026c §7.5.1 makes an Item Value exactly that, and PS3.15 2026c §E.1.1 obliges protecting Table E.1-1 attributes "whether contained in the top level Data Set or embedded in an Item of a Sequence of Items".
+
+  The retention decision is unchanged and no guard is widened. A vouched-for private `SQ` now takes the same two branches every other `SQ` takes: it is walked when its items exist, and emptied with `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` plus a `report.unauditableSequences` entry when the parser never materialized them. A non-`SQ` private element is untouched, and there is no new public surface.
+
+  The price is PS3.5 2026c §7.8.1's per-Data-Set reservation scope, which now applies inside the carrier: a nested private element whose block is reserved only at the root is removed and named, while one whose Private Creator is inside the Item, as §7.8.1 requires, is kept. No reading changes: 0 of 83,037 grid cells differ in any parse respect against base `495c9fc`.
+
+- 92c0373: 🩺 A private carrier a `Profile` declared `SQ` is no longer written into de-identified output verbatim when the parse tree resolved it to something else (`DICOM-PRIVATE-SQ-PARSE-VR`, `PRE-EXISTING`, live through the published `0.0.10`).
+
+  `keepRetainedPrivate` branched on `el.vr === "SQ"`, and the parse tree and the profile disagree about the same bytes in two ordinary, conformant situations. Under Implicit VR LE a private tag carries no VR on the wire (PS3.5 2026c §7.1.3), so `SQ` there is an inference the parser draws from a `Profile` it was given, and a profile passed only to `deidentify()` leaves the element `UN`. Under Explicit VR the wire's VR wins in the parser, so a sender who writes a profile-declared `SQ` attribute as `OB` or `UN` yields that instead, with an honest defined length wrapping a well-formed `(FFFE,E000)` item stream. Both shapes were measured shipping a `(0010,0010)` Patient's Name into output stamped `(0012,0062) Patient Identity Removed = YES`, and the Explicit VR one raises nothing at all on `ds.warnings`.
+
+  The remedy is a second authority rather than a content test: the same `Profile` that vouched for the element declares its VR. A retained private element the profile declares `SQ` whose parse tree carries no items is emptied through the channel a parsed `SQ` with no items already used, `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` plus a `report.unauditableSequences` entry, keeping the VR the file actually carried instead of re-typing the element to `SQ`. `keepsPrivate` and the retention decision are unchanged, no parser file is touched, and there is no new public surface.
+
+  It reaches the CP-246 `UN` too wherever a profile named it, because the test does not look at the length field; the undefined-length `UN` residual is a statement about elements no profile named. Two conjuncts ahead of it keep properties the module already had. An element whose on-wire VR is not one of the 34 still takes the tag-free `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` route, which keeps a header fabricated from bytes inside some element's value off the diagnostic **when its fabricated VR is outside the 34, and only then**: fabricate `OB` and the tag does reach `report.unauditableSequences`. That is disclosed rather than guarded, because a fabricated `OB` header and a genuine one are byte-identical, and because on that same input the previous behaviour kept the carrier verbatim and shipped the whole nested name. `DeidentifyReport` is not a value-free surface: its value-bearing fields are now a list on the type with no count anywhere, and re-deriving that list disclosed a fourth nobody had named, `embeddedAttributes[].hidden`, whose entries are four bytes found inside a value and whose own documentation said "safe to log" (`PRE-EXISTING`, byte-identical on every release that has shipped the field, disclosed rather than narrowed here). And a zero-length value is left alone so a second `deidentify()` pass reports no second drop. `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE`'s message no longer reads "is VR=SQ", because it is shared by both producers and the second one's premise is that the parse tree and the profile disagree about the VR.
+
+  The cost: a caller who passes a profile to `deidentify()` but not to `parseDicom` now loses that vendor sequence's content instead of shipping it unexamined. Pass the same profile to `parseDicom` and the sequence is walked and its non-PHI content retained. Deliberately not closed, and still open rather than decided: a carrier whose profile entry declares a binary VR (`OB`/`OW`/`UN`) over a well-formed item stream, which would need a content test on exactly the VRs arbitrary bytes are for.
+
+- ad675da: The README lockup now links to cosyte.com (`ASSETS`).
+
+  The `<picture>` block above the H1 is wrapped in an anchor to https://cosyte.com, per the founder
+  requirement of 2026-08-06. Nothing inside the block moved: the `<source>`, the `<img>`, the alt text
+  and both tile URLs are byte-identical.
+
+  What the anchor does was measured on both surfaces by `fhir`, not assumed, because fourteen READMEs
+  carry this shape. On GitHub the anchor works and the colour-scheme switch keeps working, because the
+  `<img>` stays a direct child of `<picture>`, which is the condition the HTML spec puts on `<source>`
+  applying at all. On an npm package page the anchor is lost: npm wraps a README image in its own
+  anchor to the image file, a nested anchor is not representable, so the parser closes ours early and
+  the image ends up linked to the image file rather than to cosyte.com. Shipped anyway by founder
+  decision of 2026-08-07: on npm that is no worse than the unlinked lockup it replaces, and GitHub is
+  where these READMEs are read.
+
+- 0a8c6e3: Correct the disclosed extent of the surviving `RetainSafePrivate` retain-route leak
+  (`DICOM-RETAIN-ROUTE-RESIDUALS`). Six artifacts described it as "a private carrier whose profile
+  entry declares a binary VR". The predicate has two conjuncts and that wording named neither: the
+  profile does not declare `SQ`, and the embedded-attribute scanner cannot read the value (it reads
+  string carriers only, and decodes tiles in the file's own encoding). The two sets are incomparable,
+  not nested - a profile entry declaring `LO` over a carrier the sender wrote `OB` ships the identical
+  nested `(0010,0010)`, while one declaring `OB` over a carrier written `LO` is emptied. The
+  prose enumeration is deleted rather than reworded, and a measured matrix pins the surface instead:
+  declared VR against encoding, and against wire VR under Explicit VR only, because Implicit VR LE
+  writes no VR at all. No `src/` predicate changes: the behaviour is `PRE-EXISTING` and identical
+  before and after. The matrix also strengthens the `DICOM-PRIVATE-SQ-PARSE-VR` closure beside it,
+  proving it on five distinct inputs rather than on the one cell that opened it.
+- c0fa362: The UID registry is now sourced from the normative PS3.6 Annex A, and every release from here on writes its own section into `CHANGELOG.md`.
+
+  **`Dictionary.uid` resolves the whole UID registry, not a subset of it.** The transfer syntax and well-known UID names used to be a hand-typed table inside the dictionary generator, merged with a SOP Class list, and nothing compared either one against the normative text. That table is gone. The generator now reads PS3.6 2026c Annex A directly (Table A-1 "UID Values" and Table A-2 "Well-known Frames of Reference") from the SHA-256-pinned DocBook already vendored here, and overlays it per field exactly as the element registry is overlaid: the normative source wins on name, type and retirement for a UID both carry, its own additions are taken, and an entry only the mirror carries is kept rather than dropped, because the standard retires UIDs rather than deleting them.
+
+  The registry goes from 268 entries to 494, and **every one of the 268 comes through byte identical**: no shipped name, type or retirement flag moved. What changed is coverage. Six transfer syntaxes the current edition defines, including the High-Throughput JPEG 2000 family and Deflated Image Frame Compression, previously resolved to `undefined`. Nothing was ever mis-read, because a transfer syntax is dispatched by UID value and never by name, but a caller asking the dictionary what it was holding got no answer.
+
+  **The two deliberate departures from the normative spelling are preserved, and they are now derived rather than typed.** Retirement stays a structured `retired` boolean instead of the trailing `(Retired)` every retired Annex A row carries at the end of its UID Name. Four transfer syntaxes keep the short form every DICOM toolkit prints instead of the longer `...: Default Transfer Syntax for ...` form, and that short form is cut from the normative name at build time rather than written out by hand, so it cannot drift away from it: a name that stops carrying the clause fails the build instead of silently keeping a stale string. Measured on this edition, those four are exactly the Annex A names that carry such a clause, so the departure is the complete set rather than a subset. Two rows that the standard retired and left unnamed in the same edition are excluded rather than shipped with an empty name, because an entry whose name is empty reads as a successful lookup and a caller's fallback stops firing.
+
+  **And the changelog is generated.** `.changeset/config.json` set `changelog: false` for this package's whole published history, so no release ever wrote a version heading and the file was maintained by hand under one `[Unreleased]` heading that nothing rolled over. Ten published versions shipped a changelog inside the tarball describing already-released work as unreleased. The fix is the flag rather than the prose: correcting the text by hand leaves the mechanism that produced it. The hand-written history is preserved verbatim, unsorted and unreworded, under a `Released before this file was generated` divider, and every release from here on prepends its own section above it.
+
+  Both halves are graded by tests rather than asserted. The UID registry is re-parsed from the pinned DocBook independently of the generator and compared against what the package actually exports, so the check cannot pass by agreeing with the generator. The changelog contract runs the real release tool against the real file in a throwaway repository, proves the archived history survives it byte for byte, and proves the region above the divider carries only what a release generates: a fabricated version section is refused wherever it is placed, which closes a gap a sibling package measured as open.
+
 ## Released before this file was generated
 
 Every release section above this heading is written by
