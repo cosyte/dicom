@@ -30,9 +30,13 @@
  * ONLY. Every mutation above is a mutation of a document another worker may be
  * reading: vitest runs test files in parallel, and an earlier shape of this file
  * mutated `vendor/nema/part05/` and `vendor/nema/part05-2004/` in place, plus
- * `src/dictionary/generated/`, while `generate-annex-e.test.ts`,
- * `test/docs/spec-citations.test.ts` and the shipped library itself were reading
- * exactly those paths. That is `DICOM-ANNEX-E-TEST-RACE`;
+ * `src/dictionary/generated/`. 🛑 NAME THE READER PER PATH, BECAUSE THEY ARE NOT THE
+ * SAME SET AND AN EARLIER DRAFT OF THIS PARAGRAPH SAID THEY WERE. Of the three,
+ * `test/docs/spec-citations.test.ts` reads `part05` at module load, and the shipped
+ * library plus the Annex E generator read `src/dictionary/generated/`.
+ * `part05-2004` is opened by nothing else in this repository except the generator
+ * this suite invokes, so no live reader was ever exposed to it. That is
+ * `DICOM-ANNEX-E-TEST-RACE`;
  * `test/helpers/generator-sandbox.ts` carries the measurement and the reason the
  * remedy is relocation rather than a softer pin on either side. Do not reach back
  * into `REPO_ROOT` for anything this suite writes.

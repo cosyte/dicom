@@ -9,8 +9,10 @@
  * corrupting those bytes is the only way to reach the content re-hash. Vitest runs
  * test files in parallel, so for the few hundred milliseconds a mutation is live,
  * every other worker sees it. `test/docs/spec-citations.test.ts` re-hashes PS3.5,
- * PS3.6 and PS3.15 at MODULE LOAD, which makes it a concurrent reader of exactly
- * those files, and a reader that fails at module load takes its whole file with it.
+ * PS3.6 and PS3.15 at MODULE LOAD, which makes it a concurrent reader of TWO of the
+ * parts these suites mutate, `part05` and `part15`, and a reader that fails at
+ * module load takes its whole file with it. Two, not all of them: see the trap
+ * below on which part a live reader was actually exposed to.
  *
  * The window was measured on this repository rather than argued about. A probe
  * running the citation gate's `readPinned` in a loop over ALL FOUR vendored part
@@ -55,13 +57,14 @@
  * argument on a script the byte-identical regen gate depends on, and that gate is
  * worth more than the convenience.
  *
- * The copy is taken once per test FILE, in a `beforeAll`, not once per mutation.
- * 🛑 DERIVE ITS COST, DO NOT READ A FIGURE OFF `du -sh`. `du -sb scripts src vendor`
- * is the answer in one command (about 17.5 MiB at this writing, almost all of it
- * `vendor/`, so two suites cost roughly 35 MiB of `os.tmpdir()` per run). An earlier
- * draft of this header quoted "~5 MB", taken from `du -sh` on a compressing
- * filesystem, which under-reported the bytes actually copied by more than three
- * times. Each sandbox lives under `os.tmpdir()` in a `mkdtemp` directory, so two
+ * The copy is taken once per test FILE, in a `beforeAll`, not once per mutation, so
+ * a run pays for two of them. 🛑 DERIVE ITS COST, DO NOT READ A FIGURE OFF `du -sh`,
+ * AND DO NOT WRITE ONE HERE: `du -sb scripts src vendor` is the answer in one
+ * command, and no numeral for it survives in this repository, because the one that
+ * used to sit on this line was wrong. It read "~5 MB", taken from `du -sh` on a
+ * compressing filesystem, which reports blocks on disk rather than the bytes
+ * `cpSync` copies and under-reported them by more than three times. Each sandbox
+ * lives under `os.tmpdir()` in a `mkdtemp` directory, so two
  * suites - or two workers on one box - cannot collide, and a run killed mid-mutation
  * leaves a temp directory rather than a corrupted normative document in `git status`.
  */

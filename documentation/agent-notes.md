@@ -2097,9 +2097,9 @@ hold a sha256` thrown at module load. **Both controls were run, because a clean 
   `attw-gate`'s slowest case **13.8 s of its 60 s `SPAWN_TIMEOUT` (23%)**, the `@example` coverage
   case **6.7 s of 30 s (22%)**, and the slowest assertion still on the **10 s default 2.1 s (21%)**.
   Every heavy `changelog-generation` case already carries its own `{ timeout: 90_000 }` or
-  `{ timeout: 150_000 }`, and `docs-content`'s 180 s is a `beforeAll`, not a per-test budget. So
-  roughly four times the ceiling is left everywhere, and nothing is near one. **No budget was changed
-  and no numeral was added to `vitest.config.ts`**, which refuses to enumerate these on purpose: the
+  `{ timeout: 150_000 }`, and `docs-content`'s 180 s is a `beforeAll`, not a per-test budget.
+  **No budget was changed and no numeral was added to `vitest.config.ts`**, which refuses to
+  enumerate these on purpose: the
   measurement is the answer, and re-measuring under the load in front of you is the rule, not reading
   a figure recorded here.
 - **NOT FIXED, AND NOT THE SAME SHAPE.** `test/scripts/phi-scan.test.ts` appends to the tracked
