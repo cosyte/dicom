@@ -64,34 +64,56 @@ warning you triage, not an exception you catch.
 
 ## Keeping PHI out of logs
 
-A Tier-2 **warning** is safe to log whole on any well-formed file. Its `message` comes from a frozen
-registry keyed by the code, and the only things substituted into it are structural: a tag, a VR
-checked against the closed 34-VR set, and input-derived numbers. No warning factory accepts a string
-read out of the document, so `ds.warnings` holds codes, positions and registry prose, not patient
-data.
+**This section states a mechanism, not a verdict.** The verdict form of it was written two ways in
+two releases - "safe to log whole on any well-formed file", then "safe on a well-formed file and not
+unconditionally safe" - so it is deleted rather than given a third wording. What follows is what the
+code does, and you decide.
 
-**One shape is the exception, and it is disclosed rather than guarded.** The tag slot is filled by a
-**shape** check, and a shape check cannot refuse a tag that a lying Value Length composed out of
-somebody's value. Measured: an `ST` carrying `"MR BRAIN SMITHSON "` that under-declares by 12
-desynchronizes the **Explicit VR LE** reader onto a fabricated header whose declared length is odd,
-and `DICOM_ODD_LENGTH_VALUE_PADDED` renders four bytes of the name as its tag (`4E495320`, `"IN S"`
-in wire order) **and four more as its decimal length** - eight payload bytes in one message, each
-reversible with one typed read. Withholding the tag there would remove it from every element that
-pads an odd length in every real-world file, which is a decision with its own slice rather than a
-fix; `report.removedPrivateTags` carries the same property for the same reason. **If you log messages
-from untrusted files verbatim, treat a tag or a length in one as document-derived.**
+A Tier-2 warning's `message` comes from a frozen registry keyed by the code, and the only things
+substituted into it are structural. No warning factory accepts a string read out of the document.
+Each substitution is bounded a different way, and the three ways are not interchangeable:
 
-**Which channel carries it is part of the answer.** The fixtures that produce this leak all die
-before a `Dataset` exists, so the message reaches you through `onWarning` or through the
-`{ strict: true }` `DicomParseError`, not through a surviving `ds.warnings`. That no measured fixture
-put one on a surviving `ds.warnings` is a fact about those fixtures, not a promise about the parser -
-review all three channels the same way.
+- **`{tag}` is a MEMBERSHIP test.** It renders a tag only when PS3.6's element registry carries a
+  **literal row** for it, and `<withheld>` otherwise. A repeating-group family row does not count:
+  `(50xx,xxxx)` Curve Data leaves the whole 16-bit element number free, so admitting a family match
+  would admit 16 x 65,536 tags whose free bits are raw document bytes.
+- **`{vr}` is a membership test** against the 34 VRs PS3.5 2026c §6.2 defines.
+- **A raw number a header carries is bound out of the factory signature.** A declared Value Length
+  has neither a shape nor a membership to test, so there is nothing for a renderer to check and the
+  bound is the absence of the slot. The one declared length still printed anywhere is
+  `(0002,0000)`'s own File Meta group length, read at a structurally fixed offset no value can
+  desynchronize the reader onto.
 
-**Two carriers this page named until recently are now bound.** `DICOM_PRIVATE_TAG_NO_CREATOR`,
-`DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR` and `DICOM_PRIVATE_CREATOR_UNKNOWN` take **no tag
-parameter at all** - an odd group is the one class of tag no closed table this library holds can
-vouch for, so the shape check was the only thing behind that slot and a shape check cannot refuse.
-The element is still in the object under its tag, and `position.byteOffset` locates the header.
+`w.code` and `w.position` carry nothing from the document.
+
+**What that closed, measured rather than argued.** An `ST` carrying `"MR BRAIN SMITHSON "` that
+under-declares by 12 desynchronizes the **Explicit VR LE** reader onto a fabricated header whose
+declared length is odd. Through `0.0.14`, `DICOM_ODD_LENGTH_VALUE_PADDED` rendered four bytes of the
+name as its tag (`4E495320`, `"IN S"` in wire order) **and four more as its decimal length** - eight
+payload bytes in one message, each reversible with one typed read. On six other under-declare deltas
+`DICOM_NONZERO_RESERVED_BYTES` printed two more bytes of the same name as two decimals, a shape no
+detector in this repo had ever looked for. Both are closed.
+
+**What it costs you, stated rather than minimised.** A message about a **private** element, a
+**Group Length** `(gggg,0000)`, or a **repeating-group member** such as `(6000,3000)` Overlay Data
+no longer names its tag, on any file. The element is still in the object under that tag, and
+`position.byteOffset` locates the header.
+
+**Which channel carries a message is still part of the answer.** The fixtures that produce a
+desynchronized read mostly die before a `Dataset` exists, so their messages reach you through
+`onWarning` or through the `{ strict: true }` `DicomParseError` rather than a surviving
+`ds.warnings`. That no measured fixture put one on a surviving `ds.warnings` is a fact about those
+fixtures, not a promise about the parser - review all three channels the same way.
+
+**Five codes take no tag parameter at all, which is a stronger bound than any renderer.**
+`DICOM_PRIVATE_TAG_NO_CREATOR`, `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR` and
+`DICOM_PRIVATE_CREATOR_UNKNOWN` fire only on an odd group, which no closed table this library holds
+can vouch for. `DICOM_NONZERO_RESERVED_BYTES` and `DICOM_DUPLICATE_TAG_IN_DATA_SET` fire where the
+header may not be a header at all. `DICOM_GROUP_LENGTH_IN_DATASET` joined them for a third reason:
+PS3.6 carries exactly one literal row ending `0000`, and it is File Meta, so its slot could never
+render anything but `<withheld>`. A slot that cannot render is still a slot a future call site can
+be handed. The element is still in the object under its tag, and `position.byteOffset` locates the
+header.
 
 Two things that array does **not** cover:
 

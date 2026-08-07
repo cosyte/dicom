@@ -189,6 +189,114 @@ claim and should not start claiming loosely: **0 of the 652 rows are all-printab
 admitted entry always contains a non-printable byte. That is a property of the current edition's
 table, not a bound this package enforces, which is why it is recorded here and not in a docstring.
 
+### The fifth and sixth instances: `renderTag` is a membership test, and a raw wire number has no test at all
+
+The sibling half above closed instances 1 and 2, measured a **fifth** nobody had filed, and named its
+remedy without taking it: *a membership `renderTag`, plus a separate answer for the raw `{n}`,
+package-wide, not a rider on another slice.* This is that slice. It also found a **sixth** instance in
+the same family, on the way.
+
+**▶ THE PREMISE WAS MEASURED BEFORE ANY CODE WAS WRITTEN, WHICH IS WHY THERE IS A SIXTH.** The sweep
+that reproduced instance 5 was widened by one arm before it was run: every 4-byte window of the
+payload rendered as a tag and as a `readUInt32LE` decimal, every 2-byte window as a VR - and, new,
+**every single byte as a decimal.** Ten under-declare deltas x two transfer syntaxes produced **eight
+leaking rows across two codes**, not one:
+
+- `DICOM_ODD_LENGTH_VALUE_PADDED`, **2 rows**, tag AND 32-bit length: `4E495320` (`"IN S"`) with
+  `542003027` (`"SON "`) at delta -12, and `42204152` (`" BRA"`) with `1213483341` (`"MITH"`) at -16.
+  The known fifth instance.
+- `DICOM_NONZERO_RESERVED_BYTES`, **6 rows**, the two reserved bytes as two decimals: `" N"`, `"SO"`,
+  `"TH"`, `"MI"`, `" S"`, `"IN"` at deltas -8 through -18. **The sixth instance, filed nowhere.** This
+  code already withheld its **tag**, and the reason it gave was that its trigger IS "this header may
+  not be a header". It then printed two bytes off that same header. **The bound was half a bound, and
+  no detector in this repo had ever looked for a single byte as a decimal.** A detector that has never
+  looked for a shape has not cleared it.
+
+**▶ 🩺 THE TWO HALVES CLOSE DIFFERENTLY, AND THAT SPLIT IS THE WHOLE SLICE.** The item's deciding test
+is *can a FINITE table vouch for this?*
+
+- **A tag can be vouched for.** `renderTag` moves to `tokens.ts` beside `renderVr` and tests
+  membership in **PS3.6's element registry**: `Dictionary.lookup` answers, or the token renders
+  `<withheld>`. 5,221 literal rows, against the 34 `renderVr` checks. The module doc that said
+  `renderTag` was *deliberately not here, because a tag has only a shape to test* is corrected rather
+  than left standing.
+- **A raw number cannot.** There is no set of "lengths PS3.6 names", so nothing is available to check
+  and the bound has to be **the factory signature**, the remedy this package keeps arriving at. No
+  count is written here: the factories that take one are the ones whose JSDoc says so. `oddLengthValuePadded` loses its declared length; `nonzeroReservedBytes` loses both byte
+  values; `pixelDataLengthMismatch` loses its declared length **although it has no call site** -
+  with none, the change costs nothing today and no later measurement would catch it once a phase
+  switches the code on.
+
+**▶ 🛑 LITERAL ROWS ONLY. THE MASK RULE IS INHERITED FROM THE SIBLING HALF AND IT COST A PASS THERE.**
+`Dictionary.lookup` answers `undefined` for a tag that resolves only through a repeating-group family,
+and that exclusion is load-bearing rather than incidental: `(50xx,xxxx)` Curve Data leaves the whole
+16-bit element number free, so a family test admits 16 x 65,536 tags whose free bits are raw document
+bytes. `"\fPAR"` composes `500C5241`, which a family test admits and which returns all four payload
+bytes with one typed read. The row that pins this asserts the **premise** too - that `500C5241` really
+does resolve through `50xx` and really is not a literal row - so it cannot pass because the
+counterexample stopped being one.
+
+**▶ ONE MORE SLOT WAS EMPTIED BY THE RULE RATHER THAN BY A JUDGEMENT, AND THE HONEST ANSWER WAS TO
+DELETE IT.** `DICOM_GROUP_LENGTH_IN_DATASET` fires on a `(gggg,0000)` outside File Meta. PS3.6 carries
+**exactly one** literal row ending `0000` - `(0002,0000)`, which is File Meta and never reaches this
+code - so **every** tag that slot could ever have rendered was already `<withheld>`. Measured over the
+suite: four distinct tags reached it, four withheld. A slot that can never render is not harmless; it
+invites a future call site to pass one. Bound out of the signature.
+
+**▶ 📏 THE COST, MEASURED OVER THE WHOLE SUITE RATHER THAN ARGUED.** A probe on the single
+construction point recorded every `(code, tag)` pair the suite renders: **50 pairs unaffected, 14
+withheld.** Of the 14, **2** are the fabricated tags this slice exists for; **8** are private tags
+(`DICOM_ODD_LENGTH_VALUE_PADDED`, `DICOM_UN_PARSED_AS_SQ`, `DICOM_SQ_NOT_DESCENDED` and the two
+`deident` codes); **4** are Group Length tags. `DICOM_VR_MISMATCH` is **12 rendered, 0 withheld**, and
+that is structural rather than lucky: it fires only where the dictionary already has an entry for the
+tag. **No repeating-group member appears in the suite at all**, so `(6000,3000)` Overlay Data losing
+its name in a message is a real cost that this repo's fixtures do not exercise - it is pinned by a
+direct unit row instead, and stated in the consumer docs rather than left to be discovered.
+
+**▶ `(0002,0000)`'s DECLARED GROUP LENGTH STAYS, AND THE ASYMMETRY IS STRUCTURAL.** It is the one raw
+declared length still printed anywhere in the registry. `parseFileMeta` runs **once** per parse, from
+`parseDicom`, at the post-`DICM` offset, and is never nested; `(0002,0000)` is the first element it
+reads or the code does not fire at all (its absence raises `DICOM_FILE_META_GROUP_LENGTH_MISSING`).
+So the four bytes are that attribute's own Value Field at a structurally determined offset, and no
+Data Set value can be read into that position - the same argument `duplicateFileMetaElement` already
+makes for its offset being file-absolute. Measured as well as argued: the desync sweep reaches that
+code **zero** times. Naming the exception is deliberate; writing "no message carries a raw length"
+would have been an absolute that is false.
+
+**▶ 🛑 THE "SAFE TO LOG" SENTENCE IS DELETED, NOT REWORDED A THIRD TIME - THIS REPO'S OWN RULE, APPLIED
+TO ITS OWN LINEAGE.** `#80` wrote it once ("safe to log whole on any well-formed file"), the sibling
+half corrected it to "safe on a well-formed file and not unconditionally safe", and a third wording
+was due. Every carrier now states the **mechanism** - which slot is a membership test, which is a
+signature bound, and the one named exception - and states **no verdict**. That is `#79`'s remedy shape
+(delete the prose enumeration, replace it with something that cannot go stale) applied to a sentence
+instead of a list. The carriers were found by **folding newlines** and windowing, not by `grep`:
+`README.md`, `docs-content/limitations.md`, `docs-content/troubleshooting.md`,
+`docs-content/spec-notes-tolerance.md`, `docs-content/cookbook.md`, `src/parser/types.ts`. Eight more
+`src/` JSDoc paragraphs asserting *"`renderTag` shape-checks a tag and therefore cannot refuse one"*
+were corrected to the past tense in the same pass - a claim that was true when each bound was taken
+and is false now, in `warnings.ts` and `fatals.ts`.
+
+**▶ RECORDED BECAUSE IT IS STRONGER THAN ANYTHING CLAIMED, AND FOR THE SAME REASON THE `E.1-1` FIGURE
+IS: 0 of the 5,221 literal rows have all four WIRE bytes in printable ASCII.** So a fabricated window
+over printable text cannot spell an admitted tag on this edition. **That is a property of the pinned
+PS3.6 2026c, not a bound this package enforces**, which is why it is here and not in a docstring or a
+test - exactly where the sibling half's `652`/`0` measurement was put.
+
+**▶ FIGURES. BASE IS `ff1a64a` AND NO HEAD SHA IS QUOTED, DELIBERATELY.** Base, whole suite: **72
+files, 1,207 passing + 1 todo, 0 red.** Head: **73 files, 1,215 passing + 1 todo, 0 red.** Head tests
+against base `src/` (replaced, not overlaid): the two behavioural rows that asserted the leaks -
+`oddLengthValuePaddedStillNamesAFabricatedTagAndLength` in
+`test/integration/fatal-diagnostic-surface.test.ts` and the `OB` half of *"a FABRICATED header keeps
+the tag-free diagnostic"* in `test/integration/deident-private-reservation.test.ts` - are **red on
+base by construction**, because each previously asserted the leak and now asserts its absence.
+
+**▶ WHAT WAS DELIBERATELY NOT TAKEN.** `report.removedPrivateTags` is untouched. It is a
+**private**-tag field by definition, so no closed table can ever vouch for its contents and a bound
+empties it on every well-formed file - the genuine product call the item names, and not this slice's.
+`report.unauditableSequences[].tag`, `report.uidMap` and `contextPath` are model fields rather than
+messages and are equally untouched; `#78`'s residual row now asserts **both halves separately**, so
+the message closing here cannot be read as the report's.
+
 ---
 
 ---

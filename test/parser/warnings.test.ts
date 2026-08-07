@@ -110,10 +110,27 @@ describe("warning factories (D-12 - one named factory per active-emit code)", ()
     expect(w.message).toContain("0040A730");
   });
 
-  it("oddLengthValuePadded", () => {
-    const w = oddLengthValuePadded(pos, "00100010", 9);
+  it("oddLengthValuePadded takes no declared length, so no call site can pass one", () => {
+    // The fifth instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`, and the worst of
+    // the six: this message rendered a fabricated tag AND a fabricated 32-bit
+    // declared length, eight consecutive payload bytes. The tag survives because
+    // `renderTag` is a membership test now; the length cannot, because a raw
+    // number has neither a shape nor a membership to check. So the bound is the
+    // signature, exactly as for `itemCrossesSequenceEnd`.
+    expect(oddLengthValuePadded.length).toBe(2);
+    const w = oddLengthValuePadded(pos, "00100010");
     expect(w.code).toBe(WARNING_CODES.DICOM_ODD_LENGTH_VALUE_PADDED);
-    expect(w.message).toContain("9");
+    // The tag is a literal PS3.6 row, so it still renders: the bound must not
+    // have cost a well-formed file its tag.
+    expect(w.message).toContain("00100010");
+    expect(w.message).toContain("withheld");
+    // Non-vacuity on the LENGTH half: rebuild `0.0.14`'s own template and prove
+    // this assertion could fail. A green row must not mean "there was never a
+    // number here to look for".
+    const shipped =
+      "Element (00100010) has odd declared length 9; cursor advanced by one padding byte.";
+    expect(/\bodd declared length \d/u.test(shipped)).toBe(true);
+    expect(/\bodd declared length \d/u.test(w.message)).toBe(false);
   });
 
   it("vrMismatch", () => {
@@ -137,8 +154,10 @@ describe("warning factories (D-12 - one named factory per active-emit code)", ()
     // reason is the tag's CLASS rather than the trigger. All three fire only on
     // an ODD group, and an odd group is the one class of tag no closed table
     // this library holds can vouch for: PS3.6's registry is even-group, and a
-    // Profile's private dictionary is keyed by a creator string. `renderTag`
-    // checks shape and therefore cannot refuse a fabricated one.
+    // Profile's private dictionary is keyed by a creator string. `renderTag` is
+    // a MEMBERSHIP test now and would withhold every one of these tags anyway;
+    // the signature bound stays because a slot that cannot render is a slot a
+    // future call site can still be handed.
     expect(factory.length).toBe(1);
     const w = factory({ byteOffset: 284 });
     expect(w.message).not.toMatch(/[0-9A-F]{8}/u);
@@ -146,29 +165,39 @@ describe("warning factories (D-12 - one named factory per active-emit code)", ()
     expect(w.message).toContain("byte offset");
   });
 
-  it("groupLengthInDataset", () => {
-    const w = groupLengthInDataset(pos, "00080000");
+  it("groupLengthInDataset takes no tag, because the membership rule emptied the slot", () => {
+    // Not a judgement taken here. PS3.6 carries exactly one literal row ending
+    // `0000` - `(0002,0000)`, which is File Meta and never reaches this code -
+    // so every tag this slot could have rendered was already withheld. A slot
+    // that can never render invites a future call site to pass one.
+    expect(groupLengthInDataset.length).toBe(1);
+    const w = groupLengthInDataset(pos);
     expect(w.code).toBe(WARNING_CODES.DICOM_GROUP_LENGTH_IN_DATASET);
-  });
-
-  it("nonzeroReservedBytes reports the reserved bytes as a number, not a hex echo", () => {
-    const w = nonzeroReservedBytes(pos, 0x00, 0xff);
-    expect(w.code).toBe(WARNING_CODES.DICOM_NONZERO_RESERVED_BYTES);
-    // Reported in wire order as two numbers: composing them into one 16-bit
-    // value would have to pick an endianness the reserved field does not have.
-    expect(w.message).toContain("first byte 0");
-    expect(w.message).toContain("second byte 255");
-  });
-
-  it("nonzeroReservedBytes takes no tag at all, so no call site can pass one", () => {
-    // The bound is the SIGNATURE, not a withholding branch: the trigger for this
-    // code is "the bytes after the VR are not what PS3.5 §7.1.2 requires", so a
-    // header that raises it may not be a header, and its four tag bytes may be
-    // document content. `renderTag` checks shape and cannot refuse them.
-    expect(nonzeroReservedBytes.length).toBe(3);
-    const w = nonzeroReservedBytes({ byteOffset: 284 }, 0x10, 0x00);
     expect(w.message).not.toMatch(/[0-9A-F]{8}/u);
-    expect(w.message).toContain("Tag withheld");
+    expect(w.message).toContain("withheld");
+    expect(w.message).toContain("byte offset");
+  });
+
+  it("nonzeroReservedBytes takes neither a tag NOR the two byte values", () => {
+    // The SIXTH instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`, measured by this
+    // slice and filed nowhere before it. The tag was already bound out here
+    // because the trigger is "these bytes are not what PS3.5 7.1.2 requires", so
+    // the header may not be a header - and the two reserved bytes come off that
+    // same header. They shipped through `0.0.14` as two decimals, which is a
+    // re-encoding a reader reverses by looking at it. The bound is the
+    // SIGNATURE, so no call site can put either back.
+    expect(nonzeroReservedBytes.length).toBe(1);
+    const w = nonzeroReservedBytes({ byteOffset: 284 });
+    expect(w.code).toBe(WARNING_CODES.DICOM_NONZERO_RESERVED_BYTES);
+    expect(w.message).not.toMatch(/[0-9A-F]{8}/u);
+    expect(w.message).toContain("withheld");
+    expect(w.message).toContain("byte offset");
+    // Non-vacuity: `0.0.14`'s own template, so a green row cannot mean the
+    // pattern never matched anything.
+    const shipped =
+      "Non-zero reserved bytes between VR and length (first byte 78, second byte 32); ignoring.";
+    expect(/(?:first|second) byte \d/u.test(shipped)).toBe(true);
+    expect(/(?:first|second) byte \d/u.test(w.message)).toBe(false);
   });
 
   it("unParsedAsSQ", () => {
@@ -181,11 +210,17 @@ describe("warning factories (D-12 - one named factory per active-emit code)", ()
     expect(w.code).toBe(WARNING_CODES.DICOM_EMPTY_ITEM_IN_SEQUENCE);
   });
 
-  it("pixelDataLengthMismatch", () => {
-    const w = pixelDataLengthMismatch(pos, 524288, 524300);
+  it("pixelDataLengthMismatch keeps the COMPUTED count and drops the DECLARED length", () => {
+    // Not emitted by this build, which is the reason to bind it NOW: with no
+    // call site the change costs nothing, and a later phase switching the code
+    // on would otherwise ship `oddLengthValuePadded`'s leak one code over. The
+    // computed figure is a product this parser calculates, not a number it read.
+    expect(pixelDataLengthMismatch.length).toBe(2);
+    const w = pixelDataLengthMismatch(pos, 524300);
     expect(w.code).toBe(WARNING_CODES.DICOM_PIXEL_DATA_LENGTH_MISMATCH);
-    expect(w.message).toContain("524288");
     expect(w.message).toContain("524300");
+    expect(w.message).not.toContain("524288");
+    expect(w.message).toContain("withheld");
   });
 
   it("implicitVRForPrivateTagWithoutVR", () => {

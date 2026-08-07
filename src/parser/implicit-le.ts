@@ -282,7 +282,7 @@ export function parseImplicitLE(
 
     // TOL-10: group-length elements in non-File-Meta groups.
     if (element === 0x0000 && group !== 0x0002) {
-      emit(groupLengthInDataset(position, tag));
+      emit(groupLengthInDataset(position));
     }
 
     // Private Creator slot (gggg,0010..00FF) - register into the stack.

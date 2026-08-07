@@ -151,13 +151,15 @@ export interface ParseOptions {
    *
    * 🛑 **THE ESCALATED DIAGNOSTIC CARRIES SOURCE BYTES THAT THE WARNING DOES
    * NOT.** A `DicomParseWarning.message` is a frozen registry string with only
-   * structural tokens filled in, so it is safe to log whole **on a well-formed
-   * file, and it is not unconditionally safe**: the `{tag}` slot is filled by a
-   * shape check, which cannot refuse a tag a lying Value Length composed out of
-   * somebody's value (measured, `PRE-EXISTING`, disclosed rather than guarded
-   * because withholding the tag would take it off every private element in every
-   * conformant file). The `DicomParseError` this option raises in its place is a
-   * different and larger surface: it also carries `snippet`,
+   * structural tokens filled in: `{tag}` renders only a tag PS3.6's element
+   * registry carries a literal row for, `{vr}` only one of the 34 VRs PS3.5
+   * section 6.2 defines, and a raw length or byte value a header carries is
+   * bound out of the factory signature rather than rendered at all. **No
+   * safe-to-log verdict is stated here** - that sentence was corrected twice and
+   * is deleted rather than tried a third time; the mechanism is above and the
+   * treatment is in the package's troubleshooting docs. The `DicomParseError`
+   * this option raises in its place is a different and larger surface: it also
+   * carries `snippet`,
    * **16 raw bytes, unredacted** (D-10), read at the warning's own `byteOffset`.
    * A message-only PHI review of the lenient path therefore does not transfer to
    * the strict one. Log `err.code`, `err.byteOffset` and `err.message`; treat

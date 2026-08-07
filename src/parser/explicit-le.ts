@@ -164,7 +164,7 @@ export function _parseExplicit(
     // whose declared length is odd. Don't pad - that's the serializer's
     // job (Phase 5).
     if (length !== UNDEFINED_LENGTH && length % 2 === 1) {
-      emit(oddLengthValuePadded(position, tag, length));
+      emit(oddLengthValuePadded(position, tag));
     }
 
     // SQ branch.
@@ -326,7 +326,7 @@ export function _parseExplicit(
     // TOL-10: group-length elements in non-File-Meta groups.
     const elementHexNum = parseInt(tag.slice(4, 8), 16);
     if (elementHexNum === 0x0000 && groupNum !== 0x0002) {
-      emit(groupLengthInDataset(position, tag));
+      emit(groupLengthInDataset(position));
     }
 
     // Private Creator slot (gggg,0010..00FF) - register into the stack.
