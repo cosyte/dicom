@@ -24,6 +24,18 @@ import type { Tag, VR } from "../dictionary/types.js";
  * `(0002,0102)` Private Information - is captured here as raw bytes (the
  * on-wire value, even-length per PS3.5 §6.2) rather than dropped. `value` is a
  * defensive copy, so the view never aliases the parsed input buffer.
+ *
+ * @example
+ * ```ts
+ * import { parseDicom } from "@cosyte/dicom";
+ * const ds = parseDicom(buf);
+ * // Anything the typed FileMeta fields do not model, in ascending tag order.
+ * for (const raw of ds.fileMeta?.extraElements ?? []) {
+ *   raw.tag; // e.g. "00020017" Source Application Entity Title
+ *   raw.vr; // the VR the source wrote (File Meta is always Explicit VR LE)
+ *   raw.value.length; // even, per PS3.5 2026c section 7.1.1
+ * }
+ * ```
  */
 export interface FileMetaRawElement {
   /** 8-char uppercase hex tag, e.g. `"00020100"`. */

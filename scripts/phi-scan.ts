@@ -2,10 +2,16 @@
 /**
  * Phase 1 Plan 04 PHI scanner - TEST-09 CI-scan half.
  *
- * Pure Node. Zero runtime deps. Walks committed/staged DICOM fixtures and
- * non-DICOM data files under `test/fixtures/**` and rejects:
+ * Pure Node. Zero runtime deps. Walks two corpora and rejects:
  *   1. PN values not matching the synthetic allow-list (scripts/phi-allow-list.txt)
  *   2. DA / DT values within the last 120 years of TODAY
+ *
+ * THE TWO CORPORA:
+ *   - `test/fixtures/**`  - committed/staged DICOM fixtures and non-DICOM data files.
+ *   - `README.md` + `docs-content/**` - the DOC corpus. The documentation ships DICOM
+ *     objects as base64-encoded Part 10 buffers inline in markdown, so a recipe needs no
+ *     `.dcm` on disk; those buffers are fixtures in every respect that matters here, and
+ *     the text sweep alone cannot see into one (see `scanEmbeddedObjects`).
  *
  * SECURITY: All git invocations use execFileSync with array args. Never any
  * shell-form spawn. The single subprocess this script makes is `git`, called
@@ -15,7 +21,7 @@
  *   --staged                 - scan only files staged in `git diff --cached`
  *   --allow-fixture <path>   - bypass for one path; rejected if not logged in phi-scan-overrides.md
  *   <path> [<path>...]       - scan specific paths
- *   (no args)                - scan all test/fixtures/** files in the working tree
+ *   (no args)                - scan both corpora in the working tree
  *
  * Exit codes: 0 (clean), 1 (hits found), 2 (invocation error).
  *
@@ -91,6 +97,31 @@ const ALLOW_LIST_PATH = join(REPO_ROOT, "scripts", "phi-allow-list.txt");
 const OVERRIDE_LOG_PATH = join(REPO_ROOT, "phi-scan-overrides.md");
 const FIXTURE_ROOT = join(REPO_ROOT, "test", "fixtures");
 const CUTOFF_YEAR = new Date().getFullYear() - 120;
+
+/**
+ * THE DOC CORPUS. Roadmap Phase 8 requires that "the PHI scanner covers doc fixtures", and the
+ * documentation ships DICOM objects the same way the test suite does: as base64-encoded Part 10
+ * buffers inline in markdown, so a recipe needs no `.dcm` file on disk. Those buffers are fixtures
+ * in every respect that matters here, and until this route existed the scanner never opened one.
+ *
+ * `README.md` is in the corpus even though the fixture walk deliberately skips a `readme.md`. That
+ * exemption is about a file that DOCUMENTS violator values (`test/fixtures/phi-scan/README.md` names
+ * the SMITH^JOHN fixtures on purpose); the package's own README is the npm-visible front page and
+ * carries no such role. `docs-content/` is walked whole rather than filtered to `.md`, because
+ * `scanTarget` already dispatches by content and a doc asset that is not markdown is still a doc
+ * asset.
+ */
+const DOC_ROOTS = [join(REPO_ROOT, "README.md"), join(REPO_ROOT, "docs-content")];
+
+/** The same roots as `DOC_ROOTS`, repo-relative, for the `--staged` scope test. */
+const DOC_SCOPE = ["README.md", "docs-content"];
+
+/**
+ * A base64 run long enough to be a Part 10 object rather than an identifier or a hash. The smallest
+ * fixture the docs ship decodes to 202 bytes, so the floor is set well below that and the decode
+ * itself does the real filtering: a run that does not decode to something DICOM-shaped is dropped.
+ */
+const MIN_BASE64_RUN = 120;
 
 // Hardcoded PN/DA/DT tags. We intentionally avoid depending on the generated
 // Dictionary (which may regenerate within the same CI build). Tags are stored
@@ -308,8 +339,12 @@ function direntKind(e: Dirent): string {
 function enumerateAll(): { files: string[]; unscannable: Unscannable[] } {
   const files: string[] = [];
   const unscannable: Unscannable[] = [];
-  if (!existsSync(FIXTURE_ROOT)) return { files, unscannable };
-  walk(FIXTURE_ROOT, files, unscannable);
+  if (existsSync(FIXTURE_ROOT)) walk(FIXTURE_ROOT, files, unscannable, true);
+  for (const root of DOC_ROOTS) {
+    if (!existsSync(root)) continue;
+    if (statSync(root).isDirectory()) walk(root, files, unscannable, false);
+    else files.push(root);
+  }
   return { files, unscannable };
 }
 
@@ -319,18 +354,22 @@ function enumerateAll(): { files: string[]; unscannable: Unscannable[] } {
  * collected into `unscannable` rather than dropped, so the caller can refuse
  * instead of reporting clean over it.
  */
-function walk(dir: string, out: string[], unscannable: Unscannable[]): void {
+function walk(dir: string, out: string[], unscannable: Unscannable[], skipReadme: boolean): void {
   const entries = readdirSync(dir, { withFileTypes: true });
   for (const e of entries) {
     const full = join(dir, e.name);
     if (e.isDirectory()) {
-      walk(full, out, unscannable);
+      walk(full, out, unscannable, skipReadme);
     } else if (e.isFile()) {
-      // Skip README.md files: they're documentation that may legitimately
-      // describe synthetic violator values (e.g., this repo's
+      // Skip README.md files under the FIXTURE root: they're documentation that
+      // may legitimately describe synthetic violator values (e.g., this repo's
       // `test/fixtures/phi-scan/README.md` documents the SMITH^JOHN /
       // 20250612 fixtures). Documentation is not a fixture.
-      if (e.name.toLowerCase() === "readme.md") continue;
+      //
+      // The DOC corpus is walked with this off, because there the documentation
+      // IS the corpus: a doc that carried a violator value would be exactly the
+      // thing the doc route was added to catch.
+      if (skipReadme && e.name.toLowerCase() === "readme.md") continue;
       out.push(full);
     } else {
       // Deliberately NOT subject to the `readme.md` exemption above. That
@@ -535,8 +574,12 @@ function buildTargetsForStaged(): Target[] {
   // gitlink, and the prefix test alone let that through (measured: exit 0 over a
   // staged mode-120000 `test/fixtures`). Only the "never a directory" half is
   // load-bearing for the `===` test; the other three are all handled below.
-  const inScope = staged.filter(
-    (s) => s.path === "test/fixtures" || s.path.startsWith("test/fixtures/"),
+  // The doc corpus joins the fixture corpus here on the same terms: the root's own path as well as
+  // everything under it, so a `docs-content` replaced by a blob, a link or a gitlink is refused
+  // rather than skipped. `README.md` is a file, so only the `===` half can ever match it.
+  const roots = ["test/fixtures", ...DOC_SCOPE];
+  const inScope = staged.filter((s) =>
+    roots.some((root) => s.path === root || s.path.startsWith(`${root}/`)),
   );
 
   refuseUnscannable(
@@ -721,13 +764,30 @@ function inspectElement(
   }
 }
 
-function scanDicom(target: Target, buf: Buffer, allow: AllowList, hits: Hit[]): void {
-  // Walk File Meta group (always Explicit VR LE) starting at offset 132.
-  // Then walk the dataset, dispatching by transfer syntax UID found in
-  // (0002,0010).
-  if (!isDicom(buf)) return;
+/**
+ * Where the File Meta group starts, or `null` when the bytes are not a DICOM stream at all.
+ *
+ * A Part 10 object begins its File Meta group at 132, after the preamble and `DICM`. A **preamble-
+ * less** stream begins it at 0, which is a deviation this package tolerates on the read path and
+ * therefore one the documentation demonstrates: `docs-content/cookbook.md` ships exactly such a
+ * fixture to show the `DICOM_MISSING_PREAMBLE` warning. Recognizing only the first shape would have
+ * left that fixture unscanned while the gate reported clean, which is the failure mode this whole
+ * script is written against.
+ */
+function fileMetaStart(buf: Buffer): number | null {
+  if (isDicom(buf)) return 132;
+  if (buf.length >= 8 && buf.readUInt16LE(0) === 0x0002) return 0;
+  return null;
+}
 
-  let offset = 132;
+function scanDicom(target: Target, buf: Buffer, allow: AllowList, hits: Hit[]): void {
+  // Walk File Meta group (always Explicit VR LE) starting after the preamble, or at 0 for a
+  // preamble-less stream. Then walk the dataset, dispatching by transfer syntax UID found in
+  // (0002,0010).
+  const start = fileMetaStart(buf);
+  if (start === null) return;
+
+  let offset = start;
   let transferSyntax = "1.2.840.10008.1.2.1"; // default Explicit VR LE
 
   // Walk file meta - group 0002 only, Explicit VR LE.
@@ -831,6 +891,37 @@ function scanText(target: Target, content: string, allow: AllowList, hits: Hit[]
 // Dispatch
 // ---------------------------------------------------------------------------
 
+/**
+ * Decode every base64 run in a text file and scan the ones that are DICOM objects.
+ *
+ * THIS IS THE DOC-FIXTURE ROUTE, AND WITHOUT IT THE DOC CORPUS SCANS CLEAN BY CONSTRUCTION.
+ * A doc fixture is a Part 10 object encoded as base64 and pasted inline, so to the text scanner it
+ * is one long alphanumeric token: no `FAMILY^GIVEN`, no `YYYYMMDD`, nothing to match. The values
+ * inside it are exactly as identifying as the ones in a `.dcm` under `test/fixtures/`.
+ *
+ * A run that does not decode to a DICOM stream is dropped in silence rather than reported. There is
+ * no evidence in an arbitrary base64 blob about what it is, and a scanner that guessed would spend
+ * its credibility on false hits over checksums and image data.
+ */
+function scanEmbeddedObjects(target: Target, text: string, allow: AllowList, hits: Hit[]): void {
+  for (const m of text.matchAll(/[A-Za-z0-9+/]{120,}={0,2}/g)) {
+    const run = m[0];
+    if (run.length < MIN_BASE64_RUN) continue;
+    let decoded: Buffer;
+    try {
+      decoded = Buffer.from(run, "base64");
+    } catch {
+      continue;
+    }
+    if (fileMetaStart(decoded) === null) continue;
+    // The hit's `path` stays the markdown file's, because that is the file a developer has to edit.
+    // The offset a hit carries is into the DECODED object, which is the only frame in which the
+    // element it names has one; the run's own index is not reported, deliberately, since a second
+    // number in the same message reads as though one of them located the value in the source.
+    scanDicom(target, decoded, allow, hits);
+  }
+}
+
 function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
   let buf: Buffer;
   try {
@@ -849,7 +940,9 @@ function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
       scanText(target, buf.toString("utf8"), allow, hits);
     }
   } else if (ext === ".json" || ext === ".txt" || ext === ".md" || ext === ".csv") {
-    scanText(target, buf.toString("utf8"), allow, hits);
+    const text = buf.toString("utf8");
+    scanText(target, text, allow, hits);
+    scanEmbeddedObjects(target, text, allow, hits);
   } else {
     // Unknown extension - try DICOM magic, else text.
     if (isDicom(buf)) {

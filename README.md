@@ -16,6 +16,8 @@
 
 A developer-focused DICOM Part 10 parser and utility library for Node.js and TypeScript. **Metadata-first**: it reads the headers (patient, study, series, image, codes, UIDs) leniently and fast, exposes pixel data as raw bytes, and **never decodes pixels**. Sibling to [`@cosyte/hl7`](https://github.com/cosyte/hl7); same engineering bar.
 
+> **Before you point this at real data, read [Known limitations](#known-limitations--non-goals).** Mis-reading a patient identifier, an image's signedness, or a rescale slope can cause real clinical harm, so the boundary is a deliverable here rather than a footnote: what is out of scope, which PHI residuals are measured-and-open, and which fields are not safe to log. A de-identified output from this package is **metadata-de-identified only**.
+
 ---
 
 ## Quickstart
@@ -157,7 +159,7 @@ A quirky object is tolerated rather than rejected, and absent fields come back `
 
 ### Build routing keys
 
-Routing and reconciliation hang off a small set of identifiers. Surface them correctly: a Patient ID without its issuer is ambiguous across systems (PS3.3 C.7.1.1).
+Routing and reconciliation hang off a small set of identifiers. Surface them correctly: a Patient ID without its issuer is ambiguous across systems. The two attributes are `(0010,0020)` Patient ID and `(0010,0021)` Issuer of Patient ID in the PS3.6 2026c registry, which is vendored and SHA-pinned here; the module that requires them to be read together is in PS3.3, which is **not** vendored here, so no clause number is claimed for it.
 
 ```ts
 // Hierarchy keys for filing into Study → Series → Instance:
@@ -187,7 +189,7 @@ img.pixelSpacing; // (0028,0030) patient-plane mm, distinct from imagerPixelSpac
 
 > **Vendor note.** Philips writes private rescale tags `(2005,1409/140A/140B)` that shadow the standard `(0028,1052/1053)`; using the standard tags alone can yield non-quantitative values. This parser **preserves** the private tags so you can prefer them. Reach them with `ds.get("20051409")` (optionally under `profiles.philips`).
 
-For Enhanced multi-frame objects, `image.frame(i)` resolves each frame's functional-group macros Per-Frame-else-Shared (PS3.3 C.7.6.16). It throws a `DicomValueError` (carrying only structural facts, never PHI) for an out-of-range frame or a required geometry macro missing from both groups.
+For Enhanced multi-frame objects, `image.frame(i)` resolves each frame's functional-group macros Per-Frame first and Shared second. The functional-group macros are defined in PS3.3, which is **not** vendored here, so no clause number is claimed for them. It throws a `DicomValueError` (carrying only structural facts, never PHI) for an out-of-range frame or a required geometry macro missing from both groups.
 
 ```ts
 if (img.isEnhancedMultiFrame) {
@@ -307,7 +309,7 @@ At an RSNA-era interoperability test, ~80% of real-world patient CDs failed stri
 | 2    | Warning        | Recoverable deviation          | `DICOM_MISSING_PREAMBLE` |
 | 3    | Fatal (always) | Unrecoverable structural error | `NOT_DICOM_PART_10`      |
 
-Tier-2 warnings are plain data on `ds.warnings`. Each carries a stable string `code`, a `message` looked up from a frozen registry (never composed from the document), and a `position` with the byte offset where it occurred, so you can react programmatically:
+Tier-2 warnings are plain data on `ds.warnings`. Each carries a stable string `code`, a `message` looked up from a frozen registry, and a `position` with the byte offset where it occurred, so you can react programmatically. **The message is safe to log on a well-formed file and is not unconditionally safe**: the registry's `{tag}` slot is filled by a shape check, and a shape check cannot refuse a tag that a lying Value Length composed out of somebody's value. Measured: an `ST` carrying a name whose Value Length under-declares desynchronizes the reader onto a fabricated header at an odd group, and `DICOM_PRIVATE_TAG_NO_CREATOR` renders four bytes of that payload as the tag. It is disclosed rather than guarded, because withholding the tag would take it off every private element in every conformant file. `w.code` and `w.position` carry nothing from the document. If you log messages from untrusted files verbatim, treat a tag in one as document-derived.
 
 ```ts
 import { parseDicom, WARNING_CODES } from "@cosyte/dicom";

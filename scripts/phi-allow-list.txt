@@ -10,6 +10,11 @@
 ANON^
 TEST^
 DOE^
+# The documentation writes the same synthetic family name in title case, which is what a
+# reader sees in a rendered example. Matching is case-sensitive by design, so the case the
+# docs use is listed rather than the comparison being loosened: loosening it would admit
+# every casing of every name on this list, which is the wrong direction for an allow-list.
+Doe^
 SYNTHETIC^
 PHANTOM^
 

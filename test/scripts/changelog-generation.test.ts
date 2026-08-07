@@ -541,9 +541,20 @@ describe("the Prettier pass, derived for this repo rather than copied", () => {
     expect(info.inferredParser).toBe("markdown");
   });
 
-  it("keeps the committed changelog Prettier-canonical, which is what makes leaving it on safe", async () => {
-    await expect(formatCheckAccepts(changelog)).resolves.toBe(true);
-  });
+  // ITS OWN BUDGET RATHER THAN A RAISED GLOBAL, per the block above `export default` in
+  // `vitest.config.ts`. Formatting the whole committed changelog is the single most expensive
+  // assertion in this file, and it timed out at the 10s default during a full `verify.sh` run on a
+  // box running several suites at once, while passing in 15.6s for the WHOLE file when run alone.
+  // That is a budget that asserts an idle box, which is exactly what that policy exists to stop.
+  const CHANGELOG_FORMAT_BUDGET_MS = 60_000;
+
+  it(
+    "keeps the committed changelog Prettier-canonical, which is what makes leaving it on safe",
+    async () => {
+      await expect(formatCheckAccepts(changelog)).resolves.toBe(true);
+    },
+    CHANGELOG_FORMAT_BUDGET_MS,
+  );
 
   it("has NO second net in the version script, which is why the pass must stay on", () => {
     // THIS IS WHERE THIS REPO DIFFERS FROM THREE OF ITS SIBLINGS AND THE DIFFERENCE DECIDES THE

@@ -225,6 +225,105 @@ describe("phi-scan: non-DICOM file regex sweep", () => {
   });
 });
 
+/**
+ * THE DOC-FIXTURE ROUTE.
+ *
+ * The documentation ships DICOM objects the same way the test suite does, as base64-encoded Part 10
+ * buffers pasted inline in markdown, and until this route existed the scanner never opened one: to
+ * the text sweep a base64 run is one long alphanumeric token with no `FAMILY^GIVEN` and no
+ * `YYYYMMDD` in it. That is the shape of a gate that reports clean over a corpus it never read.
+ *
+ * EVERY PAYLOAD HERE CARRIES A NAME. A PHI test whose fixture holds nothing identifying is vacuous
+ * by construction, so the violators use `SMITH^JOHN`, which is not on the allow-list, and each is
+ * paired with the control that turns the same run green.
+ */
+describe("phi-scan: doc fixtures (base64 DICOM inside markdown)", () => {
+  let docDir: string;
+
+  beforeAll(() => {
+    docDir = realpathSync(mkdtempSync(join(tmpdir(), "dicom-phi-scan-docs-")));
+  });
+
+  afterAll(() => {
+    rmSync(docDir, { recursive: true, force: true });
+  });
+
+  /** A markdown page shaped like this package's own docs: prose, then a runnable base64 fixture. */
+  function writeDoc(name: string, object: Buffer): string {
+    const path = join(docDir, name);
+    writeFileSync(
+      path,
+      [
+        "# Recipe",
+        "",
+        "```ts runnable",
+        'import { parseDicom } from "@cosyte/dicom";',
+        "",
+        "const buf = Buffer.from(",
+        `  "${object.toString("base64")}",`,
+        '  "base64",',
+        ");",
+        "",
+        "parseDicom(buf);",
+        "```",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    return path;
+  }
+
+  it("a non-allow-listed PN inside a base64 doc fixture is a hit (exit 1)", () => {
+    const path = writeDoc("violator.md", buildDicomFixture("19000101", "SMITH^JOHN"));
+    const r = runScanner([path]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/\(0010,0010\)/);
+  });
+
+  it("a recent StudyDate inside a base64 doc fixture is a hit (exit 1)", () => {
+    const path = writeDoc("recent.md", buildDicomFixture("20250612", "ANON^PATIENT"));
+    const r = runScanner([path]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/\(0008,0020\)/);
+  });
+
+  it("a PREAMBLE-LESS object is scanned too, which is the shape the cookbook ships", () => {
+    // `docs-content/cookbook.md` demonstrates DICOM_MISSING_PREAMBLE with an object whose File Meta
+    // group starts at byte 0. Recognizing only the `DICM`-at-128 shape would leave that one
+    // unscanned while the gate reported clean.
+    const bare = buildDicomFixture("19000101", "SMITH^JOHN").subarray(132);
+    expect(bare.toString("ascii", 0, 4)).not.toBe("DICM");
+    const path = writeDoc("no-preamble.md", bare);
+    const r = runScanner([path]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/\(0010,0010\)/);
+  });
+
+  it("the same doc with an allow-listed payload scans clean (exit 0)", () => {
+    const path = writeDoc("clean.md", buildDicomFixture("19000101", "ANON^PATIENT"));
+    const r = runScanner([path]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+
+  it("the TEXT sweep alone would not have caught it, so the decode is what does the work", () => {
+    // The control that makes the three hits above mean something. The violating name is present in
+    // the file only as base64, so a scanner without the decode route reads the page as clean.
+    const object = buildDicomFixture("19000101", "SMITH^JOHN");
+    const path = writeDoc("evidence.md", object);
+    expect(readFileSync(path, "utf8")).not.toMatch(/SMITH\^JOHN/);
+    expect(object.toString("latin1")).toMatch(/SMITH\^JOHN/);
+  });
+
+  it("a base64 run that is not a DICOM object is dropped in silence, not guessed at", () => {
+    const path = join(docDir, "not-dicom.md");
+    // A long base64 run of arbitrary bytes: an image, a checksum, a key. Nothing in it is evidence
+    // about what it is, so a scanner that guessed would spend its credibility on false hits.
+    writeFileSync(path, `\`\`\`\n${Buffer.alloc(400, 0x41).toString("base64")}\n\`\`\`\n`, "utf8");
+    const r = runScanner([path]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+});
+
 describe("phi-scan: --allow-fixture override (D-17)", () => {
   it("rejects --allow-fixture without an override-log entry (exit 2)", () => {
     const r = runScanner(["--allow-fixture", join(FIX_DIR, "recent-date-violator.dcm")]);

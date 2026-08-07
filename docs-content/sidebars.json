@@ -13,6 +13,12 @@
     },
     {
       "type": "category",
+      "label": "Known limitations",
+      "collapsed": false,
+      "items": ["limitations"]
+    },
+    {
+      "type": "category",
       "label": "Core Concepts",
       "collapsed": false,
       "items": [
