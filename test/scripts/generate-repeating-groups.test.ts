@@ -26,52 +26,57 @@
  * Plus the delegation itself: the curve bound is only taken from a 2004 document
  * because the edition in force points at it, so removing that pointer must fail.
  *
- * Both generators write into src/dictionary/generated/. Every helper restores the
- * committed artifact and the pinned SHA in a `finally`. A run killed with SIGKILL
- * mid-mutation can still leave a repointed `SHA.txt` and a mutant directory
- * behind; all of it shows up in `git status`.
+ * 🛑 EVERY BYTE THIS FILE WRITES GOES INTO A SANDBOX, AND THE WORKING TREE IS READ
+ * ONLY. Every mutation above is a mutation of a document another worker may be
+ * reading: vitest runs test files in parallel, and an earlier shape of this file
+ * mutated `vendor/nema/part05/` and `vendor/nema/part05-2004/` in place, plus
+ * `src/dictionary/generated/`, while `generate-annex-e.test.ts`,
+ * `test/docs/spec-citations.test.ts` and the shipped library itself were reading
+ * exactly those paths. That is `DICOM-ANNEX-E-TEST-RACE`;
+ * `test/helpers/generator-sandbox.ts` carries the measurement and the reason the
+ * remedy is relocation rather than a softer pin on either side. Do not reach back
+ * into `REPO_ROOT` for anything this suite writes.
  *
- * TWO SHAPES OF RESIDUAL, and the second is worse, so state it separately. The
- * `withMutated*` helpers never touch the pinned file: they write a mutant into its
- * own SHA-named directory and repoint `SHA.txt`, so the worst case is a dangling
- * POINTER. The pin-content test below is different in kind: it writes over
- * `vendor/nema/part05/<sha>/part05.xml` and `.../04_05pu.pdf` themselves, because
- * corrupting the bytes at the pinned path is the only way to reach the content
- * re-hash. Its worst case is therefore a CORRUPTED NORMATIVE DOCUMENT on disk. That
- * is bounded three ways: the restore is in a `finally`, the restore is then proved
- * by re-hashing against the pin, and any escape is loud everywhere it matters
- * (`git status`, the next generator run, and the CI regen gate). Do not copy that
- * test's shape for anything that does not specifically need to defeat the re-hash.
+ * The `finally` restores stay, and so does the re-hash that proves the pin-content
+ * test put its document back. They are no longer what stands between a crashed run
+ * and a corrupted normative document in `git status` - nothing outside the sandbox
+ * is opened for writing - but the tests after each mutation still read the sandbox
+ * and are entitled to find it as the committed tree left it, and a silently
+ * half-restored document would have them reading a standard nobody verified.
  *
- * DISCLOSED RESIDUAL, because a known flake is worth more written down than found
- * twice. The curve-bound test below leaves `src/dictionary/generated/repeating-groups.ts`
- * holding `lowMax: 0x0e` for the few milliseconds between the generator writing it
- * and the `finally` restoring it. `generate-annex-e.test.ts` asserts that the Annex E
- * generator prints "over groups 5000-501E even (16)", a statistic it computes from
- * that same live file, and vitest runs test files in parallel. So the two CAN race,
- * and the loser is a red run rather than a wrong artifact: it fails closed, and the
- * committed output is restored either way. Not fixed here because the obvious fix is
- * an output-path override on the generator, which would add an input to a script the
- * byte-identical regen gate depends on, and that trade is worse than a rare, loud,
- * self-restoring flake. If it does start biting, prefer making the two files share a
- * worker over adding that override.
+ * THE DISCLOSED FLAKE IS FIXED AND ITS DISCLOSURE IS DELETED RATHER THAN REWORDED.
+ * The curve-bound test used to leave the live `repeating-groups.ts` holding
+ * `lowMax: 0x0e` for the milliseconds between the generator writing it and the
+ * `finally` restoring it, while `generate-annex-e.test.ts` asserted a statistic its
+ * generator computes from that same file. It was declined then because the obvious
+ * fix was an output-path override on a script the byte-identical regen gate depends
+ * on. Relocating the whole tree costs the generators no new input at all, so that
+ * trade is not the one on the table any more.
  */
 
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import { deflateSync, inflateSync } from "node:zlib";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { createGeneratorSandbox, REPO_ROOT, type Sandbox } from "../helpers/generator-sandbox.js";
 import { runRepoScript, type ScriptResult } from "../helpers/run-script.js";
 
-const REPO_ROOT = process.cwd();
-const ARTIFACT = join(REPO_ROOT, "src", "dictionary", "generated", "repeating-groups.ts");
+/** The committed artifact, in the real tree. READ ONLY: this is the regen gate's answer. */
+const COMMITTED_ARTIFACT = join(REPO_ROOT, "src", "dictionary", "generated", "repeating-groups.ts");
 
-const PART05_ROOT = join(REPO_ROOT, "vendor", "nema", "part05");
-const PART05_SHA_FILE = join(PART05_ROOT, "SHA.txt");
-const PART05_2004_ROOT = join(REPO_ROOT, "vendor", "nema", "part05-2004");
-const PART05_2004_SHA_FILE = join(PART05_2004_ROOT, "SHA.txt");
+/**
+ * The sandbox, and the paths inside it. They are `let` rather than `const` because
+ * the sandbox root is only known once `beforeAll` has made it, and every write in
+ * this file goes through one of them.
+ */
+let sandbox: Sandbox;
+let ARTIFACT: string;
+let PART05_ROOT: string;
+let PART05_SHA_FILE: string;
+let PART05_2004_ROOT: string;
+let PART05_2004_SHA_FILE: string;
 
 /** Per-test budget for the generator run. No justification is stated, because the
  * one that used to sit here priced a `tsx` process start this suite no longer pays
@@ -80,7 +85,7 @@ const GENERATOR_TIMEOUT_MS = 120_000;
 
 /** Runner choice and its cost: `test/helpers/run-script.ts`. */
 function runGenerator(): ScriptResult {
-  return runRepoScript("generate-repeating-groups.ts");
+  return runRepoScript("generate-repeating-groups.ts", [], { root: sandbox.root });
 }
 
 function pinnedShaOf(shaFile: string): string {
@@ -199,10 +204,26 @@ describe("generate-repeating-groups", () => {
   let artifactAfter: string;
 
   beforeAll(() => {
-    artifactBefore = readFileSync(ARTIFACT, "utf8");
+    sandbox = createGeneratorSandbox("repeating-groups");
+    ARTIFACT = join(sandbox.root, "src", "dictionary", "generated", "repeating-groups.ts");
+    PART05_ROOT = join(sandbox.root, "vendor", "nema", "part05");
+    PART05_SHA_FILE = join(PART05_ROOT, "SHA.txt");
+    PART05_2004_ROOT = join(sandbox.root, "vendor", "nema", "part05-2004");
+    PART05_2004_SHA_FILE = join(PART05_2004_ROOT, "SHA.txt");
+
+    // 🛑 THE BASELINE IS THE COMMITTED FILE, NOT THE SANDBOX'S COPY OF IT. Reading
+    // the sandbox here would compare the generator's output against whatever this
+    // suite had already put there, which is a tautology the moment a mutation test
+    // leaves something behind. Read from the working tree, write into the sandbox,
+    // and the assertion still means "regenerates what is committed".
+    artifactBefore = readFileSync(COMMITTED_ARTIFACT, "utf8");
     happy = runGenerator();
     artifactAfter = readFileSync(ARTIFACT, "utf8");
   }, GENERATOR_TIMEOUT_MS);
+
+  afterAll(() => {
+    sandbox.dispose();
+  });
 
   it("regenerates the committed artifact byte for byte", () => {
     expect(happy.stderr, happy.stderr).toBe("");
@@ -426,9 +447,12 @@ describe("generate-repeating-groups", () => {
         } finally {
           writeFileSync(path, original);
         }
-        // This test writes over the NORMATIVE DOCUMENT itself, not a pointer, so a
-        // short or failed restore leaves a corrupted standard on disk. Prove the
-        // restore rather than assume it: re-hash and compare to the pin.
+        // This test writes over the document AT the pinned path rather than a
+        // pointer, so it is the one shape whose restore has to be proved rather
+        // than assumed. In the sandbox a failed restore costs the rest of this file
+        // and nothing else, which is the whole point of the sandbox; keep the
+        // re-hash anyway, because a silently half-restored document would make
+        // every later test here read a standard nobody verified.
         expect(createHash("sha256").update(readFileSync(path)).digest("hex"), path).toBe(pinned);
         // Nothing was emitted from an input that failed its own precondition.
         expect(readFileSync(ARTIFACT, "utf8"), path).toBe(before);
