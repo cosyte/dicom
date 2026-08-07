@@ -15,6 +15,16 @@ It is **metadata-first by design**. Pixel data is exposed as a raw `Buffer` (and
 transfer syntaxes, its fragments) but is **not decoded**. That, along with DIMSE networking and
 DICOMweb, is left to future companion packages.
 
+:::caution Read this before you point it at real data
+
+**[Known limitations](./limitations)** is the "do not over-trust" list: what is out of scope, which
+PHI residuals are measured and still open, and which fields are not safe to log. Mis-reading a
+patient identifier, an image's signedness, or a rescale slope can cause real clinical harm, so that
+page is a deliverable of this package rather than a footnote. A de-identified output from
+`@cosyte/dicom` is **metadata-de-identified only**.
+
+:::
+
 ## Install
 
 ```bash

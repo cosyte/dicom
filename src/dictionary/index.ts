@@ -15,6 +15,18 @@
  * throw `TypeError` in strict mode (which all of `@cosyte/dicom`'s emitted code
  * runs under, given `"use strict"` is implicit for ES modules).
  *
+ * @example
+ * ```ts
+ * import { Dictionary } from "@cosyte/dicom";
+ *
+ * // Tag or keyword, either way round, and `undefined` rather than a throw on a miss.
+ * Dictionary.lookup("00100020")?.name; // "Patient ID"
+ * Dictionary.byKeyword("Modality")?.tag; // "00080060"
+ *
+ * // UIDs resolve to their registered name, so nobody hard-codes a SOP Class table.
+ * Dictionary.uid("1.2.840.10008.5.1.4.1.1.2")?.name; // "CT Image Storage"
+ * ```
+ *
  * @module
  */
 
