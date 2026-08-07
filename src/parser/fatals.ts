@@ -40,9 +40,9 @@
  *
  * The numbers that do reach a template are named one at a time in
  * {@link FATAL_MESSAGES}, and every one of them is a library constant or a cap
- * the caller passed in. **No template takes a count measured over the bytes
- * being read**, and that is a property of the factory signatures rather than of
- * any branch inside them.
+ * the caller passed in. **No factory takes a count measured over the bytes being
+ * read**, which is a property of the signatures rather than of any branch inside
+ * them.
  *
  * ## The ninth instance: a VARIABLE shift is still the wire number
  *
@@ -51,16 +51,14 @@
  * it is not document content. But `parseSequence` hands a defined-length
  * Sequence Item's descent a **slice**, so inside one the buffer *is* that Item
  * and `buffer.length` *is* the Item's 32-bit Value (Item) Length off its own
- * header - four document bytes on exactly the files these fatals fire for, where
- * a reader has desynchronized onto a fabricated Item header. The message
- * publishes `byteOffset` beside the count and `cursor.position` is that offset
- * plus the header just read, so an addition returns the declared length.
+ * header - a raw wire field a sender wrote, which is the class this registry
+ * already refuses everywhere else. The message publishes `byteOffset` beside the
+ * count and `cursor.position` is that offset plus the header just read, so an
+ * addition returns the declared length.
  *
- * Measured on `"MR BRAIN SMITHSON "` with a planted Item Length of `21320`
- * (`"HS\0\0"`, two letters of the surname and the two zero high bytes every
- * reachable fabricated length carries): the shipped messages read `21312`,
- * `21288` and `21272` with the over-declaring element first in the Item, one
- * 24-byte element in, and one 40-byte element in. **The shift is
+ * Measured with a declared Item Length of `21320`: the shipped messages read
+ * `21312`, `21288` and `21272` with the over-declaring element first in the
+ * Item, one 24-byte element in, and one 40-byte element in. **The shift is
  * `cursor.position`, so it is variable**, which is why no fixed-offset arm on
  * the detector in `test/integration/fatal-diagnostic-surface.test.ts` can hunt
  * it: that arm covers the 8-byte case and says so on its own constant. The
@@ -157,7 +155,7 @@ interface FatalMessageEntry {
  *   own bound and not PS3.5's.
  * - `INFLATED_PAYLOAD_EXCEEDS_CAP`: `{n}` is the cap the caller passed in.
  *
- * Nothing else takes a number, no entry takes a tag, and **no entry takes a
+ * Nothing else takes a number, no entry takes a tag, and **no factory takes a
  * count measured over the bytes being read**.
  */
 const FATAL_MESSAGES = Object.freeze({
@@ -280,17 +278,20 @@ const FATAL_MESSAGES = Object.freeze({
 /**
  * The substitutions a registry template may take.
  *
- * **There is no `tag` field, no wire-length field and no field for a count
- * measured over the bytes being read, and that is the design.** `renderTag` in
- * `./warnings.ts` is a membership test against PS3.6's registry now, and it
- * would refuse a fabricated tag - but a Tier-3 fatal is raised where the
- * structure has already failed, so the absence of the slot is the bound that
+ * **There is no `tag` field and no wire-length field, and that is the design.**
+ * `renderTag` in `./warnings.ts` is a membership test against PS3.6's registry
+ * now, and it would refuse a fabricated tag - but a Tier-3 fatal is raised where
+ * the structure has already failed, so the absence of the slot is the bound that
  * does not depend on a table. A **wire length** has no such test available at
  * all, in either registry, and neither has a number derived from one: a count of
  * the bytes left in the buffer is the enclosing frame's own declared length less
- * an offset the same message publishes, wherever that frame is a slice. Every
- * field below is either a constant this library or its caller chose, or a token
- * checked for membership in a closed table before it is rendered.
+ * an offset the same message publishes, wherever that frame is a slice.
+ *
+ * `n` is the one field that is a bare number, and **it is not bound by its own
+ * type**: what keeps it clean is that the two factories which used to take a
+ * count over the document no longer accept one, and that the two which still
+ * pass an `n` pass a value this library or its caller chose. Their signatures
+ * say which is which, and `fatals.test.ts` asserts the arity of all four.
  *
  * @internal
  */
@@ -651,10 +652,10 @@ export function undefinedLengthOnNonSqImplicit(
  * loops raise this fatal inside a defined-length Sequence Item as well as at the
  * root. Inside one the buffer *is* the Item's slice, so the count is the Item's
  * own 32-bit declared length less a `cursor.position` the message publishes as
- * `byteOffset` plus the header just read. Measured on `"MR BRAIN SMITHSON "`
- * with a planted Item Length of `21320` (`"HS\0\0"`): `21312` first in the Item,
- * `21288` behind one 24-byte element, `21272` behind one 40-byte element - **a
- * variable shift**, which is why the bound is the signature and not a filter.
+ * `byteOffset` plus the header just read. Measured with a declared Item Length
+ * of `21320`: `21312` first in the Item, `21288` behind one 24-byte element,
+ * `21272` behind one 40-byte element - **a variable shift**, which is why the
+ * bound is the signature and not a filter.
  *
  * @example
  * ```ts

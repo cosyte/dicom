@@ -151,9 +151,10 @@ message texts in this release.** Through `0.0.14` `ELEMENT_LENGTH_EXCEEDS_BUFFER
 `FILE_META_GROUP_LENGTH_OVERRUNS` each printed `buffer.length - cursor.position`, defended as bounded
 by bytes actually present. That bounds the number's magnitude. The parser reads a defined-length
 Sequence Item from a **slice**, so inside one the buffer is that Item and the subtraction publishes
-the Item's own 32-bit declared length, less an offset the same message prints. Measured on a
-synthetic `"MR BRAIN SMITHSON "` with a planted Item Length of `21320`: the message read `21312`,
-`21288` or `21272` depending on where inside the Item the offending element sat. **A raw number
+the Item's own 32-bit declared length, less an offset the same message prints. That is a raw wire
+field a sender wrote, which is the class this registry refuses everywhere else. Measured with a
+declared Item Length of `21320`: the message read `21312`, `21288` or `21272` depending on where
+inside the Item the offending element sat. **A raw number
 shifted by an amount the reader can compute is that raw number, and here the amount is variable**, so
 the slot is gone from both signatures rather than filtered. The cost is stated where it falls:
 `FILE_META_GROUP_LENGTH_OVERRUNS` is raised at the root, where that count was the caller's own input

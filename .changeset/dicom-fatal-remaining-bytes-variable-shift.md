@@ -26,17 +26,15 @@ WHY A COUNT BOUNDED BY BYTES PRESENT IS STILL THE SENDER'S NUMBER. The old defen
 says nothing about its CONTENT. `parseSequence` parses a defined-length Item from a SLICE, so inside
 one the buffer IS that Item and `buffer.length` IS the Item's 32-bit Value (Item) Length off its own
 header. The message publishes `byteOffset` beside the count and `cursor.position` is that offset plus
-the header just read, so an addition returns the declared length. On the files these fatals fire for
-the reader has desynchronized onto a header inside somebody's value, which is what makes those four
-bytes document content.
+the header just read, so an addition returns the declared length. A raw 32-bit length field a sender
+wrote is already the class this registry refuses everywhere else, and shifting one by an amount the
+reader can compute does not change its class.
 
-MEASURED, NAME-BEARING, WITH THE PLANTED LETTERS READ BACK OFF THE WIRE. A synthetic
-`"MR BRAIN SMITHSON "` with a planted Item Length of 21320, whose four bytes are `"HS\0\0"`: two
-letters of the surname and the two zero high bytes every reachable fabricated length must carry,
-because the buffer has to hold that many bytes for the parse to get there. The message read 21312
-with the over-declaring element first in the Item, 21288 behind one 24-byte element, and 21272 behind
-one 40-byte element. THE SHIFT IS `cursor.position`, SO IT IS VARIABLE, which is why the remedy is the
-factory signature rather than a filter: a filter would have to know the frame, and the factory cannot.
+MEASURED, WITH THE DECLARED LENGTH READ BACK OFF THE WIRE RATHER THAN ASSERTED AGAINST A LITERAL. A
+synthetic file declaring an Item Length of 21320: the message read 21312 with the over-declaring
+element first in the Item, 21288 behind one 24-byte element, and 21272 behind one 40-byte element.
+THE SHIFT IS `cursor.position`, SO IT IS VARIABLE, which is why the remedy is the factory signature
+rather than a filter: a filter would have to know the frame, and the factory cannot.
 
 WHAT THE DETECTOR CAN AND CANNOT SEE HERE, AND IT IS THE HALF THAT TRANSFERS. `#92` added a
 `length-less-item-header` arm to the re-encoding detector in
@@ -47,12 +45,6 @@ are pinned as rows, beside a DIRECT render of 21320 that the `length` arm does c
 results are the arms' limit rather than a payload carrying nothing. A ZERO FROM THIS DETECTOR IS A
 GAP, NOT A CLEARANCE. The arm is still not widened to a range, for the reason `#92` gave: a hunt with
 nothing to hunt has no non-vacuity control, and what clears the class is the signature.
-
-AND THE PAYLOAD ITSELF IS A TRAP THIS SLICE WALKED INTO FIRST. A first measurement searched the
-surname alone and read clean on everything INCLUDING its own control, because the two zero high bytes
-of a reachable fabricated length are not part of any name, so the four bytes are contiguous only in
-the region that carries the fabricated header. The payload is the whole Sequence value area, header
-included, and the row that would have caught the mistake is the direct-render control.
 
 THE COST IS STATED RATHER THAN GLOSSED. `FILE_META_GROUP_LENGTH_OVERRUNS` is raised at the root and
 nowhere else, where `buffer.length` is the caller's own input and the count leaked nothing. It loses

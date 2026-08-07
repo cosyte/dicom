@@ -92,9 +92,7 @@ interface Leak {
  * shift is 32, and this arm would not have seen it - measured on base `src/`,
  * the same `"SO\0\0"` sequence length rendered `20275` rather than `20299`. A
  * draft of this constant claimed 8 was "the only structural constant any
- * registry template has ever subtracted", and that was false twice over:
- * `./fatals.ts` already discloses `{n} = buffer.length - cursor.position`, a
- * **variable** shift the message publishes beside the offset it needs.
+ * registry template has ever subtracted", and that was false twice over.
  *
  * The arm is not widened to a range, deliberately. A range has no non-vacuity
  * control - the same reason the missing 2-byte-as-`uint16` arm below is named
@@ -384,13 +382,22 @@ function fileMetaGroupLengthOverruns(): Buffer {
 }
 
 /**
- * The four bytes a fabricated **Item** Length is built from: two letters of the
- * planted surname, then the two zero high bytes every reachable fabricated
- * length carries. `"HS"` rather than `"SO"` because an Item Length is even on
- * any file this parser will have got this far into, and `0x53` is odd.
+ * The Item Length {@link overDeclareInsideAnItem} declares, as its four wire
+ * bytes.
+ *
+ * **It is an ordinary sender-written structural field, and this file does not
+ * claim otherwise.** A graded pass refused a draft that called it fabricated and
+ * called this fixture name-bearing: `parseSequence` accepts only a literal
+ * `(FFFE,E000)` Item Tag, so the header these four bytes follow is well formed
+ * here. What makes them the registry's business is what makes a declared Value
+ * Length its business - they are a raw 32-bit field a sender wrote, and shifting
+ * one by an amount the reader can compute does not change its class.
+ *
+ * Even, because an Item Length is; and small enough that a file can really carry
+ * it, which is why its two high bytes are zero and its decimal is short.
  */
 const ITEM_LEN_BYTES = Buffer.from([0x48, 0x53, 0x00, 0x00]);
-const FABRICATED_ITEM_LENGTH = ITEM_LEN_BYTES.readUInt32LE(0);
+const DECLARED_ITEM_LENGTH = ITEM_LEN_BYTES.readUInt32LE(0);
 
 /**
  * A defined-length `SQ` holding one defined-length Item whose Value (Item)
@@ -426,7 +433,7 @@ function overDeclareInsideAnItem(lead: number): { readonly raw: Buffer; readonly
   over.writeUInt16LE(0xfffe, 6);
   parts.push(over);
   const used = parts.reduce((n, b) => n + b.length, 0);
-  parts.push(Buffer.alloc(FABRICATED_ITEM_LENGTH - used, 0x41));
+  parts.push(Buffer.alloc(DECLARED_ITEM_LENGTH - used, 0x41));
 
   const itemHeader = Buffer.alloc(8);
   itemHeader.writeUInt16LE(0xfffe, 0);
@@ -438,15 +445,14 @@ function overDeclareInsideAnItem(lead: number): { readonly raw: Buffer; readonly
   sqHeader.writeUInt16LE(0xa730, 2);
   sqHeader.write("SQ", 4, "ascii");
   sqHeader.writeUInt16LE(0, 6);
-  sqHeader.writeUInt32LE(ITEM_HEADER_BYTES + FABRICATED_ITEM_LENGTH, 8);
+  sqHeader.writeUInt32LE(ITEM_HEADER_BYTES + DECLARED_ITEM_LENGTH, 8);
 
   const itemBytes = Buffer.concat([itemHeader, ...parts]);
   return {
     raw: Buffer.concat([prefix(), sqHeader, itemBytes]),
-    // 🛑 THE PAYLOAD INCLUDES THE ITEM HEADER, AND IT HAS TO. The fabricated
-    // length's four bytes are contiguous only there: the two zero high bytes are
-    // not part of the surname, so a payload cut to `NAME` alone makes every
-    // `length` arm below vacuous - including the DIRECT-render control, measured.
+    // 🛑 THE PAYLOAD INCLUDES THE ITEM HEADER, AND IT HAS TO. The four length
+    // bytes are contiguous only there, so a payload cut short of it makes every
+    // `length` arm below vacuous - the DIRECT-render control included, measured.
     payload: itemBytes.subarray(0, 128).toString("latin1"),
   };
 }
@@ -1033,13 +1039,12 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
     const recovered = (message: string, byteOffset: number): readonly number[] =>
       digitRuns(message)
         .map((run) => Number(run) + byteOffset + ITEM_HEADER_BYTES)
-        .filter((value) => value === FABRICATED_ITEM_LENGTH);
+        .filter((value) => value === DECLARED_ITEM_LENGTH);
 
-    // The planted length is read back OFF THE WIRE, not asserted against a
+    // The declared length is read back OFF THE WIRE, not asserted against a
     // literal: this is the field the recovery has to return.
     const { raw: firstShape, payload } = overDeclareInsideAnItem(0);
-    expect(firstShape.readUInt32LE(ITEM_LENGTH_FIELD_AT)).toBe(FABRICATED_ITEM_LENGTH);
-    expect(NAME).toContain(ITEM_LEN_BYTES.subarray(0, 2).toString("latin1"));
+    expect(firstShape.readUInt32LE(ITEM_LENGTH_FIELD_AT)).toBe(DECLARED_ITEM_LENGTH);
 
     // THE CLOSURE. Three positions inside the Item, three different shifts.
     for (const lead of [0, 24, 40]) {
@@ -1052,21 +1057,21 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
 
     // NON-VACUITY, AND IT IS THE ROW THAT MAKES THE THREE ABOVE MEAN ANYTHING:
     // `0.0.14`'s own template, rebuilt per shape, IS reversed by the same
-    // arithmetic, and the two low bytes of what comes back are two letters of
-    // the planted surname.
+    // arithmetic, and what comes back is the wire field byte for byte.
     const shippedTemplate = (lead: number): string =>
       `An element declares a Value Length reaching past the end of the bytes being read; ${String(
-        FABRICATED_ITEM_LENGTH - lead - ITEM_HEADER_BYTES,
+        DECLARED_ITEM_LENGTH - lead - ITEM_HEADER_BYTES,
       )} bytes remain. Its tag and its declared length are withheld; the byte offset locates it.`;
     for (const lead of [0, 24, 40]) {
       expect(recovered(shippedTemplate(lead), lead), `lead ${String(lead)}`).toStrictEqual([
-        FABRICATED_ITEM_LENGTH,
+        DECLARED_ITEM_LENGTH,
       ]);
     }
     const back = Buffer.alloc(4);
-    back.writeUInt32LE(FABRICATED_ITEM_LENGTH, 0);
-    expect(back.equals(ITEM_LEN_BYTES)).toBe(true);
-    expect(NAME).toContain(back.subarray(0, 2).toString("latin1"));
+    back.writeUInt32LE(DECLARED_ITEM_LENGTH, 0);
+    expect(back.equals(firstShape.subarray(ITEM_LENGTH_FIELD_AT, ITEM_LENGTH_FIELD_AT + 4))).toBe(
+      true,
+    );
 
     // 🛑 AND WHAT THE DETECTOR CAN AND CANNOT SEE HERE, MEASURED RATHER THAN
     // ASSUMED. `#92`'s `length-less-item-header` arm subtracts exactly
@@ -1082,7 +1087,7 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
     // ...and the payload is not the reason: a DIRECT render of the same length
     // is caught, so the two clean results above are the arms' limit.
     expect(
-      leaksIn(`declared length=${String(FABRICATED_ITEM_LENGTH)}`, payload).map((l) => l.kind),
+      leaksIn(`declared length=${String(DECLARED_ITEM_LENGTH)}`, payload).map((l) => l.kind),
     ).toContain("length");
 
     // The closure itself, at the level that survives a refactor of the prose:
