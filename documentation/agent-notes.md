@@ -236,16 +236,15 @@ bytes with one typed read. The row that pins this asserts the **premise** too - 
 does resolve through `50xx` and really is not a literal row - so it cannot pass because the
 counterexample stopped being one.
 
-**▶ ONE MORE SLOT WAS EMPTIED BY THE RULE RATHER THAN BY A JUDGEMENT, AND THE HONEST ANSWER WAS TO
-DELETE IT.** `DICOM_GROUP_LENGTH_IN_DATASET` fires on a `(gggg,0000)` outside File Meta. PS3.6 carries
+**▶ ONE MORE SLOT WAS EMPTIED BY THE RULE, NOT A JUDGEMENT, AND THE HONEST ANSWER WAS TO DELETE IT.**
+`DICOM_GROUP_LENGTH_IN_DATASET` fires on a `(gggg,0000)` outside File Meta. PS3.6 carries
 **exactly one** literal row ending `0000` - `(0002,0000)`, which is File Meta and never reaches this
 code - so **every** tag that slot could ever have rendered was already `<withheld>`. Measured over the
 suite: four distinct tags reached it, four withheld. A slot that can never render is not harmless; it
 invites a future call site to pass one. Bound out of the signature.
 
-**▶ 📏 THE COST, MEASURED OVER THE WHOLE SUITE RATHER THAN ARGUED.** A probe on the single
-construction point recorded every `(code, tag)` pair the suite renders: **50 pairs unaffected, 14
-withheld.** Of the 14, **2** are the fabricated tags this slice exists for; **8** are private tags
+**▶ 📏 THE COST, MEASURED OVER THE SUITE RATHER THAN ARGUED.** A probe on the single construction
+point recorded every `(code, tag)` pair the suite renders: **50 pairs unaffected, 14 withheld.** Of the 14, **2** are the fabricated tags this slice exists for; **8** are private tags
 (`DICOM_ODD_LENGTH_VALUE_PADDED`, `DICOM_UN_PARSED_AS_SQ`, `DICOM_SQ_NOT_DESCENDED` and the two
 `deident` codes); **4** are Group Length tags. `DICOM_VR_MISMATCH` is **12 rendered, 0 withheld**, and
 that is structural rather than lucky: it fires only where the dictionary already has an entry for the
@@ -275,26 +274,39 @@ prints the length off that same header.** The second renders `<withheld>` for it
 this slice_ and still prints the length.
 
 **A SEVENTH INSTANCE, THEREFORE, AND IT IS `PRE-EXISTING`**: byte-identical templates and signatures
-on `ff1a64a`, and the parse path is untouched. **It is not this slice's to take** - binding those two
-signatures is a second remedy on a leak the slice did not introduce, and the grade said so
-explicitly. **The remedy taken was to CORRECT THE CLAIM, NEVER WIDEN THE GUARD** - this repo's own
-first rule - in all six artifacts plus the registry's own module doc, and to add
+on `ff1a64a`, parse path untouched. **Not this slice's to take** - binding those signatures is a
+second remedy on a leak it did not introduce, and the grade said so. **The remedy was to CORRECT THE
+CLAIM, NEVER WIDEN THE GUARD**, in all six artifacts plus the registry module doc, plus
 `deidentUnauditableCodesStillRenderARawWireLength`, an asserted row **green on both trees** with a
-non-vacuity assertion on the payload. **A disclosure that names a test must name one that exists.**
+non-vacuity assertion. **A disclosure that names a test must name one that exists.**
 
 **▶ 🩺 AND THE SWEEP'S CHANNEL WAS UNSTATED, WHICH IS WHY THE ARTIFACTS COULD READ IT AS PACKAGE-WIDE.**
-The new standing sweep calls **only `parseDicom`**, so it can never reach a code `deidentify()` alone
-emits - and two of those are the seventh instance. The row is renamed to say `PARSER`, its docstring
-states the limit, and the residual row sits directly beneath it. A second gap is named rather than
-closed: `renderings()` has a 4-byte-as-`uint32` arm and a 1-byte-as-decimal arm and **no
-2-byte-as-`uint16` arm**, which is exactly a short-form Value Length. No registry entry renders one
-today, so such an arm would have nothing to hunt and no non-vacuity control, and a bare 0-65535
-search cannot be told from a legitimate count. Stated so nobody infers coverage from silence.
+It calls **only `parseDicom`**, so it can never reach a code `deidentify()` alone emits, and two of
+those are the seventh instance. Renamed to say `PARSER`, its docstring states the limit, and the
+residual row sits beneath it. A second gap is named rather than closed: `renderings()` has **no
+2-byte-as-`uint16` arm**, which is exactly a short-form Value Length. No entry renders one today, so
+the arm would have nothing to hunt and no non-vacuity control. Stated so nobody infers coverage from
+silence.
 
 **▶ AND A COUNT WENT INTO CONSUMER PROSE AND WAS WRONG IN THE SAME PARAGRAPH THAT LISTED IT.**
 `troubleshooting.md` said "Five codes take no tag parameter at all" and then named six, one of which
 this slice had just added. **Deleted, not incremented** - the rule this item enforces, and
 `CLAUDE.md`'s own "do not write a warning-code COUNT into prose".
+
+**▶ 🛑 PASS 2 PASSED THE SLICE AND STILL FOUND TWO MINORS IN THE REMEDY, AND THE FIRST IS THIS
+DISEASE A THIRD TIME IN ONE SLICE: THE REMEDY FOR A FALSE COUNT WAS TWO MORE COUNTS THAT DISAGREED.**
+"Two exceptions" in four consumer artifacts against "Three" in the changeset and the registry doc,
+over the identical codes. **Every numeral deleted, none renumbered.** The second: **the pin was
+singular and the claim was plural** - one row asserted `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE`
+while five artifacts said the pair was pinned, and the two have **different producers**, so one
+fixture cannot reach both. A second fixture was written rather than the claim narrowed. It also corrected a wording exact only where `rawBytes` is value-only:
+`isFullSpanElement` makes it declared-plus-header for an undefined-length element and for a
+defined-length `SQ` under Explicit VR.
+
+**▶ PASS 2 FILED AS BACKLOG RATHER THAN GATED**, all with the seventh instance: `deident-unauditable-sequence.test.ts`'s row titled _"carrying no value"_ for the very code
+now disclosed as printing a header-derived length; the `length` arm's **`>= 7` digit floor** in
+`renderings()`, which is why the 5-digit `20307` is invisible to that detector and is a wider gap
+than the missing `uint16` arm; and the seventh instance itself.
 
 **▶ 🛑 THE "SAFE TO LOG" SENTENCE IS DELETED, NOT REWORDED A THIRD TIME - THIS REPO'S OWN RULE, APPLIED
 TO ITS OWN LINEAGE.** `#80` wrote it once ("safe to log whole on any well-formed file"), the sibling
@@ -341,8 +353,8 @@ before quoting it.
 **TWO ROWS ARE GREEN ON BASE BY DESIGN AND MUST STAY THAT WAY**: _"the closed set is enumerable"_
 grades the generated registry, which this slice did not move; and
 `deidentUnauditableCodesStillRenderARawWireLength` pins a `PRE-EXISTING` residual, so it has to
-reproduce on both trees or it is not a residual pin. Both were confirmed green on `ff1a64a` in the
-same run that produced the 14.
+reproduce on both trees or it is not a residual pin. Both confirmed green on `ff1a64a` in the same
+run.
 
 **The non-vacuity controls are on the rows that closed, not only on the outcome.** Each of the two
 inverted pins rebuilds `0.0.14`'s own message template over the bytes its fixture really lands on and

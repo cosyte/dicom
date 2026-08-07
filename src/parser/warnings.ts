@@ -159,21 +159,24 @@ export interface DicomParseWarning {
  * must not be one.
  *
  * **🔴 THE RULE IS NOT UNIFORMLY APPLIED, AND SAYING SO IS THE POINT - A GRADED
- * PASS REFUSED THE DRAFT THAT STATED IT AS AN ABSOLUTE.** Three exceptions, each
- * named rather than left for a reader to discover:
+ * PASS REFUSED THE DRAFT THAT STATED IT AS AN ABSOLUTE.** The exceptions are
+ * named rather than counted, because a count in prose is the thing this package
+ * deletes:
  *
- * 1. {@link fileMetaGroupLengthMismatch}'s `{n}` is a raw declared length and
- *    stays, because `parseFileMeta` reads it in a frame nothing can
- *    desynchronize. Its own JSDoc carries the argument and the measurement.
- * 2. {@link undefinedVrNotAuditable}'s `{n}` and
- * 3. {@link sequenceNotAuditable}'s `{n}` are `Element.rawBytes.length`, which
- *    **equals the declared Value Length** - so a fabricated header carrying
- *    `"SO\0\0"` renders `20307`, reversible with one `readUInt32LE`. Both are
- *    `PRE-EXISTING`, both reproduce byte-identically on `0.0.14`, and neither is
- *    closed here: binding them is a second remedy on a leak this slice did not
- *    introduce, and it belongs in its own unit. Pinned by an asserted row in
- *    `test/integration/fatal-diagnostic-surface.test.ts` that is green on both
- *    trees, so no artifact can read this registry as an all-clear.
+ * - {@link fileMetaGroupLengthMismatch}'s `{n}` is a raw declared length and
+ *   stays, because `parseFileMeta` reads it in a frame nothing can
+ *   desynchronize. Its own JSDoc carries the argument and the measurement.
+ * - {@link undefinedVrNotAuditable}'s `{n}` and {@link sequenceNotAuditable}'s
+ *   `{n}` are `Element.rawBytes.length`: the declared Value Length for a
+ *   value-only element, declared-plus-header for a full-span one
+ *   (`isFullSpanElement`), and document-derived either way - so a fabricated
+ *   header carrying `"SO\0\0"` renders `20307`, reversible with one
+ *   `readUInt32LE`. Both are `PRE-EXISTING`, both reproduce byte-identically on
+ *   `0.0.14`, and neither is closed here: binding them is a second remedy on a
+ *   leak this slice did not introduce, and it belongs in its own unit. Each is
+ *   pinned by its own asserted row in
+ *   `test/integration/fatal-diagnostic-surface.test.ts`, green on both trees,
+ *   so no artifact can read this registry as an all-clear.
  *
  * Two codes are declared and never emitted by this build:
  * `DICOM_CHARSET_AMBIGUOUS_SEPARATOR` and `DICOM_PIXEL_DATA_LENGTH_MISMATCH`.

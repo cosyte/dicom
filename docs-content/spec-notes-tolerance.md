@@ -86,14 +86,15 @@ be interpolated even by a future call site that tries. A token that fails its ch
   be one. `DICOM_ODD_LENGTH_VALUE_PADDED`, `DICOM_NONZERO_RESERVED_BYTES` and
   `DICOM_PIXEL_DATA_LENGTH_MISMATCH` cannot be handed one.
 
-**Two exceptions, named rather than left implicit.** `(0002,0000)`'s own declared File Meta group
-length is still printed: `parseFileMeta` reads it at a structurally fixed offset, is never nested and
-runs once per parse, so no Data Set value can be read into that position. And **two `deidentify()`
-codes still print a length that IS the header's** - `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` and
-`DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` render `Element.rawBytes.length`, which equals the declared
-Value Length, so a fabricated header carrying `"SO\0\0"` renders `20307`. That is `PRE-EXISTING`, it
-reproduces identically on `0.0.14`, it is **not closed here**, and it is pinned by an asserted test
-row rather than implied shut.
+**Exceptions, named rather than counted.** `(0002,0000)`'s own declared File Meta group length is
+still printed: `parseFileMeta` reads it at a structurally fixed offset, is never nested and runs once
+per parse, so no Data Set value can be read into that position. And **`DICOM_DEIDENT_UNDEFINED_VR_NOT
+_AUDITABLE` and `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` still print a length that came off the
+header** - they render `Element.rawBytes.length`, which is the declared Value Length for a value-only
+element and declared-plus-header for a full-span one, document-derived either way, so a fabricated
+header carrying `"SO\0\0"` renders `20307`. That is `PRE-EXISTING`, it reproduces identically on
+`0.0.14`, it is **not closed here**, and each code is pinned by its own asserted test row rather than
+implied shut.
 
 **What the membership rule closed.** Through `0.0.14` `renderTag` validated a tag's _shape_, and a
 shape test admits all 2^32 tags. Measured: a `(0008,4000)` `ST` carrying `"MR BRAIN SMITHSON "` whose

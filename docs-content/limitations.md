@@ -92,13 +92,14 @@ structural fact about DICOM that no reader can resolve from the wire.
   of the factory signature where it is bound at all**, because a declared Value Length has neither a
   shape nor a membership a renderer could test. `w.code` and `w.position` carry nothing from the
   document.
-  **Two exceptions, named rather than left implicit.** `(0002,0000)`'s own declared File Meta group
+  **Exceptions, named rather than counted.** `(0002,0000)`'s own declared File Meta group
   length is still printed, and it is read at a structurally fixed offset no value can desynchronize
   the reader onto. And **`DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` and
   `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` still print a length that IS the header's**: they render
-  `Element.rawBytes.length`, which equals the declared Value Length, so a fabricated header carrying
-  `"SO\0\0"` renders `20307`. `PRE-EXISTING`, identical on `0.0.14`, **not closed here**, pinned by
-  an asserted test row. Both codes are raised by `deidentify()`, so they reach `report.warnings`.
+  `Element.rawBytes.length`: the declared Value Length for a value-only element, declared-plus-header
+  for a full-span one, and document-derived either way, so a fabricated header carrying `"SO\0\0"`
+  renders `20307`. `PRE-EXISTING`, identical on `0.0.14`, **not closed here**, each pinned by its own
+  asserted test row. Both codes are raised by `deidentify()`, so they reach `report.warnings`.
   **What that closed, measured on an `ST` carrying `"MR BRAIN SMITHSON "` whose Value Length
   under-declares:** under Explicit VR LE the reader desynchronizes onto a fabricated header whose
   declared length is odd, and through `0.0.14` `DICOM_ODD_LENGTH_VALUE_PADDED` rendered **four bytes

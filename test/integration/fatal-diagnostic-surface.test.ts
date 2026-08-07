@@ -41,6 +41,7 @@ import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
 import { deidentify } from "../../src/deident/index.js";
+import { defineProfile } from "../../src/profiles/index.js";
 import type { VR } from "../../src/dictionary/types.js";
 import { KNOWN_VRS } from "../../src/parser/endian.js";
 import { DicomParseError, FATAL_CODES } from "../../src/parser/errors.js";
@@ -644,6 +645,53 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
       .filter((w) => w.message.includes(String(fabricatedLength)))
       .map((w) => w.code);
     expect(carriers).toContain("DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE");
+
+    // The SECOND code needs its own fixture, and it gets one rather than being
+    // inferred from the first. A graded pass caught the draft of this row
+    // asserting one code while five artifacts said the PAIR was pinned: the two
+    // are reached by different producers, so one fixture cannot exercise both.
+    // Producer 2 is a private element a caller Profile declares `SQ` while the
+    // wire says otherwise, so the profile and the retain option are required.
+    const profile = defineProfile({
+      name: "acme-fabricated",
+      description: "Synthetic vendor block declared SQ.",
+      privateTags: { ACME: { "0009XX01": { vr: "SQ", keyword: "AcmeSeq", name: "Acme Seq" } } },
+    });
+    const seqFabricated = Buffer.concat([
+      Buffer.from([0x09, 0x00, 0x01, 0x10]),
+      Buffer.from("OB", "ascii"),
+      Buffer.from([0x00, 0x00]),
+      LEN_BYTES,
+    ]);
+    const seqFiller = Buffer.concat([
+      Buffer.from("BOND^JAMES", "ascii"),
+      Buffer.alloc(fabricatedLength - 10, 0x41),
+    ]);
+    const seqRaw = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      elements: [
+        { tag: "00100010", vr: "PN" as VR, value: val(NAME) },
+        { tag: "00090010", vr: "LO" as VR, value: Buffer.from("ACME", "ascii") },
+        {
+          tag: "00080080",
+          vr: "LO" as VR,
+          value: Buffer.concat([
+            Buffer.from("MERCY GENERAL HOSPITALS ", "ascii"),
+            seqFabricated,
+            seqFiller,
+          ]),
+          declaredLengthDelta: -(seqFabricated.length + seqFiller.length),
+        },
+      ],
+    });
+    const seqReport = deidentify(parseDicom(seqRaw), {
+      retain: ["RetainSafePrivate"],
+      profile,
+    }).report;
+    const seqCarriers = seqReport.warnings
+      .filter((w) => w.message.includes(String(fabricatedLength)))
+      .map((w) => w.code);
+    expect(seqCarriers).toContain("DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE");
   });
 
   it("embeddedAttributesHiddenNoLongerCarriesValueBytes", () => {

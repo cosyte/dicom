@@ -42,18 +42,19 @@ once a phase switches the code on. `DICOM_GROUP_LENGTH_IN_DATASET` loses its tag
 which the membership rule produced rather than a judgement: PS3.6 carries exactly one literal row
 ending `0000`, and it is File Meta, so that slot could never have rendered anything but `<withheld>`.
 
-**Three exceptions, named rather than left as an unstated absolute.** `(0002,0000)`'s own declared
+**The exceptions are named rather than counted, and rather than left as an unstated absolute.**
+`(0002,0000)`'s own declared
 File Meta group length is still printed, and that one is argued as well as measured: `parseFileMeta`
 runs once per parse, from `parseDicom`, at the post-`DICM` offset, and is never nested, so those four
 bytes are that attribute's own Value Field at a structurally determined offset that no Data Set value
 can be read into. The desynchronized-read sweep reaches that code zero times.
 **The other two are a leak this release does not close.**
 `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` and `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` render
-`Element.rawBytes.length`, which **equals the declared Value Length**, so a fabricated header
-carrying `"SO\0\0"` renders `20307` and one `readUInt32LE` reverses it. Both are `PRE-EXISTING` and
-byte-identical on `0.0.14`; both are raised by `deidentify()`, so they reach `report.warnings` and
-`{ strict: true }` does not escalate them. They are disclosed and pinned by an asserted test row
-rather than closed: binding them is a second remedy on a leak this release did not introduce, and it
+`Element.rawBytes.length`, which is **the declared Value Length for a value-only element** and
+declared-plus-header for a full-span one, so a fabricated header carrying `"SO\0\0"` renders `20307`
+and one `readUInt32LE` reverses it. Both are `PRE-EXISTING` and byte-identical on `0.0.14`; both are
+raised by `deidentify()`, so they reach `report.warnings` and `{ strict: true }` does not escalate
+them. They are disclosed and pinned, each by its own asserted test row, rather than closed: binding them is a second remedy on a leak this release did not introduce, and it
 belongs in its own unit.
 
 **What it costs you, stated rather than minimised.** On any file, well-formed or not, a message about
@@ -69,7 +70,7 @@ dictionary already has an entry for the tag.
 It was written as "safe to log whole on any well-formed file", then corrected to "safe on a
 well-formed file and not unconditionally safe", and this package deletes a disclosure it has reworded
 twice. Every carrier now states the mechanism - which slot is a membership test, which is a signature
-bound, and the three named exceptions - and states no verdict.
+bound, and the named exceptions - and states no verdict.
 
 **Not taken, deliberately.** `report.removedPrivateTags` is untouched: it is a private-tag field by
 definition, so no closed table can ever vouch for its contents and a bound would empty it on every
