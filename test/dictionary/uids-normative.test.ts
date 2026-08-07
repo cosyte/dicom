@@ -96,12 +96,17 @@ function cellText(markup: string): string {
     if (next === s) break;
     s = next;
   }
+  // ONE pass over the entities, not five. Unescaping `&amp;` first re-exposes the rest, so
+  // `&amp;lt;` would decode to `<` instead of the literal `&lt;` the document actually says.
+  const entities: Record<string, string> = {
+    "&amp;": "&",
+    "&lt;": "<",
+    "&gt;": ">",
+    "&quot;": '"',
+    "&apos;": "'",
+  };
   return s
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
+    .replace(/&(?:amp|lt|gt|quot|apos);/g, (e) => entities[e] ?? e)
     .replace(/\u200B/gu, "")
     .replace(/\s+/gu, " ")
     .trim();
