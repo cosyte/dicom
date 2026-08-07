@@ -92,7 +92,7 @@ interface Leak {
  * shift is 32, and this arm would not have seen it - measured on base `src/`,
  * the same `"SO\0\0"` sequence length rendered `20275` rather than `20299`. A
  * draft of this constant claimed 8 was "the only structural constant any
- * registry template has ever subtracted", and that was false twice over.
+ * registry template has ever subtracted", and that was false.
  *
  * The arm is not widened to a range, deliberately. A range has no non-vacuity
  * control - the same reason the missing 2-byte-as-`uint16` arm below is named

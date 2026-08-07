@@ -54,7 +54,7 @@ describe("the Tier-3 fatal registry", () => {
     }
   });
 
-  it("has no entry carrying a count measured over the bytes being read", () => {
+  it("has no factory taking a count of the bytes remaining in the frame", () => {
     // The ninth instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`, asserted where it
     // is actually bound: the two factories that used to take one. `{n}` still
     // exists, and the two entries that keep it are the two whose number nobody

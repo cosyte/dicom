@@ -40,8 +40,8 @@
  *
  * The numbers that do reach a template are named one at a time in
  * {@link FATAL_MESSAGES}, and every one of them is a library constant or a cap
- * the caller passed in. **No factory takes a count measured over the bytes being
- * read**, which is a property of the signatures rather than of any branch inside
+ * the caller passed in. **No factory takes a count of the bytes remaining in the
+ * frame**, which is a property of the signatures rather than of any branch inside
  * them.
  *
  * ## The ninth instance: a VARIABLE shift is still the wire number
@@ -156,7 +156,7 @@ interface FatalMessageEntry {
  * - `INFLATED_PAYLOAD_EXCEEDS_CAP`: `{n}` is the cap the caller passed in.
  *
  * Nothing else takes a number, no entry takes a tag, and **no factory takes a
- * count measured over the bytes being read**.
+ * count of the bytes remaining in the frame**.
  */
 const FATAL_MESSAGES = Object.freeze({
   EMPTY_INPUT: {
@@ -289,7 +289,7 @@ const FATAL_MESSAGES = Object.freeze({
  *
  * `n` is the one field that is a bare number, and **it is not bound by its own
  * type**: what keeps it clean is that the two factories which used to take a
- * count over the document no longer accept one, and that the two which still
+ * count of the bytes remaining in the frame no longer accept one, and that the two which still
  * pass an `n` pass a value this library or its caller chose. Their signatures
  * say which is which, and `fatals.test.ts` asserts the arity of all four.
  *
@@ -302,7 +302,7 @@ interface FatalTokens {
   readonly ts?: string;
   /** A zlib error code, checked against `zlib.codes` before rendering. */
   readonly zlib?: string;
-  /** A library constant, or a cap the caller passed in. Never a count over the document. */
+  /** A library constant, or a cap the caller passed in. Never a count of the frame's remaining bytes. */
   readonly n?: number;
 }
 
