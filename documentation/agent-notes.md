@@ -693,7 +693,7 @@ string citation-free.
 REFUSED.** A draft claimed the residual byte count is "bounded by the buffer the parse holds rather
 than being a field a sender wrote". Inside a defined-length Item the buffer **is** that Item's slice,
 so `{n}` plus `byteOffset` recovers the Item's own 32-bit declared length. Still not a Value Field,
-which is the property that matters and the reason it stays; not the absolute the draft asserted.
+which is the property that matters; not the absolute the draft asserted.
 
 **Provenance:** PS3.5 read from the SHA-pinned
 `vendor/nema/part05/4dfd7b8cbc7c368b7cf03e9c4b8a0773bed91266fcdb0bbf8ed634b7287cacca/part05.xml`,

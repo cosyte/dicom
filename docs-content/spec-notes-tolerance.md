@@ -90,8 +90,8 @@ be interpolated even by a future call site that tries. A token that fails its ch
   the bytes that remained inside the sequence, which is the sequence's own declared Value Length less
   the bytes of that sequence already consumed. It cannot be handed either number now.
 
-**The exceptions are named in ONE place and are deliberately not restated here** - the
-`WARNING_MESSAGES` docblock in `src/parser/warnings.ts`. No count of the copies is quoted, here or
+**The exceptions are named in ONE place that is not a record of a past change, and are deliberately
+not restated here** - the `WARNING_MESSAGES` docblock in `src/parser/warnings.ts`. No count of the copies is quoted, here or
 there: this package deletes a count it has corrected twice rather than incrementing it.
 
 **What the membership rule closed.** Through `0.0.14` `renderTag` validated a tag's _shape_, and a
@@ -142,9 +142,24 @@ read.
 The bound is the same one the Tier-2 registry uses, and it is structural rather than a discipline:
 **the factory signatures take no tag and no wire-length parameter at all**, so there is no slot for
 one to travel through. `position.byteOffset` identifies the element instead. What a fatal message can
-still carry is named one entry at a time: a VR checked against the closed 34-VR set, a byte count
-bounded by the buffer being read, a library constant, PS3.6's registry name for an unsupported
-Transfer Syntax UID, and a zlib error code checked against zlib's own nine-name table.
+still carry is named one entry at a time: a VR checked against the closed 34-VR set, a library
+constant or the caller's own cap, PS3.6's registry name for an unsupported Transfer Syntax UID, and a
+zlib error code checked against zlib's own nine-name table.
+
+**And a count of the bytes left in the buffer is not on that list any more, which is a change to two
+message texts in this release.** Through `0.0.14` `ELEMENT_LENGTH_EXCEEDS_BUFFER` and
+`FILE_META_GROUP_LENGTH_OVERRUNS` each printed `buffer.length - cursor.position`, defended as bounded
+by bytes actually present. That bounds the number's magnitude. The parser reads a defined-length
+Sequence Item from a **slice**, so inside one the buffer is that Item and the subtraction publishes
+the Item's own 32-bit declared length, less an offset the same message prints. That is a raw wire
+field a sender wrote, which is the class this registry refuses everywhere else. Measured with a
+declared Item Length of `21320`: the message read `21312`, `21288` or `21272` depending on where
+inside the Item the offending element sat. **A raw number
+shifted by an amount the reader can compute is that raw number, and here the amount is variable**, so
+the slot is gone from both signatures rather than filtered. The cost is stated where it falls:
+`FILE_META_GROUP_LENGTH_OVERRUNS` is raised at the root, where that count was the caller's own input
+size and leaked nothing, and it loses the number anyway, because a bound that holds only where a
+function happens to be called from is not a bound.
 
 **A `DicomParseError` is still different from a warning, and this is the one to read carefully.** It
 carries a `snippet`: up to 16 bytes of the source rendered as hex, attached so a structural failure

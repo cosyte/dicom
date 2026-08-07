@@ -314,7 +314,14 @@ export function _parseExplicit(
       throw undefinedLengthOnNonSqExplicit(buffer, headerStart, vr);
     }
     if (cursor.position + length > buffer.length) {
-      throw elementLengthExceedsBuffer(buffer, headerStart, buffer.length - cursor.position);
+      // NEITHER length is passed, and the second one is the ninth instance of
+      // `DICOM-DIAGNOSTIC-PHI-RESIDUALS`. `buffer.length - cursor.position` is
+      // the enclosing frame's size less the bytes consumed, and this loop runs
+      // over a defined-length Item's SLICE as readily as over the input, so in
+      // that frame the subtraction publishes the Item's own 32-bit declared
+      // length beside the offset that reverses it. The factory takes a parameter
+      // for neither. See `elementLengthExceedsBuffer`.
+      throw elementLengthExceedsBuffer(buffer, headerStart);
     }
     const valueStart = cursor.position;
     const valueEnd = valueStart + length;

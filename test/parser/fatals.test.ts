@@ -23,7 +23,10 @@ import {
   ZLIB_CODES,
   elementLengthExceedsBuffer,
   emptyInput,
+  fileMetaGroupLengthOverruns,
   inflateFailed,
+  inflatedPayloadExceedsCap,
+  sqNestingDepthExceeded,
   undefinedLengthOnNonSqExplicit,
   unsupportedTransferSyntax,
 } from "../../src/parser/fatals.js";
@@ -51,12 +54,34 @@ describe("the Tier-3 fatal registry", () => {
     }
   });
 
+  it("has no factory taking a count of the bytes remaining in the frame", () => {
+    // The ninth instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`, asserted where it
+    // is actually bound: the two factories that used to take one. `{n}` still
+    // exists, and the two entries that keep it are the two whose number nobody
+    // on the wire chose - `NESTING_DEPTH_LIMIT` and the caller's inflate cap -
+    // so this asserts the ARITY rather than searching the message. A call site
+    // cannot pass what a signature does not accept, which is the property that
+    // survives a future refactor of the prose.
+    expect(elementLengthExceedsBuffer.length).toBe(2);
+    expect(fileMetaGroupLengthOverruns.length).toBe(2);
+    // ...and the two that legitimately keep a number still take it, so the rows
+    // above are a measured bound rather than a blanket one.
+    expect(sqNestingDepthExceeded.length).toBe(3);
+    expect(inflatedPayloadExceedsCap.length).toBe(3);
+    for (const key of [
+      "ELEMENT_LENGTH_EXCEEDS_BUFFER",
+      "FILE_META_GROUP_LENGTH_OVERRUNS",
+    ] as const) {
+      expect(FATAL_MESSAGES[key].message, `${key} still carries an {n} slot`).not.toContain("{n}");
+    }
+  });
+
   it("leaves no unsubstituted slot behind after a build", () => {
     // Every factory renders through the same `build`, and `build` substitutes a
     // fixed set. A template with a typo'd slot would ship the braces verbatim.
     const rendered = [
       emptyInput(),
-      elementLengthExceedsBuffer(Buffer.alloc(32), 0, 12),
+      elementLengthExceedsBuffer(Buffer.alloc(32), 0),
       undefinedLengthOnNonSqExplicit(Buffer.alloc(32), 0, "OB"),
       inflateFailed(Buffer.alloc(32), 0, "Z_DATA_ERROR"),
       unsupportedTransferSyntax(Buffer.alloc(32), 0, "1.2.840.10008.1.2.4.50"),

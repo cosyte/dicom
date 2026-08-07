@@ -96,8 +96,8 @@ structural fact about DICOM that no reader can resolve from the wire.
   eighth instance of this class: `DICOM_ITEM_CROSSES_SEQUENCE_END` printed the bytes that remained
   inside the sequence, and that count is the sequence's own declared Value Length less the bytes of
   that sequence already consumed.
-  **The exceptions are named in ONE place and are deliberately not restated here** - the
-  `WARNING_MESSAGES` docblock in `src/parser/warnings.ts`. No count of the copies is quoted, here or
+  **The exceptions are named in ONE place that is not a record of a past change, and are
+  deliberately not restated here** - the `WARNING_MESSAGES` docblock in `src/parser/warnings.ts`. No count of the copies is quoted, here or
   there: this package deletes a count it has corrected twice rather than incrementing it.
   **What that closed, measured on an `ST` carrying `"MR BRAIN SMITHSON "` whose Value Length
   under-declares:** under Explicit VR LE the reader desynchronizes onto a fabricated header whose
