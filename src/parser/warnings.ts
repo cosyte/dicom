@@ -169,9 +169,11 @@ export interface DicomParseWarning {
  * - **🔴 {@link itemCrossesSequenceEnd}'s `{n2}` IS A SECOND ONE, `PRE-EXISTING`,
  *   AND A DRAFT OF THIS BULLET SAID IT WAS NOT.** It is `endLimit -
  *   cursor.position`, and `endLimit` is the **enclosing Sequence's declared
- *   Value Length off its own header**, so it is `declaredSqLength - 8` where 8
- *   is the Item header PS3.5 7.5.1 fixes. One addition on a published constant
- *   reverses it. Measured on a name-bearing payload, with the same reachable
+ *   Value Length off its own header**, so it is that declared length minus the
+ *   reporting Item's offset into the sequence value. For the FIRST Item that
+ *   offset is the 8-byte Item header PS3.5 7.5.1 fixes, so one addition on a
+ *   published constant reverses it; for a later Item the subtrahend is larger
+ *   and the render discloses correspondingly less. Measured on a name-bearing payload, with the same reachable
  *   length class this slice established: a `SQ` whose length field reads
  *   `"SO\0\0"` renders `20299`, and `20299 + 8 = 20307 = readUInt32LE("SO\0\0")`.
  *   It tracks - `"ON\0\0"` renders `20039` for `20047`, `"TH\0\0"` renders
@@ -833,9 +835,12 @@ export function sqNotDescended(position: DicomPosition, tag: Tag): DicomParseWar
  * cursor.position` under the emit site's `endLimit < buffer.length` conjunct,
  * and "bounded by the buffer" was read as "not read out of a header". It is:
  * `endLimit` is the enclosing **Sequence's** declared Value Length off its own
- * header, and `cursor.position` sits exactly one Item header past the value
- * start, so `{n2} + 8` is that declared length and 8 is the Item header size
- * PS3.5 7.5.1 fixes. One addition on a published constant reverses it.
+ * header, and `cursor.position` sits one Item header past the START of that
+ * Item, so `{n2}` is the declared length minus the reporting Item's offset into
+ * the sequence value. **For the FIRST Item** that offset is exactly the 8-byte
+ * Item header PS3.5 7.5.1 fixes, so `{n2} + 8` IS the declared length and one
+ * addition on a published constant reverses it; a later Item subtracts more and
+ * discloses correspondingly less. The row that pins this measures the first.
  *
  * **The retracted measurement is the lesson, not the leak.** It fabricated the
  * `SQ`'s length field over `"SMITHSON"` - four printable bytes, so `endLimit`

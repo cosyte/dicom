@@ -672,9 +672,19 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the disagreement, disclosed", 
     // introduce. It is disclosed on `itemCrossesSequenceEnd` and in the registry
     // module doc instead, and asserted here - green on BOTH trees, or it is not a
     // residual pin.
+    const RESIDUAL_NAME = "MR BRAIN SMITHSON ";
     const probe = (
       pair: string,
-    ): { readonly declaredSq: number; readonly n2: number; readonly survived: boolean } => {
+    ): {
+      readonly declaredSq: number;
+      readonly n2: number;
+      /** True only when the message was found on a `Dataset` the parse RETURNED. */
+      readonly fromDatasetWarnings: boolean;
+      /** True only when the planted surname is really in the built buffer. */
+      readonly plantedInBuffer: boolean;
+      /** The four length bytes read back OUT of the built SQ header. */
+      readonly lengthBytesOffTheWire: string;
+    } => {
       // Two letters of a planted surname, then the two zero high bytes every
       // reachable fabricated length carries.
       const lenBytes = Buffer.concat([Buffer.from(pair, "latin1"), Buffer.alloc(2)]);
@@ -689,7 +699,7 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the disagreement, disclosed", 
       const raw = buildDicom({
         transferSyntax: EXPLICIT_LE,
         elements: [
-          { tag: "00100010", vr: "PN", value: Buffer.from("MR BRAIN SMITHSON ", "latin1") },
+          { tag: "00100010", vr: "PN", value: Buffer.from(RESIDUAL_NAME, "latin1") },
           {
             tag: "0040A730",
             declaredLengthDelta: declaredSq - (8 + ITEM_PHYSICAL),
@@ -703,18 +713,39 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the disagreement, disclosed", 
           { tag: "00080080", vr: "LO", value: Buffer.alloc(trailingValueLen, 0x41) },
         ],
       });
+      // 🛑 READ THE LENGTH FIELD BACK OFF THE WIRE rather than trusting that
+      // `declaredLengthDelta` put it there. A draft asserted the payload with
+      // `expect("MR BRAIN SMITHSON ").toContain("SO")` - a literal against a
+      // literal, which never opens the fixture - and a graded pass named it.
+      // Explicit VR `SQ`: tag(4) + VR(2) + reserved(2), then the 4-byte length.
+      const sqAt = raw.indexOf(Buffer.from([0x40, 0x00, 0x30, 0xa7]));
+      const lengthBytesOffTheWire =
+        sqAt > 0 ? raw.subarray(sqAt + 8, sqAt + 12).toString("latin1") : "";
+      // `parseDicom` is called WITHOUT a try/catch on purpose: if it threw, this
+      // row would fail here. So a message recovered from the returned Dataset's
+      // own array IS the survival measurement, where a hardcoded `true` was not.
       const ds = parseDicom(raw);
       const message = ds.warnings.find(
         (w) => w.code === WARNING_CODES.DICOM_ITEM_CROSSES_SEQUENCE_END,
       )?.message;
       const n2 = Number(/; (\d+) bytes remained/u.exec(message ?? "")?.[1] ?? NaN);
-      return { declaredSq, n2, survived: true };
+      return {
+        declaredSq,
+        n2,
+        fromDatasetWarnings: message !== undefined,
+        plantedInBuffer: raw.includes(Buffer.from(RESIDUAL_NAME, "latin1")),
+        lengthBytesOffTheWire,
+      };
     };
 
-    // Non-vacuity on the payload: `"SO"` really is two letters of the surname
-    // this fixture plants, and the four bytes really do decode to 20307.
-    expect("MR BRAIN SMITHSON ").toContain("SO");
+    // Non-vacuity on the payload, measured off the fixture rather than typed:
+    // the surname really is in the built buffer, the SQ's length field really
+    // holds those two letters plus two zero high bytes, and they really do
+    // decode to 20307.
     const so = probe("SO");
+    expect(so.plantedInBuffer).toBe(true);
+    expect(RESIDUAL_NAME).toContain("SO");
+    expect(so.lengthBytesOffTheWire).toBe("SO\0\0");
     expect(so.declaredSq).toBe(20307);
     expect(String(so.declaredSq).length).toBeLessThan(7);
 
@@ -725,8 +756,9 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the disagreement, disclosed", 
     expect(Buffer.from([(so.n2 + 8) & 0xff, ((so.n2 + 8) >> 8) & 0xff]).toString("latin1")).toBe(
       "SO",
     );
-    // And it survives the parse, so `ds.warnings` carries it.
-    expect(so.survived).toBe(true);
+    // And it survives the parse: the message came off the returned Dataset's own
+    // `warnings` array, not off an `onWarning` callback on a file that then died.
+    expect(so.fromDatasetWarnings).toBe(true);
 
     // The mutation control, so this cannot pass on a constant: change the two
     // letters and the published number changes with them.

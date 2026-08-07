@@ -96,3 +96,14 @@ against base `src/` (replaced, not overlaid): 5 of 1,221 red across 3 files. THR
 TWO are the factory-arity rows, which fail on the arity line and whose message assertions would have
 passed on base, so they grade the new bound and are not evidence that base leaked. The new `{n2}`
 residual row is green on BOTH trees by design, because it pins a `PRE-EXISTING` leak.
+
+Refuter pass 2 returned NOT REFUTED and still named three claim defects, all closed before merge and
+all recorded because two are this repo's own failure shapes. One surviving artifact still said "NAMED
+exception (0002,0000)" in the singular, which is the previous slice's pass-1 blocker reappearing in
+the one carrier the remedy's enumeration omitted; the exception list now lives in seven places and
+this lineage has corrected six of them twice, so the next slice in it should collapse the count rather
+than add a seventh copy. Two lines of the new residual pin were dressed as measurements and measured
+nothing, a literal compared to a literal and a hardcoded survival flag; both now read the built buffer
+and the wire. And the `+ 8` identity holds for the FIRST Item, where the offset into the sequence
+value is exactly the Item header; a later Item subtracts more, so the unqualified sentence over-stated
+the leak and is qualified everywhere it appeared.

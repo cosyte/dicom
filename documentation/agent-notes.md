@@ -481,8 +481,11 @@ FINDING IS AN EIGHTH INSTANCE.** The draft's registry docstring listed the survi
 slots and closed the list with *"Every one of those is a number this parser produced; none is read
 out of a header."* One measurement refuted it. `DICOM_ITEM_CROSSES_SEQUENCE_END`'s `{n2}` is
 `endLimit - cursor.position`, and `endLimit` is the enclosing **Sequence's** declared Value Length off
-its own header while `cursor.position` sits exactly one Item header past the value start - so
-`{n2} + 8` IS that declared length, and 8 is a constant PS3.5 7.5.1 fixes. Reproduced independently
+its own header while `cursor.position` sits one Item header past the start of the reporting Item - so
+`{n2}` is that declared length minus the Item's offset into the sequence value, and **for the FIRST
+Item** that offset is exactly the 8 bytes PS3.5 7.5.1 fixes, making `{n2} + 8` the declared length.
+(Pass 2 caught the unqualified form: a later Item subtracts more, so the unqualified sentence
+over-states the leak. Fail-safe direction, corrected anyway; the pinned case is Item 0.) Reproduced independently
 before the remedy, on the reachable class this very slice established: `"SO\0\0"` renders `20299`
 for `20307`, `"ON\0\0"` renders `20039` for `20047`, `"TH\0\0"` renders `18508` for `18516`, and
 the parse **survives**, so it reaches `Dataset.warnings` and not only `onWarning`.
@@ -512,6 +515,27 @@ sequence fixture, whose filler **opens with a name** (`"BOND^JAMES"`), so the na
 name-bearing region of the value under test. Re-swept over the whole carrier value: no additional
 offenders, so it hid nothing - which is precisely why the reason had to go rather than be kept because
 it happened to be harmless.
+
+**▶ PASS 2 RETURNED `NOT REFUTED` AND STILL FOUND THREE MINORS, ALL OF THEM CLAIM DEFECTS, ALL CLOSED
+BEFORE THE MERGE.** Recorded because two of them are this repo's named failure shapes:
+
+1. **A surviving copy still said "NAMED exception `(0002,0000)`" - singular.** In `CLAUDE.md`, and the
+   singular was this slice's: base read "NAME the exceptions". That is the pass-1 blocker of the
+   *previous* slice reappearing in the one artifact the remedy's own enumeration of carriers omitted.
+   Restored to "NAME the exceptions". **The exception list now lives in seven places and this lineage
+   corrected six of them twice. The next slice in it should COLLAPSE the count, not add a seventh
+   copy** - the `#79` remedy shape, applied to this list.
+2. **Two lines of the new residual pin were dressed as measurements and measured nothing:**
+   `expect("MR BRAIN SMITHSON ").toContain("SO")` compared a literal to a literal without ever opening
+   the fixture, and `probe()` returned a hardcoded `survived: true` that the row then asserted. Both
+   replaced with real reads - the surname is checked **in the built buffer**, the length field is read
+   back **off the wire** at the `SQ` header, and survival is now "the message came off the returned
+   `Dataset`'s own array", which `parseDicom` being called with no `try` already makes load-bearing.
+   **A test named for the thing it did not check occupies the slot**, one line at a time.
+3. The `{n2} + 8` identity, corrected above.
+
+**▶ FIGURES ARE RE-RUN AFTER THOSE FIXES rather than carried forward**, per this repo's moving-base
+rule.
 
 ---
 
