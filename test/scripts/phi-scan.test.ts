@@ -1187,20 +1187,21 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
 // a clearance; the third is a clean result pinned BESIDE them.
 //
 // THE ACCEPTED COST, STATED SO IT IS NOT DISCOVERED: the text sweep now runs over
-// binary values, so its recognizers fire on image noise. It is the PN-shape pass
-// that fires there (see `PN_SHAPE`), NOT the compact-date pass - a first draft of
-// this comment said the opposite, from the item's wording rather than from a count,
-// and a refuter pass caught it. `\b\d{8}\b` needs a run of EXACTLY eight digits
-// plus a plausible month and day; the PN pattern needs only a caret with a letter
-// run either side. Measured over 8 independent 8 MiB draws of high-entropy pixel
-// data: every hit came from the PN pass, none from either date pass. Figures and
-// causes are in `documentation/agent-notes/dicom-scandicom-silent-halt.md`. NO RATE
-// IS QUOTED HERE - it is a property of a corpus, not of this suite.
+// binary values, so its recognizers fire on image noise. WHICH recognizer, and how
+// often, is a property of the payload's byte histogram and NOT of the scanner, so
+// no sentence here names one. Two drafts of this comment did - one naming the
+// compact-date pass, one naming the PN-shape pass - and a refuter refuted both;
+// a claim reworded twice is deleted rather than written a third time. The measured
+// table, which spans 0 to five figures over the same 8 MiB, is in
+// `documentation/agent-notes/dicom-scandicom-silent-halt.md`. NO RATE IS QUOTED
+// HERE - it is a property of a corpus, not of this suite.
 //
 // 🛑 AND THE SHAPE IS NAMED, NEVER SPELLED. A draft of this paragraph wrote the
 // two-component token out and `pnpm phi-scan` reported it against this very file,
-// which is the gate working: `test/` is its walk root, and `test/helpers/
-// phi-scan-violators.ts` exists precisely so this suite carries no literal.
+// which is the gate working: `test/` is its walk root. `test/helpers/
+// phi-scan-violators.ts` exists so this suite carries no literal THE SCANNER MUST
+// REJECT - allow-listed ones like `ANON^PATIENT` are here in plain sight, and the
+// distinction is the whole point of that helper's header.
 
 describe("phi-scan: a preamble-FUL object's silent halt", () => {
   let dir: string;

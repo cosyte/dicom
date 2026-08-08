@@ -17,10 +17,10 @@ The text sweep now runs on every binary target, and `scanEmbeddedObjects` runs i
 decodes as well, where the base64 hides the name from the enclosing page. Both are additions beside
 `scanDicom`, never replacements for it.
 
-The accepted cost is false positives over binary values. Measured rather than assumed: on
-high-entropy pixel data they come from the person-name-shape pass and not from the date
-passes, which need a run of exactly eight digits. Figures, causes and the residuals left open are in
-`documentation/agent-notes/dicom-scandicom-silent-halt.md`.
+The accepted cost is false positives over binary values. Which recognizer produces them, and how
+many, is a property of the payload's byte histogram rather than of the scanner: over 8 MiB of
+synthetic pixel data the measured count runs from zero to five figures. The table, and the residuals
+left open, are in `documentation/agent-notes/dicom-scandicom-silent-halt.md`.
 
 Also closes a pre-existing refusal on the same route: the base64 run matcher was a greedy regular
 expression, and one multi-megabyte run overflowed V8's backtrack stack, exiting 2 rather than

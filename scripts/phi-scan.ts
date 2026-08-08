@@ -1355,18 +1355,18 @@ const TEXT_EXTENSIONS = new Set([".json", ".txt", ".md", ".csv"]);
  * can now report the same value twice, once under its tag and once as `(text)`; two lines naming one
  * value is not a defect in a gate whose output a human reads before committing, and a missing line is.
  *
- * 🛑 THE REAL PRICE IS FALSE POSITIVES FROM THE **PN-SHAPE** PASS, NOT THE COMPACT-DATE ONE, AND A
- * FIRST DRAFT OF THIS PARAGRAPH NAMED THE WRONG RECOGNIZER IN FOUR ARTIFACTS AT ONCE. Over high-entropy
- * bytes - which is what an encapsulated JPEG frame is - `/\b[A-Z][A-Za-z\-']+\^[A-Z][A-Za-z\-']+\b/`
- * finds a caret with letters either side often enough to fire, and `\b\d{8}\b` essentially never does,
- * because it needs a run of EXACTLY eight digits. Measured over 8 independent 8 MiB draws: every hit
- * came from the PN pass and none from either date pass. So the line a developer actually reads names
- * `vr=PN` over a two-letter-caret-two-letter fragment of image noise, not a plausible-looking date. That is still the
- * `DICOM-DEIDENT-OVER-REDACTION` shape and the trade is still not symmetric - a false positive costs
- * one look at a hit line, while the silent halt it replaces printed `OK - no hits` over a patient
- * name - but the noise is person-name-shaped, which is the kind that trains a reader to skim.
- * NO RATE IS QUOTED HERE: it is a property of the corpus, not of this script, and the measurements
- * live in `documentation/agent-notes/dicom-scandicom-silent-halt.md`.
+ * 🛑 THE REAL PRICE IS FALSE POSITIVES OVER BINARY VALUES, AND NO SENTENCE HERE SAYS WHICH RECOGNIZER
+ * PRODUCES THEM. That is deliberate. Two drafts tried, one naming the compact-date pass and one naming
+ * the PN-shape pass, and a `conformance-refuter` refuted both; a claim reworded twice is DELETED here
+ * rather than written a third time. WHICH RECOGNIZER DOMINATES IS A PROPERTY OF THE PAYLOAD'S BYTE
+ * HISTOGRAM, not of this script: measured over 8 MiB of synthetic pixel data, the hit count runs from
+ * 0 to five figures, with the PN pass dominant on some histograms and a date pass dominant on others.
+ * Read the table in `documentation/agent-notes/dicom-scandicom-silent-halt.md` rather than carrying a
+ * rate, or a recognizer's name, out of here.
+ *
+ * It is still the `DICOM-DEIDENT-OVER-REDACTION` shape, and the trade is still not symmetric: a false
+ * positive costs a developer one look at a hit line, while the silent halt it replaces printed
+ * `OK - no hits` over a patient name.
  *
  * A text extension is still dispatched by NAME rather than by content: a `.md` whose first bytes
  * happened to look like group `0002` is still a document, and losing `scanEmbeddedObjects` on it

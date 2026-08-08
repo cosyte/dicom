@@ -79,11 +79,15 @@ The binary branch asks two independent questions and runs **both** answers, unco
 
 | input | base `21e25a0` | shipped |
 |---|---|---|
-| `isDicom` true | `scanDicom` only | `scanDicom` **and** `scanText`. Pure addition. |
-| preamble-less | `scanDicom` and `scanText` | unchanged |
-| neither | `scanText` only | unchanged |
+| `isDicom` true | `scanDicom` only | `scanDicom` **and** `scanText` **and** `scanEmbeddedObjects`. Pure addition. |
+| preamble-less | `scanDicom` and `scanText` and `scanEmbeddedObjects` | unchanged |
+| neither | `scanText` and `scanEmbeddedObjects` | unchanged |
 
-`scanEmbeddedObjects` gained the same second route on the object it decodes, for the same reason and
+**`scanEmbeddedObjects` IS NAMED IN EVERY ROW ON PURPOSE.** A draft of this table stopped at
+`scanText`, which reads as though the base64 decode were a markdown feature, and it also made rows 2
+and 3 wrong about the base: both ran the decode there already.
+
+`scanEmbeddedObjects` gained a second route on the object it decodes, for the same reason and
 one level down. **The enclosing page's own text sweep does not stand in for it**: the object arrives
 base64-encoded, so the name is not in the page's bytes in any form the PN regex could match. That is
 pinned by a control which strips the base64 run from the same page and requires exit 0.
@@ -101,48 +105,45 @@ PHI-scan halt over a name-bearing `(0010,0010)` is a false green, and a false po
 trade is not symmetric. A false positive costs a developer one look at a hit line; the halt it
 replaces printed `OK - no hits` over a patient name.
 
-**🛑 IT IS THE PN-SHAPE PASS THAT FIRES, NOT THE COMPACT-DATE PASS, AND THE FIRST DRAFT OF THIS SLICE
-NAMED THE WRONG RECOGNIZER IN FOUR ARTIFACTS AT ONCE** (this file, the `scanTarget` JSDoc, the test
-block comment and the changeset), because it reasoned about `\b\d{8}\b` from the item's wording
-instead of counting what the scanner reported. A refuter pass caught it and the count reproduced
-independently. **The item's own phrase "flags digit runs inside pixel data" is therefore a
-description of the accepted cost that does not survive measurement; the cost is real, and it is
-person-name-shaped.** The reason is in the two patterns: `\b(\d{4})(\d{2})(\d{2})\b` needs a run of
-**exactly** eight digits bounded by non-digits **and** a month of 01-12 and a day of 01-31, while
-`/\b[A-Z][A-Za-z\-']+\^[A-Z][A-Za-z\-']+\b/` needs only a `^` with a letter run either side. Over
-high-entropy bytes the second is common and the first is nearly impossible.
+**🛑 THERE IS NO SENTENCE HERE RANKING THE RECOGNIZERS, AND ITS ABSENCE IS THE FINDING. TWO WORDINGS
+WERE REFUTED IN A ROW, SO THE CLAIM IS DELETED RATHER THAN WRITTEN A THIRD TIME** (`CLAUDE.md`
+§ Method). Draft one said the **compact-date** pass was the price, reasoning from the item's phrase
+"flags digit runs inside pixel data" instead of counting; pass 1 refuted it. Draft two said it was
+the **PN-shape** pass "and not the compact-date one", generalising from high-entropy noise; pass 2
+refuted that too, and the counter-measurement reproduced here. **Both recognizers fire, and WHICH ONE
+DOMINATES IS A PROPERTY OF THE PAYLOAD'S BYTE HISTOGRAM, not of this scanner.** The table is the
+statement. **Do not replace it with a sentence.**
 
-Hits per 8 MiB of `(7FE0,0010) OW` value, base `21e25a0` vs shipped. **Base is 0 on every row,
-because base swept none of it.** The split columns are the point of the table.
+Hits per 8 MiB of `(7FE0,0010) OW` value, shipped scanner. **Base `21e25a0` is 0 on every row,
+because base swept none of it.** One draw per row unless the row says otherwise, over a synthetic
+payload named by its byte histogram; these are ILLUSTRATIVE OF RANGE and are not rates.
 
-| payload | shipped hits | from PN-shape | from either date pass |
-|---|---|---|---|
-| CSPRNG bytes, 8 independent draws | 8 to 23, mean 14 | **all of them** | **0 in all 8 draws** |
-| 8-bit ramp | 0 | 0 | 0 |
-| 16-bit LE ramp | 0 | 0 | 0 |
-| realistic metadata + CSPRNG | 10 | 10 | 0 |
-| ASCII digits and dots only | 946 | 0 | **946** |
+| 8 MiB pixel payload | PN-shape hits | date hits |
+|---|---|---|
+| uniform over `0x00-0x2F` (dark frame) | 0 | 0 |
+| 8-bit ramp | 0 | 0 |
+| 16-bit LE ramp | 0 | 0 |
+| CSPRNG, 8 independent draws (compressed or encapsulated frame) | 8 to 23 | 0 in all 8 |
+| gaussian mu `0x35` sd 10 (narrow histogram) | 0 | 25 |
+| uniform over `0x30-0x3F` (4-bit-quantised region) | 0 | 843 |
+| ASCII digits and dots (adversarial) | 0 | 1,002 |
+| uniform over `0x41-0x60` (letters, and the caret sits in it) | **71,122** | 0 |
 
-The CSPRNG row is a **range over 8 draws, not a rate**, because the payload is unseeded noise and a
-single number off one draw is not reproducible: 8, 10, 12, 13, 14, 15, 17, 23. That is ~1.8 per MiB
-as a mean, and it is the worst REALISTIC case, since an encapsulated JPEG frame is high-entropy. The
-last row is adversarial and is not a frame any modality writes; it is in the table because it is the
-only shape that makes the compact-date pass the dominant term, which is what the first draft assumed
-was true everywhere.
+**THE SPREAD IS THE POINT: 0 TO 71,122 HITS OVER THE SAME 8 MiB, ON PAYLOADS THAT DIFFER ONLY IN
+WHICH BYTES THEY USE.** A rate quoted off any one row is a fact about that row's histogram. The last
+row is what refuted draft two: the PN pass is not rare, it is rare **on high-entropy noise**, and a
+region of an uncompressed image whose values land in the letter band puts the caret `0x5E` inside its
+own alphabet. The `0x30-0x3F` row is the same lesson pointed the other way, and it is not adversarial
+at all: it is what a 4-bit-quantised or heavily windowed region looks like.
 
-**THE RATE IS A PROPERTY OF THE CORPUS, NOT OF THIS SCRIPT, so do not quote one of these as "the"
-false-positive rate.** On the corpus this gate actually reads it is **zero**: `pnpm phi-scan` exits 0
-on `main` and exits 0 here, because the package commits **no `.dcm` files at all** and a `.ts` source
-was already getting the text sweep. Every figure above is a statement about a hypothetical corpus of
-committed imaging objects.
+**THE RATE IS A PROPERTY OF THE CORPUS, NOT OF THIS SCRIPT.** On the corpus this gate actually reads
+it is **zero**: `pnpm phi-scan` exits 0 on `main` and exits 0 here, because the package commits **no
+`.dcm` files at all** and a `.ts` source was already getting the text sweep. Every figure above is a
+statement about a hypothetical corpus of committed imaging objects.
 
-**A ZERO IN THE TABLE ABOVE IS A FIXTURE PROPERTY, NOT A CLEARANCE, AND THE TWO RAMP ROWS HAVE TWO
-INDEPENDENT CAUSES rather than the one a first draft gave.** The date passes read 0 because a ramp's
-digit runs are ten long and `\b\d{8}\b` needs exactly eight. The PN pass reads 0 for an unrelated
-reason worth writing down, because it is the pass that actually matters here: in a byte ramp the
-neighbours of `0x5E` `^` are `0x5D` `]` and `0x5F` `_`, and neither is in `[A-Za-z\-']`, so the
-letter class can never adjoin the caret. Change the ramp's stride and that stops being true. **Do not
-restate either row as "pixel data does not false-positive".**
+**A ZERO IN THE TABLE ABOVE IS A FIXTURE PROPERTY, NOT A CLEARANCE.** Each zero has its own cause in
+that row's histogram, and no zero generalises to the row above or below it. **Do not restate any of
+them as "pixel data does not false-positive".**
 
 **🛑 AND A FIRST DRAFT OF THIS TABLE READ 0 ON EVERY ROW, WHICH WAS A FIXTURE ARTIFACT REPORTED AS A
 FINDING** - this repo's recurring failure mode. The generator was `x = (x * 1103515245 + 12345) >>> 0`,
@@ -174,11 +175,12 @@ measured rather than asserted: over every tracked file under `docs-content/`, `R
 of edge and adversarial strings including a 4 MiB single run (below the threshold where the pattern
 throws), padding of zero, one, two and three `=`, and a run one character below the floor.
 
-**🛑 THE RUN COUNT IS DELIBERATELY NOT WRITTEN DOWN, AND A DRAFT THAT WROTE ONE WAS WRONG FOR BOTH
-SHAS.** It quoted 13,307; a refuter measured 13,305 at base `21e25a0` and 13,315 at head. That is
-this repo's oldest failure mode, and it has an extra edge here: **the corpus contains the files this
-slice edits**, so any figure is stale the moment the next line lands. It is one command, so derive
-it, comparing `[...t.matchAll(/[A-Za-z0-9+\/]{16,}={0,2}/g)].map(m => m[0])` with
+**🛑 THE RUN COUNT IS DELIBERATELY NOT WRITTEN DOWN.** A draft quoted one and it matched neither sha;
+a second draft quoted two more, naming "base" and "head", and the "head" figure was already wrong at
+the sha it shipped on. **Both are deleted rather than corrected a third time**, because the corpus
+contains the files this slice edits, so the number moves with every line of this very paragraph
+(`scanEmbeddedObjects`, written out, is itself a base64 run long enough to count). It is one command,
+so derive it, comparing `[...t.matchAll(/[A-Za-z0-9+\/]{16,}={0,2}/g)].map(m => m[0])` with
 `[...base64Runs(t)]` over `git ls-files -z -- docs-content README.md test src scripts`. **What
 matters is that the mismatch count is zero, and zero does not move.**
 
