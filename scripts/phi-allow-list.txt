@@ -26,9 +26,57 @@ DOE^JANE
 DOE^JOHN
 SYNTHETIC^FIXTURE
 
+# --- Synthetic PN values in the TEST corpus (PHI-SCAN-WALK-ROOT-SCOPE) ---
+# The walk root moved from `test/fixtures/` to `test/`, which opened 81 tracked files this
+# gate had never read. Every fixture this package owns is BUILT IN A `.ts` SOURCE FILE by
+# `test/helpers/build-dicom.ts`, so its whole committed fixture corpus is PN literals in
+# TypeScript rather than `.dcm` files on disk. Each value below was hand-read in place before
+# it was listed.
+#
+# The entries ADDED here are EXACT, never prefixes. A prefix admits every given name under a
+# surname, and none of these needs that: each is one literal in one family of fixtures. (The
+# prefixes above are pre-existing and unchanged; `Doe^` is what excuses `Doe^Jane` across the
+# newly opened files.)
+#
+# 🛑 THIS FILE IS GLOBAL AND HAS NO PATH SCOPING, AND ADDING TO IT IS A REAL WIDENING. The
+# scanner reads it into one Set and applies it to EVERY corpus it opens, so a value listed
+# because a `.ts` fixture needs it is equally excused in `README.md`, in `docs-content/`, and
+# in a `.dcm`. A refuter measured that: a `docs-content` page carrying these values scans
+# clean at head and exited 1 at the previous sha. The two worth naming are `DATE:19800101` and
+# `DATE:20240115`, which are plausible real birth and study dates. Path scoping is a change to
+# the allow-list FORMAT and is deliberately not made here; the cost is stated instead.
+BOND^JAMES
+DEEPER^PATIENT
+DEFLATE^TEST
+NESTED^PATIENT
+ROOT^PATIENT
+SMITH^REF
+SMITHSON^BRAIN
+XOE^JANE
+# `Yamada^Tarou` is PS3.5's own worked example for the three PN component groups; the vendored
+# PS3.5 2026c under `vendor/nema/part05/` carries it as `Yamada^Tarou=<ideographic>=<phonetic>`.
+# `Yam^Tar` is NOT in the standard: it is the test's ASCII stand-in for the ideographic group,
+# because the fixture is written in ASCII. Only the first is a citation, and a draft of this
+# comment claimed both were.
+Yamada^Tarou
+Yam^Tar
+
 # --- Allow-listed dates (8-char YYYYMMDD, ignored by 120-year check) ---
 DATE:19000101
 DATE:19500101
+
+# Synthetic fixture dates in the TEST corpus, same widening as above.
+DATE:19800101
+DATE:20240115
+
+# NOT DATES. These are DICOM TAG NUMBERS that happen to satisfy the `YYYYMMDD` shape, so the
+# text sweep's compact-date pass matches them: `(4010,1006)` and the private `(7001,100x)`
+# block. The date allow-list is the only mechanism available to excuse them, and mislabelling
+# them would be worse than saying so here.
+DATE:40101006
+DATE:70011001
+DATE:70011002
+DATE:70011003
 
 # --- Notes ---
 # To add a new synthetic identifier: append a line above and commit.

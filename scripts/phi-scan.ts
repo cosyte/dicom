@@ -7,11 +7,71 @@
  *   2. DA / DT values within the last 120 years of TODAY
  *
  * THE TWO CORPORA:
- *   - `test/fixtures/**`  - committed/staged DICOM fixtures and non-DICOM data files.
+ *   - `test/**` - the TEST corpus: every tracked file under `test/`, not just the
+ *     `test/fixtures/` subtree. See "WHY THE ROOT IS `test/`" below; this is the half
+ *     `PHI-SCAN-WALK-ROOT-SCOPE` was filed against.
  *   - `README.md` + `docs-content/**` - the DOC corpus. The documentation ships DICOM
  *     objects as base64-encoded Part 10 buffers inline in markdown, so a recipe needs no
  *     `.dcm` on disk; those buffers are fixtures in every respect that matters here, and
  *     the text sweep alone cannot see into one (see `scanEmbeddedObjects`).
+ *
+ * ---------------------------------------------------------------------------
+ * WHY THE ROOT IS `test/` AND NOT `test/fixtures/`, AND WHAT THAT COST WHILE IT WAS NOT
+ * (`PHI-SCAN-WALK-ROOT-SCOPE`, measured on `8982a16`).
+ *
+ * The walk rooted at `test/fixtures/`, and every file this package commits under that
+ * directory is GITIGNORED - `.gitignore` sends `test/fixtures/phi-scan/*.dcm|json|txt` away
+ * as regenerated-per-run, exempting only a `README.md` that the walk then skipped by name.
+ * So the fixture corpus contributed EXACTLY ZERO files and the all-mode run opened 13: the
+ * README and the twelve pages under `docs-content/`. Against 226 tracked files, 213 were
+ * outside the all-mode walk, 82 of them under `test/`. ONE of those 82 was still reachable
+ * by `--staged`, which has never applied the corpus exemption, so the figure for "scanned by
+ * NEITHER route" is 212 and 81. Both are written down because the two are easy to quote as
+ * each other.
+ *
+ * That is not a small gap, because this package has no committed `.dcm` files at all: every
+ * fixture it owns is BUILT IN A `.ts` SOURCE FILE by `test/helpers/build-dicom.ts`, so the
+ * whole committed fixture corpus lived in the 81 tracked files under `test/` that the walk
+ * root excluded. Pointing this scanner at that root finds 81 PN/date hits across 20 files,
+ * none of which any run of this gate had ever looked at. (Naming all 82 tracked files under
+ * `test/` by path finds 83 across 21: the two extra are in the one corpus-exempt README, which
+ * all-mode does not open. Both numbers are stated so neither can be quoted as the other.)
+ *
+ * 🛑 AND ENUMERATING THEM BUYS THE PN/DATE FLOOR AND NOTHING ELSE. The recognizers here look
+ * for `FAMILY^GIVEN`, `YYYY-MM-DD`, a standalone `YYYYMMDD`, and PN/DA/DT values under a
+ * hardcoded tag table. They do NOT look for an MRN, an accession number, an institution
+ * name, a phone number, an email address, an SSN, or a vendor UID root. The tracked files
+ * this change opens carry all of those shapes (synthetic ones: `MRN-11111`, `ACC0099`,
+ * `ACME GENERAL HOSPITAL`, `1.2.276.0.7230010.*`), and a clean run says nothing about any of
+ * them. "Newly scanned" is not "newly cleared"; the 81 files were HAND-READ for this change,
+ * and that reading, not this gate, is what cleared them.
+ *
+ * WHAT IS STILL OUT OF SCOPE, DELIBERATELY AND WITH THE REASON. Of 229 tracked files, 95 are
+ * opened, 1 is corpus-exempt, and 133 are outside the declared roots entirely: `src/` (72),
+ * `vendor/` (17), `scripts/` (13), `.github/` (8), `.changeset/` (4), `documentation/` (3),
+ * `.claude/` (1) and 15 files at the repository root.
+ *
+ * Admitting them is a PRODUCT call with its own false-positive surface rather than a side
+ * effect of this one, and the two largest groups are structural rather than accidental:
+ * `src/dictionary/generated/annex-e.ts` is a generated table of DICOM tags, and a tag such as
+ * `(4008,0101)` written as eight digits satisfies the `YYYYMMDD` shape, so the compact-date
+ * pass matches hundreds of them; `vendor/nema/` is a SHA-pinned copy of a standards document
+ * full of real publication dates. Neither is PHI and neither is fixed by a walk root.
+ *
+ * NO HIT COUNT FOR THEM IS WRITTEN DOWN, deliberately: it is a number about prose as much as
+ * about code, and a draft of this comment moved it by one just by naming a tag in eight-digit
+ * form. It is one command, so derive it rather than quoting a stale copy:
+ *   `git ls-files -z <dir> | xargs -0 pnpm phi-scan --`
+ *
+ * 🛑 AND THE ALLOW-LIST IS GLOBAL, WHICH MEANS WIDENING THE WALK ROOT WIDENED IT TOO. Every value
+ * `scripts/phi-allow-list.txt` carries is read into ONE Set and applied to EVERY corpus this
+ * scanner opens, so a name or a date listed because a `.ts` fixture under `test/` needed it is
+ * equally excused in `README.md`, in `docs-content/` and in a `.dcm`. Measured: a `docs-content`
+ * page carrying the values this change added exits 1 on `8982a16` and 0 here. The two worth
+ * naming are `DATE:19800101` and `DATE:20240115`, which are plausible real birth and study
+ * dates. Path scoping is a change to the allow-list FORMAT and is deliberately not made; the
+ * reasoning lives beside the entries, in the file itself.
+ * ---------------------------------------------------------------------------
  *
  * SECURITY: All git invocations use execFileSync with array args. Never any
  * shell-form spawn. The single subprocess this script makes is `git`, called
@@ -48,20 +108,26 @@
  *
  * "IN SCOPE" IS A NARROWER THING THAN THE PATH PREFIX, AND THE EXACT BOUNDARY IS
  * WORTH STATING RATHER THAN LEAVING TO BE INFERRED, BECAUSE THE GAP BETWEEN THE
- * TWO IS WHERE THIS DEFECT LIVED. The walk covers everything under
- * `test/fixtures/` except a gitignored entry (the same rule that already excludes
- * a gitignored fixture, so links do not get a second, stricter boundary of their
- * own). `--staged` covers `test/fixtures` and everything under it, restricted to
- * the staged records git reports as ADDED, MODIFIED or TYPECHANGED - a deletion
- * has no staged blob to scan and an unmerged path has no single one, and both are
- * still out of scope.
+ * TWO IS WHERE THIS DEFECT LIVED. The walk covers everything under each declared
+ * root except a gitignored entry (the same rule that already excludes a gitignored
+ * fixture, so links do not get a second, stricter boundary of their own) and the
+ * single corpus exemption, which is NAMED ON STDOUT EVERY RUN. `--staged` covers
+ * each declared root's own path and everything under it, restricted to the staged
+ * records git reports as ADDED, MODIFIED or TYPECHANGED - a deletion has no staged
+ * blob to scan and an unmerged path has no single one, and both are still out of
+ * scope.
  *
- * Almost all of that is unchanged; the two places it MOVED are called out rather
- * than folded into "narrowing", because both admit MORE than before: rename
- * detection is off, so a rename destination now arrives as an ordinary add
- * instead of vanishing with its two-path record, and the fixture root's own path
- * is in scope as well as its contents. Both are the same one entry-shape this
- * banner is about, reached by a route the prefix test did not cover.
+ * The places that boundary has MOVED are called out rather than folded into
+ * "narrowing", because each admits MORE than before: rename detection is off, so a
+ * rename destination now arrives as an ordinary add instead of vanishing with its
+ * two-path record; each root's own path is in scope as well as its contents; and
+ * the walk root is `test/` rather than `test/fixtures/`.
+ *
+ * NOTHING HAS MOVED THE OTHER WAY, AND A DRAFT THAT MOVED ONE WAS REFUTED. The one
+ * corpus exemption belongs to the `all` route alone; teaching `--staged` to honour
+ * it would have subtracted a detection the base had on the route the pre-commit
+ * hook runs. So the two routes disagree about exactly one file, they disagreed
+ * about it on base too, and `--staged` is the stricter of the two.
  *
  * A refusal names the entry's own repo-relative path and an engine-owned token
  * for its kind. IT NEVER REPORTS THE LINK TARGET, which is text off the working
@@ -84,7 +150,7 @@
  * D-15 / D-16 / D-17 / TEST-09.
  */
 
-import { readFileSync, statSync, existsSync, readdirSync, type Dirent } from "node:fs";
+import { readFileSync, statSync, lstatSync, existsSync, readdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join, resolve, relative, sep, extname, isAbsolute } from "node:path";
 
@@ -95,26 +161,87 @@ import { join, resolve, relative, sep, extname, isAbsolute } from "node:path";
 const REPO_ROOT = process.cwd();
 const ALLOW_LIST_PATH = join(REPO_ROOT, "scripts", "phi-allow-list.txt");
 const OVERRIDE_LOG_PATH = join(REPO_ROOT, "phi-scan-overrides.md");
-const FIXTURE_ROOT = join(REPO_ROOT, "test", "fixtures");
 const CUTOFF_YEAR = new Date().getFullYear() - 120;
 
 /**
- * THE DOC CORPUS. Roadmap Phase 8 requires that "the PHI scanner covers doc fixtures", and the
- * documentation ships DICOM objects the same way the test suite does: as base64-encoded Part 10
- * buffers inline in markdown, so a recipe needs no `.dcm` file on disk. Those buffers are fixtures
- * in every respect that matters here, and until this route existed the scanner never opened one.
+ * The TEST corpus root, repo-relative. `test`, not `test/fixtures`: see the banner.
  *
- * `README.md` is in the corpus even though the fixture walk deliberately skips a `readme.md`. That
- * exemption is about a file that DOCUMENTS violator values (`test/fixtures/phi-scan/README.md` names
- * the SMITH^JOHN fixtures on purpose); the package's own README is the npm-visible front page and
- * carries no such role. `docs-content/` is walked whole rather than filtered to `.md`, because
- * `scanTarget` already dispatches by content and a doc asset that is not markdown is still a doc
- * asset.
+ * 🛑 THE ROOTS MUST STAY DISJOINT. Listing `test` beside `test/fixtures` would enumerate
+ * everything under the latter TWICE and report every hit in it twice, so `test` REPLACES the
+ * old root rather than joining it.
  */
-const DOC_ROOTS = [join(REPO_ROOT, "README.md"), join(REPO_ROOT, "docs-content")];
+const TEST_SCOPE = "test";
 
-/** The same roots as `DOC_ROOTS`, repo-relative, for the `--staged` scope test. */
-const DOC_SCOPE = ["README.md", "docs-content"];
+/**
+ * A declared root, with the SHAPE it is declared to have.
+ *
+ * The shape is carried rather than inferred, because `README.md` is legitimately a regular
+ * file and `test` legitimately a directory, and "whatever is there" is exactly the reading
+ * that let a corpus root replaced by a blob through. A root that is the wrong shape is
+ * refused, not silently scanned as whatever it became.
+ */
+interface Root {
+  rel: string;
+  shape: "directory" | "file";
+}
+
+/**
+ * The DOC corpus roots, repo-relative.
+ *
+ * `README.md` is in the corpus even though the walk exempts `test/fixtures/phi-scan/README.md`.
+ * That exemption is about a file that DOCUMENTS violator values on purpose; the package's own
+ * README is the npm-visible front page and carries no such role. `docs-content/` is walked
+ * whole rather than filtered to `.md`, because `scanTarget` already dispatches by content and
+ * a doc asset that is not markdown is still a doc asset.
+ */
+const DOC_ROOTS: Root[] = [
+  { rel: "README.md", shape: "file" },
+  { rel: "docs-content", shape: "directory" },
+];
+
+/** Every declared root. Used by the walk, `--staged`, and the reconciliation. */
+const SCAN_ROOTS: Root[] = [{ rel: TEST_SCOPE, shape: "directory" }, ...DOC_ROOTS];
+
+/** The declared roots' repo-relative paths, for the `--staged` scope test and `git ls-files`. */
+const SCAN_SCOPE = SCAN_ROOTS.map((r) => r.rel);
+
+/**
+ * THE ONE EXEMPTION, AND IT IS THE ONE THAT WAS ALREADY HERE.
+ *
+ * `test/fixtures/phi-scan/README.md` documents the synthetic violator values the scanner's own
+ * unit tests plant (it names them in a table, so a reader can tell a deliberate violator from a
+ * mistake). Scanning it would red the gate on a file whose entire purpose is to carry those
+ * values.
+ *
+ * 🛑 IT IS ONE LITERAL PATH, NOT A PREDICATE, AND THE DIRECTION IT FAILS IN IS WHY. A first
+ * draft wrote it as "a `readme.md` under `test/fixtures/`" on the reasoning that a rule cannot
+ * go stale. A refuter refused that, correctly: a STALE EXACT PATH fails CLOSED (the file moved,
+ * so it is scanned, and the gate reds until somebody looks), while a PREDICATE fails OPEN
+ * (every future `README.md` anywhere under `test/fixtures/`, at any depth, is exempt for as
+ * long as nobody notices). Staleness that reds is the cheap failure; an exemption that quietly
+ * grows is the expensive one.
+ *
+ * Widening the walk root to `test/` therefore does not widen this by one file: a `README.md`
+ * anywhere else is scanned like any other file, and `test/smoke/README.md` now is.
+ *
+ * 🛑 AND IT IS THE `all` ROUTE'S EXEMPTION ONLY. `--staged` never applied it, and this change
+ * does NOT teach it to: that would SUBTRACT a detection the base had, on the route the
+ * pre-commit hook runs, which is the one direction this item forbids. The two routes therefore
+ * disagree about exactly one file, and they did on base too. `PRE-EXISTING`, and it fails
+ * closed: staging that README reds the hook.
+ *
+ * It never reaches an entry that is not a regular file. This exemption is a judgement about a
+ * file whose bytes the walk could have read; a link's NAME is no evidence at all about what is
+ * on the other side of it.
+ *
+ * Every exempt path is PRINTED ON EVERY RUN (see `reportExemptions`). An exemption nobody can
+ * see is the same shape as a root nobody notices is empty.
+ */
+const CORPUS_EXEMPT = new Set(["test/fixtures/phi-scan/README.md"]);
+
+function isCorpusExempt(relPath: string): boolean {
+  return CORPUS_EXEMPT.has(relPath);
+}
 
 /**
  * The shortest base64 run worth decoding: enough characters to encode ONE Explicit VR LE short-form
@@ -344,8 +471,21 @@ interface Unscannable {
   kind: string;
 }
 
+/**
+ * The predicates `Dirent` and `Stats` share. Structural on purpose: the walk reads a
+ * `Dirent` and the ROOT check reads an `lstat` `Stats`, and both must classify an entry
+ * from the same closed set or the two routes would describe the same shape differently.
+ */
+interface KindProbe {
+  isSymbolicLink(): boolean;
+  isFIFO(): boolean;
+  isSocket(): boolean;
+  isBlockDevice(): boolean;
+  isCharacterDevice(): boolean;
+}
+
 /** Closed-set, engine-owned description of a directory entry's kind. */
-function direntKind(e: Dirent): string {
+function entryKind(e: KindProbe): string {
   if (e.isSymbolicLink()) return "a symbolic link";
   if (e.isFIFO()) return "a FIFO";
   if (e.isSocket()) return "a socket";
@@ -354,49 +494,150 @@ function direntKind(e: Dirent): string {
   return "not a regular file";
 }
 
-function enumerateAll(): { files: string[]; unscannable: Unscannable[] } {
-  const files: string[] = [];
-  const unscannable: Unscannable[] = [];
-  if (existsSync(FIXTURE_ROOT)) walk(FIXTURE_ROOT, files, unscannable, true);
-  for (const root of DOC_ROOTS) {
-    if (!existsSync(root)) continue;
-    if (statSync(root).isDirectory()) walk(root, files, unscannable, false);
-    else files.push(root);
-  }
-  return { files, unscannable };
+interface Enumeration {
+  files: string[];
+  unscannable: Unscannable[];
+  missingRoots: string[];
 }
 
 /**
- * Enumerate the fixture root. `Dirent`'s predicates are lstat answers and are
- * not exhaustive: an entry that is neither a directory nor a regular file is
- * collected into `unscannable` rather than dropped, so the caller can refuse
- * instead of reporting clean over it.
+ * Enumerate every declared root.
+ *
+ * 🛑 THE ROOT IS `lstat`ed, NEVER `existsSync`ed, AND THAT IS THE WHOLE POINT OF THIS
+ * FUNCTION'S SHAPE. `existsSync` FOLLOWS a symbolic link, so a DANGLING one answers `false`
+ * and the old code `continue`d past the root without a word: `walk()` was never called, so
+ * `readdirSync` never ran and the not-a-regular-file rule that catches a link INSIDE the root
+ * never fired for the root itself. Measured on `8982a16`: `test/fixtures` replaced by a link
+ * to a nonexistent path, and by a link to a real directory, both printed `OK - no hits` and
+ * exited 0. `lstat` answers about the link, not the target, so the root is classified by the
+ * same closed set as any entry under it.
+ *
+ * A MISSING root is recorded rather than skipped, for the reason `terminology` paid for: a
+ * declared root that never existed prints clean on every run it ever makes.
+ *
+ * 🛑 AND A COUNT IS NOT A DETECTOR. Recording missing roots does not stand in for
+ * `reconcileWithGit`: a root that EXISTS and has been EMPTIED opens nothing while remaining
+ * perfectly present, and a denominator counts the roots that DID exist. Both checks run.
  */
-function walk(dir: string, out: string[], unscannable: Unscannable[], skipReadme: boolean): void {
+function enumerateAll(): Enumeration {
+  const files: string[] = [];
+  const unscannable: Unscannable[] = [];
+  const missingRoots: string[] = [];
+  for (const root of SCAN_ROOTS) {
+    const abs = join(REPO_ROOT, root.rel);
+    let st;
+    try {
+      st = lstatSync(abs);
+    } catch {
+      missingRoots.push(root.rel);
+      continue;
+    }
+    if (st.isDirectory()) {
+      if (root.shape === "directory") walk(abs, files, unscannable);
+      else
+        unscannable.push({ path: root.rel, kind: "a directory, where a regular file is declared" });
+    } else if (st.isFile()) {
+      if (root.shape === "file") files.push(abs);
+      else
+        unscannable.push({ path: root.rel, kind: "a regular file, where a directory is declared" });
+    } else {
+      unscannable.push({ path: root.rel, kind: entryKind(st) });
+    }
+  }
+  return { files, unscannable, missingRoots };
+}
+
+/**
+ * Enumerate one root. `Dirent`'s predicates are lstat answers and are not exhaustive: an
+ * entry that is neither a directory nor a regular file is collected into `unscannable`
+ * rather than dropped, so the caller can refuse instead of reporting clean over it.
+ *
+ * The corpus exemption is NOT applied here. The walk collects every regular file it reaches
+ * and `buildTargetsForAll` partitions them, so an exempt file is a path the reconciliation
+ * can ACCOUNT FOR and the report can NAME, rather than one that silently never existed.
+ */
+function walk(dir: string, out: string[], unscannable: Unscannable[]): void {
   const entries = readdirSync(dir, { withFileTypes: true });
   for (const e of entries) {
     const full = join(dir, e.name);
     if (e.isDirectory()) {
-      walk(full, out, unscannable, skipReadme);
+      walk(full, out, unscannable);
     } else if (e.isFile()) {
-      // Skip README.md files under the FIXTURE root: they're documentation that
-      // may legitimately describe synthetic violator values (e.g., this repo's
-      // `test/fixtures/phi-scan/README.md` documents the SMITH^JOHN /
-      // 20250612 fixtures). Documentation is not a fixture.
-      //
-      // The DOC corpus is walked with this off, because there the documentation
-      // IS the corpus: a doc that carried a violator value would be exactly the
-      // thing the doc route was added to catch.
-      if (skipReadme && e.name.toLowerCase() === "readme.md") continue;
       out.push(full);
     } else {
-      // Deliberately NOT subject to the `readme.md` exemption above. That
-      // exemption is a judgement about a file whose bytes the walk could have
-      // read; a link's name is no evidence at all about what is on the other
-      // side of it.
-      unscannable.push({ path: normalizePath(full), kind: direntKind(e) });
+      unscannable.push({ path: normalizePath(full), kind: entryKind(e) });
     }
   }
+}
+
+/**
+ * Every path git TRACKS under the declared roots.
+ *
+ * This is the reconciliation's authority, and it is deliberately a different source from the
+ * filesystem walk: the walk can only report what a root handed it, so a root that is missing,
+ * emptied, dangling or swapped hands it nothing and the walk has nothing to be suspicious
+ * about. `git ls-files` answers from the index instead, which does not care what the working
+ * tree currently looks like.
+ *
+ * A failure here REFUSES rather than returning an empty list. An empty list would silently
+ * make the reconciliation vacuous, which is precisely the failure mode being closed.
+ *
+ * 🔴 WHAT IT STILL CANNOT DO, DISCLOSED: a LEGITIMATELY empty answer is indistinguishable from
+ * nothing to check. In a repository where nothing under the declared roots is tracked yet, the
+ * reconciliation has no authority to reconcile against and passes in silence. It is a check
+ * against the INDEX, so it is exactly as strong as the index is, and it is at its weakest on a
+ * fresh tree - which is also where a corpus is least likely to exist to be missed.
+ */
+function trackedInScope(): string[] {
+  try {
+    // SECURITY: array-form execFileSync, no shell.
+    const out = execFileSync("git", ["ls-files", "-z", "--", ...SCAN_SCOPE], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    return out
+      .toString("utf8")
+      .split("\0")
+      .filter((p) => p.length > 0);
+  } catch (err) {
+    throw new InvocationError(
+      `git ls-files failed: ${err instanceof Error ? err.message : String(err)}. ` +
+        "Refusing rather than reconciling against a list that may be short.",
+    );
+  }
+}
+
+/**
+ * Refuse (exit 2) when git tracks a file under a declared root that the walk did not account
+ * for. Every tracked path must land in exactly one of three buckets: OPENED, GITIGNORED, or
+ * corpus-EXEMPT. Anything else means the walk did not reach a file a commit carries.
+ *
+ * 🔴 WHAT THIS DOES NOT CLOSE, AND NO REPO IN THIS ORG HAS: THE COMPARISON IS OVER PATH SETS,
+ * NOT OVER THE BYTES GIT CARRIES AT THOSE PATHS. A root swapped for a directory that mirrors
+ * the tracked NAMES still reconciles and still exits 0, over whatever decoy contents those
+ * names hold. Widening the root makes that narrower rather than safer: a decoy now has to
+ * mirror 94 tracked names instead of 13. It is disclosed rather than claimed away.
+ */
+function reconcileWithGit(accounted: Set<string>): void {
+  const missed = trackedInScope().filter((p) => !accounted.has(p));
+  if (missed.length === 0) return;
+  const lines = missed
+    .slice(0, 40)
+    .map((p) => `  - ${p}`)
+    .join("\n");
+  const more = missed.length > 40 ? `\n  ... and ${String(missed.length - 40)} more` : "";
+  throw new InvocationError(
+    `refusing the scan: git tracks ${String(missed.length)} file(s) under the declared roots ` +
+      `(${SCAN_SCOPE.join(", ")}) that the walk did not open:\n${lines}${more}\n` +
+      // The message names the CONDITION it actually observed and lists the causes as causes.
+      // A first draft asserted "a root that is missing, emptied, dangling or swapped", which is
+      // wrong for the commonest way to reach this line by far: an ordinary `rm` of a tracked
+      // file mid-refactor, with every root perfectly intact.
+      "Every tracked path under a declared root has to be opened, gitignored or corpus-exempt. " +
+      "The usual cause is an unstaged deletion of a tracked file; the ones this check exists " +
+      "for are a root that is emptied, swapped, or replaced by something the walk cannot " +
+      "enumerate, because a clean result over one of those is a statement about an unopened " +
+      "corpus. Restore the files, stage the deletion, or narrow the declared scope deliberately.",
+  );
 }
 
 /**
@@ -467,8 +708,20 @@ function buildTargetsForPaths(paths: string[]): Target[] {
   return out;
 }
 
+/** Corpus-exempt paths the last `all`-mode enumeration accounted for, for the report. */
+const exemptThisRun: string[] = [];
+
 function buildTargetsForAll(): Target[] {
-  const { files, unscannable } = enumerateAll();
+  const { files, unscannable, missingRoots } = enumerateAll();
+
+  if (missingRoots.length > 0) {
+    throw new InvocationError(
+      `refusing the scan: ${String(missingRoots.length)} declared root(s) do not exist:\n` +
+        missingRoots.map((p) => `  - ${p}`).join("\n") +
+        "\nA declared root that is not there opens nothing and reports clean on every run it " +
+        "ever makes. Restore it, or remove it from the declared scope deliberately.",
+    );
+  }
 
   // One `git check-ignore` over both lists. An ignored entry is already out of
   // scope for the file route, so applying the same rule to a link keeps a single
@@ -485,12 +738,24 @@ function buildTargetsForAll(): Target[] {
       "corpus) untrack it and add it to .gitignore.",
   );
 
-  return files
-    .filter((abs) => !ignored.has(normalizePath(abs)))
-    .map((abs) => ({
-      path: normalizePath(abs),
-      read: () => readFileSync(abs),
-    }));
+  const opened: string[] = [];
+  exemptThisRun.length = 0;
+  for (const abs of files) {
+    const rel = normalizePath(abs);
+    if (ignored.has(rel)) continue;
+    if (isCorpusExempt(rel)) exemptThisRun.push(rel);
+    else opened.push(rel);
+  }
+
+  // Both routes' outputs are accounted for, plus the ignore set: a tracked-and-ignored path
+  // (`git add -f` over a `.gitignore` line) is out of scope for the scan but is not a walk
+  // failure, so it must not read as one.
+  reconcileWithGit(new Set([...opened, ...exemptThisRun, ...ignored]));
+
+  return opened.map((rel) => ({
+    path: rel,
+    read: () => readFileSync(join(REPO_ROOT, rel)),
+  }));
 }
 
 /** git's file modes for a regular blob. Every other mode is not a file to read. */
@@ -586,18 +851,17 @@ function buildTargetsForStaged(): Target[] {
     i += 2;
   }
 
-  // The fixture ROOT'S OWN PATH is in scope as well as everything under it. An
-  // index entry at exactly `test/fixtures` is never a directory - git records no
-  // entry for one - so it is the corpus root replaced by a blob, a link or a
-  // gitlink, and the prefix test alone let that through (measured: exit 0 over a
-  // staged mode-120000 `test/fixtures`). Only the "never a directory" half is
-  // load-bearing for the `===` test; the other three are all handled below.
-  // The doc corpus joins the fixture corpus here on the same terms: the root's own path as well as
-  // everything under it, so a `docs-content` replaced by a blob, a link or a gitlink is refused
-  // rather than skipped. `README.md` is a file, so only the `===` half can ever match it.
-  const roots = ["test/fixtures", ...DOC_SCOPE];
+  // Each ROOT'S OWN PATH is in scope as well as everything under it. An index entry at exactly
+  // `test` is never a directory - git records no entry for one - so it is a corpus root replaced
+  // by a blob, a link or a gitlink, and the prefix test alone let that through (measured: exit 0
+  // over a staged mode-120000 `test/fixtures`). Only the "never a directory" half is load-bearing
+  // for the `===` test; the other three are all handled below. `README.md` is a file, so only the
+  // `===` half can ever match it.
+  //
+  // The scope root is `test`, matching the all-mode walk. The two routes are meant to answer the
+  // same question about the same corpus, and they disagreed while one rooted at `test/fixtures`.
   const inScope = staged.filter((s) =>
-    roots.some((root) => s.path === root || s.path.startsWith(`${root}/`)),
+    SCAN_SCOPE.some((root) => s.path === root || s.path.startsWith(`${root}/`)),
   );
 
   refuseUnscannable(
@@ -613,6 +877,19 @@ function buildTargetsForStaged(): Target[] {
       "readable through it would be evidence about what it names.",
     "Unstage it, or replace it with a regular file.",
   );
+
+  // 🛑 THE CORPUS EXEMPTION IS DELIBERATELY NOT APPLIED HERE, AND A DRAFT THAT APPLIED IT WAS
+  // REFUTED. This route has never exempted `test/fixtures/phi-scan/README.md`, so teaching it to
+  // would SUBTRACT a detection the base had, on the route the pre-commit hook runs
+  // (`package.json`'s `pre-commit` is `pnpm phi-scan --staged`). Measured on `8982a16`: staging a
+  // README under `test/fixtures/` carrying a name exits 1 there, and a draft of this change made
+  // the same input exit 0.
+  //
+  // So the two routes disagree about exactly one file, they disagreed about it on base too, and
+  // the disagreement fails CLOSED: `--staged` is the stricter of the two. `PRE-EXISTING`,
+  // disclosed rather than closed, because closing it in the only direction available here means
+  // scanning less.
+  exemptThisRun.length = 0;
 
   return inScope.map(({ path: relPath }) => ({
     path: relPath,
@@ -1026,13 +1303,42 @@ function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
     scanDicom(target, buf, allow, hits);
   }
   if (!isDicom(buf)) {
-    scanText(target, buf.toString("utf8"), allow, hits);
+    const text = buf.toString("utf8");
+    scanText(target, text, allow, hits);
+    // 🛑 THE EMBEDDED DECODE IS NOT A MARKDOWN FEATURE, AND SCOPING IT TO `TEXT_EXTENSIONS` MADE
+    // IT ONE. A Part 10 object pasted as base64 into a `.ts` source is the same fixture as one
+    // pasted into a `.md` page, and every fixture this package commits is built in a `.ts` file.
+    // Measured on `8982a16` with one object and one name: as `probe.md` it was found, as
+    // `probe.dcm` it was found, as `probe.ts` the run printed `OK - no hits`. Widening the walk
+    // root to `test/` without this would have opened 81 `.ts` files and still read past every
+    // encoded object in them.
+    scanEmbeddedObjects(target, text, allow, hits);
   }
 }
 
 // ---------------------------------------------------------------------------
 // Reporting
 // ---------------------------------------------------------------------------
+
+/**
+ * Print the corpus exemptions this run accounted for, whether or not there were hits.
+ *
+ * An exemption that is not printed is indistinguishable from a file the walk never reached,
+ * which is the whole class of defect this script keeps paying for. Printing it makes the
+ * exemption an OBSERVATION rather than an assumption, and makes a stale one visible the moment
+ * the file it names moves.
+ *
+ * 🛑 THIS IS NOT A DENOMINATOR AND MUST NOT BE READ AS ONE. It names what was deliberately
+ * skipped. What DETECTS an unopened corpus is `reconcileWithGit`; a count of the files that
+ * were reached counts only the roots that were there to reach.
+ */
+function reportExemptions(): void {
+  if (exemptThisRun.length === 0) return;
+  process.stdout.write(
+    `[phi-scan] corpus exemption in force for ${String(exemptThisRun.length)} file(s): ` +
+      `${exemptThisRun.join(", ")}\n`,
+  );
+}
 
 function report(hits: Hit[]): void {
   if (hits.length === 0) {
@@ -1123,9 +1429,36 @@ function main(): number {
     }
   }
 
+  reportExemptions();
   report(hits);
   return hits.length === 0 ? 0 : 1;
 }
 
-const exitCode = main();
+/**
+ * 🛑 AN UNEXPECTED ERROR MUST NOT EXIT 1. This script's contract is 0 clean / 1 hits found / 2
+ * invocation error, and an uncaught throw exits 1 on Node - the one code that means "PHI was
+ * found", to a CI job that reads exit codes rather than stderr. `readdirSync` raising `EACCES`
+ * on an unreadable subdirectory is the live case, and widening the walk root from
+ * `test/fixtures/` to `test/` enlarged the surface it can happen on, so it is closed here rather
+ * than disclosed. Measured before this catch existed: a mode-000 directory under the walk root
+ * exited 1.
+ *
+ * The message is `err.message` only, never a stack or a cause chain, and never any bytes read
+ * off a scanned file: a diagnostic about a PHI-bearing corpus is itself a PHI surface. Node's
+ * own filesystem errors name the PATH they failed on, which is the same locus every hit and
+ * every refusal already carries.
+ */
+function run(): number {
+  try {
+    return main();
+  } catch (err) {
+    process.stderr.write(
+      `[phi-scan] refusing the scan: ${err instanceof Error ? err.message : String(err)}\n` +
+        "This is not a hit. The scan did not complete, so it says nothing about the corpus.\n",
+    );
+    return 2;
+  }
+}
+
+const exitCode = run();
 process.exit(exitCode);

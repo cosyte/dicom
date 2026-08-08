@@ -29,11 +29,23 @@ import {
   copyFileSync,
   symlinkSync,
   realpathSync,
+  chmodSync,
 } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { runRepoScript } from "../helpers/run-script.js";
+import {
+  VIOLATOR_PN,
+  CARET_PN,
+  PN_SHAPE,
+  RECENT_DA,
+  VIOLATOR_DOB,
+  TEXT_VIOLATOR_DATE,
+  OVERRIDE_LOG_DATE,
+  ALLOWED_DA,
+  TARGET_NAME,
+} from "../helpers/phi-scan-violators.js";
 
 /**
  * This repository's root, from **this file's own location** rather than from
@@ -179,15 +191,15 @@ beforeAll(() => {
   writeDicomFixture(join(FIX_DIR, "synthetic-pn-anon.dcm"), "19500101", "ANON^PATIENT");
   writeDicomFixture(join(FIX_DIR, "synthetic-pn-doe.dcm"), "19000101", "DOE^JANE");
   writeDicomFixture(join(FIX_DIR, "old-date-1900.dcm"), "19000101", "ANON^PATIENT");
-  writeDicomFixture(join(FIX_DIR, "recent-date-violator.dcm"), "20250612", "ANON^PATIENT");
-  writeDicomFixture(join(FIX_DIR, "recent-pn-violator.dcm"), "19000101", "SMITH^JOHN");
+  writeDicomFixture(join(FIX_DIR, "recent-date-violator.dcm"), RECENT_DA, "ANON^PATIENT");
+  writeDicomFixture(join(FIX_DIR, "recent-pn-violator.dcm"), "19000101", VIOLATOR_PN);
   writeFileSync(
     join(FIX_DIR, "non-dicom-clean.json"),
     JSON.stringify({ date: "1850-01-01", patient: "ANON^PATIENT" }),
   );
   writeFileSync(
     join(FIX_DIR, "non-dicom-violator.txt"),
-    "Sample DOB record: 1990-04-15 (recent - should fail)",
+    `Sample DOB record: ${TEXT_VIOLATOR_DATE} (recent - should fail)`,
   );
 });
 
@@ -217,14 +229,14 @@ describe("phi-scan: recent-date / non-allow-listed-PN violations (TEST-09)", () 
     const r = runScanner([join(FIX_DIR, "recent-date-violator.dcm")]);
     expect(r.code).toBe(1);
     expect(r.stderr).toMatch(/0008,0020/);
-    expect(r.stderr).toMatch(/20250612/);
+    expect(r.stderr).toContain(RECENT_DA);
   });
 
   it("recent-pn-violator.dcm exits 1 with structured stderr", () => {
     const r = runScanner([join(FIX_DIR, "recent-pn-violator.dcm")]);
     expect(r.code).toBe(1);
     expect(r.stderr).toMatch(/0010,0010/);
-    expect(r.stderr).toMatch(/SMITH\^JOHN/);
+    expect(r.stderr).toContain(VIOLATOR_PN);
   });
 });
 
@@ -246,11 +258,11 @@ describe("phi-scan: non-DICOM file regex sweep", () => {
  *
  * The documentation ships DICOM objects the same way the test suite does, as base64-encoded Part 10
  * buffers pasted inline in markdown, and until this route existed the scanner never opened one: to
- * the text sweep a base64 run is one long alphanumeric token with no `FAMILY^GIVEN` and no
+ * the text sweep a base64 run is one long alphanumeric token with no `PN_SHAPE` token and no
  * `YYYYMMDD` in it. That is the shape of a gate that reports clean over a corpus it never read.
  *
  * EVERY PAYLOAD HERE CARRIES A NAME. A PHI test whose fixture holds nothing identifying is vacuous
- * by construction, so the violators use `SMITH^JOHN`, which is not on the allow-list, and each is
+ * by construction, so the violators use `VIOLATOR_PN`, which is not on the allow-list, and each is
  * paired with the control that turns the same run green.
  */
 describe("phi-scan: doc fixtures (base64 DICOM inside markdown)", () => {
@@ -290,14 +302,14 @@ describe("phi-scan: doc fixtures (base64 DICOM inside markdown)", () => {
   }
 
   it("a non-allow-listed PN inside a base64 doc fixture is a hit (exit 1)", () => {
-    const path = writeDoc("violator.md", buildDicomFixture("19000101", "SMITH^JOHN"));
+    const path = writeDoc("violator.md", buildDicomFixture("19000101", VIOLATOR_PN));
     const r = runScanner([path]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toMatch(/\(0010,0010\)/);
   });
 
   it("a recent StudyDate inside a base64 doc fixture is a hit (exit 1)", () => {
-    const path = writeDoc("recent.md", buildDicomFixture("20250612", "ANON^PATIENT"));
+    const path = writeDoc("recent.md", buildDicomFixture(RECENT_DA, "ANON^PATIENT"));
     const r = runScanner([path]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toMatch(/\(0008,0020\)/);
@@ -307,7 +319,7 @@ describe("phi-scan: doc fixtures (base64 DICOM inside markdown)", () => {
     // `docs-content/cookbook.md` demonstrates DICOM_MISSING_PREAMBLE with an object whose File Meta
     // group starts at byte 0. Recognizing only the `DICM`-at-128 shape would leave that one
     // unscanned while the gate reported clean.
-    const bare = buildDicomFixture("19000101", "SMITH^JOHN").subarray(132);
+    const bare = buildDicomFixture("19000101", VIOLATOR_PN).subarray(132);
     expect(bare.toString("ascii", 0, 4)).not.toBe("DICM");
     const path = writeDoc("no-preamble.md", bare);
     const r = runScanner([path]);
@@ -336,13 +348,13 @@ describe("phi-scan: doc fixtures (base64 DICOM inside markdown)", () => {
     expect(shortest, "cookbook.md ships no preamble-less object any more").toBeDefined();
     if (shortest === undefined) return;
 
-    // Explicit VR LE `(0010,0010) PN 10 "SMITH^JOHN"`, appended to the real object's dataset.
+    // Explicit VR LE `(0010,0010) PN`, carrying `VIOLATOR_PN`, appended to the real object's dataset.
     const header = Buffer.alloc(8);
     header.writeUInt16LE(0x0010, 0);
     header.writeUInt16LE(0x0010, 2);
     header.write("PN", 4, "ascii");
-    header.writeUInt16LE(10, 6);
-    const seeded = Buffer.concat([shortest, header, Buffer.from("SMITH^JOHN", "latin1")]);
+    header.writeUInt16LE(VIOLATOR_PN.length, 6);
+    const seeded = Buffer.concat([shortest, header, Buffer.from(VIOLATOR_PN, "latin1")]);
 
     const path = writeDoc("shortest-real.md", seeded);
     const r = runScanner([path]);
@@ -359,10 +371,10 @@ describe("phi-scan: doc fixtures (base64 DICOM inside markdown)", () => {
   it("the TEXT sweep alone would not have caught it, so the decode is what does the work", () => {
     // The control that makes the three hits above mean something. The violating name is present in
     // the file only as base64, so a scanner without the decode route reads the page as clean.
-    const object = buildDicomFixture("19000101", "SMITH^JOHN");
+    const object = buildDicomFixture("19000101", VIOLATOR_PN);
     const path = writeDoc("evidence.md", object);
-    expect(readFileSync(path, "utf8")).not.toMatch(/SMITH\^JOHN/);
-    expect(object.toString("latin1")).toMatch(/SMITH\^JOHN/);
+    expect(readFileSync(path, "utf8")).not.toContain(VIOLATOR_PN);
+    expect(object.toString("latin1")).toContain(VIOLATOR_PN);
   });
 
   it("a base64 run that is not a DICOM object is dropped in silence, not guessed at", () => {
@@ -390,7 +402,7 @@ describe("phi-scan: --allow-fixture override (D-17)", () => {
     try {
       const entry =
         "\n### test/fixtures/phi-scan/recent-date-violator.dcm\n\n" +
-        "- **Date:** 2026-05-01\n" +
+        `- **Date:** ${OVERRIDE_LOG_DATE}\n` +
         "- **Reason:** unit test\n" +
         "- **Approved by:** vitest\n" +
         "- **Expires:** permanent\n";
@@ -426,13 +438,10 @@ describe("phi-scan: --allow-fixture override (D-17)", () => {
  * scanner's text pass detects. Every value is invented.
  */
 const SYNTHETIC_PHI =
-  ["Patient: RIVERA^JUANITA", "DOB: 1978-03-14", "StudyDate: 20240115"].join("\n") + "\n";
-
-/** The link target's own name carries a synthetic name, so an echo of it is visible. */
-const TARGET_NAME = "RIVERA-JUANITA-1978-03-14.txt";
+  [`Patient: ${CARET_PN}`, `DOB: ${VIOLATOR_DOB}`, `StudyDate: ${ALLOWED_DA}`].join("\n") + "\n";
 
 /** Tokens that must never appear in a refusal message. */
-const PHI_TOKENS = ["RIVERA", "JUANITA", "1978-03-14", "20240115", TARGET_NAME];
+const PHI_TOKENS = [...CARET_PN.split("^"), VIOLATOR_DOB, ALLOWED_DA, TARGET_NAME];
 
 function expectNoPhi(stderr: string): void {
   for (const t of PHI_TOKENS) expect(stderr).not.toContain(t);
@@ -456,19 +465,28 @@ const repos: string[] = [];
 
 /**
  * A throwaway git repo laid out the way this scanner expects: an allow-list under
- * `scripts/`, the `test/fixtures/` walk root, and one ordinary fixture so the
- * walk has something legitimate to find.
+ * `scripts/`, EVERY declared root, and one ordinary fixture so the walk has
+ * something legitimate to find.
+ *
+ * All three roots are created, not just the one a given case exercises. The
+ * scanner refuses a declared root that is not there, which is the point of
+ * `a declared root that does not exist is refused` below, so a helper that left
+ * `README.md` or `docs-content/` out would make every case here refuse for a
+ * reason none of them is about.
  */
 function makeRepo(): string {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "dicom-phi-scan-repo-")));
   repos.push(root);
   mkdirSync(join(root, "scripts"));
   mkdirSync(join(root, "test", "fixtures"), { recursive: true });
+  mkdirSync(join(root, "docs-content"));
   copyFileSync(
     join(REPO_ROOT, "scripts", "phi-allow-list.txt"),
     join(root, "scripts", "phi-allow-list.txt"),
   );
   writeFileSync(join(root, "test", "fixtures", "ordinary.txt"), "synthetic corpus placeholder\n");
+  writeFileSync(join(root, "README.md"), "# throwaway\n");
+  writeFileSync(join(root, "docs-content", "intro.md"), "# throwaway doc\n");
   git(root, ["init", "-q", "."]);
   return root;
 }
@@ -502,8 +520,8 @@ describe("phi-scan: the synthetic payload is genuinely detectable", () => {
     writeFileSync(join(root, "test", "fixtures", "violator.txt"), SYNTHETIC_PHI);
     const r = runIn(root, []);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain("RIVERA^JUANITA");
-    expect(r.stderr).toContain("1978-03-14");
+    expect(r.stderr).toContain(CARET_PN);
+    expect(r.stderr).toContain(VIOLATOR_DOB);
   });
 
   it("a repo with no link and no violator scans clean (exit 0)", () => {
@@ -595,10 +613,11 @@ describe("phi-scan: the all-mode walk refuses a non-regular entry", () => {
     expectNoPhi(r.stderr);
   });
 
-  it("a link OUTSIDE the walk root is not reached (the walk root is unchanged)", () => {
-    // All-mode has only ever walked `test/fixtures/`. Narrowing what that root
-    // admits is not the same as widening the root, and saying otherwise would
-    // overstate what this closes.
+  it("a link OUTSIDE every declared root is not reached", () => {
+    // The declared roots are `test`, `README.md` and `docs-content`. `src/` is
+    // not one of them, and `PHI-SCAN-WALK-ROOT-SCOPE` widened the corpus root to
+    // `test/` rather than to the whole repository. Saying otherwise would
+    // overstate what that closes.
     const root = makeRepo();
     writeFileSync(join(root, TARGET_NAME), SYNTHETIC_PHI);
     mkdirSync(join(root, "src"));
@@ -621,7 +640,7 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
     expect(gitOut(root, ["ls-files", "--stage", "test/fixtures/leak.txt"])).toMatch(/^120000 /);
     const shown = gitOut(root, ["show", ":test/fixtures/leak.txt"]);
     expect(shown.trim()).toBe(`../../${TARGET_NAME}`);
-    expect(shown).not.toContain("RIVERA^JUANITA");
+    expect(shown).not.toContain(CARET_PN);
   });
 
   it("refuses a staged symlink (exit 2), and reports no PHI", () => {
@@ -693,7 +712,7 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
 
     const r = runIn(root, ["--staged"]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain("RIVERA^JUANITA");
+    expect(r.stderr).toContain(CARET_PN);
   });
 
   it("refuses a link RENAMED into the scan root, which rename detection hid entirely", () => {
@@ -736,7 +755,7 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
     const r = runIn(root, ["--staged"]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toContain("test/fixtures/loose.txt");
-    expect(r.stderr).toContain("RIVERA^JUANITA");
+    expect(r.stderr).toContain(CARET_PN);
   });
 
   it("refuses the fixture ROOT itself staged as a link, not just entries under it", () => {
@@ -799,7 +818,7 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
     const r = runIn(root, ["--staged"]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toContain("test/fixtures/violator.txt");
-    expect(r.stderr).toContain("RIVERA^JUANITA");
+    expect(r.stderr).toContain(CARET_PN);
   });
 
   it("passes a staged ordinary clean fixture (exit 0)", () => {
@@ -810,9 +829,9 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
     expect(r.stdout).toMatch(/OK - no hits/);
   });
 
-  it("a staged link OUTSIDE the route's scope is left alone (the scope is unchanged)", () => {
-    // `--staged` has only ever covered `test/fixtures/**`. The mode check narrows
-    // what that scope admits; it does not widen the scope.
+  it("a staged link OUTSIDE the route's scope is left alone", () => {
+    // `--staged` covers the same three roots the walk does, and a loose file at
+    // the repository root is under none of them.
     const root = makeRepo();
     writeFileSync(join(root, TARGET_NAME), SYNTHETIC_PHI);
     symlinkSync(TARGET_NAME, join(root, "docs-link.txt"));
@@ -835,17 +854,14 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
 // written, so the two disagreed only at this one gate.
 //
 // EVERY PAYLOAD BELOW CARRIES A NAME, AND IT IS ONE THE TEXT SWEEP CANNOT SEE.
-// The text pass matches PN only in `FAMILY^GIVEN` form; a single-component
+// The text pass matches PN only in `PN_SHAPE` form; a single-component
 // `(0010,0010)` has no caret, so the fallback route has nothing to match, and a
 // hit therefore proves the DICOM route ran rather than proving the bytes were
 // merely present. `phi-scan-fallback-visible.txt` below is that control, and each
 // clean result is pinned beside a positive on the same route.
 
-/** Synthetic. Single-component, so the text sweep's `FAMILY^GIVEN` regex cannot match it. */
+/** Synthetic. Single-component, so the text sweep's `PN_SHAPE` regex cannot match it. */
 const BARE_PN = "WESTERGAARD";
-
-/** Synthetic, and caret-bearing, so it is the text sweep that can see it and NOT the tag walk. */
-const CARET_PN = "RIVERA^JUANITA";
 
 /** The same fixture assembler as everywhere else in this file, minus preamble and `DICM`. */
 function buildPreamblelessFixture(studyDate: string, patientName: string): Buffer {
@@ -937,10 +953,16 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
   it("the payload is invisible to the text sweep, so a hit can only come from the DICOM route", () => {
     // The non-vacuity control for every case below. Written as `.txt`, which
     // dispatches by NAME to the text route, the very same bytes scan clean.
+    const pnShapeRe = /\b[A-Z][A-Za-z\-']+\^[A-Z][A-Za-z\-']+\b/;
+    // The regex is the scanner's own text-sweep pattern, so pin that it is live
+    // before asserting a payload does not match it: a pattern that matched
+    // nothing would make the line below true for the wrong reason.
+    expect(PN_SHAPE).toMatch(pnShapeRe);
+
     const bare = buildPreamblelessFixture("19000101", BARE_PN);
     expect(bare.toString("ascii", 0, 4)).not.toBe("DICM");
     expect(bare.toString("latin1")).toContain(BARE_PN);
-    expect(bare.toString("utf8")).not.toMatch(/\b[A-Z][A-Za-z\-']+\^[A-Z][A-Za-z\-']+\b/);
+    expect(bare.toString("utf8")).not.toMatch(pnShapeRe);
 
     const r = runScanner([writeObject("fallback-visible.txt", bare)]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(0);
@@ -969,11 +991,11 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
 
   it("a preamble-less recent StudyDate is a hit on the DA route as well (exit 1)", () => {
     const r = runScanner([
-      writeObject("bare-date.dcm", buildPreamblelessFixture("20250612", "ANON^PATIENT")),
+      writeObject("bare-date.dcm", buildPreamblelessFixture(RECENT_DA, "ANON^PATIENT")),
     ]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toMatch(/\(0008,0020\)/);
-    expect(r.stderr).toMatch(/20250612/);
+    expect(r.stderr).toContain(RECENT_DA);
   });
 
   it("a preamble-less object with an ALLOW-LISTED payload scans clean (exit 0)", () => {
@@ -992,7 +1014,7 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
     // accident is the route that must still catch a genuinely non-DICOM one.
     const r = runScanner([writeObject("not-dicom.dcm", Buffer.from(SYNTHETIC_PHI, "utf8"))]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain("RIVERA^JUANITA");
+    expect(r.stderr).toContain(CARET_PN);
   });
 
   it("a preamble-FUL object is still scanned as DICOM (exit 1)", () => {
@@ -1049,7 +1071,7 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
     // One file, two names, one reachable by each route and NEITHER by the other.
     //   (0008,0090) PN WESTERGAARD  - before the SQ, single-component: tag walk only.
     //   (0008,1110) SQ undefined    - the tag walk stops dead here.
-    //   (0010,0010) PN RIVERA^JUANITA - past the stop, caret-bearing: text sweep only.
+    //   (0010,0010) PN CARET_PN     - past the stop, caret-bearing: text sweep only.
     // Both must be reported, and each one alone would leave the other route unproven.
     const object = Buffer.concat([
       preamblelessFileMeta("1.2.840.10008.1.2.1"),
@@ -1125,5 +1147,342 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
     const hit = runScanner([writeObject("preambleful-pn.dcm", named)]);
     expect(hit.code, `stderr: ${hit.stderr}`).toBe(1);
     expect(hit.stderr).toContain(CARET_PN);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// THE WALK ROOT IS `test/`, AND A DECLARED ROOT IS RECONCILED WITH GIT
+// (PHI-SCAN-WALK-ROOT-SCOPE)
+// ---------------------------------------------------------------------------
+//
+// Measured on base `8982a16`: all-mode opened THIRTEEN files, and none of them
+// was under `test/`. Every file this package commits under `test/fixtures/` is
+// gitignored (they are regenerated by the suite above), so the fixture root
+// contributed zero and the corpus was `README.md` plus `docs-content/`. Against
+// 226 tracked files, 213 were scanned by neither route, 82 of them under `test/`.
+//
+// That mattered here more than the shape of the number suggests: this package
+// ships NO `.dcm` files at all, so its whole committed fixture corpus is PN and
+// date literals inside `.ts` sources under `test/`. Pointing the same scanner at
+// that root finds 81 PN/date hits across 20 files (83 across 21 if the one
+// corpus-exempt README is named by path, which all-mode does not open).
+//
+// Four separate shapes let a declared root go unopened while the gate printed
+// `OK - no hits`, and each is pinned below with a positive beside it:
+//   - the root MISSING entirely (`terminology`'s worst instance);
+//   - the root a DANGLING symlink - `existsSync` FOLLOWS the link and answers
+//     false, so the walk returned before `readdirSync` and the not-a-regular-file
+//     rule never fired;
+//   - the root a REGULAR FILE - an uncaught `ENOTDIR`, which exits 1, the code
+//     that means "hits found";
+//   - the root present but EMPTIED, which no existence check can see at all.
+
+describe("phi-scan: the walk root is test/, not test/fixtures/", () => {
+  it("finds a violator in a tracked test file OUTSIDE test/fixtures (exit 1)", () => {
+    const root = makeRepo();
+    mkdirSync(join(root, "test", "unit"));
+    writeFileSync(join(root, "test", "unit", "leak.test.ts"), `const x = \`${SYNTHETIC_PHI}\`;\n`);
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("test/unit/leak.test.ts");
+    expect(r.stderr).toContain(CARET_PN);
+  });
+
+  it("the same file with an allow-listed payload is clean, so the root is not just always red", () => {
+    const root = makeRepo();
+    mkdirSync(join(root, "test", "unit"));
+    writeFileSync(join(root, "test", "unit", "ok.test.ts"), 'const x = "ANON^PATIENT";\n');
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+    expect(r.stdout).toMatch(/OK - no hits/);
+  });
+
+  it("exempts ONE literal path in all-mode, and no other README anywhere", () => {
+    const root = makeRepo();
+    mkdirSync(join(root, "test", "fixtures", "phi-scan"), { recursive: true });
+    mkdirSync(join(root, "test", "smoke"));
+    writeFileSync(join(root, "test", "fixtures", "phi-scan", "README.md"), SYNTHETIC_PHI);
+    writeFileSync(join(root, "test", "smoke", "README.md"), 'const x = "ANON^PATIENT";\n');
+
+    const clean = runIn(root, []);
+    expect(clean.code, `stderr: ${clean.stderr}`).toBe(0);
+    expect(clean.stdout).toContain("corpus exemption in force");
+    expect(clean.stdout).toContain("test/fixtures/phi-scan/README.md");
+
+    // The pin that stops the line above being vacuous: the SAME payload one
+    // directory across is scanned, so the exemption is one path rather than a
+    // rule about the file name.
+    writeFileSync(join(root, "test", "smoke", "README.md"), SYNTHETIC_PHI);
+    const hit = runIn(root, []);
+    expect(hit.code, `stderr: ${hit.stderr}`).toBe(1);
+    expect(hit.stderr).toContain("test/smoke/README.md");
+  });
+
+  it("🛑 the exemption is a PATH and not a rule, so a README ONE LEVEL UP is scanned", () => {
+    // A draft wrote the exemption as "a `readme.md` under `test/fixtures/`" on
+    // the reasoning that a rule cannot go stale, and a refuter refused it. The
+    // directions are not symmetric: a stale exact path fails CLOSED (the moved
+    // file is scanned and the gate reds), a predicate fails OPEN (every future
+    // README under that prefix, at any depth, is exempt until somebody notices).
+    const root = makeRepo();
+    writeFileSync(join(root, "test", "fixtures", "README.md"), SYNTHETIC_PHI);
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("test/fixtures/README.md");
+    expect(r.stderr).toContain(CARET_PN);
+  });
+
+  it("🛑 --staged does NOT apply the exemption, because base did not and that is a detection", () => {
+    // `package.json`'s `pre-commit` is `pnpm phi-scan --staged`, so this is the
+    // commit-blocking route. Base scanned a README under `test/fixtures/` on it
+    // and exited 1; a draft of this change taught the route the exemption and
+    // took the same input to exit 0, which is the one direction this item
+    // forbids. The two routes therefore disagree about exactly one file, they
+    // disagreed on base too, and the disagreement fails closed.
+    const root = makeRepo();
+    mkdirSync(join(root, "test", "fixtures", "phi-scan"), { recursive: true });
+    writeFileSync(join(root, "test", "fixtures", "phi-scan", "README.md"), SYNTHETIC_PHI);
+    git(root, ["add", "test/fixtures/phi-scan/README.md"]);
+
+    const staged = runIn(root, ["--staged"]);
+    expect(staged.code, `stderr: ${staged.stderr}`).toBe(1);
+    expect(staged.stderr).toContain("test/fixtures/phi-scan/README.md");
+    expect(staged.stderr).toContain(CARET_PN);
+
+    // And the other half of the disagreement, on the same tree, so the pair is
+    // one measurement rather than two claims.
+    const all = runIn(root, []);
+    expect(all.code, `stderr: ${all.stderr}`).toBe(0);
+    expect(all.stdout).toContain("corpus exemption in force");
+  });
+
+  it("--staged covers test/ outside test/fixtures too (exit 1)", () => {
+    const root = makeRepo();
+    mkdirSync(join(root, "test", "unit"));
+    writeFileSync(join(root, "test", "unit", "leak.test.ts"), SYNTHETIC_PHI);
+    git(root, ["add", "test/unit/leak.test.ts"]);
+
+    const r = runIn(root, ["--staged"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("test/unit/leak.test.ts");
+    expect(r.stderr).toContain(CARET_PN);
+  });
+});
+
+describe("phi-scan: an embedded base64 object is decoded outside markdown too", () => {
+  /** A Part 10 object as a base64 literal in a TypeScript source, which is how fixtures ship here. */
+  function writeTsFixture(root: string, name: string, object: Buffer): void {
+    mkdirSync(join(root, "test", "unit"), { recursive: true });
+    writeFileSync(
+      join(root, "test", "unit", name),
+      `export const OBJECT = "${object.toString("base64")}";\n`,
+    );
+  }
+
+  it("a name-bearing object base64-encoded in a .ts file is a hit (exit 1)", () => {
+    // Measured on base `8982a16`: the identical object was found as `probe.md`
+    // and as `probe.dcm`, and printed `OK - no hits` as `probe.ts`, because
+    // `scanEmbeddedObjects` ran only for a TEXT_EXTENSIONS name. Widening the
+    // walk root without this would have opened 81 `.ts` files and still read
+    // past every object encoded in one.
+    const root = makeRepo();
+    writeTsFixture(root, "object.ts", buildDicomFixture("19000101", VIOLATOR_PN));
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("test/unit/object.ts");
+    expect(r.stderr).toMatch(/\(0010,0010\)/);
+    expect(r.stderr).toContain(VIOLATOR_PN);
+  });
+
+  it("the text sweep alone cannot see it, so the decode is what does the work", () => {
+    // The control that makes the case above mean something: the name is present
+    // in the source only as base64, so the `.ts` file's own bytes carry no
+    // caret-joined token for `scanText` to match.
+    const object = buildDicomFixture("19000101", VIOLATOR_PN);
+    const encoded = object.toString("base64");
+    expect(encoded).not.toContain(VIOLATOR_PN);
+    expect(object.toString("latin1")).toContain(VIOLATOR_PN);
+  });
+
+  it("the same .ts with an allow-listed payload scans clean (exit 0)", () => {
+    const root = makeRepo();
+    writeTsFixture(root, "object.ts", buildDicomFixture("19000101", "ANON^PATIENT"));
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+
+  it("a base64 run in a .ts that is not a DICOM object is still dropped in silence", () => {
+    const root = makeRepo();
+    mkdirSync(join(root, "test", "unit"), { recursive: true });
+    writeFileSync(
+      join(root, "test", "unit", "noise.ts"),
+      `export const BLOB = "${Buffer.alloc(400, 0x41).toString("base64")}";\n`,
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+});
+
+describe("phi-scan: a declared root that cannot be walked refuses the scan", () => {
+  it("refuses a MISSING declared root (exit 2), naming it", () => {
+    const root = makeRepo();
+    rmSync(join(root, "docs-content"), { recursive: true });
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("docs-content");
+    expect(r.stdout).not.toMatch(/OK/);
+  });
+
+  it("refuses a DANGLING SYMLINK at a root, which existsSync follows and answers false for", () => {
+    // The sharpest case, and the reason the root is `lstat`ed rather than
+    // `existsSync`ed: the link resolves to nothing, `existsSync` says false, and
+    // the old code skipped the root without a word. Measured on base `8982a16`:
+    // exit 0 and `OK - no hits`.
+    const root = makeRepo();
+    rmSync(join(root, "test"), { recursive: true });
+    symlinkSync(join(root, "no-such-target"), join(root, "test"));
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("test");
+    expect(r.stderr).toContain("a symbolic link");
+    expectNoPhi(r.stderr);
+  });
+
+  it("refuses a root symlinked at a REAL directory too, so it is the link that is refused", () => {
+    const root = makeRepo();
+    mkdirSync(join(root, "elsewhere"));
+    writeFileSync(join(root, "elsewhere", TARGET_NAME), SYNTHETIC_PHI);
+    rmSync(join(root, "test"), { recursive: true });
+    symlinkSync(join(root, "elsewhere"), join(root, "test"));
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("a symbolic link");
+    expectNoPhi(r.stderr);
+  });
+
+  it("refuses a REGULAR FILE where a directory root is declared, with exit 2 and not 1", () => {
+    // The exit code is derived from THIS script's own contract (0 clean, 1 hits,
+    // 2 invocation error), not ported from a sibling. Base `8982a16` answered
+    // this shape TWO different wrong ways, both measured, and neither is 2: with
+    // a regular file at `test` the old root `test/fixtures` simply did not
+    // exist, so the run exited 0 and printed `OK - no hits`; with a regular file
+    // at `test/fixtures` itself, `readdirSync` raised an uncaught `ENOTDIR` and
+    // the process exited 1 - the one code that means "PHI was found".
+    const root = makeRepo();
+    rmSync(join(root, "test"), { recursive: true });
+    writeFileSync(join(root, "test"), SYNTHETIC_PHI);
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.code).not.toBe(1);
+    expect(r.stderr).toContain("a regular file, where a directory is declared");
+    expect(r.stderr).not.toContain("ENOTDIR");
+    expectNoPhi(r.stderr);
+  });
+
+  it("refuses a DIRECTORY where a file root is declared", () => {
+    const root = makeRepo();
+    rmSync(join(root, "README.md"));
+    mkdirSync(join(root, "README.md"));
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("a directory, where a regular file is declared");
+  });
+});
+
+describe("phi-scan: the walk is reconciled against git ls-files", () => {
+  it("refuses when a root is EMPTIED, which no existence check can see (exit 2)", () => {
+    // Existence is not observation. The root is present, `lstat` is happy, the
+    // walk enumerates nothing, and every count of what WAS reached reads clean.
+    // `git ls-files` is the second source that notices.
+    const root = makeRepo();
+    git(root, ["add", "test/fixtures/ordinary.txt"]);
+    rmSync(join(root, "test", "fixtures", "ordinary.txt"));
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+    expect(r.stderr).toContain("test/fixtures/ordinary.txt");
+    expect(r.stderr).toContain("did not open");
+  });
+
+  it("does not refuse when every tracked file IS opened, so the check is not always red", () => {
+    const root = makeRepo();
+    git(root, ["add", "test/fixtures/ordinary.txt", "README.md", "docs-content/intro.md"]);
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+
+  it("accounts for the corpus exemption rather than reporting it as a miss", () => {
+    const root = makeRepo();
+    mkdirSync(join(root, "test", "fixtures", "phi-scan"), { recursive: true });
+    writeFileSync(join(root, "test", "fixtures", "phi-scan", "README.md"), SYNTHETIC_PHI);
+    git(root, ["add", "test/fixtures/phi-scan/README.md"]);
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+    expect(r.stdout).toContain("corpus exemption in force");
+  });
+
+  it("🔴 DOES NOT close the decoy-contents escape, and this pins that it does not", () => {
+    // DISCLOSED, NOT FIXED, and no repo in this org has closed it. The
+    // reconciliation compares PATH SETS, not the bytes git carries at those
+    // paths, so a working tree whose files are clean reconciles and exits 0 even
+    // when the INDEX at the same paths holds PHI. Widening the root makes this
+    // narrower rather than safer: a decoy now has to mirror every tracked name
+    // under `test/`, not the handful under `test/fixtures/`.
+    const root = makeRepo();
+    writeFileSync(join(root, "test", "fixtures", "ordinary.txt"), SYNTHETIC_PHI);
+    git(root, ["add", "test/fixtures/ordinary.txt"]);
+    // The index now carries the payload. Replace the working-tree copy.
+    writeFileSync(join(root, "test", "fixtures", "ordinary.txt"), "clean\n");
+
+    const escaped = runIn(root, []);
+    expect(escaped.code, `stderr: ${escaped.stderr}`).toBe(0);
+
+    // And the control proving the payload is one this scanner would otherwise
+    // catch: the very same bytes, in the working tree, are a hit.
+    const staged = runIn(root, ["--staged"]);
+    expect(staged.code, `stderr: ${staged.stderr}`).toBe(1);
+    expect(staged.stderr).toContain(CARET_PN);
+  });
+});
+
+describe("phi-scan: an unexpected error is an invocation error, never a hit", () => {
+  it("exits 2 on an unreadable directory under the walk root, not 1", () => {
+    // The contract is 0 clean / 1 hits / 2 invocation error, and an uncaught
+    // throw exits 1 on Node - the one code that means "PHI was found", to a CI
+    // job that reads exit codes rather than stderr. Widening the walk root from
+    // `test/fixtures/` to `test/` enlarged the surface this can happen on.
+    // Measured before the top-level catch existed: exit 1.
+    const root = makeRepo();
+    const denied = join(root, "test", "denied");
+    mkdirSync(denied);
+    chmodSync(denied, 0o000);
+    try {
+      const r = runIn(root, []);
+      // A root-owned runner can read a mode-000 directory, so the premise is
+      // asserted rather than assumed: if the walk succeeded there is nothing
+      // here to catch and the case would otherwise pass for the wrong reason.
+      if (r.code === 0) {
+        expect(process.getuid?.()).toBe(0);
+        return;
+      }
+      expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+      expect(r.code).not.toBe(1);
+      expect(r.stderr).toContain("This is not a hit");
+    } finally {
+      chmodSync(denied, 0o755);
+    }
   });
 });
