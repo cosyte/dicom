@@ -647,10 +647,18 @@ export interface DeidentifyOptions {
    * legally carry. The Profile name is now one Value of 61 characters and each
    * active option is its own, so no option subset can exceed the maximum.
    *
-   * **Your string is not bounded here.** A value of your own longer than 64
-   * characters is written through as given, with no warning: it is yours, and
-   * splitting or truncating it would invent a record you did not write. Split it
-   * on `\` yourself if a strict receiver is in your path.
+   * **Your string is not bounded here, but it is no longer silent.** A value of
+   * your own longer than 64 characters is written through as given - it is
+   * yours, and splitting or truncating it would invent a record you did not
+   * write - and `report.warnings` carries
+   * `DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH` to say so. Split it on `\` yourself
+   * if a strict receiver is in your path. The same code covers an over-long
+   * value the **source file** wrote and this run kept, which in the common case
+   * is this library's own 76-character text from a release before the default
+   * became multi-valued. The measurement is over **bytes**, so a conformant
+   * 64-character Value encoded under a multi-byte `(0008,0005)` repertoire also
+   * raises it; a Value of 64 bytes or fewer can never be over the maximum, so it
+   * cannot miss one that is.
    *
    * PS3.15 E.1.1 says this string is "inserted in or added to" the attribute, so
    * a value the incoming Data Set already carried is kept and this one is
@@ -689,7 +697,9 @@ export interface DeidentifyOptions {
    * When the prior value **is** kept, `report.warnings` carries
    * `DICOM_DEIDENT_METHOD_PRIOR_RETAINED`: `(0012,0063)` is not in Table E.1-1, so
    * nothing in the run inspected or redacted those bytes, and a name a sender
-   * wrote there is in output stamped `(0012,0062) = YES`.
+   * wrote there is in output stamped `(0012,0062) = YES`. That code discloses the
+   * **retention** only; the **length** of what is written, from whatever source,
+   * is disclosed by `DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH` and by nothing else.
    */
   readonly deidentificationMethod?: string;
 }

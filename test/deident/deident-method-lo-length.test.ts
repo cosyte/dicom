@@ -1,6 +1,6 @@
 /**
- * `DICOM-LO-LENGTH-AND-SILENT-REPLACE` - the two remaining `(0012,0063)`
- * defects, measured rather than argued.
+ * `DICOM-LO-LENGTH-AND-SILENT-REPLACE` - the `(0012,0063)` length and
+ * replacement defects, measured rather than argued.
  *
  * ## Half one: the library's own method text was too long for the VR it writes
  *
@@ -35,6 +35,20 @@
  * de-identification record destroyed, under `(0012,0062) = YES`, with nothing
  * saying so.
  *
+ * ## Half three: the length nothing disclosed, on either route
+ *
+ * The two Values this run does **not** compose can be over the maximum - a
+ * caller's `deidentificationMethod`, and a value the source file already carried
+ * and PS3.15 2026c E.1.1 obliges this to keep. Both were written through with
+ * nothing said about their length, and **the likeliest writer of the second one
+ * is this library**: every object any published release de-identified without a
+ * caller-supplied method carries the 76-character Value, and re-de-identifying
+ * one keeps it. `DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH` discloses it. Nothing
+ * is shortened, split or truncated: the act is unchanged and only the silence is
+ * closed. The measurement is over **bytes**, which over-approximates under a
+ * multi-byte repertoire and can therefore never miss a Value that is genuinely
+ * over - the cost is pinned below rather than argued away.
+ *
  * Everything here is synthetic; the recognizable-but-fake strings exist only so
  * a substitution or a leak is observable.
  *
@@ -49,10 +63,15 @@ import { WARNING_CODES, deidentify, parseDicom, serializeDicom } from "../../src
 import type { Dataset } from "../../src/dataset/dataset.js";
 import { DEIDENTIFY_OPTIONS, type DeidentifyOption } from "../../src/deident/types.js";
 import type { Tag, VR } from "../../src/dictionary/types.js";
-import { WARNING_MESSAGES, deidentMethodNotLo } from "../../src/parser/warnings.js";
+import {
+  WARNING_MESSAGES,
+  deidentMethodNotLo,
+  deidentMethodValueOverLength,
+} from "../../src/parser/warnings.js";
 import { buildDicom } from "../helpers/build-dicom.js";
 
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
+const SPECIFIC_CHARACTER_SET = "00080005" as Tag;
 const PATIENT_NAME = "00100010" as Tag;
 const DEIDENT_METHOD = "00120063" as Tag;
 
@@ -365,11 +384,12 @@ describe("a (0012,0063) the file encoded under another VR is replaced, and says 
   });
 });
 
-describe("what this slice does NOT bound, pinned rather than left to be rediscovered", () => {
-  it("a caller value over the maximum is written through, undisclosed", () => {
-    // Residual, deliberate: the string is the caller's, and splitting or
-    // truncating it would invent a de-identification record they did not write.
-    // Closing this would turn this test red, which is the point of pinning it.
+describe("an over-long Value this run did not compose is written through, and SAYS SO", () => {
+  it("a caller value over the maximum is written through, disclosed", () => {
+    // The string is the caller's, and splitting or truncating it would invent a
+    // de-identification record they did not write. So the act is unchanged and
+    // only the silence is closed: the value is byte-for-byte what was passed in,
+    // and `report.warnings` names the length.
     const overlong = `ACME Anonymizer v3 ${"Y".repeat(80)}`;
     const { dataset, report } = deidentify(buildWithPriorMethod(), {
       deidentificationMethod: overlong,
@@ -377,12 +397,15 @@ describe("what this slice does NOT bound, pinned rather than left to be rediscov
 
     expect(valueLengths(rawMethod(dataset))).toStrictEqual([overlong.length]);
     expect(overlong.length).toBeGreaterThan(LO_VALUE_MAX_CHARS);
-    expect(report.warnings).toStrictEqual([]);
+    expect(report.warnings.map((w) => w.code)).toStrictEqual([
+      WARNING_CODES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH,
+    ]);
   });
 
-  it("a prior value the SOURCE FILE wrote over the maximum is copied through, undisclosed", () => {
+  it("a prior value the SOURCE FILE wrote over the maximum is copied through, disclosed", () => {
     // Same posture for the other direction: those bytes are the sender's and are
-    // copied verbatim by design. Only their retention is disclosed.
+    // copied verbatim by design. The retention had a code already; the LENGTH
+    // had none, on this route or on the caller's.
     const overlong = `ACME ${"Z".repeat(70)}`;
     const { dataset, report } = deidentify(
       buildWithPriorMethod({ vr: "LO" as VR, value: even(overlong) }),
@@ -391,6 +414,7 @@ describe("what this slice does NOT bound, pinned rather than left to be rediscov
     expect(valueLengths(rawMethod(dataset))).toContain(overlong.length);
     expect(report.warnings.map((w) => w.code)).toStrictEqual([
       WARNING_CODES.DICOM_DEIDENT_METHOD_PRIOR_RETAINED,
+      WARNING_CODES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH,
     ]);
   });
 
@@ -404,15 +428,15 @@ describe("what this slice does NOT bound, pinned rather than left to be rediscov
     // above calls the sender's is, in the common case, this library's own. It is
     // still KEPT, and that is right - PS3.15 E.1.1 says "added to", and
     // rewriting a prior de-identifier's record destroys the provenance the
-    // attribute exists to carry whoever wrote it - but the length is not
-    // disclosed, and a consumer with a strict receiver in the path should expect
-    // an over-long Value on anything de-identified before this release.
+    // attribute exists to carry whoever wrote it - and the length of what is
+    // written is disclosed now, on every pass rather than only the first, so a
+    // consumer with a strict receiver in the path is told.
     let ds = buildWithPriorMethod({ vr: "LO" as VR, value: even(BASE_DEFAULT_76) });
     const lengths: number[] = [];
-    let codes: readonly string[] = [];
+    const codesPerPass: (readonly string[])[] = [];
     for (let pass = 0; pass < 4; pass++) {
       const { dataset, report } = deidentify(ds);
-      codes = report.warnings.map((w) => w.code);
+      codesPerPass.push(report.warnings.map((w) => w.code));
       lengths.push(rawMethod(dataset).length);
       ds = parseDicom(serializeDicom(dataset));
     }
@@ -421,8 +445,191 @@ describe("what this slice does NOT bound, pinned rather than left to be rediscov
     expect(lengths).toStrictEqual([138, 138, 138, 138]);
     // ...and one of its two values is still over the maximum.
     expect(valueLengths(rawMethod(ds))).toStrictEqual([76, 61]);
-    // Disclosed as a retention, and silent about the length.
-    expect(codes).toStrictEqual([WARNING_CODES.DICOM_DEIDENT_METHOD_PRIOR_RETAINED]);
+    // Disclosed as a retention AND as a length, on every pass. A code raised only
+    // on the first pass would leave every re-de-identification silent again,
+    // which is the exact shape this row exists to catch.
+    expect(codesPerPass).toStrictEqual(
+      Array.from({ length: 4 }, () => [
+        WARNING_CODES.DICOM_DEIDENT_METHOD_PRIOR_RETAINED,
+        WARNING_CODES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH,
+      ]),
+    );
+  });
+
+  it("🛑 the disclosure carries no value, no length, no count and no origin", () => {
+    // A DIAGNOSTIC ABOUT A LENGTH DEFECT IS ITSELF A PHI SURFACE, and a raw
+    // length has no table to be a member of - which is why six other messages in
+    // this package had one bound out of them. Name-bearing payload, non-vacuity
+    // first: the over-long value carries the surname, so a leak is observable.
+    const named = `ACME Anonymizer v3, operator ${PATIENT} ${"W".repeat(40)}`;
+    expect(named).toContain("SMITHSON");
+    expect(named.length).toBeGreaterThan(LO_VALUE_MAX_CHARS);
+
+    const parsed = buildWithPriorMethod({ vr: "LO" as VR, value: even(named) });
+    expect(parsed.get(DEIDENT_METHOD)?.rawBytes.toString("latin1")).toContain(named);
+    const { dataset, report } = deidentify(parsed);
+    // The payload really does reach the output, so the warning is about bytes
+    // that are actually there.
+    expect(rawMethod(dataset).toString("latin1")).toContain(named);
+
+    const warning = report.warnings.find(
+      (w) => w.code === WARNING_CODES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH,
+    );
+    expect(warning).toBeDefined();
+
+    // Four letters of a surname is a leak, so the windows are taken over the
+    // NAME rather than the whole value: the registry prose is English and a
+    // four-character window of the surrounding words collides with it by
+    // coincidence, saying nothing.
+    for (const window of windows(PATIENT, 4)) {
+      expect(warning?.message).not.toContain(window);
+    }
+    expect(warning?.message).not.toContain(named);
+    expect(warning?.message).not.toContain("ACME");
+    // No measured length either. `named.length` is a count over document
+    // content; 64 is a constant of the VR and is allowed to be there.
+    expect(warning?.message).not.toContain(String(named.length));
+    expect(warning?.message).toContain("64");
+    // And the message is the frozen registry string, with nothing substituted.
+    expect(warning?.message).toBe(WARNING_MESSAGES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH);
+    expect(warning?.position.byteOffset).toBe(parsed.get(DEIDENT_METHOD)?.byteOffset);
+  });
+
+  it("the bound is the factory SIGNATURE, so no call site can put a value back", () => {
+    expect(deidentMethodValueOverLength).toHaveLength(1);
+    expect(deidentMethodValueOverLength({ byteOffset: 152, fileMeta: false }).message).toBe(
+      WARNING_MESSAGES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH,
+    );
+  });
+
+  it("the detector is not a floor: 64 is clean, 65 is not, and 65 is caught with a name in it", () => {
+    // 🛑 A DETECTOR ZERO CAN BE A GAP RATHER THAN A CLEARANCE, so the clean
+    // result is pinned BESIDE a positive the same detector does catch, one byte
+    // away. `SMITHSON` is in both, so neither row is green by a payload the
+    // detector could not have seen.
+    const at64 = `SMITHSON ${"Q".repeat(55)}`;
+    const at65 = `SMITHSON ${"Q".repeat(56)}`;
+    expect(at64).toHaveLength(64);
+    expect(at65).toHaveLength(65);
+
+    const codesFor = (method: string): readonly string[] =>
+      deidentify(buildWithPriorMethod(), { deidentificationMethod: method }).report.warnings.map(
+        (w) => w.code,
+      );
+
+    expect(codesFor(at64)).toStrictEqual([]);
+    expect(codesFor(at65)).toStrictEqual([WARNING_CODES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH]);
+  });
+
+  it("the bound is per VALUE here too: ten values of 61 are clean, one of 65 is not", () => {
+    // The same misreading that left `#74`'s hole would make this row red: a
+    // detector that measured the Value FIELD would call the 619-byte chain of
+    // conformant values a violation, and it is not one.
+    const ten = Array.from({ length: 10 }, (_, i) => `Pass ${i} ${"C".repeat(54)}`);
+    for (const value of ten) expect(value).toHaveLength(61);
+    const field = ten.join(BACKSLASH);
+    expect(field.length).toBeGreaterThan(LO_VALUE_MAX_CHARS);
+
+    const clean = deidentify(buildWithPriorMethod(), { deidentificationMethod: field });
+    expect(valueLengths(rawMethod(clean.dataset))).toHaveLength(10);
+    expect(clean.report.warnings).toStrictEqual([]);
+
+    // Non-vacuity: one over-long value among conformant ones is still found.
+    const mixed = [...ten.slice(0, 9), "D".repeat(65)].join(BACKSLASH);
+    expect(
+      deidentify(buildWithPriorMethod(), { deidentificationMethod: mixed }).report.warnings.map(
+        (w) => w.code,
+      ),
+    ).toStrictEqual([WARNING_CODES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH]);
+  });
+
+  it("all 512 option subsets: the library's own text never raises it", () => {
+    // The union half of the change, proved rather than argued: the code is
+    // additive, and on every run where the library composes the whole value it
+    // adds nothing. The sweep above already proves no Value is over; this proves
+    // the DISCLOSURE agrees with the measurement rather than firing beside it.
+    let raised = 0;
+    for (let mask = 0; mask < 1 << DEIDENTIFY_OPTIONS.length; mask++) {
+      const retain = DEIDENTIFY_OPTIONS.filter((_, i) => ((mask >> i) & 1) === 1);
+      const codes = deidentify(buildWithPriorMethod(), { retain }).report.warnings.map(
+        (w) => w.code,
+      );
+      if (codes.includes(WARNING_CODES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH)) raised++;
+    }
+    expect(raised).toBe(0);
+  });
+
+  it("🩺 the cost of measuring BYTES: a conformant multi-byte Value raises it too", () => {
+    // Disclosed rather than claimed away. No repertoire encodes a character in
+    // fewer than one byte, so 64 bytes or fewer can never be over 64 CHARACTERS
+    // and this cannot miss a genuine violation; the converse does not hold. A
+    // 40-character value under a UTF-8 repertoire whose characters are three
+    // bytes each is 120 bytes, is conformant, and is reported.
+    const threeByteChar = "中"; // a CJK ideograph, 3 bytes in UTF-8
+    const value = threeByteChar.repeat(40);
+    expect(value).toHaveLength(40);
+    expect(Buffer.from(value, "utf8")).toHaveLength(120);
+
+    // The file DECLARES the repertoire, so the value really is 40 characters
+    // rather than 120 bytes a fixture asserted were characters. Without
+    // `(0008,0005)` the default repertoire is ISO-IR 6 and the claim would be
+    // false by fixture, which is this repo's recurring failure mode.
+    const parsed = parseDicom(
+      buildDicom({
+        transferSyntax: TS_EXPLICIT_LE,
+        elements: [
+          { tag: SPECIFIC_CHARACTER_SET, vr: "CS" as VR, value: even("ISO_IR 192") },
+          { tag: PATIENT_NAME, vr: "PN" as VR, value: even(PATIENT) },
+          { tag: DEIDENT_METHOD, vr: "LO" as VR, value: Buffer.from(value, "utf8") },
+        ],
+      }),
+    );
+    expect(parsed.get(SPECIFIC_CHARACTER_SET)?.rawBytes.toString("latin1").trim()).toBe(
+      "ISO_IR 192",
+    );
+
+    const codes = deidentify(parsed).report.warnings.map((w) => w.code);
+    expect(codes).toContain(WARNING_CODES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH);
+  });
+
+  it("the codes the base already raised all still raise: nothing goes 1 -> 0", () => {
+    // 🛑 WIDEN BY UNION, NEVER BY REPLACEMENT. Every shape that raised a method
+    // code before this change raises the same one now, with the new code only
+    // ever ADDED beside it. Measured by stripping the new code and comparing
+    // against the base's answers, which are pinned as literals.
+    const withoutNew = (codes: readonly string[]): readonly string[] =>
+      codes.filter((c) => c !== WARNING_CODES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH);
+    const codesOf = (ds: Dataset, method?: string): readonly string[] =>
+      withoutNew(
+        deidentify(
+          ds,
+          method === undefined ? {} : { deidentificationMethod: method },
+        ).report.warnings.map((w) => w.code),
+      );
+
+    // No prior at all.
+    expect(codesOf(buildWithPriorMethod())).toStrictEqual([]);
+    // A conformant LO prior: retained, as before.
+    expect(
+      codesOf(buildWithPriorMethod({ vr: "LO" as VR, value: even("ACME Anonymizer v3") })),
+    ).toStrictEqual([WARNING_CODES.DICOM_DEIDENT_METHOD_PRIOR_RETAINED]);
+    // An OVER-LONG LO prior: still retained, and the retention code is not
+    // displaced by the new one.
+    expect(
+      codesOf(buildWithPriorMethod({ vr: "LO" as VR, value: even(`ACME ${"Z".repeat(70)}`) })),
+    ).toStrictEqual([WARNING_CODES.DICOM_DEIDENT_METHOD_PRIOR_RETAINED]);
+    // A non-LO prior: still replaced, still disclosed.
+    expect(
+      codesOf(buildWithPriorMethod({ vr: "SH" as VR, value: even(`ACME ${"Z".repeat(70)}`) })),
+    ).toStrictEqual([WARNING_CODES.DICOM_DEIDENT_METHOD_NOT_LO]);
+    // An over-long CALLER method beside a conformant prior: the prior is still
+    // retained.
+    expect(
+      codesOf(
+        buildWithPriorMethod({ vr: "LO" as VR, value: even("ACME Anonymizer v3") }),
+        "Y".repeat(70),
+      ),
+    ).toStrictEqual([WARNING_CODES.DICOM_DEIDENT_METHOD_PRIOR_RETAINED]);
   });
 
   it("🩺 a later pass with FEWER options leaves no trace that the earlier one had more", () => {
