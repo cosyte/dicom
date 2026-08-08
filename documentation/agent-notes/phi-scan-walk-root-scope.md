@@ -35,8 +35,13 @@ of this file make sense:
 | --- | --- | --- |
 | tracked files | 226 | 229 |
 | opened by all-mode | **13** | **95** |
-| scanned by neither route | **213** | 134 |
-| tracked under `test/` in neither | **82** | **1** (the corpus exemption, printed every run) |
+| outside the all-mode walk | **213** | 134 (133 outside the roots + 1 corpus exemption) |
+| tracked under `test/` outside it | **82** | **1** (the corpus exemption, printed every run) |
+
+**"Outside the all-mode walk" is not "scanned by neither route", and the two are easy to quote as
+each other.** One of those 82, `test/fixtures/phi-scan/README.md`, was reachable by `--staged`, which
+has never applied the corpus exemption. So the figure for **neither** route is **212 and 81**. Both
+are written down.
 
 **The fixture root contributed EXACTLY ZERO files.** Every file this package writes under
 `test/fixtures/` is gitignored, because the suite regenerates them on every run
@@ -62,9 +67,16 @@ Each was measured on base, and each is pinned by a case with a positive beside i
 | --- | --- | --- |
 | root MISSING entirely | exit **0**, `OK - no hits` | exit 2, names the root |
 | root a DANGLING symlink | exit **0**, `OK - no hits` | exit 2, "a symbolic link" |
-| root a symlink at a REAL directory | exit **0** (followed and walked) | exit 2, "a symbolic link" |
+| root a symlink at a REAL directory | **followed and walked** (see below) | exit 2, "a symbolic link" |
 | root a REGULAR FILE | exit **0** at `test`, exit **1** at `test/fixtures` | exit 2 |
 | root present but EMPTIED | exit **0** | exit 2, via `git ls-files` |
+
+**One row of that table is a different KIND of fact and saying so cost a refuter pass.** Four of the
+five are exit 0 *structurally*: nothing was opened, so nothing could be found. The symlinked-at-a-
+real-directory row is not - base FOLLOWED the link and scanned whatever was behind it, so it exits 0
+over clean contents and **1** over a name-bearing file. The defect there is not the exit code; it is
+that the gate reported on a tree the declared root does not name, and would have reported clean over
+the corpus if the link pointed somewhere empty.
 
 **The dangling case is the sharpest, and it is an `existsSync` fact rather than a `walk()` fact.**
 `existsSync` FOLLOWS the link, so a dangling one answers `false`; the old code's
@@ -132,9 +144,13 @@ this repo was vacuous BY FIXTURE, so no payload here is anonymous: each carries 
 change landed, across five fresh contexts, and the readings agreed: **no patient-identifying content**.
 
 The hits the gate now sees are synthetic fixture values, disposed of as EXACT allow-list entries
-(never prefixes, which would admit every given name under a surname): `BOND^JAMES`,
+(the entries this change ADDS are exact; the pre-existing prefixes are untouched, and it is the
+pre-existing `Doe^` that excuses `Doe^Jane` across the newly opened files): `BOND^JAMES`,
 `DEEPER^PATIENT`, `DEFLATE^TEST`, `NESTED^PATIENT`, `ROOT^PATIENT`, `SMITH^REF`, `SMITHSON^BRAIN`,
-`XOE^JANE`, and PS3.5's own ideographic worked example `Yamada^Tarou` / `Yam^Tar`. Dates
+`XOE^JANE`, and `Yamada^Tarou`, which is PS3.5's own worked example for the three PN component
+groups. `Yam^Tar` beside it is **not** in the standard: the vendored PS3.5 2026c carries
+`Yamada^Tarou=<ideographic>=<phonetic>`, and `Yam^Tar` is the test's ASCII stand-in for the
+ideographic group. A draft of the allow-list comment cited both as the standard's. Dates
 `19800101` and `20240115`. And four entries that are **not dates at all** but DICOM tag numbers
 satisfying the `YYYYMMDD` shape - `40101006`, `70011001`, `70011002`, `70011003` - listed as such in
 the allow-list rather than mislabelled.
@@ -184,19 +200,64 @@ Two things changed about it and both are narrowings:
 - it is **printed on stdout every run**. An exemption nobody can see is the same shape as a root
   nobody notices is empty.
 
-It also closes a disagreement between the two routes: `--staged` never applied the exemption at all,
-so a commit touching that README red the pre-commit hook while all-mode called the same file exempt.
+**🛑 AND A DRAFT MADE IT WORSE IN THE ONE DIRECTION THIS ITEM FORBIDS, WHICH A REFUTER CAUGHT.** That
+draft wrote the exemption as a PREDICATE ("a `readme.md` under `test/fixtures/`") and applied it to
+`--staged` as well, on the reasoning that a rule cannot go stale and that the two routes ought to
+agree. Both halves were wrong:
+
+- **A predicate fails OPEN, an exact path fails CLOSED.** A stale exact path means the file moved,
+  so it gets scanned and the gate reds until somebody looks. A predicate means every future
+  `README.md` anywhere under `test/fixtures/`, at any depth, is exempt for as long as nobody
+  notices. Staleness that reds is the cheap failure.
+- **`--staged` is the pre-commit gate** (`package.json`'s `pre-commit` is `pnpm phi-scan --staged`)
+  and it had never applied the exemption, so teaching it to SUBTRACTED a detection the base had, on
+  the commit-blocking route. Measured on the refused draft: a staged README under `test/fixtures/`
+  carrying a name exited **1** on base and **0** on the draft. The class went from one route to
+  zero.
+
+So the exemption is one literal path, on the `all` route only. The two routes disagree about exactly
+that one file, they disagreed about it on base too, and the disagreement fails CLOSED: `--staged` is
+the stricter of the two. That friction (a commit touching that README reds the hook) is
+`PRE-EXISTING` and stays, because the only way to close it here is to scan less.
+
+## Two more things the widening does not fix, disclosed
+
+**The allow-list is GLOBAL and has no path scoping, so adding to it is a real widening.** The scanner
+reads `scripts/phi-allow-list.txt` into one Set and applies it to every corpus it opens, so a value
+listed because a `.ts` fixture needs it is equally excused in `README.md`, in `docs-content/` and in
+a `.dcm`. A refuter measured exactly that on a `docs-content` page carrying the new values: clean at
+head, exit 1 at the previous sha. The two worth naming are `DATE:19800101` and `DATE:20240115`, which
+are plausible real birth and study dates. Path scoping is a change to the allow-list FORMAT and is
+deliberately not made here; the cost is written into the file itself instead.
+
+**🔴 The reconciliation is vacuous on an empty index.** `trackedInScope()` guards a git FAILURE, but
+a legitimately empty answer passes in silence: in a repository where nothing under the declared roots
+is tracked yet, there is nothing to reconcile against. It is a check against the INDEX and is exactly
+as strong as the index is. Most of the throwaway-repo cases in `test/scripts/phi-scan.test.ts` never
+commit, so the reconciliation is vacuous in them by construction; the four that exercise it call
+`git add` first, and they are the only ones that say anything about it.
+
+**An unexpected error used to exit 1.** `main()` had no top-level catch, so a `readdirSync` `EACCES`
+on an unreadable subdirectory exited 1, the code that means "PHI was found". Widening the walk root
+from `test/fixtures/` to `test/` enlarged the surface that can happen on, so it is closed here rather
+than disclosed: an unexpected throw now prints `This is not a hit` and exits 2. Measured before the
+catch existed: exit **1**.
 
 ## What is still out of scope, with the reason
 
-134 of 229 tracked files: `src/` (72), `vendor/` (17), `scripts/` (13), `.github/` (8),
-`.changeset/` (4), `documentation/` (3) and the root files. Admitting them is a **product call with
-its own false-positive surface**, not a side effect of this one. Measured with this scanner: src
-**325 hits / 4 files**, vendor **134 / 6**, the root files **13 / 2**, scripts **9 / 5**,
-documentation **16 / 2**, `.github` **2 / 2**, `.changeset` **1 / 1**.
+Of 229 tracked files, 95 are opened, 1 is corpus-exempt, and **133 are outside the declared roots
+entirely**: `src/` (72), `vendor/` (17), `scripts/` (13), `.github/` (8), `.changeset/` (4),
+`documentation/` (3), `.claude/` (1) and 15 files at the repository root. Admitting them is a
+**product call with its own false-positive surface**, not a side effect of this one.
+
+**No hit count for them is written down, deliberately.** It is a number about prose as much as about
+code: a draft of the banner comment moved the `scripts/` figure by one just by naming a tag in
+eight-digit form, and a draft of this file moved the `documentation/` figure by one just by
+existing. Derive it instead, in one command:
+`git ls-files -z <dir> | xargs -0 pnpm phi-scan --`.
 
 The two big ones are structural rather than accidental. `src/dictionary/generated/annex-e.ts` is a
-generated table of DICOM tags, and tag numbers like `40080101` satisfy the `YYYYMMDD` shape, so the
+generated table of DICOM tags, and tag numbers like `(4008,0101)` written as eight digits satisfy the `YYYYMMDD` shape, so the
 compact-date pass matches hundreds of them; `vendor/nema/` is a SHA-pinned copy of a standards
 document full of real publication dates. Neither is PHI, and neither is fixed by a walk root.
 

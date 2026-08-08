@@ -29,6 +29,7 @@ import {
   copyFileSync,
   symlinkSync,
   realpathSync,
+  chmodSync,
 } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -1198,24 +1199,64 @@ describe("phi-scan: the walk root is test/, not test/fixtures/", () => {
     expect(r.stdout).toMatch(/OK - no hits/);
   });
 
-  it("exempts a README under test/fixtures but NOT one elsewhere under test/", () => {
+  it("exempts ONE literal path in all-mode, and no other README anywhere", () => {
     const root = makeRepo();
+    mkdirSync(join(root, "test", "fixtures", "phi-scan"), { recursive: true });
     mkdirSync(join(root, "test", "smoke"));
-    writeFileSync(join(root, "test", "fixtures", "README.md"), SYNTHETIC_PHI);
+    writeFileSync(join(root, "test", "fixtures", "phi-scan", "README.md"), SYNTHETIC_PHI);
     writeFileSync(join(root, "test", "smoke", "README.md"), 'const x = "ANON^PATIENT";\n');
 
     const clean = runIn(root, []);
     expect(clean.code, `stderr: ${clean.stderr}`).toBe(0);
     expect(clean.stdout).toContain("corpus exemption in force");
-    expect(clean.stdout).toContain("test/fixtures/README.md");
+    expect(clean.stdout).toContain("test/fixtures/phi-scan/README.md");
 
     // The pin that stops the line above being vacuous: the SAME payload one
-    // directory across is scanned, so the exemption is narrow rather than a
-    // blanket rule about the file name.
+    // directory across is scanned, so the exemption is one path rather than a
+    // rule about the file name.
     writeFileSync(join(root, "test", "smoke", "README.md"), SYNTHETIC_PHI);
     const hit = runIn(root, []);
     expect(hit.code, `stderr: ${hit.stderr}`).toBe(1);
     expect(hit.stderr).toContain("test/smoke/README.md");
+  });
+
+  it("🛑 the exemption is a PATH and not a rule, so a README ONE LEVEL UP is scanned", () => {
+    // A draft wrote the exemption as "a `readme.md` under `test/fixtures/`" on
+    // the reasoning that a rule cannot go stale, and a refuter refused it. The
+    // directions are not symmetric: a stale exact path fails CLOSED (the moved
+    // file is scanned and the gate reds), a predicate fails OPEN (every future
+    // README under that prefix, at any depth, is exempt until somebody notices).
+    const root = makeRepo();
+    writeFileSync(join(root, "test", "fixtures", "README.md"), SYNTHETIC_PHI);
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("test/fixtures/README.md");
+    expect(r.stderr).toContain(CARET_PN);
+  });
+
+  it("🛑 --staged does NOT apply the exemption, because base did not and that is a detection", () => {
+    // `package.json`'s `pre-commit` is `pnpm phi-scan --staged`, so this is the
+    // commit-blocking route. Base scanned a README under `test/fixtures/` on it
+    // and exited 1; a draft of this change taught the route the exemption and
+    // took the same input to exit 0, which is the one direction this item
+    // forbids. The two routes therefore disagree about exactly one file, they
+    // disagreed on base too, and the disagreement fails closed.
+    const root = makeRepo();
+    mkdirSync(join(root, "test", "fixtures", "phi-scan"), { recursive: true });
+    writeFileSync(join(root, "test", "fixtures", "phi-scan", "README.md"), SYNTHETIC_PHI);
+    git(root, ["add", "test/fixtures/phi-scan/README.md"]);
+
+    const staged = runIn(root, ["--staged"]);
+    expect(staged.code, `stderr: ${staged.stderr}`).toBe(1);
+    expect(staged.stderr).toContain("test/fixtures/phi-scan/README.md");
+    expect(staged.stderr).toContain(CARET_PN);
+
+    // And the other half of the disagreement, on the same tree, so the pair is
+    // one measurement rather than two claims.
+    const all = runIn(root, []);
+    expect(all.code, `stderr: ${all.stderr}`).toBe(0);
+    expect(all.stdout).toContain("corpus exemption in force");
   });
 
   it("--staged covers test/ outside test/fixtures too (exit 1)", () => {
@@ -1384,8 +1425,9 @@ describe("phi-scan: the walk is reconciled against git ls-files", () => {
 
   it("accounts for the corpus exemption rather than reporting it as a miss", () => {
     const root = makeRepo();
-    writeFileSync(join(root, "test", "fixtures", "README.md"), SYNTHETIC_PHI);
-    git(root, ["add", "test/fixtures/README.md"]);
+    mkdirSync(join(root, "test", "fixtures", "phi-scan"), { recursive: true });
+    writeFileSync(join(root, "test", "fixtures", "phi-scan", "README.md"), SYNTHETIC_PHI);
+    git(root, ["add", "test/fixtures/phi-scan/README.md"]);
 
     const r = runIn(root, []);
     expect(r.code, `stderr: ${r.stderr}`).toBe(0);
@@ -1413,5 +1455,34 @@ describe("phi-scan: the walk is reconciled against git ls-files", () => {
     const staged = runIn(root, ["--staged"]);
     expect(staged.code, `stderr: ${staged.stderr}`).toBe(1);
     expect(staged.stderr).toContain(CARET_PN);
+  });
+});
+
+describe("phi-scan: an unexpected error is an invocation error, never a hit", () => {
+  it("exits 2 on an unreadable directory under the walk root, not 1", () => {
+    // The contract is 0 clean / 1 hits / 2 invocation error, and an uncaught
+    // throw exits 1 on Node - the one code that means "PHI was found", to a CI
+    // job that reads exit codes rather than stderr. Widening the walk root from
+    // `test/fixtures/` to `test/` enlarged the surface this can happen on.
+    // Measured before the top-level catch existed: exit 1.
+    const root = makeRepo();
+    const denied = join(root, "test", "denied");
+    mkdirSync(denied);
+    chmodSync(denied, 0o000);
+    try {
+      const r = runIn(root, []);
+      // A root-owned runner can read a mode-000 directory, so the premise is
+      // asserted rather than assumed: if the walk succeeded there is nothing
+      // here to catch and the case would otherwise pass for the wrong reason.
+      if (r.code === 0) {
+        expect(process.getuid?.()).toBe(0);
+        return;
+      }
+      expect(r.code, `stderr: ${r.stderr}`).toBe(2);
+      expect(r.code).not.toBe(1);
+      expect(r.stderr).toContain("This is not a hit");
+    } finally {
+      chmodSync(denied, 0o755);
+    }
   });
 });
