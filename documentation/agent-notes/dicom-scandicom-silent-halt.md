@@ -126,15 +126,17 @@ payload named by its byte histogram; these are ILLUSTRATIVE OF RANGE and are not
 | CSPRNG, 8 independent draws (compressed or encapsulated frame) | 8 to 23 | 0 in all 8 |
 | gaussian mu `0x35` sd 10 (narrow histogram) | 0 | 25 |
 | uniform over `0x30-0x3F` (4-bit-quantised region) | 0 | 843 |
-| ASCII digits and dots (adversarial) | 0 | 1,002 |
+| ASCII digits and dots (adversarial; the dot fraction is a knob, so this row moves most) | 0 | ~1,000 |
 | uniform over `0x41-0x60` (letters, and the caret sits in it) | **71,122** | 0 |
 
 **THE SPREAD IS THE POINT: 0 TO 71,122 HITS OVER THE SAME 8 MiB, ON PAYLOADS THAT DIFFER ONLY IN
 WHICH BYTES THEY USE.** A rate quoted off any one row is a fact about that row's histogram. The last
 row is what refuted draft two: the PN pass is not rare, it is rare **on high-entropy noise**, and a
-region of an uncompressed image whose values land in the letter band puts the caret `0x5E` inside its
-own alphabet. The `0x30-0x3F` row is the same lesson pointed the other way, and it is not adversarial
-at all: it is what a 4-bit-quantised or heavily windowed region looks like.
+payload whose values land in the letter band puts the caret `0x5E` inside its own alphabet. The
+`0x30-0x3F` row is the same lesson pointed the other way, on a payload with no letters in it at all.
+**NO ROW HERE CLAIMS TO BE WHAT A REAL MODALITY WRITES**, and a draft that called one "not
+adversarial at all" was asserting the shape of real imaging data without measuring any, which is the
+move that got drafts one and two refused. These are histograms, chosen to span the range.
 
 **THE RATE IS A PROPERTY OF THE CORPUS, NOT OF THIS SCRIPT.** On the corpus this gate actually reads
 it is **zero**: `pnpm phi-scan` exits 0 on `main` and exits 0 here, because the package commits **no
@@ -177,10 +179,12 @@ throws), padding of zero, one, two and three `=`, and a run one character below 
 
 **🛑 THE RUN COUNT IS DELIBERATELY NOT WRITTEN DOWN.** A draft quoted one and it matched neither sha;
 a second draft quoted two more, naming "base" and "head", and the "head" figure was already wrong at
-the sha it shipped on. **Both are deleted rather than corrected a third time**, because the corpus
-contains the files this slice edits, so the number moves with every line of this very paragraph
-(`scanEmbeddedObjects`, written out, is itself a base64 run long enough to count). It is one command,
-so derive it, comparing `[...t.matchAll(/[A-Za-z0-9+\/]{16,}={0,2}/g)].map(m => m[0])` with
+the sha it shipped on. **Both are deleted rather than corrected a third time**, because the compared
+corpus contains files this slice edits: any identifier of 16 or more base64 characters written into
+`scripts/phi-scan.ts` or `test/` is itself a counted run, so the figure moves with the code that
+produces it. (**Not with this file.** `documentation/` is in none of the five globs below, and a
+draft that said "every line of this very paragraph" moves the number was wrong about that.) It is one
+command, so derive it, comparing `[...t.matchAll(/[A-Za-z0-9+\/]{16,}={0,2}/g)].map(m => m[0])` with
 `[...base64Runs(t)]` over `git ls-files -z -- docs-content README.md test src scripts`. **What
 matters is that the mismatch count is zero, and zero does not move.**
 
