@@ -84,10 +84,13 @@ The first draft made the binary branch an if/else: recognized by `fileMetaStart`
 otherwise `scanText`. A `conformance-refuter` pass refused it, and the finding reproduced
 independently. **ADDING THE DICOM ROUTE MUST NOT SUBTRACT THE TEXT ONE, BECAUSE `scanDicom` GIVES UP
 QUIETLY.** Its walk `break`s at the first header it cannot read, and `readElementExplicit` answers
-`null` for an undefined-length value (`0xFFFFFFFF`). That is not a malformed file: PS3.5 2026c §7.5.2
-makes it the **normative** Sequence encoding, and §7.1 orders Data Elements by ascending tag, so a
-conformant object puts `(0008,1110) SQ` **before** `(0010,0010)`. A non-LE transfer syntax stops the
-walk the same way, at the first dataset element.
+`null` for an undefined-length value (`0xFFFFFFFF`). That is not a malformed file. **Quote §7.5.2
+whole: it defines TWO delimitations, the encoder chooses, and "Both ways of encoding shall be
+supported by decoders."** Calling undefined length "the normative encoding" overstates it and was
+corrected here; the argument needs only the half the clause states outright, which is that a
+conformant file may carry it and a decoder shall support it. §7.1 then orders Data Elements by
+ascending tag, so a conformant object puts `(0008,1110) SQ` **before** `(0010,0010)`. A non-LE
+transfer syntax stops the walk the same way, at the first dataset element.
 
 Measured, same bytes, three scanners. Preamble-less, `(0008,1110)` undefined-length SQ, then
 `(0010,0010) PN` carrying this suite's own synthetic `RIVERA^JUANITA`:
@@ -140,8 +143,17 @@ costs a wasted walk and never a lost scan, so the two tests do not have to be re
   every Part 10 object as text as well, which would flag 8-digit runs inside pixel data and
   encapsulated fragments. That is a gate-behaviour change with its own false-positive surface and its
   own product call, in the shape this repo already knows from `DICOM-DEIDENT-OVER-REDACTION` - not a
-  side effect of this one. **NO TEST PINS THIS**, deliberately: a green asserted over a name-bearing
-  payload would read as a clearance. It needs its own backlog item.
+  side effect of this one. It needs its own backlog item.
+  **▶ 🛑 AND A TEST PINS THE BOUNDARY, SO THE ITEM THAT CLOSES THIS WILL GO RED BEFORE IT GOES
+  GREEN.** `"a PREAMBLE-FUL object is still scanned by the DICOM route ALONE, byte-for-byte as
+  before"` in `test/scripts/phi-scan.test.ts` asserts exit 0 over a preamble-ful object carrying
+  `RIVERA^JUANITA` at `(0008,1030) LO`, which only a text sweep could report. Measured at `28e75e0`:
+  make the text sweep unconditional and the suite reads **1 failed, 51 passed, of 52**, that test
+  being the one. **It is a scope boundary, not a clearance** - its non-vacuity control sits beside it,
+  asserting that the same value at `(0010,0010)` in the same shape of object IS caught. Whoever
+  closes the residual should expect that red and move the boundary deliberately, not treat it as a
+  regression. **An earlier draft of this bullet said no test pinned it; that was false and is
+  corrected, not reworded.**
   **▶ This also bounds what the row-4 control above proves.** "The identical bytes plus 132 bytes of
   preamble were caught all along" is true of a fixture with no undefined-length element in it, and is
   **not** a general property of the preamble-ful route. Do not restate it as one.

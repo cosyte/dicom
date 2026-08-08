@@ -15,8 +15,9 @@ eight-digit token either.
 The DICOM route now asks `fileMetaStart`, which knows both shapes and is what `scanDicom` and the
 doc-corpus route already used. **The text route is not an `else`.** Detection moved in one direction
 only, and that is deliberate: `scanDicom` stops at the first header it cannot read, including an
-undefined-length Sequence, which PS3.5 2026c makes the normative encoding and which a conformant file
-places ahead of `(0010,0010)`. So a recognized object is now swept by both routes rather than handed
+undefined-length Sequence, which PS3.5 2026c §7.5.2 defines as one of two delimitations that decoders
+shall both support, and which §7.1's ascending tag order places ahead of `(0010,0010)` in a
+conformant file. So a recognized object is now swept by both routes rather than handed
 from one to the other, which makes the branch a strict superset of the old behaviour on every input:
 `isDicom` true is unchanged, a preamble-less object gains the DICOM sweep on top of the text sweep it
 already had, and an unrecognized file is unchanged. One value can now be reported twice, once under

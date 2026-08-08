@@ -974,7 +974,9 @@ const TEXT_EXTENSIONS = new Set([".json", ".txt", ".md", ".csv"]);
  * Recognizing a preamble-less object and handing it to `scanDicom` INSTEAD of `scanText` is a
  * regression, not a fix, because `scanDicom` gives up quietly. Its walk `break`s at the first header
  * it cannot read, and `readElementExplicit` returns `null` for an undefined-length value
- * (`0xFFFFFFFF`) - which PS3.5 2026c §7.5.2 makes the NORMATIVE encoding for a Sequence, and §7.1
+ * (`0xFFFFFFFF`) - which PS3.5 2026c §7.5.2 defines as one of TWO Sequence delimitations, the
+ * encoder's choice, both of which "shall be supported by decoders". (It is not "the normative
+ * encoding": the clause has two branches and quoting one is how it reads as absolute.) §7.1 then
  * orders tags ascending, so `(0008,1110) SQ` sits BEFORE `(0010,0010)` in a conformant file. An
  * exclusive swap therefore took a preamble-less object whose PatientName hides behind an
  * undefined-length `SQ` from exit 1 (the text sweep saw the name) to exit 0 and `OK - no hits`.

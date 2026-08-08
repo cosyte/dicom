@@ -882,9 +882,11 @@ function shortElementBE(group: number, element: number, vr: string, value: strin
 }
 
 /**
- * An UNDEFINED-LENGTH Sequence, immediately delimited. PS3.5 2026c §7.5.2 makes `0xFFFFFFFF` the
- * normative Sequence encoding, and `readElementExplicit` answers `null` for it, so the tag walk stops
- * dead here. This is the shape that turns an exclusive dispatch into a silent regression.
+ * An UNDEFINED-LENGTH Sequence, immediately delimited. PS3.5 2026c §7.5.2 defines `0xFFFFFFFF` as one
+ * of TWO Sequence delimitations, the encoder's choice, and says both "shall be supported by
+ * decoders" - so this is a conformant file, not a malformed one. `readElementExplicit` answers `null`
+ * for it, so the tag walk stops dead here. This is the shape that turns an exclusive dispatch into a
+ * silent regression.
  */
 function undefinedLengthSq(group: number, element: number): Buffer {
   const header = Buffer.alloc(12);
@@ -1035,8 +1037,9 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
   // The first draft of this fix made the binary branch an if/else: recognized ->
   // `scanDicom`, otherwise -> `scanText`. A `conformance-refuter` pass refused it,
   // and the finding reproduced: `scanDicom` gives up quietly at the first header it
-  // cannot read, and an undefined-length `SQ` (PS3.5 2026c §7.5.2, the NORMATIVE
-  // Sequence encoding) is one of those. §7.1 orders tags ascending, so a
+  // cannot read, and an undefined-length `SQ` (PS3.5 2026c §7.5.2 - one of two
+  // delimitations, both of which decoders shall support) is one of those. A file
+  // carrying one is conformant, not malformed. §7.1 orders tags ascending, so a
   // conformant file puts `(0008,1110) SQ` BEFORE `(0010,0010)`. Measured on the
   // refused draft: exit 1 on base `5ae8fe4`, exit 0 and `OK - no hits` on the
   // draft, over a name-bearing PatientName. The branch runs BOTH routes now, and
@@ -1080,8 +1083,11 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
     // VR LE, so an Explicit VR BE dataset is read as noise: the length field reads
     // 0x0E00 instead of 0x000E, overruns the buffer, and `readElementExplicit`
     // answers `null`. The text sweep is what covers it, exactly as it did on base.
-    // The File Meta group stays LE because PS3.5 requires it to be, whatever the
-    // dataset's transfer syntax says.
+    // The File Meta group stays LE whatever the dataset's transfer syntax says. That
+    // rule is **PS3.10 §7.1, not PS3.5** - an earlier draft of this comment cited
+    // PS3.5 and PS3.5 does not state it. PS3.10 is NOT vendored under `vendor/nema/`,
+    // so this citation is named rather than re-verified against a pin, and it is the
+    // fixture's shape that the assertion below actually rests on.
     const object = Buffer.concat([
       preamblelessFileMeta("1.2.840.10008.1.2.2"), // Explicit VR Big Endian
       shortElementBE(0x0010, 0x0010, "PN", CARET_PN),
