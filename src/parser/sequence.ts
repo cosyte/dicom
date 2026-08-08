@@ -69,7 +69,7 @@ import { Item } from "../dataset/item.js";
 import { joinTag } from "../dataset/tag.js";
 import type { Tag } from "../dictionary/types.js";
 import { ByteCursor } from "./byte-cursor.js";
-import { DicomParseError } from "./errors.js";
+import { DicomParseError, OFFSET_FRAMES } from "./errors.js";
 import {
   encapsulatedFragmentExceedsBuffer,
   itemLengthExceedsBuffer,
@@ -175,7 +175,7 @@ export function parseSequence(
     // double-decremented (parseSequence's own try/finally below would
     // decrement again - but we throw BEFORE the try block, so do it here).
     ctx.nestingDepth -= 1;
-    throw sqNestingDepthExceeded(buffer, valueStart, NESTING_DEPTH_LIMIT);
+    throw sqNestingDepthExceeded(ctx.frame, valueStart, NESTING_DEPTH_LIMIT);
   }
   ctx.encodingContextStack.push(
     opts.encapsulatedPixelData === true ? "EncapsulatedPixelData" : "SqItem",
@@ -238,7 +238,7 @@ export function parseSequence(
         itemLength = cursor.readUInt32();
       } catch (err) {
         if (err instanceof RangeError) {
-          throw sqItemHeaderTruncated(buffer, itemHeaderStart);
+          throw sqItemHeaderTruncated(ctx.frame, itemHeaderStart);
         }
         throw err;
       }
@@ -249,7 +249,7 @@ export function parseSequence(
         return { items, endOffset: cursor.position };
       }
       if (itemTag !== ITEM_TAG) {
-        throw unexpectedTagInsideSequence(buffer, itemHeaderStart);
+        throw unexpectedTagInsideSequence(ctx.frame, itemHeaderStart);
       }
 
       // (FFFE,E000) Item header consumed. itemLength holds the value-area length.
@@ -271,7 +271,7 @@ export function parseSequence(
         // surfaces the bytes; Phase 2 records each fragment as a structural
         // (empty) Item and advances the cursor past its raw bytes.
         if (cursor.position + itemLength > buffer.length) {
-          throw encapsulatedFragmentExceedsBuffer(buffer, itemHeaderStart);
+          throw encapsulatedFragmentExceedsBuffer(ctx.frame, itemHeaderStart);
         }
         cursor.position += itemLength;
         items.push(new Item({ warnings: [], elements: new Map(), index: itemIndex }));
@@ -349,23 +349,25 @@ export function parseSequence(
           emit(itemCrossesSequenceEnd({ byteOffset: itemHeaderStart }, itemTag));
         }
         if (cursor.position + itemLength > buffer.length) {
-          throw itemLengthExceedsBuffer(buffer, itemHeaderStart);
+          throw itemLengthExceedsBuffer(ctx.frame, itemHeaderStart);
         }
         const itemSlice = buffer.subarray(cursor.position, cursor.position + itemLength);
         // The item is parsed from a SLICE, so every offset raised inside it is
         // relative to that slice - including a warning's `position.byteOffset`.
-        // `ctx.buffer` is what `makeEmitter` cuts the `{ strict: true }` snippet
-        // from, so it has to name the same frame or the snippet is an unrelated
-        // element's bytes. Restored on the way out, and in a `finally` so a
-        // Tier-3 fatal thrown inside the item does not leave the frame dangling
-        // for the enclosing Data Set's own diagnostics.
-        const enclosingFrame = ctx.buffer;
+        // `ctx.frame` is what `makeEmitter` cuts the `{ strict: true }` snippet
+        // from AND what every diagnostic publishes as `offsetFrame`, so it has
+        // to be this slice or the snippet is an unrelated element's bytes and
+        // the offset is labelled with a frame it is not counted in. Restored on
+        // the way out, and in a `finally` so a Tier-3 fatal thrown inside the
+        // item does not leave the frame dangling for the enclosing Data Set's
+        // own diagnostics.
+        const enclosingFrame = ctx.frame;
         let inner;
         try {
-          ctx.buffer = itemSlice;
+          ctx.frame = { buffer: itemSlice, name: OFFSET_FRAMES.VALUE_SLICE };
           inner = opts.innerStrategy(itemSlice, 0, ctx, emit);
         } finally {
-          ctx.buffer = enclosingFrame;
+          ctx.frame = enclosingFrame;
         }
         items.push(new Item({ warnings: [], elements: inner.elements, index: itemIndex }));
         cursor.position += itemLength;
@@ -471,18 +473,19 @@ export function tryParseDefinedLengthSQ(
     // Value Length (PS3.5 section 7.5.2). See the note above.
     const slice = buffer.subarray(valueStart, valueStart + valueLength);
     // The descent's offsets are slice-relative, so the frame `makeEmitter` cuts
-    // the strict snippet from moves with it. See `ParseContext.buffer`.
-    const enclosingFrame = ctx.buffer;
+    // the strict snippet from - and names as `offsetFrame` - moves with it. See
+    // `ParseContext.frame`.
+    const enclosingFrame = ctx.frame;
     let result;
     try {
-      ctx.buffer = slice;
+      ctx.frame = { buffer: slice, name: OFFSET_FRAMES.VALUE_SLICE };
       result = parseSequence(slice, 0, ctx, emit, {
         explicitLength: valueLength,
         littleEndian: true,
         innerStrategy: implicitLeInner,
       });
     } finally {
-      ctx.buffer = enclosingFrame;
+      ctx.frame = enclosingFrame;
     }
     return { success: true, items: result.items };
   } catch (err) {
@@ -552,13 +555,13 @@ export function tryParseUnAsSQ(
     // Same frame swap as `tryParseDefinedLengthSQ`, and restored before the
     // success warning below: that one is built from the caller's `valueStart`,
     // so it belongs to the ENCLOSING frame, not the slice.
-    const enclosingFrame = ctx.buffer;
+    const enclosingFrame = ctx.frame;
     let result;
     try {
-      ctx.buffer = slice;
+      ctx.frame = { buffer: slice, name: OFFSET_FRAMES.VALUE_SLICE };
       result = parseSequence(slice, 0, ctx, emit, opts);
     } finally {
-      ctx.buffer = enclosingFrame;
+      ctx.frame = enclosingFrame;
     }
     emit(unParsedAsSQ({ byteOffset: valueStart }, tag));
     return {

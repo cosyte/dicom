@@ -104,7 +104,7 @@ export function _parseExplicit(
       peekGroup = cursor.readUInt16At(cursor.position);
     } catch (err) {
       if (err instanceof RangeError) {
-        throw truncatedDatasetHeader(buffer, headerStart);
+        throw truncatedDatasetHeader(ctx.frame, headerStart);
       }
       throw err;
     }
@@ -122,7 +122,7 @@ export function _parseExplicit(
         cursor.readUInt32();
       } catch (err) {
         if (err instanceof RangeError) {
-          throw truncatedFffeHeader(buffer, headerStart);
+          throw truncatedFffeHeader(ctx.frame, headerStart);
         }
         throw err;
       }
@@ -131,7 +131,7 @@ export function _parseExplicit(
         // ItemDelim - cursor consumed past the 8-byte marker.
         return { elements, endOffset: cursor.position };
       }
-      throw unexpectedFffeAtDatasetLevel(buffer, headerStart);
+      throw unexpectedFffeAtDatasetLevel(ctx.frame, headerStart);
     }
 
     // Standard Explicit-VR element header.
@@ -140,7 +140,7 @@ export function _parseExplicit(
       header = readExplicitElementHeader(cursor, ctx, emit);
     } catch (err) {
       if (err instanceof RangeError) {
-        throw truncatedExplicitVrHeader(buffer, headerStart);
+        throw truncatedExplicitVrHeader(ctx.frame, headerStart);
       }
       throw err;
     }
@@ -311,7 +311,7 @@ export function _parseExplicit(
     if (length === UNDEFINED_LENGTH) {
       // Undefined length on a non-SQ / non-OB-encap / non-UN VR is
       // structurally invalid under Explicit VR.
-      throw undefinedLengthOnNonSqExplicit(buffer, headerStart, vr);
+      throw undefinedLengthOnNonSqExplicit(ctx.frame, headerStart, vr);
     }
     if (cursor.position + length > buffer.length) {
       // NEITHER length is passed, and the second one is the ninth instance of
@@ -321,7 +321,7 @@ export function _parseExplicit(
       // that frame the subtraction publishes the Item's own 32-bit declared
       // length beside the offset that reverses it. The factory takes a parameter
       // for neither. See `elementLengthExceedsBuffer`.
-      throw elementLengthExceedsBuffer(buffer, headerStart);
+      throw elementLengthExceedsBuffer(ctx.frame, headerStart);
     }
     const valueStart = cursor.position;
     const valueEnd = valueStart + length;

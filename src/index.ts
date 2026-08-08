@@ -28,7 +28,13 @@ export type { FileMeta, FileMetaRawElement } from "./dataset/file-meta.js";
 
 export { WARNING_CODES, type WarningCode, type DicomParseWarning } from "./parser/warnings.js";
 
-export { FATAL_CODES, type FatalCode, DicomParseError } from "./parser/errors.js";
+export {
+  FATAL_CODES,
+  type FatalCode,
+  OFFSET_FRAMES,
+  type OffsetFrame,
+  DicomParseError,
+} from "./parser/errors.js";
 
 export type { DicomPosition, ParseOptions, OnWarningCallback } from "./parser/types.js";
 

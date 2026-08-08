@@ -41,6 +41,7 @@ import { inflateRawSync } from "node:zlib";
 import type { Element } from "../dataset/element.js";
 import type { Tag } from "../dictionary/types.js";
 import { makeEmitter } from "./emit.js";
+import { OFFSET_FRAMES } from "./errors.js";
 import { inflateFailed, inflatedPayloadExceedsCap } from "./fatals.js";
 import { parseExplicitLE } from "./explicit-le.js";
 import type { ParseContext } from "./types.js";
@@ -116,7 +117,7 @@ export function parseDeflatedLEWithCap(
       code === "ERR_BUFFER_TOO_LARGE" ||
       (err instanceof RangeError && /maxOutputLength|too large/i.test(message))
     ) {
-      throw inflatedPayloadExceedsCap(buffer, datasetStart, maxInflatedBytes);
+      throw inflatedPayloadExceedsCap(ctx.frame, datasetStart, maxInflatedBytes);
     }
     // `message` is zlib's, and it is deliberately not forwarded. It is an
     // `err.message` from a library handed the sender's bytes, which is the one
@@ -124,14 +125,17 @@ export function parseDeflatedLEWithCap(
     // `code` is a closed set and says the same thing safely. Since the fatal
     // registry that closure is enforced rather than asserted: `inflateFailed`
     // renders `code` only when it names one of the nine `zlib.codes` entries.
-    throw inflateFailed(buffer, datasetStart, code);
+    throw inflateFailed(ctx.frame, datasetStart, code);
   }
 
   // Inner ParseContext over the inflated buffer. All other fields carry
   // through unchanged (creators, encodingContextStack, nestingDepth,
   // strict, copyValues) so private-creator tracking and nesting-depth
   // accounting work transparently across the inflate boundary.
-  const innerCtx: ParseContext = { ...ctx, buffer: inflated };
+  const innerCtx: ParseContext = {
+    ...ctx,
+    frame: { buffer: inflated, name: OFFSET_FRAMES.INFLATED_DATASET },
+  };
 
   // Inner emit wrapper - tags every emitted warning's position with
   // `deflated: true` per D-27, then forwards to the outer chokepoint
@@ -139,10 +143,10 @@ export function parseDeflatedLEWithCap(
   // ds.warnings push semantics).
   //
   // It builds a chokepoint over `innerCtx` rather than forwarding to the outer
-  // one, and that is not cosmetic: `makeEmitter` closes over `ctx.buffer` to cut
-  // the strict-mode snippet, so forwarding meant slicing the COMPRESSED source
-  // at an offset that indexes the INFLATED stream. The snippet was confidently
-  // wrong. `innerCtx` shares the outer `warnings` array, `onWarning` and
+  // one, and that is not cosmetic: `makeEmitter` closes over `ctx.frame` to cut
+  // the strict-mode snippet and to name the offset's frame, so forwarding meant
+  // slicing the COMPRESSED source at an offset that indexes the INFLATED stream
+  // and labelling it `"input"`. The snippet was confidently wrong. `innerCtx` shares the outer `warnings` array, `onWarning` and
   // `strict`, so every other semantic is unchanged.
   const innerChokepoint = makeEmitter(innerCtx);
   const innerEmit = (w: DicomParseWarning): void => {

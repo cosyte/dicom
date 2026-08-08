@@ -13,8 +13,8 @@
  * @module
  */
 
-import type { Buffer } from "node:buffer";
 import type { VR } from "../dictionary/types.js";
+import type { ParseFrame } from "./errors.js";
 import type { DicomParseWarning, WarningCode } from "./warnings.js";
 
 /**
@@ -83,10 +83,21 @@ export interface Profile {
 /**
  * Positional context for a `DicomParseWarning` or `DicomParseError`.
  *
- * Byte offsets are relative to the source buffer for non-deflated transfer
- * syntaxes; for the Deflated Explicit VR LE transfer syntax (D-27),
- * `deflated: true` indicates the offset is into the inflated dataset buffer
- * rather than the on-disk source.
+ * **🛑 `byteOffset` IS NOT ALWAYS RELATIVE TO THE SOURCE BUFFER, AND THIS
+ * JSDOC SAID IT WAS.** For the Deflated Explicit VR LE transfer syntax (D-27),
+ * `deflated: true` says the offset indexes the inflated dataset buffer rather
+ * than the on-disk source. That flag is the only frame this type carries, and
+ * it is not the only frame this parser has: a defined-length Sequence Item is
+ * parsed from a **slice**, so a warning raised inside one carries an
+ * item-relative offset with nothing on the position to say so. The same is true
+ * of `Element.byteOffset`, and has been since the parser was written.
+ *
+ * **The residual is `PRE-EXISTING` and is not closed here.** What is closed is
+ * the thrown side: `DicomParseError.offsetFrame` names the coordinate system
+ * from a closed set (see `OFFSET_FRAMES`), and that covers a Tier-3 fatal and
+ * the `{ strict: true }` escalation of a Tier-2 warning. It does not reach a
+ * warning on the lenient path, which is this type. Do not read the fatal's
+ * frame contract as one this type has.
  *
  * With `exactOptionalPropertyTypes: true`, callers should omit unset keys
  * rather than passing `undefined` (mirrors `@cosyte/hl7` sibling discipline).
@@ -178,8 +189,8 @@ export interface ParseOptions {
    * carries `snippet`,
    * **16 raw bytes, unredacted** (D-10), read at the warning's own `byteOffset`.
    * A message-only PHI review of the lenient path therefore does not transfer to
-   * the strict one. Log `err.code`, `err.byteOffset` and `err.message`; treat
-   * `err.snippet` as PHI.
+   * the strict one. Log `err.code`, `err.byteOffset`, `err.offsetFrame` and
+   * `err.message`; treat `err.snippet` as PHI.
    *
    * **The snippet is cut in the SAME FRAME the `byteOffset` is counted in**, so
    * it is the bytes at the offset the diagnostic names: file-absolute at the
@@ -194,9 +205,15 @@ export interface ParseOptions {
    * message beside them is registry-bound is the mistake this whole paragraph
    * exists to prevent.
    *
-   * **`byteOffset` still carries no frame-of-reference contract**, and closing
-   * the mismatch did not give it one: a nested offset is still not a key you can
-   * look up against the root. Measure it rather than reasoning about it.
+   * **`byteOffset` NOW CARRIES A FRAME-OF-REFERENCE CONTRACT, AND IT IS A NAME
+   * AND NOT AN ORIGIN.** `err.offsetFrame` says which of three coordinate
+   * systems the number is counted in (`OFFSET_FRAMES`), so a consumer can tell a
+   * root offset from an Item-relative one instead of guessing. **A nested offset
+   * is still not a key you can look up against the root**, and it is not made
+   * into one here: where a slice begins is deliberately unpublished, because the
+   * distance between two frames is a declared Value Length off the wire. The
+   * escalated warning's own `position` is unchanged and still carries no frame
+   * beyond `deflated` - see `DicomPosition`.
    *
    * Omit (do not pass `undefined`) to use the default.
    */
@@ -252,17 +269,21 @@ export interface ParseOptions {
  */
 export interface ParseContext {
   /**
-   * **The buffer the CURRENT frame's byte offsets index into**, not the file.
+   * **The CURRENT frame: the buffer this frame's byte offsets index into, and
+   * the name of the coordinate system they are counted in.** Not the file.
    *
-   * It has exactly one reader, `makeEmitter`, which cuts the `{ strict: true }`
-   * escalation's 16-byte `snippet` from it at the warning's own
-   * `position.byteOffset`. That is the whole reason it is mutable: an offset and
-   * the buffer it is cut from have to be in the same frame, and this parser
-   * changes frame in four places. `parseDeflatedLE` recognized that first and
-   * swaps in the inflated stream; `parseSequence`, `tryParseDefinedLengthSQ` and
-   * `tryParseUnAsSQ` hand a descent a **slice**, so they swap too and restore in
-   * a `finally`, exactly as they already do for {@link ParseContext.creators}
-   * and {@link ParseContext.currentCharset}.
+   * It has two readers, both in `makeEmitter`: `frame.buffer` is what the
+   * `{ strict: true }` escalation's 16-byte `snippet` is cut from at the
+   * warning's own `position.byteOffset`, and `frame.name` is what the thrown
+   * `DicomParseError` publishes as `offsetFrame`. Every Tier-3 fatal factory
+   * takes the same object for the same two reasons. That is the whole reason
+   * it is mutable: an offset, the bytes cut at it and the name of its frame
+   * all have to agree, and this parser changes frame in four places.
+   * `parseDeflatedLE` recognized that first and swaps in the inflated stream;
+   * `parseSequence`, `tryParseDefinedLengthSQ` and `tryParseUnAsSQ` hand a
+   * descent a **slice**, so they swap too and restore in a `finally`, exactly
+   * as they already do for {@link ParseContext.creators} and
+   * {@link ParseContext.currentCharset}.
    *
    * **🛑 IT WAS THE FILE EVERYWHERE UNTIL `DICOM-FATAL-MESSAGE-REGISTRY`, AND
    * THAT MADE THE SNIPPET RETURN AN UNRELATED ELEMENT'S BYTES.** A warning
@@ -272,8 +293,15 @@ export interface ParseContext {
    * reader never looked. Do not "simplify" this back to a `readonly` field
    * holding the whole input: the swap is what keeps the offset and the bytes
    * talking about the same element.
+   *
+   * **🛑 AND DO NOT SPLIT IT BACK INTO TWO FIELDS.** The name was absent
+   * entirely until the tenth instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`, and
+   * a `buffer` beside a `frameName` is the same defect one step removed: two
+   * assignments where a frame change is one fact, so a future swap site can
+   * move the bytes and leave the label behind. {@link ParseFrame} exists so
+   * that is not expressible.
    */
-  buffer: Buffer;
+  frame: ParseFrame;
   readonly strict: boolean;
   readonly stripPreamble: "tolerate" | "require";
   readonly onWarning?: OnWarningCallback;

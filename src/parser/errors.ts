@@ -4,10 +4,10 @@
  * Phase 2 core-parser context:
  *   - D-09 - `FATAL_CODES` is a frozen `as const` registry with EXACTLY
  *     four codes; anything less severe MUST be a Tier-2 warning.
- *   - D-10 - `DicomParseError` carries `code`, `byteOffset`, `snippet`
- *     (up to 16 source bytes, space-separated lowercase hex), and an
- *     optional `contextPath`. The thrown `Error.message` is formatted
- *     `[CODE] msg (offset=N)` with `… in path/segments` appended when
+ *   - D-10 - `DicomParseError` carries `code`, `byteOffset`, `offsetFrame`,
+ *     `snippet` (up to 16 source bytes, space-separated lowercase hex), and
+ *     an optional `contextPath`. The thrown `Error.message` is formatted
+ *     `[CODE] msg (offset=N frame=F)` with `… in path/segments` appended when
  *     `contextPath` is provided.
  *
  * @module
@@ -68,28 +68,141 @@ export const FATAL_CODES = {
 export type FatalCode = (typeof FATAL_CODES)[keyof typeof FATAL_CODES];
 
 /**
+ * The coordinate systems a `byteOffset` this parser publishes can be counted
+ * in.
+ *
+ * A byte offset is a number and a number alone says nothing about where its
+ * zero is. This parser reads a Data Set out of three different buffers over one
+ * `parseDicom` call, so the same small integer means three different things
+ * depending on which one is being read - and until `DICOM-DIAGNOSTIC-PHI-
+ * RESIDUALS` closed it, nothing on the thrown error said which. A consumer
+ * cutting `input.subarray(err.byteOffset, err.byteOffset + 16)` to see what
+ * upset the parser was, inside a Sequence Item, cutting an unrelated element -
+ * the exact defect the `{ strict: true }` snippet itself was fixed for in
+ * `#80`.
+ *
+ * **A frame NAME is published; a frame ORIGIN is not, and that asymmetry is
+ * deliberate.** The distance between two nested frames is a declared Value
+ * Length off the wire - the class of number this parser's diagnostics refuse
+ * everywhere else - so publishing where a slice starts would hand back, by
+ * subtraction, the field the message withholds. The name is drawn from the
+ * closed set below, which the parser chooses and no sender can influence, and
+ * that membership is the whole of its bound.
+ *
+ * @example
+ * ```ts
+ * import { parseDicom, DicomParseError, OFFSET_FRAMES } from "@cosyte/dicom";
+ * try {
+ *   parseDicom(buffer);
+ * } catch (err) {
+ *   if (err instanceof DicomParseError && err.offsetFrame === OFFSET_FRAMES.INPUT) {
+ *     // Only here is `err.byteOffset` an index into the buffer you passed in.
+ *     console.error(buffer.subarray(err.byteOffset, err.byteOffset + 16));
+ *   }
+ * }
+ * ```
+ */
+export const OFFSET_FRAMES = {
+  /**
+   * Byte 0 is byte 0 of the buffer handed to `parseDicom`. The only frame in
+   * which indexing the caller's own input by `byteOffset` is meaningful.
+   */
+  INPUT: "input",
+  /**
+   * Byte 0 is byte 0 of the inflated Data Set of a Deflated Explicit VR LE
+   * object (`1.2.840.10008.1.2.1.99`). The compressed input holds no such
+   * byte, so the offset does not index it at any scale.
+   */
+  INFLATED_DATASET: "inflated-dataset",
+  /**
+   * Byte 0 is byte 0 of a slice this parser cut from inside a Value Field: a
+   * defined-length Sequence Item's value, or an `SQ`/`UN` value handed to a
+   * descent. **Where that slice begins is deliberately not published** - see
+   * this table's own note.
+   */
+  VALUE_SLICE: "value-slice",
+} as const;
+
+/**
+ * The frame a `DicomParseError.byteOffset` is counted in. See
+ * {@link OFFSET_FRAMES}.
+ *
+ * @example
+ * ```ts
+ * import type { OffsetFrame } from "@cosyte/dicom";
+ * function indexable(frame: OffsetFrame): boolean {
+ *   // Only the root frame's offsets index the buffer the caller passed in.
+ *   switch (frame) {
+ *     case "input":
+ *       return true;
+ *     case "inflated-dataset":
+ *     case "value-slice":
+ *       return false;
+ *   }
+ * }
+ * ```
+ */
+export type OffsetFrame = (typeof OFFSET_FRAMES)[keyof typeof OFFSET_FRAMES];
+
+/**
+ * The buffer the current frame's offsets index into, **paired with that
+ * frame's name in one object so the two cannot disagree**.
+ *
+ * They were two facts before this type existed: `ParseContext.buffer` held the
+ * frame's bytes and nothing held its name, so every diagnostic that published
+ * an offset published it unlabelled. Making the name a second sibling field
+ * would have re-created the failure this parser has already paid for twice -
+ * an offset and the bytes cut at it drifting apart across a frame change. One
+ * object with two readonly members means a frame change is a single
+ * assignment: there is no way to swap the buffer and forget the name.
+ *
+ * @internal
+ */
+export interface ParseFrame {
+  /** The bytes this frame's offsets index into. */
+  readonly buffer: Buffer;
+  /** The name of the coordinate system those offsets are counted in. */
+  readonly name: OffsetFrame;
+}
+
+/**
  * Thrown by `parseDicom` when the input violates one of the four
  * unrecoverable Tier-3 structural rules - or, under `{ strict: true }`,
  * when any Tier-2 warning is escalated through the single `emit`
  * chokepoint (D-35). Carries byte-offset positional context plus a short
  * source snippet so consumers can log actionable errors.
  *
- * Message format: `[CODE] msg (offset=N)`, with `… in a/b/c` appended
- * when `contextPath` is provided.
+ * Message format: `[CODE] msg (offset=N frame=F)`, with `… in a/b/c`
+ * appended when `contextPath` is provided.
  *
  * @remarks
  * Snippets may contain PHI when parsing real clinical files - redact at
  * the call site if required by your compliance posture. The library does
  * not redact snippets itself.
  *
+ * **`byteOffset` is only an index into your own buffer when `offsetFrame` is
+ * `"input"`.** This parser reads a Data Set out of a slice in two situations -
+ * a defined-length Sequence Item, and an `SQ`/`UN` descent - and out of an
+ * inflated stream in a third, and an offset raised in any of them counts from
+ * that buffer's byte 0. {@link OFFSET_FRAMES} names which; where a slice
+ * begins is deliberately not published, because the distance between two
+ * frames is a declared length off the wire.
+ *
+ * **`snippet` is already cut in the frame `offsetFrame` names**, so a consumer
+ * that only wants the bytes does not need the frame at all. The frame is what
+ * a consumer needs before indexing anything of its own by `byteOffset`.
+ *
  * @example
  * ```ts
- * import { parseDicom, DicomParseError } from "@cosyte/dicom";
+ * import { parseDicom, DicomParseError, OFFSET_FRAMES } from "@cosyte/dicom";
  * try {
  *   parseDicom(buffer);
  * } catch (err) {
  *   if (err instanceof DicomParseError && err.code === "NOT_DICOM_PART_10") {
- *     // err.byteOffset, err.snippet, err.contextPath all available
+ *     // err.byteOffset, err.offsetFrame, err.snippet, err.contextPath
+ *     if (err.offsetFrame !== OFFSET_FRAMES.INPUT) {
+ *       // `byteOffset` counts from somewhere inside the file, not from its start.
+ *     }
  *   }
  * }
  * ```
@@ -97,12 +210,20 @@ export type FatalCode = (typeof FATAL_CODES)[keyof typeof FATAL_CODES];
 export class DicomParseError extends Error {
   public readonly code: FatalCode;
   public readonly byteOffset: number;
+  /**
+   * The coordinate system {@link DicomParseError.byteOffset} is counted in.
+   * See {@link OFFSET_FRAMES}.
+   */
+  public readonly offsetFrame: OffsetFrame;
   public readonly snippet: string;
   public readonly contextPath: readonly string[] | undefined;
 
   /**
    * Construct a new `DicomParseError`. All fields except `contextPath` are
-   * required so every thrower populates positional context per `TOL-02`.
+   * required so every thrower populates positional context per `TOL-02` - and
+   * `offsetFrame` is required for the same reason `byteOffset` is, because an
+   * offset whose frame is optional is an offset whose frame is usually
+   * missing.
    *
    * @internal
    */
@@ -110,16 +231,18 @@ export class DicomParseError extends Error {
     code: FatalCode,
     message: string,
     byteOffset: number,
+    offsetFrame: OffsetFrame,
     snippet: string,
     contextPath?: readonly string[],
   ) {
     const formatted =
-      `[${code}] ${message} (offset=${String(byteOffset)})` +
+      `[${code}] ${message} (offset=${String(byteOffset)} frame=${offsetFrame})` +
       (contextPath !== undefined && contextPath.length > 0 ? ` … in ${contextPath.join("/")}` : "");
     super(formatted);
     this.name = "DicomParseError";
     this.code = code;
     this.byteOffset = byteOffset;
+    this.offsetFrame = offsetFrame;
     this.snippet = snippet;
     this.contextPath = contextPath;
   }

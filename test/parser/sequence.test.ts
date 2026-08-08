@@ -17,7 +17,7 @@ import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
 import type { Tag } from "../../src/dictionary/types.js";
-import { DicomParseError } from "../../src/parser/errors.js";
+import { DicomParseError, OFFSET_FRAMES } from "../../src/parser/errors.js";
 import {
   parseSequence,
   tryParseUnAsSQ,
@@ -30,7 +30,7 @@ import { parseImplicitLE } from "../../src/parser/implicit-le.js";
 
 function makeContext(buffer: Buffer, overrides: Partial<ParseContext> = {}): ParseContext {
   return {
-    buffer,
+    frame: { buffer, name: OFFSET_FRAMES.INPUT },
     strict: false,
     stripPreamble: "tolerate",
     warnings: [],

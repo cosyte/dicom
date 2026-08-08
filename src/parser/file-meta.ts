@@ -102,7 +102,7 @@ export function parseFileMeta(
     firstElement = readExplicitLeElement(cursor);
   } catch (err) {
     if (err instanceof RangeError) {
-      throw fileMetaTruncated(buffer, fmStart);
+      throw fileMetaTruncated(ctx.frame, fmStart);
     }
     throw err;
   }
@@ -123,7 +123,7 @@ export function parseFileMeta(
       // remaining count was `buffer.length - cursor.position`, which the factory
       // no longer accepts - see `fileMetaGroupLengthOverruns` for why the bound
       // is its signature and not this call site's frame.
-      throw fileMetaGroupLengthOverruns(buffer, fmStart);
+      throw fileMetaGroupLengthOverruns(ctx.frame, fmStart);
     }
   } else {
     // (0002,0000) absent - emit warning and treat the first element as the start of the FM body.
@@ -143,7 +143,7 @@ export function parseFileMeta(
       next = readExplicitLeElement(cursor);
     } catch (err) {
       if (err instanceof RangeError) {
-        throw fileMetaTruncated(buffer, fmStart);
+        throw fileMetaTruncated(ctx.frame, fmStart);
       }
       throw err;
     }
@@ -171,7 +171,7 @@ export function parseFileMeta(
         next = readExplicitLeElement(cursor);
       } catch (err) {
         if (err instanceof RangeError) {
-          throw fileMetaTruncated(buffer, fmStart);
+          throw fileMetaTruncated(ctx.frame, fmStart);
         }
         throw err;
       }
@@ -211,7 +211,7 @@ export function parseFileMeta(
   // Step 4: Project File Meta elements into the FileMeta interface.
   const tsElement = fmElements.find((e) => e.tag === "00020010");
   if (tsElement === undefined || tsElement.vr !== "UI") {
-    throw fileMetaTransferSyntaxMissing(buffer, fmStart);
+    throw fileMetaTransferSyntaxMissing(ctx.frame, fmStart);
   }
 
   // Any (0002,xxxx) element not projected into a typed field above is preserved

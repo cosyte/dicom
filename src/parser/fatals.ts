@@ -81,14 +81,38 @@
  * snippet is documented as PHI on `ParseOptions.strict` and on the class, and
  * that documentation is the whole of the guarantee there.
  *
+ * ## The tenth instance: the locator had no frame
+ *
+ * `#93` bound the last wire-derived number out of these signatures and left
+ * `err.byteOffset` as the sole locator for the two messages it changed. That
+ * offset is **slice-relative inside a defined-length Sequence Item** - it reads
+ * `0`, `24`, `40` for the same file depending on where in the Item the element
+ * sits - and nothing on `DicomParseError` said so. A locator that looks
+ * absolute and is not is not a smaller defect than a locator that leaks; it is
+ * a diagnostic pointing a consumer at somebody else's bytes, which is how the
+ * `{ strict: true }` snippet went wrong in `#80`.
+ *
+ * So every factory here takes a {@link ParseFrame} rather than a `Buffer`: one
+ * object carrying the frame's bytes AND the frame's name, so the snippet and
+ * the published `offsetFrame` cannot come from different frames. **The name is
+ * published and the frame's ORIGIN is not.** The distance between two nested
+ * frames is a declared Value Length off the wire, so an origin would hand back
+ * by subtraction the field these messages withhold.
+ *
  * @module
  */
 
-import type { Buffer } from "node:buffer";
-
 import { uid as dictionaryUid } from "../dictionary/index.js";
 import type { VR } from "../dictionary/types.js";
-import { DicomParseError, FATAL_CODES, buildSnippet, type FatalCode } from "./errors.js";
+import {
+  DicomParseError,
+  FATAL_CODES,
+  OFFSET_FRAMES,
+  buildSnippet,
+  type FatalCode,
+  type OffsetFrame,
+  type ParseFrame,
+} from "./errors.js";
 import { WITHHELD, renderVr } from "./tokens.js";
 
 /**
@@ -187,8 +211,11 @@ const FATAL_MESSAGES = Object.freeze({
     message: "File Meta is truncated.",
   },
   // The declared group length is deliberately absent. It is four bytes of the
-  // document read as a 32-bit integer, and this code fires precisely when those
-  // four bytes are not what they claim to be.
+  // document read as a 32-bit integer. **NOT because this code fires only when
+  // those four bytes are fabricated** - an honestly truncated file raises it
+  // with a perfectly correct group length, measured - but because they are four
+  // bytes a sender wrote in either reading, and in the other one they are part
+  // of somebody's value.
   FILE_META_GROUP_LENGTH_OVERRUNS: {
     code: FATAL_CODES.INVALID_FILE_META,
     message:
@@ -291,7 +318,10 @@ const FATAL_MESSAGES = Object.freeze({
  * type**: what keeps it clean is that the two factories which used to take a
  * count of the bytes remaining in the frame no longer accept one, and that the two which still
  * pass an `n` pass a value this library or its caller chose. Their signatures
- * say which is which, and `fatals.test.ts` asserts the arity of all four.
+ * say which is which, and `fatals.test.ts` asserts the **declared parameter
+ * list** of all four - not `Function.prototype.length`, which stops counting at
+ * the first defaulted or rest parameter and would therefore have read `2` for a
+ * factory that had grown exactly the slot the pin exists to refuse.
  *
  * @internal
  */
@@ -340,6 +370,7 @@ function renderZlibCode(code: string | undefined): string {
 function build(
   key: FatalMessageKey,
   byteOffset: number,
+  offsetFrame: OffsetFrame,
   snippet: string,
   tokens: FatalTokens = {},
 ): DicomParseError {
@@ -349,25 +380,31 @@ function build(
     .replace("{ts}", renderTransferSyntax(tokens.ts))
     .replace("{zlib}", renderZlibCode(tokens.zlib))
     .replace("{n}", String(tokens.n ?? 0));
-  return new DicomParseError(entry.code, message, byteOffset, snippet);
+  return new DicomParseError(entry.code, message, byteOffset, offsetFrame, snippet);
 }
 
 /**
- * Build a fatal whose snippet is cut from `buffer` at `offset`, which is the
- * shape every fatal but the two `EMPTY_INPUT` forms takes.
+ * Build a fatal whose snippet is cut from `frame.buffer` at `offset` and whose
+ * published `offsetFrame` is `frame.name`, which is the shape every fatal but
+ * the two `EMPTY_INPUT` forms takes.
+ *
+ * **The two come off one object on purpose.** A `buffer` parameter beside a
+ * separate frame-name parameter would let a call site cut bytes from the Item's
+ * slice and label the offset `"input"`, and that call site would type-check.
  */
 function at(
   key: FatalMessageKey,
-  buffer: Buffer,
+  frame: ParseFrame,
   offset: number,
   tokens: FatalTokens = {},
 ): DicomParseError {
-  return build(key, offset, buildSnippet(buffer, offset), tokens);
+  return build(key, offset, frame.name, buildSnippet(frame.buffer, offset), tokens);
 }
 
 // ---------------------------------------------------------------------------
 // Factories. One per key, and the signature is the bound: none of them accepts
-// a tag, and none accepts a length field read off the wire.
+// a tag, none accepts a length field read off the wire, and none accepts a
+// frame NAME separately from the bytes that frame is made of.
 // ---------------------------------------------------------------------------
 
 /**
@@ -380,7 +417,9 @@ function at(
  * ```
  */
 export function emptyInput(): DicomParseError {
-  return build("EMPTY_INPUT", 0, "");
+  // The one frame that exists before a `ParseContext` does. There are no bytes
+  // to be in a second one.
+  return build("EMPTY_INPUT", 0, OFFSET_FRAMES.INPUT, "");
 }
 
 /**
@@ -392,7 +431,7 @@ export function emptyInput(): DicomParseError {
  * ```
  */
 export function emptyInputAfterNormalization(): DicomParseError {
-  return build("EMPTY_INPUT_AFTER_NORMALIZATION", 0, "");
+  return build("EMPTY_INPUT_AFTER_NORMALIZATION", 0, OFFSET_FRAMES.INPUT, "");
 }
 
 /**
@@ -401,11 +440,11 @@ export function emptyInputAfterNormalization(): DicomParseError {
  *
  * @example
  * ```ts
- * throw notDicomPart10Required(buffer, 0);
+ * throw notDicomPart10Required(ctx.frame, 0);
  * ```
  */
-export function notDicomPart10Required(buffer: Buffer, offset: number): DicomParseError {
-  return at("NOT_DICOM_PART_10_REQUIRED", buffer, offset);
+export function notDicomPart10Required(frame: ParseFrame, offset: number): DicomParseError {
+  return at("NOT_DICOM_PART_10_REQUIRED", frame, offset);
 }
 
 /**
@@ -414,11 +453,11 @@ export function notDicomPart10Required(buffer: Buffer, offset: number): DicomPar
  *
  * @example
  * ```ts
- * throw notDicomPart10(buffer, 0);
+ * throw notDicomPart10(ctx.frame, 0);
  * ```
  */
-export function notDicomPart10(buffer: Buffer, offset: number): DicomParseError {
-  return at("NOT_DICOM_PART_10", buffer, offset);
+export function notDicomPart10(frame: ParseFrame, offset: number): DicomParseError {
+  return at("NOT_DICOM_PART_10", frame, offset);
 }
 
 /**
@@ -435,11 +474,11 @@ export function notDicomPart10(buffer: Buffer, offset: number): DicomParseError 
  *
  * @example
  * ```ts
- * throw unsupportedTransferSyntax(buffer, fileMetaEnd, "1.2.840.10008.1.2.4.50");
+ * throw unsupportedTransferSyntax(ctx.frame, fileMetaEnd, "1.2.840.10008.1.2.4.50");
  * ```
  */
 export function unsupportedTransferSyntax(
-  buffer: Buffer,
+  frame: ParseFrame,
   offset: number,
   ts: string,
 ): DicomParseError {
@@ -447,7 +486,8 @@ export function unsupportedTransferSyntax(
   return build(
     "UNSUPPORTED_TRANSFER_SYNTAX",
     offset,
-    name.length > 0 ? name : buildSnippet(buffer, offset),
+    frame.name,
+    name.length > 0 ? name : buildSnippet(frame.buffer, offset),
     { ts },
   );
 }
@@ -457,11 +497,11 @@ export function unsupportedTransferSyntax(
  *
  * @example
  * ```ts
- * throw fileMetaTruncated(buffer, fmStart);
+ * throw fileMetaTruncated(ctx.frame, fmStart);
  * ```
  */
-export function fileMetaTruncated(buffer: Buffer, offset: number): DicomParseError {
-  return at("FILE_META_TRUNCATED", buffer, offset);
+export function fileMetaTruncated(frame: ParseFrame, offset: number): DicomParseError {
+  return at("FILE_META_TRUNCATED", frame, offset);
 }
 
 /**
@@ -471,7 +511,17 @@ export function fileMetaTruncated(buffer: Buffer, offset: number): DicomParseErr
  * @remarks
  * **The declared length is bound out of this signature**: it is four document
  * bytes read as a 32-bit integer, on the one element whose job is to say how
- * long the group is, raised exactly when those bytes are not what they claim.
+ * long the group is.
+ *
+ * **🛑 THE REASON IS NOT "IT IS RAISED EXACTLY WHEN THOSE BYTES ARE NOT WHAT
+ * THEY CLAIM", AND THAT WORDING IS CORRECTED RATHER THAN REPEATED.** Measured:
+ * a spec-clean file cut short inside its File Meta group raises this fatal with
+ * `(0002,0000)` entirely honest, and nothing anywhere in the file fabricated.
+ * The universal held for neither this code nor `ELEMENT_LENGTH_EXCEEDS_BUFFER`,
+ * which raises the same way on a well-formed object truncated by two bytes. The
+ * bound is right in both readings for a reason that does not need the
+ * universal: the number is a raw 32-bit field a sender wrote, and on the
+ * desynchronized reading that field is four bytes of somebody's value.
  *
  * **So is the count of bytes left in the buffer, which this message printed
  * through `0.0.14`.** File Meta is read at the root today, where that count is
@@ -484,11 +534,11 @@ export function fileMetaTruncated(buffer: Buffer, offset: number): DicomParseErr
  *
  * @example
  * ```ts
- * throw fileMetaGroupLengthOverruns(buffer, fmStart);
+ * throw fileMetaGroupLengthOverruns(ctx.frame, fmStart);
  * ```
  */
-export function fileMetaGroupLengthOverruns(buffer: Buffer, offset: number): DicomParseError {
-  return at("FILE_META_GROUP_LENGTH_OVERRUNS", buffer, offset);
+export function fileMetaGroupLengthOverruns(frame: ParseFrame, offset: number): DicomParseError {
+  return at("FILE_META_GROUP_LENGTH_OVERRUNS", frame, offset);
 }
 
 /**
@@ -496,11 +546,11 @@ export function fileMetaGroupLengthOverruns(buffer: Buffer, offset: number): Dic
  *
  * @example
  * ```ts
- * throw fileMetaTransferSyntaxMissing(buffer, fmStart);
+ * throw fileMetaTransferSyntaxMissing(ctx.frame, fmStart);
  * ```
  */
-export function fileMetaTransferSyntaxMissing(buffer: Buffer, offset: number): DicomParseError {
-  return at("FILE_META_TRANSFER_SYNTAX_MISSING", buffer, offset);
+export function fileMetaTransferSyntaxMissing(frame: ParseFrame, offset: number): DicomParseError {
+  return at("FILE_META_TRANSFER_SYNTAX_MISSING", frame, offset);
 }
 
 /**
@@ -509,11 +559,11 @@ export function fileMetaTransferSyntaxMissing(buffer: Buffer, offset: number): D
  *
  * @example
  * ```ts
- * throw truncatedDatasetHeader(buffer, headerStart);
+ * throw truncatedDatasetHeader(ctx.frame, headerStart);
  * ```
  */
-export function truncatedDatasetHeader(buffer: Buffer, offset: number): DicomParseError {
-  return at("TRUNCATED_DATASET_HEADER", buffer, offset);
+export function truncatedDatasetHeader(frame: ParseFrame, offset: number): DicomParseError {
+  return at("TRUNCATED_DATASET_HEADER", frame, offset);
 }
 
 /**
@@ -521,11 +571,11 @@ export function truncatedDatasetHeader(buffer: Buffer, offset: number): DicomPar
  *
  * @example
  * ```ts
- * throw truncatedFffeHeader(buffer, headerStart);
+ * throw truncatedFffeHeader(ctx.frame, headerStart);
  * ```
  */
-export function truncatedFffeHeader(buffer: Buffer, offset: number): DicomParseError {
-  return at("TRUNCATED_FFFE_HEADER", buffer, offset);
+export function truncatedFffeHeader(frame: ParseFrame, offset: number): DicomParseError {
+  return at("TRUNCATED_FFFE_HEADER", frame, offset);
 }
 
 /**
@@ -533,11 +583,11 @@ export function truncatedFffeHeader(buffer: Buffer, offset: number): DicomParseE
  *
  * @example
  * ```ts
- * throw truncatedExplicitVrHeader(buffer, headerStart);
+ * throw truncatedExplicitVrHeader(ctx.frame, headerStart);
  * ```
  */
-export function truncatedExplicitVrHeader(buffer: Buffer, offset: number): DicomParseError {
-  return at("TRUNCATED_EXPLICIT_VR_HEADER", buffer, offset);
+export function truncatedExplicitVrHeader(frame: ParseFrame, offset: number): DicomParseError {
+  return at("TRUNCATED_EXPLICIT_VR_HEADER", frame, offset);
 }
 
 /**
@@ -545,11 +595,11 @@ export function truncatedExplicitVrHeader(buffer: Buffer, offset: number): Dicom
  *
  * @example
  * ```ts
- * throw sqItemHeaderTruncated(buffer, itemHeaderStart);
+ * throw sqItemHeaderTruncated(ctx.frame, itemHeaderStart);
  * ```
  */
-export function sqItemHeaderTruncated(buffer: Buffer, offset: number): DicomParseError {
-  return at("SQ_ITEM_HEADER_TRUNCATED", buffer, offset);
+export function sqItemHeaderTruncated(frame: ParseFrame, offset: number): DicomParseError {
+  return at("SQ_ITEM_HEADER_TRUNCATED", frame, offset);
 }
 
 /**
@@ -564,11 +614,11 @@ export function sqItemHeaderTruncated(buffer: Buffer, offset: number): DicomPars
  *
  * @example
  * ```ts
- * throw unexpectedFffeAtDatasetLevel(buffer, headerStart);
+ * throw unexpectedFffeAtDatasetLevel(ctx.frame, headerStart);
  * ```
  */
-export function unexpectedFffeAtDatasetLevel(buffer: Buffer, offset: number): DicomParseError {
-  return at("UNEXPECTED_FFFE_AT_DATASET_LEVEL", buffer, offset);
+export function unexpectedFffeAtDatasetLevel(frame: ParseFrame, offset: number): DicomParseError {
+  return at("UNEXPECTED_FFFE_AT_DATASET_LEVEL", frame, offset);
 }
 
 /**
@@ -578,11 +628,11 @@ export function unexpectedFffeAtDatasetLevel(buffer: Buffer, offset: number): Di
  *
  * @example
  * ```ts
- * throw unexpectedFffeAtDatasetRoot(buffer, headerStart);
+ * throw unexpectedFffeAtDatasetRoot(ctx.frame, headerStart);
  * ```
  */
-export function unexpectedFffeAtDatasetRoot(buffer: Buffer, offset: number): DicomParseError {
-  return at("UNEXPECTED_FFFE_AT_DATASET_ROOT", buffer, offset);
+export function unexpectedFffeAtDatasetRoot(frame: ParseFrame, offset: number): DicomParseError {
+  return at("UNEXPECTED_FFFE_AT_DATASET_ROOT", frame, offset);
 }
 
 /**
@@ -599,15 +649,15 @@ export function unexpectedFffeAtDatasetRoot(buffer: Buffer, offset: number): Dic
  *
  * @example
  * ```ts
- * throw undefinedLengthOnNonSqExplicit(buffer, headerStart, "LO");
+ * throw undefinedLengthOnNonSqExplicit(ctx.frame, headerStart, "LO");
  * ```
  */
 export function undefinedLengthOnNonSqExplicit(
-  buffer: Buffer,
+  frame: ParseFrame,
   offset: number,
   vr: VR,
 ): DicomParseError {
-  return at("UNDEFINED_LENGTH_ON_NON_SQ_EXPLICIT", buffer, offset, { vr });
+  return at("UNDEFINED_LENGTH_ON_NON_SQ_EXPLICIT", frame, offset, { vr });
 }
 
 /**
@@ -622,15 +672,15 @@ export function undefinedLengthOnNonSqExplicit(
  *
  * @example
  * ```ts
- * throw undefinedLengthOnNonSqImplicit(buffer, headerStart, "UN");
+ * throw undefinedLengthOnNonSqImplicit(ctx.frame, headerStart, "UN");
  * ```
  */
 export function undefinedLengthOnNonSqImplicit(
-  buffer: Buffer,
+  frame: ParseFrame,
   offset: number,
   vr: VR,
 ): DicomParseError {
-  return at("UNDEFINED_LENGTH_ON_NON_SQ_IMPLICIT", buffer, offset, { vr });
+  return at("UNDEFINED_LENGTH_ON_NON_SQ_IMPLICIT", frame, offset, { vr });
 }
 
 /**
@@ -659,11 +709,11 @@ export function undefinedLengthOnNonSqImplicit(
  *
  * @example
  * ```ts
- * throw elementLengthExceedsBuffer(buffer, headerStart);
+ * throw elementLengthExceedsBuffer(ctx.frame, headerStart);
  * ```
  */
-export function elementLengthExceedsBuffer(buffer: Buffer, offset: number): DicomParseError {
-  return at("ELEMENT_LENGTH_EXCEEDS_BUFFER", buffer, offset);
+export function elementLengthExceedsBuffer(frame: ParseFrame, offset: number): DicomParseError {
+  return at("ELEMENT_LENGTH_EXCEEDS_BUFFER", frame, offset);
 }
 
 /**
@@ -677,11 +727,11 @@ export function elementLengthExceedsBuffer(buffer: Buffer, offset: number): Dico
  *
  * @example
  * ```ts
- * throw unexpectedTagInsideSequence(buffer, itemHeaderStart);
+ * throw unexpectedTagInsideSequence(ctx.frame, itemHeaderStart);
  * ```
  */
-export function unexpectedTagInsideSequence(buffer: Buffer, offset: number): DicomParseError {
-  return at("UNEXPECTED_TAG_INSIDE_SEQUENCE", buffer, offset);
+export function unexpectedTagInsideSequence(frame: ParseFrame, offset: number): DicomParseError {
+  return at("UNEXPECTED_TAG_INSIDE_SEQUENCE", frame, offset);
 }
 
 /**
@@ -690,11 +740,14 @@ export function unexpectedTagInsideSequence(buffer: Buffer, offset: number): Dic
  *
  * @example
  * ```ts
- * throw encapsulatedFragmentExceedsBuffer(buffer, itemHeaderStart);
+ * throw encapsulatedFragmentExceedsBuffer(ctx.frame, itemHeaderStart);
  * ```
  */
-export function encapsulatedFragmentExceedsBuffer(buffer: Buffer, offset: number): DicomParseError {
-  return at("ENCAPSULATED_FRAGMENT_EXCEEDS_BUFFER", buffer, offset);
+export function encapsulatedFragmentExceedsBuffer(
+  frame: ParseFrame,
+  offset: number,
+): DicomParseError {
+  return at("ENCAPSULATED_FRAGMENT_EXCEEDS_BUFFER", frame, offset);
 }
 
 /**
@@ -707,11 +760,11 @@ export function encapsulatedFragmentExceedsBuffer(buffer: Buffer, offset: number
  *
  * @example
  * ```ts
- * throw itemLengthExceedsBuffer(buffer, itemHeaderStart);
+ * throw itemLengthExceedsBuffer(ctx.frame, itemHeaderStart);
  * ```
  */
-export function itemLengthExceedsBuffer(buffer: Buffer, offset: number): DicomParseError {
-  return at("ITEM_LENGTH_EXCEEDS_BUFFER", buffer, offset);
+export function itemLengthExceedsBuffer(frame: ParseFrame, offset: number): DicomParseError {
+  return at("ITEM_LENGTH_EXCEEDS_BUFFER", frame, offset);
 }
 
 /**
@@ -723,15 +776,15 @@ export function itemLengthExceedsBuffer(buffer: Buffer, offset: number): DicomPa
  *
  * @example
  * ```ts
- * throw sqNestingDepthExceeded(buffer, valueStart, 64);
+ * throw sqNestingDepthExceeded(ctx.frame, valueStart, 64);
  * ```
  */
 export function sqNestingDepthExceeded(
-  buffer: Buffer,
+  frame: ParseFrame,
   offset: number,
   limit: number,
 ): DicomParseError {
-  return at("SQ_NESTING_DEPTH_EXCEEDED", buffer, offset, { n: limit });
+  return at("SQ_NESTING_DEPTH_EXCEEDED", frame, offset, { n: limit });
 }
 
 /**
@@ -739,15 +792,15 @@ export function sqNestingDepthExceeded(
  *
  * @example
  * ```ts
- * throw inflatedPayloadExceedsCap(buffer, datasetStart, 268435456);
+ * throw inflatedPayloadExceedsCap(ctx.frame, datasetStart, 268435456);
  * ```
  */
 export function inflatedPayloadExceedsCap(
-  buffer: Buffer,
+  frame: ParseFrame,
   offset: number,
   cap: number,
 ): DicomParseError {
-  return at("INFLATED_PAYLOAD_EXCEEDS_CAP", buffer, offset, { n: cap });
+  return at("INFLATED_PAYLOAD_EXCEEDS_CAP", frame, offset, { n: cap });
 }
 
 /**
@@ -759,15 +812,15 @@ export function inflatedPayloadExceedsCap(
  *
  * @example
  * ```ts
- * throw inflateFailed(buffer, datasetStart, "Z_DATA_ERROR");
+ * throw inflateFailed(ctx.frame, datasetStart, "Z_DATA_ERROR");
  * ```
  */
 export function inflateFailed(
-  buffer: Buffer,
+  frame: ParseFrame,
   offset: number,
   code: string | undefined,
 ): DicomParseError {
-  return at("INFLATE_FAILED", buffer, offset, ...(code !== undefined ? [{ zlib: code }] : []));
+  return at("INFLATE_FAILED", frame, offset, ...(code !== undefined ? [{ zlib: code }] : []));
 }
 
 /**

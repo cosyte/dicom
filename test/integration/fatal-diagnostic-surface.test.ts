@@ -2,7 +2,7 @@
  * `DICOM-FATAL-MESSAGE-REGISTRY`: the Tier-3 half of "a diagnostic about a PHI
  * leak is itself a PHI surface".
  *
- * Two things are proved here, and they are the two halves of the item.
+ * Three things are proved here.
  *
  * ## 1. No document byte reaches a Tier-3 `err.message`
  *
@@ -45,15 +45,17 @@ import type { DeidentifyReport } from "../../src/deident/types.js";
 import { defineProfile } from "../../src/profiles/index.js";
 import type { VR } from "../../src/dictionary/types.js";
 import { KNOWN_VRS } from "../../src/parser/endian.js";
-import { DicomParseError, FATAL_CODES } from "../../src/parser/errors.js";
+import { DicomParseError, FATAL_CODES, OFFSET_FRAMES } from "../../src/parser/errors.js";
 import { FATAL_MESSAGES, elementLengthExceedsBuffer } from "../../src/parser/fatals.js";
 import { parseDicom } from "../../src/parser/index.js";
 import { renderTag } from "../../src/parser/tokens.js";
 import { WARNING_MESSAGES } from "../../src/parser/warnings.js";
 import { buildDicom } from "../helpers/build-dicom.js";
+import { declaredParameters } from "../helpers/declared-parameters.js";
 
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
 const TS_IMPLICIT_LE = "1.2.840.10008.1.2";
+const TS_DEFLATED = "1.2.840.10008.1.2.1.99";
 
 /**
  * Synthetic and name-bearing. `#55` paid a blocker for a pinning test that was
@@ -289,7 +291,15 @@ const REGISTRY_PATTERNS: readonly RegExp[] = Object.values(FATAL_MESSAGES).map((
     .replace(/\\\{ts\\\}/gu, "(?:Transfer Syntax .+|The Transfer Syntax UID)")
     .replace(/\\\{n\\\}/gu, "\\d+");
   // `NOT_DICOM_PART_10` carries digits, so the code class is not `[A-Z_]+`.
-  return new RegExp(`^\\[[A-Z0-9_]+\\] ${pattern}(?: \\(offset=\\d+\\))?$`, "u");
+  // The suffix carries the frame now (the tenth instance): an offset with no
+  // coordinate system is not a locator, so `offsetFrame` is published beside it
+  // in the message as well as on the class. The frame class is the closed
+  // `OFFSET_FRAMES` set, spelled as a pattern rather than as `.+` so a frame
+  // name assembled out of document bytes could not satisfy it.
+  return new RegExp(
+    `^\\[[A-Z0-9_]+\\] ${pattern}(?: \\(offset=\\d+ frame=(?:input|inflated-dataset|value-slice)\\))?$`,
+    "u",
+  );
 });
 
 /** Strip the `[CODE] ` prefix and ` (offset=N)` suffix `DicomParseError` adds. */
@@ -1093,7 +1103,13 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
     // The closure itself, at the level that survives a refactor of the prose:
     // the template has no numeric slot and the factory has no parameter for one.
     expect(FATAL_MESSAGES.ELEMENT_LENGTH_EXCEEDS_BUFFER.message).not.toContain("{n}");
-    expect(elementLengthExceedsBuffer.length).toBe(2);
+    // 🛑 THIS ROW READ `elementLengthExceedsBuffer.length` UNTIL THE TENTH
+    // INSTANCE, AND `Function.prototype.length` STOPS AT THE FIRST DEFAULTED
+    // PARAMETER - so `(frame, offset, remaining = 0)`, the exact slot it exists
+    // to refuse, would have read `2` and passed. The declared list is read off
+    // the source instead, and `test/helpers/declared-parameters.ts` carries the
+    // controls that prove the reader sees what `length` cannot.
+    expect(declaredParameters(elementLengthExceedsBuffer)).toStrictEqual(["frame", "offset"]);
   });
 
   it("the deidentify() channel is swept, with the floor off, and the only tags left are PS3.6 rows", () => {
@@ -1249,6 +1265,55 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
     ).toStrictEqual([]);
   });
 
+  it("the 'fires precisely when a length field is lying' universal is FALSE, and is corrected not repeated", () => {
+    // 🛑 THE CLAIM, NOT THE GUARD. Three artifacts justified withholding a
+    // declared length by saying the fatal that carries it "fires precisely when
+    // bytes inside somebody's value are being read as a header". That universal
+    // is false in the only-when direction for BOTH of the two old fields, and
+    // this row is the measurement.
+    //
+    // A spec-clean object, cut short. Nothing is fabricated, every declared
+    // length in the file is honest, and no value is being read as a header.
+    const whole = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      elements: [
+        { tag: "00080060", vr: "CS" as VR, value: val("CT") },
+        { tag: "00100010", vr: "PN" as VR, value: val(NAME) },
+      ],
+    });
+    // Non-vacuity: the uncut file really does parse, so the fatals below are the
+    // truncation's doing and not a defect in the fixture.
+    expect(() => parseDicom(whole)).not.toThrow();
+
+    for (const cut of [2, 4, 6, 8, 10]) {
+      const err = fatalFrom(whole.subarray(0, whole.length - cut));
+      expect(err.code, `cut ${String(cut)}`).toBe(FATAL_CODES.INVALID_FILE_META);
+      expect(err.message, `cut ${String(cut)}`).toContain(
+        FATAL_MESSAGES.ELEMENT_LENGTH_EXCEEDS_BUFFER.message,
+      );
+    }
+
+    // ...and the same for the File Meta half, on a file cut short inside the
+    // group with `(0002,0000)` left exactly as written.
+    const groupLengthValueAt = 128 + 4 + 8;
+    expect(whole.subarray(128, 132).toString("ascii")).toBe("DICM");
+    const declared = whole.readUInt32LE(groupLengthValueAt);
+    const fileMetaEnd = groupLengthValueAt + 4 + declared;
+    const cutInsideFileMeta = fatalFrom(whole.subarray(0, fileMetaEnd - 6));
+    expect(cutInsideFileMeta.message).toContain(
+      FATAL_MESSAGES.FILE_META_GROUP_LENGTH_OVERRUNS.message,
+    );
+    // The group length really is untouched, so "honest" is measured rather than
+    // asserted: the bytes still in the truncated file read back as `declared`.
+    expect(whole.subarray(0, fileMetaEnd - 6).readUInt32LE(groupLengthValueAt)).toBe(declared);
+
+    // The bound is unchanged and correct in BOTH readings, which is why the
+    // remedy here was the claim and not the guard: the withheld number is four
+    // bytes a sender wrote either way.
+    expect(FATAL_MESSAGES.ELEMENT_LENGTH_EXCEEDS_BUFFER.message).not.toContain("{n}");
+    expect(FATAL_MESSAGES.FILE_META_GROUP_LENGTH_OVERRUNS.message).not.toContain("{n}");
+  });
+
   it("every fixture reaches a fatal, and between them at least six distinct messages", () => {
     // A table that collapsed onto one code would pass the sweep above while
     // saying nothing about the other twenty-two entries. Six is what this set
@@ -1334,6 +1399,166 @@ function snippetAscii(snippet: string): string {
     .join("");
 }
 
+// ---------------------------------------------------------------------------
+// Half 3: the offset names the frame it is counted in.
+// ---------------------------------------------------------------------------
+
+/**
+ * The absolute offset at which {@link overDeclareInsideAnItem}'s Item slice
+ * begins: the four-byte Item Length field, then the field itself.
+ *
+ * **Derived here so it can be searched FOR, never published BY the library.**
+ * The distance between two nested frames is a declared Value Length off the
+ * wire, which is the class of number this registry withholds everywhere else,
+ * so an error that named its frame's origin would hand that field back by
+ * subtraction. The rows below assert it is absent and pin a positive that the
+ * same search does catch.
+ */
+const ITEM_SLICE_STARTS_AT = ITEM_LENGTH_FIELD_AT + 4;
+
+describe("PHI: a byteOffset names the frame it is counted in", () => {
+  it("is value-slice inside a defined-length Item, on all three shapes", () => {
+    // 🩺 THE TENTH INSTANCE OF `DICOM-DIAGNOSTIC-PHI-RESIDUALS`. `#93` bound the
+    // last wire-derived number out of this message and left `err.byteOffset` as
+    // its SOLE locator - while that offset is counted from the Item's slice, not
+    // from the file. Nothing on `DicomParseError` said so, so the honest reading
+    // and the wrong one were the same integer.
+    for (const lead of [0, 24, 40]) {
+      const err = fatalFrom(overDeclareInsideAnItem(lead).raw);
+      expect(err.byteOffset, `lead ${String(lead)}`).toBe(lead);
+      expect(err.offsetFrame, `lead ${String(lead)}`).toBe(OFFSET_FRAMES.VALUE_SLICE);
+      // ...and the message carries it too, because the most common thing a
+      // consumer does with one of these is log it.
+      expect(err.message).toContain(`(offset=${String(lead)} frame=value-slice)`);
+    }
+  });
+
+  it("the label is load-bearing: the same number in the caller's buffer is a different element", () => {
+    // The positive that makes the row above mean something. A clean assertion
+    // that a field exists proves nothing about whether the field was needed.
+    const { raw } = overDeclareInsideAnItem(24);
+    const err = fatalFrom(raw);
+
+    // What the error names, read in the frame it names: the `(0008,0060)`
+    // short-form header whose 16-bit Value Length is `0xFFFE`.
+    const inTheFrame = raw.subarray(
+      ITEM_SLICE_STARTS_AT + err.byteOffset,
+      ITEM_SLICE_STARTS_AT + err.byteOffset + 16,
+    );
+    expect(err.snippet).toBe([...inTheFrame].map((b) => b.toString(16).padStart(2, "0")).join(" "));
+
+    // What a consumer reading `byteOffset` as a file offset would have got
+    // instead: a different sixteen bytes entirely.
+    const inTheInput = raw.subarray(err.byteOffset, err.byteOffset + 16);
+    expect(inTheInput.equals(inTheFrame)).toBe(false);
+  });
+
+  it("is input at the root, where the two frames were always the same", () => {
+    // The other direction, so the change is not mistaken for one that relabelled
+    // every offset. At the root `byteOffset` is an index into the caller's own
+    // buffer and always was, and the frame says so rather than leaving it to be
+    // inferred from silence.
+    const whole = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      elements: [{ tag: "00100010", vr: "PN" as VR, value: val(NAME) }],
+    });
+    const raw = whole.subarray(0, whole.length - 6);
+    const err = fatalFrom(raw);
+    expect(err.offsetFrame).toBe(OFFSET_FRAMES.INPUT);
+    expect(err.snippet).toBe(
+      [...raw.subarray(err.byteOffset, err.byteOffset + 16)]
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join(" "),
+    );
+  });
+
+  it("is inflated-dataset inside a Deflated TS object, where the input holds no such byte", () => {
+    // The third frame, and the one a consumer is least likely to guess: the
+    // offset indexes a stream that exists only after inflation, so it does not
+    // index the caller's buffer at ANY scale. `position.deflated` already said
+    // this for a warning; a fatal said nothing at all.
+    const raw = buildDicom({
+      transferSyntax: TS_DEFLATED,
+      elements: [
+        { tag: "00100010", vr: "PN" as VR, value: val(NAME) },
+        {
+          tag: "00080080",
+          vr: "LO" as VR,
+          value: val("MERCY GENERAL"),
+          declaredLengthDelta: 4096,
+        },
+      ],
+    });
+    const err = fatalFrom(raw);
+    expect(err.offsetFrame).toBe(OFFSET_FRAMES.INFLATED_DATASET);
+    // Non-vacuity: the offset really is in range of the compressed input too, so
+    // "it does not index the input" is a statement about MEANING, not about
+    // bounds - which is exactly why a label was needed and a range check is not
+    // a substitute.
+    expect(err.byteOffset).toBeLessThan(raw.length);
+    expect(err.snippet).not.toBe(
+      [...raw.subarray(err.byteOffset, err.byteOffset + 16)]
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join(" "),
+    );
+  });
+
+  it("publishes the frame's NAME and never its ORIGIN", () => {
+    // 🛑 THE HALF THAT IS DELIBERATELY NOT DONE, ASSERTED RATHER THAN IMPLIED.
+    // Naming the frame is a membership statement about a three-entry set this
+    // parser chooses. Naming where the frame BEGINS is a number, and the
+    // distance between two nested frames is a declared Value Length off the
+    // wire - so an origin hands back by subtraction the field this same message
+    // withholds. The set is closed; the origin is absent.
+    const frames = new Set<string>();
+    for (const [, raw] of FIXTURES) {
+      const err = fatalFrom(raw);
+      frames.add(err.offsetFrame);
+      expect(Object.values(OFFSET_FRAMES) as readonly string[]).toContain(err.offsetFrame);
+    }
+    // Non-vacuity: the sweep really did reach more than one frame, so the
+    // membership row above is not a fact about a single constant.
+    expect(frames.size).toBeGreaterThan(1);
+
+    // The origin, searched for over EVERY digit run of the message rather than
+    // over a slot this test names, so it cannot pass by looking at the wrong
+    // number. The search does not cover `snippet`: that is 16 raw document bytes
+    // rendered as hex and already disclosed as PHI (D-10), not a place this
+    // library publishes anything.
+    const { raw } = overDeclareInsideAnItem(24);
+    const err = fatalFrom(raw);
+    expect(raw.readUInt32LE(ITEM_LENGTH_FIELD_AT)).toBe(DECLARED_ITEM_LENGTH);
+    expect(digitRuns(err.message).map(Number)).not.toContain(ITEM_SLICE_STARTS_AT);
+    expect(err.byteOffset).not.toBe(ITEM_SLICE_STARTS_AT);
+
+    // NON-VACUITY, AND IT IS WHAT MAKES THE CLEAN RESULT ABOVE MEAN ANYTHING: a
+    // message that DID publish the origin is caught by the same search. Without
+    // this row, a search that simply never matched would read identically.
+    const wouldPublish = `${err.message} The frame begins at ${String(ITEM_SLICE_STARTS_AT)}.`;
+    expect(digitRuns(wouldPublish).map(Number)).toContain(ITEM_SLICE_STARTS_AT);
+  });
+
+  it("the frame name is chosen by the parser, so no document byte can compose one", () => {
+    // The bound, and it is membership in a closed set rather than a shape test -
+    // the same posture `renderVr` established and `renderTag` was moved to. The
+    // three names are literals in this library's own source; nothing a sender
+    // writes reaches the slot.
+    expect([...Object.values(OFFSET_FRAMES)].sort()).toStrictEqual([
+      "inflated-dataset",
+      "input",
+      "value-slice",
+    ]);
+    // ...and the detector agrees: with the frame now in every message, the
+    // name-bearing sweep at the top of this file is still clean. That sweep is
+    // the assertion; this row names the reason it is not vacuous - the payload
+    // really is searched for a rendering of every window, and a frame name is
+    // not one of them because it is not composed from any window.
+    const err = fatalFrom(overDeclareInsideAnItem(0).raw);
+    expect(err.message).toContain("frame=value-slice");
+    expect(leaksIn(err.message, overDeclareInsideAnItem(0).payload)).toStrictEqual([]);
+  });
+});
+
 describe("PHI: the {strict:true} snippet is cut in the frame its offset names", () => {
   const { raw } = oneFileTwoFrames();
 
@@ -1381,6 +1606,32 @@ describe("PHI: the {strict:true} snippet is cut in the frame its offset names", 
       .map((b) => b.toString(16).padStart(2, "0"))
       .join(" ");
     expect(err.snippet).toBe(expected);
+  });
+
+  it("and now SAYS which frame, on the one fixture where the wrong reading is a name", () => {
+    // 🩺 THE TENTH INSTANCE, ON THE HARM. `#80` fixed the snippet so it stopped
+    // returning the root Patient Name at an item-relative offset. It did not fix
+    // the OFFSET: `err.byteOffset` still carries that item-relative number, and
+    // the row above measures that reading it in the file lands inside
+    // `"SMITHSON"`. A consumer who logs the error and then cuts its own buffer
+    // at that number reproduces `#80`'s defect in its own code, and until this
+    // slice nothing on the error warned it not to.
+    const err = errorFrom(raw, true);
+    expect(err.offsetFrame).toBe(OFFSET_FRAMES.VALUE_SLICE);
+    expect(err.message).toContain("frame=value-slice");
+    // Non-vacuity, and it is the same collision the row above pins: the wrong
+    // reading really does return the surname, so the label really is what stands
+    // between a consumer and it.
+    expect(raw.subarray(err.byteOffset, err.byteOffset + 16).toString("latin1")).toContain(
+      "SMITHSON",
+    );
+    // ...and the frame is not a blanket relabel: the root-level control below
+    // this one still reads `input`.
+    const rootOnly = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      elements: [{ tag: "00100020", vr: "LO" as VR, value: Buffer.from("MRN-1111X", "latin1") }],
+    });
+    expect(errorFrom(rootOnly, true).offsetFrame).toBe(OFFSET_FRAMES.INPUT);
   });
 
   it("still carries raw source bytes, and the docs must keep saying so", () => {

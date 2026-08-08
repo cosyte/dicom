@@ -104,7 +104,7 @@ export function parseImplicitLE(
     } catch (err) {
       if (err instanceof RangeError) {
         // T-02-03-01 mitigation - truncated header.
-        throw truncatedDatasetHeader(buffer, headerStart);
+        throw truncatedDatasetHeader(ctx.frame, headerStart);
       }
       throw err;
     }
@@ -121,7 +121,7 @@ export function parseImplicitLE(
         // cursor is now past the 8-byte ItemDelim marker.
         return { elements, endOffset: cursor.position };
       }
-      throw unexpectedFffeAtDatasetRoot(buffer, headerStart);
+      throw unexpectedFffeAtDatasetRoot(ctx.frame, headerStart);
     }
 
     const position = { byteOffset: headerStart };
@@ -211,7 +211,7 @@ export function parseImplicitLE(
           continue;
         }
       }
-      throw undefinedLengthOnNonSqImplicit(buffer, headerStart, vr);
+      throw undefinedLengthOnNonSqImplicit(ctx.frame, headerStart, vr);
     }
 
     // T-02-03-02 mitigation - bounds-check declared length before slice.
@@ -219,7 +219,7 @@ export function parseImplicitLE(
       // Same bound as the Explicit VR loop's, and for the same reason: neither
       // the declared length nor the count of bytes left in this frame has a
       // slot. See `elementLengthExceedsBuffer`.
-      throw elementLengthExceedsBuffer(buffer, headerStart);
+      throw elementLengthExceedsBuffer(ctx.frame, headerStart);
     }
 
     const valueStart = cursor.position;

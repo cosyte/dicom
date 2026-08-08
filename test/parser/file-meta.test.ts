@@ -7,7 +7,7 @@ import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
 import { buildDicom } from "../helpers/build-dicom.js";
-import { DicomParseError } from "../../src/parser/errors.js";
+import { DicomParseError, OFFSET_FRAMES } from "../../src/parser/errors.js";
 import { parseFileMeta } from "../../src/parser/file-meta.js";
 import { parsePart10Header } from "../../src/parser/part10-header.js";
 import type { ParseContext } from "../../src/parser/types.js";
@@ -17,7 +17,7 @@ import { WARNING_CODES } from "../../src/parser/warnings.js";
 function ctxFor(buffer: Buffer): { ctx: ParseContext; emitted: DicomParseWarning[] } {
   const emitted: DicomParseWarning[] = [];
   const ctx: ParseContext = {
-    buffer,
+    frame: { buffer, name: OFFSET_FRAMES.INPUT },
     strict: false,
     stripPreamble: "tolerate",
     warnings: emitted,

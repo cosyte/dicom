@@ -60,7 +60,7 @@ export function parsePart10Header(
   }
 
   if (ctx.stripPreamble === "require") {
-    throw notDicomPart10Required(buffer, 0);
+    throw notDicomPart10Required(ctx.frame, 0);
   }
 
   // Default `stripPreamble === "tolerate"`: try detecting a bare File Meta
@@ -70,7 +70,7 @@ export function parsePart10Header(
     return { datasetStart: 0, hadPreamble: false };
   }
 
-  throw notDicomPart10(buffer, 0);
+  throw notDicomPart10(ctx.frame, 0);
 }
 
 /**

@@ -33,6 +33,7 @@ import {
 import { parseDeflatedLEWithCap } from "../../src/parser/deflated-le.js";
 import type { Tag } from "../../src/dictionary/types.js";
 import { makeEmitter } from "../../src/parser/emit.js";
+import { OFFSET_FRAMES } from "../../src/parser/errors.js";
 import type { ParseContext } from "../../src/parser/types.js";
 import { buildDicom } from "../helpers/build-dicom.js";
 
@@ -293,7 +294,7 @@ describe("Security: decompression-bomb cap (T-02-05-01)", () => {
     const datasetStart = findDatasetStart(buf);
 
     const innerCtx: ParseContext = {
-      buffer: buf,
+      frame: { buffer: buf, name: OFFSET_FRAMES.INFLATED_DATASET },
       strict: false,
       stripPreamble: "tolerate",
       warnings: [],

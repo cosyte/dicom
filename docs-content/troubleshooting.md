@@ -137,19 +137,34 @@ Two things that array does **not** cover:
   used to be taken from the whole file at an offset that had already moved with the frame, so an
   escalation raised inside a defined-length Item returned **an unrelated element's** bytes. Review
   the two paths separately; a message-only review of the lenient path does not transfer.
-- **A Tier-3 fatal's `message` is registry-composed too, and was not before this release.** It is
-  looked up in a second frozen registry, and the factories that build one **take no tag and no
-  wire-length parameter**, so neither can be interpolated: those are exactly the fields a fatal about
-  a lying length field would be reading out of somebody's value. `err.byteOffset` locates the
-  element instead. A VR still reads, when it names one of the 34; anything else renders
-  `<withheld>`.
-- **⚠ Two of those messages changed text in this release, so a string match on them stops matching.**
-  `ELEMENT_LENGTH_EXCEEDS_BUFFER` and `FILE_META_GROUP_LENGTH_OVERRUNS` printed how many bytes
-  remained in the buffer; they do not now, and the factories take no parameter for it. The reason is
-  the one above applied one level out: a defined-length Sequence Item is parsed from a **slice**, so
-  inside one that count is the Item's own declared length less an offset the message publishes, and
-  an addition puts it back. `err.code` is unchanged, which files throw is unchanged, and
-  `err.byteOffset` still locates the element.
+- **A Tier-3 fatal's `message` is registry-composed too.** It is looked up in a second frozen
+  registry, and the factories that build one **take no tag and no wire-length parameter**, so neither
+  can be interpolated: on the desynchronized reading those are four bytes out of somebody's value.
+  **They are withheld on the other reading too, and the reason is not that the fatal fires only when
+  a length field is lying.** It does not: a spec-clean object cut short by two bytes raises
+  `ELEMENT_LENGTH_EXCEEDS_BUFFER` with every declared length in the file honest, and a file cut short
+  inside its File Meta group raises `FILE_META_GROUP_LENGTH_OVERRUNS` with `(0002,0000)` untouched.
+  The number is four bytes a sender wrote in either case, which is bound enough.
+  `err.byteOffset` locates the element instead. A VR still reads, when it names one of the 34;
+  anything else renders `<withheld>`.
+- **⚠ Two of those messages lost their remaining-bytes count, so a string match on them stops
+  matching.** `ELEMENT_LENGTH_EXCEEDS_BUFFER` and `FILE_META_GROUP_LENGTH_OVERRUNS` printed how many
+  bytes remained in the buffer; they do not now, and the factories take no parameter for it. A
+  defined-length Sequence Item is parsed from a **slice**, so inside one that count is the Item's own
+  declared length less an offset the message publishes, and an addition puts it back. `err.code` is
+  unchanged and which files throw is unchanged.
+- **⚠ And every Tier-3 message's suffix changed, from `(offset=N)` to `(offset=N frame=F)`.** An
+  offset is not a locator until you know where its zero is, and `err.byteOffset` had become the sole
+  locator on the two messages above. `err.offsetFrame` names the coordinate system from a closed
+  three-entry set (`OFFSET_FRAMES`: `"input"`, `"inflated-dataset"`, `"value-slice"`), and **only
+  `"input"` means the number indexes the buffer you passed in.** The same defect in the same file
+  reports `0`, `24` or `40` depending on where inside a Sequence Item the offending element sits.
+  Where a slice **begins** is deliberately not published: the distance between two frames is a
+  declared Value Length off the wire. If you have code that cuts your own copy of a file at
+  `err.byteOffset`, gate it on `err.offsetFrame === "input"`; before this existed it was reading an
+  unrelated element whenever the fatal came from inside an Item. **`DicomParseWarning.position` is
+  NOT framed this way** - it carries only the `deflated` flag - and `Element.byteOffset` is not framed
+  at all. Both are unchanged.
 - **Value-decode deviations do not appear on `ds.warnings`.** Decode is lazy, so a `DA` in a legacy
   format or a `UI` with the wrong pad surfaces on the decoded value's own `warnings`
   (`el.value.warnings`), never folded into the frozen dataset array. Those messages are built from

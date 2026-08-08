@@ -132,12 +132,16 @@ real finding, and it is still uncapped.
 refusal rather than by the fatal code (the four codes are locked, and several of them are raised for
 more than one reason). Until this release four of those messages were assembled at the throw site out
 of template literals and printed the element's tag, its declared length, or both. That reads as
-harmless and is not: a fatal like "this element's Value Length reaches past the end of the buffer"
-fires precisely when a length field is lying, which is what makes the reader read bytes inside
-somebody's value as a Data Element header. Measured on a synthetic `"MR BRAIN SMITHSON "`, one such
-message printed `Element 41524E49 declared length=1330858068`: that is `"RAIN"` followed by
-`"THSO"`, eight consecutive bytes of the payload in two fields, each recoverable with a single typed
-read.
+harmless and is not. **The reason is NOT that such a fatal fires only when a length field is lying.**
+It fires on an honestly truncated file too, where every declared length is correct and the transport
+simply lost bytes: a spec-clean object cut short by two bytes raises
+`ELEMENT_LENGTH_EXCEEDS_BUFFER`, and a file cut short inside its File Meta group raises
+`FILE_META_GROUP_LENGTH_OVERRUNS`, both with nothing fabricated anywhere. Both readings are covered by
+the same bound because the withheld numbers are four bytes a sender wrote in either of them. What
+makes the desynchronized reading the sharp one is that those four bytes are then somebody's name:
+measured on a synthetic `"MR BRAIN SMITHSON "`, one such message printed
+`Element 41524E49 declared length=1330858068`, which is `"RAIN"` followed by `"THSO"` - eight
+consecutive bytes of the payload in two fields, each recoverable with a single typed read.
 
 The bound is the same one the Tier-2 registry uses, and it is structural rather than a discipline:
 **the factory signatures take no tag and no wire-length parameter at all**, so there is no slot for
@@ -178,6 +182,23 @@ defined-length Item returned the 16 bytes sitting at that item-relative number m
 of the file. That is a diagnostic handing back part of an element the reader was never asked about.
 Fixed. **It does not make the snippet safe**: the bytes are still raw source bytes, and the fix makes
 them more certainly the element's own content, not less.
+
+**And the offset itself now says which frame it is counted in, which the snippet fix did not do.**
+`err.byteOffset` was left as the sole locator on the two messages that lost their remaining-bytes
+count, and a number alone does not say where its zero is: the same defect in the same file reports
+`0`, `24` or `40` depending on where inside the Sequence Item the offending element sits.
+`err.offsetFrame` names the coordinate system, from a closed three-entry set the parser chooses
+(`"input"`, `"inflated-dataset"`, `"value-slice"`), and the `Error.message` suffix carries it too, so
+it now reads `(offset=N frame=F)`. **Only `"input"` means the number indexes the buffer you passed
+in.** A consumer that cuts its own copy of the file at an offset raised inside an Item is
+reproducing, in its own code, exactly the defect the snippet fix closed in this library's.
+
+**The frame's NAME is published and its ORIGIN is not, deliberately.** Where a slice begins is the sum
+of declared lengths that reached it, so publishing it would hand back by subtraction the wire field
+these same messages withhold. **Two residuals stay open and neither is closed here**:
+`DicomParseWarning.position` carries no frame beyond its `deflated` flag, and `Element.byteOffset`
+carries none at all - it reads `0` inside a defined-length Item and file-absolute inside an
+undefined-length one, and has since the parser was written.
 
 ### The model fields that are bounded, and the ones that are values
 
