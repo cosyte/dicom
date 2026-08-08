@@ -844,9 +844,75 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
 /** Synthetic. Single-component, so the text sweep's `FAMILY^GIVEN` regex cannot match it. */
 const BARE_PN = "WESTERGAARD";
 
+/** Synthetic, and caret-bearing, so it is the text sweep that can see it and NOT the tag walk. */
+const CARET_PN = "RIVERA^JUANITA";
+
 /** The same fixture assembler as everywhere else in this file, minus preamble and `DICM`. */
 function buildPreamblelessFixture(studyDate: string, patientName: string): Buffer {
   return buildDicomFixture(studyDate, patientName).subarray(132);
+}
+
+/** One short-form Explicit VR LE element. */
+function shortElement(group: number, element: number, vr: string, value: string): Buffer {
+  const padded = value.length % 2 === 0 ? value : value + " ";
+  const out = Buffer.alloc(8 + padded.length);
+  out.writeUInt16LE(group, 0);
+  out.writeUInt16LE(element, 2);
+  out.write(vr, 4, "ascii");
+  out.writeUInt16LE(padded.length, 6);
+  out.write(padded, 8, "latin1");
+  return out;
+}
+
+/**
+ * One short-form Explicit VR **Big Endian** element. Written out rather than reusing the LE writer
+ * with a different `(0002,0010)`, because a fixture LABELLED big-endian while carrying little-endian
+ * bytes proves nothing: the tag walk reads it happily and the case passes for the wrong reason. It
+ * did, on the first draft of this block.
+ */
+function shortElementBE(group: number, element: number, vr: string, value: string): Buffer {
+  const padded = value.length % 2 === 0 ? value : value + " ";
+  const out = Buffer.alloc(8 + padded.length);
+  out.writeUInt16BE(group, 0);
+  out.writeUInt16BE(element, 2);
+  out.write(vr, 4, "ascii");
+  out.writeUInt16BE(padded.length, 6);
+  out.write(padded, 8, "latin1");
+  return out;
+}
+
+/**
+ * An UNDEFINED-LENGTH Sequence, immediately delimited. PS3.5 2026c §7.5.2 makes `0xFFFFFFFF` the
+ * normative Sequence encoding, and `readElementExplicit` answers `null` for it, so the tag walk stops
+ * dead here. This is the shape that turns an exclusive dispatch into a silent regression.
+ */
+function undefinedLengthSq(group: number, element: number): Buffer {
+  const header = Buffer.alloc(12);
+  header.writeUInt16LE(group, 0);
+  header.writeUInt16LE(element, 2);
+  header.write("SQ", 4, "ascii");
+  header.writeUInt32LE(0xffffffff, 8);
+  const delimiter = Buffer.alloc(8);
+  delimiter.writeUInt16LE(0xfffe, 0);
+  delimiter.writeUInt16LE(0xe0dd, 2);
+  return Buffer.concat([header, delimiter]);
+}
+
+/** The preamble-less File Meta group of `buildDicomFixture`, with a caller-chosen transfer syntax. */
+function preamblelessFileMeta(transferSyntaxUid: string): Buffer {
+  const whole = buildDicomFixture("19000101", "ANON^PATIENT").subarray(132);
+  // Everything up to the first dataset element, with (0002,0010)'s value replaced in place. The two
+  // UIDs are the same length, so no group-length recomputation is needed.
+  const shipped = "1.2.840.10008.1.2.1";
+  if (transferSyntaxUid.length !== shipped.length) {
+    throw new Error(`preamblelessFileMeta: expected a ${String(shipped.length)}-char UID`);
+  }
+  const at = whole.indexOf(shipped, 0, "latin1");
+  if (at < 0) throw new Error("preamblelessFileMeta: transfer syntax UID not found");
+  const copy = Buffer.from(whole);
+  copy.write(transferSyntaxUid, at, "latin1");
+  // Drop the two dataset elements the assembler appends; callers supply their own.
+  return copy.subarray(0, copy.length - (8 + 8) - (8 + 12));
 }
 
 describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () => {
@@ -960,5 +1026,98 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
     const r = runIn(root, []);
     expect(r.code, `stderr: ${r.stderr}`).toBe(0);
     expect(r.stdout).toMatch(/OK - no hits/);
+  });
+
+  // -------------------------------------------------------------------------
+  // ADDING THE DICOM ROUTE MUST NOT SUBTRACT THE TEXT ONE
+  // -------------------------------------------------------------------------
+  //
+  // The first draft of this fix made the binary branch an if/else: recognized ->
+  // `scanDicom`, otherwise -> `scanText`. A `conformance-refuter` pass refused it,
+  // and the finding reproduced: `scanDicom` gives up quietly at the first header it
+  // cannot read, and an undefined-length `SQ` (PS3.5 2026c §7.5.2, the NORMATIVE
+  // Sequence encoding) is one of those. §7.1 orders tags ascending, so a
+  // conformant file puts `(0008,1110) SQ` BEFORE `(0010,0010)`. Measured on the
+  // refused draft: exit 1 on base `5ae8fe4`, exit 0 and `OK - no hits` on the
+  // draft, over a name-bearing PatientName. The branch runs BOTH routes now, and
+  // these cases are why.
+
+  it("runs BOTH routes: the tag walk stops at an undefined-length SQ and the text sweep continues", () => {
+    // One file, two names, one reachable by each route and NEITHER by the other.
+    //   (0008,0090) PN WESTERGAARD  - before the SQ, single-component: tag walk only.
+    //   (0008,1110) SQ undefined    - the tag walk stops dead here.
+    //   (0010,0010) PN RIVERA^JUANITA - past the stop, caret-bearing: text sweep only.
+    // Both must be reported, and each one alone would leave the other route unproven.
+    const object = Buffer.concat([
+      preamblelessFileMeta("1.2.840.10008.1.2.1"),
+      shortElement(0x0008, 0x0090, "PN", BARE_PN),
+      undefinedLengthSq(0x0008, 0x1110),
+      shortElement(0x0010, 0x0010, "PN", CARET_PN),
+    ]);
+
+    const r = runScanner([writeObject("sq-undefined.dcm", object)]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr, "the tag walk did not run, or did not reach (0008,0090)").toContain(BARE_PN);
+    expect(r.stderr, "the text sweep was subtracted: this is the refuted regression").toContain(
+      CARET_PN,
+    );
+  });
+
+  it("the same object as .bin is a hit too, so the regression is not extension-specific", () => {
+    const object = Buffer.concat([
+      preamblelessFileMeta("1.2.840.10008.1.2.1"),
+      undefinedLengthSq(0x0008, 0x1110),
+      shortElement(0x0010, 0x0010, "PN", CARET_PN),
+    ]);
+
+    const r = runScanner([writeObject("sq-undefined.bin", object)]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain(CARET_PN);
+  });
+
+  it("a non-LE transfer syntax stops the tag walk the same way, and is caught the same way", () => {
+    // `scanDicom` walks the dataset as Explicit VR LE unless (0002,0010) is Implicit
+    // VR LE, so an Explicit VR BE dataset is read as noise: the length field reads
+    // 0x0E00 instead of 0x000E, overruns the buffer, and `readElementExplicit`
+    // answers `null`. The text sweep is what covers it, exactly as it did on base.
+    // The File Meta group stays LE because PS3.5 requires it to be, whatever the
+    // dataset's transfer syntax says.
+    const object = Buffer.concat([
+      preamblelessFileMeta("1.2.840.10008.1.2.2"), // Explicit VR Big Endian
+      shortElementBE(0x0010, 0x0010, "PN", CARET_PN),
+    ]);
+
+    const r = runScanner([writeObject("explicit-be.dcm", object)]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain(CARET_PN);
+  });
+
+  it("a PREAMBLE-FUL object is still scanned by the DICOM route ALONE, byte-for-byte as before", () => {
+    // The other half of the superset property. `isDicom` true must stay
+    // `scanDicom`-only: sweeping every Part 10 object as text as well would flag
+    // 8-digit runs inside pixel data, which is a gate-behaviour change and not part
+    // of this item. Pinned with a caret-bearing value at a NON-PN tag, which only
+    // the text route could report.
+    const description = Buffer.concat([
+      Buffer.alloc(128),
+      Buffer.from("DICM", "ascii"),
+      preamblelessFileMeta("1.2.840.10008.1.2.1"),
+      shortElement(0x0008, 0x1030, "LO", CARET_PN), // StudyDescription: not a PN tag
+    ]);
+    const clean = runScanner([writeObject("preambleful-lo.dcm", description)]);
+    expect(clean.code, `stderr: ${clean.stderr}`).toBe(0);
+
+    // And the pin that keeps that green from being vacuous: the SAME value at a PN
+    // tag in the SAME shape of object is caught, so the detector is demonstrably
+    // live and what is pinned above is the routing, not a blind scanner.
+    const named = Buffer.concat([
+      Buffer.alloc(128),
+      Buffer.from("DICM", "ascii"),
+      preamblelessFileMeta("1.2.840.10008.1.2.1"),
+      shortElement(0x0010, 0x0010, "PN", CARET_PN),
+    ]);
+    const hit = runScanner([writeObject("preambleful-pn.dcm", named)]);
+    expect(hit.code, `stderr: ${hit.stderr}`).toBe(1);
+    expect(hit.stderr).toContain(CARET_PN);
   });
 });

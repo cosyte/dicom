@@ -4,6 +4,11 @@
 roadmap. Written here rather than in `documentation/agent-notes.md` because that file is **over** its
 250,000-byte budget on `main` and the hook refuses growth (ADR 0023). **Nothing dropped.**
 
+**Provenance:** the spec claims are read from the SHA-pinned vendored copy at
+`vendor/nema/part05/`, **PS3.5 2026c** (§7.1 tag ordering, §7.5.2 undefined-length Sequences). Every
+other figure is a measurement taken on this repo, quoted with the sha it was taken at, and the two
+mutation controls are reproducible with `git show <sha>:scripts/phi-scan.ts` over the current tests.
+
 **`CLAUDE.md` CARRIES NO LINE FOR THIS, DELIBERATELY, AND THAT IS A GAP RATHER THAN A JUDGEMENT THAT
 THE TRAP IS SMALL.** Its ratchet is 39,550 bytes and it measured 39,544 on `main`: six bytes, which
 is not a line. The remedy in that situation is relocation, never deleting an existing trap to make
@@ -67,28 +72,79 @@ The fourth row is what makes the first three a gate defect rather than an undete
 identical bytes, plus 132 bytes of preamble and magic, were caught all along. The fifth is the clean
 result pinned beside the positives, so a green is a green and not an absent detector.
 
-**A `N OF M` FIGURE HAS A MOVING BASE.** Quoted with its sha and no other: with this slice's tests
-applied to base `5ae8fe4`'s `scripts/phi-scan.ts`, `test/scripts/phi-scan.test.ts` runs **5 failed,
-43 passed, of 48**. The 43 include every control in the new block, which is the point - a control
-that only passes after the fix is not a control.
+**A `N OF M` FIGURE HAS A MOVING BASE.** Quoted with its sha and no other: with the tests as they
+stand at the end of this slice, `test/scripts/phi-scan.test.ts` runs **6 failed, 46 passed, of 52**
+against base `5ae8fe4`'s `scripts/phi-scan.ts`, and **3 failed, 49 passed, of 52** against the
+refused first draft `1ff2ab4`'s. The passing majority in both columns is the point: a control that
+only passes after the fix is not a control.
+
+## 🛑 THE FIRST DRAFT WAS REFUSED, AND THE FINDING IS THE RULE
+
+The first draft made the binary branch an if/else: recognized by `fileMetaStart` goes to `scanDicom`,
+otherwise `scanText`. A `conformance-refuter` pass refused it, and the finding reproduced
+independently. **ADDING THE DICOM ROUTE MUST NOT SUBTRACT THE TEXT ONE, BECAUSE `scanDicom` GIVES UP
+QUIETLY.** Its walk `break`s at the first header it cannot read, and `readElementExplicit` answers
+`null` for an undefined-length value (`0xFFFFFFFF`). That is not a malformed file: PS3.5 2026c §7.5.2
+makes it the **normative** Sequence encoding, and §7.1 orders Data Elements by ascending tag, so a
+conformant object puts `(0008,1110) SQ` **before** `(0010,0010)`. A non-LE transfer syntax stops the
+walk the same way, at the first dataset element.
+
+Measured, same bytes, three scanners. Preamble-less, `(0008,1110)` undefined-length SQ, then
+`(0010,0010) PN` carrying this suite's own synthetic `RIVERA^JUANITA`:
+
+| scanner | result |
+|---|---|
+| base `5ae8fe4` | exit 1, the text sweep reports the name |
+| refused draft `1ff2ab4` | **exit 0, `OK - no hits`** |
+| shipped | exit 1 |
+
+A gate that reports clean over a name it used to report is a worse defect than the one being fixed.
 
 ## The remedy
 
-`scanTarget` dispatches text extensions by NAME, and everything else by CONTENT via `fileMetaStart`:
+`scanTarget` dispatches a text extension by NAME. For everything else it asks **two independent
+questions and runs both answers**, which makes it a strict **superset** of the `isDicom` gate on
+every input. That superset property is the thing to preserve if this is ever touched again:
 
-```
-TEXT_EXTENSIONS -> scanText + scanEmbeddedObjects
-fileMetaStart(buf) !== null -> scanDicom
-otherwise -> scanText (unchanged fallback)
-```
+| input | base `5ae8fe4` | shipped |
+|---|---|---|
+| `isDicom` true | `scanDicom` | `scanDicom`. Byte-for-byte unchanged. |
+| preamble-less | `scanText` | `scanDicom` **and** `scanText`. Pure addition. |
+| neither | `scanText` | `scanText`. Byte-for-byte unchanged. |
 
-`.dcm`, `.bin` and unknown extensions were already three copies of one branch; they are one branch
-now. `isDicom` is not deleted - `fileMetaStart` calls it as the Part 10 half of the answer - but
-nothing else in the script may gate a scan on it. **The binary route asks `fileMetaStart`, never
-`isDicom`.**
+Because the middle row keeps the text sweep it used to get, **nothing that was found before can be
+lost**, which is what the refused draft could not say. `.dcm`, `.bin` and unknown extensions were
+three copies of one branch and are one branch now. `isDicom` is not deleted - `fileMetaStart` calls
+it as the Part 10 half of the answer, and the branch calls it again to decide whether the text sweep
+is owed - but nothing may gate the **DICOM** scan on it. **The DICOM route asks `fileMetaStart`,
+never `isDicom`; the text route is not an `else`.**
+
+The cost, stated rather than left to be discovered: a preamble-less object can now report one value
+twice, once under its tag and once as `(text)`. Two lines naming one value is not a defect in a gate
+whose output a human reads before committing. A missing line is.
+
+The superset shape also settles a second question the exclusive draft had opened. `fileMetaStart`'s
+preamble-less test is **looser** than the library's own tolerated shape (`src/parser/part10-header.ts`
+requires exactly `(0002,0000) UL 0x0004`; the scanner accepts any `(0002,eeee)` with two ASCII
+capitals at bytes 4-5). Under an if/else that looseness could **remove** a text sweep from a binary
+the library itself would refuse as `NOT_DICOM_PART_10`. Running both routes means a false recognition
+costs a wasted walk and never a lost scan, so the two tests do not have to be reconciled here.
 
 ## Residuals, disclosed and NOT closed
 
+- **🩺 `scanDicom` HALTS SILENTLY AND REPORTS NOTHING ABOUT THE BYTES IT NEVER READ, AND A
+  PREAMBLE-FUL PART 10 OBJECT HAS NO TEXT SWEEP BEHIND IT.** So the identical fixture above **plus**
+  a 128-byte preamble and `DICM` measures **exit 0, `OK - no hits`, on base `5ae8fe4` and on the
+  shipped tree alike**, over `(0010,0010) = RIVERA^JUANITA`. `PRE-EXISTING`, surfaced by the refuter
+  pass on this slice, and **NOT closed here**. It is not an oversight: closing it means sweeping
+  every Part 10 object as text as well, which would flag 8-digit runs inside pixel data and
+  encapsulated fragments. That is a gate-behaviour change with its own false-positive surface and its
+  own product call, in the shape this repo already knows from `DICOM-DEIDENT-OVER-REDACTION` - not a
+  side effect of this one. **NO TEST PINS THIS**, deliberately: a green asserted over a name-bearing
+  payload would read as a clearance. It needs its own backlog item.
+  **▶ This also bounds what the row-4 control above proves.** "The identical bytes plus 132 bytes of
+  preamble were caught all along" is true of a fixture with no undefined-length element in it, and is
+  **not** a general property of the preamble-ful route. Do not restate it as one.
 - **A TEXT EXTENSION IS STILL DISPATCHED BY NAME, SO A `.md`/`.json`/`.txt`/`.csv` FILE WHOSE RAW
   BYTES ARE A DICOM OBJECT IS NEVER SCANNED AS ONE.** `PRE-EXISTING` and **unchanged** by this slice:
   it was true on base for a preamble-ful object as well, so it is a dispatch-by-name defect and not a
