@@ -1370,17 +1370,14 @@ export function deidentMethodPriorRetained(position: DicomPosition): DicomParseW
  * **The measurement is over BYTES and that is a deliberate over-approximation.**
  * No repertoire encodes a character in fewer than one byte, so a Value of 64
  * bytes or fewer can never hold more than 64 characters and this code cannot
- * miss a Value that is genuinely over. The converse does not hold, and **a
- * graded pass refuted the draft that named only one reason it does not.**
- * PS3.5 2026c §6.2 specifies these lengths "in characters rather than bytes",
- * because the bytes per character depend on the character set, **and excludes
- * Code Extension escape sequences from the count**. So a conformant Value of 64
- * characters exceeds 64 bytes under a multi-byte repertoire declared in
- * `(0008,0005)` **and** under a single-byte one at Level 4, where an
- * ISO/IEC 2022 escape sequence Table 6.2-1's `LO` row expressly admits adds
- * bytes that are not characters. Both fire here. A leading space is a character
- * and counts on both sides; the encoder's trailing pad is trimmed off before
- * this measurement, so it does not. Read the code as **"a Value in this
+ * miss a Value that is genuinely over. **The converse fails whenever a Value's
+ * bytes outnumber its counted characters**, and the enumeration of ways that
+ * happens is DELETED rather than written a third time: two graded passes refuted
+ * two drafts of it. PS3.5 2026c §6.2 specifies these lengths "in characters
+ * rather than bytes" and excludes Code Extension escape sequences from the
+ * count, and Table 6.2-1's `LO` row admits both a padded Value and an
+ * ISO/IEC 2022 escape sequence, so a conformant Value of 64 characters can
+ * exceed 64 bytes and this code fires on it. Read the code as **"a Value in this
  * attribute is over 64 bytes"**, which is what is measured, never as "the
  * attribute is non-conformant".
  *

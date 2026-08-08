@@ -658,10 +658,8 @@ export interface DeidentifyOptions {
    * became multi-valued. The measurement is over **bytes**: a Value of 64 bytes
    * or fewer can never carry more than 64 characters, so it cannot miss one that
    * is genuinely over, but PS3.5 §6.2 specifies the bound in characters rather
-   * than bytes and excludes Code Extension escape sequences from the count, so a
-   * conformant 64-character Value raises it whenever its encoding needs more than
-   * 64 bytes - under a multi-byte `(0008,0005)` repertoire, and under a
-   * single-byte one carrying an ISO/IEC 2022 escape sequence.
+   * than bytes and excludes Code Extension escape sequences from the count, so it
+   * raises on any conformant Value whose bytes outnumber its counted characters.
    *
    * PS3.15 E.1.1 says this string is "inserted in or added to" the attribute, so
    * a value the incoming Data Set already carried is kept and this one is

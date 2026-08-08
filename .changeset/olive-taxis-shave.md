@@ -38,18 +38,22 @@ the new code raised **0** times on the text this library composes for itself.
 **The measurement is over BYTES and that is a deliberate over-approximation, disclosed rather than
 argued away.** No repertoire encodes a character in fewer than one byte, so a Value of 64 bytes or
 fewer can never hold more than 64 characters and this cannot miss a Value that is genuinely over.
-The converse fails for **two** reasons, and PS3.5 2026c §6.2 gives both in the paragraph above Table
-6.2-1: those lengths are "expressly specified in characters rather than bytes ... because the
+**The converse fails whenever a Value's bytes outnumber its counted characters, and the enumeration
+of ways that happens is DELETED rather than written a third time** - two graded passes refuted two
+drafts of it, the first for naming only a multi-byte repertoire and the second for asserting that
+the encoder's pad could not do it. PS3.5 2026c §6.2, in the paragraph above Table 6.2-1, is the
+general rule: those lengths are "expressly specified in characters rather than bytes ... because the
 mapping from a character to the number of bytes used for that character's encoding may be dependent
 on the character set used", and "Escape Sequences used for Code Extension shall not be included in
-the count of characters". So a conformant 64-character Value exceeds 64 bytes under a multi-byte
-`(0008,0005)` repertoire (40 characters of `ISO_IR 192` is 120 bytes) **and** under a single-byte one
-at Level 4 (`\ISO 2022 IR 100` with an ISO/IEC 2022 escape sequence Table 6.2-1's `LO` row expressly
-admits: 67 bytes carrying 64 counted characters, parsing with no warnings). Both raise the code and
-both are pinned with files that really declare the repertoire, rather than fixtures that assert
-bytes are characters. The encoder's trailing pad does **not** count, because both operands are
-trimmed before the check; a leading space does. Read the code as "a Value in this attribute is over
-64 bytes", which is what is measured, never as "the attribute is non-conformant".
+the count of characters". Table 6.2-1's `LO` row admits both a padded Value and an ISO/IEC 2022
+escape sequence. Measured rather than enumerated: 40 characters of `ISO_IR 192` is 120 bytes;
+`\ISO 2022 IR 100` with `ESC 2/13 4/1` plus 64 single-byte characters is 67 bytes carrying 64
+counted characters and parses with no warnings; and a conformant 64-character Value with a pad byte
+that is not the field's last is 65. All three raise the code, and the repertoire pins use files that
+really declare the repertoire rather than fixtures that assert bytes are characters. **Do not bound
+what the measurement sees with §6.4, a clause about what an ENCODER writes** - that reading is the
+one the item names as having left the earlier hole. Read the code as "a Value in this attribute is
+over 64 bytes", which is what is measured, never as "the attribute is non-conformant".
 
 The message is the frozen registry string with nothing substituted: **no value, no length, no count
 of how many Values are over, and no origin.** 64 is a constant of the VR; the offending Value's own

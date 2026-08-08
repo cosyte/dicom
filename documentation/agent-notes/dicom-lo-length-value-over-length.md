@@ -87,36 +87,38 @@ and the new code is only ever pushed **beside** the others. Proved two ways rath
 byte, so a Value of 64 bytes or fewer can never hold more than 64 characters: the check **cannot
 miss** a Value that is genuinely over the maximum.
 
-**🛑 THE CONVERSE FAILS FOR TWO REASONS AND A GRADED PASS REFUTED THE DRAFT THAT NAMED ONE.** The
-draft's frozen registry message called 64 bytes "the largest an `LO` Value may be **under a
-single-byte repertoire**", and the vendored PS3.5 2026c contradicts it in the paragraph immediately
-above Table 6.2-1: the lengths there are "expressly specified in characters rather than bytes ...
-because the mapping from a character to the number of bytes used for that character's encoding may
-be dependent on the character set used. **Escape Sequences used for Code Extension shall not be
-included in the count of characters.**" Table 6.2-1's `LO` Character Repertoire cell admits ESC "when
-used for ISO/IEC 2022 escape sequences", and a multi-valued `(0008,0005)` (Level 4, §6.1.2.5.4) makes
-that legal. So the two routes are:
+**🛑 THE CONVERSE FAILS WHENEVER A VALUE'S BYTES OUTNUMBER ITS COUNTED CHARACTERS, AND THE
+ENUMERATION OF WAYS THAT HAPPENS IS DELETED RATHER THAN WRITTEN A THIRD TIME.** Two graded passes
+refuted two drafts of it, and this repo's rule for that is deletion, not a third wording:
 
-- a **multi-byte** repertoire: 40 characters under `ISO_IR 192` is 120 bytes; and
-- a **single-byte** one at Level 4: `\ISO 2022 IR 100` with `ESC 2/13 4/1` plus 64 characters is 67
-  bytes carrying 64 counted characters, and the file parses with no warnings.
+- **Draft 1** put in the frozen registry message that 64 bytes is "the largest an `LO` Value may be
+  **under a single-byte repertoire**". Pass 1 refuted it from the vendored PS3.5 2026c, in the
+  paragraph immediately above Table 6.2-1: those lengths are "expressly specified in characters
+  rather than bytes ... because the mapping from a character to the number of bytes used for that
+  character's encoding may be dependent on the character set used. **Escape Sequences used for Code
+  Extension shall not be included in the count of characters.**" Table 6.2-1's `LO` Character
+  Repertoire cell admits ESC "when used for ISO/IEC 2022 escape sequences", and a multi-valued
+  `(0008,0005)` (Level 4, §6.1.2.5.4) makes that legal.
+- **Draft 2** said the converse fails "for two reasons", named the multi-byte repertoire and the
+  escape sequence, and added that the encoder's trailing pad could not do it "because both operands
+  reach the check trimmed" - true of the **field**, which is where `trimTrailingPad` runs at the
+  write, and false of a Value that is not last. Pass 2 refuted it with a prior field of
+  `"X"x64 + SPACE + "\" + "ACME"`: a conformant 64-character Value, 65 bytes, and the code fires.
+  **That draft used §6.4 - a clause about what an ENCODER writes - to bound what the MEASUREMENT can
+  see**, which is precisely the misreading the item names as rule one of the three this lineage paid
+  for.
 
-Both fire, both are pinned, and the message now states what was measured rather than asserting a
-bound. **Reading Table 6.2-1's cell without §6.2's qualifying sentences is the same shape as the
-misreading the item names as having left `#74`'s hole**, which is why the remedy was a claim
-correction in five artifacts and not a widened guard.
+What survives every counter-example is the general rule, and it is now the only thing any artifact
+states. The measurements stay, because they are measurements rather than an enumeration: 40
+characters of `ISO_IR 192` is 120 bytes; `\ISO 2022 IR 100` with `ESC 2/13 4/1` plus 64 single-byte
+characters is 67 bytes carrying 64 counted characters and parses with no warnings; a conformant
+64-character Value with an interior pad byte is 65. All three raise the code, all three are pinned,
+and a leading space is content rather than padding, so it counts.
 
-The pins for both are files that **declare** the repertoire. A first draft built the multi-byte
+The repertoire pins are files that **declare** the repertoire. A first draft built the multi-byte
 fixture without `(0008,0005)`, under which the default repertoire is ISO-IR 6 and "40 characters"
 would have been a claim the fixture could not support - green by fixture, which is this repo's
 recurring failure mode.
-
-**"Trailing pad counts too" was in five artifacts and is DELETED rather than reworded**, because it
-is false: both operands reach the check through `trimTrailingPad`, so PS3.5 2026c §6.4's pad - which
-may make the last Value one byte longer on the wire than in memory, and is the only trailing pad
-DICOM writes - cannot push a conformant Value over on its own. A leading space is content and does
-count. Measured: a caller method of 64 `Q` plus a space raises nothing; the same 64 with a space in
-front raises the code.
 
 **`position.byteOffset` locates the prior element, and is `0` when there was none.** This is the
 first method code that can be raised on a Data Set carrying no `(0012,0063)` at all - the other three

@@ -46,11 +46,11 @@
  * one keeps it. `DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH` discloses it. Nothing
  * is shortened, split or truncated: the act is unchanged and only the silence is
  * closed. The measurement is over **bytes**, so it can never miss a Value that
- * is genuinely over and it over-reports in two ways, **both** pinned below
- * rather than argued away: §6.2 specifies these lengths "in characters rather
- * than bytes" and excludes Code Extension escape sequences from the count, so a
- * conformant 64-character Value exceeds 64 bytes under a multi-byte repertoire
- * **and** under a single-byte one carrying an ISO/IEC 2022 escape sequence.
+ * is genuinely over, and it over-reports on **any** conformant Value whose bytes
+ * outnumber its counted characters - §6.2 specifies these lengths "in characters
+ * rather than bytes" and excludes Code Extension escape sequences from the
+ * count. The rows below measure that rather than enumerating it: **two drafts of
+ * an enumeration were refuted, so there is none.**
  *
  * Everything here is synthetic; the recognizable-but-fake strings exist only so
  * a substitution or a leak is observable.
@@ -648,18 +648,22 @@ describe("an over-long Value this run did not compose is written through, and SA
     );
   });
 
-  it("the encoder's trailing pad is NOT counted, and a leading space IS", () => {
-    // Both operands reach the check trimmed, so PS3.5 6.4's pad - which may make
-    // the last Value one byte longer on the wire than in memory - cannot push a
-    // conformant Value over on its own. A leading space is content (the writer
-    // only ever pads on the right) and does count. Stated because a draft of
-    // this slice claimed the pad counted, in five artifacts at once.
-    const padded = `${"Q".repeat(64)} `;
-    expect(padded).toHaveLength(65);
+  it("🩺 padding: the FIELD's trailing pad comes off, a value's INTERIOR pad does not", () => {
+    // 🛑 TWO DRAFTS OF A SENTENCE ABOUT PADDING WERE REFUTED, SO THE SENTENCE IS
+    // GONE AND THIS ROW MEASURES INSTEAD. The first said the pad counted; the
+    // second said it could not, "because both operands reach the check trimmed"
+    // - true of the FIELD, which is where `trimTrailingPad` runs at the write,
+    // and false of a Value that is not last. Table 6.2-1 describes a VALUE, and
+    // a clause about where the ENCODER puts its pad (6.4) is not a bound on what
+    // a measurement can see: that reading is what left `#74`'s hole.
+    const terminal = `${"Q".repeat(64)} `;
+    expect(terminal).toHaveLength(65);
     expect(
-      deidentify(buildWithPriorMethod(), { deidentificationMethod: padded }).report.warnings,
+      deidentify(buildWithPriorMethod(), { deidentificationMethod: terminal }).report.warnings,
     ).toStrictEqual([]);
 
+    // A leading space is content, not padding: the writer only ever pads on the
+    // right, so it survives a round trip and it counts.
     const leading = ` ${"Q".repeat(64)}`;
     expect(leading).toHaveLength(65);
     expect(
@@ -667,6 +671,17 @@ describe("an over-long Value this run did not compose is written through, and SA
         (w) => w.code,
       ),
     ).toStrictEqual([WARNING_CODES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH]);
+
+    // And the case the deleted sentence would have denied: a conformant
+    // 64-character Value with a pad byte, followed by another Value, so the pad
+    // is interior. 65 bytes, and it raises. Over-report, same direction.
+    const interior = `${"X".repeat(64)} ${BACKSLASH}ACME`;
+    const parsed = buildWithPriorMethod({ vr: "LO" as VR, value: even(interior) });
+    expect(valueLengths(rawMethod(parsed)).slice(0, 1)).toStrictEqual([65]);
+    expect(deidentify(parsed).report.warnings.map((w) => w.code)).toStrictEqual([
+      WARNING_CODES.DICOM_DEIDENT_METHOD_PRIOR_RETAINED,
+      WARNING_CODES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH,
+    ]);
   });
 
   it("🛑 on the CALLER route the byte offset is a sentinel, not a location", () => {
