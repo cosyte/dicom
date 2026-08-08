@@ -1,5 +1,163 @@
 # Changelog
 
+## 0.0.17
+
+### Patch Changes
+
+- 8982a16: Fix the repo's PHI gate skipping a preamble-less DICOM object on disk (`DICOM-SCANTARGET-PREAMBLELESS`).
+
+  `scripts/phi-scan.ts`'s `scanTarget` gated a `.dcm`, a `.bin` and any unknown extension on `isDicom`
+  (the 128-byte preamble plus `DICM`) before handing the bytes to `scanDicom`. A preamble-less stream,
+  whose File Meta group starts at byte 0, failed that gate and fell through to the text sweep, so the
+  DICOM-aware scan never ran on one and the gate printed `OK - no hits` over it. The text sweep is not
+  a narrower scan but a different one: it matches a person name only in `FAMILY^GIVEN` form, so a
+  single-component `(0010,0010)` is invisible to it, and a `DT` value's date head is not a standalone
+  eight-digit token either.
+
+  The DICOM route now asks `fileMetaStart`, which knows both shapes and is what `scanDicom` and the
+  doc-corpus route already used. **The text route is not an `else`.** Detection moved in one direction
+  only, and that is deliberate: `scanDicom` stops at the first header it cannot read, including an
+  undefined-length Sequence, which PS3.5 2026c §7.5.2 defines as one of two delimitations that decoders
+  shall both support, and which §7.1's ascending tag order places ahead of `(0010,0010)` in a
+  conformant file. So a recognized object is now swept by both routes rather than handed
+  from one to the other, which makes the branch a strict superset of the old behaviour on every input:
+  `isDicom` true is unchanged, a preamble-less object gains the DICOM sweep on top of the text sweep it
+  already had, and an unrecognized file is unchanged. One value can now be reported twice, once under
+  its tag and once as `(text)`.
+
+  Still open, `PRE-EXISTING` and unchanged: a preamble-ful Part 10 object gets no text sweep behind
+  `scanDicom`, so an early halt on one is silent; and a text extension is still dispatched by name, so
+  a `.md` whose raw bytes are a DICOM object is not scanned as one.
+
+  Gate-only: no runtime, API or parser behaviour changes, and no published surface moves.
+
+- 1028317: Disclose an over-long `(0012,0063)` Value that `deidentify()` did not compose (`DICOM-LO-LENGTH-AND-SILENT-REPLACE`).
+
+  PS3.5 2026c Table 6.2-1 caps an `LO` at "64 chars maximum", and that row describes a **Value**:
+  `(0012,0063)` is `1-n`, so the bound falls on each value between `5CH` delimiters and never on the
+  Value Field. Reading it the other way is the misreading that left `#74`'s hole, and a field of 619
+  bytes made of ten Values of 61 is conformant. The text this library composes for itself has been
+  inside the maximum on all 512 option subsets since `#75`. The two Values it does **not** compose can
+  be over, and both were written through with `report.warnings` saying nothing about their length: a
+  caller's `deidentificationMethod`, and a value the source file already carried and PS3.15 2026c
+  E.1.1 obliges this to keep.
+
+  **The likeliest writer of the second one is this library.** Every object any published release
+  de-identified without a caller-supplied method carries a 76-character Value, and re-de-identifying
+  one keeps it: measured flat at 138 bytes over four passes, Values of 76 and 61. The **retention** has
+  been disclosed since `DICOM_DEIDENT_METHOD_PRIOR_RETAINED`; the **length** was disclosed by nothing,
+  on that route or on the caller's. So "a sender's non-conformant `LO` is the sender's" does not apply
+  to the common case, and the earlier changesets that described the retention are not corrected by
+  this: they were about which bytes survive, not about how long they are.
+
+  `report.warnings` now carries `DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH` whenever the `(0012,0063)`
+  this run writes carries a Value longer than 64 bytes. **It is a disclosure and not a bound: nothing
+  is shortened, split or truncated**, because splitting or truncating either Value would invent a
+  de-identification record nobody made, and keeping a prior record intact is what E.1.1's provenance
+  carrier is for. The code is measured over the value actually written, so one check covers the caller
+  route, the retained-prior route and both replacement fallbacks, and it is raised on **every** pass
+  rather than only the first, which is what a re-de-identified object needs.
+
+  **Widened by union, never by replacement.** No existing branch moved and no existing code stopped
+  firing: `DICOM_DEIDENT_METHOD_NOT_ADDED`, `DICOM_DEIDENT_METHOD_NOT_LO` and
+  `DICOM_DEIDENT_METHOD_PRIOR_RETAINED` are unchanged on every shape, pinned by a matrix that strips
+  the new code and compares against the base's answers, and a sweep of all 512 option subsets shows
+  the new code raised **0** times on the text this library composes for itself.
+
+  **The measurement is over BYTES and that is a deliberate over-approximation, disclosed rather than
+  argued away.** No repertoire encodes a character in fewer than one byte, so a Value of 64 bytes or
+  fewer can never hold more than 64 characters and this cannot miss a Value that is genuinely over.
+  **The converse fails whenever a Value's bytes outnumber its counted characters.** PS3.5 2026c §6.2,
+  in the paragraph above Table 6.2-1, is the rule: those lengths are "expressly specified in characters
+  rather than bytes ... because the mapping from a character to the number of bytes used for that
+  character's encoding may be dependent on the character set used", and "Escape Sequences used for
+  Code Extension shall not be included in the count of characters". Measured rather than enumerated:
+  40 characters of `ISO_IR 192` is 120 bytes, and `\ISO 2022 IR 100` with `ESC 2/13 4/1` plus 64
+  single-byte characters is 67 bytes carrying 64 counted characters and parses with no warnings. Both
+  raise the code, and both pins use files that really declare the repertoire rather than fixtures that
+  assert bytes are characters. Read the code as "a Value in this attribute is over 64 bytes", which is
+  what is measured, never as "the attribute is non-conformant".
+
+  The message is the frozen registry string with nothing substituted: **no value, no length, no count
+  of how many Values are over, and no origin.** 64 is a constant of the VR; the offending Value's own
+  length is a measurement over document content, which is the number `DICOM-DIAGNOSTIC-PHI-RESIDUALS`
+  bound out of six other messages, and which of the two sources a Value came from is not decidable
+  when they are equal. **`position.byteOffset` locates the prior element and is `0` when there was
+  none**: this is the first method code that can be raised on a Data Set carrying no `(0012,0063)` at
+  all, so on the caller route the offset is a sentinel rather than a location, and both routes are
+  pinned so the `0` reads as an absence. Emitted by `deidentify()` only, so it never reaches the
+  parser's `{ strict: true }` escalation and cannot refuse a conformant file.
+
+  Adding a warning code is a public-surface change and the `WARNING_CODES` snapshot moves with it.
+
+  Still open and unchanged, a backlog line rather than a rider on this one: `(0012,0063)` records the
+  **union** of the options ever applied rather than a per-run history, so a later pass with fewer
+  options leaves no trace an earlier one had more. The direction is conservative (the union
+  over-states retention, never understates it), and changing it would rewrite what every run writes
+  and reopen the unbounded growth the fixed-point rule and the ceiling guard exist to stop.
+
+- 4bc6930: Point the repo's PHI gate at the corpus it was named for (`PHI-SCAN-WALK-ROOT-SCOPE`).
+
+  `scripts/phi-scan.ts` rooted its walk at `test/fixtures/`, and every file this package writes there
+  is gitignored because the suite regenerates it on each run. So the fixture corpus contributed exactly
+  zero files and an all-mode run opened thirteen: the README and the twelve pages under
+  `docs-content/`. Against 226 tracked files at `8982a16`, 213 were outside the all-mode walk, 82 of
+  them under `test/`; one of those 82 was still reachable by `--staged`, so the figure for neither
+  route is 212 and 81.
+
+  That mattered here more than the number suggests, because this package ships no committed `.dcm`
+  files at all: every fixture it owns is built in a `.ts` source by `test/helpers/build-dicom.ts`, so
+  the whole committed fixture corpus was in the 81 tracked files the walk root excluded. The root is
+  now `test/`, which replaces `test/fixtures/` rather than joining it so the roots stay disjoint, and
+  `--staged` covers the same three roots. Head opens 95 of 229 tracked files. All 81 newly opened files
+  were hand-read before this landed and none carries patient-identifying content; the synthetic fixture
+  names and dates the gate now sees are added to `scripts/phi-allow-list.txt` as exact entries, never
+  as prefixes. That file is global and has no path scoping, so those entries are excused in every
+  corpus the scanner opens and not only in the one that needed them: the two worth naming are
+  `DATE:19800101` and `DATE:20240115`. Path scoping is an allow-list format change and is deliberately
+  not made here.
+
+  Enumerating buys the recognizer floor and nothing else, so the second half shipped with it.
+  `scanEmbeddedObjects` decoded base64 DICOM objects only for a name in `TEXT_EXTENSIONS`. Measured on
+  `8982a16` with one object and one name-bearing PatientName: found as `probe.md`, found as
+  `probe.dcm`, and `OK - no hits` as `probe.ts`. The decode now runs on the non-`isDicom` branch too,
+  in addition to the text sweep and never instead of it.
+
+  Four shapes let a declared root go unopened while the gate printed clean, all measured on
+  `8982a16` and all now refusals with exit 2, the code this script's own contract gives an invocation
+  error: a missing root (exit 0), a dangling symlink at a root (exit 0, because `existsSync` follows
+  the link and answers false so the walk returned before `readdirSync`), a symlink at a real directory
+  (exit 0, followed and walked), and a regular file at a root (exit 0 at `test`, and an uncaught
+  `ENOTDIR` exiting 1 at `test/fixtures`). Existence is not observation, so the emptied-root half is
+  closed separately by reconciling the walked set against `git ls-files`: every tracked path under a
+  declared root must be opened, gitignored or corpus-exempt, and anything else refuses. No scanned-file
+  count is printed, deliberately: a count counts the roots that did exist.
+
+  Still open and disclosed rather than claimed away: the reconciliation compares path sets, not the
+  bytes git carries at those paths, so a working tree that mirrors the tracked names still exits 0 over
+  decoy contents. A test pins that escape rather than a fix. Widening the root makes it narrower, not
+  closed. Also unchanged: `src/`, `vendor/`, `scripts/` and the root files are still outside the
+  declared scope, because a generated DICOM tag table produces hundreds of matches on tag numbers that
+  satisfy the `YYYYMMDD` shape and a pinned standards document is full of real publication dates.
+  Admitting them is a product call with its own false-positive surface.
+
+  The one corpus exemption is the one that was already here, `test/fixtures/phi-scan/README.md`, which
+  documents the deliberate violator values. It is now ONE LITERAL PATH rather than the old
+  skip-any-`readme.md`-the-walk-meets rule, so widening the root did not widen it by a file, and it is
+  printed on stdout every run. It stays on the `all` route alone: `--staged` has never applied it, and
+  teaching it to would subtract a detection the base had on the route the pre-commit hook runs, so the
+  two routes disagree about exactly that one file as they did on base, with `--staged` the stricter.
+  No new exemption was added: the values the scanner's own tests must have it reject are assembled at
+  runtime in `test/helpers/phi-scan-violators.ts`, so that file is scanned like any other.
+
+  One error path is fixed rather than disclosed, because widening the walk root enlarged it: `main()`
+  had no top-level catch, so an unexpected throw (a `readdirSync` `EACCES` on an unreadable
+  subdirectory) exited 1, the code that means "PHI was found". It now exits 2 and says the scan did not
+  complete. Also disclosed: the reconciliation is vacuous on an empty index, since a legitimately empty
+  `git ls-files` answer is indistinguishable from nothing to check.
+
+  Gate-only: no runtime, API or parser behaviour changes, and no published surface moves.
+
 ## 0.0.16
 
 ### Patch Changes
