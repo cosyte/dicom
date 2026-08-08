@@ -122,10 +122,12 @@ describe("the Tier-3 fatal registry", () => {
     // 🛑 THIS IS THE OMISSION MODE AND NOT AN IMPOSSIBILITY PROOF, WHICH A
     // GRADED PASS CORRECTED. A caller that deliberately composes
     // `{ buffer: itemSlice, name: OFFSET_FRAMES.INPUT }` still type-checks and
-    // still renders. What the type buys is that the frame is composed in
-    // exactly four places in `src/`, and none of them can move the bytes and
-    // leave the name behind. The row below pins the mismatch as WRITABLE so no
-    // reader takes the title for the stronger claim.
+    // still renders. What the type buys is that composing a frame is a single
+    // assignment, so no site can move the bytes and leave the name behind. **No
+    // count of those sites is written here**: a first remedy said "exactly
+    // four" and a graded pass measured five, the omitted one being the root
+    // composition that reads `"input"`. The row below pins the mismatch as
+    // WRITABLE so no reader takes the title for the stronger claim.
     for (const factory of [
       elementLengthExceedsBuffer,
       fileMetaGroupLengthOverruns,

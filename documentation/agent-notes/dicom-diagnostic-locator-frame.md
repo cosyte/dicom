@@ -68,11 +68,24 @@ without the label that belongs beside it.
 DISAGREEMENT IS "NOT EXPRESSIBLE" - A GRADED PASS BUILT ONE.**
 `elementLengthExceedsBuffer({ buffer: itemSlice, name: OFFSET_FRAMES.INPUT }, 0)` type-checks, lints,
 and renders a mislabelled offset beside a faithful snippet of the Item. The pair did not vanish; it
-moved from an argument list into an object literal at the swap sites. What the type actually buys is
-that a frame is composed in exactly **four** places in `src/` (`parseSequence`'s defined-length item,
-`tryParseDefinedLengthSQ`, `tryParseUnAsSQ`, and `parseDeflatedLEWithCap`'s `innerCtx`), all named on
-`ParseContext.frame`, and none of them can half-update. The honest limit is pinned in
-`fatals.test.ts` rather than left to a test title: the mismatched pair is asserted to RENDER.
+moved from an argument list into an object literal at the sites that compose a frame. What the type
+actually buys is that composing one is a single assignment, so no site can half-update. The honest
+limit is pinned in `fatals.test.ts` rather than left to a test title: the mismatched pair is asserted
+to RENDER.
+
+**🛑 AND NO COUNT OF THOSE SITES IS WRITTEN, IN THIS FILE OR ANYWHERE.** The first remedy to this
+finding said "exactly four" in five artifacts, and the next graded pass measured **five**: the
+omitted one is the ROOT composition in `parseDicom`, which reads `"input"` - the very label a forged
+pair would claim. A worker sweeping frame compositions from that census reviews four of five and
+reads clean, which is this lineage's own "a detector zero can be a gap, not a clearance" arriving by
+way of a numeral. Derive it instead, in two seconds and never stale:
+`grep -rn "OFFSET_FRAMES\." src/parser/`.
+
+**That derivation OVER-reports and is chosen for it.** Its output also contains the JSDoc notes
+saying so, and the two `EMPTY_INPUT` factories, which publish a frame NAME without composing a frame
+at all because they are raised before a `ParseContext` exists. A narrower pattern that returned only
+the object literals would be a detector with a floor, and this file's whole subject is what a floor
+hides. Over-reporting is the safe direction for a census you must not miss a member of.
 
 **The frame's NAME is published; its ORIGIN is not, deliberately.** That asymmetry is asserted, not
 just stated: `"publishes the frame's NAME and never its ORIGIN"` searches every digit run of the
@@ -166,9 +179,11 @@ detector works:
 | A Deflated fatal reports `"inflated-dataset"`                          | Its offset is IN RANGE of the compressed input and its snippet still does not match it                     |
 | `UNSUPPORTED_TRANSFER_SYNTAX`'s snippet is NOT a cut of its frame        | A truncated-file fatal's snippet IS byte-identical to the frame cut, in the same test                      |
 
-That last row is the one worth reading twice. `26 < 224`, so a bounds check on the offset would have
-read clean: **"it does not index the input" is a statement about meaning, not about range**, which is
-precisely why a label was needed and a range check is not a substitute.
+**The Deflated row is the one worth reading twice**, and it is NAMED rather than pointed at, because
+a first draft said "that last row" and a later row was appended under it. Measured: the offset is
+`26` and the compressed input is `224` bytes, so a bounds check on the offset would have read clean.
+**"It does not index the input" is a statement about meaning, not about range**, which is precisely
+why a label was needed and a range check is not a substitute.
 
 ## 6. What is NOT closed, stated rather than implied
 
@@ -194,12 +209,15 @@ precisely why a label was needed and a range check is not a substitute.
   PS3.6's own name for the unsupported UID (`"RLE Lossless"`) when the registry publishes one, and
   16 raw bytes only when it does not. That is `PRE-EXISTING`, deliberate, and unchanged. A first
   draft of this slice wrote a universal on `DicomParseError`'s own JSDoc that was false because of
-  it, and a graded pass reproduced the counterexample. **Never write a universal about `snippet`
-  without this row.** Pinned in `fatal-diagnostic-surface.test.ts`.
+  it, and a graded pass reproduced the counterexample. A second pass then found the same false
+  universal surviving in `at()`'s own JSDoc, which said **two** factories bypass it when three do.
+  **Never write a universal about `snippet` without this row.** Pinned in
+  `fatal-diagnostic-surface.test.ts`.
 - **`ParseFrame` closes the OMISSION mode only.** A deliberately mismatched
   `{ buffer, name }` still type-checks and renders faithfully; a graded pass built one, and the
   claim that a disagreement is "not expressible" is corrected in every artifact that carried it.
-  The real guard is that the frame is composed in exactly four places in `src/`.
+  The real guard is that composing a frame is one assignment, so no site can half-update. **The
+  count of those sites is deleted rather than corrected** - see the note in section 2.
 - **The origin-withholding rationale is weaker than an impossibility, and is stated as weaker.** A
   frame origin is a position, and this library publishes positions freely in the `"input"` frame;
   recovering a specific declared length from one needs a second published number. A graded pass made

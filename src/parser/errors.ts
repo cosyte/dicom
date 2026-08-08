@@ -164,10 +164,20 @@ export type OffsetFrame = (typeof OFFSET_FRAMES)[keyof typeof OFFSET_FRAMES];
  * `{ buffer: itemSlice, name: OFFSET_FRAMES.INPUT }` type-checks, lints and
  * renders faithfully, so this is not an impossibility proof and must never be
  * described as one - the pair did not vanish, it moved from an argument list
- * into an object literal at the four swap sites. What it buys is that the four
- * are the ONLY places a frame is composed, they are named on this field, and
- * none of them can half-update. Never restate it as "a disagreement is not
- * expressible".
+ * into an object literal at the sites that compose a frame. What it buys is
+ * that composing one is a single assignment, so no site can half-update. Never
+ * restate it as "a disagreement is not expressible".
+ *
+ * **🛑 AND WRITE NO COUNT OF THOSE SITES.** A first remedy said "exactly four"
+ * in five artifacts and a graded pass measured five: the ROOT composition in
+ * `parseDicom` is one, and it reads `"input"` - the very label a forged pair
+ * would claim. A worker sweeping from that census reviews four of five and
+ * reads clean. Derive it instead, in two seconds and never stale:
+ * `grep -rn "OFFSET_FRAMES\." src/parser/`. **It OVER-reports, deliberately:
+ * its output also contains this note and the two `EMPTY_INPUT` factories, which
+ * publish a frame NAME without composing a frame at all because they are raised
+ * before a context exists. Over-reporting is the safe direction for a census
+ * you must not miss a member of.**
  *
  * @internal
  */

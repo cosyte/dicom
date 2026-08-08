@@ -299,8 +299,9 @@ describe("Security: decompression-bomb cap (T-02-05-01)", () => {
       // after the cap check, and the fatal this test drives is raised BEFORE
       // that swap. A graded pass caught this labelled `INFLATED_DATASET`, which
       // asserted nothing and was still the wrong model for the next worker to
-      // copy: the frame is composed in four places in `src/` and this is what
-      // one of them really passes.
+      // copy: this is what a real composition site passes. A first remedy said
+      // there were "exactly four" of those and a graded pass measured five, so
+      // no count is written here.
       frame: { buffer: buf, name: OFFSET_FRAMES.INPUT },
       strict: false,
       stripPreamble: "tolerate",

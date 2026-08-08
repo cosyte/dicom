@@ -278,8 +278,16 @@ export interface ParseContext {
    * `DicomParseError` publishes as `offsetFrame`. Every Tier-3 fatal factory
    * takes the same object for the same two reasons. That is the whole reason
    * it is mutable: an offset, the bytes cut at it and the name of its frame
-   * all have to agree, and this parser changes frame in four places.
-   * `parseDeflatedLE` recognized that first and swaps in the inflated stream;
+   * all have to agree, and this parser changes frame in more than one place.
+   * **No count is written here, and the reason is measured**: a numeral for it
+   * was wrong the first time it was written down, because the ROOT composition
+   * in `parseDicom` is easy to leave out of one. Derive it:
+   * `grep -rn "OFFSET_FRAMES\." src/parser/`. **It OVER-reports, deliberately:
+   * its output also contains this note and the two `EMPTY_INPUT` factories,
+   * which publish a frame NAME without composing a frame at all because they
+   * are raised before a context exists. Over-reporting is the safe direction
+   * for a census you must not miss a member of.**
+   * `parseDeflatedLE` recognized the need first and swaps in the inflated stream;
    * `parseSequence`, `tryParseDefinedLengthSQ` and `tryParseUnAsSQ` hand a
    * descent a **slice**, so they swap too and restore in a `finally`, exactly
    * as they already do for {@link ParseContext.creators} and

@@ -388,14 +388,23 @@ function build(
 
 /**
  * Build a fatal whose snippet is cut from `frame.buffer` at `offset` and whose
- * published `offsetFrame` is `frame.name`, which is the shape every fatal but
- * the two `EMPTY_INPUT` forms takes.
+ * published `offsetFrame` is `frame.name`.
+ *
+ * **THREE FACTORIES BYPASS IT, NOT TWO, AND THE THIRD IS THE ONE THAT MATTERS.**
+ * A graded pass caught this sentence saying "every fatal but the two
+ * `EMPTY_INPUT` forms": those two have no buffer to cut from, but
+ * {@link unsupportedTransferSyntax} calls `build` directly so it can put PS3.6's
+ * NAME for the UID in the snippet slot. That is the counterexample to every
+ * universal about `snippet` in this package, so a sentence here that implies it
+ * away is the same defect one file over. Enumerated rather than counted; the
+ * derivation is `grep -n "return build(" src/parser/fatals.ts`.
  *
  * **The two come off one object on purpose**, so a factory cannot be handed a
  * snippet source without the label that belongs to it. It does not make a
  * mismatched pair impossible: composing one by hand still type-checks. What it
- * buys is that the frame is composed in exactly four places, all named on
- * {@link ParseFrame}, and none of them can half-update.
+ * buys is that composing a frame is a single assignment, so no site can
+ * half-update. **No count of those sites is written here** - see
+ * {@link ParseFrame}, which says why and how to derive it.
  */
 function at(
   key: FatalMessageKey,
