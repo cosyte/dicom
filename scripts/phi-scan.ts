@@ -259,13 +259,58 @@ function isCorpusExempt(relPath: string): boolean {
  */
 const MIN_BASE64_RUN = 16;
 
+/** The base64 alphabet, as a character test. `=` is padding and is handled by the caller. */
+function isBase64Char(code: number): boolean {
+  return (
+    (code >= 0x41 && code <= 0x5a) || // A-Z
+    (code >= 0x61 && code <= 0x7a) || // a-z
+    (code >= 0x30 && code <= 0x39) || // 0-9
+    code === 0x2b || // +
+    code === 0x2f // /
+  );
+}
+
 /**
+ * Every maximal base64 run of at least `MIN_BASE64_RUN` characters, with up to two `=` of padding.
+ *
+ * 🛑 THIS WAS `new RegExp("[A-Za-z0-9+/]{" + MIN_BASE64_RUN + ",}={0,2}", "g")` AND A REGEX IS THE
+ * WRONG TOOL FOR IT, MEASURED RATHER THAN ASSERTED. V8's backtracking engine keeps per-character
+ * state for a greedy quantifier, so ONE long run overflows the backtrack stack: an 8 MiB run threw
+ * `RangeError: Maximum call stack size exceeded`, which `run()` turns into exit 2 - the scan refusing
+ * outright. Measured on `21e25a0`, on a plain `.md` carrying one run, so it is `PRE-EXISTING` and
+ * reachable on the doc corpus: 0.5/1/2/4 MiB exit 0, 8 MiB exits 2. It is closed here rather than
+ * disclosed because `DICOM-SCANDICOM-SILENT-HALT` sends whole Part 10 objects down this route, and a
+ * Part 10 object is routinely megabytes of pixel data.
+ *
+ * The loop yields exactly what the pattern matched - maximal runs, the same floor, the same trailing
+ * `=` allowance - in one forward pass with no backtracking and no per-character stack. It is a
+ * different REPRESENTATION of the same predicate, not a wider or narrower one, and
+ * `test/scripts/phi-scan.test.ts` pins the equivalence against the pattern itself.
+ *
  * Built from the floor so the two cannot drift: a hardcoded quantifier made the constant dead, and a
- * dead constant is the shape where changing the number changes nothing. A fresh `RegExp` per call
- * rather than one module-level object, so no `lastIndex` can be carried between files.
+ * dead constant is the shape where changing the number changes nothing. It is a generator holding no
+ * cursor between calls, so nothing can be carried between files (the `lastIndex` hazard a fresh
+ * `RegExp` per call used to answer).
  */
-function base64RunRe(): RegExp {
-  return new RegExp(`[A-Za-z0-9+/]{${String(MIN_BASE64_RUN)},}={0,2}`, "g");
+function* base64Runs(text: string): Generator<string> {
+  const n = text.length;
+  let i = 0;
+  while (i < n) {
+    if (!isBase64Char(text.charCodeAt(i))) {
+      i += 1;
+      continue;
+    }
+    let end = i + 1;
+    while (end < n && isBase64Char(text.charCodeAt(end))) end += 1;
+    if (end - i < MIN_BASE64_RUN) {
+      i = end;
+      continue;
+    }
+    let padded = end;
+    while (padded < n && padded - end < 2 && text.charCodeAt(padded) === 0x3d) padded += 1;
+    yield text.slice(i, padded);
+    i = padded;
+  }
 }
 
 // Hardcoded PN/DA/DT tags. We intentionally avoid depending on the generated
@@ -1207,10 +1252,21 @@ function scanText(target: Target, content: string, allow: AllowList, hits: Hit[]
  * A run that does not decode to a DICOM stream is dropped in silence rather than reported. There is
  * no evidence in an arbitrary base64 blob about what it is, and a scanner that guessed would spend
  * its credibility on false hits over checksums and image data.
+ *
+ * 🛑 A DECODED OBJECT GETS THE TEXT SWEEP TOO, FOR THE REASON IN `scanTarget`'S SUPERSET TABLE, AND
+ * THE BASE64 IS WHY IT IS NOT ALREADY COVERED. `scanDicom` gives up quietly, so an object whose name
+ * sits behind an undefined-length `SQ` is read no further; and the enclosing file's own text sweep
+ * cannot stand in for it here, because the object arrives BASE64-ENCODED - the name is not in the
+ * page's bytes in any form the PN regex could match. Measured on `21e25a0`, a preamble-ful object
+ * carrying `(0008,1110)` undefined-length `SQ` before a name-bearing `(0010,0010)`: exit 0 and
+ * `OK - no hits` as a `.md`, exit 1 here. The decoded text sweep is an ADDITION beside `scanDicom`,
+ * never a replacement for it.
+ *
+ * The decode is NOT re-entered on the decoded bytes. One level is what a doc fixture is; a scanner
+ * that recursed would spend unbounded time on an object whose pixel data happens to be alphanumeric.
  */
 function scanEmbeddedObjects(target: Target, text: string, allow: AllowList, hits: Hit[]): void {
-  for (const m of text.matchAll(base64RunRe())) {
-    const run = m[0];
+  for (const run of base64Runs(text)) {
     let decoded: Buffer;
     try {
       decoded = Buffer.from(run, "base64");
@@ -1223,6 +1279,7 @@ function scanEmbeddedObjects(target: Target, text: string, allow: AllowList, hit
     // element it names has one; the run's own index is not reported, deliberately, since a second
     // number in the same message reads as though one of them located the value in the source.
     scanDicom(target, decoded, allow, hits);
+    scanText(target, decoded.toString("utf8"), allow, hits);
   }
 }
 
@@ -1259,28 +1316,38 @@ const TEXT_EXTENSIONS = new Set([".json", ".txt", ".md", ".csv"]);
  * undefined-length `SQ` from exit 1 (the text sweep saw the name) to exit 0 and `OK - no hits`.
  * A non-LE transfer syntax does the same thing for the same reason.
  *
+ * 🛑 AND THE PREAMBLE IS NOT WHAT MAKES `scanDicom` GIVE UP, SO IT MUST NOT DECIDE WHO GETS THE TEXT
+ * SWEEP (`DICOM-SCANDICOM-SILENT-HALT`). The halt above is a property of the DATASET - an
+ * undefined-length `SQ`, a non-LE transfer syntax, a header that will not read - and 132 bytes of
+ * preamble and magic in front of it change none of that. While the text sweep was an `isDicom`-false
+ * `else`, the identical dataset was caught without a preamble and MISSED with one, in silence.
+ * Measured on `21e25a0` over `(0008,1110)` undefined-length `SQ` then a name-bearing `(0010,0010)`:
+ * preamble-less exit 1, preamble-ful exit 0 and `OK - no hits`. A gate that reports clean over a name
+ * is a false green; the text sweep therefore runs on EVERY binary target, unconditionally.
+ *
  * So the binary branch asks TWO independent questions and runs BOTH answers. What it does is a strict
  * SUPERSET of what gating on `isDicom` did, on every input, which is the property to preserve if this
  * ever changes again:
  *
- *   - `isDicom` true  -> `scanDicom` only. Byte-for-byte the old behaviour.
- *   - preamble-less   -> `scanDicom` AND `scanText`. The text sweep is what it always got; the DICOM
+ *   - `isDicom` true  -> `scanDicom` AND `scanText`. The DICOM sweep is what it always got; the text
  *                        sweep is the addition. Nothing that used to be found can be lost.
+ *   - preamble-less   -> `scanDicom` AND `scanText`. Both, since `DICOM-SCANTARGET-PREAMBLELESS`.
  *   - neither         -> `scanText` only. Byte-for-byte the old behaviour.
  *
- * The cost is that a preamble-less object can now report the same value twice, once as its tag and
- * once as `(text)`. Two lines naming one value is not a defect in a gate whose output a human reads
- * before committing; a missing line is.
+ * The cost is stated rather than left to be discovered, and it was taken deliberately. A DICOM object
+ * can now report the same value twice, once under its tag and once as `(text)`; two lines naming one
+ * value is not a defect in a gate whose output a human reads before committing, and a missing line is.
+ * The real price is FALSE POSITIVES from the compact-date pass over binary values: any eight ASCII
+ * digits bounded by non-digits inside pixel data, an encapsulated fragment or a UID root can read as
+ * `YYYYMMDD`. That is the `DICOM-DEIDENT-OVER-REDACTION` shape, and the trade is not symmetric - a
+ * false positive costs a developer one look at a hit line, while the silent halt it replaces printed
+ * `OK - no hits` over a patient name. NO RATE IS QUOTED HERE: it is a property of the corpus, not of
+ * this script, and the measurement (with its fixtures and its shas) lives in
+ * `documentation/agent-notes/dicom-scandicom-silent-halt.md`.
  *
  * A text extension is still dispatched by NAME rather than by content: a `.md` whose first bytes
  * happened to look like group `0002` is still a document, and losing `scanEmbeddedObjects` on it
- * would trade one blind spot for another.
- *
- * WHAT THIS DOES NOT CLOSE, because it is `PRE-EXISTING` and closing it is a product call with its own
- * false-positive surface: a **preamble-ful** Part 10 object gets no text sweep, so `scanDicom` giving
- * up early on one is still silent. Measured on base and unchanged here. Sweeping every Part 10 object
- * as text as well would flag 8-digit runs inside pixel data, which is a gate-behaviour change, not a
- * side effect of this one.
+ * would trade one blind spot for another. `PRE-EXISTING`, and unchanged here.
  */
 function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
   let buf: Buffer;
@@ -1302,18 +1369,21 @@ function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
   if (fileMetaStart(buf) !== null) {
     scanDicom(target, buf, allow, hits);
   }
-  if (!isDicom(buf)) {
-    const text = buf.toString("utf8");
-    scanText(target, text, allow, hits);
-    // 🛑 THE EMBEDDED DECODE IS NOT A MARKDOWN FEATURE, AND SCOPING IT TO `TEXT_EXTENSIONS` MADE
-    // IT ONE. A Part 10 object pasted as base64 into a `.ts` source is the same fixture as one
-    // pasted into a `.md` page, and every fixture this package commits is built in a `.ts` file.
-    // Measured on `8982a16` with one object and one name: as `probe.md` it was found, as
-    // `probe.dcm` it was found, as `probe.ts` the run printed `OK - no hits`. Widening the walk
-    // root to `test/` without this would have opened 81 `.ts` files and still read past every
-    // encoded object in them.
-    scanEmbeddedObjects(target, text, allow, hits);
-  }
+  // 🛑 UNCONDITIONAL, AND `if (!isDicom(buf))` IS WHAT USED TO BE HERE. That guard made the text
+  // sweep an `else` for a preamble-ful Part 10 object, so `scanDicom` halting early on one was
+  // SILENT (`DICOM-SCANDICOM-SILENT-HALT`). Do not reintroduce it, and do not reach for any other
+  // predicate that decides who is owed a text sweep: the halt is a property of the dataset, and no
+  // cheap test on the first 132 bytes can see it.
+  const text = buf.toString("utf8");
+  scanText(target, text, allow, hits);
+  // 🛑 THE EMBEDDED DECODE IS NOT A MARKDOWN FEATURE, AND SCOPING IT TO `TEXT_EXTENSIONS` MADE
+  // IT ONE. A Part 10 object pasted as base64 into a `.ts` source is the same fixture as one
+  // pasted into a `.md` page, and every fixture this package commits is built in a `.ts` file.
+  // Measured on `8982a16` with one object and one name: as `probe.md` it was found, as
+  // `probe.dcm` it was found, as `probe.ts` the run printed `OK - no hits`. Widening the walk
+  // root to `test/` without this would have opened 81 `.ts` files and still read past every
+  // encoded object in them.
+  scanEmbeddedObjects(target, text, allow, hits);
 }
 
 // ---------------------------------------------------------------------------

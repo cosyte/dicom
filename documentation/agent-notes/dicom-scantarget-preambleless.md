@@ -135,26 +135,19 @@ costs a wasted walk and never a lost scan, so the two tests do not have to be re
 
 ## Residuals, disclosed and NOT closed
 
-- **🩺 `scanDicom` HALTS SILENTLY AND REPORTS NOTHING ABOUT THE BYTES IT NEVER READ, AND A
-  PREAMBLE-FUL PART 10 OBJECT HAS NO TEXT SWEEP BEHIND IT.** So the identical fixture above **plus**
-  a 128-byte preamble and `DICM` measures **exit 0, `OK - no hits`, on base `5ae8fe4` and on the
-  shipped tree alike**, over `(0010,0010) = RIVERA^JUANITA`. `PRE-EXISTING`, surfaced by the refuter
-  pass on this slice, and **NOT closed here**. It is not an oversight: closing it means sweeping
-  every Part 10 object as text as well, which would flag 8-digit runs inside pixel data and
-  encapsulated fragments. That is a gate-behaviour change with its own false-positive surface and its
-  own product call, in the shape this repo already knows from `DICOM-DEIDENT-OVER-REDACTION` - not a
-  side effect of this one. It needs its own backlog item.
-  **▶ 🛑 AND A TEST PINS THE BOUNDARY, SO THE ITEM THAT CLOSES THIS WILL GO RED BEFORE IT GOES
-  GREEN.** `"a PREAMBLE-FUL object is still scanned by the DICOM route ALONE, byte-for-byte as
-  before"` in `test/scripts/phi-scan.test.ts` asserts exit 0 over a preamble-ful object carrying
-  `RIVERA^JUANITA` at `(0008,1030) LO`, which only a text sweep could report. Measured at `28e75e0`:
-  make the text sweep unconditional and the suite reads **1 failed, 51 passed, of 52**, that test
-  being the one. **It is a scope boundary, not a clearance** - its non-vacuity control sits beside it,
-  asserting that the same value at `(0010,0010)` in the same shape of object IS caught. Whoever
-  closes the residual should expect that red and move the boundary deliberately, not treat it as a
-  regression. **An earlier draft of this bullet said no test pinned it; that was false and is
-  corrected, not reworded.**
-  **▶ This also bounds what the row-4 control above proves.** "The identical bytes plus 132 bytes of
+- **🩺 `scanDicom` HALTS SILENTLY, AND A PREAMBLE-FUL PART 10 OBJECT HAD NO TEXT SWEEP BEHIND IT.
+  ✅ CLOSED by `DICOM-SCANDICOM-SILENT-HALT`; the mechanism, the measurements and the accepted
+  false-positive cost are in
+  [`dicom-scandicom-silent-halt.md`](dicom-scandicom-silent-halt.md).** The text sweep is
+  unconditional on the binary branch now, and `scanEmbeddedObjects` runs it on the object it decodes
+  as well. **What is NOT closed is the first half of that heading**: `scanDicom` still reports
+  nothing about the bytes it never read, so a value the text sweep cannot match is still invisible
+  past a halt. Read the residuals in that file before calling the class closed.
+  **▶ The test that pinned the old boundary has been REPLACED, not deleted.** `"a PREAMBLE-FUL object
+  is still scanned by the DICOM route ALONE, byte-for-byte as before"` asserted exit 0 over an object
+  carrying `RIVERA^JUANITA` at `(0008,1030) LO`; the successor asserts exit 1 on the same fixture and
+  keeps the non-vacuity control that the same value at `(0010,0010)` is reported **under its tag**.
+  **▶ This still bounds what the row-4 control above proves.** "The identical bytes plus 132 bytes of
   preamble were caught all along" is true of a fixture with no undefined-length element in it, and is
   **not** a general property of the preamble-ful route. Do not restate it as one.
 - **A TEXT EXTENSION IS STILL DISPATCHED BY NAME, SO A `.md`/`.json`/`.txt`/`.csv` FILE WHOSE RAW
