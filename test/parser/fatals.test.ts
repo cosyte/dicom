@@ -112,12 +112,20 @@ describe("the Tier-3 fatal registry", () => {
     }
   });
 
-  it("takes a frame OBJECT, so no factory can cut bytes from one frame and label another", () => {
+  it("takes a frame OBJECT, so no factory can be handed bytes without the label beside them", () => {
     // The tenth instance. Every factory's first parameter is the `ParseFrame`
     // pair, never a bare `Buffer` beside a frame name, because two parameters
-    // are two chances to disagree - and the disagreement is silent: a snippet
+    // are two chances to half-update - and the disagreement is silent: a snippet
     // cut from the Item's slice and an offset labelled `"input"` both look
     // right on their own.
+    //
+    // 🛑 THIS IS THE OMISSION MODE AND NOT AN IMPOSSIBILITY PROOF, WHICH A
+    // GRADED PASS CORRECTED. A caller that deliberately composes
+    // `{ buffer: itemSlice, name: OFFSET_FRAMES.INPUT }` still type-checks and
+    // still renders. What the type buys is that the frame is composed in
+    // exactly four places in `src/`, and none of them can move the bytes and
+    // leave the name behind. The row below pins the mismatch as WRITABLE so no
+    // reader takes the title for the stronger claim.
     for (const factory of [
       elementLengthExceedsBuffer,
       fileMetaGroupLengthOverruns,
@@ -138,6 +146,14 @@ describe("the Tier-3 fatal registry", () => {
     const err = elementLengthExceedsBuffer(slice, 0);
     expect(err.offsetFrame).toBe(OFFSET_FRAMES.VALUE_SLICE);
     expect(err.snippet).toBe(buildSnippet(slice.buffer, 0));
+
+    // And the honest limit, asserted rather than left to the title: a hand-made
+    // mismatched pair renders faithfully, so the guard is the four swap sites
+    // and not the type.
+    const mismatched: ParseFrame = { buffer: slice.buffer, name: OFFSET_FRAMES.INPUT };
+    const mislabelled = elementLengthExceedsBuffer(mismatched, 0);
+    expect(mislabelled.offsetFrame).toBe(OFFSET_FRAMES.INPUT);
+    expect(mislabelled.snippet).toBe(err.snippet);
   });
 
   it("leaves no unsubstituted slot behind after a build", () => {

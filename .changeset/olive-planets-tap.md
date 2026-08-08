@@ -23,11 +23,12 @@ string match on it stops matching. `err.code` is unchanged and which files throw
 The frame's **name** is published and its **origin** is not. Where a slice begins is the sum of the
 declared lengths that reached it, so an error naming its own frame's origin would hand back by
 subtraction the wire field these same messages withhold. Internally the frame's bytes and its name
-travel as one object, so a diagnostic cannot cut its snippet from one frame and label its offset with
-another.
+travel as one object, so a frame change is one assignment and no call site can move the bytes and
+leave the label behind. It does not make a deliberately mismatched pair impossible, and is not
+described as doing so.
 
-**The universal three artifacts used to justify withholding a declared length was false and is
-corrected rather than reworded a second time.** A fatal "about a length field that lies" does not fire
+**The universal used to justify withholding a declared length, in the README, two package docs and
+two places in the parser, was false and is corrected rather than reworded a second time.** A fatal "about a length field that lies" does not fire
 only when a length field is lying: a spec-clean object cut short by two bytes raises
 `ELEMENT_LENGTH_EXCEEDS_BUFFER` with every declared length honest, and one cut short inside its File
 Meta group raises `FILE_META_GROUP_LENGTH_OVERRUNS` with `(0002,0000)` untouched. Both are measured.
@@ -38,7 +39,9 @@ Also replaces an arity pin that did not pin what it claimed. It read
 `Function.prototype.length`, which stops counting at the first defaulted parameter, so a factory that
 had grown exactly the slot the pin refuses would still have read `2` and stayed green.
 
-`DicomParseWarning.position` and `Element.byteOffset` still carry no frame, and `err.snippet` is still
-16 raw source bytes. All three are pre-existing, disclosed, and not closed here. The measurements,
+`UNSUPPORTED_TRANSFER_SYNTAX` keeps the behaviour every released version has: its `snippet` slot
+carries PS3.6's own name for the unsupported UID rather than raw bytes, so it is the one fatal whose
+snippet is not a cut of the frame it names. `DicomParseWarning.position` and `Element.byteOffset`
+still carry no frame, and `err.snippet` is still 16 raw source bytes. All three are pre-existing, disclosed, and not closed here. The measurements,
 the residuals, and every clean result with the positive it is pinned beside are in
 `documentation/agent-notes/dicom-diagnostic-locator-frame.md`.

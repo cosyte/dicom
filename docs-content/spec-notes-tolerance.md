@@ -174,7 +174,9 @@ posture requires it. (The one exception is deliberate: for `UNSUPPORTED_TRANSFER
 slot carries the dictionary's _name_ for the UID when PS3.6 publishes one, which is a constant, not
 input.)
 
-**The snippet is now cut in the same frame its `byteOffset` is counted in.** It was not: the offset
+**The snippet is now cut in the same frame its `byteOffset` is counted in**, on every fatal but the
+`UNSUPPORTED_TRANSFER_SYNTAX` one noted above, whose slot carries PS3.6's name for the UID rather than
+bytes. It was not: the offset
 moved with the frame (file-absolute at the root, relative to the enclosing slice inside a
 defined-length Sequence or Item, into the inflated stream under Deflated Explicit VR LE) while the
 cut was always taken from the whole file, so a `{ strict: true }` escalation raised inside a

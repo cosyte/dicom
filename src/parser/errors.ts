@@ -82,12 +82,15 @@ export type FatalCode = (typeof FATAL_CODES)[keyof typeof FATAL_CODES];
  * `#80`.
  *
  * **A frame NAME is published; a frame ORIGIN is not, and that asymmetry is
- * deliberate.** The distance between two nested frames is a declared Value
- * Length off the wire - the class of number this parser's diagnostics refuse
- * everywhere else - so publishing where a slice starts would hand back, by
- * subtraction, the field the message withholds. The name is drawn from the
- * closed set below, which the parser chooses and no sender can influence, and
- * that membership is the whole of its bound.
+ * deliberate.** The name is drawn from the closed set below, which the parser
+ * chooses and no sender can influence, and that membership is the whole of its
+ * bound. An origin has no such table: it is a position reached by summing the
+ * declared lengths that led to it, so two of them differ by a wire field, and a
+ * message that already publishes `byteOffset` would be one number short of
+ * one. **That is a weaker argument than an impossibility and is stated as
+ * weaker**, since the library publishes positions freely in the `"input"`
+ * frame; a graded pass said so. The item asked for the frame to be NAMED, and
+ * nothing here needs the origin, so the cheap side of the trade is taken.
  *
  * @example
  * ```ts
@@ -146,7 +149,7 @@ export type OffsetFrame = (typeof OFFSET_FRAMES)[keyof typeof OFFSET_FRAMES];
 
 /**
  * The buffer the current frame's offsets index into, **paired with that
- * frame's name in one object so the two cannot disagree**.
+ * frame's name in one object so a frame change is one assignment**.
  *
  * They were two facts before this type existed: `ParseContext.buffer` held the
  * frame's bytes and nothing held its name, so every diagnostic that published
@@ -154,7 +157,17 @@ export type OffsetFrame = (typeof OFFSET_FRAMES)[keyof typeof OFFSET_FRAMES];
  * would have re-created the failure this parser has already paid for twice -
  * an offset and the bytes cut at it drifting apart across a frame change. One
  * object with two readonly members means a frame change is a single
- * assignment: there is no way to swap the buffer and forget the name.
+ * assignment: there is no way to swap the buffer and FORGET the name.
+ *
+ * **🛑 THAT IS THE OMISSION MODE AND IT IS THE ONLY ONE THIS TYPE CLOSES. A
+ * DELIBERATELY MISMATCHED PAIR IS STILL WRITABLE AND A GRADED PASS BUILT ONE.**
+ * `{ buffer: itemSlice, name: OFFSET_FRAMES.INPUT }` type-checks, lints and
+ * renders faithfully, so this is not an impossibility proof and must never be
+ * described as one - the pair did not vanish, it moved from an argument list
+ * into an object literal at the four swap sites. What it buys is that the four
+ * are the ONLY places a frame is composed, they are named on this field, and
+ * none of them can half-update. Never restate it as "a disagreement is not
+ * expressible".
  *
  * @internal
  */
@@ -188,9 +201,16 @@ export interface ParseFrame {
  * begins is deliberately not published, because the distance between two
  * frames is a declared length off the wire.
  *
- * **`snippet` is already cut in the frame `offsetFrame` names**, so a consumer
- * that only wants the bytes does not need the frame at all. The frame is what
- * a consumer needs before indexing anything of its own by `byteOffset`.
+ * **`snippet` is cut in the frame `offsetFrame` names, on every fatal but one.**
+ * The exception is `UNSUPPORTED_TRANSFER_SYNTAX`, whose snippet slot carries
+ * PS3.6's own NAME for the unsupported UID when the registry publishes one
+ * (`"RLE Lossless"`), and 16 raw bytes only when it does not. That is
+ * deliberate and predates the frame; it is named here because a universal about
+ * `snippet` written without it is false on the code a compressed object reaches
+ * first. Everywhere else the two agree, so a consumer that only wants the bytes
+ * at the offset already has them. **The frame is what a consumer needs before
+ * indexing anything of its OWN by `byteOffset`**, which is the case no field on
+ * this class used to cover.
  *
  * @example
  * ```ts

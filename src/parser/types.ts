@@ -298,8 +298,10 @@ export interface ParseContext {
    * entirely until the tenth instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`, and
    * a `buffer` beside a `frameName` is the same defect one step removed: two
    * assignments where a frame change is one fact, so a future swap site can
-   * move the bytes and leave the label behind. {@link ParseFrame} exists so
-   * that is not expressible.
+   * move the bytes and leave the label behind. {@link ParseFrame} closes that
+   * OMISSION mode and only that one: a deliberately mismatched pair is still
+   * writable, a graded pass built one, and this must not be described as making
+   * a disagreement inexpressible.
    */
   frame: ParseFrame;
   readonly strict: boolean;

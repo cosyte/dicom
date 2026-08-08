@@ -93,8 +93,11 @@
  * `{ strict: true }` snippet went wrong in `#80`.
  *
  * So every factory here takes a {@link ParseFrame} rather than a `Buffer`: one
- * object carrying the frame's bytes AND the frame's name, so the snippet and
- * the published `offsetFrame` cannot come from different frames. **The name is
+ * object carrying the frame's bytes AND the frame's name, so no call site can
+ * pass a snippet source and forget to update the label beside it. **That is the
+ * omission mode and it is the only one the type closes** - a call site that
+ * deliberately writes `{ buffer: itemSlice, name: "input" }` still type-checks,
+ * a graded pass built one, and this is not an impossibility proof. **The name is
  * published and the frame's ORIGIN is not.** The distance between two nested
  * frames is a declared Value Length off the wire, so an origin would hand back
  * by subtraction the field these messages withhold.
@@ -388,9 +391,11 @@ function build(
  * published `offsetFrame` is `frame.name`, which is the shape every fatal but
  * the two `EMPTY_INPUT` forms takes.
  *
- * **The two come off one object on purpose.** A `buffer` parameter beside a
- * separate frame-name parameter would let a call site cut bytes from the Item's
- * slice and label the offset `"input"`, and that call site would type-check.
+ * **The two come off one object on purpose**, so a factory cannot be handed a
+ * snippet source without the label that belongs to it. It does not make a
+ * mismatched pair impossible: composing one by hand still type-checks. What it
+ * buys is that the frame is composed in exactly four places, all named on
+ * {@link ParseFrame}, and none of them can half-update.
  */
 function at(
   key: FatalMessageKey,
