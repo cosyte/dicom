@@ -949,6 +949,62 @@ function scanEmbeddedObjects(target: Target, text: string, allow: AllowList, hit
   }
 }
 
+/**
+ * Extensions dispatched to the TEXT route (plus the embedded-object decode). Membership here is
+ * about a file whose bytes are markup a human wrote, not about what those bytes might encode.
+ */
+const TEXT_EXTENSIONS = new Set([".json", ".txt", ".md", ".csv"]);
+
+/**
+ * Dispatch one target to the route that can actually read it.
+ *
+ * 🛑 THE BINARY ROUTE ASKS `fileMetaStart`, NEVER `isDicom`. `isDicom` is the 128-byte-preamble +
+ * `DICM` test, and it is one of the TWO shapes this package reads; a **preamble-less** stream begins
+ * its File Meta group at byte 0 and answers `false` to it. Gating on it here sent every preamble-less
+ * object on disk to `scanText` instead, so the DICOM-aware sweep - the tag table, the transfer-syntax
+ * dispatch, the per-VR value decode - never ran on one, and the gate printed `OK - no hits` over it.
+ * That is not a narrower scan; it is a DIFFERENT one, and it cannot see what the tag table sees: a
+ * single-component `(0010,0010)` carries no `FAMILY^GIVEN` caret, so the text sweep's PN regex has
+ * nothing to match, and a `DT` value's `YYYYMMDD` head is not a standalone 8-digit token either.
+ * `scanDicom` already called `fileMetaStart`, so the two shapes disagreed only at this gate, and only
+ * for an object ON DISK - the doc-corpus route reached `scanDicom` through `scanEmbeddedObjects`,
+ * which had asked `fileMetaStart` since it was written.
+ *
+ * 🛑 AND THE TWO ROUTES ARE NOT ALTERNATIVES: ADDING THE DICOM ONE MUST NOT SUBTRACT THE TEXT ONE.
+ * Recognizing a preamble-less object and handing it to `scanDicom` INSTEAD of `scanText` is a
+ * regression, not a fix, because `scanDicom` gives up quietly. Its walk `break`s at the first header
+ * it cannot read, and `readElementExplicit` returns `null` for an undefined-length value
+ * (`0xFFFFFFFF`) - which PS3.5 2026c §7.5.2 defines as one of TWO Sequence delimitations, the
+ * encoder's choice, both of which "shall be supported by decoders". (It is not "the normative
+ * encoding": the clause has two branches and quoting one is how it reads as absolute.) §7.1 then
+ * orders tags ascending, so `(0008,1110) SQ` sits BEFORE `(0010,0010)` in a conformant file. An
+ * exclusive swap therefore took a preamble-less object whose PatientName hides behind an
+ * undefined-length `SQ` from exit 1 (the text sweep saw the name) to exit 0 and `OK - no hits`.
+ * A non-LE transfer syntax does the same thing for the same reason.
+ *
+ * So the binary branch asks TWO independent questions and runs BOTH answers. What it does is a strict
+ * SUPERSET of what gating on `isDicom` did, on every input, which is the property to preserve if this
+ * ever changes again:
+ *
+ *   - `isDicom` true  -> `scanDicom` only. Byte-for-byte the old behaviour.
+ *   - preamble-less   -> `scanDicom` AND `scanText`. The text sweep is what it always got; the DICOM
+ *                        sweep is the addition. Nothing that used to be found can be lost.
+ *   - neither         -> `scanText` only. Byte-for-byte the old behaviour.
+ *
+ * The cost is that a preamble-less object can now report the same value twice, once as its tag and
+ * once as `(text)`. Two lines naming one value is not a defect in a gate whose output a human reads
+ * before committing; a missing line is.
+ *
+ * A text extension is still dispatched by NAME rather than by content: a `.md` whose first bytes
+ * happened to look like group `0002` is still a document, and losing `scanEmbeddedObjects` on it
+ * would trade one blind spot for another.
+ *
+ * WHAT THIS DOES NOT CLOSE, because it is `PRE-EXISTING` and closing it is a product call with its own
+ * false-positive surface: a **preamble-ful** Part 10 object gets no text sweep, so `scanDicom` giving
+ * up early on one is still silent. Measured on base and unchanged here. Sweeping every Part 10 object
+ * as text as well would flag 8-digit runs inside pixel data, which is a gate-behaviour change, not a
+ * side effect of this one.
+ */
 function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
   let buf: Buffer;
   try {
@@ -959,24 +1015,18 @@ function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
     );
   }
   const ext = extname(target.path).toLowerCase();
-  if (ext === ".dcm" || ext === ".bin") {
-    if (isDicom(buf)) {
-      scanDicom(target, buf, allow, hits);
-    } else {
-      // best-effort text fallback
-      scanText(target, buf.toString("utf8"), allow, hits);
-    }
-  } else if (ext === ".json" || ext === ".txt" || ext === ".md" || ext === ".csv") {
+  if (TEXT_EXTENSIONS.has(ext)) {
     const text = buf.toString("utf8");
     scanText(target, text, allow, hits);
     scanEmbeddedObjects(target, text, allow, hits);
-  } else {
-    // Unknown extension - try DICOM magic, else text.
-    if (isDicom(buf)) {
-      scanDicom(target, buf, allow, hits);
-    } else {
-      scanText(target, buf.toString("utf8"), allow, hits);
-    }
+    return;
+  }
+  // Two questions, not one choice. See the superset table above before making either an `else`.
+  if (fileMetaStart(buf) !== null) {
+    scanDicom(target, buf, allow, hits);
+  }
+  if (!isDicom(buf)) {
+    scanText(target, buf.toString("utf8"), allow, hits);
   }
 }
 
