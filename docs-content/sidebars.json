@@ -13,12 +13,6 @@
     },
     {
       "type": "category",
-      "label": "Known limitations",
-      "collapsed": false,
-      "items": ["limitations"]
-    },
-    {
-      "type": "category",
       "label": "Core Concepts",
       "collapsed": false,
       "items": [
@@ -37,7 +31,7 @@
     {
       "type": "category",
       "label": "Troubleshooting",
-      "items": ["troubleshooting"]
+      "items": ["troubleshooting", "limitations"]
     }
   ]
 }

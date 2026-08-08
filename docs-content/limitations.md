@@ -12,7 +12,8 @@ Read this page before you put `@cosyte/dicom` in front of real data.
 Mis-reading a patient identifier, an image's signedness, or a rescale slope can cause real clinical
 harm, and a de-identifier that reports a clean run it did not perform is worse than one that refuses.
 This package is engineered to prevent over-trust, so the boundary is a **deliverable**, not a
-footnote, and it lives high in the navigation rather than at the end of a troubleshooting page.
+footnote: it is a page of its own, held to the same bar as the rest of these docs, and the
+introduction and the cookbook link into it from every route that depends on it.
 
 **This page is an index, not a census.** Each entry is one line plus a link to the section that owns
 it, and the owning section is where the measurements, the fixtures and the residuals live. Read the
