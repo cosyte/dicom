@@ -949,6 +949,32 @@ function scanEmbeddedObjects(target: Target, text: string, allow: AllowList, hit
   }
 }
 
+/**
+ * Extensions dispatched to the TEXT route (plus the embedded-object decode). Membership here is
+ * about a file whose bytes are markup a human wrote, not about what those bytes might encode.
+ */
+const TEXT_EXTENSIONS = new Set([".json", ".txt", ".md", ".csv"]);
+
+/**
+ * Dispatch one target to the route that can actually read it.
+ *
+ * 🛑 THE BINARY ROUTE ASKS `fileMetaStart`, NEVER `isDicom`. `isDicom` is the 128-byte-preamble +
+ * `DICM` test, and it is one of the TWO shapes this package reads; a **preamble-less** stream begins
+ * its File Meta group at byte 0 and answers `false` to it. Gating on it here sent every preamble-less
+ * object on disk to `scanText` instead, so the DICOM-aware sweep - the tag table, the transfer-syntax
+ * dispatch, the per-VR value decode - never ran on one, and the gate printed `OK - no hits` over it.
+ * That is not a narrower scan; it is a DIFFERENT one, and it cannot see what the tag table sees: a
+ * single-component `(0010,0010)` carries no `FAMILY^GIVEN` caret, so the text sweep's PN regex has
+ * nothing to match, and a `DT` value's `YYYYMMDD` head is not a standalone 8-digit token either.
+ * `scanDicom` already called `fileMetaStart`, so the two shapes disagreed only at this gate, and only
+ * for an object ON DISK - the doc-corpus route reached `scanDicom` through `scanEmbeddedObjects`,
+ * which had asked `fileMetaStart` since it was written.
+ *
+ * A non-DICOM binary still falls back to the text sweep, unchanged, and a text extension is still
+ * dispatched by NAME rather than by content: a `.md` whose first bytes happened to look like group
+ * `0002` is still a document, and losing `scanEmbeddedObjects` on it would trade one blind spot for
+ * another.
+ */
 function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
   let buf: Buffer;
   try {
@@ -959,24 +985,15 @@ function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
     );
   }
   const ext = extname(target.path).toLowerCase();
-  if (ext === ".dcm" || ext === ".bin") {
-    if (isDicom(buf)) {
-      scanDicom(target, buf, allow, hits);
-    } else {
-      // best-effort text fallback
-      scanText(target, buf.toString("utf8"), allow, hits);
-    }
-  } else if (ext === ".json" || ext === ".txt" || ext === ".md" || ext === ".csv") {
+  if (TEXT_EXTENSIONS.has(ext)) {
     const text = buf.toString("utf8");
     scanText(target, text, allow, hits);
     scanEmbeddedObjects(target, text, allow, hits);
+  } else if (fileMetaStart(buf) !== null) {
+    scanDicom(target, buf, allow, hits);
   } else {
-    // Unknown extension - try DICOM magic, else text.
-    if (isDicom(buf)) {
-      scanDicom(target, buf, allow, hits);
-    } else {
-      scanText(target, buf.toString("utf8"), allow, hits);
-    }
+    // Not a DICOM stream by either shape: best-effort text sweep.
+    scanText(target, buf.toString("utf8"), allow, hits);
   }
 }
 

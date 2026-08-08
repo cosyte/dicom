@@ -822,3 +822,143 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
     expect(r.code, `stderr: ${r.stderr}`).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// A PREAMBLE-LESS OBJECT ON DISK (DICOM-SCANTARGET-PREAMBLELESS)
+// ---------------------------------------------------------------------------
+//
+// `scanTarget` gated a `.dcm`/`.bin`/unknown-extension file on `isDicom` before
+// handing it to `scanDicom`. `isDicom` is the 128-byte-preamble + `DICM` test, one
+// of the TWO shapes this package reads, so a preamble-less object on disk went to
+// `scanText` instead and the DICOM-aware sweep never ran on it. `scanDicom` itself
+// had asked `fileMetaStart` (which knows both shapes) since the doc route was
+// written, so the two disagreed only at this one gate.
+//
+// EVERY PAYLOAD BELOW CARRIES A NAME, AND IT IS ONE THE TEXT SWEEP CANNOT SEE.
+// The text pass matches PN only in `FAMILY^GIVEN` form; a single-component
+// `(0010,0010)` has no caret, so the fallback route has nothing to match, and a
+// hit therefore proves the DICOM route ran rather than proving the bytes were
+// merely present. `phi-scan-fallback-visible.txt` below is that control, and each
+// clean result is pinned beside a positive on the same route.
+
+/** Synthetic. Single-component, so the text sweep's `FAMILY^GIVEN` regex cannot match it. */
+const BARE_PN = "WESTERGAARD";
+
+/** The same fixture assembler as everywhere else in this file, minus preamble and `DICM`. */
+function buildPreamblelessFixture(studyDate: string, patientName: string): Buffer {
+  return buildDicomFixture(studyDate, patientName).subarray(132);
+}
+
+describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () => {
+  let diskDir: string;
+
+  beforeAll(() => {
+    diskDir = realpathSync(mkdtempSync(join(tmpdir(), "dicom-phi-scan-disk-")));
+  });
+
+  afterAll(() => {
+    rmSync(diskDir, { recursive: true, force: true });
+  });
+
+  function writeObject(name: string, buf: Buffer): string {
+    const path = join(diskDir, name);
+    writeFileSync(path, buf);
+    return path;
+  }
+
+  it("the payload is invisible to the text sweep, so a hit can only come from the DICOM route", () => {
+    // The non-vacuity control for every case below. Written as `.txt`, which
+    // dispatches by NAME to the text route, the very same bytes scan clean.
+    const bare = buildPreamblelessFixture("19000101", BARE_PN);
+    expect(bare.toString("ascii", 0, 4)).not.toBe("DICM");
+    expect(bare.toString("latin1")).toContain(BARE_PN);
+    expect(bare.toString("utf8")).not.toMatch(/\b[A-Z][A-Za-z\-']+\^[A-Z][A-Za-z\-']+\b/);
+
+    const r = runScanner([writeObject("fallback-visible.txt", bare)]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+
+  it("a preamble-less .dcm is a hit (exit 1)", () => {
+    const r = runScanner([writeObject("bare.dcm", buildPreamblelessFixture("19000101", BARE_PN))]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/\(0010,0010\)/);
+    expect(r.stderr).toContain(BARE_PN);
+  });
+
+  it("a preamble-less .bin is a hit (exit 1)", () => {
+    const r = runScanner([writeObject("bare.bin", buildPreamblelessFixture("19000101", BARE_PN))]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/\(0010,0010\)/);
+  });
+
+  it("a preamble-less object under an UNKNOWN extension is a hit too (exit 1)", () => {
+    // The unknown-extension branch carried the identical `isDicom` gate, so it
+    // had the identical blind spot. A fixture is not obliged to be named `.dcm`.
+    const r = runScanner([writeObject("bare.dat", buildPreamblelessFixture("19000101", BARE_PN))]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/\(0010,0010\)/);
+  });
+
+  it("a preamble-less recent StudyDate is a hit on the DA route as well (exit 1)", () => {
+    const r = runScanner([
+      writeObject("bare-date.dcm", buildPreamblelessFixture("20250612", "ANON^PATIENT")),
+    ]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/\(0008,0020\)/);
+    expect(r.stderr).toMatch(/20250612/);
+  });
+
+  it("a preamble-less object with an ALLOW-LISTED payload scans clean (exit 0)", () => {
+    // The clean result that means something only because it sits beside the
+    // positives above: the route runs, and it still says nothing about a name the
+    // allow-list carries.
+    const r = runScanner([
+      writeObject("bare-clean.dcm", buildPreamblelessFixture("19000101", "ANON^PATIENT")),
+    ]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+
+  it("a .dcm that is NOT a DICOM stream still gets the text sweep (exit 1)", () => {
+    // The regression control on the else branch. Neither shape recognizes these
+    // bytes, and the fallback that used to catch a preamble-less object by
+    // accident is the route that must still catch a genuinely non-DICOM one.
+    const r = runScanner([writeObject("not-dicom.dcm", Buffer.from(SYNTHETIC_PHI, "utf8"))]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("RIVERA^JUANITA");
+  });
+
+  it("a preamble-FUL object is still scanned as DICOM (exit 1)", () => {
+    const r = runScanner([
+      writeObject("with-preamble.dcm", buildDicomFixture("19000101", BARE_PN)),
+    ]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/\(0010,0010\)/);
+  });
+
+  it("the ALL-MODE walk catches one under test/fixtures, which is the shape CI runs", () => {
+    // The cases above go through the paths route. This is the route the gate
+    // itself uses, over a corpus root, in a throwaway repo.
+    const root = makeRepo();
+    writeFileSync(
+      join(root, "test", "fixtures", "bare.dcm"),
+      buildPreamblelessFixture("19000101", BARE_PN),
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("test/fixtures/bare.dcm");
+    expect(r.stderr).toContain(BARE_PN);
+  });
+
+  it("and the same corpus with an allow-listed payload is still clean (exit 0)", () => {
+    const root = makeRepo();
+    writeFileSync(
+      join(root, "test", "fixtures", "bare.dcm"),
+      buildPreamblelessFixture("19000101", "ANON^PATIENT"),
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+    expect(r.stdout).toMatch(/OK - no hits/);
+  });
+});
