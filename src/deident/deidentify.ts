@@ -158,6 +158,7 @@ import {
   deidentMethodNotAdded,
   deidentMethodNotLo,
   deidentMethodPriorRetained,
+  deidentMethodValueOverLength,
   embeddedAttributeRemoved,
   sequenceNotAuditable,
   undefinedVrNotAuditable,
@@ -1571,9 +1572,12 @@ const DEFAULT_METHOD_PROFILE = "@cosyte/dicom Basic Application Level Confidenti
  *
  * **This bounds the value this library WRITES FRESH, and nothing else.** A
  * caller `deidentificationMethod` whose own values exceed 64 characters is
- * written through as given, undisclosed - the same posture as every other value
- * the caller owns. So is a prior value from the source file, which is copied
- * through verbatim by design.
+ * written through as given - the same posture as every other value the caller
+ * owns. So is a prior value from the source file, which is copied through
+ * verbatim by design. **Neither is silent any more**: both raise
+ * `DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH`, which is a disclosure over the value
+ * actually written and shortens, splits and truncates nothing. See
+ * {@link hasValueOverLoMaximum}.
  *
  * **🩺 AND THE MOST LIKELY SENDER OF AN OVER-LONG PRIOR VALUE IS THIS LIBRARY,
  * WHICH IS WHY THAT SENTENCE IS NOT "the sender's problem". A graded pass
@@ -1584,12 +1588,13 @@ const DEFAULT_METHOD_PROFILE = "@cosyte/dicom Basic Application Level Confidenti
  * it while `0.0.2` and `0.0.9` were never published at all -
  * and re-de-identifying one keeps it: measured at a flat **138** bytes over four
  * passes, two values of **76** and **61**, with `DICOM_DEIDENT_METHOD_PRIOR_RETAINED`
- * raised for the retention and **nothing said about the length**. Keeping it is
+ * raised for the retention. Keeping it is
  * still the right act - PS3.15 E.1.1 says "added to", and rewriting a prior
  * de-identifier's record would destroy the provenance this attribute exists to
- * carry, whoever wrote it - but a consumer with a strict receiver in the path
- * should expect an over-long Value on any object de-identified before this
- * release. A residual test pins it rather than leaving it to be rediscovered.
+ * carry, whoever wrote it - and the retention was disclosed already, but the
+ * **length** was not, on that route or on the caller's. It is now, by the code
+ * above, so a consumer with a strict receiver in the path is told rather than
+ * left to rediscover it on any object de-identified before this release.
  */
 function defaultMethod(active: ReadonlySet<DeidentifyOption>): string {
   const options = DEIDENTIFY_OPTIONS.filter((option) => active.has(option));
@@ -1606,6 +1611,58 @@ const VALUE_DELIMITER = 0x5c;
  * pad past the field as well. `LO` is a short-form VR.
  */
 const MAX_SHORT_FORM_VALUE_BYTES = 0xfffe;
+
+/**
+ * PS3.5 2026c Table 6.2-1, `LO` row: "A character string that may be padded with
+ * leading and/or trailing spaces ... **64 chars maximum**". The row describes a
+ * **Value**, and `(0012,0063)` is `1-n`, so this is the bound on each value
+ * between `5CH` delimiters and never on the Value Field.
+ */
+const LO_VALUE_MAX_CHARS = 64;
+
+/**
+ * True when the `(0012,0063)` Value Field about to be written carries at least
+ * one Value longer than {@link LO_VALUE_MAX_CHARS} bytes.
+ *
+ * 🩺 **THIS IS A DISCLOSURE, NOT A BOUND. NOTHING IS SHORTENED, SPLIT OR
+ * TRUNCATED BY IT.** The text {@link defaultMethod} composes is inside the
+ * maximum on all 512 option subsets. The two Values this library does not
+ * compose can be over, and both are still written through as given, because
+ * splitting or truncating either would invent a de-identification record nobody
+ * made: a caller's `deidentificationMethod`, and a value the source file already
+ * carried, which PS3.15 2026c E.1.1 obliges this to add to rather than rewrite.
+ * The **retention** of the second one has its own code already; its **length**
+ * was disclosed by nothing, on either route.
+ *
+ * **The measurement is over BYTES, deliberately over-approximating.** No
+ * character repertoire encodes a character in fewer than one byte, so a Value of
+ * 64 bytes or fewer can never carry more than 64 characters and this cannot miss
+ * a Value that is genuinely over the maximum.
+ *
+ * 🛑 **THE CONVERSE FAILS WHENEVER A VALUE'S BYTES OUTNUMBER ITS COUNTED
+ * CHARACTERS, AND THE ENUMERATION OF WAYS THAT HAPPENS IS DELETED RATHER THAN
+ * WRITTEN AGAIN.** Three graded passes refuted three drafts of it. The rule that
+ * survives every counter-example is the general one, and it is the only thing
+ * stated here.
+ *
+ * PS3.5 2026c §6.2 specifies these lengths "in characters rather than bytes ...
+ * because the mapping from a character to the number of bytes used for that
+ * character's encoding may be dependent on the character set used", **and adds
+ * that "Escape Sequences used for Code Extension shall not be included in the
+ * count of characters"**. So a conformant Value of 64 characters can exceed 64
+ * bytes, and this fires on it.
+ *
+ * Decoding per `(0008,0005)` to count characters exactly was refused here: the
+ * charset of an attribute whose values may predate this run is not a thing this
+ * function can establish, and a disclosure that under-reports is worth less than
+ * one that over-reports.
+ *
+ * The split is the same `5CH` one {@link addDeidentificationMethod} compares
+ * with, so the two agree about what a Value is.
+ */
+function hasValueOverLoMaximum(field: Buffer): boolean {
+  return splitValues(field).some((value) => value.length > LO_VALUE_MAX_CHARS);
+}
 
 /**
  * Build the `(0012,0063)` De-identification Method value: `method` **added to**
@@ -1972,6 +2029,18 @@ export function deidentify(
   if (deidentMethod.replacedNonLoPrior) {
     warnings.push(
       deidentMethodNotLo({ byteOffset: priorMethod?.byteOffset ?? 0, fileMeta: false }),
+    );
+  }
+  // 🩺 THE LENGTH, WHICH NOTHING DISCLOSED ON EITHER ROUTE. Measured over the
+  // value actually WRITTEN, so it covers every shape at once: a caller method
+  // over the maximum, a prior value the source file wrote over it and kept here,
+  // and the replacement fallbacks, which write `added`. It is additive - no
+  // existing code stops firing because of it - and it never fires on the text
+  // this library composes for itself, which is proved by sweeping all 512 option
+  // subsets rather than argued.
+  if (hasValueOverLoMaximum(deidentMethod.value)) {
+    warnings.push(
+      deidentMethodValueOverLength({ byteOffset: priorMethod?.byteOffset ?? 0, fileMeta: false }),
     );
   }
   if (hasUncleanedBurnedIn(ds)) {

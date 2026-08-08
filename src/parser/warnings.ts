@@ -80,6 +80,7 @@ export const WARNING_CODES = {
   DICOM_DEIDENT_METHOD_NOT_ADDED: "DICOM_DEIDENT_METHOD_NOT_ADDED", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_METHOD_NOT_LO: "DICOM_DEIDENT_METHOD_NOT_LO", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_METHOD_PRIOR_RETAINED: "DICOM_DEIDENT_METHOD_PRIOR_RETAINED", // emitted by deidentify(), never by the parser
+  DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH: "DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE: "DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE: "DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE", // emitted by deidentify(), never by the parser
   DICOM_PRIVATE_CREATOR_UNKNOWN: "DICOM_PRIVATE_CREATOR_UNKNOWN", // reserved by Phase 6 - not emitted in Phase 2
@@ -296,6 +297,21 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   // text is the file's own. The tag is a constant of this code.
   DICOM_DEIDENT_METHOD_PRIOR_RETAINED:
     "A De-identification Method (0012,0063) value the source file already carried was kept beside the one this run recorded, as PS3.15 E.1.1 requires. That attribute is not in Table E.1-1, so no rule in this run inspected, audited or redacted those bytes: if the sender wrote identifying text there it is in the de-identified output, under (0012,0062) = YES. The text is withheld from this message.",
+  // No value, no length, no count AND NO ORIGIN. 64 is a constant of the VR, not
+  // a measurement over input; the offending Value's own length IS a measurement
+  // over input and is the number DICOM-DIAGNOSTIC-PHI-RESIDUALS bound out of six
+  // other messages. How many Values are over is the same kind of number, and
+  // which one of them the caller supplied versus which the file did is not
+  // decidable when the two are equal.
+  //
+  // 🛑 AND IT SAYS "LONGER THAN 64 BYTES", NOT "OVER THE MAXIMUM". A graded pass
+  // refuted the draft that called 64 bytes "the largest an LO Value may be under
+  // a single-byte repertoire": PS3.5 6.2 specifies these lengths "in characters
+  // rather than bytes" and excludes Code Extension escape sequences from the
+  // count, so a conformant 64-character Value can exceed 64 bytes under a
+  // single-byte repertoire too. The message states what was measured.
+  DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH:
+    "The De-identification Method (0012,0063) this run wrote carries a Value longer than 64 bytes. PS3.5 Table 6.2-1 bounds an LO Value at 64 characters, per Value and not per Value Field, and PS3.5 6.2 specifies that length in characters rather than bytes and excludes Code Extension escape sequences from the count: a Value of 64 bytes or fewer can never carry more than 64 characters, but a longer one is not necessarily over the maximum. This run never shortens, splits or truncates a Value it did not compose: a caller-supplied method, and a value the source file already carried, are both written through as given. A receiver that enforces the VR may reject the attribute that records the de-identification. The value, its length, how many Values are over and which of them came from where are all withheld from this message.",
   // BOTH of the disagreeing length fields are deliberately absent, and the
   // second one is the eighth instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`: the
   // remaining-bytes count this string used to carry was the enclosing sequence's
@@ -1325,6 +1341,67 @@ export function deidentMethodNotLo(position: DicomPosition): DicomParseWarning {
  */
 export function deidentMethodPriorRetained(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DEIDENT_METHOD_PRIOR_RETAINED, position);
+}
+
+/**
+ * Build a `DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH` warning for a `(0012,0063)`
+ * `deidentify()` wrote carrying a Value longer than an `LO` Value may be.
+ *
+ * @remarks
+ * PS3.5 2026c Table 6.2-1's `LO` row is "64 chars maximum", and that row
+ * describes a **Value**: `(0012,0063)` is `1-n`, so the bound falls on each
+ * value and never on the Value Field. The text this library composes for itself
+ * is inside it on all 512 option subsets. Two Values it does **not** compose can
+ * be over, and both are written through as given, because splitting or
+ * truncating either would invent a de-identification record nobody made:
+ *
+ *  - a caller's `deidentificationMethod`, whose bytes are the caller's; and
+ *  - a value the **source file** already carried, kept because PS3.15 2026c
+ *    E.1.1 says a method is "added to" that attribute.
+ *
+ * **🩺 THE LIKELIEST WRITER OF THE SECOND ONE IS THIS LIBRARY.** Every object
+ * any published release de-identified without a caller-supplied method carries a
+ * 76-character Value, and re-de-identifying one keeps it. Its **retention** has
+ * been disclosed since `DICOM_DEIDENT_METHOD_PRIOR_RETAINED`; its **length** was
+ * not disclosed by anything, which is the hole this code closes. The act is
+ * unchanged: nothing is shortened, split or truncated, and the two residual
+ * tests that pinned the pass-through now pin the disclosure instead.
+ *
+ * **The measurement is over BYTES and that is a deliberate over-approximation.**
+ * No repertoire encodes a character in fewer than one byte, so a Value of 64
+ * bytes or fewer can never hold more than 64 characters and this code cannot
+ * miss a Value that is genuinely over. **The converse fails whenever a Value's
+ * bytes outnumber its counted characters.** PS3.5 2026c §6.2 specifies these
+ * lengths "in characters rather than bytes" and excludes Code Extension escape
+ * sequences from the count, so a conformant Value of 64 characters can exceed 64
+ * bytes and this code fires on it. Read the code as **"a Value in this attribute
+ * is over 64 bytes"**, which is what is measured, never as "the attribute is
+ * non-conformant".
+ *
+ * **No value, no length, no count, no origin.** 64 is a constant of the VR; the
+ * offending Value's own length is a measurement over input, which is the number
+ * `DICOM-DIAGNOSTIC-PHI-RESIDUALS` bound out of six other messages, and so is a
+ * count of how many Values are over. Which Value came from the caller and which
+ * from the file is not decidable when the two are equal.
+ *
+ * **`position.byteOffset` locates the prior element, and is `0` when there was
+ * none.** This is the first method code that can be raised on a Data Set with no
+ * `(0012,0063)` at all - the other three cannot fire without a prior element -
+ * so on the caller route the offset is a sentinel rather than a location, and
+ * saying otherwise would be a claim the field cannot support. There is nothing
+ * to point at: the over-long bytes are the caller's argument, not the file's.
+ *
+ * Emitted by `deidentify()` only, so it reaches `report.warnings` and is not
+ * subject to the parser's `{ strict: true }` escalation - which is why adding it
+ * cannot refuse a conformant file.
+ *
+ * @example
+ * ```ts
+ * const w = deidentMethodValueOverLength({ byteOffset: 4096, fileMeta: false });
+ * ```
+ */
+export function deidentMethodValueOverLength(position: DicomPosition): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH, position);
 }
 
 /**
