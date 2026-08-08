@@ -26,9 +26,44 @@ DOE^JANE
 DOE^JOHN
 SYNTHETIC^FIXTURE
 
+# --- Synthetic PN values in the TEST corpus (PHI-SCAN-WALK-ROOT-SCOPE) ---
+# The walk root moved from `test/fixtures/` to `test/`, which opened 81 tracked files this
+# gate had never read. Every fixture this package owns is BUILT IN A `.ts` SOURCE FILE by
+# `test/helpers/build-dicom.ts`, so its whole committed fixture corpus is PN literals in
+# TypeScript rather than `.dcm` files on disk. Each value below was hand-read in place before
+# it was listed.
+#
+# They are EXACT entries, never prefixes. A prefix admits every given name under a surname,
+# and none of these needs that: each is one literal in one family of fixtures.
+BOND^JAMES
+DEEPER^PATIENT
+DEFLATE^TEST
+NESTED^PATIENT
+ROOT^PATIENT
+SMITH^REF
+SMITHSON^BRAIN
+XOE^JANE
+# PS3.5's own worked example for the three PN component groups (the ideographic case). It is
+# the standard's illustration, so the literal is what makes the test correct.
+Yamada^Tarou
+Yam^Tar
+
 # --- Allow-listed dates (8-char YYYYMMDD, ignored by 120-year check) ---
 DATE:19000101
 DATE:19500101
+
+# Synthetic fixture dates in the TEST corpus, same widening as above.
+DATE:19800101
+DATE:20240115
+
+# NOT DATES. These are DICOM TAG NUMBERS that happen to satisfy the `YYYYMMDD` shape, so the
+# text sweep's compact-date pass matches them: `(4010,1006)` and the private `(7001,100x)`
+# block. The date allow-list is the only mechanism available to excuse them, and mislabelling
+# them would be worse than saying so here.
+DATE:40101006
+DATE:70011001
+DATE:70011002
+DATE:70011003
 
 # --- Notes ---
 # To add a new synthetic identifier: append a line above and commit.
