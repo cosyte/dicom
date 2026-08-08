@@ -1120,24 +1120,31 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
     expect(r.stderr).toContain(CARET_PN);
   });
 
-  it("a PREAMBLE-FUL object is still scanned by the DICOM route ALONE, byte-for-byte as before", () => {
-    // The other half of the superset property. `isDicom` true must stay
-    // `scanDicom`-only: sweeping every Part 10 object as text as well would flag
-    // 8-digit runs inside pixel data, which is a gate-behaviour change and not part
-    // of this item. Pinned with a caret-bearing value at a NON-PN tag, which only
-    // the text route could report.
+  it("a PREAMBLE-FUL object gets BOTH routes now, and the DICOM one is unchanged", () => {
+    // 🛑 THIS TEST PINNED THE OPPOSITE UNTIL `DICOM-SCANDICOM-SILENT-HALT`. It read
+    // "scanned by the DICOM route ALONE, byte-for-byte as before" and asserted exit
+    // 0 over the first fixture below, on the reasoning that sweeping every Part 10
+    // object as text was a separate product call. It was, it has been taken, and
+    // this is the boundary MOVED deliberately rather than a regression: the halt
+    // that made the old green a FALSE green is a property of the DATASET, so the
+    // preamble must not decide who is owed a text sweep. See the block below.
+    //
+    // What has NOT moved is the DICOM route: `isDicom` true still reaches
+    // `scanDicom`, and the second half asserts the tag-borne hit that proves it.
     const description = Buffer.concat([
       Buffer.alloc(128),
       Buffer.from("DICM", "ascii"),
       preamblelessFileMeta("1.2.840.10008.1.2.1"),
       shortElement(0x0008, 0x1030, "LO", CARET_PN), // StudyDescription: not a PN tag
     ]);
-    const clean = runScanner([writeObject("preambleful-lo.dcm", description)]);
-    expect(clean.code, `stderr: ${clean.stderr}`).toBe(0);
+    const swept = runScanner([writeObject("preambleful-lo.dcm", description)]);
+    expect(swept.code, `stderr: ${swept.stderr}`).toBe(1);
+    // Only the text route can report this one: `(0008,1030)` is in no tag table here.
+    expect(swept.stderr).toMatch(/tag=\(text\)/);
+    expect(swept.stderr).toContain(CARET_PN);
 
-    // And the pin that keeps that green from being vacuous: the SAME value at a PN
-    // tag in the SAME shape of object is caught, so the detector is demonstrably
-    // live and what is pinned above is the routing, not a blind scanner.
+    // The DICOM route, unchanged: the SAME value at a PN tag is still reported
+    // UNDER ITS TAG, which the text sweep cannot do.
     const named = Buffer.concat([
       Buffer.alloc(128),
       Buffer.from("DICM", "ascii"),
@@ -1146,7 +1153,234 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
     ]);
     const hit = runScanner([writeObject("preambleful-pn.dcm", named)]);
     expect(hit.code, `stderr: ${hit.stderr}`).toBe(1);
+    expect(hit.stderr).toMatch(/\(0010,0010\)/);
     expect(hit.stderr).toContain(CARET_PN);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A PREAMBLE-FUL OBJECT'S SILENT HALT (DICOM-SCANDICOM-SILENT-HALT)
+// ---------------------------------------------------------------------------
+//
+// `scanDicom` gives up quietly - its walk `break`s at the first header it cannot
+// read - and while the text sweep was an `isDicom`-false `else`, a preamble-FUL
+// Part 10 object had nothing behind it. So the identical dataset was caught
+// WITHOUT a preamble and missed WITH one, and the gate printed `OK - no hits`
+// over a name-bearing `(0010,0010)`.
+//
+// Measured on `21e25a0`, one object per row, `(0008,1110)` undefined-length `SQ`
+// (PS3.5 2026c §7.5.2: one of two delimitations, both of which decoders shall
+// support) before a name-bearing `(0010,0010)` (§7.1 orders tags ascending, so
+// that is the conformant order):
+//
+//   | target                                     | base | here |
+//   |--------------------------------------------|------|------|
+//   | preamble-FUL, SQ then PN                   |  0   |  1   |
+//   | preamble-FUL, caret name at (0008,1030) LO |  0   |  1   |
+//   | the same object base64'd into a `.md`      |  0   |  1   |
+//   | preamble-LESS, SQ then PN  (control)       |  1   |  1   |
+//   | preamble-FUL, PN, no SQ    (control)       |  1   |  1   |
+//   | preamble-FUL, allow-listed PN (control)    |  0   |  0   |
+//
+// The last three rows are what make the first three evidence. Two are positives
+// the detector already caught on base, so a green here would be a GAP rather than
+// a clearance; the third is a clean result pinned BESIDE them.
+//
+// THE ACCEPTED COST, STATED SO IT IS NOT DISCOVERED: the text sweep now runs over
+// binary values, so its recognizers fire on image noise. WHICH recognizer, and how
+// often, is a property of the payload's byte histogram and NOT of the scanner, so
+// no sentence here names one. Two drafts of this comment did - one naming the
+// compact-date pass, one naming the PN-shape pass - and a refuter refuted both;
+// a claim reworded twice is deleted rather than written a third time. The measured
+// table, which spans 0 to five figures over the same 8 MiB, is in
+// `documentation/agent-notes/dicom-scandicom-silent-halt.md`. NO RATE IS QUOTED
+// HERE - it is a property of a corpus, not of this suite.
+//
+// 🛑 AND THE SHAPE IS NAMED, NEVER SPELLED. A draft of this paragraph wrote the
+// two-component token out and `pnpm phi-scan` reported it against this very file,
+// which is the gate working: `test/` is its walk root. `test/helpers/
+// phi-scan-violators.ts` exists so this suite carries no literal THE SCANNER MUST
+// REJECT - allow-listed ones like `ANON^PATIENT` are here in plain sight, and the
+// distinction is the whole point of that helper's header.
+
+describe("phi-scan: a preamble-FUL object's silent halt", () => {
+  let dir: string;
+
+  beforeAll(() => {
+    dir = realpathSync(mkdtempSync(join(tmpdir(), "dicom-phi-scan-halt-")));
+  });
+
+  afterAll(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  function writeObject(name: string, buf: Buffer): string {
+    const path = join(dir, name);
+    writeFileSync(path, buf);
+    return path;
+  }
+
+  /** The same assembler the block above uses, with the 132 bytes back on the front. */
+  function withPreamble(...parts: Buffer[]): Buffer {
+    return Buffer.concat([
+      Buffer.alloc(128),
+      Buffer.from("DICM", "ascii"),
+      preamblelessFileMeta("1.2.840.10008.1.2.1"),
+      ...parts,
+    ]);
+  }
+
+  /** One Part 10 object, base64-encoded into a markdown page, as `docs-content/` ships them. */
+  function asDocPage(buf: Buffer): Buffer {
+    return Buffer.from(`# fixture\n\n\`\`\`\n${buf.toString("base64")}\n\`\`\`\n`, "utf8");
+  }
+
+  const HALTED_NAME = Buffer.concat([
+    undefinedLengthSq(0x0008, 0x1110),
+    shortElement(0x0010, 0x0010, "PN", CARET_PN),
+  ]);
+
+  it("THE DEFECT: a name behind an undefined-length SQ is reported (exit 1)", () => {
+    const r = runScanner([writeObject("halt-sq.dcm", withPreamble(HALTED_NAME))]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain(CARET_PN);
+  });
+
+  it("CONTROL: the identical dataset WITHOUT the preamble was caught on base too", () => {
+    // The row that makes the row above a routing defect rather than an undetectable
+    // payload: the same bytes, minus 132, exit 1 on base and here alike.
+    const bare = Buffer.concat([preamblelessFileMeta("1.2.840.10008.1.2.1"), HALTED_NAME]);
+    const r = runScanner([writeObject("halt-sq-bare.dcm", bare)]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain(CARET_PN);
+  });
+
+  it("CONTROL: a preamble-FUL PN with NO halt in front of it is caught under its TAG", () => {
+    // The detector-is-live control. `scanDicom` reaches this one, so the hit names
+    // `(0010,0010)`; a green anywhere in this block therefore cannot be an absent
+    // detector.
+    const r = runScanner([
+      writeObject("no-halt.dcm", withPreamble(shortElement(0x0010, 0x0010, "PN", CARET_PN))),
+    ]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/\(0010,0010\)/);
+  });
+
+  it("CLEAN: a preamble-FUL object whose payload is allow-listed is still clean (exit 0)", () => {
+    // Pinned beside the positives above, and it carries a DA the allow-list holds as
+    // well as an allow-listed PN, because the text sweep now reads both.
+    const r = runScanner([
+      writeObject(
+        "halt-clean.dcm",
+        withPreamble(
+          undefinedLengthSq(0x0008, 0x1110),
+          shortElement(0x0010, 0x0010, "PN", "ANON^PATIENT"),
+          shortElement(0x0008, 0x0020, "DA", ALLOWED_DA),
+        ),
+      ),
+    ]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+    expect(r.stdout).toMatch(/OK - no hits/);
+  });
+
+  it("a non-LE transfer syntax halts the same way and is caught the same way", () => {
+    // The halt does not need a Sequence. `scanDicom` reads the dataset as Explicit
+    // VR LE unless (0002,0010) says Implicit VR LE, so a Big Endian dataset stops it
+    // at the first element - and with a preamble in front, nothing used to follow.
+    const object = Buffer.concat([
+      Buffer.alloc(128),
+      Buffer.from("DICM", "ascii"),
+      preamblelessFileMeta("1.2.840.10008.1.2.2"), // Explicit VR Big Endian
+      shortElementBE(0x0010, 0x0010, "PN", CARET_PN),
+    ]);
+    const r = runScanner([writeObject("halt-be.dcm", object)]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain(CARET_PN);
+  });
+
+  // -------------------------------------------------------------------------
+  // THE SAME HALT, ONE LEVEL DOWN: A BASE64 OBJECT INSIDE A DOC PAGE
+  // -------------------------------------------------------------------------
+  //
+  // `scanEmbeddedObjects` decodes a run and hands it to `scanDicom` ALONE, so the
+  // halt is silent there too - and the enclosing page's own text sweep cannot
+  // stand in for it, because the name is inside the BASE64 and matches nothing in
+  // the page's bytes. Measured on `21e25a0`: exit 0, `OK - no hits`.
+
+  it("THE DEFECT, EMBEDDED: the same object base64'd into a .md is reported (exit 1)", () => {
+    const r = runScanner([writeObject("halt-sq.md", asDocPage(withPreamble(HALTED_NAME)))]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain(CARET_PN);
+  });
+
+  it("CONTROL: the page's OWN text sweep cannot see the name, so the hit came from the decode", () => {
+    // Non-vacuity for the case above. The identical page with the base64 run
+    // REMOVED carries nothing to match, so a hit there would have meant the name
+    // was legible in the page's own bytes and the embedded route proved nothing.
+    const page = asDocPage(withPreamble(HALTED_NAME));
+    expect(page.toString("utf8")).not.toContain(CARET_PN);
+    const stripped = Buffer.from(page.toString("utf8").replace(/[A-Za-z0-9+/]{16,}={0,2}/g, ""));
+    const r = runScanner([writeObject("halt-sq-stripped.md", stripped)]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+
+  it("CONTROL EMBEDDED: an unhalted object in a .md is still reported under its TAG", () => {
+    const r = runScanner([
+      writeObject(
+        "no-halt.md",
+        asDocPage(withPreamble(shortElement(0x0010, 0x0010, "PN", CARET_PN))),
+      ),
+    ]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/\(0010,0010\)/);
+  });
+
+  // -------------------------------------------------------------------------
+  // A MULTI-MEGABYTE BASE64 RUN MUST NOT REFUSE THE SCAN
+  // -------------------------------------------------------------------------
+  //
+  // The run matcher was `new RegExp("[A-Za-z0-9+/]{16,}={0,2}", "g")`, and V8 keeps
+  // per-character backtrack state for a greedy quantifier: ONE long run threw
+  // `RangeError: Maximum call stack size exceeded`, which `run()` turns into exit 2
+  // - the scan refusing outright rather than reporting anything. `PRE-EXISTING` and
+  // measured on `21e25a0` over a plain `.md` carrying one run: 0.5/1/2/4 MiB exit 0,
+  // 8 MiB exits 2. It is closed here because this item sends whole Part 10 objects
+  // down that route and a Part 10 object is routinely megabytes of pixel data.
+  //
+  // 🛑 THE EXACT THRESHOLD IS A PROPERTY OF V8'S STACK, NOT OF THIS SCRIPT, so this
+  // asserts the PROPERTY (a multi-megabyte run is scanned, and the object after it
+  // is still found) and not the threshold. On a build with a larger stack the old
+  // matcher would have passed it too; that is fine, because the assertion that
+  // carries the weight is the HIT, which is what a refusal would have lost.
+
+  it("a 6 MiB base64 run is swept without refusing, and the object after it is found", () => {
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    // Deterministic, and NOT a `Math.random()` fixture: a run that differs per run
+    // makes a failure unreproducible. xorshift32 via `Math.imul` stays inside 32
+    // bits - a plain `x * 1103515245` LCG silently loses precision past 2^53 and
+    // produces structured bytes that a measurement then reports as a finding.
+    let x = 0x9e3779b9;
+    const run = Buffer.alloc(6 * 1024 * 1024);
+    for (let i = 0; i < run.length; i += 1) {
+      x ^= x << 13;
+      x >>>= 0;
+      x ^= x >>> 17;
+      x ^= x << 5;
+      x >>>= 0;
+      run[i] = alphabet.charCodeAt(x % 64);
+    }
+    const page = Buffer.concat([
+      Buffer.from("# big\n\n", "utf8"),
+      run,
+      Buffer.from("\n\n", "utf8"),
+      Buffer.from(withPreamble(shortElement(0x0010, 0x0010, "PN", CARET_PN)).toString("base64")),
+      Buffer.from("\n", "utf8"),
+    ]);
+
+    const r = runScanner([writeObject("big-run.md", page)]);
+    expect(r.code, `the scan refused instead of scanning; stderr: ${r.stderr}`).not.toBe(2);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain(CARET_PN);
   });
 });
 
