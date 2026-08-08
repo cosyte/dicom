@@ -103,17 +103,32 @@ refuted two drafts of it, and this repo's rule for that is deletion, not a third
   escape sequence, and added that the encoder's trailing pad could not do it "because both operands
   reach the check trimmed" - true of the **field**, which is where `trimTrailingPad` runs at the
   write, and false of a Value that is not last. Pass 2 refuted it with a prior field of
-  `"X"x64 + SPACE + "\" + "ACME"`: a conformant 64-character Value, 65 bytes, and the code fires.
-  **That draft used §6.4 - a clause about what an ENCODER writes - to bound what the MEASUREMENT can
-  see**, which is precisely the misreading the item names as rule one of the three this lineage paid
-  for.
+  `"X"x64 + SPACE + "\" + "ACME"`, whose first Value is 65 bytes and raises the code. **That draft
+  used §6.4 - a clause about what an ENCODER writes - to bound what the MEASUREMENT can see**, which
+  is the misreading the item names as rule one of the three this lineage paid for.
+- **Draft 3** wrote pass 2's own counter-example up as a third over-report direction, calling that
+  65-byte Value "conformant". **Pass 3 refuted that too, and refuted pass 2's premise with it**,
+  from the paragraph three above the note both earlier drafts quoted: "An individual Value,
+  **including padding**, shall not exceed the Length of Value, **except in the case of the last
+  Value of a multi-valued field** as specified in §6.4." So padding counts toward the length, the
+  sole exception is the last Value, and a 65-character non-last Value is **not conformant**: the
+  code firing on it is a **true positive**, not an over-report. Pass 3 measured the boundary and
+  found the guard exactly on §6.2's line - `"X"x63 + SPACE` in a non-last Value raises nothing,
+  `"X"x64 + SPACE` raises.
 
-What survives every counter-example is the general rule, and it is now the only thing any artifact
-states. The measurements stay, because they are measurements rather than an enumeration: 40
-characters of `ISO_IR 192` is 120 bytes; `\ISO 2022 IR 100` with `ESC 2/13 4/1` plus 64 single-byte
-characters is 67 bytes carrying 64 counted characters and parses with no warnings; a conformant
-64-character Value with an interior pad byte is 65. All three raise the code, all three are pinned,
-and a leading space is content rather than padding, so it counts.
+**🛑 SO THERE IS NO PADDING SENTENCE ANYWHERE, IN EITHER DIRECTION, AND THERE MUST NOT BE A FOURTH.**
+Three graded passes refuted three drafts. This paragraph is the history, which is what this file is
+for; every other artifact - the registry message, both JSDoc blocks, `types.ts`, `README.md`,
+`docs-content/troubleshooting.md`, the changeset and the test module docblock - carries only the
+general rule and says nothing about padding at all. The test row that measures the three padded
+cases is named for what it measures and claims nothing.
+
+What survives every counter-example is the general rule: the byte measurement over-reports whenever
+a Value's bytes outnumber its **counted** characters, which is §6.2's escape-sequence exclusion and
+its characters-not-bytes rule and nothing else. The two measurements that instantiate it stay,
+because they are measurements rather than an enumeration: 40 characters of `ISO_IR 192` is 120
+bytes, and `\ISO 2022 IR 100` with `ESC 2/13 4/1` plus 64 single-byte characters is 67 bytes carrying
+64 counted characters and parses with no warnings.
 
 The repertoire pins are files that **declare** the repertoire. A first draft built the multi-byte
 fixture without `(0008,0005)`, under which the default repertoire is ISO-IR 6 and "40 characters"

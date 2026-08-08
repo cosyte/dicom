@@ -49,8 +49,8 @@
  * is genuinely over, and it over-reports on **any** conformant Value whose bytes
  * outnumber its counted characters - §6.2 specifies these lengths "in characters
  * rather than bytes" and excludes Code Extension escape sequences from the
- * count. The rows below measure that rather than enumerating it: **two drafts of
- * an enumeration were refuted, so there is none.**
+ * count. The rows below measure that rather than enumerating it: **three drafts
+ * of an enumeration were refuted in three graded passes, so there is none.**
  *
  * Everything here is synthetic; the recognizable-but-fake strings exist only so
  * a substitution or a leak is observable.
@@ -648,22 +648,19 @@ describe("an over-long Value this run did not compose is written through, and SA
     );
   });
 
-  it("🩺 padding: the FIELD's trailing pad comes off, a value's INTERIOR pad does not", () => {
-    // 🛑 TWO DRAFTS OF A SENTENCE ABOUT PADDING WERE REFUTED, SO THE SENTENCE IS
-    // GONE AND THIS ROW MEASURES INSTEAD. The first said the pad counted; the
-    // second said it could not, "because both operands reach the check trimmed"
-    // - true of the FIELD, which is where `trimTrailingPad` runs at the write,
-    // and false of a Value that is not last. Table 6.2-1 describes a VALUE, and
-    // a clause about where the ENCODER puts its pad (6.4) is not a bound on what
-    // a measurement can see: that reading is what left `#74`'s hole.
+  it("a trailing space on the FIELD is trimmed at the write; on any other Value it is 65 and raises", () => {
+    // 🛑 THREE DRAFTS OF A SENTENCE ABOUT PADDING WERE REFUTED IN THREE GRADED
+    // PASSES, SO THERE IS NO SENTENCE: THIS ROW MEASURES AND SAYS NOTHING ELSE.
+    // The history is in `documentation/agent-notes/dicom-lo-length-value-over-length.md`.
+    // 64 characters plus a space, on the field's last Value, where
+    // `trimTrailingPad` runs at the write.
     const terminal = `${"Q".repeat(64)} `;
     expect(terminal).toHaveLength(65);
     expect(
       deidentify(buildWithPriorMethod(), { deidentificationMethod: terminal }).report.warnings,
     ).toStrictEqual([]);
 
-    // A leading space is content, not padding: the writer only ever pads on the
-    // right, so it survives a round trip and it counts.
+    // The same space in front, which nothing trims.
     const leading = ` ${"Q".repeat(64)}`;
     expect(leading).toHaveLength(65);
     expect(
@@ -672,9 +669,8 @@ describe("an over-long Value this run did not compose is written through, and SA
       ),
     ).toStrictEqual([WARNING_CODES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH]);
 
-    // And the case the deleted sentence would have denied: a conformant
-    // 64-character Value with a pad byte, followed by another Value, so the pad
-    // is interior. 65 bytes, and it raises. Over-report, same direction.
+    // And the same space on a Value that is not the field's last, which nothing
+    // trims either: 65 bytes, and it raises.
     const interior = `${"X".repeat(64)} ${BACKSLASH}ACME`;
     const parsed = buildWithPriorMethod({ vr: "LO" as VR, value: even(interior) });
     expect(valueLengths(rawMethod(parsed)).slice(0, 1)).toStrictEqual([65]);

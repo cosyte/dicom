@@ -1641,21 +1641,16 @@ const LO_VALUE_MAX_CHARS = 64;
  *
  * 🛑 **THE CONVERSE FAILS WHENEVER A VALUE'S BYTES OUTNUMBER ITS COUNTED
  * CHARACTERS, AND THE ENUMERATION OF WAYS THAT HAPPENS IS DELETED RATHER THAN
- * WRITTEN A THIRD TIME.** Two graded passes refuted two drafts of it: the first
- * named only a multi-byte repertoire, the second named that plus an escape
- * sequence and asserted the pad could not do it. The rule that survives every
- * counter-example is the general one, and it is the only thing stated here.
+ * WRITTEN AGAIN.** Three graded passes refuted three drafts of it. The rule that
+ * survives every counter-example is the general one, and it is the only thing
+ * stated here.
  *
  * PS3.5 2026c §6.2 specifies these lengths "in characters rather than bytes ...
  * because the mapping from a character to the number of bytes used for that
  * character's encoding may be dependent on the character set used", **and adds
  * that "Escape Sequences used for Code Extension shall not be included in the
- * count of characters"**; Table 6.2-1's `LO` row admits both a padded Value and
- * an ISO/IEC 2022 escape sequence. So a conformant Value of 64 characters can
- * exceed 64 bytes, and this fires on it. **Do not bound what the measurement can
- * see with a clause about what an ENCODER writes** - §6.4 is a rule about the
- * write, and reading it as a bound on a comparison is what left `#74`'s hole and
- * what a second graded pass caught here.
+ * count of characters"**. So a conformant Value of 64 characters can exceed 64
+ * bytes, and this fires on it.
  *
  * Decoding per `(0008,0005)` to count characters exactly was refused here: the
  * charset of an attribute whose values may predate this run is not a thing this

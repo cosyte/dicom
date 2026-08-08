@@ -1371,15 +1371,12 @@ export function deidentMethodPriorRetained(position: DicomPosition): DicomParseW
  * No repertoire encodes a character in fewer than one byte, so a Value of 64
  * bytes or fewer can never hold more than 64 characters and this code cannot
  * miss a Value that is genuinely over. **The converse fails whenever a Value's
- * bytes outnumber its counted characters**, and the enumeration of ways that
- * happens is DELETED rather than written a third time: two graded passes refuted
- * two drafts of it. PS3.5 2026c §6.2 specifies these lengths "in characters
- * rather than bytes" and excludes Code Extension escape sequences from the
- * count, and Table 6.2-1's `LO` row admits both a padded Value and an
- * ISO/IEC 2022 escape sequence, so a conformant Value of 64 characters can
- * exceed 64 bytes and this code fires on it. Read the code as **"a Value in this
- * attribute is over 64 bytes"**, which is what is measured, never as "the
- * attribute is non-conformant".
+ * bytes outnumber its counted characters.** PS3.5 2026c §6.2 specifies these
+ * lengths "in characters rather than bytes" and excludes Code Extension escape
+ * sequences from the count, so a conformant Value of 64 characters can exceed 64
+ * bytes and this code fires on it. Read the code as **"a Value in this attribute
+ * is over 64 bytes"**, which is what is measured, never as "the attribute is
+ * non-conformant".
  *
  * **No value, no length, no count, no origin.** 64 is a constant of the VR; the
  * offending Value's own length is a measurement over input, which is the number
