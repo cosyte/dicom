@@ -62,6 +62,15 @@
  * about code, and a draft of this comment moved it by one just by naming a tag in eight-digit
  * form. It is one command, so derive it rather than quoting a stale copy:
  *   `git ls-files -z <dir> | xargs -0 pnpm phi-scan --`
+ *
+ * 🛑 AND THE ALLOW-LIST IS GLOBAL, WHICH MEANS WIDENING THE WALK ROOT WIDENED IT TOO. Every value
+ * `scripts/phi-allow-list.txt` carries is read into ONE Set and applied to EVERY corpus this
+ * scanner opens, so a name or a date listed because a `.ts` fixture under `test/` needed it is
+ * equally excused in `README.md`, in `docs-content/` and in a `.dcm`. Measured: a `docs-content`
+ * page carrying the values this change added exits 1 on `8982a16` and 0 here. The two worth
+ * naming are `DATE:19800101` and `DATE:20240115`, which are plausible real birth and study
+ * dates. Path scoping is a change to the allow-list FORMAT and is deliberately not made; the
+ * reasoning lives beside the entries, in the file itself.
  * ---------------------------------------------------------------------------
  *
  * SECURITY: All git invocations use execFileSync with array args. Never any

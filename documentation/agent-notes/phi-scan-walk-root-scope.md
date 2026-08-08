@@ -194,9 +194,11 @@ refused:
 here, `test/fixtures/phi-scan/README.md`, which documents the deliberate violator values in a table.
 Two things changed about it and both are narrowings:
 
-- it is now scoped to a `readme.md` **under `test/fixtures/`** rather than to any `readme.md` the
-  walk meets, so widening the root did not widen the exemption. `test/smoke/README.md` is now
-  scanned, and a case writes the same payload into both paths and requires one hit and one pass.
+- it is now **ONE LITERAL PATH**, `test/fixtures/phi-scan/README.md`, rather than the old
+  skip-any-`readme.md`-the-walk-meets rule, so widening the root did not widen the exemption by a
+  single file. A `README.md` one level up at `test/fixtures/README.md` is scanned, and so is
+  `test/smoke/README.md`; a case writes the same payload into two of those paths and requires one
+  hit and one pass.
 - it is **printed on stdout every run**. An exemption nobody can see is the same shape as a root
   nobody notices is empty.
 
