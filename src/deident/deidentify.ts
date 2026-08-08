@@ -1637,13 +1637,30 @@ const LO_VALUE_MAX_CHARS = 64;
  * **The measurement is over BYTES, deliberately over-approximating.** No
  * character repertoire encodes a character in fewer than one byte, so a Value of
  * 64 bytes or fewer can never carry more than 64 characters and this cannot miss
- * a Value that is genuinely over the maximum. It does fire on a conformant Value
- * of 64 characters encoded under a multi-byte repertoire declared in
- * `(0008,0005)`, and on trailing pad, which errs the same way. Decoding per
- * `(0008,0005)` to count characters exactly was refused here: the charset of an
- * attribute whose values may predate this run is not a thing this function can
- * establish, and a disclosure that under-reports is worth less than one that
- * over-reports.
+ * a Value that is genuinely over the maximum.
+ *
+ * 🛑 **THE CONVERSE FAILS FOR TWO REASONS AND A GRADED PASS REFUTED THE DRAFT
+ * THAT NAMED ONE.** PS3.5 2026c §6.2 specifies these lengths "in characters
+ * rather than bytes ... because the mapping from a character to the number of
+ * bytes used for that character's encoding may be dependent on the character set
+ * used", **and adds that "Escape Sequences used for Code Extension shall not be
+ * included in the count of characters"**. So a conformant Value of 64 characters
+ * exceeds 64 bytes under a multi-byte repertoire declared in `(0008,0005)` -
+ * and **also under a single-byte one**, when `(0008,0005)` is multi-valued
+ * (Level 4) and the Value carries an ISO/IEC 2022 escape sequence, which Table
+ * 6.2-1's `LO` Character Repertoire cell expressly admits. Both fire here, and
+ * both are pinned. Reading Table 6.2-1's cell without §6.2's qualifying
+ * sentences is the same shape of misreading that left `#74`'s hole.
+ *
+ * Decoding per `(0008,0005)` to count characters exactly was refused here: the
+ * charset of an attribute whose values may predate this run is not a thing this
+ * function can establish, and a disclosure that under-reports is worth less than
+ * one that over-reports.
+ *
+ * **The encoder's trailing pad is NOT counted**, because both operands reach
+ * here trimmed: PS3.5 2026c §6.4 lets the pad make the last Value one byte
+ * longer on the wire than in memory, and the pad is not content. A leading
+ * space is content and does count.
  *
  * The split is the same `5CH` one {@link addDeidentificationMethod} compares
  * with, so the two agree about what a Value is.

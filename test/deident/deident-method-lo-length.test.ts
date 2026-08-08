@@ -45,9 +45,12 @@
  * caller-supplied method carries the 76-character Value, and re-de-identifying
  * one keeps it. `DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH` discloses it. Nothing
  * is shortened, split or truncated: the act is unchanged and only the silence is
- * closed. The measurement is over **bytes**, which over-approximates under a
- * multi-byte repertoire and can therefore never miss a Value that is genuinely
- * over - the cost is pinned below rather than argued away.
+ * closed. The measurement is over **bytes**, so it can never miss a Value that
+ * is genuinely over and it over-reports in two ways, **both** pinned below
+ * rather than argued away: §6.2 specifies these lengths "in characters rather
+ * than bytes" and excludes Code Extension escape sequences from the count, so a
+ * conformant 64-character Value exceeds 64 bytes under a multi-byte repertoire
+ * **and** under a single-byte one carrying an ISO/IEC 2022 escape sequence.
  *
  * Everything here is synthetic; the recognizable-but-fake strings exist only so
  * a substitution or a leak is observable.
@@ -549,17 +552,23 @@ describe("an over-long Value this run did not compose is written through, and SA
     // adds nothing. The sweep above already proves no Value is over; this proves
     // the DISCLOSURE agrees with the measurement rather than firing beside it.
     let raised = 0;
+    let swept = 0;
     for (let mask = 0; mask < 1 << DEIDENTIFY_OPTIONS.length; mask++) {
       const retain = DEIDENTIFY_OPTIONS.filter((_, i) => ((mask >> i) & 1) === 1);
       const codes = deidentify(buildWithPriorMethod(), { retain }).report.warnings.map(
         (w) => w.code,
       );
+      swept++;
       if (codes.includes(WARNING_CODES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH)) raised++;
     }
+    // A zero is only a clearance over a domain that was actually walked, so the
+    // domain is asserted beside it: a tenth option would make this 1,024 and an
+    // eighth would make it 256, either silently.
+    expect(swept).toBe(512);
     expect(raised).toBe(0);
   });
 
-  it("🩺 the cost of measuring BYTES: a conformant multi-byte Value raises it too", () => {
+  it("🩺 the cost of measuring BYTES, one: a conformant multi-byte Value raises it too", () => {
     // Disclosed rather than claimed away. No repertoire encodes a character in
     // fewer than one byte, so 64 bytes or fewer can never be over 64 CHARACTERS
     // and this cannot miss a genuine violation; the converse does not hold. A
@@ -590,6 +599,104 @@ describe("an over-long Value this run did not compose is written through, and SA
 
     const codes = deidentify(parsed).report.warnings.map((w) => w.code);
     expect(codes).toContain(WARNING_CODES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH);
+  });
+
+  it("🩺 the cost of measuring BYTES, two: a SINGLE-byte repertoire does it too, via ESC", () => {
+    // 🛑 A GRADED PASS REFUTED THE DRAFT THAT NAMED ONLY THE MULTI-BYTE ROUTE,
+    // and it did so by reading Table 6.2-1's cell without the two sentences
+    // above it. PS3.5 2026c 6.2: these lengths are "expressly specified in
+    // characters rather than bytes ... Escape Sequences used for Code Extension
+    // shall not be included in the count of characters." Table 6.2-1's `LO`
+    // Character Repertoire cell admits ESC "when used for ISO/IEC 2022 escape
+    // sequences", which a multi-valued `(0008,0005)` (Level 4) makes legal. So a
+    // conformant 64-CHARACTER Value under a SINGLE-byte repertoire is 67 bytes
+    // and raises the code. Reading a cell without its qualifying clauses is the
+    // same shape as the misreading that left `#74`'s hole.
+    const esc = Buffer.from([0x1b, 0x2d, 0x41]); // ESC 2/13 4/1: designate ISO-IR 100 as G1
+    const sixtyFour = "ACME Anonymizer v3, single byte throughout, no wide chars";
+    expect(sixtyFour).toHaveLength(57);
+    const chars = `${sixtyFour}${"X".repeat(7)}`;
+    expect(chars).toHaveLength(64);
+
+    // 3 escape bytes + 64 single-byte characters = 67 bytes carrying 64
+    // COUNTED characters. Padded to 68 so the element is even-length; the pad is
+    // trimmed before the measurement, so 67 is the figure that is compared.
+    const value = Buffer.concat([esc, Buffer.from(chars, "latin1"), Buffer.from([0x20])]);
+    expect(value).toHaveLength(68);
+
+    const parsed = parseDicom(
+      buildDicom({
+        transferSyntax: TS_EXPLICIT_LE,
+        elements: [
+          // Multi-valued, so Code Extension is in force (PS3.5 6.1.2.5.4). Both
+          // designated repertoires are single-byte.
+          { tag: SPECIFIC_CHARACTER_SET, vr: "CS" as VR, value: even("\\ISO 2022 IR 100") },
+          { tag: PATIENT_NAME, vr: "PN" as VR, value: even(PATIENT) },
+          { tag: DEIDENT_METHOD, vr: "LO" as VR, value },
+        ],
+      }),
+    );
+    expect(parsed.get(SPECIFIC_CHARACTER_SET)?.rawBytes.toString("latin1")).toContain(
+      "ISO 2022 IR 100",
+    );
+    // Non-vacuity: the parse is clean, so this is a conformant file rather than
+    // one the parser already objected to.
+    expect(parsed.warnings.map((w) => w.code)).toStrictEqual([]);
+
+    expect(deidentify(parsed).report.warnings.map((w) => w.code)).toContain(
+      WARNING_CODES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH,
+    );
+  });
+
+  it("the encoder's trailing pad is NOT counted, and a leading space IS", () => {
+    // Both operands reach the check trimmed, so PS3.5 6.4's pad - which may make
+    // the last Value one byte longer on the wire than in memory - cannot push a
+    // conformant Value over on its own. A leading space is content (the writer
+    // only ever pads on the right) and does count. Stated because a draft of
+    // this slice claimed the pad counted, in five artifacts at once.
+    const padded = `${"Q".repeat(64)} `;
+    expect(padded).toHaveLength(65);
+    expect(
+      deidentify(buildWithPriorMethod(), { deidentificationMethod: padded }).report.warnings,
+    ).toStrictEqual([]);
+
+    const leading = ` ${"Q".repeat(64)}`;
+    expect(leading).toHaveLength(65);
+    expect(
+      deidentify(buildWithPriorMethod(), { deidentificationMethod: leading }).report.warnings.map(
+        (w) => w.code,
+      ),
+    ).toStrictEqual([WARNING_CODES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH]);
+  });
+
+  it("🛑 on the CALLER route the byte offset is a sentinel, not a location", () => {
+    // The other three method codes cannot fire without a prior element, so this
+    // is the first one whose `position.byteOffset` can point at nothing: with no
+    // `(0012,0063)` in the source there is no element to locate, and the
+    // over-long bytes are the caller's argument rather than the file's. Pinned
+    // rather than described, because the locator is the compensating control for
+    // withholding the value, the length, the count and the origin.
+    const noPrior = buildWithPriorMethod();
+    expect(noPrior.get(DEIDENT_METHOD)).toBeUndefined();
+    const fromCaller = deidentify(noPrior, {
+      deidentificationMethod: "Y".repeat(70),
+    }).report.warnings.find((w) => w.code === WARNING_CODES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH);
+    expect(fromCaller?.position.byteOffset).toBe(0);
+
+    // Non-vacuity: on the route where there IS a prior element, the same code
+    // carries that element's real offset, so 0 above is the absence and not a
+    // constant.
+    const withPrior = buildWithPriorMethod({
+      vr: "LO" as VR,
+      value: even(`ACME ${"Z".repeat(70)}`),
+    });
+    const offset = withPrior.get(DEIDENT_METHOD)?.byteOffset;
+    expect(offset).toBeGreaterThan(0);
+    expect(
+      deidentify(withPrior).report.warnings.find(
+        (w) => w.code === WARNING_CODES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH,
+      )?.position.byteOffset,
+    ).toBe(offset);
   });
 
   it("the codes the base already raised all still raise: nothing goes 1 -> 0", () => {

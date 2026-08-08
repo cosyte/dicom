@@ -85,13 +85,46 @@ and the new code is only ever pushed **beside** the others. Proved two ways rath
 
 **The measurement is over BYTES.** No character repertoire encodes a character in fewer than one
 byte, so a Value of 64 bytes or fewer can never hold more than 64 characters: the check **cannot
-miss** a Value that is genuinely over the maximum. The converse does not hold. A conformant
-40-character Value under an `(0008,0005)` of `ISO_IR 192` is 120 bytes and raises the code, and
-trailing pad counts too, erring the same way.
+miss** a Value that is genuinely over the maximum.
 
-The pin for that is a file that **declares** the repertoire. A first draft built the fixture without
-`(0008,0005)`, under which the default repertoire is ISO-IR 6 and "40 characters" would have been a
-claim the fixture could not support - green by fixture, which is this repo's recurring failure mode.
+**🛑 THE CONVERSE FAILS FOR TWO REASONS AND A GRADED PASS REFUTED THE DRAFT THAT NAMED ONE.** The
+draft's frozen registry message called 64 bytes "the largest an `LO` Value may be **under a
+single-byte repertoire**", and the vendored PS3.5 2026c contradicts it in the paragraph immediately
+above Table 6.2-1: the lengths there are "expressly specified in characters rather than bytes ...
+because the mapping from a character to the number of bytes used for that character's encoding may
+be dependent on the character set used. **Escape Sequences used for Code Extension shall not be
+included in the count of characters.**" Table 6.2-1's `LO` Character Repertoire cell admits ESC "when
+used for ISO/IEC 2022 escape sequences", and a multi-valued `(0008,0005)` (Level 4, §6.1.2.5.4) makes
+that legal. So the two routes are:
+
+- a **multi-byte** repertoire: 40 characters under `ISO_IR 192` is 120 bytes; and
+- a **single-byte** one at Level 4: `\ISO 2022 IR 100` with `ESC 2/13 4/1` plus 64 characters is 67
+  bytes carrying 64 counted characters, and the file parses with no warnings.
+
+Both fire, both are pinned, and the message now states what was measured rather than asserting a
+bound. **Reading Table 6.2-1's cell without §6.2's qualifying sentences is the same shape as the
+misreading the item names as having left `#74`'s hole**, which is why the remedy was a claim
+correction in five artifacts and not a widened guard.
+
+The pins for both are files that **declare** the repertoire. A first draft built the multi-byte
+fixture without `(0008,0005)`, under which the default repertoire is ISO-IR 6 and "40 characters"
+would have been a claim the fixture could not support - green by fixture, which is this repo's
+recurring failure mode.
+
+**"Trailing pad counts too" was in five artifacts and is DELETED rather than reworded**, because it
+is false: both operands reach the check through `trimTrailingPad`, so PS3.5 2026c §6.4's pad - which
+may make the last Value one byte longer on the wire than in memory, and is the only trailing pad
+DICOM writes - cannot push a conformant Value over on its own. A leading space is content and does
+count. Measured: a caller method of 64 `Q` plus a space raises nothing; the same 64 with a space in
+front raises the code.
+
+**`position.byteOffset` locates the prior element, and is `0` when there was none.** This is the
+first method code that can be raised on a Data Set carrying no `(0012,0063)` at all - the other three
+cannot fire without a prior element - so on the caller route the offset is a sentinel rather than a
+location. There is nothing to point at: the over-long bytes are the caller's argument, not the
+file's. Stated rather than glossed, because that locator is the compensating control for withholding
+the value, the length, the count and the origin, and pinned on both routes so the `0` reads as an
+absence and not a constant.
 
 Decoding per `(0008,0005)` to count characters exactly was refused here: the charset of an attribute
 whose Values may predate this run is not something the function can establish, and a disclosure that
@@ -112,6 +145,11 @@ member of** - which is why `DICOM-DIAGNOSTIC-PHI-RESIDUALS` bound one out of six
 - **the origin is not**; which Value came from the caller and which from the file is not decidable
   when the two are equal, so naming one would be a claim rather than a report.
 
+The message no longer says "which is the largest an `LO` Value may be under a single-byte
+repertoire". It says the Value is longer than 64 bytes, cites §6.2's characters-not-bytes rule, and
+states the one direction that holds: 64 bytes or fewer can never carry more than 64 characters, a
+longer one is not necessarily over.
+
 Pinned with a **name-bearing payload and a non-vacuity assertion**, because `#55`'s pin here was
 vacuous by fixture: the over-long prior carries `SMITHSON^BRAIN`, the test asserts those bytes really
 do reach the output before it asserts anything about the message, and every four-character window of
@@ -122,17 +160,26 @@ is English and a four-character window of the surrounding words collides by coin
 The detector's clean result is pinned **beside a positive it does catch, one byte away** - 64 clean,
 65 raised, `SMITHSON` in both - because a detector zero can be a gap rather than a clearance. And the
 per-Value reading has its own row: ten Values of 61 in a 619-byte field are clean, one Value of 65
-among nine conformant ones is caught. A detector that measured the Value Field would fail both.
+among nine conformant ones is caught. A detector that measured the Value Field would fail both. The
+512-subset sweep asserts the size of the domain it walked beside its zero, so a tenth option (1,024)
+or a removed one (256) cannot turn the clearance into a smaller sweep silently.
 
 ## Base-red, re-run after every test change
 
-**9 of 122, in 2 files of 4, on `4bc6930`**, with `src/` **replaced** (`rm -rf src` then a file copy
+**12 of 125, in 2 files of 4, on `4bc6930`**, with `src/` **replaced** (`rm -rf src` then a file copy
 from a pristine snapshot, never `git checkout`):
 
-- `test/deident/deident-method-lo-length.test.ts` **8 of 31**
+- `test/deident/deident-method-lo-length.test.ts` **11 of 34**
 - `test/property/warning-codes.snapshot.test.ts` **1 of 5** (the locked public-surface snapshot)
 - `test/deident/deident-method-add.test.ts` **0 of 29**, deliberately
-- `test/integration/phi-diagnostic-surface.test.ts` **0 of 50**, deliberately
+- `test/integration/phi-diagnostic-surface.test.ts` **0 of 57**, deliberately
+
+**This figure moved twice inside the slice, and the rule earned its fifth outing.** The first
+measurement read 9 of 122 with the last file quoted at 0 of 50; **a graded pass refuted the 50**,
+and the note's own total gave it away: 31 + 5 + 29 + 50 is 115, not 122. The file is byte-identical
+on both trees, so no reading of "which base" rescues it. It was then re-run again after the pass-1
+remedy added three rows to the first file. **Re-run it after every test you add, STRENGTHEN OR
+DELETE, and never carry one forward.**
 
 The two deliberate zeros pin behaviour this slice says it does not change, so a red in either would
 mean it changed something it claims it did not.
@@ -159,3 +206,11 @@ is not a leak, and it stays a backlog line rather than a rider here for three re
    properties.
 
 Its residual test is unchanged and still pins it.
+
+**Also open, `PRE-EXISTING`, raised by pass 1 and left as a backlog line:**
+`test/integration/phi-diagnostic-surface.test.ts` claims in its header to enumerate every
+consumer-controlled position on the diagnostic surface, and it has no slot for this code. The
+enumeration was already incomplete before this slice; widening it is a sweep across every code in
+`WARNING_MESSAGES`, not a rider on one of them. The code's own PHI properties are pinned in
+`test/deident/deident-method-lo-length.test.ts` under "the disclosure carries no value, no length,
+no count and no origin".

@@ -655,10 +655,13 @@ export interface DeidentifyOptions {
    * if a strict receiver is in your path. The same code covers an over-long
    * value the **source file** wrote and this run kept, which in the common case
    * is this library's own 76-character text from a release before the default
-   * became multi-valued. The measurement is over **bytes**, so a conformant
-   * 64-character Value encoded under a multi-byte `(0008,0005)` repertoire also
-   * raises it; a Value of 64 bytes or fewer can never be over the maximum, so it
-   * cannot miss one that is.
+   * became multi-valued. The measurement is over **bytes**: a Value of 64 bytes
+   * or fewer can never carry more than 64 characters, so it cannot miss one that
+   * is genuinely over, but PS3.5 §6.2 specifies the bound in characters rather
+   * than bytes and excludes Code Extension escape sequences from the count, so a
+   * conformant 64-character Value raises it whenever its encoding needs more than
+   * 64 bytes - under a multi-byte `(0008,0005)` repertoire, and under a
+   * single-byte one carrying an ISO/IEC 2022 escape sequence.
    *
    * PS3.15 E.1.1 says this string is "inserted in or added to" the attribute, so
    * a value the incoming Data Set already carried is kept and this one is
