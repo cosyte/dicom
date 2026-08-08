@@ -284,8 +284,21 @@ function isBase64Char(code: number): boolean {
  *
  * The loop yields exactly what the pattern matched - maximal runs, the same floor, the same trailing
  * `=` allowance - in one forward pass with no backtracking and no per-character stack. It is a
- * different REPRESENTATION of the same predicate, not a wider or narrower one, and
- * `test/scripts/phi-scan.test.ts` pins the equivalence against the pattern itself.
+ * different REPRESENTATION of the same predicate, not a wider or narrower one.
+ *
+ * 🛑 NO TEST PINS THAT EQUIVALENCE, AND AN EARLIER DRAFT OF THIS PARAGRAPH SAID ONE DID. It named
+ * `test/scripts/phi-scan.test.ts`, which pins the no-refusal PROPERTY and nothing about the run set;
+ * a disclosure that names a test must name one that exists, so the sentence is DELETED rather than
+ * reworded. It cannot be a unit test as things stand: this is a CLI that calls `process.exit` at
+ * module scope, so `base64Runs` is not importable. What the suite does pin is the FLOOR, which is the
+ * end a narrowing would show up at first - `"reaches the SHORTEST real fixture in docs-content, not
+ * just a test-built one"` takes the shortest DICOM-shaped run out of the shipped `docs-content/`
+ * corpus and requires the scanner to find a name appended to it. The whole-corpus comparison is
+ * measured out of band, and it is one command rather than a numeral copied into prose:
+ *
+ *   git ls-files -z -- docs-content README.md test src scripts | xargs -0 node -e '...'
+ *
+ * comparing `[...t.matchAll(/[A-Za-z0-9+\/]{16,}={0,2}/g)].map(m => m[0])` with `[...base64Runs(t)]`.
  *
  * Built from the floor so the two cannot drift: a hardcoded quantifier made the constant dead, and a
  * dead constant is the shape where changing the number changes nothing. It is a generator holding no
@@ -1329,21 +1342,31 @@ const TEXT_EXTENSIONS = new Set([".json", ".txt", ".md", ".csv"]);
  * SUPERSET of what gating on `isDicom` did, on every input, which is the property to preserve if this
  * ever changes again:
  *
- *   - `isDicom` true  -> `scanDicom` AND `scanText`. The DICOM sweep is what it always got; the text
- *                        sweep is the addition. Nothing that used to be found can be lost.
- *   - preamble-less   -> `scanDicom` AND `scanText`. Both, since `DICOM-SCANTARGET-PREAMBLELESS`.
- *   - neither         -> `scanText` only. Byte-for-byte the old behaviour.
+ *   - `isDicom` true  -> `scanDicom` AND `scanText` AND `scanEmbeddedObjects`. The DICOM sweep is what
+ *                        it always got; the other two are the addition, and nothing can be lost.
+ *   - preamble-less   -> the same three. Both halves since `DICOM-SCANTARGET-PREAMBLELESS`.
+ *   - neither         -> `scanText` AND `scanEmbeddedObjects`. Byte-for-byte the old behaviour.
+ *
+ * (`scanEmbeddedObjects` is named in every row on purpose. A table that stopped at `scanText` read as
+ * though the base64 decode were a markdown feature, and this file already records what scoping it that
+ * way cost.)
  *
  * The cost is stated rather than left to be discovered, and it was taken deliberately. A DICOM object
  * can now report the same value twice, once under its tag and once as `(text)`; two lines naming one
  * value is not a defect in a gate whose output a human reads before committing, and a missing line is.
- * The real price is FALSE POSITIVES from the compact-date pass over binary values: any eight ASCII
- * digits bounded by non-digits inside pixel data, an encapsulated fragment or a UID root can read as
- * `YYYYMMDD`. That is the `DICOM-DEIDENT-OVER-REDACTION` shape, and the trade is not symmetric - a
- * false positive costs a developer one look at a hit line, while the silent halt it replaces printed
- * `OK - no hits` over a patient name. NO RATE IS QUOTED HERE: it is a property of the corpus, not of
- * this script, and the measurement (with its fixtures and its shas) lives in
- * `documentation/agent-notes/dicom-scandicom-silent-halt.md`.
+ *
+ * 🛑 THE REAL PRICE IS FALSE POSITIVES FROM THE **PN-SHAPE** PASS, NOT THE COMPACT-DATE ONE, AND A
+ * FIRST DRAFT OF THIS PARAGRAPH NAMED THE WRONG RECOGNIZER IN FOUR ARTIFACTS AT ONCE. Over high-entropy
+ * bytes - which is what an encapsulated JPEG frame is - `/\b[A-Z][A-Za-z\-']+\^[A-Z][A-Za-z\-']+\b/`
+ * finds a caret with letters either side often enough to fire, and `\b\d{8}\b` essentially never does,
+ * because it needs a run of EXACTLY eight digits. Measured over 8 independent 8 MiB draws: every hit
+ * came from the PN pass and none from either date pass. So the line a developer actually reads names
+ * `vr=PN` over a two-letter-caret-two-letter fragment of image noise, not a plausible-looking date. That is still the
+ * `DICOM-DEIDENT-OVER-REDACTION` shape and the trade is still not symmetric - a false positive costs
+ * one look at a hit line, while the silent halt it replaces printed `OK - no hits` over a patient
+ * name - but the noise is person-name-shaped, which is the kind that trains a reader to skim.
+ * NO RATE IS QUOTED HERE: it is a property of the corpus, not of this script, and the measurements
+ * live in `documentation/agent-notes/dicom-scandicom-silent-halt.md`.
  *
  * A text extension is still dispatched by NAME rather than by content: a `.md` whose first bytes
  * happened to look like group `0002` is still a document, and losing `scanEmbeddedObjects` on it

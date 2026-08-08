@@ -95,22 +95,40 @@ test on the first 132 bytes.
 
 ## The cost, taken deliberately and MEASURED rather than asserted
 
-The text sweep now runs over binary values, so the compact-date pass can read eight ASCII digits
-bounded by non-digits as `YYYYMMDD`. This is the `DICOM-DEIDENT-OVER-REDACTION` false-positive shape
-and it was accepted before coding: **a silent PHI-scan halt over a name-bearing `(0010,0010)` is a
-false green, and a false positive is not.** The trade is not symmetric. A false positive costs a
-developer one look at a hit line; the halt it replaces printed `OK - no hits` over a patient name.
+The text sweep now runs over binary values, so its recognizers fire on image noise. This is the
+`DICOM-DEIDENT-OVER-REDACTION` false-positive shape and it was accepted before coding: **a silent
+PHI-scan halt over a name-bearing `(0010,0010)` is a false green, and a false positive is not.** The
+trade is not symmetric. A false positive costs a developer one look at a hit line; the halt it
+replaces printed `OK - no hits` over a patient name.
 
-Rates, per 8 MiB of `(7FE0,0010) OW` value, base `21e25a0` vs shipped. **Base is 0 on every row,
-because base swept none of it.**
+**🛑 IT IS THE PN-SHAPE PASS THAT FIRES, NOT THE COMPACT-DATE PASS, AND THE FIRST DRAFT OF THIS SLICE
+NAMED THE WRONG RECOGNIZER IN FOUR ARTIFACTS AT ONCE** (this file, the `scanTarget` JSDoc, the test
+block comment and the changeset), because it reasoned about `\b\d{8}\b` from the item's wording
+instead of counting what the scanner reported. A refuter pass caught it and the count reproduced
+independently. **The item's own phrase "flags digit runs inside pixel data" is therefore a
+description of the accepted cost that does not survive measurement; the cost is real, and it is
+person-name-shaped.** The reason is in the two patterns: `\b(\d{4})(\d{2})(\d{2})\b` needs a run of
+**exactly** eight digits bounded by non-digits **and** a month of 01-12 and a day of 01-31, while
+`/\b[A-Z][A-Za-z\-']+\^[A-Z][A-Za-z\-']+\b/` needs only a `^` with a letter run either side. Over
+high-entropy bytes the second is common and the first is nearly impossible.
 
-| payload | shipped hits | note |
-|---|---|---|
-| CSPRNG bytes | 12 | ~1.5 per MiB. The worst REALISTIC case: an encapsulated JPEG frame is high-entropy. |
-| 8-bit ramp | 0 | A digit run in a ramp is 10 long, and `\b\d{8}\b` needs EXACTLY 8. |
-| 16-bit LE ramp | 0 | Same, and the high byte breaks every run at length 1. |
-| realistic metadata + CSPRNG | 10 | With UIDs, a `TM`, an institution name and an MRN in front of it. |
-| ASCII digits and dots only | 1,012 | ~126 per MiB. **Adversarial, and not a frame any modality writes.** |
+Hits per 8 MiB of `(7FE0,0010) OW` value, base `21e25a0` vs shipped. **Base is 0 on every row,
+because base swept none of it.** The split columns are the point of the table.
+
+| payload | shipped hits | from PN-shape | from either date pass |
+|---|---|---|---|
+| CSPRNG bytes, 8 independent draws | 8 to 23, mean 14 | **all of them** | **0 in all 8 draws** |
+| 8-bit ramp | 0 | 0 | 0 |
+| 16-bit LE ramp | 0 | 0 | 0 |
+| realistic metadata + CSPRNG | 10 | 10 | 0 |
+| ASCII digits and dots only | 946 | 0 | **946** |
+
+The CSPRNG row is a **range over 8 draws, not a rate**, because the payload is unseeded noise and a
+single number off one draw is not reproducible: 8, 10, 12, 13, 14, 15, 17, 23. That is ~1.8 per MiB
+as a mean, and it is the worst REALISTIC case, since an encapsulated JPEG frame is high-entropy. The
+last row is adversarial and is not a frame any modality writes; it is in the table because it is the
+only shape that makes the compact-date pass the dominant term, which is what the first draft assumed
+was true everywhere.
 
 **THE RATE IS A PROPERTY OF THE CORPUS, NOT OF THIS SCRIPT, so do not quote one of these as "the"
 false-positive rate.** On the corpus this gate actually reads it is **zero**: `pnpm phi-scan` exits 0
@@ -118,9 +136,13 @@ on `main` and exits 0 here, because the package commits **no `.dcm` files at all
 was already getting the text sweep. Every figure above is a statement about a hypothetical corpus of
 committed imaging objects.
 
-**A ZERO IN THE TABLE ABOVE IS A FIXTURE PROPERTY, NOT A CLEARANCE.** The two ramp rows read 0
-because `\b(\d{4})(\d{2})(\d{2})\b` needs a run of **exactly** eight digits, and a ramp produces runs
-of ten. Do not restate them as "pixel data does not false-positive".
+**A ZERO IN THE TABLE ABOVE IS A FIXTURE PROPERTY, NOT A CLEARANCE, AND THE TWO RAMP ROWS HAVE TWO
+INDEPENDENT CAUSES rather than the one a first draft gave.** The date passes read 0 because a ramp's
+digit runs are ten long and `\b\d{8}\b` needs exactly eight. The PN pass reads 0 for an unrelated
+reason worth writing down, because it is the pass that actually matters here: in a byte ramp the
+neighbours of `0x5E` `^` are `0x5D` `]` and `0x5F` `_`, and neither is in `[A-Za-z\-']`, so the
+letter class can never adjoin the caret. Change the ramp's stride and that stops being true. **Do not
+restate either row as "pixel data does not false-positive".**
 
 **🛑 AND A FIRST DRAFT OF THIS TABLE READ 0 ON EVERY ROW, WHICH WAS A FIXTURE ARTIFACT REPORTED AS A
 FINDING** - this repo's recurring failure mode. The generator was `x = (x * 1103515245 + 12345) >>> 0`,
@@ -147,10 +169,26 @@ is closed rather than disclosed.
 
 `base64Runs()` is a forward scan with no backtracking and no per-character stack. It is a different
 **representation** of the same predicate, not a wider or narrower one, and the equivalence is
-measured, not asserted: over the 181 tracked files under `docs-content/`, `README.md`, `test/`,
-`src/` and `scripts/` it yields **13,307 runs, 0 mismatches** against the pattern it replaced, plus
-14 edge and adversarial strings (including a 4 MiB single run, below the threshold where the pattern
-throws) with 0 mismatches.
+measured rather than asserted: over every tracked file under `docs-content/`, `README.md`, `test/`,
+`src/` and `scripts/` it yields **0 mismatches** against the pattern it replaced, and 0 across a set
+of edge and adversarial strings including a 4 MiB single run (below the threshold where the pattern
+throws), padding of zero, one, two and three `=`, and a run one character below the floor.
+
+**🛑 THE RUN COUNT IS DELIBERATELY NOT WRITTEN DOWN, AND A DRAFT THAT WROTE ONE WAS WRONG FOR BOTH
+SHAS.** It quoted 13,307; a refuter measured 13,305 at base `21e25a0` and 13,315 at head. That is
+this repo's oldest failure mode, and it has an extra edge here: **the corpus contains the files this
+slice edits**, so any figure is stale the moment the next line lands. It is one command, so derive
+it, comparing `[...t.matchAll(/[A-Za-z0-9+\/]{16,}={0,2}/g)].map(m => m[0])` with
+`[...base64Runs(t)]` over `git ls-files -z -- docs-content README.md test src scripts`. **What
+matters is that the mismatch count is zero, and zero does not move.**
+
+**AND NO TEST PINS THAT EQUIVALENCE.** A draft of the `base64Runs` JSDoc claimed one did; the named
+test pins the no-refusal property and says nothing about the run set. **DELETED, not reworded.** It
+cannot be a unit test as things stand, because `phi-scan.ts` is a CLI that calls `process.exit` at
+module scope, so nothing in it is importable. What the suite does pin is the **floor**, which is the
+end a narrowing shows up at first: `"reaches the SHORTEST real fixture in docs-content, not just a
+test-built one"` takes the shortest DICOM-shaped run out of the shipped corpus and requires a name
+appended to it to be found. That test predates this slice and is why the floor is guarded at all.
 
 **🛑 THE THRESHOLD IS A PROPERTY OF V8'S STACK, NOT OF THIS SCRIPT.** The test pins the PROPERTY (a
 6 MiB run is swept, and the object after it is still reported) and not the number. On a build with a
@@ -177,3 +215,9 @@ weight is the HIT, which a refusal loses.
 - **A DUPLICATE LINE IS THE PRICE AND IT IS THE RIGHT WAY ROUND.** A DICOM object can now report one
   value twice, once under its tag and once as `(text)`. Two lines naming one value is not a defect in
   a gate whose output a human reads before committing. A missing line is.
+- **`report()` PRINTS ONE STDERR LINE PER HIT, UNCAPPED, AND THIS SLICE WIDENS WHAT CAN REACH IT.**
+  `PRE-EXISTING`: base already had no cap, on every text file and every non-DICOM binary. An
+  adversarial 128 KiB payload yields tens of thousands of PN matches. Capping it is a change to the
+  gate's output contract and belongs in its own slice; the same shape is already recorded against
+  `deidentify()` in `CLAUDE.md` ("58,255 findings and 36 MB of warnings from a 1 MiB input"), and the
+  remedy there was a per-run cap, not a narrower detector.

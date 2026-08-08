@@ -15,8 +15,11 @@ cannot decide who is owed a text sweep.
 
 The text sweep now runs on every binary target, and `scanEmbeddedObjects` runs it on the object it
 decodes as well, where the base64 hides the name from the enclosing page. Both are additions beside
-`scanDicom`, never replacements for it. The accepted cost is false positives from the compact-date
-pass over binary values, measured and reasoned in
+`scanDicom`, never replacements for it.
+
+The accepted cost is false positives over binary values. Measured rather than assumed: on
+high-entropy pixel data they come from the person-name-shape pass and not from the date
+passes, which need a run of exactly eight digits. Figures, causes and the residuals left open are in
 `documentation/agent-notes/dicom-scandicom-silent-halt.md`.
 
 Also closes a pre-existing refusal on the same route: the base64 run matcher was a greedy regular
