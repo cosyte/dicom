@@ -6,8 +6,9 @@ Fold the `Known limitations` sidebar category into `Troubleshooting`, so the shi
 `docs-content/sidebars.json` conforms to the documentation IA spine (`DOCS-STALE-BEHIND-IA040`)
 
 No source, no public API and no parse behaviour changes. `docs-content/limitations.md` is not
-renamed, not moved and not edited: only its placement in the navigation changes, and the page keeps
-its URL, so every existing link to it still resolves.
+renamed and not moved, and the page keeps its URL, so every existing link to it still resolves. One
+sentence of its prose changes, for the reason given under THE PAGE NO LONGER DESCRIBES ITS OWN
+POSITION below.
 
 WHAT SHIPS. The top level of `docs-content/sidebars.json` goes from
 
@@ -42,6 +43,15 @@ existed to keep a one-item category permanently expanded so `limitations` read l
 page, a need that disappears once the page lives inside a real two-item category. `Core Concepts`
 keeps its `"collapsed": false` because it is the five-part reading spine of the package, not a
 destination a reader navigates to on purpose.
+
+THE PAGE NO LONGER DESCRIBES ITS OWN POSITION. `limitations.md` opened by claiming the boundary
+"lives high in the navigation rather than at the end of a troubleshooting page", which this change
+makes false in the one place a reader can check it: the page is now the last item of the last
+category, immediately after the troubleshooting page. That sentence is rewritten to say what is
+actually load-bearing, that the boundary is a page of its own rather than a closing paragraph, and
+that the introduction and the cookbook link into it. Left alone it would have frozen into an
+immutable release artifact and been correctable only by cutting yet another release, which is the
+same failure this change exists to end.
 
 NO `API Reference` CATEGORY IS AUTHORED HERE, and none may be. The docs site injects it at the
 canonical position (immediately before Troubleshooting) from the package's generated API set;
