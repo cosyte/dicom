@@ -67,6 +67,19 @@ export interface RunScriptOptions {
    * sandbox deliberately does not carry.
    */
   root?: string;
+  /**
+   * Flags for the RUNNER, before the script path. `node` only, and REFUSED with `tsx`.
+   *
+   * It exists for one job: preloading an observer with `--require` so a property of the script's
+   * RUN, rather than of its output, can be measured without editing the script. The scanner is
+   * synchronous end to end, so nothing that waits on its event loop can see it working; a preload
+   * hooking a call it makes per file can. Anything passed here changes how the child is started,
+   * so keep it to observation.
+   *
+   * 🛑 IT THROWS RATHER THAN DROPPING THE FLAGS UNDER `tsx`. Silently discarding an OBSERVATION
+   * flag is how a caller gets a zero it believes: the run would look ordinary and measure nothing.
+   */
+  nodeArgs?: readonly string[];
 }
 
 /**
@@ -80,9 +93,12 @@ export function runRepoScript(
   args: readonly string[] = [],
   options: RunScriptOptions = {},
 ): ScriptResult {
-  const { root = REPO_ROOT, cwd = root, runner = "node" } = options;
+  const { root = REPO_ROOT, cwd = root, runner = "node", nodeArgs = [] } = options;
   const bin = runner === "tsx" ? join(REPO_ROOT, "node_modules", ".bin", "tsx") : process.execPath;
-  const r = spawnSync(bin, [join(root, "scripts", name), ...args], {
+  if (nodeArgs.length > 0 && runner !== "node") {
+    throw new Error("runRepoScript: nodeArgs is node-only; tsx would drop it and measure nothing");
+  }
+  const r = spawnSync(bin, [...nodeArgs, join(root, "scripts", name), ...args], {
     cwd,
     encoding: "utf8",
     shell: false,

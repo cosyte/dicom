@@ -82,6 +82,7 @@
     "gen:all": "pnpm gen:repeating-groups && pnpm gen:dictionary && pnpm gen:annex-e",
     "check:no-emdash": "bash scripts/check-no-emdash.sh",
     "measure:phi-scan-unread": "tsx scripts/measure-phi-scan-unread.ts",
+    "measure:phi-scan-retention": "node scripts/measure-phi-scan-retention.ts",
     "phi-scan": "tsx scripts/phi-scan.ts",
     "smoke": "tsx scripts/smoke.ts",
     "pack:docs": "bash scripts/build-docs-artifacts.sh",

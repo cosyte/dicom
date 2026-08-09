@@ -2820,3 +2820,166 @@ describe("phi-scan: a hit line echoes an EXCERPT of the value, bounded at constr
     expect(excerpted).toHaveLength(pushes.length);
   });
 });
+
+// ---------------------------------------------------------------------------
+// The excerpt owns its bytes
+// ---------------------------------------------------------------------------
+//
+// The block above bounds what a hit line PRINTS. It did not bound what a hit
+// HOLDS: V8 answers `raw.slice(0, n)`, and a regexp match, with a string that
+// points into its parent, so an excerpt cut from a file's whole decoded text
+// kept that whole text alive for the rest of the run. The excerpt was bounded
+// logically while the hit still retained the payload.
+//
+// 🛑 THE SCANNER IS SYNCHRONOUS END TO END, so nothing on its event loop runs
+// while it scans: a preloaded `setInterval` sampler fires once before the scan
+// and once after it, when `hits` is already unreachable, and both readings say
+// nothing about the peak. That was measured before this shape was settled on.
+// The observer below hooks `readFileSync` instead, so it runs INSIDE the scan,
+// once per file, with `hits` live, and forces a full GC first so that transient
+// garbage is never counted as retention.
+//
+// 🛑 THE CASE ASSERTS A SHAPE, NOT A SIZE. What is claimed is that retention
+// does not GROW with the number of hit-bearing files, so nothing here writes
+// down how many bytes a run may hold. `pnpm measure:phi-scan-retention` prints
+// the table across four corpus sizes against any base.
+
+/** One file of the retention corpus. Big enough that retaining one is unmistakable. */
+const RETAIN_FILE_BYTES = 2 * 1024 * 1024;
+
+/** Bytes carrying no PN token, no ISO date and no 8-digit run, so they contribute no hit. */
+function retainFiller(): string {
+  const unit = "the quick brown fox jumps over the lazy dog ".repeat(64);
+  const out: string[] = [];
+  while (out.length * unit.length < RETAIN_FILE_BYTES) out.push(unit);
+  return out.join("").slice(0, RETAIN_FILE_BYTES);
+}
+
+interface RetainRun {
+  code: number;
+  hits: number;
+  peak: number;
+  samples: number;
+}
+
+/**
+ * Scan `files` copies of one big page and report what the run was holding at its peak.
+ *
+ * The observer writes to a FILE rather than to stderr, so it cannot perturb the stream this
+ * suite asserts on elsewhere.
+ */
+function retainedPeak(files: number, withHit: boolean): RetainRun {
+  const root = makeRepo();
+  const body = retainFiller();
+  for (let i = 0; i < files; i += 1) {
+    writeFileSync(
+      join(root, "test", "fixtures", `big-${String(i)}.txt`),
+      withHit ? `${CARET_PN}\n${body}` : body,
+    );
+  }
+  const report = join(root, "peak.txt");
+  const observer = join(root, "observer.cjs");
+  writeFileSync(
+    observer,
+    [
+      'const fs = require("node:fs");',
+      "const real = fs.readFileSync;",
+      "let peak = 0;",
+      "let samples = 0;",
+      "fs.readFileSync = function (...args) {",
+      "  const r = real.apply(this, args);",
+      `  if (Buffer.isBuffer(r) && r.length >= ${String(RETAIN_FILE_BYTES)}) {`,
+      "    global.gc();",
+      "    global.gc();",
+      "    const m = process.memoryUsage();",
+      "    samples += 1;",
+      "    if (m.heapUsed + m.external > peak) peak = m.heapUsed + m.external;",
+      "  }",
+      "  return r;",
+      "};",
+      `process.on("exit", () => { require("node:fs").writeFileSync(${JSON.stringify(report)}, peak + " " + samples); });`,
+      "",
+    ].join("\n"),
+  );
+  const r = runRepoScript("phi-scan.ts", [], {
+    cwd: root,
+    nodeArgs: ["--expose-gc", "--require", observer],
+  });
+  const [peak, samples] = readFileSync(report, "utf8").split(" ").map(Number);
+  const total = /\[phi-scan\] (\d+) hits across/.exec(r.stderr);
+  return {
+    code: r.code,
+    hits: total === null ? 0 : Number(total[1]),
+    peak: peak ?? -1,
+    samples: samples ?? -1,
+  };
+}
+
+describe("phi-scan: a hit does NOT retain the payload its excerpt was cut from", () => {
+  it("holds no more for nine hit-bearing files than for three", () => {
+    // The property, stated as a difference so no absolute size is written down.
+    // Six more files, each carrying its own violating name inside its own
+    // multi-megabyte page, must not cost the run even ONE more page. On the tree
+    // this case was written against it cost six.
+    const few = retainedPeak(3, true);
+    const many = retainedPeak(9, true);
+
+    // Non-vacuity first: a run that found nothing, or an observer that never
+    // fired, would satisfy the difference by holding nothing in either arm.
+    expect(few.code, "the three-file corpus did not refuse").toBe(1);
+    expect(many.code, "the nine-file corpus did not refuse").toBe(1);
+    expect(few.hits).toBe(3);
+    expect(many.hits).toBe(9);
+    expect(few.samples).toBe(3);
+    expect(many.samples).toBe(9);
+
+    expect(
+      many.peak - few.peak,
+      `retention grew by ${String(many.peak - few.peak)} bytes over six more files`,
+    ).toBeLessThan(RETAIN_FILE_BYTES);
+  });
+
+  it("🩺 THE DETECTOR ZERO IS PINNED BESIDE A POSITIVE: the filler alone is hit-free", () => {
+    // Without this the case above could be reading a corpus that produces no
+    // hits at all, where every tree holds nothing and the difference is zero for
+    // the wrong reason. Same bytes, same count, one token's difference.
+    const clean = retainedPeak(9, false);
+    expect(clean.code, `a corpus of pure filler refused: ${String(clean.hits)} hits`).toBe(0);
+    expect(clean.hits).toBe(0);
+    expect(clean.samples).toBe(9);
+  });
+
+  it("round-trips every byte the value carried, so the copy is not a re-encode", () => {
+    // The copy that drops the parent is a round trip, and a round trip that
+    // changed a character would be the same class of wrong answer as printing
+    // too much: the report would name a value the file does not carry. The
+    // alphabet is every byte a latin1 decode can produce except the ones the
+    // trailing-pad trim eats, so it covers the whole range the TAG ROUTE can
+    // reach, and the bound is DERIVED from a run rather than written here.
+    //
+    // 🛑 WHAT THIS CASE DOES NOT DO, SAID PLAINLY RATHER THAN IMPLIED BY ITS
+    // NAME: it does not discriminate `utf16le` from `utf8` or from `latin1`.
+    // All three round-trip this alphabet identically, and no reachable input can
+    // do better, because the tag route decodes latin1 and the text sweep's
+    // recognizers match ASCII, so an unpaired surrogate cannot arrive here at
+    // all. The reason `excerptValue` uses `utf16le` anyway is on its JSDoc and
+    // is an argument about the SLOT, not a claim this suite pins.
+    const bound = oneTextHit(pnOfLength(5000)).value.length;
+    let alphabet = "";
+    for (let i = 0; alphabet.length < bound * 2; i += 1) {
+      alphabet += String.fromCharCode(0x21 + (i % (0xff - 0x21 + 1)));
+    }
+    expect([...alphabet].some((c) => c.charCodeAt(0) > 0x7f)).toBe(true);
+
+    const root = makeRepo();
+    const p = join(root, "test", "fixtures", "alphabet.dcm");
+    writeFileSync(p, part10(shortElement(0x0010, 0x0010, "PN", alphabet)));
+
+    const r = runIn(root, [p]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    const lines = parseHitLines(r.stderr);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.value).toBe(alphabet.slice(0, bound));
+    expect(lines[0]?.withheld).toBe(alphabet.length - bound);
+  });
+});
