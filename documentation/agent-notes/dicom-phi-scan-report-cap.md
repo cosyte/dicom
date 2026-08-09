@@ -8,7 +8,8 @@ its 250,000-byte budget on `main` and the hook refuses growth (ADR 0023). **Noth
 SMALL.** Its ratchet is 39,550 bytes and it measured 39,544 on `main`: six bytes, which is not a
 line. Relocation is the remedy, never deleting an existing trap to make room and never raising the
 ceiling. So the rule lives where a worker touching this code reads it: the JSDoc on
-`DEFAULT_HIT_LINES_PER_FILE` and on `report`, the block in `test/scripts/phi-scan.test.ts` under
+`DEFAULT_HIT_LINES_PER_RECOGNIZER` (this file's `DEFAULT_HIT_LINES_PER_FILE`, renamed when the budget
+became per recognizer) and on `report`, the block in `test/scripts/phi-scan.test.ts` under
 `"phi-scan: the hit report is capped PER FILE, and the cap cannot move the verdict"`, and this file.
 
 **Provenance.** Every figure below is a measurement taken against base **`b784c38`**, quoted with
@@ -46,7 +47,7 @@ that has not printed its own histogram is not evidence here.
 
 ## What shipped
 
-A **print cap**, per file, defaulting to `DEFAULT_HIT_LINES_PER_FILE`, with `--max-hit-lines <n>` to
+A **print cap**, per file, defaulting to the constant, with `--max-hit-lines <n>` to
 change it and `--max-hit-lines 0` to print every line. Same three payloads, same shas:
 
 | payload | base lines | capped-default lines | `--max-hit-lines 0` lines |
@@ -124,6 +125,11 @@ local run says nothing about this fix, and the fix was not narrowed on the stren
 - **THE NUMBER OF FILE HEADERS IS UNCAPPED**, on purpose. Capping the set of paths named is the
   net-leak shape in property 2, so the report grows with the number of hit-bearing FILES and not with
   the number of hits. That is the direction to keep if this is ever revisited.
+- **THE BUDGET IS SPENT PER RECOGNIZER PER FILE NOW, NOT PER FILE**, so the figures above are a
+  measurement of the per-file budget this slice shipped and are not re-derivable from the current
+  tree. The rows headed `capped-default lines` are single-recognizer payloads, where the two policies
+  agree; a mixed payload prints more here than the number in that column. Nothing above is retracted.
+  `dicom-phi-scan-report-monotonicity.md` carries the change, the superset grid and its cost.
 - **THE DEFAULT'S VALUE IS WRITTEN IN EXACTLY ONE PLACE**, the constant. No test and no prose here
   quotes it: the suite pins that a default run prints strictly fewer lines than an uncapped one over
   the same corpus while reporting the same total, which fails **closed** if the default is ever

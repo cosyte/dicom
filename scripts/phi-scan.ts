@@ -80,7 +80,8 @@
  * Modes:
  *   --staged                 - scan only files staged in `git diff --cached`
  *   --allow-fixture <path>   - bypass for one path; rejected if not logged in phi-scan-overrides.md
- *   --max-hit-lines <n>      - print at most n hit lines PER FILE; `0` prints every one
+ *   --max-hit-lines <n>      - print at most n hit lines PER RECOGNIZER PER FILE; `0` prints
+ *                              every one
  *   <path> [<path>...]       - scan specific paths
  *   (no args)                - scan both corpora in the working tree
  *
@@ -168,8 +169,8 @@ const OVERRIDE_LOG_PATH = join(REPO_ROOT, "phi-scan-overrides.md");
 const CUTOFF_YEAR = new Date().getFullYear() - 120;
 
 /**
- * How many hit lines `report` prints PER FILE before it stops printing them and says how many
- * it did not print. `--max-hit-lines 0` prints every one.
+ * How many hit lines `report` prints PER RECOGNIZER PER FILE before it stops printing them and
+ * says how many it did not print. `--max-hit-lines 0` prints every one.
  *
  * 🛑 THIS IS A PRINT CAP AND NOTHING ELSE, AND THAT IS THE ONLY REASON IT IS SAFE. `main` derives
  * the exit code from `hits.length`, the summary line reports `hits.length`, and neither is capped,
@@ -183,6 +184,32 @@ const CUTOFF_YEAR = new Date().getFullYear() - 120;
  * set of PATHS reported is uncapped, every file with a hit still prints its header and its first
  * lines, and the suppression is bounded by a count the same line states exactly.
  *
+ * 🛑 AND IT IS PER RECOGNIZER WITHIN THAT FILE, WHICH IS THE SAME ARGUMENT ONE LEVEL DOWN. One
+ * budget shared by every recognizer let a file's loud recognizer spend the quiet one's share, and
+ * the tag walk appends before the text sweep, so how many of the text sweep's findings were printed
+ * was decided by how many the tag walk had already made. Per recognizer, a hit prints if its index
+ * among that file's hits FROM ITS OWN RECOGNIZER is under the budget, a question no OTHER
+ * recognizer's findings are an input to. Every line printed at a given budget before is still
+ * printed at that budget: a hit that was among a file's first n overall is among its own
+ * recognizer's first n. The per-file line bound is therefore n x `RECOGNIZERS`, and that table is
+ * closed.
+ *
+ * ⚖️ THIS IS NOT MONOTONICITY AND MUST NOT BE CALLED THAT, LABEL OR SENTENCE. Under ANY budget that
+ * cuts at all (`--max-hit-lines 0` does not), n+1 hits from one entry print n, so adding a hit can always remove a line; the general property is not
+ * available at a cap at all, and a claim that it is was refused here. What is closed is one entry's
+ * budget being spent by ANOTHER entry's findings.
+ *
+ * 🛑 AND SEVERAL SWEEPS SHARE AN ENTRY, SO THE COST IS LARGER THAN "THE SAME SWEEP TWICE".
+ * `scanText`'s ISO pass and its compact `YYYYMMDD` pass both push `textDate`, and `scanText` runs
+ * AGAIN on every object `scanEmbeddedObjects` decodes, so a doc page's own tokens and its embedded
+ * objects' share one entry each. Measured, and IDENTICAL on base `7754a6c` and here: over 200 ISO
+ * dates followed by 200 compact ones the report prints 20 ISO and 0 compact, and adding a 20th ISO
+ * date in front of one compact DOB takes that DOB off the default report. Splitting the two date
+ * passes is available; splitting per embedded object is NOT, because the number of objects is the
+ * PAYLOAD's choice and a per-class budget times a payload-chosen class count is no budget.
+ * `test/scripts/phi-scan.test.ts` pins both measurements rather than this comment claiming them
+ * away.
+ *
  * WHY THERE IS A CAP AT ALL, MEASURED RATHER THAN ASSERTED. `DICOM-SCANDICOM-SILENT-HALT` made the
  * text sweep run over every Part 10 object's bytes, and its recognizers fire on image noise at a
  * rate that is a property of the payload's byte histogram. Re-measured on `b784c38` over 8 MiB of
@@ -191,7 +218,7 @@ const CUTOFF_YEAR = new Date().getFullYear() - 120;
  * `documentation/agent-notes/dicom-phi-scan-report-cap.md`; no rate is copied here, because it is a
  * fact about that payload's histogram and not about this script.
  */
-const DEFAULT_HIT_LINES_PER_FILE = 20;
+const DEFAULT_HIT_LINES_PER_RECOGNIZER = 20;
 
 /**
  * How much of a violating value one hit line may echo, in `String.length`.
@@ -489,6 +516,41 @@ function excerptValue(raw: string): HitValue {
   return bounded as HitValue;
 }
 
+/**
+ * Which recognizer produced a hit. The print budget in `report` is spent PER ENTRY OF THIS TABLE,
+ * so this table's size is the only thing that multiplies the per-file line bound.
+ *
+ * 🛑 IT IS A CLOSED TABLE AND THAT IS THE WHOLE BOUND. Budgeting on `reason` would have been one
+ * field cheaper and would not have been a bound: `reason` is assembled at the push site, so one
+ * future recognizer interpolating a payload-derived token into it gives the payload a vote on how
+ * many classes exist, and a per-class budget times an attacker-chosen class count is no budget.
+ * The type refuses that instead of an analysis of what today's push sites happen to pass - the same
+ * shape `HitValue` is built in, and this lineage's own rule: remove the slot, do not filter the
+ * value.
+ *
+ * The entries are the recognizers, not the VRs. `tagPn` and `textPn` are one VR and two routes, and
+ * separating them is the point: `scanDicom` appends before `scanText` within a file, so with one
+ * shared budget the tag route's findings decide how many of the text route's are printed.
+ *
+ * 🛑 AN ENTRY IS A CLASS OF SWEEP AND SEVERAL SWEEPS SHARE ONE. `scanText`'s two date passes both
+ * push `textDate`, and `scanText` runs once per embedded object as well as once on the page, so
+ * those hits land in the page's entries too. What that costs is measured at
+ * `DEFAULT_HIT_LINES_PER_RECOGNIZER`. Adding an entry per sweep is available for the date passes
+ * and NOT for the embedded route, where the count of sweeps is the payload's choice.
+ */
+const RECOGNIZERS = {
+  /** `inspectElement`, a `PN` tag off the tag table. */
+  tagPn: "tag-pn",
+  /** `inspectElement`, a `DA` or `DT` tag off the tag table. */
+  tagDate: "tag-date",
+  /** `scanText`'s PN-shaped token sweep. */
+  textPn: "text-pn",
+  /** `scanText`'s two date sweeps, ISO and compact. */
+  textDate: "text-date",
+} as const;
+
+type Recognizer = (typeof RECOGNIZERS)[keyof typeof RECOGNIZERS];
+
 interface Hit {
   path: string;
   tag: string; // formatted "(gggg,eeee)"
@@ -496,6 +558,8 @@ interface Hit {
   offset: number;
   value: HitValue;
   reason: string;
+  /** Which recognizer found it. Budgeted on in `report`; never printed. */
+  recognizer: Recognizer;
 }
 
 /**
@@ -558,7 +622,7 @@ interface Args {
   mode: "all" | "staged" | "paths";
   paths: string[];
   allowFixtures: string[]; // paths bypassed via --allow-fixture
-  maxHitLines: number; // hit lines printed per file; 0 prints every one
+  maxHitLines: number; // hit lines printed per recognizer per file; 0 prints every one
 }
 
 class InvocationError extends Error {
@@ -576,7 +640,7 @@ function parseArgs(argv: string[]): Args {
   let staged = false;
   const paths: string[] = [];
   const allowFixtures: string[] = [];
-  let maxHitLines = DEFAULT_HIT_LINES_PER_FILE;
+  let maxHitLines = DEFAULT_HIT_LINES_PER_RECOGNIZER;
   let i = 0;
   while (i < argv.length) {
     const a = argv[i];
@@ -1322,6 +1386,7 @@ function inspectElement(
         offset: valueOffset,
         value: excerptValue(value),
         reason: "PN not in allow-list",
+        recognizer: RECOGNIZERS.tagPn,
       });
     }
   } else if (isDa && DA_TAGS.has(key)) {
@@ -1334,6 +1399,7 @@ function inspectElement(
         offset: valueOffset,
         value: excerptValue(value),
         reason: violation,
+        recognizer: RECOGNIZERS.tagDate,
       });
     }
   } else if (isDt && DT_TAGS.has(key)) {
@@ -1348,6 +1414,7 @@ function inspectElement(
         offset: valueOffset,
         value: excerptValue(value),
         reason: violation,
+        recognizer: RECOGNIZERS.tagDate,
       });
     }
   }
@@ -1483,6 +1550,7 @@ function scanText(target: Target, content: string, allow: AllowList, hits: Hit[]
         offset: m.index,
         value: excerptValue(full),
         reason: `text date within last 120 years (>= ${String(CUTOFF_YEAR)})`,
+        recognizer: RECOGNIZERS.textDate,
       });
     }
   }
@@ -1508,6 +1576,7 @@ function scanText(target: Target, content: string, allow: AllowList, hits: Hit[]
         offset: m.index,
         value: excerptValue(full),
         reason: `text date within last 120 years (>= ${String(CUTOFF_YEAR)})`,
+        recognizer: RECOGNIZERS.textDate,
       });
     }
   }
@@ -1524,6 +1593,7 @@ function scanText(target: Target, content: string, allow: AllowList, hits: Hit[]
         offset: m.index,
         value: excerptValue(value),
         reason: "text PN not in allow-list",
+        recognizer: RECOGNIZERS.textPn,
       });
     }
   }
@@ -1766,20 +1836,23 @@ function reportUnread(unread: UnreadByPath): void {
 }
 
 /**
- * Print the hits, at most `maxHitLines` of them per file, each with an excerpt of its value rather
- * than the value - bounded where the hit is made, not here. See `MAX_HIT_VALUE_LENGTH`.
+ * Print the hits, at most `maxHitLines` of them per recognizer per file, each with an excerpt of
+ * its value rather than the value - bounded where the hit is made, not here. See
+ * `MAX_HIT_VALUE_LENGTH`.
  *
- * The three properties that make the cap safe are stated at `DEFAULT_HIT_LINES_PER_FILE` and
+ * The properties that make the cap safe are stated at `DEFAULT_HIT_LINES_PER_RECOGNIZER` and
  * enforced here: the exit code and the totals are computed off `hits`, not off what was printed;
- * the cap is per file, so no path goes unnamed; and a file that had lines withheld says so, with
- * the exact number and the flag that prints them.
+ * the cap is per file, so no path goes unnamed; it is per recognizer within that file, so no
+ * recognizer's findings decide how many of another's are printed; and a file that had lines
+ * withheld says so, with the exact number and the flag that prints them.
  *
- * The suppression line carries a COUNT and nothing else - no tag, no VR, no value, no offset. A
- * diagnostic about a PHI leak is itself a PHI surface, and a line whose whole job is to say
- * "there is more here" must not become a second way to spill some of it.
+ * The suppression line carries a COUNT and nothing else - no tag, no VR, no value, no offset, and
+ * no per-recognizer breakdown. A diagnostic about a PHI leak is itself a PHI surface, and a line
+ * whose whole job is to say "there is more here" must not become a second way to spill some of it.
  *
  * 🛑 WHICH LINES SURVIVE THE CAP IS SCAN ORDER, NOT FILE ORDER, and it is worth saying because the
- * obvious reading is the wrong one. "The first n hits" is not "the first n in the file".
+ * obvious reading is the wrong one. "The first n hits" is not "the first n in the file". It is now
+ * the first n of each recognizer's, which is scan order restricted, never reordered.
  */
 function report(hits: Hit[], maxHitLines: number, partialFiles: number): void {
   if (hits.length === 0) {
@@ -1812,12 +1885,19 @@ function report(hits: Hit[], maxHitLines: number, partialFiles: number): void {
   let withheld = 0;
   for (const [path, group] of byPath) {
     process.stderr.write(`[phi-scan] HIT: ${path}\n`);
-    const shown = maxHitLines === 0 ? group.length : Math.min(group.length, maxHitLines);
-    for (let i = 0; i < shown; i += 1) {
-      // `noUncheckedIndexedAccess` is on, and an out-of-range read here would be a bug in the
-      // bound above rather than a missing hit, so it refuses instead of printing a partial line.
-      const h = group[i];
-      if (h === undefined) throw new Error("report: hit index out of range");
+    // One counter per recognizer, RESET PER FILE. A budget carried across files would be the
+    // global cap this has never been, one axis at a time.
+    const spent = new Map<Recognizer, number>();
+    let shown = 0;
+    for (const h of group) {
+      if (maxHitLines !== 0) {
+        const used = spent.get(h.recognizer) ?? 0;
+        // `continue`, not `break`: the group is in scan order and a later hit may belong to a
+        // recognizer that still has budget. Breaking here is what made this non-monotone.
+        if (used >= maxHitLines) continue;
+        spent.set(h.recognizer, used + 1);
+      }
+      shown += 1;
       // The value arrives bounded (`HitValue`), so this is a format and not a filter. The
       // withheld amount is printed OUTSIDE the quotes: inside them it would read as content, and
       // it carries NO UNIT, because the two routes measure in two different ones (`excerptValue`).
