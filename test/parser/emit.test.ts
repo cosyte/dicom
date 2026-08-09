@@ -1,14 +1,17 @@
 import { Buffer } from "node:buffer";
 import { describe, expect, it, vi } from "vitest";
 
-import { DicomParseError, FATAL_CODES } from "../../src/parser/errors.js";
+import { DicomParseError, FATAL_CODES, OFFSET_FRAMES } from "../../src/parser/errors.js";
 import { makeEmitter } from "../../src/parser/emit.js";
 import type { ParseContext } from "../../src/parser/types.js";
 import { WARNING_CODES, type DicomParseWarning } from "../../src/parser/warnings.js";
 
 function makeCtx(overrides: Partial<ParseContext> = {}): ParseContext {
   const base: ParseContext = {
-    buffer: Buffer.from([0x44, 0x49, 0x43, 0x4d, 0x00, 0x01, 0x02, 0x03]),
+    frame: {
+      buffer: Buffer.from([0x44, 0x49, 0x43, 0x4d, 0x00, 0x01, 0x02, 0x03]),
+      name: OFFSET_FRAMES.INPUT,
+    },
     strict: false,
     stripPreamble: "tolerate",
     warnings: [],

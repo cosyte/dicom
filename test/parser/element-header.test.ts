@@ -17,13 +17,14 @@ import {
   resolveImplicitVR,
   resolvePrivateCreator,
 } from "../../src/parser/element-header.js";
+import { OFFSET_FRAMES } from "../../src/parser/errors.js";
 import type { ParseContext } from "../../src/parser/types.js";
 import type { DicomParseWarning } from "../../src/parser/warnings.js";
 import { WARNING_CODES } from "../../src/parser/warnings.js";
 
 function makeCtx(): ParseContext {
   return {
-    buffer: Buffer.alloc(0),
+    frame: { buffer: Buffer.alloc(0), name: OFFSET_FRAMES.INPUT },
     strict: false,
     stripPreamble: "tolerate",
     warnings: [],

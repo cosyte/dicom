@@ -1,7 +1,12 @@
 import { Buffer } from "node:buffer";
 import { describe, it, expect } from "vitest";
 
-import { DicomParseError, FATAL_CODES, buildSnippet } from "../../src/parser/errors.js";
+import {
+  DicomParseError,
+  FATAL_CODES,
+  OFFSET_FRAMES,
+  buildSnippet,
+} from "../../src/parser/errors.js";
 
 describe("FATAL_CODES (D-09)", () => {
   it("has exactly 4 codes (D-09 - locked at 4, no expansion)", () => {
@@ -17,11 +22,12 @@ describe("FATAL_CODES (D-09)", () => {
 });
 
 describe("DicomParseError (D-10)", () => {
-  it("carries code, byteOffset, snippet, contextPath after construction", () => {
+  it("carries code, byteOffset, offsetFrame, snippet, contextPath after construction", () => {
     const err = new DicomParseError(
       FATAL_CODES.NOT_DICOM_PART_10,
       "no DICM magic",
       0,
+      OFFSET_FRAMES.INPUT,
       "44 49 43 4d",
     );
     expect(err).toBeInstanceOf(Error);
@@ -29,27 +35,68 @@ describe("DicomParseError (D-10)", () => {
     expect(err.name).toBe("DicomParseError");
     expect(err.code).toBe(FATAL_CODES.NOT_DICOM_PART_10);
     expect(err.byteOffset).toBe(0);
+    expect(err.offsetFrame).toBe(OFFSET_FRAMES.INPUT);
     expect(err.snippet).toBe("44 49 43 4d");
     expect(err.contextPath).toBeUndefined();
   });
 
-  it("formats Error.message as `[CODE] msg (offset=N)` (CONTEXT specifics §)", () => {
-    const err = new DicomParseError(FATAL_CODES.NOT_DICOM_PART_10, "no DICM magic", 0, "");
-    expect(err.message.startsWith("[NOT_DICOM_PART_10] no DICM magic (offset=0)")).toBe(true);
+  it("formats Error.message as `[CODE] msg (offset=N frame=F)` (CONTEXT specifics §)", () => {
+    const err = new DicomParseError(
+      FATAL_CODES.NOT_DICOM_PART_10,
+      "no DICM magic",
+      0,
+      OFFSET_FRAMES.INPUT,
+      "",
+    );
+    expect(err.message.startsWith("[NOT_DICOM_PART_10] no DICM magic (offset=0 frame=input)")).toBe(
+      true,
+    );
+  });
+
+  it("puts the frame in the message, because a logged offset is the whole risk", () => {
+    // The tenth instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`: `byteOffset` was
+    // the sole locator and no field named its coordinate system, so a consumer
+    // logging `err.message` and indexing its own buffer by that number was, in
+    // a Sequence Item, reading somebody else's element. A field alone would not
+    // have reached the most common consumption path.
+    const err = new DicomParseError(
+      FATAL_CODES.INVALID_FILE_META,
+      "an element declares too much",
+      24,
+      OFFSET_FRAMES.VALUE_SLICE,
+      "",
+    );
+    expect(err.offsetFrame).toBe("value-slice");
+    expect(err.message).toContain("(offset=24 frame=value-slice)");
+    // ...and the frame's ORIGIN is not published anywhere on the error, which is
+    // the deliberate half: the distance between two frames is a declared Value
+    // Length off the wire.
+    expect(Object.keys(err)).not.toContain("frameStart");
+    expect(err.message).not.toMatch(/frameStart|frameOffset|absolute/u);
   });
 
   it("appends `… in path/segments` when contextPath is provided", () => {
-    const err = new DicomParseError(FATAL_CODES.INVALID_FILE_META, "missing TS UID", 132, "", [
-      "0040A730",
-      "0",
-      "00080100",
-    ]);
+    const err = new DicomParseError(
+      FATAL_CODES.INVALID_FILE_META,
+      "missing TS UID",
+      132,
+      OFFSET_FRAMES.INPUT,
+      "",
+      ["0040A730", "0", "00080100"],
+    );
     expect(err.message).toContain("… in 0040A730/0/00080100");
     expect(err.contextPath).toEqual(["0040A730", "0", "00080100"]);
   });
 
   it("does not append `… in …` when contextPath is empty array", () => {
-    const err = new DicomParseError(FATAL_CODES.EMPTY_INPUT, "input is empty", 0, "", []);
+    const err = new DicomParseError(
+      FATAL_CODES.EMPTY_INPUT,
+      "input is empty",
+      0,
+      OFFSET_FRAMES.INPUT,
+      "",
+      [],
+    );
     expect(err.message).not.toContain("… in");
   });
 });

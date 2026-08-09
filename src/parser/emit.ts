@@ -14,11 +14,13 @@
  *     decision (b)). Strict mode bypasses `ctx.warnings` entirely - no
  *     residue.
  *
- * This module is the ONLY reader of {@link ParseContext.buffer}, and the
- * snippet cut below is the reason that field is mutable and follows the frame
- * rather than naming the file. See its JSDoc: an offset and the bytes cut at it
- * have to be in the same frame, or a diagnostic hands back an element the
- * reader was never asked about.
+ * This module is the ONLY reader of {@link ParseContext.frame}, and both the
+ * snippet cut below and the `offsetFrame` published beside it are the reason
+ * that field is mutable and follows the frame rather than naming the file. See
+ * its JSDoc: an offset, the bytes cut at it and the name of its coordinate
+ * system have to agree, or a diagnostic hands back an element the reader was
+ * never asked about - or, worse, hands back a correct offset a consumer then
+ * reads in the wrong frame.
  *
  * Threat model T-02-01-02: a consumer-supplied `onWarning` that throws
  * MUST NOT corrupt parser state - wrapped in try/catch with silent swallow.
@@ -54,7 +56,12 @@ export function makeEmitter(ctx: ParseContext): (w: DicomParseWarning) => void {
       w.code as unknown as FatalCode,
       w.message,
       w.position.byteOffset,
-      buildSnippet(ctx.buffer, w.position.byteOffset),
+      // Both come off the SAME frame object, so an escalation cannot name one
+      // frame and cut its bytes from another. `DicomParseWarning.position`
+      // itself carries no frame - that is `PRE-EXISTING` and stated on
+      // `DicomPosition`, not closed here.
+      ctx.frame.name,
+      buildSnippet(ctx.frame.buffer, w.position.byteOffset),
       w.position.contextPath,
     );
   };

@@ -27,6 +27,7 @@ import { Buffer } from "node:buffer";
 
 import { Dataset } from "../dataset/dataset.js";
 import { makeEmitter } from "./emit.js";
+import { OFFSET_FRAMES } from "./errors.js";
 import { emptyInput, emptyInputAfterNormalization, unsupportedTransferSyntax } from "./fatals.js";
 import { parseFileMeta } from "./file-meta.js";
 import { parsePart10Header } from "./part10-header.js";
@@ -129,7 +130,7 @@ export function parseDicom(
     // (Process 1)` still reads usefully and a UID PS3.6 does not publish reads
     // as nothing at all. The closed-set lookup that used to live at this call
     // site now lives in the factory, where a future call site cannot skip it.
-    throw unsupportedTransferSyntax(buffer, fileMetaEnd, tsUid);
+    throw unsupportedTransferSyntax(ctx.frame, fileMetaEnd, tsUid);
   }
 
   // Step 4: Parse the dataset with the chosen strategy.
@@ -161,7 +162,9 @@ function buildContext(
   warnings: DicomParseWarning[],
 ): ParseContext {
   const base: Omit<ParseContext, "onWarning" | "profile"> = {
-    buffer,
+    // The root frame. Every nested frame is entered from here by a swap that
+    // moves the bytes and the name together; see `ParseFrame`.
+    frame: { buffer, name: OFFSET_FRAMES.INPUT },
     strict: options.strict === true,
     stripPreamble: options.stripPreamble ?? "tolerate",
     warnings,

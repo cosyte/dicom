@@ -16,7 +16,12 @@ import * as zlib from "node:zlib";
 
 import { describe, expect, it } from "vitest";
 
-import { FATAL_CODES } from "../../src/parser/errors.js";
+import {
+  FATAL_CODES,
+  OFFSET_FRAMES,
+  buildSnippet,
+  type ParseFrame,
+} from "../../src/parser/errors.js";
 import {
   FATAL_MESSAGES,
   SUPPORTED_TRANSFER_SYNTAXES,
@@ -32,6 +37,17 @@ import {
 } from "../../src/parser/fatals.js";
 import { TRANSFER_SYNTAX_PARSERS } from "../../src/parser/transfer-syntax.js";
 import type { VR } from "../../src/dictionary/types.js";
+import {
+  controlWithDefault,
+  controlWithNoParameterList,
+  controlWithRest,
+  declaredParameters,
+} from "../helpers/declared-parameters.js";
+
+/** A root {@link ParseFrame} over `size` zero bytes, for the direct factory rows. */
+function rootFrame(size: number): ParseFrame {
+  return { buffer: Buffer.alloc(size), name: OFFSET_FRAMES.INPUT };
+}
 
 describe("the Tier-3 fatal registry", () => {
   it("names only the four locked Tier-3 codes", () => {
@@ -54,20 +70,40 @@ describe("the Tier-3 fatal registry", () => {
     }
   });
 
+  it("Function.prototype.length is blind to a defaulted parameter, and declaredParameters is not", () => {
+    // 🛑 THE PIN BELOW USED TO BE `fn.length`, AND `fn.length` STOPS AT THE
+    // FIRST DEFAULTED OR REST PARAMETER. So a factory that had grown exactly
+    // the slot the pin exists to refuse - `(frame, offset, remaining = 0)` -
+    // would still have read `2` and the pin would still have been green. This
+    // row is the positive that makes the clean results in the next one mean
+    // something: the reader really does see a parameter `length` cannot.
+    expect(controlWithDefault.length).toBe(2);
+    expect(declaredParameters(controlWithDefault)).toStrictEqual(["a", "b", "c = 0"]);
+    expect(controlWithRest.length).toBe(1);
+    expect(declaredParameters(controlWithRest)).toStrictEqual(["a", "...more"]);
+    // And it fails loudly rather than returning an empty list, because an empty
+    // list would read as "this function takes no parameters" - a clean result
+    // that is a gap.
+    expect(() => declaredParameters(controlWithNoParameterList)).toThrow(/no parameter list/u);
+  });
+
   it("has no factory taking a count of the bytes remaining in the frame", () => {
     // The ninth instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`, asserted where it
     // is actually bound: the two factories that used to take one. `{n}` still
     // exists, and the two entries that keep it are the two whose number nobody
     // on the wire chose - `NESTING_DEPTH_LIMIT` and the caller's inflate cap -
-    // so this asserts the ARITY rather than searching the message. A call site
-    // cannot pass what a signature does not accept, which is the property that
-    // survives a future refactor of the prose.
-    expect(elementLengthExceedsBuffer.length).toBe(2);
-    expect(fileMetaGroupLengthOverruns.length).toBe(2);
+    // so this asserts the DECLARED PARAMETER LIST rather than searching the
+    // message. A call site cannot pass what a signature does not accept, which
+    // is the property that survives a future refactor of the prose.
+    //
+    // The lists are asserted WHOLE rather than by count, so a third parameter
+    // is refused whatever it is called and whatever default it carries.
+    expect(declaredParameters(elementLengthExceedsBuffer)).toStrictEqual(["frame", "offset"]);
+    expect(declaredParameters(fileMetaGroupLengthOverruns)).toStrictEqual(["frame", "offset"]);
     // ...and the two that legitimately keep a number still take it, so the rows
     // above are a measured bound rather than a blanket one.
-    expect(sqNestingDepthExceeded.length).toBe(3);
-    expect(inflatedPayloadExceedsCap.length).toBe(3);
+    expect(declaredParameters(sqNestingDepthExceeded)).toStrictEqual(["frame", "offset", "limit"]);
+    expect(declaredParameters(inflatedPayloadExceedsCap)).toStrictEqual(["frame", "offset", "cap"]);
     for (const key of [
       "ELEMENT_LENGTH_EXCEEDS_BUFFER",
       "FILE_META_GROUP_LENGTH_OVERRUNS",
@@ -76,15 +112,60 @@ describe("the Tier-3 fatal registry", () => {
     }
   });
 
+  it("takes a frame OBJECT, so no factory can be handed bytes without the label beside them", () => {
+    // The tenth instance. Every factory's first parameter is the `ParseFrame`
+    // pair, never a bare `Buffer` beside a frame name, because two parameters
+    // are two chances to half-update - and the disagreement is silent: a snippet
+    // cut from the Item's slice and an offset labelled `"input"` both look
+    // right on their own.
+    //
+    // 🛑 THIS IS THE OMISSION MODE AND NOT AN IMPOSSIBILITY PROOF, WHICH A
+    // GRADED PASS CORRECTED. A caller that deliberately composes
+    // `{ buffer: itemSlice, name: OFFSET_FRAMES.INPUT }` still type-checks and
+    // still renders. What the type buys is that composing a frame is a single
+    // assignment, so no site can move the bytes and leave the name behind. **No
+    // count of those sites is written here**: a first remedy said "exactly
+    // four" and a graded pass measured five, the omitted one being the root
+    // composition that reads `"input"`. The row below pins the mismatch as
+    // WRITABLE so no reader takes the title for the stronger claim.
+    for (const factory of [
+      elementLengthExceedsBuffer,
+      fileMetaGroupLengthOverruns,
+      sqNestingDepthExceeded,
+      inflatedPayloadExceedsCap,
+      undefinedLengthOnNonSqExplicit,
+      unsupportedTransferSyntax,
+      inflateFailed,
+    ]) {
+      expect(declaredParameters(factory)[0], factory.name).toBe("frame");
+    }
+    // And the pair really does travel: the published frame is the one whose
+    // bytes the snippet came from.
+    const slice: ParseFrame = {
+      buffer: Buffer.from("MRN-11111 PATIENT", "latin1"),
+      name: OFFSET_FRAMES.VALUE_SLICE,
+    };
+    const err = elementLengthExceedsBuffer(slice, 0);
+    expect(err.offsetFrame).toBe(OFFSET_FRAMES.VALUE_SLICE);
+    expect(err.snippet).toBe(buildSnippet(slice.buffer, 0));
+
+    // And the honest limit, asserted rather than left to the title: a hand-made
+    // mismatched pair renders faithfully.
+    const mismatched: ParseFrame = { buffer: slice.buffer, name: OFFSET_FRAMES.INPUT };
+    const mislabelled = elementLengthExceedsBuffer(mismatched, 0);
+    expect(mislabelled.offsetFrame).toBe(OFFSET_FRAMES.INPUT);
+    expect(mislabelled.snippet).toBe(err.snippet);
+  });
+
   it("leaves no unsubstituted slot behind after a build", () => {
     // Every factory renders through the same `build`, and `build` substitutes a
     // fixed set. A template with a typo'd slot would ship the braces verbatim.
     const rendered = [
       emptyInput(),
-      elementLengthExceedsBuffer(Buffer.alloc(32), 0),
-      undefinedLengthOnNonSqExplicit(Buffer.alloc(32), 0, "OB"),
-      inflateFailed(Buffer.alloc(32), 0, "Z_DATA_ERROR"),
-      unsupportedTransferSyntax(Buffer.alloc(32), 0, "1.2.840.10008.1.2.4.50"),
+      elementLengthExceedsBuffer(rootFrame(32), 0),
+      undefinedLengthOnNonSqExplicit(rootFrame(32), 0, "OB"),
+      inflateFailed(rootFrame(32), 0, "Z_DATA_ERROR"),
+      unsupportedTransferSyntax(rootFrame(32), 0, "1.2.840.10008.1.2.4.50"),
     ];
     for (const err of rendered) {
       expect(err.message).not.toMatch(/\{[a-z0-9]+\}/u);
@@ -114,16 +195,16 @@ describe("the Tier-3 fatal registry", () => {
   });
 
   it("renders a zlib code only when it names one", () => {
-    expect(inflateFailed(Buffer.alloc(0), 0, "Z_DATA_ERROR").message).toContain("Z_DATA_ERROR");
+    expect(inflateFailed(rootFrame(0), 0, "Z_DATA_ERROR").message).toContain("Z_DATA_ERROR");
     // The negative direction is the one that matters: a code outside the table
     // is refused whole rather than echoed.
-    expect(inflateFailed(Buffer.alloc(0), 0, "SMIT").message).toContain("<withheld>");
-    expect(inflateFailed(Buffer.alloc(0), 0, "SMIT").message).not.toContain("SMIT");
-    expect(inflateFailed(Buffer.alloc(0), 0, undefined).message).toContain("<withheld>");
+    expect(inflateFailed(rootFrame(0), 0, "SMIT").message).toContain("<withheld>");
+    expect(inflateFailed(rootFrame(0), 0, "SMIT").message).not.toContain("SMIT");
+    expect(inflateFailed(rootFrame(0), 0, undefined).message).toContain("<withheld>");
   });
 
   it("renders a VR only when it names one of the 34", () => {
-    const buf = Buffer.alloc(0);
+    const buf = rootFrame(0);
     expect(undefinedLengthOnNonSqExplicit(buf, 0, "OB").message).toContain("VR=OB");
     // Two bytes of a surname that are not a VR: refused, not echoed.
     expect(undefinedLengthOnNonSqExplicit(buf, 0, "Sm" as VR).message).toContain("<withheld>");
@@ -131,7 +212,7 @@ describe("the Tier-3 fatal registry", () => {
   });
 
   it("names a Transfer Syntax from PS3.6 and never echoes the UID", () => {
-    const buf = Buffer.alloc(0);
+    const buf = rootFrame(0);
     // A UID PS3.6 publishes a name for: the name reads, the UID does not.
     const known = unsupportedTransferSyntax(buf, 0, "1.2.840.10008.1.2.4.50");
     expect(known.message).toMatch(/^\[UNSUPPORTED_TRANSFER_SYNTAX\] Transfer Syntax /u);

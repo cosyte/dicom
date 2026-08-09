@@ -126,8 +126,11 @@ async function indexFile(path: string) {
 }
 ```
 
-Log `err.code` and `err.byteOffset`. Do **not** log `err.snippet`: it is up to 16 raw source bytes
-and the library does not redact it. See [Keeping PHI out of logs](./troubleshooting#keeping-phi-out-of-logs).
+Log `err.code`, `err.byteOffset` and `err.offsetFrame`. Do **not** log `err.snippet`: it is up to 16
+raw source bytes and the library does not redact it. **`err.byteOffset` indexes the buffer you passed
+in only when `err.offsetFrame` is `"input"`** - inside a Sequence Item it counts from that Item, so
+cutting your own copy of the file at it returns a different element. See
+[Keeping PHI out of logs](./troubleshooting#keeping-phi-out-of-logs).
 
 ---
 

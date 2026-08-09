@@ -33,6 +33,7 @@ import {
 import { parseDeflatedLEWithCap } from "../../src/parser/deflated-le.js";
 import type { Tag } from "../../src/dictionary/types.js";
 import { makeEmitter } from "../../src/parser/emit.js";
+import { OFFSET_FRAMES } from "../../src/parser/errors.js";
 import type { ParseContext } from "../../src/parser/types.js";
 import { buildDicom } from "../helpers/build-dicom.js";
 
@@ -293,7 +294,15 @@ describe("Security: decompression-bomb cap (T-02-05-01)", () => {
     const datasetStart = findDatasetStart(buf);
 
     const innerCtx: ParseContext = {
-      buffer: buf,
+      // `buf` is the ON-DISK compressed object, so the frame is the caller's
+      // input. `parseDeflatedLEWithCap` swaps in the inflated stream itself,
+      // after the cap check, and the fatal this test drives is raised BEFORE
+      // that swap. A graded pass caught this labelled `INFLATED_DATASET`, which
+      // asserted nothing and was still the wrong model for the next worker to
+      // copy: this is what a real composition site passes. A first remedy said
+      // there were "exactly four" of those and a graded pass measured five, so
+      // no count is written here.
+      frame: { buffer: buf, name: OFFSET_FRAMES.INPUT },
       strict: false,
       stripPreamble: "tolerate",
       warnings: [],

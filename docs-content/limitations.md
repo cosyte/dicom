@@ -134,9 +134,9 @@ structural fact about DICOM that no reader can resolve from the wire.
   here): the count read one, then two, then three, and was wrong each time.
 
 - **A `DicomParseError` is not safe to log whole.** It carries `snippet`, up to 16 raw source bytes as
-  hex, and the library does not redact them. Log `err.code`, `err.byteOffset` and `err.message`.
-  `{ strict: true }` turns **every** Tier-2 warning into one of these, so a PHI review of the lenient
-  path does not transfer to the strict one.
+  hex, and the library does not redact them. Log `err.code`, `err.byteOffset`, `err.offsetFrame` and
+  `err.message`. `{ strict: true }` turns **every** Tier-2 warning into one of these, so a PHI review
+  of the lenient path does not transfer to the strict one.
 
 ---
 
@@ -153,8 +153,10 @@ on the wire.
   `DICOM_DUPLICATE_FILE_META_ELEMENT`. Neither can fire on a conformant file.
 - **`Element.byteOffset` inside a sequence item disagrees with itself and always has**: `0` inside a
   defined-length item (its own frame), file-absolute inside an undefined-length one. The same is true
-  of a warning's `position.byteOffset`. There is no frame-of-reference contract either way. Measure
-  it rather than assuming one.
+  of a warning's `position.byteOffset`. There is no frame-of-reference contract on either, and
+  **neither is covered by `DicomParseError.offsetFrame`** - that names the frame for a thrown fatal
+  and for the `{ strict: true }` escalation of a warning, and for nothing on the lenient path.
+  Measure it rather than assuming one.
 - **A failed CP-246 `UN` descent emits nothing.** The honest test for a consumer is
   `el.items === undefined`, **not** `ds.warnings`.
 - **`NESTING_DEPTH_LIMIT` is this library's bound, not the standard's.** A fully conformant file

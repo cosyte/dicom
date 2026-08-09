@@ -21,11 +21,12 @@ import {
   parseImplicitLE,
   TRANSFER_SYNTAX_PARSERS,
 } from "../../src/parser/transfer-syntax.js";
+import { OFFSET_FRAMES } from "../../src/parser/errors.js";
 import type { ParseContext } from "../../src/parser/types.js";
 
 function makeCtx(buffer: Buffer): ParseContext {
   return {
-    buffer,
+    frame: { buffer, name: OFFSET_FRAMES.INPUT },
     strict: false,
     stripPreamble: "tolerate",
     warnings: [],
