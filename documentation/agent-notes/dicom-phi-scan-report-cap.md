@@ -84,15 +84,16 @@ run still refuses, the count still includes it, the file is still named, and `--
 prints it. A test asserts exactly that, in both directions, rather than asserting nothing is lost.
 
 **🛑 WHICH LINES SURVIVE IS SCAN ORDER, NOT FILE ORDER, AND THE OBVIOUS READING IS WRONG.** Measured:
-with the person name at the start of an appended block and the DOB two lines later, the capped report
-prints the **DOB** and not the name. "The first n hits" is not "the first n in the file".
+with the person name at the start of an appended block and the DOB after it, the capped report prints
+the **DOB** and not the name. "The first n hits" is not "the first n in the file".
 
 **🛑 AN EARLIER DRAFT ENUMERATED THAT ORDER AND ARGUED FROM IT THAT PER-RECOGNIZER CAP SLOTS "BUY
-COMPLEXITY AND NO SAFETY". A REFUTER FALSIFIED BOTH HALVES ON THIS SLICE'S OWN SECOND PAYLOAD ROW**
-(`0x30-0x3F`, where the noise is date-shaped and the name is not, so the two are not the same class)
-**and the enumeration was incomplete besides. Both are DELETED rather than reworded**, per
-this repo's standing rule. **Do not write either of them again**: the order is not enumerated here,
-and no claim is made about what reserving slots would or would not buy.
+COMPLEXITY AND NO SAFETY". A REFUTER FALSIFIED BOTH HALVES**: the enumeration omitted
+`scanEmbeddedObjects`, which `scanTarget` runs after both of the routes it named, so the doc corpus's
+embedded objects rank last and are withheld first; and the `0x30-0x3F` row above is a case where the
+noise and the name are not the same class. **Both are DELETED rather than reworded**, per this repo's
+standing rule. **Do not write either of them again**: the order is not enumerated here, and no claim
+is made about what reserving slots would or would not buy.
 
 ## The false-positive spread, which is the reason none of this narrows the detector
 
