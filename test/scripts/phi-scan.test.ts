@@ -2234,6 +2234,43 @@ describe("phi-scan: the report's TAIL survives a stderr pipe the reader is not d
     expect(countHitLines(stderr)).toBe(STALL_HITS);
     expect(stderr).toContain(`${String(STALL_HITS)} hits across 1 file(s).`);
   });
+
+  it("🛑 A VANISHED READER DOES NOT BECOME EXIT 1, WHICH IS THE CODE THAT MEANS PHI", async () => {
+    // The cost of not calling `process.exit()`, and it was REFUTED into existence
+    // rather than anticipated. `process.exit()` hid every late stdio error; without
+    // it, a write to a pipe whose reader has gone fails with `EPIPE` on a LATER
+    // tick, after `run()` has returned, so `run()`'s try/catch cannot see it and
+    // Node's default unhandled-`'error'` path exits 1.
+    //
+    // 1 is the one code that means "PHI was found". Measured against `21d42f5`
+    // before the listeners were added, reader closed: a clean corpus went 0 -> 1
+    // and an invocation error went 2 -> 1, turning "the scan did not complete, so
+    // it says nothing about the corpus" into a confident wrong answer.
+    //
+    // Both codes are asserted, because the two say opposite things and only one of
+    // them is about the corpus at all.
+    const root = makeRepo();
+
+    const runWithNoReader = async (args: string[]): Promise<number | null> => {
+      const child = spawn(process.execPath, [SCANNER_PATH, ...args], {
+        cwd: root,
+        shell: false,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      // Close both read ends at once, so whichever stream the run writes to is
+      // the one that breaks. This is what `| head -n 0` does to it.
+      child.stdout.destroy();
+      child.stderr.destroy();
+      return new Promise<number | null>((resolve) => {
+        child.on("close", resolve);
+      });
+    };
+
+    // A clean corpus writes to STDOUT and must stay 0.
+    expect(await runWithNoReader([])).toBe(0);
+    // An invocation error writes to STDERR and must stay 2. Not 1.
+    expect(await runWithNoReader(["--max-hit-lines", "banana"])).toBe(2);
+  });
 });
 
 describe("phi-scan: an unexpected error is an invocation error, never a hit", () => {

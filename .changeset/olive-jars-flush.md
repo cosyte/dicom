@@ -21,20 +21,30 @@ This was red on `main`. `ci / verify (24, ubuntu-latest)` is a required check an
 `08ed3ee` and `21d42f5`, both times on `countHitLines(...) === 200` reading 193, and on `#106`'s PR
 head reading 191, with `verify (22)` green throughout and the exit code correct in every case.
 
-That the exit code was correct is what located it: `report()` had run to completion and issued all
-200 writes, so nothing was mis-scanned and the loss was in delivery. Measured on `21d42f5` with the
-reader stalled, 5,000 small stderr writes: `process.exit(1)` delivered 784 lines, about one 64 KiB
-pipe, on 3 of 3 runs; `process.exitCode = 1` delivered 5,000 on 3 of 3. Node 22.23.1 and 24.19.0
-behaved identically there, so the version split is scheduling and not stdio semantics. The CI
-failure itself reproduced on the real script and the real fixture once the reader was made to lose
-(single-page pipes plus CPU contention): **30 of 60 runs truncated, counts including 190, 191 and
-192, exit 1 every time; 0 of 60 with this change.**
+The scan is deterministic, so the hit COUNT cannot vary between runs: the fixture is 200 distinct
+tokens and the recognizers are plain global regexes over the whole file. What varied is what
+arrived. Measured on `21d42f5` with the reader stalled, 5,000 small stderr writes: `process.exit(1)`
+delivered 784 lines, about one 64 KiB pipe, on 3 of 3 runs; `process.exitCode = 1` delivered 5,000
+on 3 of 3. Node 22.23.1 and 24.19.0 behaved identically there, so the version split is scheduling
+and not stdio semantics. The CI failure itself reproduced on the real script and the real fixture
+once the reader was made to lose (single-page pipes plus CPU contention): **30 of 60 runs truncated,
+counts including 190, 191 and 192, exit 1 every time; 0 of 60 with this change.**
 
-It changes what ARRIVES, never what is WRITTEN. Base and fixed emit byte-identical stdout, stderr
-and exit code across 12 cases spanning all three of the contract's exit codes, the per-file print
-cap at its default and at 0, 1 and 3, the net-leak control and both cells of the finding that
-`report()` is not monotone in `hits` at the cap. Nothing about the cap or its non-monotonicity is
-changed or claimed away here; the printed set simply arrives.
+Not calling `process.exit()` has a cost, and it is paid here rather than discovered later: it makes
+a late stdio error reachable. A write to a pipe whose reader has gone fails with `EPIPE` on a later
+tick, after `run()` has returned, so `run()`'s try/catch cannot see it and Node's default
+unhandled-`'error'` path exits 1, the one code that means "PHI was found". Without a listener a
+clean corpus went 0 to 1 and an invocation error went 2 to 1. Both stdio streams now discard a late
+error, which is exactly what `process.exit()` did by making it unreachable, so the exit code stays
+exactly what `run()` returned. **The residual, disclosed and not closed: with a reader that never
+drains at all this script now waits instead of exiting.** Every caller in this repo drains, and the
+shipped `tsx` path does not exit on a stalled reader on `21d42f5` either.
+
+It changes what ARRIVES, never what is WRITTEN. Over a draining reader, base and fixed emit
+byte-identical stdout, stderr and exit code across 12 cases spanning all three of the contract's
+exit codes, the per-file print cap at its default and at 0, 1 and 3, the net-leak control and both
+cells of the finding that `report()` is not monotone in `hits` at the cap. Nothing about the cap or
+its non-monotonicity is changed or claimed away here; the printed set simply arrives.
 
 Still open and NOT fixed here: `test/helpers/run-script.ts` inherits `spawnSync`'s 1 MiB
 `maxBuffer`, which truncates at roughly 15,400 lines in both exit modes. That is the parent dropping

@@ -38,14 +38,17 @@ Every failure is one of the two `--max-hit-lines 0` cases and always the same sh
 | `21d42f5` main | `caps by DEFAULT, with no flag` | 193 | 200 |
 | `e32e595` (`#106` PR) | `` `--max-hit-lines 0` prints every one `` | 191 | 200 |
 
-## The deduction that fixed the search, before any experiment
+## What rules out "the scanner found fewer hits on Node 24"
 
-**The exit code was right in every failure.** `main` computes it from `hits.length` and the
-assertion above the failing one - `expect(r.code).toBe(1)` - passed every time. `report()` therefore
-ran to completion and **issued all 200 writes**. Nothing was mis-scanned and no hit was lost.
+**The scan is deterministic.** The fixture is 200 distinct PN-shaped tokens written by the test, the
+allow-list is copied from this repo, and `scanText`'s three passes are plain global regexes over the
+whole file with no ordering or timing input. The same bytes produce the same 200 hits on every run
+and every Node version, so the hit COUNT cannot vary. What varied is what arrived.
 
-That rules out the whole class of "the scanner found fewer hits on Node 24" explanations and leaves
-exactly one: **the bytes were issued and did not arrive.** Everything below is about delivery.
+**🛑 AN EARLIER DRAFT ARGUED THIS FROM THE EXIT CODE INSTEAD - "exit 1 was correct, therefore all
+200 writes were issued" - AND A REFUTER FALSIFIED IT.** Exit 1 means `hits.length >= 1` and nothing
+more, so it is equally consistent with 193 hits having been found. The conclusion held; the argument
+did not. It is DELETED rather than reworded. Do not write it again.
 
 ## The mechanism, established rather than assumed
 
@@ -89,15 +92,43 @@ an idle box drains the pipe faster than the child fills it; the defect needs a r
 
 ## What shipped
 
-One statement, plus a case that makes the defect deterministic:
-
 ```js
+const discardLateStdioError = (): void => {};
+process.stdout.on("error", discardLateStdioError);
+process.stderr.on("error", discardLateStdioError);
+
 process.exitCode = run();
 ```
 
-Node returns from the main script and exits once the loop has drained. Nothing in this script keeps
-the loop alive on its own - the scan is entirely synchronous - so this changes only that the process
-ends **after** its own output, not when.
+Node returns from the main script and exits once the loop has drained.
+
+**The two listeners are not decoration, and they are here because pass 1 of the gate REFUTED the
+slice without them.** `process.exit()` hid every late stdio error; without it a write to a pipe
+whose reader has gone fails with `EPIPE` on a **later tick**, after `run()` has returned, so
+`run()`'s try/catch cannot see it and Node's default unhandled-`'error'` path exits **1** - the one
+code that means "PHI was found". Measured, reader closed (`| head -n 0`):
+
+| run | `21d42f5` | one statement, no listeners | shipped |
+| --- | --- | --- | --- |
+| clean corpus | 0 | **1** | 0 |
+| invocation error (`--max-hit-lines banana`) | 2 | **1** | 2 |
+
+`2 -> 1` turns "the scan did not complete, so it says nothing about the corpus" into a confident
+wrong answer, and it printed an uncaught-exception stack that the `run()` JSDoc forbids. Both codes
+hold again under `node` and under `tsx`, which is the invocation `pnpm phi-scan` uses.
+
+**The error is DISCARDED rather than reported, and that is base parity rather than a judgement that
+it does not matter.** `process.exit()` made every late stdio error unreachable, so the exit code was
+always exactly what `run()` returned; it stays exactly that. There is also nowhere to report it -
+the stream that failed is the one a diagnostic would go to.
+
+**🔴 THE COST, MEASURED AND NOT CLOSED HERE: with a reader that never drains at all, the script now
+WAITS instead of exiting**, where `process.exit()` ended it by dropping the report. An earlier draft
+of the JSDoc claimed this "does not change when the process ends"; that is FALSE and is deleted.
+Every caller in this repo drains (`spawnSync`, and the one `spawn` in the suite attaches a
+listener), and the shipped `pnpm phi-scan` path runs under `tsx`, which does not exit on a stalled
+reader on `21d42f5` either. Blocking until the reader takes the bytes is what makes the report
+whole; a timeout here would re-introduce the defect this slice closed.
 
 ## Why this could not be folded into `#106`
 
@@ -127,8 +158,10 @@ stdout bytes + stderr bytes:
 | missing flag argument | 2 | 53 | yes |
 | all mode, leak in `docs-content/` | 1 | 382 | yes |
 
-**12 of 12 byte-identical, and all three exit codes of the contract (0 / 1 / 2) are exercised and
-preserved.** So:
+**12 of 12 byte-identical, over a DRAINING reader, and all three exit codes of the contract
+(0 / 1 / 2) are exercised.** The draining qualifier is load-bearing and was added because a refuter
+refused the sentence without it: a vanished reader is a different question and is answered by its
+own table under "What shipped". So:
 
 - **`#104`'s per-file print cap is untouched.** The default, `0`, `1` and `3` all emit the same bytes
   as base, and the net-leak control still names both paths.
@@ -148,12 +181,22 @@ from the child's stderr, pauses 500 ms, then resumes.
 
 | script tail | result |
 | --- | --- |
-| `21d42f5` | 171 of 5,000 hit lines, **3 of 3 runs**, total line absent |
+| `21d42f5` | short, **3 of 3 runs**, total line absent |
 | shipped | 5,000 of 5,000, total line present |
 
+**No numeral is quoted for how short, deliberately.** How much of the report base delivers depends
+on the reader, and two honest measurements of it disagree: through this case in the suite it read
+171 of 5,000, and a refuter running the same shape standalone read 962-964 of 5,000. Both are the
+defect. Neither is a property of the scanner, so neither belongs in prose as one.
+
 The fixture is 25 x `floodText()` = 5,000 hits, ~400 KB of report, deliberately: a stalled reader can
-still receive one chunk plus one full pipe, about 128 KiB, so a smaller fixture lets a truncating
-scanner pass. Measured at 1,500 hits, one draw in five reached 79,592 bytes. **Do not shrink it.**
+still receive one chunk plus one full pipe, about 128 KiB, and the 962-964 measurement is ~80 KB
+against that bound, so a smaller fixture lets a truncating scanner pass. **Do not shrink it.**
+
+The second case pins the cost of the remedy rather than the defect: with both read ends destroyed,
+a clean corpus must still exit 0 and an invocation error must still exit 2. It **fails** on the
+one-statement version and **passes** on `21d42f5`, which is what makes it a parity guard and not a
+new invention.
 
 ## Residual, unchanged by this slice and NOT closed here
 
