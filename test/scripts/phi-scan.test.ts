@@ -1692,6 +1692,238 @@ describe("phi-scan: the walk is reconciled against git ls-files", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// The hit report's per-file print cap
+// ---------------------------------------------------------------------------
+//
+// `DICOM-SCANDICOM-SILENT-HALT` made the text sweep run over every Part 10
+// object's bytes, and its recognizers fire on image noise at a rate that is a
+// property of the payload's byte histogram. Re-measured on `b784c38`: 8 MiB of
+// synthetic `(7FE0,0010) OW` pixel data uniform over `0x41-0x60` produced tens of
+// thousands of hits and one stderr line each. The figures and the generator are
+// in `documentation/agent-notes/dicom-phi-scan-report-cap.md`.
+//
+// 🛑 THE CAP IS THE PLACE A FIX BECOMES A NET LEAK, so the cases below pin the
+// three properties that stop it being one, and the one thing it genuinely costs:
+// the exit code and the totals are computed off the hits and not off what was
+// printed; the cap is PER FILE, so no path goes unnamed however loud another file
+// is; a file with lines withheld says so with an exact count; and a withheld line
+// IS withheld, which the last pair of cases states rather than claims away.
+
+/**
+ * A PN-shaped token the text sweep matches, distinct per index.
+ *
+ * Assembled from parts, never written as a literal, for the reason
+ * `test/helpers/phi-scan-violators.ts` gives at length: every tracked file under
+ * `test/` is in this scanner's own corpus, so a caret-joined person-name token in
+ * this source would red the gate on the suite that proves the gate works. The PN
+ * recognizer admits letters only, so the index is spelled in letters.
+ */
+function pnNoiseToken(i: number): string {
+  const caret = String.fromCharCode(0x5e);
+  const hi = String.fromCharCode(0x41 + Math.floor(i / 26));
+  const lo = String.fromCharCode(0x41 + (i % 26));
+  return `Noise${hi}${lo}${caret}Given${hi}${lo}`;
+}
+
+/** How many hit-bearing lines a `pnNoiseToken` file carries. One hit each, so this IS the count. */
+const FLOOD_HITS = 200;
+
+function floodText(): string {
+  const lines: string[] = [];
+  for (let i = 0; i < FLOOD_HITS; i += 1) lines.push(pnNoiseToken(i));
+  return lines.join("\n") + "\n";
+}
+
+/** Hit DETAIL lines only: the per-hit lines, not the `HIT:` headers or the summary. */
+function countHitLines(stderr: string): number {
+  return stderr.split("\n").filter((l) => /^ {2}tag=/.test(l)).length;
+}
+
+describe("phi-scan: the hit report is capped PER FILE, and the cap cannot move the verdict", () => {
+  it("prints an exact count of what it did not print, and the true total", () => {
+    const root = makeRepo();
+    writeFileSync(join(root, "test", "fixtures", "flood.txt"), floodText());
+
+    const r = runIn(root, ["--max-hit-lines", "3", join(root, "test", "fixtures", "flood.txt")]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(countHitLines(r.stderr)).toBe(3);
+    expect(r.stderr).toContain(`... and ${String(FLOOD_HITS - 3)} more hit(s) in this file`);
+    // The total is over the hits, not over the lines printed.
+    expect(r.stderr).toContain(`${String(FLOOD_HITS)} hits across 1 file(s).`);
+    expect(r.stderr).toContain(`${String(FLOOD_HITS - 3)} hit line(s) were not printed`);
+  });
+
+  it("`--max-hit-lines 0` prints every one, so nothing is lost, only unprinted", () => {
+    const root = makeRepo();
+    writeFileSync(join(root, "test", "fixtures", "flood.txt"), floodText());
+
+    const r = runIn(root, ["--max-hit-lines", "0", join(root, "test", "fixtures", "flood.txt")]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(countHitLines(r.stderr)).toBe(FLOOD_HITS);
+    expect(r.stderr).not.toContain("more hit(s) in this file");
+    expect(r.stderr).not.toContain("were not printed");
+  });
+
+  it("🛑 THE NET-LEAK CONTROL: a loud file does not push a later file's name off the report", () => {
+    // This is the case a GLOBAL cap would fail, and it is why the cap is per
+    // file. The flood is scanned FIRST (paths mode preserves argv order, so the
+    // ordering is the test's and not the filesystem's), and it carries far more
+    // hits than the cap. A global budget would be spent inside it and the second
+    // file, whose hit names a person, would never be reached.
+    const root = makeRepo();
+    const flood = join(root, "test", "fixtures", "flood.txt");
+    const named = join(root, "test", "fixtures", "named.txt");
+    writeFileSync(flood, floodText());
+    writeFileSync(named, SYNTHETIC_PHI);
+
+    const r = runIn(root, ["--max-hit-lines", "3", flood, named]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("flood.txt");
+    expect(r.stderr).toContain("named.txt");
+    expect(r.stderr).toContain(CARET_PN);
+  });
+
+  it("does not cap a file whose hits fit, so the suppression line is not always on", () => {
+    const root = makeRepo();
+    const named = join(root, "test", "fixtures", "named.txt");
+    writeFileSync(named, SYNTHETIC_PHI);
+
+    const r = runIn(root, ["--max-hit-lines", "3", named]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain(CARET_PN);
+    expect(r.stderr).not.toContain("more hit(s) in this file");
+    expect(r.stderr).not.toContain("were not printed");
+  });
+
+  it("cannot turn a hit into a clean run, at any cap including one", () => {
+    // The property the whole cap rests on: `main` derives the exit code from the
+    // hits, never from what `report` wrote. A cap of 1 over a 200-hit file prints
+    // one line and still refuses.
+    const root = makeRepo();
+    const flood = join(root, "test", "fixtures", "flood.txt");
+    writeFileSync(flood, floodText());
+
+    const r = runIn(root, ["--max-hit-lines", "1", flood]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(countHitLines(r.stderr)).toBe(1);
+    expect(r.stdout).not.toContain("OK - no hits");
+  });
+
+  it("🛑 A WITHHELD LINE IS WITHHELD: the name is off the default report and one flag away", () => {
+    // Stated rather than claimed away. The cap's cost is real: a hit line that
+    // names a person, sitting behind more hits than the cap, is NOT printed by
+    // default. What makes that acceptable is the other half of this case. The
+    // run still refuses, the count still includes it, the file is still named,
+    // and `--max-hit-lines 0` prints it. What is never acceptable is a green run,
+    // and the case above pins that this cannot produce one.
+    const root = makeRepo();
+    const mixed = join(root, "test", "fixtures", "mixed.txt");
+    writeFileSync(mixed, floodText() + SYNTHETIC_PHI);
+
+    const capped = runIn(root, ["--max-hit-lines", "3", mixed]);
+    expect(capped.code, `stderr: ${capped.stderr}`).toBe(1);
+    expect(capped.stderr).not.toContain(CARET_PN);
+    expect(capped.stderr).toContain("more hit(s) in this file");
+
+    const uncapped = runIn(root, ["--max-hit-lines", "0", mixed]);
+    expect(uncapped.code, `stderr: ${uncapped.stderr}`).toBe(1);
+    expect(uncapped.stderr).toContain(CARET_PN);
+    // Same verdict, same total, different amount printed. That is the whole
+    // difference the flag makes.
+    expect(countHitLines(uncapped.stderr)).toBeGreaterThan(countHitLines(capped.stderr));
+  });
+
+  it("🛑 WHICH lines survive is RECOGNIZER order, not file order, and that is not obvious", () => {
+    // Measured, and it contradicts the reading a reviewer arrives with. `scanText`
+    // makes three whole-file passes in sequence (ISO date, then compact date, then
+    // PN shape), so every date hit in a file precedes every PN hit in it whatever
+    // their byte offsets are. In the fixture below the person name is at offset 0
+    // of the appended block and the DOB two lines after it, yet the DOB is printed
+    // and the name is not: the PN pass runs last and the flood is already ahead of
+    // it. "The first n hits" is therefore not "the first n in the file", and a
+    // reader who assumed otherwise would mis-read every capped report.
+    //
+    // It is disclosed rather than fixed. Reserving cap slots per recognizer does
+    // NOT help the case that matters, where the noise and the real hit are the
+    // same shape: 200 PN noise hits and one real PN would still starve the real
+    // one inside its own class. It would buy complexity and no safety.
+    const root = makeRepo();
+    const mixed = join(root, "test", "fixtures", "mixed.txt");
+    writeFileSync(mixed, floodText() + SYNTHETIC_PHI);
+
+    const capped = runIn(root, ["--max-hit-lines", "3", mixed]);
+    expect(capped.code, `stderr: ${capped.stderr}`).toBe(1);
+    expect(capped.stderr).toContain(VIOLATOR_DOB);
+    expect(capped.stderr).not.toContain(CARET_PN);
+
+    // The suppression line itself carries a count and the flag, and nothing off
+    // the hits it stands for: no tag, no VR, no value, no offset. A diagnostic
+    // about a PHI leak is itself a PHI surface.
+    // The remainder is derived from the run's own total rather than written as a
+    // numeral, so the two cannot drift apart and be quoted as each other.
+    const total = Number(/(\d+) hits across/.exec(capped.stderr)?.[1]);
+    expect(total).toBeGreaterThan(3);
+    const line = capped.stderr.split("\n").find((l) => l.includes("more hit(s) in this file"));
+    expect(line).toBe(
+      `  ... and ${String(total - 3)} more hit(s) in this file, not printed. ` +
+        "Re-run with --max-hit-lines 0 to print every one.",
+    );
+  });
+
+  it("caps by DEFAULT, with no flag, which is the run CI and the pre-commit hook make", () => {
+    // The default's VALUE is not written here. A numeral copied into a test is a
+    // second source of truth that drifts from the constant. What is pinned is
+    // that a default run prints strictly fewer lines than an uncapped one over
+    // the same corpus while reporting the same total. This assumes the default
+    // sits below `FLOOD_HITS`, and it fails CLOSED if a future raise passes it.
+    const root = makeRepo();
+    const flood = join(root, "test", "fixtures", "flood.txt");
+    writeFileSync(flood, floodText());
+
+    const dflt = runIn(root, [flood]);
+    const uncapped = runIn(root, ["--max-hit-lines", "0", flood]);
+    expect(dflt.code, `stderr: ${dflt.stderr}`).toBe(1);
+    expect(uncapped.code, `stderr: ${uncapped.stderr}`).toBe(1);
+    expect(countHitLines(uncapped.stderr)).toBe(FLOOD_HITS);
+    expect(countHitLines(dflt.stderr)).toBeLessThan(FLOOD_HITS);
+    expect(dflt.stderr).toContain(`${String(FLOOD_HITS)} hits across 1 file(s).`);
+  });
+
+  it("refuses a bad --max-hit-lines (exit 2) rather than falling back to the default", () => {
+    // A run that quietly printed a different amount than it was told to is the
+    // same shape of unobservable behaviour this script exists to close. Exit 2
+    // is the invocation-error code, and it is NOT 1: nothing was scanned, so the
+    // run says nothing about the corpus.
+    const root = makeRepo();
+    const flood = join(root, "test", "fixtures", "flood.txt");
+    writeFileSync(flood, floodText());
+
+    for (const bad of ["-1", "1.5", "abc", "1e9", " 3", ""]) {
+      const r = runIn(root, ["--max-hit-lines", bad, flood]);
+      expect(r.code, `value ${JSON.stringify(bad)} stderr: ${r.stderr}`).toBe(2);
+      expect(r.stderr).toContain("--max-hit-lines expects a non-negative integer");
+      expect(countHitLines(r.stderr)).toBe(0);
+    }
+
+    const missing = runIn(root, ["--max-hit-lines"]);
+    expect(missing.code, `stderr: ${missing.stderr}`).toBe(2);
+    expect(missing.stderr).toContain("--max-hit-lines requires a count argument");
+  });
+
+  it("the flag alone does not flip the run into paths mode, so all-mode still walks", () => {
+    // `parseArgs` selects `paths` mode from POSITIONAL paths and `--allow-fixture`
+    // only. A flag that silently emptied the corpus would report clean over it.
+    const root = makeRepo();
+    git(root, ["add", "test/fixtures/ordinary.txt", "README.md", "docs-content/intro.md"]);
+    writeFileSync(join(root, "docs-content", "leak.md"), SYNTHETIC_PHI);
+
+    const r = runIn(root, ["--max-hit-lines", "0"]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("docs-content/leak.md");
+  });
+});
+
 describe("phi-scan: an unexpected error is an invocation error, never a hit", () => {
   it("exits 2 on an unreadable directory under the walk root, not 1", () => {
     // The contract is 0 clean / 1 hits / 2 invocation error, and an uncaught
