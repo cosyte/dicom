@@ -84,6 +84,7 @@
     "measure:phi-scan-unread": "tsx scripts/measure-phi-scan-unread.ts",
     "measure:phi-scan-retention": "node scripts/measure-phi-scan-retention.ts",
     "measure:phi-scan-monotonicity": "node scripts/measure-phi-scan-monotonicity.ts",
+    "measure:phi-scan-regex-statics": "node scripts/measure-phi-scan-regex-statics.ts",
     "phi-scan": "tsx scripts/phi-scan.ts",
     "smoke": "tsx scripts/smoke.ts",
     "pack:docs": "bash scripts/build-docs-artifacts.sh",
