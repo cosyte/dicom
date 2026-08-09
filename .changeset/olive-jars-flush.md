@@ -37,8 +37,9 @@ unhandled-`'error'` path exits 1, the one code that means "PHI was found". Witho
 clean corpus went 0 to 1 and an invocation error went 2 to 1. Both stdio streams now discard a late
 error, which is exactly what `process.exit()` did by making it unreachable, so the exit code stays
 exactly what `run()` returned. **The residual, disclosed and not closed: with a reader that never
-drains at all this script now waits instead of exiting.** Every caller in this repo drains, and the
-shipped `tsx` path does not exit on a stalled reader on `21d42f5` either.
+drains at all this script now waits instead of exiting, where `process.exit()` ended it by dropping
+the report.** That is introduced, on `node` and under `tsx` alike. A timeout would re-introduce the
+defect this closes, so it is disclosed rather than answered.
 
 It changes what ARRIVES, never what is WRITTEN. Over a draining reader, base and fixed emit
 byte-identical stdout, stderr and exit code across 12 cases spanning all three of the contract's

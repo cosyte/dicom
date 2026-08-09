@@ -1684,10 +1684,9 @@ function run(): number {
  *
  * 🔴 THE RESIDUAL, MEASURED AND NOT CLOSED HERE: with a reader that never drains at all, this
  * script now WAITS instead of exiting, where `process.exit()` ended it by dropping the report.
- * Every caller in this repo drains (`spawnSync`, and the one `spawn` in the suite attaches a
- * listener), and the shipped `pnpm phi-scan` path runs under `tsx`, which does not exit on a
- * stalled reader on `21d42f5` either. Blocking until the reader takes the bytes is what makes the
- * report whole; a timeout here would re-introduce the defect this file just closed.
+ * That is INTRODUCED, on `node` and under `tsx` alike, which is the runner `pnpm phi-scan` uses.
+ * Blocking until the reader takes the bytes is what makes the report whole; a timeout here would
+ * re-introduce the defect this file just closed.
  */
 const discardLateStdioError = (): void => {};
 process.stdout.on("error", discardLateStdioError);

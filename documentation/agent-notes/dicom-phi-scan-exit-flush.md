@@ -42,8 +42,13 @@ Every failure is one of the two `--max-hit-lines 0` cases and always the same sh
 
 **The scan is deterministic.** The fixture is 200 distinct PN-shaped tokens written by the test, the
 allow-list is copied from this repo, and `scanText`'s three passes are plain global regexes over the
-whole file with no ordering or timing input. The same bytes produce the same 200 hits on every run
-and every Node version, so the hit COUNT cannot vary. What varied is what arrived.
+whole file. The same bytes produce the same 200 hits on every run and every Node version, so the hit
+COUNT cannot vary. What varied is what arrived.
+
+**"With no ordering or timing input" was in that sentence and is DELETED**: `CUTOFF_YEAR` is
+`new Date().getFullYear() - 120`, a wall-clock read, so the premise was false as written even though
+the conclusion holds - the 200 tokens carry no digits, so neither date pass can fire on them. A
+refuter caught it as the same shape as the syllogism it replaced.
 
 **🛑 AN EARLIER DRAFT ARGUED THIS FROM THE EXIT CODE INSTEAD - "exit 1 was correct, therefore all
 200 writes were issued" - AND A REFUTER FALSIFIED IT.** Exit 1 means `hits.length >= 1` and nothing
@@ -125,10 +130,22 @@ the stream that failed is the one a diagnostic would go to.
 **🔴 THE COST, MEASURED AND NOT CLOSED HERE: with a reader that never drains at all, the script now
 WAITS instead of exiting**, where `process.exit()` ended it by dropping the report. An earlier draft
 of the JSDoc claimed this "does not change when the process ends"; that is FALSE and is deleted.
-Every caller in this repo drains (`spawnSync`, and the one `spawn` in the suite attaches a
-listener), and the shipped `pnpm phi-scan` path runs under `tsx`, which does not exit on a stalled
-reader on `21d42f5` either. Blocking until the reader takes the bytes is what makes the report
-whole; a timeout here would re-introduce the defect this slice closed.
+It is INTRODUCED, on `node` and under `tsx` alike, which is the runner `pnpm phi-scan` uses.
+Blocking until the reader takes the bytes is what makes the report whole; a timeout here would
+re-introduce the defect this slice closed.
+
+**🛑 A SECOND DRAFT TRIED TO SOFTEN THAT RESIDUAL AND A REFUTER FALSIFIED THE SOFTENER TOO.** It
+read "every caller in this repo drains, and the shipped `pnpm phi-scan` path runs under `tsx`, which
+does not exit on a stalled reader on `21d42f5` either." Both halves were wrong: base exits under
+`tsx` in ~430 ms as well as under `node`, so the hang is this slice's; and the suite has had TWO
+`spawn` sites since this slice added one, and the one it added destroys its read ends rather than
+attaching a listener. **The clause is DELETED, not reworded a third time.** The residual stands
+unqualified, which is the honest form of it.
+
+**🛑 AND A NOTE ON HOW THAT ONE GOT IN, BECAUSE IT IS THE REUSABLE PART.** It was inherited from a
+refuter's own finding and written into the tree WITHOUT BEING RE-MEASURED. When it finally was, the
+first draw agreed with the false version and four repeats refuted it. A single draw against a
+process that races a timeout is not a measurement.
 
 ## Why this could not be folded into `#106`
 
