@@ -1647,5 +1647,27 @@ function run(): number {
   }
 }
 
-const exitCode = run();
-process.exit(exitCode);
+/**
+ * 🛑 `process.exitCode`, NEVER `process.exit()`. `process.exit()` tears the process down without
+ * waiting for stdio libuv has accepted but not yet written, and this script's stderr is a PIPE
+ * under every caller that matters - `spawnSync` in this repo's own suite, and the shell pipeline
+ * a CI job runs it in. A pipe write that cannot complete immediately is queued and flushed on a
+ * later loop turn, so `report()` returning is NOT the same as its bytes having left the process.
+ *
+ * That is a PHI-gate defect and not a cosmetic one: the exit code is computed off `hits` and was
+ * always right, so a truncated report is a run that REFUSES while under-naming what it found.
+ * The dropped bytes are the END of the report - the last hit lines and the total - which is the
+ * part a reader trusts to say how much there was.
+ *
+ * Measured on `21d42f5`, `scripts/phi-scan.ts --max-hit-lines 0` over a 200-hit file, stderr on a
+ * pipe whose reader is not keeping up: **30 of 60 runs delivered fewer than 200 hit lines** (190,
+ * 191, 192, 170, 171 seen) with exit 1 every time, and **60 of 60 delivered all 200 with the line
+ * below**. The generator and the conditions are in
+ * `documentation/agent-notes/dicom-phi-scan-exit-flush.md`.
+ *
+ * Setting `exitCode` lets Node return from the main script and exit once the loop has drained,
+ * which is the only thing that makes the report's tail a guarantee rather than a race. Nothing
+ * here keeps the loop alive on its own - the scan is entirely synchronous - so this does not
+ * change when the process ends, only that it ends after its own output.
+ */
+process.exitCode = run();

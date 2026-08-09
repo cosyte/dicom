@@ -17,7 +17,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import {
   writeFileSync,
   mkdirSync,
@@ -2153,6 +2153,86 @@ describe("phi-scan: the hit report is capped PER FILE, and the cap cannot move t
     const r = runIn(root, ["--max-hit-lines", "0"]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toContain("docs-content/leak.md");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The report's tail, when stderr is a pipe the reader is not draining
+// ---------------------------------------------------------------------------
+
+/**
+ * Enough hits that the uncapped report cannot fit in a pipe TWICE OVER.
+ *
+ * A Linux pipe holds 64 KiB. The case below reads one chunk and then stalls, so
+ * a truncating scanner can still deliver up to one chunk plus one full pipe -
+ * about 128 KiB - and a smaller fixture would let it pass. 25 x `floodText()` is
+ * 5,000 hits and roughly 400 KB of report, so the margin is about threefold.
+ * Measured at 1,500 hits, one draw in five reached 79,592 bytes; that is the
+ * fixture size this constant exists to avoid.
+ */
+const STALL_FLOODS = 25;
+const STALL_HITS = FLOOD_HITS * STALL_FLOODS;
+
+describe("phi-scan: the report's TAIL survives a stderr pipe the reader is not draining", () => {
+  it("prints every hit line and the total, with the reader stalled mid-report", async () => {
+    // 🛑 THE DEFECT THIS PINS IS A PHI-GATE DEFECT, NOT A COSMETIC ONE. The exit
+    // code is computed off `hits` and was always right, so the failure mode is a
+    // run that REFUSES while under-naming what it found - and the bytes it drops
+    // are the END of the report, the last hit lines and the total, which is the
+    // part a reader trusts to say how much there was.
+    //
+    // `scripts/phi-scan.ts` ended `process.exit(run())`. That tears the process
+    // down without waiting for stdio libuv has accepted but not yet written, and
+    // stderr is a PIPE under every caller that matters: `spawnSync` here, and the
+    // shell pipeline CI runs the script in. Once one write cannot complete
+    // immediately, every later one queues behind it and only a loop turn flushes
+    // it - which `process.exit()` never allows.
+    //
+    // On `main` this fired as a ~50% flake in `ci / verify (24)` on the two
+    // `--max-hit-lines 0` cases above: 191 and 193 of 200 hit lines, exit 1 both
+    // times, `verify (22)` green, and unreproducible under an idle reader. This
+    // case makes it deterministic by stalling the reader instead of hoping the
+    // scheduler does. Measured against `21d42f5`: 5 of 5 runs short (171-1,006 of
+    // 1,500 hit lines at that fixture size), 0 of 5 carrying the total. With
+    // `process.exitCode`: 5 of 5 complete.
+    //
+    // SECURITY, and it is the file header's rule not an exception to it: array
+    // args, no shell. `spawn` rather than `spawnSync` because the whole point is
+    // to control WHEN the parent reads, which a synchronous call cannot express.
+    const root = makeRepo();
+    const flood = join(root, "test", "fixtures", "flood.txt");
+    writeFileSync(flood, floodText().repeat(STALL_FLOODS));
+
+    const child = spawn(process.execPath, [SCANNER_PATH, "--max-hit-lines", "0", flood], {
+      cwd: root,
+      shell: false,
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+
+    // Read the first chunk, then stop reading for long enough that the child
+    // fills the pipe and has to queue the rest. A scanner that exits on its own
+    // terms blocks here and finishes once reading resumes; one that calls
+    // `process.exit()` drops whatever it queued.
+    let stderr = "";
+    let stalled = false;
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+      if (!stalled) {
+        stalled = true;
+        child.stderr.pause();
+        setTimeout(() => child.stderr.resume(), 500);
+      }
+    });
+
+    const code = await new Promise<number | null>((resolve) => {
+      child.on("close", resolve);
+    });
+
+    expect(stalled, "the reader never saw a first chunk, so nothing was stalled").toBe(true);
+    expect(code, `stderr: ${stderr.slice(-400)}`).toBe(1);
+    expect(countHitLines(stderr)).toBe(STALL_HITS);
+    expect(stderr).toContain(`${String(STALL_HITS)} hits across 1 file(s).`);
   });
 });
 
