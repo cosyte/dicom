@@ -1,4 +1,4 @@
-# The payload never becomes a `RegExp` subject: V8's legacy statics hold no scan target
+# The scan route hands no target bytes to a `RegExp`
 
 > **⚠ DISCOVERABILITY, DISCLOSED RATHER THAN PAPERED OVER.** `CLAUDE.md` was **not** edited:
 > derived headroom is **39,550 - 39,544 = 6 bytes**, which is not a line. Derive it, never restate
@@ -138,8 +138,9 @@ base, because only it asserts a property base did not have.
   length in code units of `scripts/phi-allow-list.txt`. The remaining subjects are `process.argv`,
   the allow-list, `phi-scan-overrides.md` and `git diff --cached --raw` output. **Neither config
   file is inside `SCAN_ROOTS`** (`test`, `README.md`, `docs-content`), so the walk and `--staged`
-  never reach either as a target. **Both can be named as positional paths**, and in that mode the
-  config route and the scan route read the same bytes. Unchanged here.
+  never reach either as a target. **The allow-list is the one file both routes read**: it is parsed
+  on every run and can also be named as a positional path, which is exactly the run the `3772`
+  above comes from. Unchanged here.
 - `hits` is still unbounded as an array; the relocation, `contextPath` and `attributes[].tag` stand;
   a flood within one recognizer entry still buries a later hit; the never-draining-reader wait and
   `run-script.ts`'s 1 MiB `maxBuffer` are untouched by this slice in either direction.
