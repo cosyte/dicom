@@ -316,8 +316,8 @@ function isBase64Char(code: number): boolean {
  * 🛑 NO TEST PINS THAT EQUIVALENCE, AND AN EARLIER DRAFT OF THIS PARAGRAPH SAID ONE DID. It named
  * `test/scripts/phi-scan.test.ts`, which pins the no-refusal PROPERTY and nothing about the run set;
  * a disclosure that names a test must name one that exists, so the sentence is DELETED rather than
- * reworded. It cannot be a unit test as things stand: this is a CLI that calls `process.exit` at
- * module scope, so `base64Runs` is not importable. What the suite does pin is the FLOOR, which is the
+ * reworded. It cannot be a unit test as things stand: this is a CLI that runs its scan at module
+ * scope, so `base64Runs` is not importable. What the suite does pin is the FLOOR, which is the
  * end a narrowing would show up at first - `"reaches the SHORTEST real fixture in docs-content, not
  * just a test-built one"` takes the shortest DICOM-shaped run out of the shipped `docs-content/`
  * corpus and requires the scanner to find a name appended to it. The whole-corpus comparison is
@@ -1647,5 +1647,49 @@ function run(): number {
   }
 }
 
-const exitCode = run();
-process.exit(exitCode);
+/**
+ * 🛑 `process.exitCode`, NEVER `process.exit()`. `process.exit()` tears the process down without
+ * waiting for stdio libuv has accepted but not yet written, and this script's stderr is a PIPE
+ * under every caller that matters - `spawnSync` in this repo's own suite, and the shell pipeline
+ * a CI job runs it in. A pipe write that cannot complete immediately is queued and flushed on a
+ * later loop turn, so `report()` returning is NOT the same as its bytes having left the process.
+ *
+ * That is a PHI-gate defect and not a cosmetic one: the exit code is computed off `hits` and was
+ * always right, so a truncated report is a run that REFUSES while under-naming what it found.
+ * The dropped bytes are the END of the report - the last hit lines and the total - which is the
+ * part a reader trusts to say how much there was.
+ *
+ * Measured on `21d42f5`, `scripts/phi-scan.ts --max-hit-lines 0` over a 200-hit file, stderr on a
+ * pipe whose reader is not keeping up: **30 of 60 runs delivered fewer than 200 hit lines** (190,
+ * 191, 192, 170, 171 seen) with exit 1 every time, and **60 of 60 delivered all 200 with the line
+ * below**. The generator and the conditions are in
+ * `documentation/agent-notes/dicom-phi-scan-exit-flush.md`.
+ *
+ * Setting `exitCode` lets Node return from the main script and exit once the loop has drained,
+ * which is the only thing that makes the report's tail a guarantee rather than a race.
+ *
+ * 🛑 IT ALSO MAKES A LATE STDIO ERROR REACHABLE, WHICH `process.exit()` HID, AND THAT IS WHY THE
+ * LISTENERS BELOW ARE NOT OPTIONAL. A write to a pipe whose reader has gone fails with `EPIPE` on
+ * a LATER TICK, after `run()` has already returned, so `run()`'s try/catch cannot see it and
+ * Node's default unhandled-`'error'` path exits **1** - the one code that means "PHI was found".
+ * Measured on `21d42f5` versus this file without the listeners, reader closed (`| head -n 0`): a
+ * clean corpus went **0 -> 1** and an invocation error went **2 -> 1**, turning "the scan says
+ * nothing about the corpus" into a confident wrong answer, and printing an uncaught-exception
+ * stack that the `run()` JSDoc above forbids.
+ *
+ * The error is DISCARDED rather than reported, and that is base parity rather than a judgement
+ * that it does not matter: `process.exit()` made every late stdio error unreachable, so the exit
+ * code was always exactly what `run()` returned. It stays exactly that. There is also nowhere to
+ * report it - the stream that failed is the one a diagnostic would go to.
+ *
+ * 🔴 THE RESIDUAL, MEASURED AND NOT CLOSED HERE: with a reader that never drains at all, this
+ * script now WAITS instead of exiting, where `process.exit()` ended it by dropping the report.
+ * That is INTRODUCED, on `node` and under `tsx` alike, which is the runner `pnpm phi-scan` uses.
+ * Blocking until the reader takes the bytes is what makes the report whole; a timeout here would
+ * re-introduce the defect this file just closed.
+ */
+const discardLateStdioError = (): void => {};
+process.stdout.on("error", discardLateStdioError);
+process.stderr.on("error", discardLateStdioError);
+
+process.exitCode = run();
