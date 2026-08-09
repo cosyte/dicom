@@ -67,6 +67,16 @@ export interface RunScriptOptions {
    * sandbox deliberately does not carry.
    */
   root?: string;
+  /**
+   * Flags for the RUNNER, before the script path. `node` only.
+   *
+   * It exists for one job: preloading an observer with `--require` so a property of the script's
+   * RUN, rather than of its output, can be measured without editing the script. The scanner is
+   * synchronous end to end, so nothing that waits on its event loop can see it working; a preload
+   * hooking a call it makes per file can. Anything passed here changes how the child is started,
+   * so keep it to observation.
+   */
+  nodeArgs?: readonly string[];
 }
 
 /**
@@ -80,9 +90,10 @@ export function runRepoScript(
   args: readonly string[] = [],
   options: RunScriptOptions = {},
 ): ScriptResult {
-  const { root = REPO_ROOT, cwd = root, runner = "node" } = options;
+  const { root = REPO_ROOT, cwd = root, runner = "node", nodeArgs = [] } = options;
   const bin = runner === "tsx" ? join(REPO_ROOT, "node_modules", ".bin", "tsx") : process.execPath;
-  const r = spawnSync(bin, [join(root, "scripts", name), ...args], {
+  const pre = runner === "node" ? nodeArgs : [];
+  const r = spawnSync(bin, [...pre, join(root, "scripts", name), ...args], {
     cwd,
     encoding: "utf8",
     shell: false,

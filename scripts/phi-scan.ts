@@ -464,10 +464,26 @@ interface HitValue {
  *
  * The assertion adds the brand and nothing else: the object literal below already IS every
  * readable field of the type, and the property being asserted in is one no caller can write.
+ *
+ * 🛑 THE COPY IS PART OF THE BOUND, AND WITHOUT IT THE BOUND WAS PRINTED-ONLY. V8 answers
+ * `raw.slice(0, n)` and a regexp match alike with a string that POINTS INTO ITS PARENT, so an
+ * excerpt cut from an 8 MiB decode kept the whole 8 MiB alive for the run. Measured: retention grew
+ * by one whole file per hit-bearing file and did not grow at all once the excerpt owned its bytes.
+ * The figures, the instrument and the residual are in
+ * `documentation/agent-notes/dicom-phi-scan-value-retention.md`. `pnpm measure:phi-scan-retention`
+ * re-derives them.
+ *
+ * 🛑 AND THE ROUND TRIP IS `utf16le` BECAUSE `utf8` IS LOSSY AND WOULD HAVE BEEN A SILENT VALUE
+ * CORRUPTION. `Buffer.from(s, "utf8")` turns an unpaired surrogate into U+FFFD, so the excerpt
+ * would print a character the file does not contain, which is the same class of wrong answer as
+ * printing too much. `utf16le` round-trips every one of the 65,536 code units, paired or not. That
+ * no CALLER can hand this an unpaired surrogate today is exactly the reasoning this slot is built
+ * to not depend on: it is one recognizer away from being false.
  */
 function excerptValue(raw: string): HitValue {
+  const cut = raw.length > MAX_HIT_VALUE_LENGTH ? raw.slice(0, MAX_HIT_VALUE_LENGTH) : raw;
   const bounded = {
-    text: raw.length > MAX_HIT_VALUE_LENGTH ? raw.slice(0, MAX_HIT_VALUE_LENGTH) : raw,
+    text: Buffer.from(cut, "utf16le").toString("utf16le"),
     length: raw.length,
   };
   return bounded as HitValue;
