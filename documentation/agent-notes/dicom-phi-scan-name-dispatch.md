@@ -113,6 +113,8 @@ behind every Part 10 object, so the two do not have to land together to close a 
 - **`scanDicom` STILL REPORTS NOTHING ABOUT THE BYTES IT NEVER READ.** Unchanged, and the reason it
   is unchanged is above. A value past the halt that is neither `FAMILY^GIVEN` nor an eight-digit date
   run is still invisible - an MRN and an institution name among them.
+  **▶ CLOSED SINCE, as its own slice, in `dicom-phi-scan-unread-tail.md`. The REPORTING is what
+  closed: the walk is unchanged, so the sentence above about what is invisible still stands.**
 - **The `hits` array is still unbounded IN MEMORY** (`#104`'s residual). Untouched. This slice can
   only add hits, so it moves that surface in the wrong direction on a corpus that has any; it is
   disclosed rather than claimed away, and it is zero on this corpus.

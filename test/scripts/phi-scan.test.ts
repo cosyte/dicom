@@ -1301,7 +1301,15 @@ describe("phi-scan: a preamble-FUL object's silent halt", () => {
       ),
     ]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(0);
-    expect(r.stdout).toMatch(/OK - no hits/);
+    // 🛑 THIS ASSERTED `OK - no hits` AND THAT WAS THE OTHER HALF OF THE SAME DEFECT.
+    // The payload is allow-listed, so no hits is right; but this object carries an
+    // undefined-length `SQ`, so the tag walk stopped in front of the two elements
+    // below it and the word `OK` was a clearance of bytes it never read. The run
+    // still exits 0. What it no longer does is claim to be clean about them.
+    // `DICOM-PHI-SCAN-RESIDUALS`; see the block at the end of this file.
+    expect(r.stdout).not.toMatch(/OK - no hits/);
+    expect(r.stdout).toContain("This run is not an all-clear.");
+    expect(r.stderr).toContain("[phi-scan] PARTIAL:");
   });
 
   it("a non-LE transfer syntax halts the same way and is caught the same way", () => {
@@ -2270,6 +2278,272 @@ describe("phi-scan: the report's TAIL survives a stderr pipe the reader is not d
     expect(await runWithNoReader([])).toBe(0);
     // An invocation error writes to STDERR and must stay 2. Not 1.
     expect(await runWithNoReader(["--max-hit-lines", "banana"])).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// What the DICOM sweep did NOT read (DICOM-PHI-SCAN-RESIDUALS)
+// ---------------------------------------------------------------------------
+//
+// `scanDicom` stops at the first header it cannot read and used to say nothing,
+// so a run printed `OK - no hits` over a file whose tag table it had abandoned
+// partway through. The commonest way in is CONFORMANT: PS3.5 2026c §7.5.2 makes
+// `0xFFFFFFFF` one of two Sequence delimitations, both of which decoders shall
+// support, and §7.1 orders tags ascending, so `(0008,1110)` sits before
+// `(0010,0010)`.
+//
+// 🛑 EVERY CLEAN RESULT BELOW IS PINNED BESIDE A POSITIVE ON THE SAME RUN. A
+// detector zero can be a GAP rather than a clearance, so no case asserts "no
+// PARTIAL line" without a sibling file in the same invocation that does print
+// one. The payload is single-component, which is the shape only the tag table
+// can see: it has no caret for the text pass to match, so a halt in front of it
+// genuinely loses the name rather than losing a second opinion.
+
+/** Preamble + `DICM`, cut off the same assembler every other case here uses. */
+const PART10_PREAMBLE = buildDicomFixture("19000101", "ANON^PATIENT").subarray(0, 132);
+
+/** A Part 10 object: preamble, File Meta group, then the caller's dataset bytes. */
+function part10(dataset: Buffer, ts = "1.2.840.10008.1.2.1"): Buffer {
+  return Buffer.concat([PART10_PREAMBLE, preamblelessFileMeta(ts), dataset]);
+}
+
+/** The money shape: a conformant undefined-length `SQ`, then the name nothing else can see. */
+function nameBehindHalt(name = BARE_PN): Buffer {
+  return part10(
+    Buffer.concat([undefinedLengthSq(0x0008, 0x1110), shortElement(0x0010, 0x0010, "PN", name)]),
+  );
+}
+
+/** The same name with nothing in front of it: the walk reads to the end. */
+function nameWithNoHalt(name = BARE_PN): Buffer {
+  return part10(shortElement(0x0010, 0x0010, "PN", name));
+}
+
+/** Every `PARTIAL:` line in a run's stderr. */
+function partialLines(stderr: string): string[] {
+  return stderr.split("\n").filter((l) => l.startsWith("[phi-scan] PARTIAL:"));
+}
+
+describe("phi-scan: the DICOM sweep reports the bytes it never read", () => {
+  let dir: string;
+
+  beforeAll(() => {
+    dir = realpathSync(mkdtempSync(join(tmpdir(), "dicom-phi-scan-unread-")));
+  });
+
+  afterAll(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  function writeObject(name: string, buf: Buffer): string {
+    const path = join(dir, name);
+    writeFileSync(path, buf);
+    return path;
+  }
+
+  it("🛑 THE FALSE GREEN: a name behind a conformant SQ still exits 0, and the run no longer says OK", () => {
+    // The whole item in one case. The name is in the bytes, no recognizer finds
+    // it, and the exit code is 0 both before and after this change. What changed
+    // is that the run now states that the tag table stopped before it got there,
+    // and withdraws the word that read as a clearance.
+    const buf = nameBehindHalt();
+    expect(buf.toString("latin1")).toContain(BARE_PN);
+
+    const r = runScanner([writeObject("behind-halt.dcm", buf)]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+    expect(r.stderr).not.toContain(BARE_PN);
+    expect(partialLines(r.stderr)).toHaveLength(1);
+    expect(r.stderr).toContain("an undefined-length value (0xFFFFFFFF)");
+    expect(r.stdout).not.toContain("OK - no hits");
+    expect(r.stdout).toContain("This run is not an all-clear.");
+  });
+
+  it("🛑 THE NON-VACUITY CONTROL: the same name with no halt IS found, so the payload is detectable", () => {
+    // Without this the case above proves only that a scanner found nothing, which
+    // it would also do over a payload carrying no name at all.
+    const r = runScanner([writeObject("no-halt.dcm", nameWithNoHalt())]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/\(0010,0010\)/);
+    expect(r.stderr).toContain(BARE_PN);
+  });
+
+  it("🛑 THE DETECTOR ZERO: silent on a complete object, loud on a halting one, in ONE run", () => {
+    // A clean result that is not pinned beside a positive on the same detector
+    // proves nothing. Both files are scanned by the same invocation, so the
+    // absence of a line for the first is a fact about that file and not about
+    // whether the disclosure is wired up at all.
+    const complete = writeObject("pair-complete.dcm", nameWithNoHalt("ANON^PATIENT"));
+    const halting = writeObject("pair-halting.dcm", nameBehindHalt("ANON^PATIENT"));
+
+    const r = runScanner([complete, halting]);
+    const lines = partialLines(r.stderr);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("pair-halting.dcm");
+    expect(r.stderr).not.toContain("pair-complete.dcm");
+  });
+
+  it("prints the OLD clean line BYTE-IDENTICALLY when nothing halted", () => {
+    // The superset property in one assertion: a corpus the walk reads to the end
+    // produces exactly the output it always did.
+    const r = runScanner([writeObject("clean.dcm", nameWithNoHalt("ANON^PATIENT"))]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+    expect(r.stdout).toContain("[phi-scan] OK - no hits");
+    expect(partialLines(r.stderr)).toHaveLength(0);
+    expect(r.stderr).not.toContain("stopped early");
+  });
+
+  it("🩺 THE LINE IS VALUE-FREE: a count, a path and a closed-set reason, and nothing else", () => {
+    // A diagnostic about a PHI leak is itself a PHI surface. The bytes at a halt
+    // are exactly the bytes that did NOT read as a header, so a tag or a VR named
+    // off them would be unvouched-for input, and the value bytes are the leak.
+    const r = runScanner([writeObject("value-free.dcm", nameBehindHalt())]);
+    const line = partialLines(r.stderr)[0];
+    expect(line).toBeDefined();
+    expect(line).not.toContain(BARE_PN);
+    expect(line).not.toContain("tag=");
+    expect(line).not.toContain("vr=");
+    expect(line).not.toContain("offset=");
+    expect(line).not.toMatch(/\(\d{4},\d{4}\)/);
+    expectNoPhi(r.stderr);
+  });
+
+  it("names each halt shape from a closed set, so the reason is actionable without being input", () => {
+    // One case per reachable arm. `noAdvance` is not here because it is not
+    // reachable: `nextOffset` is `valueOffset + valueLength` and `valueOffset` is
+    // always at least eight past the cursor, so it cannot fail to advance. It
+    // stays in the table as the defensive arm of a check that predates this
+    // change, and this comment is what stops the next reader hunting for it.
+    const name = shortElement(0x0010, 0x0010, "PN", BARE_PN);
+
+    // A header whose VR field is not two uppercase letters.
+    const badVr = Buffer.alloc(10);
+    badVr.writeUInt16LE(0x0009, 0);
+    badVr.writeUInt16LE(0x0001, 2);
+    badVr.write("z9", 4, "ascii");
+    badVr.writeUInt16LE(2, 6);
+    const vrRun = runScanner([writeObject("reason-vr.dcm", part10(Buffer.concat([name, badVr])))]);
+    expect(vrRun.stderr).toContain("a header whose VR field is not two uppercase letters");
+
+    // A declared length that runs past the last byte of the object.
+    const over = Buffer.alloc(8 + 6);
+    over.writeUInt16LE(0x0008, 0);
+    over.writeUInt16LE(0x1030, 2);
+    over.write("LO", 4, "ascii");
+    over.writeUInt16LE(6 + 64, 6);
+    over.write("STUDY ", 8, "latin1");
+    const overRun = runScanner([
+      writeObject("reason-over.dcm", part10(Buffer.concat([name, over]))),
+    ]);
+    expect(overRun.stderr).toContain("a value length that runs past the end of the object");
+
+    // Exactly eight bytes of a LONG-FORM header: the walk enters, the form needs twelve.
+    const stub = Buffer.alloc(8);
+    stub.writeUInt16LE(0x7fe0, 0);
+    stub.writeUInt16LE(0x0010, 2);
+    stub.write("OB", 4, "ascii");
+    const stubRun = runScanner([
+      writeObject("reason-stub.dcm", part10(Buffer.concat([name, stub]))),
+    ]);
+    expect(stubRun.stderr).toContain("a header the remaining bytes cannot hold");
+
+    // A tail with no header in it at all: never read, and never broken either.
+    const tailRun = runScanner([
+      writeObject("reason-tail.dcm", Buffer.concat([part10(name), Buffer.from([1, 2, 3, 4])])),
+    ]);
+    expect(tailRun.stderr).toContain("a tail too short to hold an element header");
+    expect(tailRun.stderr).toContain("leaving 4 byte(s)");
+  });
+
+  it("fires on a well-formed object the walk cannot follow, not only on a broken one", () => {
+    // Explicit VR Big Endian. `@cosyte/dicom`'s own parser reads this object with
+    // ZERO warnings and hands back both values; the scanner's tag walk treats
+    // every non-`1.2.840.10008.1.2` syntax as LITTLE endian and cannot follow it.
+    //
+    // 🛑 DO NOT CALL IT CONFORMANT. A draft did, and a refuter refused it against
+    // the pinned edition: PS3.5 2026c §A.3 says the Big Endian Explicit VR
+    // Transfer Syntax "was retired in 2006", the UID `1.2.840.10008.1.2.2` does
+    // not appear in the document at all, and this package's own generated UID
+    // registry marks it `retired: true`. A lenient parser's silence is not a
+    // spec verdict. The conformance leg of this slice rests on §7.5.2's
+    // undefined-length Sequence, which is cited and measured on its own.
+    const be = part10(
+      Buffer.concat([
+        shortElementBE(0x0008, 0x0020, "DA", "19000101"),
+        shortElementBE(0x0010, 0x0010, "PN", CARET_PN),
+      ]),
+      "1.2.840.10008.1.2.2",
+    );
+    const r = runScanner([writeObject("big-endian.dcm", be)]);
+    expect(partialLines(r.stderr)).toHaveLength(1);
+  });
+
+  it("aggregates PER FILE, so a page of halting objects is one line with a count", () => {
+    // The output is bounded by the number of FILES, never by anything an object
+    // can choose. That is what keeps this clear of the cap `#104` had to add for
+    // hits: there is no flooding shape to cap.
+    const page =
+      "# page\n\n" +
+      [nameBehindHalt(), nameBehindHalt("ANON^PATIENT"), nameWithNoHalt()]
+        .map((b) => "```\n" + b.toString("base64") + "\n```\n")
+        .join("\n");
+    const r = runScanner([writeObject("many.md", Buffer.from(page, "utf8"))]);
+    const lines = partialLines(r.stderr);
+    expect(lines).toHaveLength(1);
+    // Two of the three objects halt; the third is read to the end and contributes
+    // nothing, which is the same detector-zero pin as above at object granularity.
+    expect(lines[0]).toContain("the end of 2 object(s)");
+    expect(r.stderr).toContain("stopped early in 1 file(s)");
+  });
+
+  it("🛑 THE NET-LEAK CONTROL: a file loud enough to bury its own hits cannot bury this line", () => {
+    // `#104` capped hit lines per file and `#105` found `report` is not monotone
+    // in `hits` at that cap, because `scanDicom`'s hits append before
+    // `scanText`'s. Neither can touch this: the disclosure is not a hit, is
+    // printed by a different function, and is in no budget. Pinned at a cap of
+    // one over a file whose hits run to the hundreds.
+    const flood = Buffer.from(floodText(), "utf8");
+    const buf = Buffer.concat([nameBehindHalt(), Buffer.from("\n", "utf8"), flood]);
+    const path = writeObject("loud.bin", buf);
+
+    const capped = runScanner(["--max-hit-lines", "1", path]);
+    expect(capped.code, `stderr: ${capped.stderr}`).toBe(1);
+    expect(countHitLines(capped.stderr)).toBe(1);
+    expect(capped.stderr).toContain("more hit(s) in this file");
+    expect(partialLines(capped.stderr)).toHaveLength(1);
+
+    // And a second file's disclosure is not pushed off by the first file's noise.
+    const quiet = writeObject("quiet.dcm", nameBehindHalt("ANON^PATIENT"));
+    const both = runScanner(["--max-hit-lines", "1", path, quiet]);
+    expect(partialLines(both.stderr)).toHaveLength(2);
+    expect(both.stderr).toContain("stopped early in 2 file(s)");
+  });
+
+  it("cannot move the exit code in either direction", () => {
+    // The property the whole change rests on. `hits` is the only input to the
+    // verdict and `scanDicom` appends to it exactly as it did before, so a
+    // halting object with a hit still refuses and a halting object without one
+    // still exits 0. A disclosure that could turn 1 into 0 would be the net leak
+    // `#97` paid for; one that turned 0 into 1 would red CI on conformant files.
+    // The violator sits BEFORE the halt, so the tag table reaches it. A name behind
+    // the halt is exactly the one the tag table cannot see, which is the case above.
+    const withHit = runScanner([
+      writeObject(
+        "halt-and-hit.dcm",
+        part10(
+          Buffer.concat([
+            shortElement(0x0010, 0x0010, "PN", VIOLATOR_PN),
+            undefinedLengthSq(0x0008, 0x1110),
+          ]),
+        ),
+      ),
+    ]);
+    expect(partialLines(withHit.stderr)).toHaveLength(1);
+    expect(withHit.code, `stderr: ${withHit.stderr}`).toBe(1);
+    expect(withHit.stderr).toContain("hits across 1 file(s).");
+
+    const withoutHit = runScanner([writeObject("halt-no-hit.dcm", nameBehindHalt("ANON^PATIENT"))]);
+    expect(partialLines(withoutHit.stderr)).toHaveLength(1);
+    expect(withoutHit.code, `stderr: ${withoutHit.stderr}`).toBe(0);
   });
 });
 

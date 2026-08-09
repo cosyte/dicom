@@ -84,7 +84,10 @@
  *   <path> [<path>...]       - scan specific paths
  *   (no args)                - scan both corpora in the working tree
  *
- * Exit codes: 0 (clean), 1 (hits found), 2 (invocation error).
+ * Exit codes: 0 (no hits), 1 (hits found), 2 (invocation error). The word "clean" used to stand
+ * where "no hits" does, and it is cut rather than qualified: a run can exit 0 having stopped the
+ * DICOM sweep partway through an object, which `reportUnread` states on stderr and the exit code
+ * deliberately does not carry. See the note at the bottom of `main`.
  *
  * ---------------------------------------------------------------------------
  * AN IN-SCOPE ENTRY THAT IS NOT A REGULAR FILE REFUSES THE SCAN (exit 2). It is
@@ -397,6 +400,56 @@ interface Hit {
   offset: number;
   value: string;
   reason: string;
+}
+
+/**
+ * What one file's Part 10 objects left UNREAD by the tag walk, aggregated over every object in it.
+ *
+ * 🩺 WHY THERE IS A RECORD HERE AT ALL. `scanDicom` stops at the first header it cannot read and
+ * says nothing, so a caller got `OK - no hits` over a file the DICOM sweep had abandoned partway
+ * through. A guard that has never been pointed at an input has not cleared that input, and the
+ * commonest way in is CONFORMANT: PS3.5 2026c §7.5.2 makes `0xFFFFFFFF` one of two Sequence
+ * delimitations, both of which decoders shall support, and §7.1 orders tags ascending, so
+ * `(0008,1110)` sits before `(0010,0010)` in a conformant file.
+ *
+ * 🛑 WHAT IT CARRIES, AND THE LIST IS THE CONTRACT: the file's own repo-relative path (the same
+ * locus every hit already carries), two COUNTS, and tokens from the closed `HALT_REASONS` table.
+ * WHAT IT DELIBERATELY DOES NOT CARRY: no tag, no VR, no value, and no byte of the object. The
+ * bytes at a halt are precisely the bytes that did not read as a header, so anything named off
+ * them is unvouched-for input.
+ *
+ * 🩺 "NO OFFSET" IS NOT ON THAT LIST AND MUST NOT BE PUT BACK ON IT. No offset is PRINTED, but for
+ * a file holding one object `bytes` is `objectLength - haltOffset`, and the object's length is the
+ * file's own committed size, so the halt offset is recoverable. That is the same locus a hit line
+ * already prints outright, beside a value; the honest statement is that the counts are structural
+ * positions and not content, not that a position is absent.
+ *
+ * 🛑 AND IT IS BOUNDED IN MEMORY, WHICH `hits` IS NOT. One entry per file, each holding two
+ * numbers and a Set that cannot exceed the six literals in `HALT_REASONS`, so an attacker-chosen
+ * object count moves the counts and not the footprint. That is a deliberate difference from
+ * `hits`, whose unbounded growth is this item's other open residual.
+ */
+interface UnreadTally {
+  /** How many objects in this file the tag walk stopped short of the end of. */
+  objects: number;
+  /** How many bytes, summed over those objects, the tag walk never reached. */
+  bytes: number;
+  /** Which of the closed reasons were seen. A Set, so the line cannot repeat itself. */
+  reasons: Set<HaltReason>;
+}
+
+/** Per-file unread tallies, keyed by the same `target.path` a hit carries. */
+type UnreadByPath = Map<string, UnreadTally>;
+
+function recordUnread(unread: UnreadByPath, path: string, bytes: number, reason: HaltReason): void {
+  const existing = unread.get(path);
+  if (existing === undefined) {
+    unread.set(path, { objects: 1, bytes, reasons: new Set([reason]) });
+    return;
+  }
+  existing.objects += 1;
+  existing.bytes += bytes;
+  existing.reasons.add(reason);
 }
 
 interface AllowList {
@@ -1038,17 +1091,56 @@ interface ElementHeader {
   nextOffset: number;
 }
 
-function readElementExplicit(buf: Buffer, offset: number): ElementHeader | null {
-  if (offset + 8 > buf.length) return null;
+/**
+ * Closed-set, engine-owned descriptions of why the tag walk stopped short of an object's end.
+ *
+ * 🛑 IT IS A CLOSED TABLE FOR THE SAME REASON `entryKind` AND `gitModeKind` ARE, AND THAT IS THE
+ * WHOLE OF WHAT MAKES THE DISCLOSURE SAFE. The trigger for every one of these is "these bytes did
+ * not read as a Data Element header", so the bytes at the halt ARE INPUT: they can be the middle
+ * of somebody's value, and a message that quoted them, or named the tag or VR it thinks it saw
+ * there, would be a diagnostic about a PHI leak that carries PHI. Each value below is a LITERAL
+ * chosen at authoring time; nothing read off a scanned file can reach one, and there is no string
+ * parameter for anything to travel through.
+ */
+const HALT_REASONS = {
+  /** Fewer bytes remain than the shortest header needs. Reached only through the long form. */
+  truncatedHeader: "a header the remaining bytes cannot hold",
+  /** Explicit VR only: the two bytes where a VR belongs are not two uppercase letters. */
+  vrNotTwoLetters: "a header whose VR field is not two uppercase letters",
+  /** PS3.5 2026c §7.5.2's other Sequence delimitation. A CONFORMANT file reaches this. */
+  undefinedLength: "an undefined-length value (0xFFFFFFFF)",
+  /** The declared length would run the walk past the last byte of the object. */
+  valuePastEnd: "a value length that runs past the end of the object",
+  /** Defensive: a header that would not move the cursor forward. */
+  noAdvance: "a header that does not advance the walk",
+  /** Not a halt on a header at all: the walk consumed everything an element could start in. */
+  tailTooShort: "a tail too short to hold an element header",
+} as const;
+
+type HaltReason = (typeof HALT_REASONS)[keyof typeof HALT_REASONS];
+
+/**
+ * One header read: the header, or the reason the walk cannot go on.
+ *
+ * It was `ElementHeader | null`, and the `null` is the whole of what
+ * `DICOM-PHI-SCAN-RESIDUALS` was filed against: five distinguishable conditions arrived at the
+ * caller as one indistinguishable value, so the caller could not say anything about them and
+ * said nothing. The PREDICATES below are unchanged, in the same order, with the same outcomes;
+ * only what a refusal CARRIES is new.
+ */
+type ElementRead = { ok: true; header: ElementHeader } | { ok: false; reason: HaltReason };
+
+function readElementExplicit(buf: Buffer, offset: number): ElementRead {
+  if (offset + 8 > buf.length) return { ok: false, reason: HALT_REASONS.truncatedHeader };
   const group = buf.readUInt16LE(offset);
   const element = buf.readUInt16LE(offset + 2);
   const vr = buf.toString("ascii", offset + 4, offset + 6);
-  if (!/^[A-Z]{2}$/.test(vr)) return null;
+  if (!/^[A-Z]{2}$/.test(vr)) return { ok: false, reason: HALT_REASONS.vrNotTwoLetters };
 
   let valueOffset: number;
   let valueLength: number;
   if (LONG_FORM_VRS.has(vr)) {
-    if (offset + 12 > buf.length) return null;
+    if (offset + 12 > buf.length) return { ok: false, reason: HALT_REASONS.truncatedHeader };
     valueLength = buf.readUInt32LE(offset + 8);
     valueOffset = offset + 12;
   } else {
@@ -1056,28 +1148,28 @@ function readElementExplicit(buf: Buffer, offset: number): ElementHeader | null 
     valueOffset = offset + 8;
   }
   // Undefined-length sequences (0xFFFFFFFF) - we don't recurse, just stop.
-  if (valueLength === 0xffffffff) return null;
+  if (valueLength === 0xffffffff) return { ok: false, reason: HALT_REASONS.undefinedLength };
   const nextOffset = valueOffset + valueLength;
-  if (nextOffset > buf.length) return null;
-  return { group, element, vr, valueOffset, valueLength, nextOffset };
+  if (nextOffset > buf.length) return { ok: false, reason: HALT_REASONS.valuePastEnd };
+  return { ok: true, header: { group, element, vr, valueOffset, valueLength, nextOffset } };
 }
 
-function readElementImplicit(buf: Buffer, offset: number): ElementHeader | null {
-  if (offset + 8 > buf.length) return null;
+function readElementImplicit(buf: Buffer, offset: number): ElementRead {
+  if (offset + 8 > buf.length) return { ok: false, reason: HALT_REASONS.truncatedHeader };
   const group = buf.readUInt16LE(offset);
   const element = buf.readUInt16LE(offset + 2);
   const valueLength = buf.readUInt32LE(offset + 4);
-  if (valueLength === 0xffffffff) return null;
+  if (valueLength === 0xffffffff) return { ok: false, reason: HALT_REASONS.undefinedLength };
   const valueOffset = offset + 8;
   const nextOffset = valueOffset + valueLength;
-  if (nextOffset > buf.length) return null;
+  if (nextOffset > buf.length) return { ok: false, reason: HALT_REASONS.valuePastEnd };
   // Resolve VR from our hardcoded subset.
   const key = tagKey(group, element);
   let vr = "UN";
   if (PN_TAGS.has(key)) vr = "PN";
   else if (DA_TAGS.has(key)) vr = "DA";
   else if (DT_TAGS.has(key)) vr = "DT";
-  return { group, element, vr, valueOffset, valueLength, nextOffset };
+  return { ok: true, header: { group, element, vr, valueOffset, valueLength, nextOffset } };
 }
 
 function decodeAscii(buf: Buffer, offset: number, length: number): string {
@@ -1191,7 +1283,39 @@ function fileMetaStart(buf: Buffer): number | null {
   return null;
 }
 
-function scanDicom(target: Target, buf: Buffer, allow: AllowList, hits: Hit[]): void {
+/**
+ * Walk one Part 10 object's tag table, and RECORD what the walk did not reach.
+ *
+ * 🛑 THE WALK IS UNCHANGED. Every predicate, in the same order, with the same outcome: this reads
+ * exactly the elements it read before, `inspectElement` is called on exactly the same set, and
+ * `hits` is therefore identical on every input. The addition is `unread`, and it is a second
+ * output channel rather than a change to the first one, so the exit code cannot move.
+ *
+ * 🛑 THE FILE-META LOOP RECORDS NOTHING, AND ITS `break` IS NOT A HALT. `peekGroup !== 0x0002` is
+ * how a well-formed object leaves the File Meta group for its dataset; recording that would put a
+ * disclosure on EVERY object and make the one that matters unreadable.
+ *
+ * 🔴 SO A FILE-META HALT IS REPORTED ONLY IF THE DATASET LOOP ALSO STOPS AT THAT OFFSET, AND UNDER
+ * IMPLICIT VR LE IT MAY NOT. A first draft of this comment said the dataset loop "re-reads the same
+ * offset and records the same reason, so nothing is lost", and a refuter falsified both halves:
+ * `readElementImplicit` is a DIFFERENT predicate set, so the same bytes can yield a different
+ * reason, or read as a header and let the walk continue past the offset the File Meta group gave
+ * up at. Under Explicit VR the two loops do agree, because they call the same reader. It is stated
+ * rather than closed: the remedy is to record in the file-meta loop too, and that is a second
+ * disclosure with its own shape.
+ *
+ * The tail check is `offset < buf.length` and not "the loop broke", because the two are different
+ * conditions and only the first is the question being asked. A walk can also run out of room
+ * WITHOUT a broken header, when fewer than eight bytes remain; those bytes were never read either,
+ * and `tailTooShort` is what says so.
+ */
+function scanDicom(
+  target: Target,
+  buf: Buffer,
+  allow: AllowList,
+  hits: Hit[],
+  unread: UnreadByPath,
+): void {
   // Walk File Meta group (always Explicit VR LE) starting after the preamble, or at 0 for a
   // preamble-less stream. Then walk the dataset, dispatching by transfer syntax UID found in
   // (0002,0010).
@@ -1206,8 +1330,8 @@ function scanDicom(target: Target, buf: Buffer, allow: AllowList, hits: Hit[]): 
     const peekGroup = buf.readUInt16LE(offset);
     if (peekGroup !== 0x0002) break;
     const result = readElementExplicit(buf, offset);
-    if (result === null) break;
-    const { group, element, vr, valueOffset, valueLength, nextOffset } = result;
+    if (!result.ok) break;
+    const { group, element, vr, valueOffset, valueLength, nextOffset } = result.header;
     if (group === 0x0002 && element === 0x0010 && vr === "UI") {
       transferSyntax = decodeAscii(buf, valueOffset, valueLength).replace(/\0+$/, "").trim();
     }
@@ -1216,14 +1340,25 @@ function scanDicom(target: Target, buf: Buffer, allow: AllowList, hits: Hit[]): 
   }
 
   const implicit = transferSyntax === "1.2.840.10008.1.2";
+  let stoppedOn: HaltReason | null = null;
   // Continue with dataset.
   while (offset + 8 <= buf.length) {
     const result = implicit ? readElementImplicit(buf, offset) : readElementExplicit(buf, offset);
-    if (result === null) break;
-    const { group, element, vr, valueOffset, valueLength, nextOffset } = result;
+    if (!result.ok) {
+      stoppedOn = result.reason;
+      break;
+    }
+    const { group, element, vr, valueOffset, valueLength, nextOffset } = result.header;
     inspectElement(target, buf, group, element, vr, valueOffset, valueLength, allow, hits);
-    if (nextOffset <= offset || nextOffset > buf.length) break;
+    if (nextOffset <= offset || nextOffset > buf.length) {
+      stoppedOn = nextOffset <= offset ? HALT_REASONS.noAdvance : HALT_REASONS.valuePastEnd;
+      break;
+    }
     offset = nextOffset;
+  }
+
+  if (offset < buf.length) {
+    recordUnread(unread, target.path, buf.length - offset, stoppedOn ?? HALT_REASONS.tailTooShort);
   }
 }
 
@@ -1326,7 +1461,13 @@ function scanText(target: Target, content: string, allow: AllowList, hits: Hit[]
  * The decode is NOT re-entered on the decoded bytes. One level is what a doc fixture is; a scanner
  * that recursed would spend unbounded time on an object whose pixel data happens to be alphanumeric.
  */
-function scanEmbeddedObjects(target: Target, text: string, allow: AllowList, hits: Hit[]): void {
+function scanEmbeddedObjects(
+  target: Target,
+  text: string,
+  allow: AllowList,
+  hits: Hit[],
+  unread: UnreadByPath,
+): void {
   for (const run of base64Runs(text)) {
     let decoded: Buffer;
     try {
@@ -1339,7 +1480,10 @@ function scanEmbeddedObjects(target: Target, text: string, allow: AllowList, hit
     // The offset a hit carries is into the DECODED object, which is the only frame in which the
     // element it names has one; the run's own index is not reported, deliberately, since a second
     // number in the same message reads as though one of them located the value in the source.
-    scanDicom(target, decoded, allow, hits);
+    // An embedded object's unread tail is attributed to the PAGE, which is the file a developer
+    // has to edit, exactly as its hits are. The tallies aggregate, so a page carrying several
+    // halting objects reports one line with a count rather than one line each.
+    scanDicom(target, decoded, allow, hits, unread);
     scanText(target, decoded.toString("utf8"), allow, hits);
   }
 }
@@ -1436,7 +1580,7 @@ function scanEmbeddedObjects(target: Target, text: string, allow: AllowList, hit
  * reason the sibling residual is NOT closed with it are in
  * `documentation/agent-notes/dicom-phi-scan-name-dispatch.md`. No count off it is copied here.
  */
-function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
+function scanTarget(target: Target, allow: AllowList, hits: Hit[], unread: UnreadByPath): void {
   let buf: Buffer;
   try {
     buf = target.read();
@@ -1449,7 +1593,7 @@ function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
   // same two questions, and they are two questions rather than one choice. See the superset table
   // above before adding a test on the NAME back, or before making either of these an `else`.
   if (fileMetaStart(buf) !== null) {
-    scanDicom(target, buf, allow, hits);
+    scanDicom(target, buf, allow, hits, unread);
   }
   // 🛑 UNCONDITIONAL, AND `if (!isDicom(buf))` IS WHAT USED TO BE HERE. That guard made the text
   // sweep an `else` for a preamble-ful Part 10 object, so `scanDicom` halting early on one was
@@ -1465,7 +1609,7 @@ function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
   // `probe.dcm` it was found, as `probe.ts` the run printed `OK - no hits`. Widening the walk
   // root to `test/` without this would have opened 81 `.ts` files and still read past every
   // encoded object in them.
-  scanEmbeddedObjects(target, text, allow, hits);
+  scanEmbeddedObjects(target, text, allow, hits, unread);
 }
 
 // ---------------------------------------------------------------------------
@@ -1493,6 +1637,39 @@ function reportExemptions(): void {
 }
 
 /**
+ * Print, per file, what the DICOM sweep did not read.
+ *
+ * 🛑 THESE ARE NOT HITS AND ARE NOT CAPPED, AND BOTH HALVES ARE DELIBERATE. Not hits, because a
+ * halt is not evidence that a name is there; `hits` stays the only input to the exit code and to
+ * the totals, so nothing here can move either. Not capped, because the output is already bounded
+ * by the number of FILES rather than by anything an object can choose: a page with ten thousand
+ * halting objects prints ONE line carrying a count. That is also what keeps it clear of `#104`'s
+ * per-file hit cap and of the non-monotonicity underneath it. A file loud enough to bury its own
+ * hit lines cannot bury this line, because this line is not in that budget.
+ *
+ * 🛑 THE MESSAGE STATES THE OBSERVATION AND STOPS THERE. It does not say what the text sweep did
+ * with the same bytes. `scanTarget` and `scanEmbeddedObjects` both run `scanText` over the whole
+ * buffer unconditionally, so it is tempting to write "but they were swept anyway"; the sweep runs
+ * over `buf.toString("utf8")`, which is a lossy decode of arbitrary bytes, and the text pass has
+ * no tag table, so the sentence would be a claim about coverage that neither half supports. It is
+ * in `documentation/agent-notes/dicom-phi-scan-unread-tail.md` with its bounds, and not here.
+ */
+function reportUnread(unread: UnreadByPath): void {
+  if (unread.size === 0) return;
+  for (const [path, tally] of unread) {
+    process.stderr.write(
+      `[phi-scan] PARTIAL: ${path}: the DICOM sweep stopped before the end of ` +
+        `${String(tally.objects)} object(s), leaving ${String(tally.bytes)} byte(s) it never ` +
+        `read: ${[...tally.reasons].join("; ")}\n`,
+    );
+  }
+  process.stderr.write(
+    `[phi-scan] the DICOM sweep stopped early in ${String(unread.size)} file(s). A clean ` +
+      "result over an object it did not read to the end is not a clearance of that object.\n",
+  );
+}
+
+/**
  * Print the hits, at most `maxHitLines` of them per file.
  *
  * The three properties that make the cap safe are stated at `DEFAULT_HIT_LINES_PER_FILE` and
@@ -1507,9 +1684,26 @@ function reportExemptions(): void {
  * 🛑 WHICH LINES SURVIVE THE CAP IS SCAN ORDER, NOT FILE ORDER, and it is worth saying because the
  * obvious reading is the wrong one. "The first n hits" is not "the first n in the file".
  */
-function report(hits: Hit[], maxHitLines: number): void {
+function report(hits: Hit[], maxHitLines: number, partialFiles: number): void {
   if (hits.length === 0) {
-    process.stdout.write("[phi-scan] OK - no hits\n");
+    // 🛑 `OK` IS A CLAIM AND THE OTHER TWO WORDS ARE A MEASUREMENT, so the claim is what goes when
+    // the sweep stopped early. "No hits" stays, because it is true and it is what was counted;
+    // what cannot stand is the line reading as a clearance of a corpus part of which the tag
+    // table never saw. The wording is not a qualified `OK`: the token is gone.
+    //
+    // With no partial file the line is BYTE-IDENTICAL to what it always was. That is what lets
+    // the whole change be a strict superset of the old output rather than a rewrite of it.
+    //
+    // It says "on stderr" and not "above": this line goes to STDOUT and `reportUnread` writes to
+    // STDERR, so a consumer capturing the two separately would find "above" pointing at nothing.
+    if (partialFiles === 0) {
+      process.stdout.write("[phi-scan] OK - no hits\n");
+    } else {
+      process.stdout.write(
+        `[phi-scan] no hits, over a corpus in which the DICOM sweep stopped early in ` +
+          `${String(partialFiles)} file(s), listed on stderr. This run is not an all-clear.\n`,
+      );
+    }
     return;
   }
   const byPath = new Map<string, Hit[]>();
@@ -1603,9 +1797,10 @@ function main(): number {
   targets = targets.filter((t) => !allowedSet.has(t.path));
 
   const hits: Hit[] = [];
+  const unread: UnreadByPath = new Map();
   for (const t of targets) {
     try {
-      scanTarget(t, allow, hits);
+      scanTarget(t, allow, hits, unread);
     } catch (err) {
       if (err instanceof InvocationError) {
         process.stderr.write(`[phi-scan] ${err.message}\n`);
@@ -1616,13 +1811,24 @@ function main(): number {
   }
 
   reportExemptions();
-  report(hits, args.maxHitLines);
+  reportUnread(unread);
+  report(hits, args.maxHitLines, unread.size);
   // Off `hits`, never off what `report` printed. The print cap must not be able to move this.
+  //
+  // 🛑 AND `unread` IS NOT IN IT, DELIBERATELY, WITH THE COST STATED RATHER THAN CLAIMED AWAY. An
+  // unread tail is neither of the two non-zero codes this file declares in its banner: nothing was
+  // found, and nothing refused the scan. Exit 2 would also fire on a file PS3.5 2026c §7.5.2 makes
+  // legal, an undefined-length Sequence being the encoder's choice, and it would MASK a real hit
+  // whenever both were present.
+  //
+  // 🔴 SO A CI JOB THAT READS ONLY THE EXIT CODE STILL CANNOT SEE THIS, AND THAT IS AN OPEN
+  // RESIDUAL, not a property being argued for. Making it visible to one is a change to this
+  // script's contract with every caller and is its own decision, taken deliberately or not at all.
   return hits.length === 0 ? 0 : 1;
 }
 
 /**
- * 🛑 AN UNEXPECTED ERROR MUST NOT EXIT 1. This script's contract is 0 clean / 1 hits found / 2
+ * 🛑 AN UNEXPECTED ERROR MUST NOT EXIT 1. This script's contract is 0 no hits / 1 hits found / 2
  * invocation error, and an uncaught throw exits 1 on Node - the one code that means "PHI was
  * found", to a CI job that reads exit codes rather than stderr. `readdirSync` raising `EACCES`
  * on an unreadable subdirectory is the live case, and widening the walk root from
