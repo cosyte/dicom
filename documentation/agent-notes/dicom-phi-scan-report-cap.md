@@ -83,17 +83,16 @@ person, sitting behind more hits than the cap in the same file, is **not printed
 run still refuses, the count still includes it, the file is still named, and `--max-hit-lines 0`
 prints it. A test asserts exactly that, in both directions, rather than asserting nothing is lost.
 
-**🛑 WHICH LINES SURVIVE IS RECOGNIZER ORDER, NOT FILE ORDER, AND THE OBVIOUS READING IS WRONG.**
-`scanText` makes three whole-file passes in sequence (ISO date, compact date, PN shape), so **every**
-date hit in a file precedes **every** PN hit in it whatever their byte offsets are, and a binary
-target's `scanDicom` hits precede all of them. Measured: with the person name at the start of an
-appended block and the DOB two lines later, the capped report prints the **DOB** and not the name.
-"The first n hits" is not "the first n in the file".
+**🛑 WHICH LINES SURVIVE IS SCAN ORDER, NOT FILE ORDER, AND THE OBVIOUS READING IS WRONG.** Measured:
+with the person name at the start of an appended block and the DOB two lines later, the capped report
+prints the **DOB** and not the name. "The first n hits" is not "the first n in the file".
 
-**Reserving cap slots per recognizer was considered and NOT done, and the reason is the one that
-generalises:** it does not help the case that matters. Where the noise and the real hit are the same
-shape (200 PN noise hits and one real PN) a per-class budget still starves the real one inside its
-own class. It buys complexity and no safety.
+**🛑 AN EARLIER DRAFT ENUMERATED THAT ORDER AND ARGUED FROM IT THAT PER-RECOGNIZER CAP SLOTS "BUY
+COMPLEXITY AND NO SAFETY". A REFUTER FALSIFIED BOTH HALVES ON THIS SLICE'S OWN SECOND PAYLOAD ROW**
+(`0x30-0x3F`, where the noise is date-shaped and the name is not, so the two are not the same class)
+**and the enumeration was incomplete besides. Both are DELETED rather than reworded**, per
+this repo's standing rule. **Do not write either of them again**: the order is not enumerated here,
+and no claim is made about what reserving slots would or would not buy.
 
 ## The false-positive spread, which is the reason none of this narrows the detector
 

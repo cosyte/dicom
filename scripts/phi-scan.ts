@@ -1493,12 +1493,8 @@ function reportExemptions(): void {
  * diagnostic about a PHI leak is itself a PHI surface, and a line whose whole job is to say
  * "there is more here" must not become a second way to spill some of it.
  *
- * 🛑 WHICH LINES SURVIVE THE CAP IS RECOGNIZER ORDER, NOT FILE ORDER, and it is worth saying
- * because the obvious reading is the wrong one. `scanText` makes three whole-file passes in
- * sequence, so EVERY date hit in a file precedes EVERY PN hit in it whatever their byte offsets
- * are, and a binary target's `scanDicom` hits precede all of them. "The first n hits" is not "the
- * first n in the file". Reserving slots per recognizer would not help the case that matters, where
- * the noise and the real hit are the same shape, so this is disclosed rather than answered.
+ * 🛑 WHICH LINES SURVIVE THE CAP IS SCAN ORDER, NOT FILE ORDER, and it is worth saying because the
+ * obvious reading is the wrong one. "The first n hits" is not "the first n in the file".
  */
 function report(hits: Hit[], maxHitLines: number): void {
   if (hits.length === 0) {

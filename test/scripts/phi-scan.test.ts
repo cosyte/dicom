@@ -1834,20 +1834,18 @@ describe("phi-scan: the hit report is capped PER FILE, and the cap cannot move t
     expect(countHitLines(uncapped.stderr)).toBeGreaterThan(countHitLines(capped.stderr));
   });
 
-  it("🛑 WHICH lines survive is RECOGNIZER order, not file order, and that is not obvious", () => {
-    // Measured, and it contradicts the reading a reviewer arrives with. `scanText`
-    // makes three whole-file passes in sequence (ISO date, then compact date, then
-    // PN shape), so every date hit in a file precedes every PN hit in it whatever
-    // their byte offsets are. In the fixture below the person name is at offset 0
-    // of the appended block and the DOB two lines after it, yet the DOB is printed
-    // and the name is not: the PN pass runs last and the flood is already ahead of
-    // it. "The first n hits" is therefore not "the first n in the file", and a
-    // reader who assumed otherwise would mis-read every capped report.
+  it("🛑 WHICH lines survive is SCAN order, not file order, and that is not obvious", () => {
+    // Measured, and it contradicts the reading a reviewer arrives with. In the
+    // fixture below the person name is at offset 0 of the appended block and the
+    // DOB two lines after it, yet the DOB is printed and the name is not. "The
+    // first n hits" is therefore not "the first n in the file", and a reader who
+    // assumed otherwise would mis-read every capped report.
     //
-    // It is disclosed rather than fixed. Reserving cap slots per recognizer does
-    // NOT help the case that matters, where the noise and the real hit are the
-    // same shape: 200 PN noise hits and one real PN would still starve the real
-    // one inside its own class. It would buy complexity and no safety.
+    // 🛑 AN EARLIER DRAFT ENUMERATED THAT ORDER HERE AND ARGUED FROM IT THAT
+    // PER-RECOGNIZER CAP SLOTS BUY NO SAFETY. A refuter falsified both halves and
+    // both are DELETED rather than reworded. Do not write either again; see
+    // `documentation/agent-notes/dicom-phi-scan-report-cap.md`. The assertions
+    // below are unchanged: they are the measurement, not the explanation.
     const root = makeRepo();
     const mixed = join(root, "test", "fixtures", "mixed.txt");
     writeFileSync(mixed, floodText() + SYNTHETIC_PHI);
