@@ -428,8 +428,7 @@ function* base64Runs(text: string): Generator<string> {
  * The scan route is `scanTarget` and everything it reaches. The gate's own CONFIGURATION is a
  * different route and is still parsed with patterns: `process.argv`, the allow-list, the override
  * log, and `git diff --cached --raw` output. Neither config file is inside `SCAN_ROOTS`, so the
- * walk and `--staged` never reach either. The allow-list is the one file both routes read: it is
- * parsed on every run and can also be named as a positional path.
+ * walk and `--staged` never reach either.
  * `documentation/agent-notes/dicom-phi-scan-regex-statics.md` measures what is left.
  *
  * V8 keeps the last successful match on the `RegExp` CONSTRUCTOR: `RegExp.input` (`$_`) is the
