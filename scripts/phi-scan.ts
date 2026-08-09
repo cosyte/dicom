@@ -469,9 +469,9 @@ interface HitValue {
  * `raw.slice(0, n)` and a regexp match alike with a string that POINTS INTO ITS PARENT, so an
  * excerpt cut from an 8 MiB decode kept the whole 8 MiB alive for the run. Measured: retention grew
  * by one whole file per hit-bearing file and did not grow at all once the excerpt owned its bytes.
- * The figures, the instrument and the residual are in
- * `documentation/agent-notes/dicom-phi-scan-value-retention.md`. `pnpm measure:phi-scan-retention`
- * re-derives them.
+ * The tables, the direction this COSTS on, and the residual it does not close are in
+ * `documentation/agent-notes/dicom-phi-scan-value-retention.md`; `pnpm measure:phi-scan-retention`
+ * re-derives the tables.
  *
  * 🛑 AND THE ROUND TRIP IS `utf16le` BECAUSE `utf8` IS LOSSY AND WOULD HAVE BEEN A SILENT VALUE
  * CORRUPTION. `Buffer.from(s, "utf8")` turns an unpaired surrogate into U+FFFD, so the excerpt

@@ -2950,19 +2950,25 @@ describe("phi-scan: a hit does NOT retain the payload its excerpt was cut from",
   });
 
   it("round-trips every byte the value carried, so the copy is not a re-encode", () => {
-    // The copy that drops the parent is a `utf16le` round trip, and a round trip
-    // that changed a character would be the same class of wrong answer as
-    // printing too much: the report would name a value the file does not carry.
-    // The alphabet is every byte a latin1 decode can produce except the ones the
-    // trailing-pad trim eats, so it covers the whole range the tag route can
+    // The copy that drops the parent is a round trip, and a round trip that
+    // changed a character would be the same class of wrong answer as printing
+    // too much: the report would name a value the file does not carry. The
+    // alphabet is every byte a latin1 decode can produce except the ones the
+    // trailing-pad trim eats, so it covers the whole range the TAG ROUTE can
     // reach, and the bound is DERIVED from a run rather than written here.
+    //
+    // 🛑 WHAT THIS CASE DOES NOT DO, SAID PLAINLY RATHER THAN IMPLIED BY ITS
+    // NAME: it does not discriminate `utf16le` from `utf8` or from `latin1`.
+    // All three round-trip this alphabet identically, and no reachable input can
+    // do better, because the tag route decodes latin1 and the text sweep's
+    // recognizers match ASCII, so an unpaired surrogate cannot arrive here at
+    // all. The reason `excerptValue` uses `utf16le` anyway is on its JSDoc and
+    // is an argument about the SLOT, not a claim this suite pins.
     const bound = oneTextHit(pnOfLength(5000)).value.length;
     let alphabet = "";
     for (let i = 0; alphabet.length < bound * 2; i += 1) {
       alphabet += String.fromCharCode(0x21 + (i % (0xff - 0x21 + 1)));
     }
-    // Non-vacuous: the alphabet must actually leave ASCII, or this case would
-    // pass on a latin1 round trip and on a utf8 one alike.
     expect([...alphabet].some((c) => c.charCodeAt(0) > 0x7f)).toBe(true);
 
     const root = makeRepo();

@@ -14,12 +14,19 @@ not a line. So the rule lives where a worker touching this code reads it: the JS
 `"phi-scan: a hit does NOT retain the payload its excerpt was cut from"`, and this file.
 
 **Provenance.** Every figure below was measured on the tree that shipped, against base **`88be779`**
-restored **by file copy**, and is re-derivable:
+restored **by file copy**. **The two tables and the grid, and nothing else, come out of the committed
+instrument**, which prints all three in one run:
 
 ```
 git show 88be779:scripts/phi-scan.ts > /tmp/base-phi-scan.ts
 pnpm measure:phi-scan-retention /tmp/base-phi-scan.ts
 ```
+
+**The other figures on this page are NOT from that script and are not claimed for it** - the
+discarded-instrument readings, the `RegExp.input` probe and the red-on-base test figure each say
+where they came from where they are written. A first draft of this page said "every figure" was
+re-derivable by that one command, which was false of five of them, and **the sentence was cut rather
+than the script grown to make it true.**
 
 ## The defect
 
@@ -42,8 +49,9 @@ once after it, when `hits` is already unreachable; both readings are about an id
 measured, not assumed: the first sampler built for this slice reported the same 5.1 MiB for a 16 MiB
 corpus and for a 160 MiB one, which is what a sampler that never fires looks like.
 
-**A GENERATOR IS AN INSTRUMENT.** Three further readings were discarded for the same class of reason
-before the shape below was settled on, and each is worth knowing:
+**A GENERATOR IS AN INSTRUMENT.** Three further readings, each taken by a throwaway harness during
+this slice and none of them re-derivable from the committed script, were discarded for the same
+class of reason before the shape below was settled on, and each is worth knowing:
 
 - **`--max-old-space-size` does not bound this at all.** A string produced by `Buffer.toString()` is
   counted in `process.memoryUsage().external`, not in `heapUsed`, and the old-space limit does not
@@ -83,6 +91,28 @@ repeats of every cell agreed to the tenth of a MiB. **At two files the two trees
 that row is kept rather than dropped: the fix buys nothing on a small corpus, and a table that only
 showed the loud rows would be arguing rather than reporting.
 
+## 🔴 The direction the copy COSTS on, which the table above cannot show
+
+That table is the favourable axis: few excerpts, large pages. The unfavourable one is many hits
+inside each page, where a resident copy of up to the excerpt bound replaces a resident pointer, and
+the `hits` array is still unbounded. Five 8 MiB pages of back-to-back PN tokens:
+
+| token length        | hits      | base `88be779` | shipped   |
+| ------------------- | --------- | -------------- | --------- |
+| 200, over the bound | 208,675   | 82.3 MiB       | 87.2 MiB  |
+| 20, under the bound | 1,997,290 | 292.3 MiB      | 280.2 MiB |
+
+**It goes both ways and it is small in both**, which is why it is a row rather than a redesign: over
+the bound the copy costs 4.9 MiB on 82.3, and under it the copy is CHEAPER than the pointer it
+replaced by 12.1 MiB on 292.3. What is unchanged is the kind of thing retained: excerpts, never
+whole payloads.
+
+**🩺 THE FIRST DRAFT OF THIS TABLE READ FLAT AND IT WAS THE INSTRUMENT, NOT THE RESULT.** It used ONE
+loud file, and the observer fires as a file is READ, before that file has contributed a hit, so the
+only sample it took was of an empty `hits`. It printed 25.9 MiB against 25.6 MiB, a difference
+indistinguishable from the baseline, and it would have shipped as "no cost". The largest sample of
+an `n` file corpus sees `n - 1` scanned files; every row here uses five.
+
 ## The shape, which is the same one `#109` used
 
 The copy is inside **`excerptValue`, the only constructor of `HitValue`**, so it is on the slot and
@@ -92,10 +122,15 @@ reason there is none that can put an unbounded string on one.
 **The round trip is `utf16le`, and `utf8` would have been a silent value corruption.**
 `Buffer.from(s, "utf8")` turns an unpaired surrogate into U+FFFD, so the report would print a
 character the file does not contain, which is the same class of wrong answer as printing too much.
-`utf16le` round-trips all 65,536 code units, paired or not; that was checked by sweeping every one of
-them, plus lone surrogates either side and an astral pair, through the candidate. **That no caller
-can hand this an unpaired surrogate today is exactly the reasoning this slot exists to not depend
-on.**
+`utf16le` round-trips all 65,536 code units, paired or not. **That no caller can hand this an
+unpaired surrogate today is exactly the reasoning this slot exists to not depend on.**
+
+**🛑 AND NO TEST DISCRIMINATES THE THREE ENCODINGS, WHICH IS SAID HERE RATHER THAN LEFT TO BE
+INFERRED FROM A CASE NAMED FOR THEM.** Nothing reachable through the CLI can carry an unpaired
+surrogate: the tag route decodes latin1 and the text sweep's recognizers match ASCII, so `latin1`,
+`utf8` and `utf16le` all round-trip every value this scanner can produce identically. The suite pins
+that the excerpt equals the value's own first characters over the whole latin1 alphabet; the choice
+of `utf16le` is an argument about the slot, and this page does not dress it as a measurement.
 
 ## The superset, in the strongest form available
 
@@ -109,31 +144,34 @@ them carry a cut value.** A grid whose cells printed nothing would read identica
 **PROVED BY MUTATION.** Cutting one character less (`MAX_HIT_VALUE_LENGTH - 1`) takes the grid from
 42 identical to **24 identical and 18 violations**. The grid can see a changed value.
 
-**And the loud case, which is where a per-hit copy would be paid the most.** An 8 MiB
-`(7FE0,0010) OW` payload uniform over `0x41-0x60` produced **71,734 hits** with
-`--max-hit-lines 0`: stderr is **byte-identical** between the two trees (6,063,059 bytes, `cmp`
-clean), and the wall clocks overlap across three runs each. **No ratio is quoted, and 71,734 is a
-fourth draw of a spread that is not a rate** (the item already carries 71,122 / 71,447 / 71,525, and
-a dark frame reads 0).
+**And the loud case, taken by hand rather than by the instrument** (a one-off harness in a scratch
+directory, not committed, and named as such). An 8 MiB `(7FE0,0010) OW` payload uniform over
+`0x41-0x60` produced **71,734 hits** with `--max-hit-lines 0`: stderr is **byte-identical** between
+the two trees (6,063,059 bytes, `cmp` clean), and the wall clocks overlap across three runs each.
+**No ratio is quoted, and 71,734 is a fourth draw of a spread that is not a rate** (the item already
+carries 71,122 / 71,447 / 71,525, and a dark frame reads 0).
 
 ## The tests, and which of them run red on base
 
 Three cases. **One is the property and it goes red on base**: nine hit-bearing files must not cost
 more retention than three, and on `88be779` six more files cost **12,626,394 bytes** against a
-threshold of one file. **The other two are green on base by design and are named as such** rather
+threshold of one file (read off the failing assertion with the base tree restored by file copy, not
+from the instrument). **The other two are green on base by design and are named as such** rather
 than counted as evidence: the detector-zero control (the filler alone is hit-free, so the difference
-is the hits' doing) and the `utf16le` round-trip fidelity case, which guards the new copy and has
-nothing to regress on a tree without it.
+is the hits' doing) and the round-trip fidelity case, which guards the new copy and has nothing to
+regress on a tree without it.
 
 **No case writes down how many bytes a run may hold.** The claim is a shape, not a size, so the
 assertion is a difference between two corpus sizes; `pnpm measure:phi-scan-retention` prints the
-sizes.
+sizes. **The suite's own scanner path is this repository's**, so a test cannot be pointed at a base
+tree; a base reading is taken by restoring `scripts/phi-scan.ts` by file copy and re-running.
 
 ## 🔴 Residuals, disclosed and NOT closed
 
 - **⚠ V8's legacy `RegExp` statics retain ONE subject string, and that is why the shipped column is
   not the control.** `RegExp.input` holds the last successfully matched subject, so one file's whole
-  decoded text stays alive after its scan regardless of anything `Hit` does. Measured directly:
+  decoded text stays alive after its scan regardless of anything `Hit` does. Measured by a one-off
+  probe rather than by the committed instrument, which has no row for it:
   after a match on an 8 MiB subject, with every local reference dropped and a forced GC,
   `RegExp.input.length` reads 8,388,628. It is what the constant 8 MiB gap between the shipped
   column and the control is, and the gap tracked file size exactly across 2, 4, 8 and 16 MiB files.

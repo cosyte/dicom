@@ -6,8 +6,10 @@
  * ## Why this file exists rather than a table in a note
  *
  * The same reason `scripts/measure-phi-scan-unread.ts` exists: a figure only its author can produce
- * is not evidence. Every number in
- * `documentation/agent-notes/dicom-phi-scan-value-retention.md` comes out of this file.
+ * is not evidence. **The two tables and the grid** in
+ * `documentation/agent-notes/dicom-phi-scan-value-retention.md` come out of this file. The figures
+ * that file takes by other means say so where they are written, and none of them is claimed for
+ * this script.
  *
  * ## What it measures, and why an ordinary sampler cannot
  *
@@ -178,10 +180,74 @@ async function row(scanner: string, files: number, size: number): Promise<[Run, 
         `${String(withHit.hits)} hits, ${String(withHit.samples)} samples for ${String(files)} files)`,
     );
   }
-  if (control.code !== 0 || control.hits !== 0) {
-    throw new Error("instrument: the filler is not hit-free; a difference would prove nothing");
+  if (control.code !== 0 || control.hits !== 0 || control.samples !== files) {
+    throw new Error(
+      `instrument: control wrong (exit ${String(control.code)}, ${String(control.hits)} hits, ` +
+        `${String(control.samples)} samples for ${String(files)} files). A control whose observer ` +
+        `never fired would print 0.0 MiB and read as the strongest possible result.`,
+    );
   }
   return [withHit, control];
+}
+
+// ---------------------------------------------------------------------------
+// The direction the copy COSTS on
+// ---------------------------------------------------------------------------
+//
+// 🛑 THE TABLE ABOVE IS THE FAVOURABLE AXIS AND IT IS NOT THE ONLY ONE. Retention falls when the
+// excerpts are few and the pages are large. It RISES when one file produces very many hits, because
+// a copy of up to `MAX_HIT_VALUE_LENGTH` is resident per hit where a pointer's header was, and the
+// `hits` array is still unbounded. That product is measured here rather than argued about.
+
+/** One page of back-to-back PN tokens, each longer than the excerpt bound. */
+function tokenPage(bytes: number, tokenChars: number): string {
+  const half = Math.max(1, Math.floor((tokenChars - 1) / 2));
+  const token = `${"A".repeat(half)}${CARET}${"B".repeat(tokenChars - half - 1)}`;
+  const out: string[] = [];
+  let n = 0;
+  while (n < bytes) {
+    out.push(token);
+    n += token.length + 1;
+  }
+  return out.join("\n");
+}
+
+/**
+ * Several copies of one loud page, because ONE would measure nothing.
+ *
+ * 🩺 THE OBSERVER FIRES AS A FILE IS READ, WHICH IS BEFORE THAT FILE HAS CONTRIBUTED A SINGLE HIT.
+ * So the largest sample of an `n` file corpus sees `n - 1` scanned files, and a ONE file corpus
+ * samples an empty `hits` and reports the baseline for both trees. A first draft of this table did
+ * exactly that and read a flat 25.9 / 25.6 MiB, which is what an instrument that cannot see the
+ * thing looks like. It is the same trap as the sampler in the header, one level in.
+ */
+const LOUD_FILES = 5;
+
+async function loudFileRow(scanner: string, tokenChars: number): Promise<Run> {
+  const root = mkdtempSync(join(tmpdir(), "dicom-phi-scan-loud-"));
+  roots.push(root);
+  mkdirSync(join(root, "scripts"));
+  mkdirSync(join(root, "test", "fixtures"), { recursive: true });
+  mkdirSync(join(root, "docs-content"));
+  copyFileSync(
+    join(REPO_ROOT, "scripts", "phi-allow-list.txt"),
+    join(root, "scripts", "phi-allow-list.txt"),
+  );
+  writeFileSync(join(root, "README.md"), "# throwaway\n");
+  writeFileSync(join(root, "docs-content", "intro.md"), "# throwaway doc\n");
+  spawnSync("git", ["init", "-q", "."], { cwd: root, shell: false });
+  const page = tokenPage(8 * 1024 * 1024, tokenChars);
+  for (let i = 0; i < LOUD_FILES; i += 1) {
+    writeFileSync(join(root, "test", "fixtures", `loud-${String(i)}.txt`), page);
+  }
+  const r = await measure(scanner, { root, files: LOUD_FILES, mib: 8 });
+  if (r.code !== 1 || r.hits < 1000 || r.samples !== LOUD_FILES) {
+    throw new Error(
+      `instrument: the loud files did not produce many hits (exit ${String(r.code)}, ` +
+        `${String(r.hits)} hits, ${String(r.samples)} samples)`,
+    );
+  }
+  return r;
 }
 
 // ---------------------------------------------------------------------------
@@ -331,6 +397,14 @@ function runCell(scanner: string, cell: Cell): { code: number; stdout: string; s
 
 const base = process.argv[2];
 
+const trees: [string, string][] =
+  base === undefined
+    ? [["shipped", SHIPPED]]
+    : [
+        ["base", base],
+        ["shipped", SHIPPED],
+      ];
+
 const sizes: readonly (readonly [number, number])[] = [
   [2, 8],
   [5, 8],
@@ -341,18 +415,25 @@ const sizes: readonly (readonly [number, number])[] = [
 process.stdout.write("RETAINED PEAK, forced GC, sampled once per file DURING the scan\n");
 process.stdout.write("corpus                | tree     | with hits | hit-free control\n");
 for (const [files, size] of sizes) {
-  const trees: [string, string][] =
-    base === undefined
-      ? [["shipped", SHIPPED]]
-      : [
-          ["base", base],
-          ["shipped", SHIPPED],
-        ];
   for (const [label, scanner] of trees) {
     const [withHit, control] = await row(scanner, files, size);
     process.stdout.write(
       `${String(files).padStart(2)} x ${String(size)} MiB = ${String(files * size).padStart(3)} MiB | ` +
         `${label.padEnd(8)} | ${mib(withHit.peak).padStart(6)} MiB | ${mib(control.peak).padStart(6)} MiB\n`,
+    );
+  }
+}
+
+process.stdout.write(
+  `\nTHE DIRECTION THE COPY COSTS ON: many hits per file, ${String(LOUD_FILES)} x 8 MiB\n`,
+);
+process.stdout.write("token length | tree     | hits   | retained peak\n");
+for (const tokenChars of [200, 20]) {
+  for (const [label, scanner] of trees) {
+    const r = await loudFileRow(scanner, tokenChars);
+    process.stdout.write(
+      `${String(tokenChars).padStart(12)} | ${label.padEnd(8)} | ${String(r.hits).padStart(6)} | ` +
+        `${mib(r.peak).padStart(6)} MiB\n`,
     );
   }
 }
