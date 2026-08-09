@@ -61,6 +61,15 @@ export const VIOLATOR_DOB = date("-", "1978", "03", "14");
 /** A second ISO date inside the window, for the plain-text fixture. */
 export const TEXT_VIOLATOR_DATE = date("-", "1990", "04", "15");
 
+/**
+ * A COMPACT eight-digit date inside the window, matched only by the text sweep's second date pass.
+ *
+ * The two passes share one entry of the scanner's recognizer table, so this value is what a case
+ * needs to show one pass spending the other's budget. Written through `date` like every other value
+ * here: spelled out, it is an eight-digit run in a scanned file, and the gate reported it.
+ */
+export const COMPACT_VIOLATOR_DATE = date("", "1955", "11", "03");
+
 /** The date written into a temporary `phi-scan-overrides.md` entry during one test. */
 export const OVERRIDE_LOG_DATE = date("-", "2026", "05", "01");
 

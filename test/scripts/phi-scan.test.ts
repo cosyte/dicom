@@ -42,6 +42,7 @@ import {
   RECENT_DA,
   VIOLATOR_DOB,
   TEXT_VIOLATOR_DATE,
+  COMPACT_VIOLATOR_DATE,
   OVERRIDE_LOG_DATE,
   ALLOWED_DA,
   TARGET_NAME,
@@ -2104,9 +2105,15 @@ describe("phi-scan: the hit report is capped PER FILE, and the cap cannot move t
     // numeral, so the two cannot drift apart and be quoted as each other.
     const total = Number(/(\d+) hits across/.exec(capped.stderr)?.[1]);
     expect(total).toBeGreaterThan(3);
+    // The remainder is `total - what was PRINTED`, and the printed count is READ OFF THE RUN
+    // rather than assumed to be the cap. It is not: the budget is spent per recognizer, so a file
+    // whose hits come from two of them prints more lines than the number on the flag. Writing the
+    // flag's value here would pin an arithmetic the report does not do.
+    const printed = countHitLines(capped.stderr);
+    expect(printed).toBeGreaterThan(3);
     const line = capped.stderr.split("\n").find((l) => l.includes("more hit(s) in this file"));
     expect(line).toBe(
-      `  ... and ${String(total - 3)} more hit(s) in this file, not printed. ` +
+      `  ... and ${String(total - printed)} more hit(s) in this file, not printed. ` +
         "Re-run with --max-hit-lines 0 to print every one.",
     );
   });
@@ -2161,6 +2168,264 @@ describe("phi-scan: the hit report is capped PER FILE, and the cap cannot move t
     const r = runIn(root, ["--max-hit-lines", "0"]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toContain("docs-content/leak.md");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The print budget is spent PER RECOGNIZER within a file
+// ---------------------------------------------------------------------------
+//
+// One shared per-file budget made `report` NOT MONOTONE: adding hits could
+// REMOVE a line it would otherwise have printed, because a file's loud
+// recognizer spent the quiet one's share. `scanDicom` appends before `scanText`
+// within a file, so a tag-route flood decided how many of the text route's
+// findings were printed - and the text route's PN sweep is the one that finds a
+// caret-joined person name in bytes the tag table never typed.
+//
+// The cases below pin the property in the two forms that matter: adding hits
+// never removes a printed line, and the budget a recognizer can spend is its own.
+// The superset against the previous scanner, across a grid, is
+// `scripts/measure-phi-scan-monotonicity.ts`; these are the shapes, not the grid.
+
+/** `n` ISO-date hits and nothing else: digits only, so the PN sweep matches none of them. */
+function dateFloodText(n: number): string {
+  const lines: string[] = [];
+  for (let i = 0; i < n; i += 1) lines.push(`seen ${TEXT_VIOLATOR_DATE}`);
+  return lines.join("\n") + "\n";
+}
+
+/**
+ * The reason field of every hit DETAIL line, in order.
+ *
+ * Read by walking back from the closing parenthesis and BALANCING, never by one regex: a date
+ * reason carries a parenthesis of its own (`(>= 1906)`) and a value may carry either bracket, so
+ * a greedy or lazy pattern reads part of the value as part of the reason. `parseHitLines` above
+ * documents the same trap from the other end of the line.
+ */
+function hitReasons(stderr: string): string[] {
+  const out: string[] = [];
+  for (const line of stderr.split("\n")) {
+    if (!/^ {2}tag=/.test(line)) continue;
+    expect(line.endsWith(")"), `hit line does not end in a reason: ${line.slice(0, 80)}`).toBe(
+      true,
+    );
+    let depth = 0;
+    let start = -1;
+    for (let i = line.length - 1; i >= 0; i -= 1) {
+      if (line[i] === ")") depth += 1;
+      else if (line[i] === "(") {
+        depth -= 1;
+        if (depth === 0) {
+          start = i;
+          break;
+        }
+      }
+    }
+    expect(start, `unbalanced reason on: ${line.slice(0, 80)}`).toBeGreaterThan(-1);
+    out.push(line.slice(start + 1, line.length - 1));
+  }
+  return out;
+}
+
+/** How many times each reason appears among the printed hit lines. */
+function reasonCounts(stderr: string): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const r of hitReasons(stderr)) counts.set(r, (counts.get(r) ?? 0) + 1);
+  return counts;
+}
+
+describe("phi-scan: the print budget is spent PER RECOGNIZER, so no class spends another's", () => {
+  it("🛑 ANOTHER CLASS'S FLOOD DOES NOT REMOVE A PRINTED LINE, at the DEFAULT cap", () => {
+    // The monotonicity case, at the cap CI and the pre-commit hook actually use.
+    // Run one: a file whose only hit is a person name. Run two: the same name
+    // with a date flood in front of it, far more of them than the default cap.
+    // Every line run one printed must still be printed in run two.
+    //
+    // The flood and the name are different recognizers, which is the whole
+    // point; the within-recognizer case is pinned separately below and is NOT
+    // closed by this.
+    const root = makeRepo();
+    const quiet = join(root, "test", "fixtures", "quiet.txt");
+    const loud = join(root, "test", "fixtures", "loud.txt");
+    writeFileSync(quiet, `Patient: ${CARET_PN}\n`);
+    writeFileSync(loud, dateFloodText(FLOOD_HITS) + `Patient: ${CARET_PN}\n`);
+
+    const before = runIn(root, [quiet]);
+    expect(before.code, `stderr: ${before.stderr}`).toBe(1);
+    const beforeValues = parseHitLines(before.stderr).map((l) => l.value);
+    expect(beforeValues).toContain(CARET_PN);
+
+    const after = runIn(root, [loud]);
+    expect(after.code, `stderr: ${after.stderr}`).toBe(1);
+    const afterValues = parseHitLines(after.stderr).map((l) => l.value);
+    // The superset, in the smallest form the suite can state it: nothing the
+    // quiet run printed went missing when the flood arrived.
+    for (const v of beforeValues) expect(afterValues).toContain(v);
+    // And the flood really did exceed the budget, so the case is not vacuous:
+    // the run withheld lines and said so.
+    expect(after.stderr).toContain("more hit(s) in this file");
+    expect(after.stderr).toContain(`${String(FLOOD_HITS + 1)} hits across 1 file(s).`);
+  });
+
+  it("🛑 A TAG-ROUTE FLOOD DOES NOT SPEND THE TEXT SWEEP'S BUDGET", () => {
+    // The route pair `#105` named. `scanDicom` appends before `scanText`, so
+    // with one shared budget an object carrying more typed hits than the cap
+    // withheld every text-route line in the same file - including the PN token
+    // sweep, which is the only route that can see a name in bytes the tag walk
+    // never typed. The name here sits AFTER the object, where the tag table
+    // cannot reach it at all.
+    const root = makeRepo();
+    const p = join(root, "test", "fixtures", "loud.dcm");
+    const dataset = Buffer.concat(
+      Array.from({ length: FLOOD_HITS }, () => shortElement(0x0008, 0x0020, "DA", RECENT_DA)),
+    );
+    writeFileSync(p, Buffer.concat([part10(dataset), Buffer.from(`\nPatient: ${CARET_PN}\n`)]));
+
+    const r = runIn(root, [p]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(parseHitLines(r.stderr).map((l) => l.value)).toContain(CARET_PN);
+    // Non-vacuity: the typed route really did flood, past the default cap.
+    const counts = reasonCounts(r.stderr);
+    expect(counts.get("PN not in allow-list") ?? 0).toBe(0);
+    const tagDates = [...counts].filter(([reason]) => !reason.startsWith("text"));
+    expect(tagDates.length).toBeGreaterThan(0);
+    expect(r.stderr).toContain("more hit(s) in this file");
+  });
+
+  it("does not grow with the payload: doubling every flood prints the same lines", () => {
+    // The bound, derived rather than written as a numeral, and stated in the one
+    // form the OUTPUT can carry it.
+    //
+    // 🛑 A REASON IS NOT A RECOGNIZER, and a first draft of this case asserted
+    // that each reason appears exactly the cap times. That passes only because
+    // `scanText`'s two date passes share one entry of the table, so it would go
+    // red on a correct split and was PINNING the shortfall rather than the
+    // bound. Deleted rather than reworded. What is asserted instead is the
+    // property a reader depends on: past the ceiling the report stops growing
+    // with the hits, so a payload cannot choose the size of the diagnostic.
+    const root = makeRepo();
+    const build = (n: number): string => {
+      const p = join(root, "test", "fixtures", `mixed-${String(n)}.dcm`);
+      const dataset = Buffer.concat(
+        Array.from({ length: n }, () => shortElement(0x0008, 0x0020, "DA", RECENT_DA)),
+      );
+      writeFileSync(
+        p,
+        Buffer.concat([
+          part10(dataset),
+          Buffer.from(`\nPatient: ${CARET_PN}\n${dateFloodText(n)}${floodText()}`),
+        ]),
+      );
+      return p;
+    };
+    const single = build(FLOOD_HITS);
+    const double = build(FLOOD_HITS * 2);
+
+    for (const cap of ["1", "2", "3", "5"]) {
+      const a = runIn(root, ["--max-hit-lines", cap, single]);
+      const b = runIn(root, ["--max-hit-lines", cap, double]);
+      expect(a.code, `cap ${cap} stderr: ${a.stderr}`).toBe(1);
+      expect(b.code, `cap ${cap} stderr: ${b.stderr}`).toBe(1);
+      // Non-vacuous on both halves: more than one recognizer fired, every one of
+      // them was cut, and the two corpora really do differ in hit count.
+      expect(reasonCounts(a.stderr).size).toBeGreaterThan(1);
+      expect(a.stderr).toContain("more hit(s) in this file");
+      const totalA = Number(/(\d+) hits across/.exec(a.stderr)?.[1]);
+      const totalB = Number(/(\d+) hits across/.exec(b.stderr)?.[1]);
+      expect(totalB).toBeGreaterThan(totalA);
+      expect(countHitLines(b.stderr)).toBe(countHitLines(a.stderr));
+    }
+  });
+
+  it("⚖️ TWO SWEEPS SHARE ONE ENTRY, AND HERE IS WHAT THAT COSTS", () => {
+    // Measured rather than argued, and UNCHANGED from base: `scanText`'s ISO
+    // pass and its compact `YYYYMMDD` pass both push the same entry, so the ISO
+    // pass can spend the whole budget and the compact pass, which is the only
+    // route that sees a bare eight-digit DOB, prints nothing at all. This is the
+    // half of the defect the per-recognizer budget does NOT close, and the file
+    // that discloses it must be able to fail if it is ever fixed or ever gets
+    // worse.
+    const root = makeRepo();
+    const both = join(root, "test", "fixtures", "both-dates.txt");
+    writeFileSync(
+      both,
+      dateFloodText(FLOOD_HITS) +
+        Array.from({ length: FLOOD_HITS }, () => `seen ${COMPACT_VIOLATOR_DATE}`).join("\n") +
+        "\n",
+    );
+
+    const r = runIn(root, [both]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    const values = parseHitLines(r.stderr).map((l) => l.value);
+    expect(values).toContain(TEXT_VIOLATOR_DATE);
+    expect(values).not.toContain(COMPACT_VIOLATOR_DATE);
+    // And one flag away, which is what makes the cost acceptable rather than
+    // hidden: the total counted it and `--max-hit-lines 0` prints it.
+    expect(r.stderr).toContain(`${String(FLOOD_HITS * 2)} hits across 1 file(s).`);
+    const uncapped = runIn(root, ["--max-hit-lines", "0", both]);
+    expect(parseHitLines(uncapped.stderr).map((l) => l.value)).toContain(COMPACT_VIOLATOR_DATE);
+  });
+
+  it("cannot move the verdict, the totals, the files named or the withheld count", () => {
+    // Green on base by design, and named as such so nobody quotes this block's
+    // size as a count of regressions caught. It pins what the change must NOT
+    // move: the exit code and the total come off the hits, every hit-bearing
+    // file is still named, and the suppression count is still exactly what was
+    // not printed.
+    const root = makeRepo();
+    const loud = join(root, "test", "fixtures", "loud.txt");
+    const named = join(root, "test", "fixtures", "named.txt");
+    writeFileSync(loud, dateFloodText(FLOOD_HITS));
+    writeFileSync(named, SYNTHETIC_PHI);
+
+    const r = runIn(root, ["--max-hit-lines", "3", loud, named]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("loud.txt");
+    expect(r.stderr).toContain("named.txt");
+    const total = Number(/(\d+) hits across (\d+) file/.exec(r.stderr)?.[1]);
+    expect(total).toBe(FLOOD_HITS + parseHitLines(runIn(root, [named]).stderr).length);
+    const withheld = Number(/(\d+) hit line\(s\) were not printed/.exec(r.stderr)?.[1]);
+    expect(withheld).toBe(total - countHitLines(r.stderr));
+  });
+
+  it("⚖️ WITHIN one recognizer a flood still buries a later hit, and that is NOT closed", () => {
+    // Stated rather than claimed away, and it is the honest limit of this
+    // change: a per-recognizer budget makes the budget a recognizer's own, it
+    // does not make a recognizer's own budget infinite. Earlier hits from the
+    // SAME sweep still push later ones off, which no print cap can avoid. The
+    // run still refuses, the total still counts it, and `--max-hit-lines 0`
+    // still prints it.
+    const root = makeRepo();
+    const p = join(root, "test", "fixtures", "same-class.txt");
+    writeFileSync(p, floodText() + `Patient: ${CARET_PN}\n`);
+
+    const capped = runIn(root, ["--max-hit-lines", "3", p]);
+    expect(capped.code, `stderr: ${capped.stderr}`).toBe(1);
+    expect(capped.stderr).not.toContain(CARET_PN);
+    expect(countHitLines(capped.stderr)).toBe(3);
+
+    const uncapped = runIn(root, ["--max-hit-lines", "0", p]);
+    expect(uncapped.code, `stderr: ${uncapped.stderr}`).toBe(1);
+    expect(uncapped.stderr).toContain(CARET_PN);
+  });
+
+  it("the recognizer is NOT printed, so the budget added no field to the line", () => {
+    // A diagnostic about a PHI leak is itself a PHI surface, and this change
+    // answers a selection question, not a reporting one. The hit line's fields
+    // are what they were; the suppression line still carries a count and the
+    // flag and nothing else.
+    const root = makeRepo();
+    const p = join(root, "test", "fixtures", "shape.txt");
+    writeFileSync(p, SYNTHETIC_PHI);
+
+    const r = runIn(root, [p]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    for (const line of r.stderr.split("\n").filter((l) => /^ {2}tag=/.test(l))) {
+      expect(line).toMatch(/^ {2}tag=\S+ vr=\S+ offset=\d+ value=".*" \([^()]*(\([^()]*\))?\)$/);
+    }
+    for (const token of ["tag-pn", "tag-date", "text-pn", "text-date", "recognizer"]) {
+      expect(r.stderr).not.toContain(token);
+    }
   });
 });
 
