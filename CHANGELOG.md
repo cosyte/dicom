@@ -1,5 +1,204 @@
 # Changelog
 
+## 0.0.18
+
+### Patch Changes
+
+- 21d42f5: Scan a file by its CONTENT in the repository's PHI gate (`scripts/phi-scan.ts`), which is developer
+  tooling and not part of the published surface.
+
+  `scanTarget` branched on the file's extension before it read a byte: `.json`, `.txt`, `.md` and
+  `.csv` ran the text sweep and the base64 decode and returned, so the DICOM-aware sweep never ran on
+  one whatever its bytes were. A file whose raw bytes are a Part 10 object was therefore never scanned
+  as one if it happened to be named `.md`, which a de-identification report, a bug repro or a fixture
+  saved under the wrong extension plausibly is.
+
+  What that cost is narrower than "a second opinion", and the fixture is built to show it: only the
+  tag table can see a **single-component** `(0010,0010)`, because that shape carries no caret for the
+  text sweep's person-name pass to match. Measured on `08ed3ee` over one object, the same bytes exited
+  1 as `.dcm`, `.bin` and `.dat`, and 0 with `OK - no hits` as `.md`, `.txt`, `.json` and `.csv`.
+  Preamble-less, the same.
+
+  The remedy is the DELETION of the branch, and that is what makes it safe rather than a net leak.
+  `scanDicom` gives up quietly at an undefined-length Sequence (PS3.5 2026c section 7.5.2 defines
+  `0xFFFFFFFF` as one of two Sequence delimitations, both of which decoders shall support, and section
+  7.1 orders tags ascending, so `(0008,1110)` precedes `(0010,0010)` in a conformant file), so routing
+  a file to it INSTEAD of the text sweep has previously taken a name from exit 1 to exit 0. The removed
+  branch's two calls were the text sweep and the base64 decode; the branch that replaces it makes the
+  same two unconditionally and adds one conditional DICOM sweep. Hits are only ever appended, so the
+  hit set, the totals and the exit code are a strict superset on every input.
+
+  That superset was checked mechanically over 11 objects times 7 extensions, 77 cells: 65 identical,
+  12 strictly more reported, 0 cells that lost an exit code or a reported value. Every fixture was
+  verified through this package's own parser before any zero it produced was believed. The scan of the
+  repository's real corpus is byte-identical, exit code and output alike.
+
+  Two residuals are unchanged and disclosed rather than closed: the DICOM sweep still reports nothing
+  about the bytes it never read, and the hit array is still unbounded in memory. The matrix, the
+  superset check and the reason the first of those is a separate slice are in
+  `documentation/agent-notes/dicom-phi-scan-name-dispatch.md`.
+
+- 028fe85: Close a silent halt in the repository's PHI gate (`scripts/phi-scan.ts`), which is developer
+  tooling and not part of the published surface.
+
+  `scanDicom` gives up quietly at the first Data Element header it cannot read, and an
+  undefined-length Sequence is one of those (PS3.5 2026c section 7.5.2 defines it as one of two
+  delimitations, both of which decoders shall support). The text sweep behind it ran only when
+  `isDicom` answered false, so a **preamble-ful** Part 10 object had nothing behind the halt: the
+  identical dataset was reported without a preamble and missed with one, and the gate printed
+  `OK - no hits` over a name-bearing `(0010,0010)`. The preamble is not part of the dataset, so it
+  cannot decide who is owed a text sweep.
+
+  The text sweep now runs on every binary target, and `scanEmbeddedObjects` runs it on the object it
+  decodes as well, where the base64 hides the name from the enclosing page. Both are additions beside
+  `scanDicom`, never replacements for it.
+
+  The accepted cost is false positives over binary values. Which recognizer produces them, and how
+  many, is a property of the payload's byte histogram rather than of the scanner: over 8 MiB of
+  synthetic pixel data the measured count runs from zero to five figures. The table, and the residuals
+  left open, are in `documentation/agent-notes/dicom-scandicom-silent-halt.md`.
+
+  Also closes a pre-existing refusal on the same route: the base64 run matcher was a greedy regular
+  expression, and one multi-megabyte run overflowed V8's backtrack stack, exiting 2 rather than
+  scanning. It is a forward scan now, yielding the same runs.
+
+- 99da18f: Make the repository's PHI gate (`scripts/phi-scan.ts`) report the bytes its DICOM sweep never read.
+  This is developer tooling and not part of the published surface.
+
+  `scanDicom` stops at the first Data Element header it cannot read and said nothing about what came
+  after it, so a run printed `OK - no hits` over a file whose tag table it had abandoned partway
+  through. The way in is conformant: PS3.5 2026c section 7.5.2 defines an undefined-length Sequence as
+  one of two delimitations, both of which decoders shall support, and section 7.1 orders tags
+  ascending, so `(0008,1110)` precedes `(0010,0010)`. Encapsulated pixel data has the same shape.
+
+  Each halt is now recorded per file and printed as a `PARTIAL:` line, and the word `OK` is withdrawn
+  from the clean line when any file has one. The line carries a path, two counts and a reason from a
+  closed table: no tag, no VR, no value and no byte of the object, because the bytes at a halt are
+  exactly the bytes that did not read as a header. The tally is bounded by the number of files rather
+  than by anything an object can choose, so it needs no cap and cannot be pushed off the report by a
+  file loud enough to bury its own hits.
+
+  The exit code deliberately does not move. Nothing was found, nothing refused the scan, the same
+  disclosure would fire on input section 7.5.2 makes legal, and folding it into exit 2 would mask a
+  real hit whenever both were present. A CI job that reads only the exit code therefore still cannot
+  see this, which is disclosed rather than claimed away.
+
+  Proved over 13 objects x 5 carriers x 3 cap settings: exit code and hit lines identical in all 195
+  cells, 60 outputs identical, 105 strictly larger, 30 differing only by the withdrawn `OK` line, 0
+  violations. The generator ships as `scripts/measure-phi-scan-unread.ts` so the table can be
+  re-derived. What the disclosure does and does not carry, and the residuals left open, are in
+  `documentation/agent-notes/dicom-phi-scan-unread-tail.md`.
+
+- 783f667: Let the repository's PHI gate (`scripts/phi-scan.ts`) finish writing its report before it exits.
+  This is developer tooling and not part of the published surface.
+
+  The script ended `process.exit(run())`. `process.exit()` tears the process down without waiting for
+  stdio that libuv has accepted but not yet written, and under every caller that matters this script's
+  stderr is a **pipe**: `spawnSync` in this repo's own suite, and the shell pipeline a CI job runs it
+  in. A pipe write that cannot complete immediately is queued and flushed on a later loop turn, which
+  `process.exit()` never allows, so `report()` returning was not the same as its bytes having left the
+  process.
+
+  **The failure mode is a gate defect, not a cosmetic one.** The exit code is computed from
+  `hits.length` and was always right, so a truncated report is a run that REFUSES while under-naming
+  what it found, and the bytes it drops are the END of the report: the last hit lines and the total,
+  which is the part a reader trusts to say how much there was.
+
+  This was red on `main`. `ci / verify (24, ubuntu-latest)` is a required check and it failed on
+  `08ed3ee` and `21d42f5`, both times on `countHitLines(...) === 200` reading 193, and on `#106`'s PR
+  head reading 191, with `verify (22)` green throughout and the exit code correct in every case.
+
+  The scan is deterministic, so the hit COUNT cannot vary between runs: the fixture is 200 distinct
+  tokens and the recognizers are plain global regexes over the whole file. What varied is what
+  arrived. Measured on `21d42f5` with the reader stalled, 5,000 small stderr writes: `process.exit(1)`
+  delivered 784 lines, about one 64 KiB pipe, on 3 of 3 runs; `process.exitCode = 1` delivered 5,000
+  on 3 of 3. Node 22.23.1 and 24.19.0 behaved identically there, so the version split is scheduling
+  and not stdio semantics. The CI failure itself reproduced on the real script and the real fixture
+  once the reader was made to lose (single-page pipes plus CPU contention): **30 of 60 runs truncated,
+  counts including 190, 191 and 192, exit 1 every time; 0 of 60 with this change.**
+
+  Not calling `process.exit()` has a cost, and it is paid here rather than discovered later: it makes
+  a late stdio error reachable. A write to a pipe whose reader has gone fails with `EPIPE` on a later
+  tick, after `run()` has returned, so `run()`'s try/catch cannot see it and Node's default
+  unhandled-`'error'` path exits 1, the one code that means "PHI was found". Without a listener a
+  clean corpus went 0 to 1 and an invocation error went 2 to 1. Both stdio streams now discard a late
+  error, which is exactly what `process.exit()` did by making it unreachable, so the exit code stays
+  exactly what `run()` returned. **The residual, disclosed and not closed: with a reader that never
+  drains at all this script now waits instead of exiting, where `process.exit()` ended it by dropping
+  the report.** That is introduced, on `node` and under `tsx` alike. A timeout would re-introduce the
+  defect this closes, so it is disclosed rather than answered.
+
+  It changes what ARRIVES, never what is WRITTEN. Over a draining reader, base and fixed emit
+  byte-identical stdout, stderr and exit code across 12 cases spanning all three of the contract's
+  exit codes, the per-file print cap at its default and at 0, 1 and 3, the net-leak control and both
+  cells of the finding that `report()` is not monotone in `hits` at the cap. Nothing about the cap or
+  its non-monotonicity is changed or claimed away here; the printed set simply arrives.
+
+  Still open and NOT fixed here: `test/helpers/run-script.ts` inherits `spawnSync`'s 1 MiB
+  `maxBuffer`, which truncates at roughly 15,400 lines in both exit modes. That is the parent dropping
+  bytes it was handed rather than the child failing to hand them over, and it is a different defect.
+
+  Detail, controls and the superset check: `documentation/agent-notes/dicom-phi-scan-exit-flush.md`.
+
+- b784c38: Name the frame a `DicomParseError`'s byte offset is counted in, and correct the universal that was
+  defending the bound around it.
+
+  `err.byteOffset` was the sole locator on the two Tier-3 messages that lost their remaining-bytes
+  count, and it is slice-relative inside a defined-length Sequence Item: on one fixture the same
+  defect reports `0`, `24` or `40` depending on where inside the Item the offending element sits, while
+  that Item's slice begins at absolute offset 202. Nothing on the class said which coordinate system
+  the number was in, and the wrong reading is not detectable by a consumer. It is a valid index into a
+  buffer that returns a real element, just not the one the diagnostic named. On a fixture engineered
+  for the earlier snippet fix, reading the item-relative number against the file lands inside a planted
+  `"MR BRAIN SMITHSON "`.
+
+  **`DicomParseError.offsetFrame` is new and required**, drawn from the new `OFFSET_FRAMES` export
+  (`"input"`, `"inflated-dataset"`, `"value-slice"`). **Only `"input"` means the offset indexes the
+  buffer you passed in.** The frame is in the `Error.message` suffix as well as on the class, so that
+  suffix reads `(offset=N frame=F)` on every Tier-3 fatal and every `{ strict: true }` escalation: a
+  string match on it stops matching. `err.code` is unchanged and which files throw is unchanged.
+
+  The frame's **name** is published and its **origin** is not. Where a slice begins is the sum of the
+  declared lengths that reached it, so an error naming its own frame's origin would hand back by
+  subtraction the wire field these same messages withhold. Internally the frame's bytes and its name
+  travel as one object, so a frame change is one assignment and no call site can move the bytes and
+  leave the label behind. It does not make a deliberately mismatched pair impossible, and is not
+  described as doing so.
+
+  **The universal used to justify withholding a declared length, in the README, two package docs and
+  two places in the parser, was false and is corrected rather than reworded a second time.** A fatal "about a length field that lies" does not fire
+  only when a length field is lying: a spec-clean object cut short by two bytes raises
+  `ELEMENT_LENGTH_EXCEEDS_BUFFER` with every declared length honest, and one cut short inside its File
+  Meta group raises `FILE_META_GROUP_LENGTH_OVERRUNS` with `(0002,0000)` untouched. Both are measured.
+  The bound is right in either reading because the withheld number is four bytes a sender wrote either
+  way; the universal was never what made it right.
+
+  Also replaces an arity pin that did not pin what it claimed. It read
+  `Function.prototype.length`, which stops counting at the first defaulted parameter, so a factory that
+  had grown exactly the slot the pin refuses would still have read `2` and stayed green.
+
+  `UNSUPPORTED_TRANSFER_SYNTAX` keeps the behaviour every released version has: its `snippet` slot
+  carries PS3.6's own name for the unsupported UID rather than raw bytes, so it is the one fatal whose
+  snippet is not a cut of the frame it names. `DicomParseWarning.position` and `Element.byteOffset`
+  still carry no frame, and `err.snippet` is still 16 raw source bytes. All three are pre-existing, disclosed, and not closed here. The measurements,
+  the residuals, and every clean result with the positive it is pinned beside are in
+  `documentation/agent-notes/dicom-diagnostic-locator-frame.md`.
+
+- 08ed3ee: Cap the repository's PHI gate (`scripts/phi-scan.ts`) at a per-file number of printed hit lines,
+  which is developer tooling and not part of the published surface.
+
+  `report()` wrote one stderr line per hit with no bound, and the preceding slice widened what reaches
+  it: the text sweep now runs over every Part 10 object's bytes, and its recognizers fire on image
+  noise at a rate that is a property of the payload's byte histogram. Measured on `b784c38` over 8 MiB
+  of synthetic pixel data uniform over `0x41-0x60`, one run wrote 71,447 hits as 6,037,715 bytes of
+  stderr.
+
+  The cap is on **printing only**. The exit code and the reported totals are derived from the hits and
+  not from what was printed, so a withheld line cannot turn a refusal into a clean run. It is applied
+  **per file**, never globally, so a loud file cannot push a later file's hits off the report. A file
+  with lines withheld says so, with the exact remainder. `--max-hit-lines <n>` sets the bound and
+  `--max-hit-lines 0` prints every line, reproducing the previous output byte for byte.
+
 ## 0.0.17
 
 ### Patch Changes
