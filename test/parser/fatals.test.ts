@@ -150,8 +150,7 @@ describe("the Tier-3 fatal registry", () => {
     expect(err.snippet).toBe(buildSnippet(slice.buffer, 0));
 
     // And the honest limit, asserted rather than left to the title: a hand-made
-    // mismatched pair renders faithfully, so the guard is the four swap sites
-    // and not the type.
+    // mismatched pair renders faithfully.
     const mismatched: ParseFrame = { buffer: slice.buffer, name: OFFSET_FRAMES.INPUT };
     const mislabelled = elementLengthExceedsBuffer(mismatched, 0);
     expect(mislabelled.offsetFrame).toBe(OFFSET_FRAMES.INPUT);

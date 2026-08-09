@@ -73,19 +73,18 @@ actually buys is that composing one is a single assignment, so no site can half-
 limit is pinned in `fatals.test.ts` rather than left to a test title: the mismatched pair is asserted
 to RENDER.
 
-**🛑 AND NO COUNT OF THOSE SITES IS WRITTEN, IN THIS FILE OR ANYWHERE.** The first remedy to this
-finding said "exactly four" in five artifacts, and the next graded pass measured **five**: the
-omitted one is the ROOT composition in `parseDicom`, which reads `"input"` - the very label a forged
-pair would claim. A worker sweeping frame compositions from that census reviews four of five and
-reads clean, which is this lineage's own "a detector zero can be a gap, not a clearance" arriving by
-way of a numeral. Derive it instead, in two seconds and never stale:
+**🛑 AND WRITE NO COUNT OF THOSE SITES.** The first remedy to this finding said "exactly four" in
+five artifacts, and the next graded pass measured **five**: the omitted one is the ROOT composition
+in `parseDicom`, which reads `"input"` - the very label a forged pair would claim. A worker sweeping
+frame compositions from that census reviews four of five and reads clean, which is this lineage's
+own "a detector zero can be a gap, not a clearance" arriving by way of a numeral. Derive it instead,
+in two seconds and never stale:
 `grep -rn "OFFSET_FRAMES\." src/parser/`.
 
-**That derivation OVER-reports and is chosen for it.** Its output also contains the JSDoc notes
-saying so, and the two `EMPTY_INPUT` factories, which publish a frame NAME without composing a frame
-at all because they are raised before a `ParseContext` exists. A narrower pattern that returned only
-the object literals would be a detector with a floor, and this file's whole subject is what a floor
-hides. Over-reporting is the safe direction for a census you must not miss a member of.
+**That derivation OVER-reports and is chosen for it.** Naming a frame is not composing one, so read
+every hit rather than counting them. A narrower pattern that returned only the object literals would
+be a detector with a floor, and this file's whole subject is what a floor hides. Over-reporting is
+the safe direction for a census you must not miss a member of.
 
 **The frame's NAME is published; its ORIGIN is not, deliberately.** That asymmetry is asserted, not
 just stated: `"publishes the frame's NAME and never its ORIGIN"` searches every digit run of the

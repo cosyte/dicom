@@ -174,10 +174,9 @@ export type OffsetFrame = (typeof OFFSET_FRAMES)[keyof typeof OFFSET_FRAMES];
  * would claim. A worker sweeping from that census reviews four of five and
  * reads clean. Derive it instead, in two seconds and never stale:
  * `grep -rn "OFFSET_FRAMES\." src/parser/`. **It OVER-reports, deliberately:
- * its output also contains this note and the two `EMPTY_INPUT` factories, which
- * publish a frame NAME without composing a frame at all because they are raised
- * before a context exists. Over-reporting is the safe direction for a census
- * you must not miss a member of.**
+ * naming a frame is not composing one, so read every hit rather than counting
+ * them. Over-reporting is the safe direction for a census you must not miss a
+ * member of.**
  *
  * @internal
  */
