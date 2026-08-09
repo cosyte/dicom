@@ -57,7 +57,7 @@ CALLED** (`#93`): the hit would still carry the whole payload, and the next cons
 
 **THE TYPE IS THE ENFORCEMENT, AND IT WAS VERIFIED RATHER THAN ASSERTED.** Reverting one of the six
 push sites to the raw string it used to pass fails the build:
-`scripts/phi-scan.ts(1306,9): error TS2322: Type 'string' is not assignable to type 'HitValue'`,
+`scripts/phi-scan.ts(1307,9): error TS2322: Type 'string' is not assignable to type 'HitValue'`,
 and restoring it is green again. A test pins the arithmetic the compiler cannot state: the number of
 `hits.push({` sites equals the number of `value: excerptValue(` sites.
 
