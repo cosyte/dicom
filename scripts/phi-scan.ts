@@ -153,7 +153,7 @@
 
 import { readFileSync, statSync, lstatSync, existsSync, readdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { join, resolve, relative, sep, extname, isAbsolute } from "node:path";
+import { join, resolve, relative, sep, isAbsolute } from "node:path";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -1345,12 +1345,6 @@ function scanEmbeddedObjects(target: Target, text: string, allow: AllowList, hit
 }
 
 /**
- * Extensions dispatched to the TEXT route (plus the embedded-object decode). Membership here is
- * about a file whose bytes are markup a human wrote, not about what those bytes might encode.
- */
-const TEXT_EXTENSIONS = new Set([".json", ".txt", ".md", ".csv"]);
-
-/**
  * Dispatch one target to the route that can actually read it.
  *
  * 🛑 THE BINARY ROUTE ASKS `fileMetaStart`, NEVER `isDicom`. `isDicom` is the 128-byte-preamble +
@@ -1386,7 +1380,7 @@ const TEXT_EXTENSIONS = new Set([".json", ".txt", ".md", ".csv"]);
  * preamble-less exit 1, preamble-ful exit 0 and `OK - no hits`. A gate that reports clean over a name
  * is a false green; the text sweep therefore runs on EVERY binary target, unconditionally.
  *
- * So the binary branch asks TWO independent questions and runs BOTH answers. What it does is a strict
+ * So the dispatch asks TWO independent questions and runs BOTH answers. What it does is a strict
  * SUPERSET of what gating on `isDicom` did, on every input, which is the property to preserve if this
  * ever changes again:
  *
@@ -1416,9 +1410,32 @@ const TEXT_EXTENSIONS = new Set([".json", ".txt", ".md", ".csv"]);
  * positive costs a developer one look at a hit line, while the silent halt it replaces printed
  * `OK - no hits` over a patient name.
  *
- * A text extension is still dispatched by NAME rather than by content: a `.md` whose first bytes
- * happened to look like group `0002` is still a document, and losing `scanEmbeddedObjects` on it
- * would trade one blind spot for another. `PRE-EXISTING`, and unchanged here.
+ * 🛑 AND THE THREE ROWS ABOVE ARE THE WHOLE TABLE, BECAUSE NOTHING IS DISPATCHED BY NAME ANY MORE.
+ * There was a fourth row, keyed on the file's EXTENSION and taken before any of them: `.json`,
+ * `.txt`, `.md` and `.csv` ran `scanText` and `scanEmbeddedObjects` and returned, so `scanDicom`
+ * never ran on one whatever its bytes were. That is the same defect as the two above, wearing a
+ * name instead of a preamble: the halt, the preamble and now the FILENAME are all things that do
+ * not decide what the bytes are. Measured on `08ed3ee` over one Part 10 object carrying a
+ * single-component `(0010,0010)` - a shape with no caret, so the text sweep's PN pass cannot match
+ * it and only the tag table can - the SAME BYTES exited 1 as `.dcm`, `.bin` and `.dat`, and 0 with
+ * `OK - no hits` as `.md`, `.txt`, `.json` and `.csv`. Preamble-less, the same. A de-identification
+ * report, a bug repro or a fixture saved under the wrong name therefore carried a patient name
+ * straight through the gate.
+ *
+ * 🛑 THE REMEDY IS A DELETION, AND THAT IS WHY IT CANNOT BE THE NET LEAK `#97` PAID FOR. The removed
+ * branch's two calls are `scanText` and `scanEmbeddedObjects`; the branch that replaces it makes the
+ * SAME two calls unconditionally and adds one more. So on every input the new behaviour is the old
+ * behaviour plus whatever `scanDicom` finds, `hits` is only ever appended to, and no route was
+ * swapped for another. The reason `#97`'s rule bites an `if/else` and not this is exactly that: a
+ * dispatch that CHOOSES can subtract, and one that only ADDS cannot.
+ *
+ * What the deleted branch was FOR, and why the reason does not survive: a `.md` whose first bytes
+ * look like group `0002` is still a document, so it must not lose `scanEmbeddedObjects`. It does not.
+ * That argument was only ever against an exclusive swap, and there is no swap here.
+ *
+ * The full 11-object x 7-extension matrix, the mechanical superset check over its 77 cells, and the
+ * reason the sibling residual is NOT closed with it are in
+ * `documentation/agent-notes/dicom-phi-scan-name-dispatch.md`. No count off it is copied here.
  */
 function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
   let buf: Buffer;
@@ -1429,14 +1446,9 @@ function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
       `could not read ${target.path}: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
-  const ext = extname(target.path).toLowerCase();
-  if (TEXT_EXTENSIONS.has(ext)) {
-    const text = buf.toString("utf8");
-    scanText(target, text, allow, hits);
-    scanEmbeddedObjects(target, text, allow, hits);
-    return;
-  }
-  // Two questions, not one choice. See the superset table above before making either an `else`.
+  // 🛑 NOTHING IS READ OFF THE PATH HERE, AND `extname` IS GONE ON PURPOSE. Every target gets the
+  // same two questions, and they are two questions rather than one choice. See the superset table
+  // above before adding a test on the NAME back, or before making either of these an `else`.
   if (fileMetaStart(buf) !== null) {
     scanDicom(target, buf, allow, hits);
   }
@@ -1447,8 +1459,8 @@ function scanTarget(target: Target, allow: AllowList, hits: Hit[]): void {
   // cheap test on the first 132 bytes can see it.
   const text = buf.toString("utf8");
   scanText(target, text, allow, hits);
-  // 🛑 THE EMBEDDED DECODE IS NOT A MARKDOWN FEATURE, AND SCOPING IT TO `TEXT_EXTENSIONS` MADE
-  // IT ONE. A Part 10 object pasted as base64 into a `.ts` source is the same fixture as one
+  // 🛑 THE EMBEDDED DECODE IS NOT A MARKDOWN FEATURE, AND SCOPING IT TO A SET OF TEXT EXTENSIONS
+  // MADE IT ONE. A Part 10 object pasted as base64 into a `.ts` source is the same fixture as one
   // pasted into a `.md` page, and every fixture this package commits is built in a `.ts` file.
   // Measured on `8982a16` with one object and one name: as `probe.md` it was found, as
   // `probe.dcm` it was found, as `probe.ts` the run printed `OK - no hits`. Widening the walk

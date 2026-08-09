@@ -127,9 +127,14 @@ the second is dicom-specific.
 - the same bytes as `probe.ts` -> exit 0, `OK - no hits`
 
 So widening the walk root alone would have opened 81 `.ts` files and read straight past every object
-encoded in one, in a package whose fixtures are exactly that. The decode now runs on the non-`isDicom`
-branch as well, **in addition to** `scanText` and never instead of it, which keeps the strict-superset
-property the `scanTarget` banner already documents.
+encoded in one, in a package whose fixtures are exactly that. The decode runs **in addition to**
+`scanText` and never instead of it, which keeps the strict-superset property the `scanTarget` banner
+already documents.
+
+> **⚠ `TEXT_EXTENSIONS` NO LONGER EXISTS**, so the measurement above is a record of base and not a
+> description of the scanner. `DICOM-PHI-SCAN-RESIDUALS` (2026-08-09) deleted the by-name branch
+> outright; every target now gets `scanText`, `scanEmbeddedObjects` and - if its bytes say so -
+> `scanDicom`. `dicom-phi-scan-name-dispatch.md`.
 
 **🩺 THE CLEAN RESULTS ARE PINNED BESIDE POSITIVES THE DETECTOR DOES CATCH, because a detector zero
 can be a gap rather than a clearance.** The `.ts` zero above sits beside the `.md` and `.dcm` ones on

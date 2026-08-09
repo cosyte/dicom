@@ -203,13 +203,11 @@ weight is the HIT, which a refusal loses.
 
 ## Residuals, disclosed and NOT closed
 
-- **A TEXT EXTENSION IS STILL DISPATCHED BY NAME, SO A `.md`/`.json`/`.txt`/`.csv` FILE WHOSE RAW
-  BYTES ARE A DICOM OBJECT IS NEVER SCANNED AS ONE.** `PRE-EXISTING` and **unchanged** by this slice.
-  It is a dispatch-by-name defect, not a preamble one, and it was true on base for both shapes. Left
-  deliberately: the text route is what runs `scanEmbeddedObjects`, and a doc page sent to the DICOM
-  route on the strength of its first eight bytes would lose the base64 decode that is the only thing
-  that reads the doc corpus at all. Closing it means running **both** routes on a text extension,
-  which is its own change with its own false-positive surface.
+- ~~**A TEXT EXTENSION IS STILL DISPATCHED BY NAME, SO A `.md`/`.json`/`.txt`/`.csv` FILE WHOSE RAW
+  BYTES ARE A DICOM OBJECT IS NEVER SCANNED AS ONE.**~~ **CLOSED** by `DICOM-PHI-SCAN-RESIDUALS`
+  (2026-08-09). The prediction in this bullet - that closing it means running **both** routes on a
+  text extension - is what shipped, and the branch was DELETED rather than widened, so nothing was
+  swapped. Read `dicom-phi-scan-name-dispatch.md` for the before/after matrix and the superset proof.
 - **`scanDicom` STILL REPORTS NOTHING ABOUT THE BYTES IT NEVER READ.** The text sweep behind it is a
   net, not a fix for the walk: a value that is neither `FAMILY^GIVEN` nor an eight-digit date run is
   still invisible past the halt, an MRN and an institution name among them. Teaching the walk to

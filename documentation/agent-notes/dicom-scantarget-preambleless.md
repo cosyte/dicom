@@ -109,6 +109,11 @@ A gate that reports clean over a name it used to report is a worse defect than t
 questions and runs both answers**, which makes it a strict **superset** of the `isDicom` gate on
 every input. That superset property is the thing to preserve if this is ever touched again:
 
+> **⚠ THE FIRST SENTENCE IS SUPERSEDED AND THE REST IS NOT.** `DICOM-PHI-SCAN-RESIDUALS` (2026-08-09)
+> DELETED the by-name branch, so the two questions are now asked of **every** target and the table
+> below describes all of them rather than the non-text-extension ones.
+> `dicom-phi-scan-name-dispatch.md`.
+
 | input | base `5ae8fe4` | shipped |
 |---|---|---|
 | `isDicom` true | `scanDicom` | `scanDicom`. Byte-for-byte unchanged. |
@@ -150,14 +155,11 @@ costs a wasted walk and never a lost scan, so the two tests do not have to be re
   **▶ This still bounds what the row-4 control above proves.** "The identical bytes plus 132 bytes of
   preamble were caught all along" is true of a fixture with no undefined-length element in it, and is
   **not** a general property of the preamble-ful route. Do not restate it as one.
-- **A TEXT EXTENSION IS STILL DISPATCHED BY NAME, SO A `.md`/`.json`/`.txt`/`.csv` FILE WHOSE RAW
-  BYTES ARE A DICOM OBJECT IS NEVER SCANNED AS ONE.** `PRE-EXISTING` and **unchanged** by this slice:
-  it was true on base for a preamble-ful object as well, so it is a dispatch-by-name defect and not a
-  preamble one. Left deliberately, because the trade is not free in the other direction either - the
-  text route is what runs `scanEmbeddedObjects`, and a doc page dispatched to the DICOM route on the
-  strength of its first eight bytes would lose the base64 decode that is the only thing that reads
-  the doc corpus at all. Closing it means running **both** routes on a text extension, which is a
-  scanner-behaviour change with its own false-positive surface, not a side effect of this one.
+- ~~**A TEXT EXTENSION IS STILL DISPATCHED BY NAME, SO A `.md`/`.json`/`.txt`/`.csv` FILE WHOSE RAW
+  BYTES ARE A DICOM OBJECT IS NEVER SCANNED AS ONE.**~~ **CLOSED** by `DICOM-PHI-SCAN-RESIDUALS`
+  (2026-08-09), by running **both** routes on every target - which is exactly what this bullet said
+  closing it would take. The doc page keeps `scanEmbeddedObjects`, because the branch was DELETED
+  and not swapped. `dicom-phi-scan-name-dispatch.md`.
 - The `--staged` route still drops `D` (a deletion has no staged blob) and `U` (an unmerged path has
   no single one). `PRE-EXISTING`, untouched here, and already stated in the script's own banner.
 - Nothing about the **hit** surface moved. A hit still reports the element's tag, VR, offset and
