@@ -221,9 +221,11 @@ weight is the HIT, which a refusal loses.
 - **A DUPLICATE LINE IS THE PRICE AND IT IS THE RIGHT WAY ROUND.** A DICOM object can now report one
   value twice, once under its tag and once as `(text)`. Two lines naming one value is not a defect in
   a gate whose output a human reads before committing. A missing line is.
-- **`report()` PRINTS ONE STDERR LINE PER HIT, UNCAPPED, AND THIS SLICE WIDENS WHAT CAN REACH IT.**
+- **`report()` PRINTED ONE STDERR LINE PER HIT, UNCAPPED, AND THIS SLICE WIDENED WHAT CAN REACH IT.**
   `PRE-EXISTING`: base already had no cap, on every text file and every non-DICOM binary. An
-  adversarial 128 KiB payload yields tens of thousands of PN matches. Capping it is a change to the
-  gate's output contract and belongs in its own slice; the same shape is already recorded against
-  `deidentify()` in `CLAUDE.md` ("58,255 findings and 36 MB of warnings from a 1 MiB input"), and the
-  remedy there was a per-run cap, not a narrower detector.
+  adversarial 128 KiB payload yields tens of thousands of PN matches. **CLOSED 2026-08-09 by a
+  per-file PRINT cap** (`DICOM-PHI-SCAN-RESIDUALS`), which changes nothing about the exit code, the
+  totals or what is detected. The figures, the superset proof and the residuals it does **not** close
+  are in [`dicom-phi-scan-report-cap.md`](dicom-phi-scan-report-cap.md). The same shape is recorded
+  against `deidentify()` in `CLAUDE.md` ("58,255 findings and 36 MB of warnings from a 1 MiB input"),
+  and the remedy there was a per-run cap, not a narrower detector.

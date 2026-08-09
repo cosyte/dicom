@@ -80,6 +80,7 @@
  * Modes:
  *   --staged                 - scan only files staged in `git diff --cached`
  *   --allow-fixture <path>   - bypass for one path; rejected if not logged in phi-scan-overrides.md
+ *   --max-hit-lines <n>      - print at most n hit lines PER FILE; `0` prints every one
  *   <path> [<path>...]       - scan specific paths
  *   (no args)                - scan both corpora in the working tree
  *
@@ -162,6 +163,32 @@ const REPO_ROOT = process.cwd();
 const ALLOW_LIST_PATH = join(REPO_ROOT, "scripts", "phi-allow-list.txt");
 const OVERRIDE_LOG_PATH = join(REPO_ROOT, "phi-scan-overrides.md");
 const CUTOFF_YEAR = new Date().getFullYear() - 120;
+
+/**
+ * How many hit lines `report` prints PER FILE before it stops printing them and says how many
+ * it did not print. `--max-hit-lines 0` prints every one.
+ *
+ * 🛑 THIS IS A PRINT CAP AND NOTHING ELSE, AND THAT IS THE ONLY REASON IT IS SAFE. `main` derives
+ * the exit code from `hits.length`, the summary line reports `hits.length`, and neither is capped,
+ * so a line this cap withholds CANNOT turn exit 1 into exit 0 or shrink the number a reader sees.
+ * A cap that could do either would be a net leak dressed as tidy output: the gate would print less
+ * over a corpus carrying a real name and look calmer for it.
+ *
+ * 🛑 AND IT IS PER FILE, NEVER GLOBAL. A global cap is the net-leak shape: one flooding file would
+ * consume the whole budget and every later file's hits - including a file whose hit names an actual
+ * patient - would go unprinted, with the flooding file's path the only one on screen. Per file, the
+ * set of PATHS reported is uncapped, every file with a hit still prints its header and its first
+ * lines, and the suppression is bounded by a count the same line states exactly.
+ *
+ * WHY THERE IS A CAP AT ALL, MEASURED RATHER THAN ASSERTED. `DICOM-SCANDICOM-SILENT-HALT` made the
+ * text sweep run over every Part 10 object's bytes, and its recognizers fire on image noise at a
+ * rate that is a property of the payload's byte histogram. Re-measured on `b784c38` over 8 MiB of
+ * synthetic `(7FE0,0010) OW` pixel data: a uniform `0x41-0x60` payload produced tens of thousands of
+ * hits and one stderr line each. The figures, the generator and the negative control are in
+ * `documentation/agent-notes/dicom-phi-scan-report-cap.md`; no rate is copied here, because it is a
+ * fact about that payload's histogram and not about this script.
+ */
+const DEFAULT_HIT_LINES_PER_FILE = 20;
 
 /**
  * The TEST corpus root, repo-relative. `test`, not `test/fixtures`: see the banner.
@@ -382,6 +409,7 @@ interface Args {
   mode: "all" | "staged" | "paths";
   paths: string[];
   allowFixtures: string[]; // paths bypassed via --allow-fixture
+  maxHitLines: number; // hit lines printed per file; 0 prints every one
 }
 
 class InvocationError extends Error {
@@ -399,6 +427,7 @@ function parseArgs(argv: string[]): Args {
   let staged = false;
   const paths: string[] = [];
   const allowFixtures: string[] = [];
+  let maxHitLines = DEFAULT_HIT_LINES_PER_FILE;
   let i = 0;
   while (i < argv.length) {
     const a = argv[i];
@@ -419,6 +448,25 @@ function parseArgs(argv: string[]): Args {
         throw new InvocationError("--allow-fixture requires a path argument");
       }
       allowFixtures.push(next);
+      i += 2;
+    } else if (a === "--max-hit-lines") {
+      const next = argv[i + 1];
+      if (next === undefined) {
+        throw new InvocationError("--max-hit-lines requires a count argument");
+      }
+      // A non-negative INTEGER only. `Number` alone accepts `1e9`, `0x10`, ` 3 `
+      // and `Infinity`, and a cap silently read off one of those is a cap nobody
+      // set. A bad value REFUSES (exit 2) rather than falling back to the
+      // default, because a run that quietly printed a different amount than it
+      // was told to is the same shape of unobservable behaviour this whole
+      // script is written against.
+      if (!/^\d+$/.test(next)) {
+        throw new InvocationError(
+          `--max-hit-lines expects a non-negative integer, got ${JSON.stringify(next)} ` +
+            "(use 0 to print every hit line).",
+        );
+      }
+      maxHitLines = Number(next);
       i += 2;
     } else if (a !== undefined && a.startsWith("--")) {
       throw new InvocationError(`Unknown flag: ${a}`);
@@ -442,7 +490,7 @@ function parseArgs(argv: string[]): Args {
   } else {
     mode = "all";
   }
-  return { mode, paths, allowFixtures };
+  return { mode, paths, allowFixtures, maxHitLines };
 }
 
 // ---------------------------------------------------------------------------
@@ -1433,7 +1481,22 @@ function reportExemptions(): void {
   );
 }
 
-function report(hits: Hit[]): void {
+/**
+ * Print the hits, at most `maxHitLines` of them per file.
+ *
+ * The three properties that make the cap safe are stated at `DEFAULT_HIT_LINES_PER_FILE` and
+ * enforced here: the exit code and the totals are computed off `hits`, not off what was printed;
+ * the cap is per file, so no path goes unnamed; and a file that had lines withheld says so, with
+ * the exact number and the flag that prints them.
+ *
+ * The suppression line carries a COUNT and nothing else - no tag, no VR, no value, no offset. A
+ * diagnostic about a PHI leak is itself a PHI surface, and a line whose whole job is to say
+ * "there is more here" must not become a second way to spill some of it.
+ *
+ * 🛑 WHICH LINES SURVIVE THE CAP IS SCAN ORDER, NOT FILE ORDER, and it is worth saying because the
+ * obvious reading is the wrong one. "The first n hits" is not "the first n in the file".
+ */
+function report(hits: Hit[], maxHitLines: number): void {
   if (hits.length === 0) {
     process.stdout.write("[phi-scan] OK - no hits\n");
     return;
@@ -1444,16 +1507,35 @@ function report(hits: Hit[]): void {
     if (arr) arr.push(h);
     else byPath.set(h.path, [h]);
   }
+  let withheld = 0;
   for (const [path, group] of byPath) {
     process.stderr.write(`[phi-scan] HIT: ${path}\n`);
-    for (const h of group) {
+    const shown = maxHitLines === 0 ? group.length : Math.min(group.length, maxHitLines);
+    for (let i = 0; i < shown; i += 1) {
+      // `noUncheckedIndexedAccess` is on, and an out-of-range read here would be a bug in the
+      // bound above rather than a missing hit, so it refuses instead of printing a partial line.
+      const h = group[i];
+      if (h === undefined) throw new Error("report: hit index out of range");
       process.stderr.write(
         `  tag=${h.tag} vr=${h.vr} offset=${String(h.offset)} value=${JSON.stringify(h.value)} (${h.reason})\n`,
       );
     }
+    const rest = group.length - shown;
+    if (rest > 0) {
+      withheld += rest;
+      process.stderr.write(
+        `  ... and ${String(rest)} more hit(s) in this file, not printed. ` +
+          `Re-run with --max-hit-lines 0 to print every one.\n`,
+      );
+    }
   }
+  // The totals are over `hits`, never over what was printed. The withheld count is stated once
+  // more here so a reader who scrolls to the end of a long report cannot mistake the lines above
+  // for the whole of it.
+  const withheldNote =
+    withheld > 0 ? ` ${String(withheld)} hit line(s) were not printed (see --max-hit-lines).` : "";
   process.stderr.write(
-    `[phi-scan] ${String(hits.length)} hits across ${String(byPath.size)} file(s). ` +
+    `[phi-scan] ${String(hits.length)} hits across ${String(byPath.size)} file(s).${withheldNote} ` +
       `To bypass for a synthetic fixture, add to scripts/phi-allow-list.txt OR ` +
       `run with --allow-fixture <path> AND log in phi-scan-overrides.md.\n`,
   );
@@ -1523,7 +1605,8 @@ function main(): number {
   }
 
   reportExemptions();
-  report(hits);
+  report(hits, args.maxHitLines);
+  // Off `hits`, never off what `report` printed. The print cap must not be able to move this.
   return hits.length === 0 ? 0 : 1;
 }
 
