@@ -417,6 +417,239 @@ function* base64Runs(text: string): Generator<string> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Matching a scan target's bytes WITHOUT handing them to a RegExp
+// ---------------------------------------------------------------------------
+
+/**
+ * 🛑 A SCAN TARGET'S BYTES ARE NEVER A `RegExp` SUBJECT IN THIS SCRIPT, AND THE PREDICATES BELOW
+ * ARE WHAT MAKES THAT TRUE RATHER THAN A CONVENTION.
+ *
+ * V8 keeps the last successful match on the `RegExp` CONSTRUCTOR: `RegExp.input` (`$_`) is the
+ * whole subject string, `RegExp.lastMatch` (`$&`) is the matched text verbatim, and
+ * `RegExp.leftContext`, `RegExp.rightContext`, `RegExp.lastParen` and `RegExp.$1` to `RegExp.$9`
+ * are the rest of it. Those are readable properties of a global object. So a gate that hands a
+ * target's text to a regex leaves that target's bytes readable from anywhere in the process until
+ * something else matches, with the matched value (a name, a date) NOT excerpted.
+ *
+ * `DICOM-RESIDUALS` bounded what a hit line prints (`#109`) and what a hit holds (`#110`). This is
+ * the third carrier of the same payload, disclosed by `#110` and unmeasured until now.
+ * `scripts/measure-phi-scan-regex-statics.ts` is the instrument, and
+ * `test/integration/phi-scan-regex-statics.test.ts` is the pin.
+ *
+ * 🛑 THE BOUND IS ON THE SUBJECT, NOT ON A CLEANUP CALL. Overwriting the statics after the scan
+ * would be a bound that holds only from where the cleanup is called, and this lineage has ruled
+ * that shape out twice (`#109`, `#111`): remove the slot, do not filter the value. There is no
+ * cleanup here because there is nothing to clean up.
+ *
+ * `base64Runs` above already replaced a regex with a forward scanner in this file, for a different
+ * reason (a backtrack stack that an 8 MiB run overflowed). This is the same shape and the same
+ * standard of evidence: each function below is a different REPRESENTATION of the pattern it
+ * replaces, never a wider or narrower predicate. The trims and the two fixed-shape tests are pinned
+ * EXHAUSTIVELY over every code point their inputs can hold, and the three text recognizers are
+ * pinned by a differential fuzz against the patterns they replace. Both live in
+ * `test/scripts/phi-scan-matchers.test.ts`.
+ */
+function isDigitCode(code: number): boolean {
+  return code >= 0x30 && code <= 0x39;
+}
+
+function isUpperCode(code: number): boolean {
+  return code >= 0x41 && code <= 0x5a;
+}
+
+/** `\w`: the character class a `\b` boundary is defined against. */
+function isWordCode(code: number): boolean {
+  return (
+    isDigitCode(code) ||
+    isUpperCode(code) ||
+    (code >= 0x61 && code <= 0x7a) || // a-z
+    code === 0x5f // _
+  );
+}
+
+/** The `[A-Za-z\-']` body class of the PN pattern. It deliberately does NOT admit the caret. */
+function isPnBodyCode(code: number): boolean {
+  return (
+    isUpperCode(code) ||
+    (code >= 0x61 && code <= 0x7a) || // a-z
+    code === 0x2d || // -
+    code === 0x27 // '
+  );
+}
+
+/**
+ * `\s`, and the WHOLE of it, written out rather than narrowed to what a latin1 decode can hold.
+ *
+ * Every caller here decodes latin1 today, so the reachable set is smaller. Keying on that would be
+ * a bound that holds only from where the function is called, which is the shape this file's own
+ * rules refuse, and it would go wrong silently the first time a caller decoded anything else.
+ * ES2023 `WhiteSpace` + `LineTerminator`, pinned against the pattern over all 65,536 code points.
+ */
+function isSpaceCode(code: number): boolean {
+  return (
+    code === 0x20 ||
+    (code >= 0x09 && code <= 0x0d) ||
+    code === 0xa0 ||
+    code === 0x1680 ||
+    (code >= 0x2000 && code <= 0x200a) ||
+    code === 0x2028 ||
+    code === 0x2029 ||
+    code === 0x202f ||
+    code === 0x205f ||
+    code === 0x3000 ||
+    code === 0xfeff
+  );
+}
+
+/**
+ * `\b` at `index`: exactly one side is a word character, with either end of the string counting as
+ * a non-word side.
+ */
+function isWordBoundary(text: string, index: number): boolean {
+  const before = index > 0 && isWordCode(text.charCodeAt(index - 1));
+  const after = index < text.length && isWordCode(text.charCodeAt(index));
+  return before !== after;
+}
+
+/** `text.replace(/[\0\s]+$/, "")`: drop a trailing run of NUL and whitespace. */
+function trimTrailingPad(text: string): string {
+  let end = text.length;
+  while (end > 0) {
+    const code = text.charCodeAt(end - 1);
+    if (code !== 0 && !isSpaceCode(code)) break;
+    end -= 1;
+  }
+  return end === text.length ? text : text.slice(0, end);
+}
+
+/** `text.replace(/\0+$/, "")`: drop a trailing run of NUL only. */
+function trimTrailingNuls(text: string): string {
+  let end = text.length;
+  while (end > 0 && text.charCodeAt(end - 1) === 0) end -= 1;
+  return end === text.length ? text : text.slice(0, end);
+}
+
+/** `/^\d{8}$/.test(text)`. */
+function isEightDigits(text: string): boolean {
+  if (text.length !== 8) return false;
+  for (let i = 0; i < 8; i += 1) if (!isDigitCode(text.charCodeAt(i))) return false;
+  return true;
+}
+
+/** `/^[A-Z]{2}$/.test(text)`. */
+function isTwoUpperLetters(text: string): boolean {
+  return text.length === 2 && isUpperCode(text.charCodeAt(0)) && isUpperCode(text.charCodeAt(1));
+}
+
+/**
+ * `/\b(\d{4})-(\d{2})-(\d{2})\b/g`, as start offsets.
+ *
+ * Fixed width with no quantifier, so there is nothing to backtrack: a start offset either satisfies
+ * every position or it does not. On a match the cursor moves to the end of it, which is what a
+ * global `exec` loop does with `lastIndex`; otherwise it moves on by one, which is what the engine
+ * does with its start index.
+ */
+function* isoDateRuns(text: string): Generator<number> {
+  const n = text.length;
+  let i = 0;
+  while (i + 10 <= n) {
+    if (
+      isDigitCode(text.charCodeAt(i)) &&
+      isDigitCode(text.charCodeAt(i + 1)) &&
+      isDigitCode(text.charCodeAt(i + 2)) &&
+      isDigitCode(text.charCodeAt(i + 3)) &&
+      text.charCodeAt(i + 4) === 0x2d &&
+      isDigitCode(text.charCodeAt(i + 5)) &&
+      isDigitCode(text.charCodeAt(i + 6)) &&
+      text.charCodeAt(i + 7) === 0x2d &&
+      isDigitCode(text.charCodeAt(i + 8)) &&
+      isDigitCode(text.charCodeAt(i + 9)) &&
+      isWordBoundary(text, i) &&
+      isWordBoundary(text, i + 10)
+    ) {
+      yield i;
+      i += 10;
+      continue;
+    }
+    i += 1;
+  }
+}
+
+/** `/\b(\d{4})(\d{2})(\d{2})\b/g`, as start offsets. Fixed width, same reasoning as above. */
+function* compactDateRuns(text: string): Generator<number> {
+  const n = text.length;
+  let i = 0;
+  outer: while (i + 8 <= n) {
+    for (let k = 0; k < 8; k += 1) {
+      if (!isDigitCode(text.charCodeAt(i + k))) {
+        i += 1;
+        continue outer;
+      }
+    }
+    if (isWordBoundary(text, i) && isWordBoundary(text, i + 8)) {
+      yield i;
+      i += 8;
+      continue;
+    }
+    i += 1;
+  }
+}
+
+/**
+ * `/\b[A-Z][A-Za-z\-']+\^[A-Z][A-Za-z\-']+\b/g`, as `[start, end)` offsets.
+ *
+ * This is the only one of the three with anything to backtrack, and only one of its two quantifiers
+ * can productively do so:
+ *
+ * * the FIRST `[A-Za-z\-']+` cannot. The caret is not in the class, so a greedy run never consumed
+ *   one, and giving characters back only exposes class characters. The caret therefore has to sit
+ *   exactly where the greedy run stopped, or this start offset has no match at all;
+ * * the SECOND can, because the class admits `-` and `'`, which are not word characters, so a run
+ *   ending in one fails the trailing `\b`. The engine gives them back one at a time while the `+`
+ *   keeps at least one character. That is the `while` below.
+ */
+function* pnRuns(text: string): Generator<[number, number]> {
+  const n = text.length;
+  let i = 0;
+  while (i < n) {
+    if (!isUpperCode(text.charCodeAt(i)) || !isWordBoundary(text, i)) {
+      i += 1;
+      continue;
+    }
+    let j = i + 1;
+    while (j < n && isPnBodyCode(text.charCodeAt(j))) j += 1;
+    if (j === i + 1 || j >= n || text.charCodeAt(j) !== 0x5e) {
+      i += 1;
+      continue;
+    }
+    const second = j + 1;
+    if (second >= n || !isUpperCode(text.charCodeAt(second))) {
+      i += 1;
+      continue;
+    }
+    let k = second + 1;
+    while (k < n && isPnBodyCode(text.charCodeAt(k))) k += 1;
+    if (k === second + 1) {
+      i += 1;
+      continue;
+    }
+    // `second + 2`, NOT `second + 1`: `second` is the `[A-Z]`, so the `+` starts at `second + 1`
+    // and giving back to `second + 1` would leave it holding nothing. An earlier draft floored it
+    // one character lower, and the adversarial cell of
+    // `scripts/measure-phi-scan-regex-statics.ts` reported the difference on `ABC^D-`: this
+    // scanner matched `ABC^D`, where the pattern matches nothing at all.
+    let end = k;
+    while (end > second + 2 && !isWordBoundary(text, end)) end -= 1;
+    if (!isWordBoundary(text, end)) {
+      i += 1;
+      continue;
+    }
+    yield [i, end];
+    i = end;
+  }
+}
+
 // Hardcoded PN/DA/DT tags. We intentionally avoid depending on the generated
 // Dictionary (which may regenerate within the same CI build). Tags are stored
 // as 8-char uppercase hex (group + element concatenated, no comma).
@@ -1295,7 +1528,7 @@ function readElementExplicit(buf: Buffer, offset: number): ElementRead {
   const group = buf.readUInt16LE(offset);
   const element = buf.readUInt16LE(offset + 2);
   const vr = buf.toString("ascii", offset + 4, offset + 6);
-  if (!/^[A-Z]{2}$/.test(vr)) return { ok: false, reason: HALT_REASONS.vrNotTwoLetters };
+  if (!isTwoUpperLetters(vr)) return { ok: false, reason: HALT_REASONS.vrNotTwoLetters };
 
   let valueOffset: number;
   let valueLength: number;
@@ -1347,7 +1580,7 @@ function isPnAllowed(value: string, allow: AllowList): boolean {
 }
 
 function checkDate(value: string, allow: AllowList): string | null {
-  if (!/^\d{8}$/.test(value)) return null; // not a strict YYYYMMDD; skip
+  if (!isEightDigits(value)) return null; // not a strict YYYYMMDD; skip
   if (allow.dates.has(value)) return null;
   const year = Number(value.slice(0, 4));
   if (year >= CUTOFF_YEAR) {
@@ -1374,7 +1607,7 @@ function inspectElement(
   if (!isPn && !isDa && !isDt) return;
 
   const raw = decodeAscii(buf, valueOffset, valueLength);
-  const value = raw.replace(/[\0\s]+$/, "");
+  const value = trimTrailingPad(raw);
   if (value.length === 0) return;
 
   if (isPn && PN_TAGS.has(key)) {
@@ -1439,7 +1672,7 @@ function fileMetaStart(buf: Buffer): number | null {
   if (
     buf.length >= 8 &&
     buf.readUInt16LE(0) === 0x0002 &&
-    /^[A-Z]{2}$/.test(buf.toString("latin1", 4, 6))
+    isTwoUpperLetters(buf.toString("latin1", 4, 6))
   ) {
     return 0;
   }
@@ -1496,7 +1729,7 @@ function scanDicom(
     if (!result.ok) break;
     const { group, element, vr, valueOffset, valueLength, nextOffset } = result.header;
     if (group === 0x0002 && element === 0x0010 && vr === "UI") {
-      transferSyntax = decodeAscii(buf, valueOffset, valueLength).replace(/\0+$/, "").trim();
+      transferSyntax = trimTrailingNuls(decodeAscii(buf, valueOffset, valueLength)).trim();
     }
     inspectElement(target, buf, group, element, vr, valueOffset, valueLength, allow, hits);
     offset = nextOffset;
@@ -1529,25 +1762,29 @@ function scanDicom(
 // Non-DICOM (text/json) scanner
 // ---------------------------------------------------------------------------
 
+/**
+ * The three text recognizers.
+ *
+ * 🛑 `content` IS A SCAN TARGET'S OWN BYTES AND IS NEVER HANDED TO A `RegExp`. The three patterns
+ * this used to run are now the forward scanners above, for the reason written on them: a matched
+ * subject stays readable from `RegExp.input` and `RegExp.lastMatch`, which are process globals, so
+ * the whole page and the matched name outlived the scan. The scanners take the same offsets and
+ * the same substrings; the sub-match groups are sliced off the run instead of being read out of
+ * `m[1]`, which is why the `undefined` guards those groups needed are gone.
+ */
 function scanText(target: Target, content: string, allow: AllowList, hits: Hit[]): void {
   // ISO date `YYYY-MM-DD`
-  const isoRe = /\b(\d{4})-(\d{2})-(\d{2})\b/g;
-  let m: RegExpExecArray | null;
-  while ((m = isoRe.exec(content)) !== null) {
-    const yyyy = m[1];
-    const mm = m[2];
-    const dd = m[3];
-    const full = m[0];
-    if (yyyy === undefined || mm === undefined || dd === undefined) continue;
-    const compact = `${yyyy}${mm}${dd}`;
+  for (const index of isoDateRuns(content)) {
+    const full = content.slice(index, index + 10);
+    const compact = `${full.slice(0, 4)}${full.slice(5, 7)}${full.slice(8, 10)}`;
     if (allow.dates.has(compact)) continue;
-    const year = Number(yyyy);
+    const year = Number(full.slice(0, 4));
     if (year >= CUTOFF_YEAR) {
       hits.push({
         path: target.path,
         tag: "(text)",
         vr: "DA",
-        offset: m.index,
+        offset: index,
         value: excerptValue(full),
         reason: `text date within last 120 years (>= ${String(CUTOFF_YEAR)})`,
         recognizer: RECOGNIZERS.textDate,
@@ -1556,24 +1793,19 @@ function scanText(target: Target, content: string, allow: AllowList, hits: Hit[]
   }
 
   // 8-char YYYYMMDD as a standalone token
-  const compactRe = /\b(\d{4})(\d{2})(\d{2})\b/g;
-  while ((m = compactRe.exec(content)) !== null) {
-    const yyyy = m[1];
-    const mm = m[2];
-    const dd = m[3];
-    const full = m[0];
-    if (yyyy === undefined || mm === undefined || dd === undefined) continue;
+  for (const index of compactDateRuns(content)) {
+    const full = content.slice(index, index + 8);
     if (allow.dates.has(full)) continue;
-    const year = Number(yyyy);
-    const month = Number(mm);
-    const day = Number(dd);
+    const year = Number(full.slice(0, 4));
+    const month = Number(full.slice(4, 6));
+    const day = Number(full.slice(6, 8));
     if (month < 1 || month > 12 || day < 1 || day > 31) continue;
     if (year >= CUTOFF_YEAR) {
       hits.push({
         path: target.path,
         tag: "(text)",
         vr: "DA",
-        offset: m.index,
+        offset: index,
         value: excerptValue(full),
         reason: `text date within last 120 years (>= ${String(CUTOFF_YEAR)})`,
         recognizer: RECOGNIZERS.textDate,
@@ -1582,15 +1814,14 @@ function scanText(target: Target, content: string, allow: AllowList, hits: Hit[]
   }
 
   // FAMILY^GIVEN PN-shaped tokens
-  const pnRe = /\b[A-Z][A-Za-z\-']+\^[A-Z][A-Za-z\-']+\b/g;
-  while ((m = pnRe.exec(content)) !== null) {
-    const value = m[0];
+  for (const [start, end] of pnRuns(content)) {
+    const value = content.slice(start, end);
     if (!isPnAllowed(value, allow)) {
       hits.push({
         path: target.path,
         tag: "(text)",
         vr: "PN",
-        offset: m.index,
+        offset: start,
         value: excerptValue(value),
         reason: "text PN not in allow-list",
         recognizer: RECOGNIZERS.textPn,
