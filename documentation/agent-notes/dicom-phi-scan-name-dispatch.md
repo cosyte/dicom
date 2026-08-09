@@ -4,6 +4,13 @@ _`DICOM-PHI-SCAN-RESIDUALS`, 2026-08-09. Base `08ed3ee`. The `PRE-EXISTING` half
 sibling residual (`scanDicom` reports nothing about bytes it never read) is **not** closed here and is
 **not** part of this slice - see "Why this was one slice and not two" below._
 
+**Provenance.** The spec claims are read from the SHA-pinned vendored copy at `vendor/nema/part05/`,
+**PS3.5 2026c** (§7.1 tag ordering, §7.5.2 undefined-length Sequences). Every other figure is a
+measurement taken on this repo against base **`08ed3ee`**, quoted with that sha and no other. The
+base column is reproducible with `git show 08ed3ee:scripts/phi-scan.ts > /tmp/base-phi-scan.ts &&
+node /tmp/base-phi-scan.ts <path>` run with `cwd=<repo root>`, since the script resolves its
+allow-list from `process.cwd()`.
+
 ## The defect
 
 `scanTarget` branched on the file's **extension** before it read a byte:
@@ -33,19 +40,19 @@ the exit code and which planted value the run printed. Base `08ed3ee` against th
 Legend: `B` = a single-component name printed, `C` = a caret-bearing name printed, `D` = a recent
 `DA` printed, `t` = the hit named `(0010,0010)`.
 
-| object | `.md` `.txt` `.json` `.csv` base | ... shipped | `.dcm` `.bin` `.dat` (both) |
-|---|---|---|---|
-| preamble-FUL, single-component PN | `0----` | **`1B--t`** | `1B--t` |
-| preamble-LESS, single-component PN | `0----` | **`1B--t`** | `1B--t` |
-| preamble-FUL, recent `DA` | `1--D-` | `1--D-` | `1--D-` |
-| preamble-FUL, caret PN behind an undefined-length `SQ` | `1-C--` | `1-C--` | `1-C--` |
-| preamble-FUL, Explicit VR BE dataset | `1-C--` | `1-C--` | `1-C--` |
-| preamble-FUL, single-component PN then a halt then a caret PN | `1-C--` | **`1BC--`** | `1BC--` |
-| preamble-FUL, allow-listed PN + allow-listed `DA` | `0----` | `0----` | `0----` |
-| not a DICOM stream, caret PN in prose | `1-C--` | `1-C--` | `1-C--` |
-| not a DICOM stream, allow-listed PN | `0----` | `0----` | `0----` |
-| a base64 object inside a markdown page | `1-C--` | `1-C--` | `1-C--` |
-| preamble-LESS, caret PN behind an undefined-length `SQ` | `1-C--` | `1-C--` | `1-C--` |
+| object                                                        | `.md` `.txt` `.json` `.csv` base | ... shipped | `.dcm` `.bin` `.dat` (both) |
+| ------------------------------------------------------------- | -------------------------------- | ----------- | --------------------------- |
+| preamble-FUL, single-component PN                             | `0----`                          | **`1B--t`** | `1B--t`                     |
+| preamble-LESS, single-component PN                            | `0----`                          | **`1B--t`** | `1B--t`                     |
+| preamble-FUL, recent `DA`                                     | `1--D-`                          | `1--D-`     | `1--D-`                     |
+| preamble-FUL, caret PN behind an undefined-length `SQ`        | `1-C--`                          | `1-C--`     | `1-C--`                     |
+| preamble-FUL, Explicit VR BE dataset                          | `1-C--`                          | `1-C--`     | `1-C--`                     |
+| preamble-FUL, single-component PN then a halt then a caret PN | `1-C--`                          | **`1BC--`** | `1BC--`                     |
+| preamble-FUL, allow-listed PN + allow-listed `DA`             | `0----`                          | `0----`     | `0----`                     |
+| not a DICOM stream, caret PN in prose                         | `1-C--`                          | `1-C--`     | `1-C--`                     |
+| not a DICOM stream, allow-listed PN                           | `0----`                          | `0----`     | `0----`                     |
+| a base64 object inside a markdown page                        | `1-C--`                          | `1-C--`     | `1-C--`                     |
+| preamble-LESS, caret PN behind an undefined-length `SQ`       | `1-C--`                          | `1-C--`     | `1-C--`                     |
 
 **The superset, checked mechanically over all 77 cells rather than read off the table: 65 identical,
 12 strictly more reported, 0 violations.** No cell went exit 1 -> 0, no cell went to exit 2, and no
@@ -72,12 +79,12 @@ one of two Sequence delimitations, both of which decoders shall support; §7.1 o
 so `(0008,1110)` precedes `(0010,0010)` in a conformant file). Routing a file to `scanDicom`
 **instead of** the text sweep once took a name behind an `SQ` from exit 1 to exit 0.
 
-**The remedy here is a DELETION, which is the one direction that cannot subtract.** The removed
-branch's two calls were `scanText` and `scanEmbeddedObjects`. The branch that replaces it makes the
-**same two calls unconditionally** and adds one conditional `scanDicom`. `hits` is only ever appended
-to, so the new behaviour on every input is the old behaviour plus whatever `scanDicom` finds. The
-by-name branch's own justification - that a `.md` whose first bytes look like group `0002` must not
-lose `scanEmbeddedObjects` - was an argument against an exclusive **swap**, and there is no swap.
+**The remedy here is a DELETION.** The removed branch's two calls were `scanText` and
+`scanEmbeddedObjects`. The branch that replaces it makes the **same two calls unconditionally** and
+adds one conditional `scanDicom`. `hits` is only ever appended to, so the **hit set, the totals and
+the exit code** are a strict superset on every input. The by-name branch's own justification - that a
+`.md` whose first bytes look like group `0002` must not lose `scanEmbeddedObjects` - was an argument
+against an exclusive **swap**, and there is no swap.
 
 Rows 4, 10 and 11 of the table are that claim under measurement rather than under assertion: each is
 a file whose only detectable name is behind a halt, and each is still exit 1.
@@ -119,9 +126,7 @@ behind every Part 10 object, so the two do not have to land together to close a 
   table.** Every object was verified through `@cosyte/dicom`'s **own parser** before any zero it
   produced was believed - `parseDicom` read each planted value back - because a generator is an
   instrument and `#102` caught two of its own wrong.
-- **Reverting `scripts/phi-scan.ts` alone turns 11 of the new tests red**, all of them `THE DEFECT`
-  or `BOTH ROUTES` cases. The `CONTROL`, `CLEAN` and `NOT SUBTRACTED` cases stay green on base, which
-  is what makes them controls rather than proof.
+- **Reverting `scripts/phi-scan.ts` alone turns 11 tests red.**
 - **Do not use a text extension to disable the DICOM route in a test.** One pre-existing control did
   (`"the payload is invisible to the text sweep"` wrote the bytes as `.txt` and expected exit 0), and
   that method **is** the defect. It now disables the route by CONTENT - one byte in front of the

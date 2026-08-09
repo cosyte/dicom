@@ -1424,10 +1424,9 @@ function scanEmbeddedObjects(target: Target, text: string, allow: AllowList, hit
  *
  * 🛑 THE REMEDY IS A DELETION, AND THAT IS WHY IT CANNOT BE THE NET LEAK `#97` PAID FOR. The removed
  * branch's two calls are `scanText` and `scanEmbeddedObjects`; the branch that replaces it makes the
- * SAME two calls unconditionally and adds one more. So on every input the new behaviour is the old
- * behaviour plus whatever `scanDicom` finds, `hits` is only ever appended to, and no route was
- * swapped for another. The reason `#97`'s rule bites an `if/else` and not this is exactly that: a
- * dispatch that CHOOSES can subtract, and one that only ADDS cannot.
+ * SAME two calls unconditionally and adds one more. `hits` is only ever appended to, so the HIT SET,
+ * the TOTALS and the EXIT CODE are a strict superset on every input, and no route was swapped for
+ * another.
  *
  * What the deleted branch was FOR, and why the reason does not survive: a `.md` whose first bytes
  * look like group `0002` is still a document, so it must not lose `scanEmbeddedObjects`. It does not.

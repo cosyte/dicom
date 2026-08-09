@@ -23,8 +23,8 @@ The remedy is the DELETION of the branch, and that is what makes it safe rather 
 7.1 orders tags ascending, so `(0008,1110)` precedes `(0010,0010)` in a conformant file), so routing
 a file to it INSTEAD of the text sweep has previously taken a name from exit 1 to exit 0. The removed
 branch's two calls were the text sweep and the base64 decode; the branch that replaces it makes the
-same two unconditionally and adds one conditional DICOM sweep. Hits are only ever appended, so on
-every input the new behaviour is the old behaviour plus whatever the DICOM sweep finds.
+same two unconditionally and adds one conditional DICOM sweep. Hits are only ever appended, so the
+hit set, the totals and the exit code are a strict superset on every input.
 
 That superset was checked mechanically over 11 objects times 7 extensions, 77 cells: 65 identical,
 12 strictly more reported, 0 cells that lost an exit code or a reported value. Every fixture was
