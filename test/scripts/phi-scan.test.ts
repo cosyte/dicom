@@ -857,7 +857,8 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
 // The text pass matches PN only in `PN_SHAPE` form; a single-component
 // `(0010,0010)` has no caret, so the fallback route has nothing to match, and a
 // hit therefore proves the DICOM route ran rather than proving the bytes were
-// merely present. `phi-scan-fallback-visible.txt` below is that control, and each
+// merely present. `fallback-visible.txt` below is that control - the same bytes
+// with one byte in front, so `fileMetaStart` does not recognize them - and each
 // clean result is pinned beside a positive on the same route.
 
 /** Synthetic. Single-component, so the text sweep's `PN_SHAPE` regex cannot match it. */
@@ -951,8 +952,17 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
   }
 
   it("the payload is invisible to the text sweep, so a hit can only come from the DICOM route", () => {
-    // The non-vacuity control for every case below. Written as `.txt`, which
-    // dispatches by NAME to the text route, the very same bytes scan clean.
+    // The non-vacuity control for every case below.
+    //
+    // 🛑 THE MECHANISM CHANGED AND THE PROPERTY DID NOT. This wrote the same bytes
+    // as `.txt` and expected exit 0, on the reasoning that a text EXTENSION sent a
+    // file to the text route. That was true, and it was the defect
+    // `DICOM-PHI-SCAN-RESIDUALS` closed: nothing is dispatched by name any more,
+    // so a `.txt` whose bytes are a Part 10 object now reaches `scanDicom` like
+    // any other. Using the extension to disable the DICOM route would be asserting
+    // the leak, so the route is disabled by CONTENT instead - one byte in front of
+    // the stream, which makes `fileMetaStart` answer `null` and leaves every other
+    // byte, including the name, exactly where it was.
     const pnShapeRe = /\b[A-Z][A-Za-z\-']+\^[A-Z][A-Za-z\-']+\b/;
     // The regex is the scanner's own text-sweep pattern, so pin that it is live
     // before asserting a payload does not match it: a pattern that matched
@@ -964,8 +974,19 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
     expect(bare.toString("latin1")).toContain(BARE_PN);
     expect(bare.toString("utf8")).not.toMatch(pnShapeRe);
 
-    const r = runScanner([writeObject("fallback-visible.txt", bare)]);
+    // One byte in front: not a preamble, not group `0002`, so neither shape of
+    // `fileMetaStart` recognizes it and only the text sweep runs.
+    const disguised = Buffer.concat([Buffer.from("x", "ascii"), bare]);
+    expect(disguised.toString("latin1")).toContain(BARE_PN);
+
+    const r = runScanner([writeObject("fallback-visible.txt", disguised)]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+
+    // And the pin that stops the line above being a claim about the extension:
+    // the UNSHIFTED bytes under the SAME name are a hit, under their tag.
+    const recognized = runScanner([writeObject("fallback-recognized.txt", bare)]);
+    expect(recognized.code, `stderr: ${recognized.stderr}`).toBe(1);
+    expect(recognized.stderr).toMatch(/\(0010,0010\)/);
   });
 
   it("a preamble-less .dcm is a hit (exit 1)", () => {
@@ -1385,6 +1406,218 @@ describe("phi-scan: a preamble-FUL object's silent halt", () => {
 });
 
 // ---------------------------------------------------------------------------
+// A TEXT EXTENSION WAS DISPATCHED BY NAME (DICOM-PHI-SCAN-RESIDUALS)
+// ---------------------------------------------------------------------------
+//
+// `scanTarget` branched on the file's EXTENSION before it read a byte: `.json`,
+// `.txt`, `.md` and `.csv` ran `scanText` and `scanEmbeddedObjects` and RETURNED,
+// so `scanDicom` never ran on one whatever its bytes were. That is the same
+// defect as the two above wearing a NAME instead of a preamble - the halt, the
+// preamble and the filename are all things that do not decide what the bytes
+// are - and it has a plausible real path: a de-identification report, a bug
+// repro, or a fixture saved under the wrong extension carries a patient
+// identifier past the gate entirely.
+//
+// Measured on `08ed3ee`, one Part 10 object per row carrying a SINGLE-COMPONENT
+// `(0010,0010)`. That shape has no caret, so the text sweep's PN pass cannot
+// match it and the tag table is the only route that can see it:
+//
+//   | target                                       | base | here |
+//   |----------------------------------------------|------|------|
+//   | preamble-FUL object named `.md`              |  0   |  1   |
+//   | the same, `.txt` / `.json` / `.csv`          |  0   |  1   |
+//   | preamble-LESS object named `.md`             |  0   |  1   |
+//   | the same object named `.dcm`      (control)  |  1   |  1   |
+//   | allow-listed payload, `.md`       (control)  |  0   |  0   |
+//
+// The last two rows are what make the first three evidence: one is a positive
+// the detector already caught on base, so a green here would be a GAP rather
+// than a clearance, and the other is a clean result pinned beside it.
+//
+// 🛑 THE REMEDY IS A DELETION, WHICH IS WHY IT IS NOT THE NET LEAK `#97` PAID
+// FOR. The removed branch's two calls were `scanText` and `scanEmbeddedObjects`;
+// the branch that replaces it makes the SAME two unconditionally and adds
+// `scanDicom`, and `hits` is only ever appended to. The three NOT-SUBTRACTED
+// cases below put that under test instead of asserting it: the base64 decode,
+// the plain text sweep, and the halted object an exclusive swap would have taken
+// from exit 1 to exit 0.
+//
+// The full before/after matrix is 11 objects x 7 extensions; it is in
+// `documentation/agent-notes/dicom-phi-scan-name-dispatch.md`. NO SUMMARY OF IT
+// IS RESTATED HERE, because the rows this suite pins are the rows it asserts.
+
+describe("phi-scan: a target is dispatched by CONTENT, never by its extension", () => {
+  let dir: string;
+
+  beforeAll(() => {
+    dir = realpathSync(mkdtempSync(join(tmpdir(), "dicom-phi-scan-name-")));
+  });
+
+  afterAll(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  function writeObject(name: string, buf: Buffer): string {
+    const path = join(dir, name);
+    writeFileSync(path, buf);
+    return path;
+  }
+
+  /** The four extensions the deleted branch claimed. */
+  const TEXT_EXTS = [".md", ".txt", ".json", ".csv"];
+
+  /** A preamble-FUL Part 10 object whose only payload the tag table alone can see. */
+  const FUL = buildDicomFixture("19000101", BARE_PN);
+  /** The identical dataset with the 132 bytes off the front. */
+  const LESS = buildPreamblelessFixture("19000101", BARE_PN);
+
+  it("the payload is invisible to the text sweep, so a hit can only come from the DICOM route", () => {
+    // Non-vacuity for every case below, and it is the whole reason `BARE_PN` is
+    // single-component: if the text sweep could see this name, a green under a
+    // text extension would prove nothing about which route ran.
+    const pnShapeRe = /\b[A-Z][A-Za-z\-']+\^[A-Z][A-Za-z\-']+\b/;
+    expect(
+      PN_SHAPE,
+      "the sweep's own pattern must be live before a non-match means anything",
+    ).toMatch(pnShapeRe);
+    for (const buf of [FUL, LESS]) {
+      expect(buf.toString("latin1")).toContain(BARE_PN);
+      expect(buf.toString("utf8")).not.toMatch(pnShapeRe);
+    }
+    // The object's OTHER bytes must not be producing the hit either. The same
+    // assembler with an allow-listed name scans clean under the same extension,
+    // so what the cases below detect is the name and not the file meta group.
+    const r = runScanner([
+      writeObject("by-name-nonvacuity.md", buildDicomFixture("19000101", "ANON^PATIENT")),
+    ]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+  });
+
+  it("CONTROL: the identical object named .dcm was a hit on base too", () => {
+    // The detector-is-live row. Every green below sits beside this one.
+    const r = runScanner([writeObject("by-name-control.dcm", FUL)]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toMatch(/\(0010,0010\)/);
+    expect(r.stderr).toContain(BARE_PN);
+  });
+
+  for (const ext of TEXT_EXTS) {
+    it(`THE DEFECT: the same bytes named ${ext} are reported (exit 1)`, () => {
+      const r = runScanner([writeObject(`by-name-ful${ext}`, FUL)]);
+      expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+      // Under its TAG, which is the half the text sweep cannot produce. Asserting
+      // the exit code alone would pass on a hit from any recognizer at all.
+      expect(r.stderr).toMatch(/\(0010,0010\)/);
+      expect(r.stderr).toContain(BARE_PN);
+    });
+
+    it(`THE DEFECT, PREAMBLE-LESS: the same dataset named ${ext} is reported (exit 1)`, () => {
+      const r = runScanner([writeObject(`by-name-less${ext}`, LESS)]);
+      expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+      expect(r.stderr).toMatch(/\(0010,0010\)/);
+    });
+  }
+
+  it("CLEAN: an allow-listed object named .md is still clean (exit 0)", () => {
+    const r = runScanner([
+      writeObject("by-name-clean.md", buildDicomFixture(ALLOWED_DA, "ANON^PATIENT")),
+    ]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+    expect(r.stdout).toMatch(/OK - no hits/);
+  });
+
+  it("NOT SUBTRACTED: a .md that is NOT a DICOM stream still gets the text sweep", () => {
+    const r = runScanner([writeObject("by-name-prose.md", Buffer.from(SYNTHETIC_PHI, "utf8"))]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain(CARET_PN);
+  });
+
+  it("NOT SUBTRACTED: a .md carrying a base64 object is still decoded", () => {
+    // `scanEmbeddedObjects` was the deleted branch's other call. A page whose own
+    // bytes carry nothing matchable proves the decode ran rather than the sweep.
+    const embedded = Buffer.concat([
+      Buffer.alloc(128),
+      Buffer.from("DICM", "ascii"),
+      preamblelessFileMeta("1.2.840.10008.1.2.1"),
+      shortElement(0x0010, 0x0010, "PN", CARET_PN),
+    ]);
+    const page = Buffer.from(
+      `# fixture\n\n\`\`\`\n${embedded.toString("base64")}\n\`\`\`\n`,
+      "utf8",
+    );
+    expect(page.toString("utf8")).not.toContain(CARET_PN);
+
+    const r = runScanner([writeObject("by-name-embedded.md", page)]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain(CARET_PN);
+  });
+
+  it("NOT SUBTRACTED: a .md whose name hides behind an undefined-length SQ is still reported", () => {
+    // 🛑 THIS IS `#97`'s CASE, ON THIS BRANCH. `scanDicom` gives up quietly at an
+    // undefined-length `SQ` (PS3.5 2026c §7.5.2), and §7.1 orders tags ascending,
+    // so `(0008,1110)` sits before `(0010,0010)` in a conformant file. Routing
+    // this file to `scanDicom` INSTEAD of the text sweep would have taken it from
+    // exit 1 to exit 0 - the fix making the leak worse. It is an addition, so it
+    // does not, and this case is what says so.
+    const halted = Buffer.concat([
+      Buffer.alloc(128),
+      Buffer.from("DICM", "ascii"),
+      preamblelessFileMeta("1.2.840.10008.1.2.1"),
+      undefinedLengthSq(0x0008, 0x1110),
+      shortElement(0x0010, 0x0010, "PN", CARET_PN),
+    ]);
+    const r = runScanner([writeObject("by-name-halt.md", halted)]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain(CARET_PN);
+  });
+
+  it("BOTH ROUTES: one .md, one name per route, and neither route can see the other's", () => {
+    // The superset in a single file. `(0008,0090)` is single-component and before
+    // the halt, so only the tag walk reaches it; `(0010,0010)` is caret-bearing
+    // and past the halt, so only the text sweep does. On base this file reported
+    // the second alone.
+    const both = Buffer.concat([
+      Buffer.alloc(128),
+      Buffer.from("DICM", "ascii"),
+      preamblelessFileMeta("1.2.840.10008.1.2.1"),
+      shortElement(0x0008, 0x0090, "PN", BARE_PN),
+      undefinedLengthSq(0x0008, 0x1110),
+      shortElement(0x0010, 0x0010, "PN", CARET_PN),
+    ]);
+    const r = runScanner([writeObject("by-name-both.md", both)]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr, "the tag walk did not run on a text-named file").toContain(BARE_PN);
+    expect(r.stderr, "the text sweep was subtracted, which is the net-leak shape").toContain(
+      CARET_PN,
+    );
+  });
+
+  it("the ALL-MODE walk catches one too, which is the route CI runs", () => {
+    // The cases above go through the paths route. This is the gate's own route,
+    // over a corpus root, in a throwaway repo.
+    const root = makeRepo();
+    writeFileSync(join(root, "test", "fixtures", "report.md"), FUL);
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("test/fixtures/report.md");
+    expect(r.stderr).toContain(BARE_PN);
+  });
+
+  it("and the same corpus with an allow-listed payload is still clean (exit 0)", () => {
+    const root = makeRepo();
+    writeFileSync(
+      join(root, "test", "fixtures", "report.md"),
+      buildDicomFixture(ALLOWED_DA, "ANON^PATIENT"),
+    );
+
+    const r = runIn(root, []);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+    expect(r.stdout).toMatch(/OK - no hits/);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // THE WALK ROOT IS `test/`, AND A DECLARED ROOT IS RECONCILED WITH GIT
 // (PHI-SCAN-WALK-ROOT-SCOPE)
 // ---------------------------------------------------------------------------
@@ -1519,9 +1752,10 @@ describe("phi-scan: an embedded base64 object is decoded outside markdown too", 
   it("a name-bearing object base64-encoded in a .ts file is a hit (exit 1)", () => {
     // Measured on base `8982a16`: the identical object was found as `probe.md`
     // and as `probe.dcm`, and printed `OK - no hits` as `probe.ts`, because
-    // `scanEmbeddedObjects` ran only for a TEXT_EXTENSIONS name. Widening the
-    // walk root without this would have opened 81 `.ts` files and still read
-    // past every object encoded in one.
+    // `scanEmbeddedObjects` ran only for a name in the text-extension set that
+    // `DICOM-PHI-SCAN-RESIDUALS` has since deleted. Widening the walk root
+    // without this would have opened 81 `.ts` files and still read past every
+    // object encoded in one.
     const root = makeRepo();
     writeTsFixture(root, "object.ts", buildDicomFixture("19000101", VIOLATOR_PN));
 
