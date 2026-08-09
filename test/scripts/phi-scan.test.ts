@@ -2575,3 +2575,248 @@ describe("phi-scan: an unexpected error is an invocation error, never a hit", ()
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// The value excerpt
+// ---------------------------------------------------------------------------
+//
+// A hit line used to echo the whole violating value, and how many characters
+// that was is decided by the payload: an element declares its own length, so a
+// `(0010,0010)` claiming the rest of the object put the rest of the object on
+// one stderr line. Every other field on that line is structural or comes from a
+// closed set. A diagnostic about a PHI leak is itself a PHI surface.
+//
+// 🛑 NO CASE BELOW WRITES THE BOUND AS A NUMERAL. The cases DERIVE it from a run
+// - a value the scanner cut announces exactly how much it withheld - and then use
+// that number to place the boundary cases. A numeral copied
+// here would be a second source of truth that drifts from the constant, which is
+// the reason `#104`'s cases do not name their default either.
+
+/**
+ * The `value=...` field of one hit line, parsed as JSON, plus how much was withheld.
+ *
+ * The withheld amount carries NO UNIT in the output and none is invented here: the tag route
+ * measures a latin1 decode (bytes) and the text sweep a UTF-8 one (UTF-16 code units), so the
+ * cases below compare it against `String.length` of the value they wrote and never call it a
+ * character count.
+ */
+interface ParsedHitLine {
+  value: string;
+  withheld: number | null;
+}
+
+/**
+ * Parse the hit DETAIL lines of a run.
+ *
+ * The reason text contains parentheses (`(>= 1906)`), so the value is read by
+ * walking its JSON string to the closing quote rather than by one greedy regex.
+ * A first draft of this helper read a `DT` line's reason as part of its value.
+ */
+function parseHitLines(stderr: string): ParsedHitLine[] {
+  const head = /^ {2}tag=\S+ vr=\S+ offset=\d+ value=/;
+  const out: ParsedHitLine[] = [];
+  for (const line of stderr.split("\n")) {
+    const m = head.exec(line);
+    if (m === null) continue;
+    let i = m[0].length;
+    expect(line[i], `hit line value is not a JSON string: ${line.slice(0, 80)}`).toBe('"');
+    for (i += 1; i < line.length; i += 1) {
+      if (line[i] === "\\") i += 1;
+      else if (line[i] === '"') break;
+    }
+    const field = line.slice(m[0].length, i + 1);
+    const cut = /^ \[\+(\d+) not printed\]/.exec(line.slice(i + 1));
+    out.push({
+      value: JSON.parse(field) as string,
+      withheld: cut === null ? null : Number(cut[1]),
+    });
+  }
+  return out;
+}
+
+/** A PN-shaped token the text sweep matches, exactly `n` characters long. */
+function pnOfLength(n: number): string {
+  if (n < CARET_PN.length) throw new Error(`pnOfLength: ${String(n)} is shorter than the name`);
+  return CARET_PN + "A".repeat(n - CARET_PN.length);
+}
+
+/**
+ * Run one text-route file through the scanner and hand back its single hit line.
+ * Every caller asserts the exit code, so a case cannot pass off a run that found
+ * nothing as a run that found something short.
+ */
+function oneTextHit(value: string): ParsedHitLine {
+  const root = makeRepo();
+  const p = join(root, "test", "fixtures", "excerpt.txt");
+  writeFileSync(p, `Patient: ${value}\n`);
+  const r = runIn(root, [p]);
+  expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+  const lines = parseHitLines(r.stderr);
+  expect(lines).toHaveLength(1);
+  const only = lines[0];
+  if (only === undefined) throw new Error("unreachable: length asserted above");
+  return only;
+}
+
+describe("phi-scan: a hit line echoes an EXCERPT of the value, bounded at construction", () => {
+  it("prints part of the value and says exactly how much it did not print", () => {
+    // The arithmetic is the whole claim: excerpt + withheld = the value's own
+    // `length`. Nothing is dropped silently, and the line does not read as a
+    // complete value.
+    const whole = pnOfLength(5000);
+    const hit = oneTextHit(whole);
+    expect(hit.withheld).not.toBeNull();
+    expect(hit.value.length).toBeLessThan(whole.length);
+    expect(hit.value.length + (hit.withheld ?? 0)).toBe(whole.length);
+    expect(whole.startsWith(hit.value)).toBe(true);
+  });
+
+  it("prints a value AT the bound WHOLE, and one character over as an excerpt", () => {
+    // 🛑 THE POSITIVE CONTROL FOR EVERY "no marker" ASSERTION IN THIS BLOCK. A
+    // run that printed no marker because it found no hit would satisfy the first
+    // half by accident, so the bound is derived from a run that DID cut, and the
+    // two cases sit either side of it.
+    const probe = oneTextHit(pnOfLength(5000));
+    const bound = probe.value.length;
+    expect(bound).toBeGreaterThan(CARET_PN.length);
+
+    const atBound = oneTextHit(pnOfLength(bound));
+    expect(atBound.withheld).toBeNull();
+    expect(atBound.value).toBe(pnOfLength(bound));
+
+    const overBound = oneTextHit(pnOfLength(bound + 1));
+    expect(overBound.withheld).toBe(1);
+    expect(overBound.value.length).toBe(bound);
+  });
+
+  it("bounds the DICOM TAG route, not only the text sweep", () => {
+    // 🛑 THE ROUTES ARE SCANNED FOR SEPARATELY BECAUSE THEY PUSH SEPARATELY, and
+    // a bound that reached one of them would be the shape `#97` paid for. The
+    // payload is single-component, so the text sweep has nothing to match and
+    // the hit proves the tag route ran.
+    const root = makeRepo();
+    const p = join(root, "test", "fixtures", "long-pn.dcm");
+    const value = BARE_PN + "A".repeat(60000 - BARE_PN.length);
+    writeFileSync(p, part10(shortElement(0x0010, 0x0010, "PN", value)));
+
+    const r = runIn(root, [p]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    const lines = parseHitLines(r.stderr);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.value.length ?? 0).toBeLessThan(value.length);
+    expect((lines[0]?.value.length ?? 0) + (lines[0]?.withheld ?? 0)).toBe(value.length);
+  });
+
+  it("bounds the DT route, whose head is eight characters and whose value is not", () => {
+    // The third push site that can exceed the bound. `checkDate` reads the first
+    // eight characters of a `DT`, so everything after them is unexamined payload
+    // that the report used to print in full. The padding is letters, so no date
+    // or PN recognizer matches it and this file has exactly one hit.
+    const root = makeRepo();
+    const p = join(root, "test", "fixtures", "long-dt.dcm");
+    const value = RECENT_DA + "A".repeat(40000 - RECENT_DA.length);
+    writeFileSync(p, part10(shortElement(0x0008, 0x002a, "DT", value)));
+
+    const r = runIn(root, [p]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    const lines = parseHitLines(r.stderr);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.withheld).toBe(value.length - (lines[0]?.value.length ?? 0));
+    expect(lines[0]?.value.length ?? 0).toBeLessThan(value.length);
+  });
+
+  it("bounds the LINE, however many bytes the value declared", () => {
+    // The number that actually matters. A 1 MiB value produced a 1 MiB stderr
+    // line; the printed field is now bounded by the excerpt through
+    // `JSON.stringify`, whose longest expansion of one character is a six-
+    // character escape. The assertion is a ceiling with room in it rather than a
+    // second copy of the constant, and it is non-vacuous: the value is four
+    // orders of magnitude larger.
+    const value = pnOfLength(1024 * 1024);
+    const root = makeRepo();
+    const p = join(root, "test", "fixtures", "huge.txt");
+    writeFileSync(p, `Patient: ${value}\n`);
+
+    const r = runIn(root, [p]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    const detail = r.stderr.split("\n").filter((l) => /^ {2}tag=/.test(l));
+    expect(detail).toHaveLength(1);
+    expect(detail[0]?.length ?? 0).toBeLessThan(2000);
+    expect(parseHitLines(r.stderr)[0]?.withheld ?? 0).toBeGreaterThan(1_000_000);
+  });
+
+  it("🛑 CUTS A CONFORMANT 194-CHARACTER PN: the bound is in the SCANNER'S units", () => {
+    // The counter-example to the sentence this block's first draft carried, kept
+    // as a shape rather than as a disclosure. PS3.5 2026c Table 6.2-1 gives PN's
+    // length in CHARACTERS - its length cell cross-references `note_6.1-2-1`,
+    // which says the lengths of VRs whose Character Repertoire can be extended
+    // are `expressly specified in characters rather than bytes` - and this
+    // scanner decodes latin1, so it counts bytes. A single-valued, conformant PN
+    // of exactly three 64-character component groups under `ISO_IR 192` is
+    // therefore cut here. `194` bounds what the report prints; it says nothing
+    // about what the standard admits.
+    const groups = [pnOfLength(64), "\u5c71".repeat(64), "\u3042".repeat(64)];
+    const pn = groups.join("=");
+    // The spec arithmetic, written as arithmetic so it cannot be read as the
+    // scanner's constant: three component groups of 64 and two delimiters.
+    expect(pn.length).toBe(3 * 64 + 2);
+    const wire = Buffer.from(pn, "utf8");
+    expect(wire.length).toBeGreaterThan(pn.length);
+
+    const root = makeRepo();
+    const p = join(root, "test", "fixtures", "iso-ir-192.dcm");
+    writeFileSync(
+      p,
+      part10(
+        Buffer.concat([
+          shortElement(0x0008, 0x0005, "CS", "ISO_IR 192"),
+          shortElement(0x0010, 0x0010, "PN", wire.toString("latin1")),
+        ]),
+      ),
+    );
+
+    const r = runIn(root, [p]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    const tagLine = r.stderr.split("\n").find((l) => l.startsWith("  tag=(0010,0010)"));
+    expect(tagLine).toBeDefined();
+    const cut = /\[\+(\d+) not printed\]/.exec(tagLine ?? "");
+    expect(cut, "a conformant PN of the standard's maximum length was NOT cut").not.toBeNull();
+    // Withheld is measured against the WIRE length, which is what the scanner read,
+    // and against the bound DERIVED from a run rather than a numeral written here.
+    const bound = oneTextHit(pnOfLength(5000)).value.length;
+    expect(Number(cut?.[1])).toBe(wire.length - bound);
+  });
+
+  it("cannot move the verdict, the totals or the set of files named", () => {
+    // The property every bound in this script has to keep. The excerpt is a
+    // print-time shortening of one field: `main` derives the exit code from
+    // `hits`, the summary counts `hits`, and a file with a hit is still named.
+    const root = makeRepo();
+    const huge = join(root, "test", "fixtures", "huge.txt");
+    const named = join(root, "test", "fixtures", "named.txt");
+    writeFileSync(huge, `Patient: ${pnOfLength(200000)}\n`);
+    writeFileSync(named, SYNTHETIC_PHI);
+
+    const r = runIn(root, [huge, named]);
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain("huge.txt");
+    expect(r.stderr).toContain("named.txt");
+    // The short violator is under the bound, so its line is untouched.
+    expect(r.stderr).toContain(CARET_PN);
+    expect(r.stderr).toContain("hits across 2 file(s).");
+  });
+
+  it("🛑 THE SLOT IS BOUND, NOT THE PRINTER: every push goes through the factory", () => {
+    // A bound that held only where `report` is CALLED would leave `Hit.value`
+    // carrying the whole payload for the next consumer to print, which is the
+    // failure this lineage has watched relocate to a sibling twice. `Hit.value`
+    // is not a `string`, so the compiler refuses a raw one; this case pins the
+    // arithmetic the compiler cannot state, that no push site was left out.
+    const src = readFileSync(SCANNER_PATH, "utf8");
+    expect(src).toContain("value: HitValue;");
+    const pushes = src.match(/hits\.push\(\{/g) ?? [];
+    const excerpted = src.match(/value: excerptValue\(/g) ?? [];
+    expect(pushes.length).toBeGreaterThan(0);
+    expect(excerpted).toHaveLength(pushes.length);
+  });
+});
