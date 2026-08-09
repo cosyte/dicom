@@ -422,8 +422,15 @@ function* base64Runs(text: string): Generator<string> {
 // ---------------------------------------------------------------------------
 
 /**
- * 🛑 A SCAN TARGET'S BYTES ARE NEVER A `RegExp` SUBJECT IN THIS SCRIPT, AND THE PREDICATES BELOW
- * ARE WHAT MAKES THAT TRUE RATHER THAN A CONVENTION.
+ * 🛑 THE SCAN ROUTE HANDS NO TARGET BYTES TO A `RegExp`, AND THE PREDICATES BELOW ARE WHAT MAKES
+ * THAT TRUE RATHER THAN A CONVENTION.
+ *
+ * The scan route is `scanTarget` and everything it reaches. The gate's own CONFIGURATION is a
+ * different route and is still parsed with patterns: `process.argv`, the allow-list, the override
+ * log, and `git diff --cached --raw` output. Neither config file is inside `SCAN_ROOTS`, so the
+ * walk and `--staged` never reach either, but both can be named as positional paths, and in that
+ * mode the two routes read the same bytes. `documentation/agent-notes/dicom-phi-scan-regex-statics.md`
+ * measures what is left.
  *
  * V8 keeps the last successful match on the `RegExp` CONSTRUCTOR: `RegExp.input` (`$_`) is the
  * whole subject string, `RegExp.lastMatch` (`$&`) is the matched text verbatim, and
