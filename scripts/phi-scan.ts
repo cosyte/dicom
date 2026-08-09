@@ -194,8 +194,8 @@ const CUTOFF_YEAR = new Date().getFullYear() - 120;
  * recognizer's first n. The per-file line bound is therefore n x `RECOGNIZERS`, and that table is
  * closed.
  *
- * ⚖️ THIS IS NOT MONOTONICITY AND MUST NOT BE CALLED THAT. Under ANY finite budget, n+1 hits from
- * one entry print n, so adding a hit can always remove a line; the general property is not
+ * ⚖️ THIS IS NOT MONOTONICITY AND MUST NOT BE CALLED THAT, LABEL OR SENTENCE. Under ANY budget that
+ * cuts at all (`--max-hit-lines 0` does not), n+1 hits from one entry print n, so adding a hit can always remove a line; the general property is not
  * available at a cap at all, and a claim that it is was refused here. What is closed is one entry's
  * budget being spent by ANOTHER entry's findings.
  *

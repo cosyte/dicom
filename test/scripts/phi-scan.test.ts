@@ -2175,16 +2175,23 @@ describe("phi-scan: the hit report is capped PER FILE, and the cap cannot move t
 // The print budget is spent PER RECOGNIZER within a file
 // ---------------------------------------------------------------------------
 //
-// One shared per-file budget made `report` NOT MONOTONE: adding hits could
-// REMOVE a line it would otherwise have printed, because a file's loud
-// recognizer spent the quiet one's share. `scanDicom` appends before `scanText`
-// within a file, so a tag-route flood decided how many of the text route's
-// findings were printed - and the text route's PN sweep is the one that finds a
-// caret-joined person name in bytes the tag table never typed.
+// One shared per-file budget let a file's loud recognizer spend the quiet one's
+// share. `scanDicom` appends before `scanText` within a file, so a tag-route
+// flood decided how many of the text route's findings were printed - and the
+// text route's PN sweep is the one that finds a caret-joined person name in
+// bytes the tag table never typed.
 //
-// The cases below pin the property in the two forms that matter: adding hits
-// never removes a printed line, and the budget a recognizer can spend is its own.
-// The superset against the previous scanner, across a grid, is
+// 🛑 "ADDING HITS NEVER REMOVES A PRINTED LINE" WAS WRITTEN HERE AND IS FALSE.
+// Under any finite budget, n+1 hits from one entry of the table print n. It is
+// DELETED rather than reworded, twice over: a refuter refused it, and a second
+// pass found this comment still carrying it after the test names had been
+// scoped - a first remedy that sweeps the vocabulary leaves the carriers still
+// carrying the claim. Do not write it again.
+//
+// What the cases below pin is what was closed: one entry's budget cannot be
+// spent by ANOTHER entry's findings. Two of them pin what was NOT closed, and
+// they are the reason the sentence above cannot come back. The superset against
+// the previous scanner, across a grid, is
 // `scripts/measure-phi-scan-monotonicity.ts`; these are the shapes, not the grid.
 
 /** `n` ISO-date hits and nothing else: digits only, so the PN sweep matches none of them. */
@@ -2236,7 +2243,9 @@ function reasonCounts(stderr: string): Map<string, number> {
 
 describe("phi-scan: the print budget is spent PER RECOGNIZER, so no class spends another's", () => {
   it("🛑 ANOTHER CLASS'S FLOOD DOES NOT REMOVE A PRINTED LINE, at the DEFAULT cap", () => {
-    // The monotonicity case, at the cap CI and the pre-commit hook actually use.
+    // The cross-entry case, at the cap CI and the pre-commit hook actually use.
+    // NOT "the monotonicity case": the word is refused three lines above the
+    // block header and a label is a carrier like any other sentence.
     // Run one: a file whose only hit is a person name. Run two: the same name
     // with a date flood in front of it, far more of them than the default cap.
     // Every line run one printed must still be printed in run two.

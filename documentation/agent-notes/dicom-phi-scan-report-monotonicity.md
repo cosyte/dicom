@@ -69,9 +69,13 @@ new one for no gain.
 ## 🛑 THIS IS NOT MONOTONICITY, AND CALLING IT THAT WAS THIS SLICE'S OWN REFUSED CLAIM
 
 Pass 1 refused the sentence *"adding hits cannot remove a printed line"*, in the commit subject, the
-changeset, a test name and this page. It is false, and not narrowly:
+changeset, a test name and this page. **Pass 2 then found it still in a fifth carrier - the header
+comment over the test block - after the other four had been scoped**, which is this repo's own trap
+arriving inside its remedy: a first pass that sweeps the VOCABULARY leaves the carriers still
+carrying the CLAIM. It is DELETED in all five, never reworded. It is false, and not narrowly:
 
-- **Under ANY finite budget it is unavailable.** `n+1` hits from one entry print `n`. There is no
+- **Under ANY budget that cuts it is unavailable** (`--max-hit-lines 0` does not cut). `n+1` hits
+  from one entry print `n`. There is no
   print cap for which the general property holds, so no amount of partitioning would have made the
   sentence true.
 - **Several sweeps share one entry**, so the shortfall is larger than "the same sweep twice".
@@ -98,6 +102,11 @@ budget.
 
 **What IS closed, and it is the whole of what is claimed: one entry's budget cannot be spent by
 another entry's findings.**
+
+**Pass 3 (NOT REFUTED, and the ADR 0016 ceiling) found a SIXTH carrier - the word "monotonicity" as a
+comment LABEL inside the block the pass-2 remedy had just swept.** Cut too. Three refuter passes and
+five sweeps to get one sentence out of one slice is the measurement worth keeping: in this lineage a
+phrase sweep that finds nothing on its first pass has not finished.
 
 ## The superset, which is the only question a selection-policy change gets asked
 
@@ -162,10 +171,14 @@ as such here so nobody quotes "eight tests" as "eight regressions caught": they 
 must NOT move (the verdict, the totals, the files named, the withheld arithmetic), the two costs it
 does NOT close, and the line shape it does not touch.
 
-One of the four red is red for a NON-VACUITY reason and says so in its own comment: the doubling case
-asserts that more than one recognizer was printed before it compares the two line counts, and on base
-at a budget of one only one is. **Its bound half is green on base.** That is stated because "red on
-base" reads as "caught a regression" and here it does not.
+**🛑 AND ONLY TWO OF THE FOUR ARE RED ON THE DEFECT.** The other two are red on a NON-VACUITY guard
+whose own half is green on base, which a second refuter pass caught this page under-stating as one:
+the doubling case requires more than one printed REASON before it compares the two line counts (a
+reason, not a recognizer - the guard can only see what the line carries), and at a budget of one on
+base there is only one; the strengthened scan-order case requires
+more lines printed than the flag's value, and on base there are exactly as many. **Both arithmetic
+halves are green on base.** This is stated because "red on base" reads as "caught a regression", and
+for two of these four it does not.
 
 **No case writes the budget as a numeral.**
 
