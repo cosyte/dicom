@@ -24,11 +24,15 @@
  * The observer is written into a temporary directory and preloaded with `--require`. It never
  * touches `scripts/phi-scan.ts`, which runs exactly as it ships.
  *
- * 🩺 THE INSTRUMENT IS VERIFIED BEFORE ANY NUMBER IT PRINTS IS BELIEVED. Every corpus is scanned
- * twice: once carrying one PN-shaped token per file, and once byte-for-byte the same size with no
- * token in it at all. The second is the NEGATIVE CONTROL, and it is what says a difference in
- * retention is the doing of the hits rather than of the corpus. A run whose control is not clean,
- * or whose positive corpus does not produce exactly one hit per file, throws instead of reporting.
+ * 🩺 THE INSTRUMENT IS VERIFIED BEFORE ANY NUMBER IT PRINTS IS BELIEVED, and each table verifies
+ * what its own conclusion needs. **The FIRST table**, whose conclusion is about growth with corpus
+ * size, scans every corpus twice: once carrying one PN-shaped token per file, and once byte-for-byte
+ * the same size with no token in it at all. That second run is the NEGATIVE CONTROL, and it is what
+ * says a difference is the doing of the hits rather than of the corpus; a run whose control is not
+ * clean, whose positive corpus does not produce one hit per file, or whose observer did not fire
+ * once per file, throws instead of reporting. **The SECOND table has NO control and needs none**,
+ * because its conclusion is a base-against-shipped delta over byte-identical corpora: it asserts
+ * only that the loud pages produced many hits and that the observer fired once per file.
  *
  * ## Running it
  *
@@ -37,7 +41,7 @@
  * pnpm measure:phi-scan-retention /tmp/base-phi-scan.ts
  * ```
  *
- * With no argument it verifies the instrument and prints the shipped tree's table alone, with no
+ * With no argument it verifies the instrument and prints the shipped tree's columns alone, with no
  * base comparison and no grid.
  *
  * **`node`, not `tsx`.** This script imports nothing from `src/`.

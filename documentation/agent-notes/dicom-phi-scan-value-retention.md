@@ -68,12 +68,17 @@ per file, with `hits` live, and force a full GC before reading `process.memoryUs
 lives in the test and in the measurement script; `scripts/phi-scan.ts` is not touched and runs
 exactly as it ships.
 
-**🩺 THE INSTRUMENT IS VERIFIED BEFORE ANY NUMBER IT PRINTS IS BELIEVED.** Every corpus is scanned
-twice: once with one PN-shaped token per file, and once byte-for-byte the same size with no token in
-it. The second is the negative control, and it is what says a retention difference is the doing of
-the hits rather than of the corpus. The harness throws rather than reports if the positive corpus
-does not produce exactly one hit per file, if the observer did not fire once per file, or if the
-control is not clean.
+**🩺 THE INSTRUMENT IS VERIFIED BEFORE ANY NUMBER IT PRINTS IS BELIEVED, AND EACH TABLE VERIFIES WHAT
+ITS OWN CONCLUSION NEEDS.** The **first** table, whose conclusion is about growth with corpus size,
+scans every corpus twice: once with one PN-shaped token per file, and once byte-for-byte the same
+size with no token in it. That second run is the negative control, and it is what says a retention
+difference is the doing of the hits rather than of the corpus; the harness throws rather than reports
+if the positive corpus does not produce one hit per file, if the observer did not fire once per file,
+or if the control is not clean. **The second table has NO control and needs none**, because its
+conclusion is a base-against-shipped delta over byte-identical corpora with equal hit counts; it
+asserts only that the loud pages produced many hits and that the observer fired once per file. **That
+distinction is written down because the sentence above it was once a universal, and the second table
+falsified it the moment it was added.**
 
 ## What it measures
 
