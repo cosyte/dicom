@@ -22,10 +22,10 @@
 Closes the two residuals `#112` left open, and they turned out to be **one mechanism**, which the
 census showed rather than an argument:
 
-- *"The gate's own CONFIGURATION is still a `RegExp` subject"*, disclosed **by a measured figure
+- _"The gate's own CONFIGURATION is still a `RegExp` subject"_, disclosed **by a measured figure
   rather than a description**: every clean column read `input 3772`.
-- *"`PRE-EXISTING`: `loadOverrideLog` is FENCE-BLIND, so the committed `phi-scan-overrides.md`
-  template line parses as a live allow entry."*
+- _"`PRE-EXISTING`: `loadOverrideLog` is FENCE-BLIND, so the committed `phi-scan-overrides.md`
+  template line parses as a live allow entry."_
 
 ## The disclosed figure, verified before anything was built to it
 
@@ -36,13 +36,13 @@ exactly the one astral emoji in it, four bytes for two units. So `input 3772` is
 A runtime census over five invocation modes on `01d0983`, taken by wrapping `RegExp.prototype`'s
 `exec`/`test` and the four `Symbol` methods and recording every call with its stack:
 
-| route | regex operations | subject held at exit |
-| --- | --- | --- |
-| no arguments (all-mode) | **3,773**, every one `loadAllowList`'s split | `input` 3,772, `lastMatch` `"\n"` |
-| `--max-hit-lines 5 <path>` | 3,775 | `input` 3,772 |
-| `--staged` | 3,774 | `input` 32, the git raw record |
-| `--allow-fixture <path>` | 597 | **`input` = `lastMatch` = `"### <path>"`** |
-| `--max-hit-lines banana` | 2 | `input` 0 |
+| route                      | regex operations                             | subject held at exit                       |
+| -------------------------- | -------------------------------------------- | ------------------------------------------ |
+| no arguments (all-mode)    | **3,773**, every one `loadAllowList`'s split | `input` 3,772, `lastMatch` `"\n"`          |
+| `--max-hit-lines 5 <path>` | 3,775                                        | `input` 3,772                              |
+| `--staged`                 | 3,774                                        | `input` 32, the git raw record             |
+| `--allow-fixture <path>`   | 597                                          | **`input` = `lastMatch` = `"### <path>"`** |
+| `--max-hit-lines banana`   | 2                                            | `input` 0                                  |
 
 ## 🛑 The census is what made this ONE slice rather than two
 
@@ -87,9 +87,9 @@ nothing about the corpus, which is a refusal rather than a clearance.
 two gates refused it, the second with the measurement that kills the shape entirely. On
 `open / A / close-with-a-trailer / B / close / C`:
 
-| how the trailer is read | dropped | live |
-| --- | --- | --- |
-| as bare, so it closes | `A`, `C` | **`B`** |
+| how the trailer is read           | dropped  | live    |
+| --------------------------------- | -------- | ------- |
+| as bare, so it closes             | `A`, `C` | **`B`** |
 | as an info string, so it does not | `A`, `B` | **`C`** |
 
 Getting one fence wrong does not merely drop or admit that block's headings, **it swaps every block
@@ -108,13 +108,27 @@ it and each now a named test plus a mutant:
    all 18 cases. Dropped, the same parity flip happens with a tab. The control in the other
    direction had only ever used a space; it now uses both.
 
+## 🔴 Two corrections applied AFTER the fourth pass, and therefore UNGRADED
+
+The gate returned `NOT REFUTED` at the cap with two `minor` findings, and named both as backlog
+lines safe to ship around. They were applied anyway, because each is a **deletion of a false
+sentence** and a comment cannot change behaviour. **They carry no refuter verdict and that is stated
+rather than glossed:**
+
+1. `Fence.bare` claimed _"each arm has been wrong once and each is pinned by its own case."_ Both
+   halves false: `isSpaceCode` admits `0x20` and `0x09`, so no head ever shipped a wrong arm, and
+   dropping **either** arm reds the **same** single case. Replaced with that measurement.
+2. The exit-2 misstatement was corrected in the note and the changeset but **left standing in the
+   two code carriers**, which are what a maintainer reads first. Corrected to the wording the fourth
+   pass measured as true.
+
 ## 🔴 One known divergence from §4.5, PRE-EXISTING and disclosed rather than argued harmless
 
 §4.5 also says an info string after a **backtick** fence may not contain backticks. `fenceRun` opens
-on ` ```a\`b ` anyway. Measured: on `open-with-that-info-string / X / close / Y / close`, this tree
-makes `Y` a live allow entry where CommonMark renders it inside a code block. **Base `01d0983` is
+on ` ```a\`b `anyway. Measured: on`open-with-that-info-string / X / close / Y / close`, this tree
+makes `Y`a live allow entry where CommonMark renders it inside a code block. **Base`01d0983`is
 fence-blind and makes both live**, so this tree is strictly the smaller surface and the divergence
-is `PRE-EXISTING` in outcome. It is a backlog line, not this slice's to close: narrowing the opener
+is`PRE-EXISTING` in outcome. It is a backlog line, not this slice's to close: narrowing the opener
 is a third selection change on a function that has already cost two passes.
 
 ## 🛑 The inertness was RE-MEASURED, not inherited, and it holds twice over
@@ -122,11 +136,11 @@ is a third selection change on a function that has already cost two passes.
 `#112` recorded the fence-blind entry as inert. Re-measured here, in a throwaway repository with a
 PHI-bearing file whose repo-relative path IS the placeholder:
 
-| route | can a target normalize to `<path>`? | outcome |
-| --- | --- | --- |
-| `all` (what CI runs) | **no**, the placeholder is a ROOT-LEVEL path and `SCAN_ROOTS` is `test`, `README.md`, `docs-content` | never a target |
-| `--staged` (what the pre-commit hook runs) | **no**; the file was staged, git listed it in `--raw`, and `SCAN_SCOPE` dropped it | never a target |
-| explicit paths | **yes** | **exit 0, target exempted, silently** |
+| route                                      | can a target normalize to `<path>`?                                                                  | outcome                               |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `all` (what CI runs)                       | **no**, the placeholder is a ROOT-LEVEL path and `SCAN_ROOTS` is `test`, `README.md`, `docs-content` | never a target                        |
+| `--staged` (what the pre-commit hook runs) | **no**; the file was staged, git listed it in `--raw`, and `SCAN_SCOPE` dropped it                   | never a target                        |
+| explicit paths                             | **yes**                                                                                              | **exit 0, target exempted, silently** |
 
 So the inertness is stronger than "no tracked path is named `<path>`": **neither gating route can
 produce such a target at all.** It was live only where a caller names the file itself. Pinned beside
@@ -140,22 +154,22 @@ no human wrote is a silent exemption waiting for a path to match it.
 Base `01d0983` restored **by file copy**, never `git checkout`. Instrument extended and shipped as
 `scripts/measure-phi-scan-regex-statics.ts`.
 
-| | base | here |
-| --- | --- | --- |
-| scan shapes leaving a `RegExp` subject | **7 of 7**, `input 3772` | **0 of 7** |
-| config routes leaving one | **5 of 6** | **0 of 6** |
-| config routes byte-identical to base, as required | | **5** |
-| config routes DELIBERATELY different | | **1**, and the instrument refuses if it is not |
-| routes disagreeing with either expectation | | **0** |
+|                                                   | base                     | here                                           |
+| ------------------------------------------------- | ------------------------ | ---------------------------------------------- |
+| scan shapes leaving a `RegExp` subject            | **7 of 7**, `input 3772` | **0 of 7**                                     |
+| config routes leaving one                         | **5 of 6**               | **0 of 6**                                     |
+| config routes byte-identical to base, as required |                          | **5**                                          |
+| config routes DELIBERATELY different              |                          | **1**, and the instrument refuses if it is not |
+| routes disagreeing with either expectation        |                          | **0**                                          |
 
-| equivalence, whole output byte for byte | |
-| --- | --- |
-| cells (real corpus + adversarial + 32 fuzz corpora) | **34** |
-| **cells differing from base in any byte** | **0** |
-| cells that refused (exit 1) | 33 |
-| hit lines compared | **9,283** |
-| **MUTATION CONTROL, same cells, one character** | **17 cells differ** |
-| detector positive control | fires, and **the instrument throws if it does not** |
+| equivalence, whole output byte for byte             |                                                     |
+| --------------------------------------------------- | --------------------------------------------------- |
+| cells (real corpus + adversarial + 32 fuzz corpora) | **34**                                              |
+| **cells differing from base in any byte**           | **0**                                               |
+| cells that refused (exit 1)                         | 33                                                  |
+| hit lines compared                                  | **9,283**                                           |
+| **MUTATION CONTROL, same cells, one character**     | **17 cells differ**                                 |
+| detector positive control                           | fires, and **the instrument throws if it does not** |
 
 **🛑 THE ZERO IS PINNED BESIDE POSITIVE CONTROLS AT BOTH ENDS.** The detector must report a token a
 regex has just matched; the equivalence grid must report a one-character mutant; and the config
@@ -169,20 +183,20 @@ removing the regexes moved nothing, so a red one would mean the slice changed be
 not have. The figure that says they are not vacuous is the mutation grid, over the 18 cases in the
 two files:
 
-| mutant | cases red |
-| --- | --- |
-| `splitLines` splits on a lone `CR` | 1 |
-| `isAllDigits` widened to `Number()` | 1 |
-| `tripleHashValue` drops the `LineTerminator` check | 1 |
-| `fenceRun` never sees a fence (base behaviour) | **6** |
-| a closing fence need not be bare | 2 |
-| fence indent allowance removed | 1 |
-| tilde fences not recognized | 1 |
-| all-whitespace narrowing reverted (base behaviour) | 1 |
-| `isSpaceCode` drops `NBSP` | **5** |
-| **`bare` computed over all of `\s` (the refuter's pass-1 defect)** | **1** |
-| **`bare` drops its tab arm (the refuter's pass-2 defect)** | **1** |
-| **`rawRecordMode` accepts UPPERCASE hex** | **0** |
+| mutant                                                             | cases red |
+| ------------------------------------------------------------------ | --------- |
+| `splitLines` splits on a lone `CR`                                 | 1         |
+| `isAllDigits` widened to `Number()`                                | 1         |
+| `tripleHashValue` drops the `LineTerminator` check                 | 1         |
+| `fenceRun` never sees a fence (base behaviour)                     | **6**     |
+| a closing fence need not be bare                                   | 2         |
+| fence indent allowance removed                                     | 1         |
+| tilde fences not recognized                                        | 1         |
+| all-whitespace narrowing reverted (base behaviour)                 | 1         |
+| `isSpaceCode` drops `NBSP`                                         | **5**     |
+| **`bare` computed over all of `\s` (the refuter's pass-1 defect)** | **1**     |
+| **`bare` drops its tab arm (the refuter's pass-2 defect)**         | **1**     |
+| **`rawRecordMode` accepts UPPERCASE hex**                          | **0**     |
 
 The override-log parser is driven as a **membership oracle**: `--allow-fixture` is repeatable and
 the refusal names every path it could not find an entry for, so one subprocess reports exactly which

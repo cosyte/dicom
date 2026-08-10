@@ -459,8 +459,8 @@ function* base64Runs(text: string): Generator<string> {
  *
  * 🔴 THE ONE PLACE THAT IS DELIBERATELY NOT AN EQUIVALENCE IS `overrideLogPaths`, WHICH IS NARROWER
  * ON PURPOSE AND IN THE FAIL-CLOSED DIRECTION. Its two departures from the pattern it replaces are
- * enumerated on that function, and a dropped entry REFUSES a `--allow-fixture` bypass, which runs
- * the scan.
+ * enumerated on that function, and a dropped entry REFUSES a `--allow-fixture` bypass at exit 2,
+ * so the target is not exempted.
  *
  * 🔴 AND THE CONFIG PARSERS ARE NOT ALL PINNED TO THE SAME STANDARD AS THE SCAN ROUTE. Two shapes
  * are unreachable from outside this script and no test claims them: `splitLines`'s `CRLF` handling
@@ -1047,9 +1047,9 @@ interface Fence {
    *
    * 🛑 SPACE AND TAB, NOT `isSpaceCode`, AND BOTH ARMS ARE LOAD-BEARING. CommonMark 0.31.2 §4.5:
    * a closing fence "may be followed only by spaces or tabs, which are ignored." Anything else is
-   * an info string and does not close. Each arm has been wrong once and each is pinned by its own
-   * case in `test/scripts/phi-scan-matchers.test.ts`, in both directions. What a wrong answer here
-   * does is on `fenceRun` below; it is not a thing this field can be reasoned about locally.
+   * an info string and does not close. Dropping either arm reds one case in
+   * `test/scripts/phi-scan-matchers.test.ts`, and it is the same case for both. What a wrong answer
+   * here does is on `fenceRun` below; it is not a thing this field can be reasoned about locally.
    */
   bare: boolean;
 }
@@ -1117,8 +1117,10 @@ function tripleHashValue(line: string): string | null {
  *
  * 🛑 THIS IS THE ONE PARSER HERE THAT IS DELIBERATELY NOT AN EQUIVALENCE, AND BOTH DEPARTURES ARE
  * FAIL-CLOSED. Dropping an entry makes `validateAllowFixtures` REFUSE the `--allow-fixture` flag
- * naming it (exit 2), so the target is scanned rather than exempted. Admitting one that no human
- * wrote is the direction that silently exempts a PHI target, and it is what both of these were.
+ * naming it (exit 2), so the target is not exempted. Exit 2 does not scan it either: the run stops
+ * before enumeration and says nothing about the corpus, which is a refusal and not a clearance.
+ * Admitting an entry that no human wrote is the direction that silently exempts a PHI target, and
+ * it is what both of these were.
  *
  * 1. **Fence-awareness.** The pattern this replaces was FENCE-BLIND, so the `### <path>` line in
  *    this repository's own committed `phi-scan-overrides.md` - a TEMPLATE, inside the fenced block
