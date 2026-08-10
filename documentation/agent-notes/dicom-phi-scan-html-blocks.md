@@ -48,13 +48,22 @@ the parity trap below**: a guess that a line is not in a paragraph opens blocks 
 which moves entries in both directions at once. So it is scoped, named on the function, and pinned
 by a test with both of its arms:
 
-| log                                | CommonMark        | here            | agrees |
-| ---------------------------------- | ----------------- | --------------- | ------ |
-| `<span>` after a BLANK line        | kind 7, no heading | **live entry** | no     |
-| `<span>` after a PARAGRAPH line    | no block, heading | live entry      | yes    |
+| log                                            | CommonMark         | base `8139687`  | here            |
+| ---------------------------------------------- | ------------------ | --------------- | --------------- |
+| `<span>` after a BLANK line                    | kind 7, no heading | live entry      | **live entry**  |
+| `<span>` after a PARAGRAPH line                | no block, heading  | live entry      | live entry      |
+| `</pre>`, then a comment holding a fence opener | kind 7, no heading | **exit 2**      | **exit 0, EXEMPTED** |
 
-The second arm is why the case asserts both: a test showing only the first would read as an accepted
-behaviour rather than as a measured gap.
+The second row is why the case asserts more than one arm: a test showing only the first would read
+as an accepted behaviour rather than as a measured gap.
+
+**🔴 THE THIRD ROW IS THIS SLICE WIDENING THE HOLE, AND IT WAS FOUND BY THE GATE RATHER THAN BY THE
+SLICE.** `</pre>` alone on a line is a complete closing tag, so CommonMark starts a kind-7 block
+there that runs to the end of the document; neither tree models that. But the comment opener beneath
+it is read here, and it swallows the fence delimiter that used to hide the heading, so **this tree
+exempts at exit 0 a target base refused at exit 2.** The CLASS was disclosed, the INSTANCE was not,
+and that gap is the same shape `#116` disclosed against itself. It is now a corpus row
+(`condition-seven-widened`) and a test arm, and it carries a `DICOM-RESIDUALS` line.
 
 ## 🛑 NO DIRECTION IS CLAIMED, AND THE DISJOINTNESS ROW IS WHY
 
@@ -124,10 +133,29 @@ document**. Zero and two are both refusals, which is the meta-repo's rule about 
 section, and this repository has paid for the first-match shape before (`#80` cited PS3.5 section 7.5
 twice when the sentence is in 7.5.2).
 
-`test/scripts/phi-scan-matchers.test.ts` then drives **one `--allow-fixture` per derived name**
-through the membership oracle in a single subprocess, so the committed table is checked
-**behaviourally** rather than by a text regex over the source. **NO COUNT OF EITHER LIST IS WRITTEN
-ANYWHERE**, here or in `phi-scan.ts`.
+`test/scripts/phi-scan-matchers.test.ts` then drives **one `--allow-fixture` per derived name, from
+BOTH lists**, through the membership oracle in a single subprocess, so each committed table is
+checked **behaviourally** rather than by a text regex over the source. **NO COUNT OF EITHER LIST IS
+WRITTEN ANYWHERE**, here or in `phi-scan.ts`.
+
+**🛑 CONDITION 1's LIST WAS DRIVEN BY NOTHING IN THE FIRST DRAFT, AND THE GATE PROVED IT WITH A
+MUTANT: reducing that table to a single name left the WHOLE SUITE GREEN.** The claim above was
+written in the plural while half of it was verified by a second typed literal in a test, which is
+the "table somebody typed" this section names, one file over. The loop was extended rather than the
+sentence narrowed, because the unguarded direction is the leak direction: a name missing from the
+shipped table means that tag starts no block, so the heading under it is a live allow entry.
+
+**No exhaustiveness is claimed in the other direction.** An over-wide table is caught only for
+NAMED controls: `divx` and `paramx`, which are prefixes of listed names and pin the maximal-munch
+read, plus `source`, `canvas` and `video`, which are unrelated names a table grown by one entry
+would fail on. A method plus a named list, asserting no completeness.
+
+Both mutants the gate used are now red, re-measured on the remedy rather than argued:
+
+| mutant                                         | before the remedy   | after     |
+| ---------------------------------------------- | ------------------- | --------- |
+| condition 1's table reduced to one name        | **whole suite green** | 1 case red |
+| `source` added to condition 6's table          | both test files green | 1 case red |
 
 **The control for the other direction is `<divx` and `<paramx`**: a listed name followed by more
 tag-name characters. CommonMark starts no block on either, and they are not complete tags so
@@ -136,21 +164,24 @@ maximal-munch read of the name safe to state: the five things section 4.6 allows
 (space, tab, end of line, `>`, `/>`) are none of them tag-name characters, so a listed name that is
 a strict PREFIX of the run is never followed by one of them.
 
-## Tests: 7 red on base of 1,388, and 4 green on base BY DESIGN
+## Tests: 8 red on base of 1,388, and 3 green on base BY DESIGN
 
 Full suite with base `8139687`'s `scripts/phi-scan.ts` restored **by file copy** into this tree:
-**`7 failed | 1380 passed | 1 todo` across 76 files.** All seven are this slice's new behavioural
-cases and all seven are in one file.
+**`8 failed | 1379 passed | 1 todo` across 76 files.** All eight are this slice's new behavioural
+cases and all eight are in one file. **The figure was re-taken after the remedy rather than carried:
+it read 7 of 1,388 before the condition-7 case gained its widening arm**, which is red on base
+because base refuses the target this tree exempts.
 
-**The 4 green-on-base cases are counted separately rather than folded in**, because a padded red
+**The 3 green-on-base cases are counted separately rather than folded in**, because a padded red
 fraction is this lineage's recurring claim defect:
 
 - the two `commonmark-pin` cases read a **vendored document** and say nothing about `phi-scan`'s
   behaviour. A red one would mean the pin was wrong;
-- the **condition-7 case** is green on base because base does not model kind 7 either. It is the
-  disclosure, not the fix;
 - the **committed-log anchor** is green on both trees, which is exactly what it is for: this
   repository's own log carries no HTML and adding a block class must not have moved it.
+
+The condition-7 case's first two arms are green on base, and only its third is red. It is counted in
+the red fraction as one case, which is what the runner counts.
 
 Every behavioural case asks **both directions** in the same run, so a parser that dropped everything
 fails as surely as one that dropped nothing.
@@ -167,8 +198,15 @@ caught.
 
 - **Start condition 7**, above. It is a `DICOM-RESIDUALS` line, not a sentence filed here alone.
 - **`tripleHashValue` still refuses a heading whose text contains `LS` or `PS`** (`U+2028`,
-  `U+2029`), and **section 4.5's backtick-info-string opener** is untouched. Both `PRE-EXISTING`,
-  both unmeasured here.
+  `U+2029`), and **section 4.5's backtick-info-string opener** is untouched. Both `PRE-EXISTING`.
+- **🔴 AND `tripleHashValue` ADMITS IN THE OTHER DIRECTION TOO, WHICH WAS UNNAMED UNTIL A GATE NAMED
+  IT.** It separates the `###` run from the text with `isSpaceCode`, the whole of `\s`, where
+  section 4.2 allows only a space or a tab. So `###` followed by `U+00A0`, `U+3000`, `U+2000` to
+  `U+200A`, `U+000B`, `U+000C` or `U+FEFF` renders as a PARAGRAPH and is a **live allow entry on
+  both trees**. That is the exempting direction, it is `PRE-EXISTING` (head equals base), and it is
+  a `DICOM-RESIDUALS` line rather than this slice's to close: it is a further selection change on
+  the heading recognizer, and the existing cases assert the current answer for an `NBSP` separator
+  deliberately.
 - **This parser still models no CONTAINER blocks.** A `### <path>` is only ever recognised at column
   0, so a heading inside a block quote or a list item is a dropped entry rather than an admitted
   one, and nothing here changes that. It is stated because "models section 4.6" must not be read as

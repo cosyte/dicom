@@ -757,20 +757,31 @@ describe("phi-scan suppresses a heading inside a CommonMark section 4.6 HTML blo
   const OPEN_COMMENT = "<!--";
   const CLOSE_COMMENT = "-->";
 
-  it("suppresses a heading under every tag start condition 6 lists, and under no other", () => {
-    const { blockTags } = htmlBlockConditions();
-    // Non-vacuity: the list is read from the spec, so an extraction that silently produced nothing
-    // would make this case assert nothing at all.
+  it("suppresses a heading under every tag BOTH tag conditions list, and under none of its named controls", () => {
+    // 🛑 BOTH TABLES, NOT ONE. Condition 1's four names are as unguarded as condition 6's sixty if
+    // only condition 6 is driven here, and the unguarded direction is the leak direction: a name
+    // missing from the shipped table means that tag starts no block, so the heading under it is a
+    // LIVE allow entry exempting a PHI scan target at exit 0. A gate found exactly that gap, with a
+    // one-name mutant of condition 1's table passing the whole suite.
+    const { literalTags, blockTags } = htmlBlockConditions();
+    // Non-vacuity: both lists are read from the spec, so an extraction that silently produced
+    // nothing would make this case assert nothing at all.
+    expect(literalTags.length).toBeGreaterThan(3);
     expect(blockTags.length).toBeGreaterThan(50);
 
-    const smuggled = blockTags.map((t) => `s6-${t}`);
-    // 🛑 THE OTHER DIRECTION, IN THE SAME RUN. `unlisted` is a tag-name PREFIX of a listed name
-    // followed by more name characters, so CommonMark starts no block on it (and it is not a
-    // complete tag, so condition 7 does not reach it either) and the heading below it is a real
-    // heading. A parser whose table were too wide, or which matched a prefix rather than the whole
-    // name run, would drop these; a parser that dropped everything fails on them too.
-    const unlisted = ["divx", "paramx"];
+    const smuggled = [...literalTags.map((t) => `s1-${t}`), ...blockTags.map((t) => `s6-${t}`)];
+    // 🛑 THE OTHER DIRECTION, IN THE SAME RUN, AND NO EXHAUSTIVENESS IS CLAIMED OVER IT. These are
+    // NAMED controls, not a proof that the tables hold nothing else. Each is a name that section
+    // 4.6 lists in neither condition, written without a `>` so it is not a complete tag either and
+    // condition 7 cannot reach it: CommonMark starts no block, and the heading below it is real.
+    // The first two are also PREFIXES of listed names, which is what pins the maximal-munch read;
+    // the rest are unrelated names, which is what a table grown by one entry would fail on.
+    const unlisted = ["divx", "paramx", "source", "canvas", "video"];
     const lines = ["# log", ""];
+    // Kind 1 ends on the line carrying its end tag and NOT at a blank line, so each block is closed
+    // explicitly. A parser that failed to close one would swallow every entry after it, including
+    // `live-at-the-end`.
+    for (const t of literalTags) lines.push(`<${t}>`, `### s1-${t}`, `</${t}>`, "");
     for (const t of blockTags) lines.push(`<${t}>`, `### s6-${t}`, "");
     for (const t of unlisted) lines.push(`<${t}`, `### live-${t}`, "");
     lines.push("### live-at-the-end", "");
@@ -951,8 +962,15 @@ describe("phi-scan suppresses a heading inside a CommonMark section 4.6 HTML blo
    * Both arms are asserted because only one of them is a divergence: after a PARAGRAPH line,
    * condition 7 cannot fire, so the heading is live in CommonMark too and the parsers agree. A case
    * that asserted only the first would read as an accepted behaviour rather than as a measured gap.
+   *
+   * 🔴 AND THE THIRD ARM IS THIS SLICE WIDENING THE HOLE, DISCLOSED AGAINST ITSELF. A gate found it;
+   * the class was disclosed and this INSTANCE of it was not. `</pre>` alone on a line is a complete
+   * closing tag, so CommonMark starts a kind-7 block there that runs to the end of the document and
+   * no heading below it exists at all. Neither tree models that. But the comment opener beneath it
+   * is now read, and it swallows the fence delimiter that used to hide the heading, so **this tree
+   * exempts at exit 0 a target base refused at exit 2.** Named here rather than left to the record.
    */
-  it("does not model start condition 7, and the case where that agrees with CommonMark", () => {
+  it("does not model start condition 7, the case where that agrees, and the input it widens", () => {
     const diverges = makeConfigRepo({
       overrides: ["# log", "", "<span>", "### under-span", ""].join("\n"),
     });
@@ -962,6 +980,20 @@ describe("phi-scan suppresses a heading inside a CommonMark section 4.6 HTML blo
       overrides: ["# log", "", "intro", "<span>", "### under-span-para", ""].join("\n"),
     });
     expect(missingFromOverrideLog(agrees, ["under-span-para"])).toEqual(new Set());
+
+    const widened = makeConfigRepo({
+      overrides: [
+        "# log",
+        "",
+        "</pre>",
+        OPEN_COMMENT,
+        FENCE,
+        CLOSE_COMMENT,
+        "### widened",
+        "",
+      ].join("\n"),
+    });
+    expect(missingFromOverrideLog(widened, ["widened"])).toEqual(new Set());
   });
 
   it("leaves the committed override log holding no entries at all", () => {

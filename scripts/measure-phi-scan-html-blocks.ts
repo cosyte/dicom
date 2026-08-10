@@ -169,6 +169,15 @@ const CORPUS: Log[] = [
     candidates: ["under-span"],
     about: "🔴 THE SCOPED-OUT KIND. CommonMark hides this heading; every script here shows it.",
   },
+  {
+    name: "condition-seven-widened",
+    body: ["# log", "", "</pre>", "<!--", FENCE, "-->", "### widened", ""].join("\n"),
+    candidates: ["widened"],
+    about:
+      "🔴 THE INSTANCE OF THE SCOPED-OUT KIND THAT THIS CHANGE WIDENS. `</pre>` alone is a kind 7 " +
+      "start neither script models; reading the comment under it swallows the fence that used to " +
+      "hide the heading, so head EXEMPTS at exit 0 what base refused at exit 2.",
+  },
 ];
 
 const roots: string[] = [];
