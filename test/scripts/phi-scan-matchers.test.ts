@@ -406,7 +406,7 @@ function missingFromOverrideLog(root: string, candidates: readonly string[]): Se
   return out;
 }
 
-describe("phi-scan parses its own override log the way the pattern did, minus two fail-closed cuts", () => {
+describe("phi-scan parses its own override log the way the pattern did, minus two deliberate cuts", () => {
   /**
    * Lines chosen because they are where the pattern and a hand-written scan can part company: the
    * greedy `\s+` handing a character back to a lazy `(.+?)`, `.` refusing a `LineTerminator` that
@@ -514,10 +514,8 @@ describe("phi-scan parses its own override log the way the pattern did, minus tw
   });
 
   it("is not closed by a fence run that has an info string after it", () => {
-    // A CLOSING fence must be bare. This is the asymmetry `fenceRun` is written around: seeing a
-    // fence that is not one drops entries (fail-closed), while treating a non-bare run as a close
-    // reopens `###` parsing inside a code block, which is the fail-open direction. A block whose
-    // body contains a nested-looking ```` ```js ```` line must stay open across it.
+    // A CLOSING fence must be bare, per CommonMark 0.31.2 section 4.5. A block whose body contains
+    // a nested-looking ```` ```js ```` line must stay open across it.
     // The inner run is the SAME LENGTH as the opening one, so only the info string can decide it.
     // A shorter inner run would be refused on length alone and would prove nothing about `bare`.
     const { kept } = classify(LINES);
@@ -546,8 +544,8 @@ describe("phi-scan parses its own override log the way the pattern did, minus tw
     // The control in the other direction, so this is not just "nothing ever closes". BOTH arms are
     // here: a run trailed by a space and a run trailed by a TAB are each bare, each close, and the
     // entries after them are live again. The tab arm was unpinned when this case was first written
-    // and dropping it passed the whole suite, which is exactly how a fail-open branch gets removed
-    // by a later maintainer who ran the tests.
+    // and dropping it passed the whole suite, which is how a load-bearing branch gets removed by a
+    // later maintainer who ran the tests.
     for (const [name, trailer] of [
       ["space", " "],
       ["tab", "\t"],

@@ -77,7 +77,9 @@ that holds only from where a cleanup is called is not a bound. There is nothing 
    root-level entry for a file named with a single space.
 
 Both narrowings are fail-closed **as narrowings of `overrideLogPaths`**: a dropped entry makes
-`--allow-fixture` **refuse** (exit 2), which scans the target rather than exempting it.
+`--allow-fixture` **refuse the run** (exit 2), so the target is not exempted. Exit 2 does not scan
+it either, and saying so was a third wording this record had to correct: the run stops and says
+nothing about the corpus, which is a refusal rather than a clearance.
 
 ## 🛑 But `fenceRun` has no safe direction, and two passes were spent learning it
 
@@ -179,6 +181,7 @@ two files:
 | all-whitespace narrowing reverted (base behaviour) | 1 |
 | `isSpaceCode` drops `NBSP` | **5** |
 | **`bare` computed over all of `\s` (the refuter's pass-1 defect)** | **1** |
+| **`bare` drops its tab arm (the refuter's pass-2 defect)** | **1** |
 | **`rawRecordMode` accepts UPPERCASE hex** | **0** |
 
 The override-log parser is driven as a **membership oracle**: `--allow-fixture` is repeatable and

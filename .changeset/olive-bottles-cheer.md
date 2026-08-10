@@ -19,7 +19,8 @@ is deleted rather than worded again. A scrub was available and refused once more
 only from where a cleanup is called is not a bound.
 
 `overrideLogPaths` is the one parser deliberately narrower than the pattern it replaces, in the
-fail-closed direction, because a dropped entry makes `--allow-fixture` refuse and therefore scan.
+fail-closed direction, because a dropped entry makes `--allow-fixture` refuse the run at exit 2
+rather than exempt the target.
 It is fence-aware, so the committed `### <path>` template inside the "Format" block is no longer an
 allow entry, and an all-whitespace heading no longer registers a lone space as a path. The template
 entry's inertness was re-measured rather than inherited and holds twice over: neither gating route

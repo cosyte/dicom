@@ -1047,10 +1047,9 @@ interface Fence {
    *
    * 🛑 SPACE AND TAB, NOT `isSpaceCode`, AND BOTH ARMS ARE LOAD-BEARING. CommonMark 0.31.2 §4.5:
    * a closing fence "may be followed only by spaces or tabs, which are ignored." Anything else is
-   * an info string and does not close. Measured on a draft that used the whole of `\s`: a closing
-   * run trailed by an invisible `NBSP` closed the block and a heading below it became a live allow
-   * entry. Measured on a draft with the tab arm dropped: the same, with a tab. Both are pinned in
-   * `test/scripts/phi-scan-matchers.test.ts`.
+   * an info string and does not close. Each arm has been wrong once and each is pinned by its own
+   * case in `test/scripts/phi-scan-matchers.test.ts`, in both directions. What a wrong answer here
+   * does is on `fenceRun` below; it is not a thing this field can be reasoned about locally.
    */
   bare: boolean;
 }
