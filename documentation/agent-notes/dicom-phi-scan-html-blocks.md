@@ -46,7 +46,7 @@ start condition is a complete open or closing tag alone on a line, and section 4
 does not have and cannot acquire without modelling every other leaf block, and **approximating it is
 the parity trap below**: a guess that a line is not in a paragraph opens blocks CommonMark does not,
 which moves entries in both directions at once. So it is scoped, named on the function, and pinned
-by a test with both of its arms:
+by a test, arm by arm, with no count of them written:
 
 | log                                            | CommonMark         | base `8139687`  | here            |
 | ---------------------------------------------- | ------------------ | --------------- | --------------- |
@@ -63,7 +63,13 @@ there that runs to the end of the document; neither tree models that. But the co
 it is read here, and it swallows the fence delimiter that used to hide the heading, so **this tree
 exempts at exit 0 a target base refused at exit 2.** The CLASS was disclosed, the INSTANCE was not,
 and that gap is the same shape `#116` disclosed against itself. It is now a corpus row
-(`condition-seven-widened`) and a test arm, and it carries a `DICOM-RESIDUALS` line.
+(`condition-seven-widened`) and a test arm.
+
+**🛑 AND IT FALSIFIES THE `DICOM-RESIDUALS` LINE THAT EXISTS, WHICH THIS SUBMODULE CANNOT EDIT.** That
+line reads that the class is `PRE-EXISTING` on the `LF` form and that `#116` widened its reach BY ONE
+INPUT, the lone `CR` form. This input is pure `LF` and moves base exit 2 to head exit 0, so both
+halves are now wrong. **The correction is OWED to the meta-repo and is named here rather than
+asserted as already made.**
 
 ## 🛑 NO DIRECTION IS CLAIMED, AND THE DISJOINTNESS ROW IS WHY
 
@@ -92,22 +98,37 @@ defended as safer. What decides it is the document.
 
 ## The measurement
 
-`scripts/measure-phi-scan-html-blocks.ts` (shipped, `pnpm measure:phi-scan-html-blocks`), head
-against `8139687` restored **by file copy, never `git checkout`**:
+`scripts/measure-phi-scan-html-blocks.ts` (shipped, `pnpm measure:phi-scan-html-blocks`) reads the
+entry sets of one or two `phi-scan.ts` PATHS, so nothing here touches the working tree and a base is
+restored **by file copy, never `git checkout`**.
 
-| log                | head          | base `8139687`                   | relation      |
-| ------------------ | ------------- | -------------------------------- | ------------- |
-| `committed`        | `{}`          | `{}`                             | equal, the anchor |
-| `comment`          | `{visible}`   | **`{commented, visible}`**       | a-subset-of-b |
-| `comment-lone-cr`  | `{visible}`   | **`{commented, visible}`**       | a-subset-of-b |
-| `div`              | `{after}`     | **`{after, in-div, still-in-div}`** | a-subset-of-b |
-| `pre`              | `{after}`     | **`{after, in-pre, still-in-pre}`** | a-subset-of-b |
-| `one-line-comment` | `{after}`     | `{after}`                        | equal         |
-| `fence-in-comment` | `{after}`     | `{}`                             | b-subset-of-a |
-| `parity`           | `{alpha}`     | `{bravo}`                        | **disjoint**  |
-| `comment-in-fence` | `{after}`     | `{after}`                        | equal         |
-| `indent-four`      | `{after}`     | `{after}`                        | equal         |
-| `condition-seven`  | `{under-span}` | `{under-span}`                  | equal         |
+**🛑 THE PER-LOG GRID IS NOT TRANSCRIBED HERE, AND THAT IS THE REMEDY FOR A DEFECT A GATE CAUGHT IN
+THIS FILE.** A hand-copied grid stated eleven rows while the commit carrying it grew the corpus to
+twelve, and the row it omitted was the only one showing the leak direction. That is the item's
+`AN INHERITED FIGURE IS NOT A RE-MEASUREMENT`, inside the remedy for a different trap, which is the
+shape `#109` paid for. The instrument ships, so the grid is **one command** and cannot go stale:
+
+```
+pnpm measure:phi-scan-html-blocks scripts/phi-scan.ts <a copy of base>
+```
+
+What is quoted is its SUMMARY, re-run against `8139687` on the tree that carries this sentence:
+
+```
+logs where the two scripts differ: 7 of 12
+  comment: a-subset-of-b
+  comment-lone-cr: a-subset-of-b
+  div: a-subset-of-b
+  pre: a-subset-of-b
+  fence-in-comment: b-subset-of-a
+  parity: disjoint
+  condition-seven-widened: b-subset-of-a
+controls: scanner identity OK, committed-log anchor OK, positive control OK
+```
+
+Two rows carry the whole argument and are named rather than left to be read off: **`parity`** is
+`{alpha}` against `{bravo}`, and **`condition-seven-widened`** is `{widened}` against `{}`. The
+`committed` anchor reads `{}` on both.
 
 **🛑 THE `relate` HELPER DIFFERS FROM THE SIBLING LINE-ENDINGS INSTRUMENT BY ONE ORDERING, AND THE
 DIFFERENCE IS THE POINT.** An empty set shares nothing with anything **and** is a subset of
@@ -146,9 +167,9 @@ sentence narrowed, because the unguarded direction is the leak direction: a name
 shipped table means that tag starts no block, so the heading under it is a live allow entry.
 
 **No exhaustiveness is claimed in the other direction.** An over-wide table is caught only for
-NAMED controls: `divx` and `paramx`, which are prefixes of listed names and pin the maximal-munch
-read, plus `source`, `canvas` and `video`, which are unrelated names a table grown by one entry
-would fail on. A method plus a named list, asserting no completeness.
+NAMED controls: `divx` and `paramx`, each a LISTED NAME FOLLOWED BY MORE tag-name characters, which
+is what pins the maximal-munch read (the listed name is the prefix, not the control), plus `source`,
+`canvas` and `video`, which are unrelated names a table grown by one entry would fail on. A method plus a named list, asserting no completeness.
 
 Both mutants the gate used are now red, re-measured on the remedy rather than argued:
 
@@ -201,9 +222,12 @@ caught.
   `U+2029`), and **section 4.5's backtick-info-string opener** is untouched. Both `PRE-EXISTING`.
 - **🔴 AND `tripleHashValue` ADMITS IN THE OTHER DIRECTION TOO, WHICH WAS UNNAMED UNTIL A GATE NAMED
   IT.** It separates the `###` run from the text with `isSpaceCode`, the whole of `\s`, where
-  section 4.2 allows only a space or a tab. So `###` followed by `U+00A0`, `U+3000`, `U+2000` to
-  `U+200A`, `U+000B`, `U+000C` or `U+FEFF` renders as a PARAGRAPH and is a **live allow entry on
-  both trees**. That is the exempting direction, it is `PRE-EXISTING` (head equals base), and it is
+  section 4.2 allows only a space or a tab. So a heading whose separator is any other whitespace
+  renders as a PARAGRAPH and is a **live allow entry on both trees**. **The enumeration that stood
+  here is DELETED rather than completed**: it named six such characters and a gate measured three
+  more, and this lineage's rule is that a list corrected once is cut, not extended. The predicate is
+  the whole of `\s`, which is complete and does not need an illustration. That is the exempting
+  direction, it is `PRE-EXISTING` (head equals base), and it is
   a `DICOM-RESIDUALS` line rather than this slice's to close: it is a further selection change on
   the heading recognizer, and the existing cases assert the current answer for an `NBSP` separator
   deliberately.

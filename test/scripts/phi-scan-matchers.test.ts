@@ -774,8 +774,9 @@ describe("phi-scan suppresses a heading inside a CommonMark section 4.6 HTML blo
     // NAMED controls, not a proof that the tables hold nothing else. Each is a name that section
     // 4.6 lists in neither condition, written without a `>` so it is not a complete tag either and
     // condition 7 cannot reach it: CommonMark starts no block, and the heading below it is real.
-    // The first two are also PREFIXES of listed names, which is what pins the maximal-munch read;
-    // the rest are unrelated names, which is what a table grown by one entry would fail on.
+    // The first two are each a LISTED NAME FOLLOWED BY MORE tag-name characters, which is what pins
+    // the maximal-munch read: the listed name is the prefix, not the control. The rest are unrelated
+    // names, which is what a table grown by one entry would fail on.
     const unlisted = ["divx", "paramx", "source", "canvas", "video"];
     const lines = ["# log", ""];
     // Kind 1 ends on the line carrying its end tag and NOT at a blank line, so each block is closed
