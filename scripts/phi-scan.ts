@@ -462,12 +462,13 @@ function* base64Runs(text: string): Generator<string> {
  * enumerated on that function, and a dropped entry REFUSES a `--allow-fixture` bypass at exit 2,
  * so the target is not exempted.
  *
- * 🔴 AND THE CONFIG PARSERS ARE NOT ALL PINNED TO THE SAME STANDARD AS THE SCAN ROUTE. Two shapes
- * are unreachable from outside this script and no test claims them: `splitLines`'s `CRLF` handling
- * (both callers trim, so a `CR`-blind split is invisible) and two `rawRecordMode` shapes git cannot
- * emit. Each is named on its own function together with the mutant that passes the suite. They are
+ * 🔴 AND THE CONFIG PARSERS ARE NOT ALL PINNED TO THE SAME STANDARD AS THE SCAN ROUTE. Two
+ * `rawRecordMode` shapes git cannot emit are unreachable from outside this script and no test
+ * claims them; they are named on that function, with the mutant that passes the suite. They are
  * still written the pattern's way, because a predicate keyed to what today's caller happens to do
  * afterwards is a bound that holds only from the call site - the shape this file refuses elsewhere.
+ * `splitLines`'s `CRLF` handling was listed here as a third such shape and that was WRONG: it is
+ * observable through `overrideLogPaths`, measured, and claimed by a test. See that function.
  */
 function isDigitCode(code: number): boolean {
   return code >= 0x30 && code <= 0x39;
@@ -590,14 +591,26 @@ function isAllDigits(text: string): boolean {
  * `i - 1` can never already belong to the previous separator, because a separator ends on its `LF`
  * and the character before this `LF` would then be that `LF` rather than a `CR`.
  *
- * 🔴 THE `CRLF` HALF IS NOT OBSERVABLE THROUGH EITHER OF TODAY'S CALLERS, AND NO TEST CLAIMS IT IS.
- * `loadAllowList` runs `lineRaw.trim()` and `tripleHashValue` trims trailing whitespace, so a `CR`
- * left on the end of a line by a `CR`-blind split is eaten by both before anything reads it - a
- * mutant that drops the `i - 1` test passes the whole suite. It is written the pattern's way
- * regardless, for the reason `isSpaceCode` above gives at length: keying on what today's callers
- * happen to do afterwards is a bound that holds only from the call site, and it goes wrong silently
- * the first time a caller stops trimming. What IS observable, and IS pinned, is that a LONE `CR` is
- * not a separator.
+ * 🛑 THE `CRLF` HALF IS LOAD-BEARING, AND A DISCLOSURE STOOD HERE SAYING IT WAS UNOBSERVABLE
+ * THROUGH EITHER CALLER AND CLAIMED BY NO TEST. That was WRONG, and wrong in the way this file
+ * warns about elsewhere: it reasoned from what the callers do to a line AFTERWARDS. `loadAllowList`
+ * trims and `tripleHashValue` trims, but `overrideLogPaths` hands the RAW line to `fenceRun` FIRST,
+ * and `bare` there admits a space or a tab and nothing else. So on an override log written with
+ * `CRLF`, a `CR`-blind split leaves a `CR` after a closing run, the run is read as an info string
+ * rather than as a close, the block never ends, and every entry below it is dropped.
+ *
+ * Measured on one such log, entry live below a fenced template: this file exits 0 with the entry
+ * honoured, the `CR`-blind mutant exits 2 having dropped it, and with the SAME log written `LF` the
+ * two agree. `test/scripts/phi-scan-matchers.test.ts` claims it, in both directions and against the
+ * `LF` arm. That a LONE `CR` is not a separator is pinned there too.
+ *
+ * 🛑 AND NO DIRECTION IS CLAIMED FOR THAT MUTANT. A draft of this paragraph argued it was
+ * fail-closed, because a `CR` can only prevent a close and never cause one; that is the parity
+ * fallacy `fenceRun` below was refused twice for, and it is now falsified a third time BY
+ * MEASUREMENT. On a log whose lines are `CRLF` except one opening fence, the entry sets are
+ * `{decoy}` here and `{smuggled}` for the mutant - disjoint, not nested - and the mutant EXEMPTS at
+ * exit 0 a target this file refuses at exit 2. A prevented close CAN invert later boundaries, so
+ * a wrong answer moves entries in BOTH directions. The argument is DELETED, not narrowed.
  */
 function splitLines(text: string): string[] {
   const out: string[] = [];
@@ -1067,8 +1080,8 @@ interface Fence {
  *
  * What is left is not a safety heuristic but a specification: this follows CommonMark 0.31.2 §4.5,
  * and where it is measured to diverge that divergence is written down rather than argued to be
- * harmless. `documentation/agent-notes/dicom-phi-scan-config-parsers.md` carries the one known
- * divergence. This file does not render markdown and none of this is here because it does; it is
+ * harmless. `documentation/agent-notes/dicom-phi-scan-config-parsers.md` carries the known
+ * divergences, and carries no count of them. This file does not render markdown and none of this is here because it does; it is
  * here because `overrideLogPaths` has to agree with what a human reviewing that file sees.
  */
 function fenceRun(line: string): Fence | null {

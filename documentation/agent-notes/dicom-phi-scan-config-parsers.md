@@ -213,10 +213,11 @@ of a candidate set the parser produced. Both directions are asked separately.
 
 ## 🔴 Not closed, and named rather than claimed away
 
-- **Two shapes are unreachable from outside the script and NO TEST CLAIMS THEM.** `splitLines`'s
-  `CRLF` handling is invisible because both callers `trim()`, and a `CR`-blind mutant passes the
-  whole suite; `rawRecordMode` cannot be shown an uppercase-hex sha or trailing bytes after the
-  status, because git does not emit either, and mutants widening both pass. **A first draft of this
+- **One shape is unreachable from outside the script and NO TEST CLAIMS IT.** `rawRecordMode`
+  cannot be shown an uppercase-hex sha or trailing bytes after the status, because git does not emit
+  either, and mutants widening both pass. **`splitLines`'s `CRLF` handling was named here as a
+  second such shape and that was WRONG** - it is observable through `overrideLogPaths`, and the
+  section below closes it. **A first draft of this
   slice's JSDoc claimed an exhaustive differential for each. Both sentences were DELETED** rather
   than reworded, on this repo's own rule that a disclosure naming a test must name one that exists.
   What does pin `rawRecordMode` was measured instead: a mutant that never parses a record reds **14**
@@ -231,3 +232,93 @@ of a candidate set the parser produced. Both directions are asked separately.
   `contextPath` and `attributes[].tag`; a flood within one recognizer entry still burying a later
   hit; the never-draining-reader wait and `run-script.ts`'s 1 MiB `maxBuffer`; the exit code still
   cannot see an unread tail. **This slice measures nothing about the heap.**
+
+## 🛑 The `CRLF` half WAS observable, and the disclosure saying it was not is DELETED
+
+`#113` shipped `splitLines` with a 🔴 disclosure on it: the `CRLF` half was unobservable through
+either caller and claimed by no test, because `loadAllowList` trims and `tripleHashValue` trims.
+Those two premises are true. **The conclusion is FALSE, and false in exactly the way this file's own
+`isSpaceCode` paragraph warns about** - it reasoned from what a caller does to a line AFTERWARDS,
+which is the "bound that holds only from the call site" shape the slice was otherwise built to
+refuse.
+
+`overrideLogPaths` hands the RAW line to `fenceRun` BEFORE anything trims it, and `bare` there
+admits a space or a tab and nothing else (CommonMark 0.31.2 §4.5, the rule `#113`'s own two refuter
+passes were spent on). So on an override log written with `CRLF`, a `CR`-blind split leaves a `CR`
+after the closing run, the run is read as an info string rather than as a close, the block never
+ends, and every entry below it is dropped.
+
+**Measured on one log - a fenced template, two live entries below it - both `--allow-fixture`
+directions asked on each arm:**
+
+| arm                            | the two entries below the fence | the fenced template |
+| ------------------------------ | ------------------------------- | ------------------- |
+| shipped, `CRLF` log            | exit 0, both honoured           | exit 2, refused     |
+| `CR`-blind mutant, `CRLF` log  | **exit 2, both dropped**        | exit 2, refused     |
+| shipped AND mutant, `LF` log   | exit 0, both honoured           | exit 2, refused     |
+
+The `LF` row is what makes this a fact about the line ending rather than about the fence rules
+`#113` already pinned, and the template column is the other direction, so a parser that made
+everything below an entry fails it too. The test runs both arms before asserting either, so a mutant
+reports both in one failure (`{ crlf: Set{2}, lf: Set{} }`) instead of stopping at the first.
+
+## 🛑 NO DIRECTION IS CLAIMED FOR THAT MUTANT, and the draft that claimed one was refuted BY MEASUREMENT
+
+A draft of the section above argued the `CR`-blind mutant was **fail-CLOSED** - a `CR` can only
+prevent a close and never cause one, `tripleHashValue` trims one off a heading, therefore the
+mutant's entry set is a strict SUBSET and its cost is a refused `--allow-fixture` rather than an
+exempted target. **That is the parity fallacy, it is the THIRD attempt at a fail-safe direction on
+`fenceRun` in this lineage, and the gate falsified it with an input.** On a log whose lines are all
+`CRLF` except one opening fence:
+
+| target                   | shipped                    | `CR`-blind mutant             |
+| ------------------------ | -------------------------- | ----------------------------- |
+| `--allow-fixture decoy`    | **exit 0, exempted**       | exit 2, refused               |
+| `--allow-fixture smuggled` | exit 2, refused            | **exit 0, EXEMPTED**          |
+
+The two entry sets are `{decoy}` and `{smuggled}` - **disjoint, not nested** - and the mutant
+exempts a target the shipped script refuses. A prevented close CAN invert later boundaries, which
+is what "fence state is PARITY" means and what the `fenceRun` section above already measured. **The
+argument is DELETED, not narrowed.** The branch is claimed by a test; nothing needs a direction.
+
+**Mutation figure, re-measured on this slice's own head rather than inherited** (a figure
+without its sha is not a fact, and the base moves): the `CR`-blind mutant (dropping the `i - 1`
+test) reds **1 of 1,369 cases across all 75 test files**, the 1 being the new case. The run is
+`1 failed | 1,367 passed | 1 todo`; the **`todo` is what makes those three numerals add up**, and
+the shipped tree reads `1,368 passed | 1 todo`. On base `fd0b92a`, the same mutant over the base
+suite reds **0 of 1,368**, so `#113`'s "passes the whole suite" is re-measured as **0 before, 1
+after** rather than restated.
+
+**This slice changes no behaviour.** Every changed line in `scripts/phi-scan.ts` is a comment line -
+checked with the TypeScript transpiler rather than by eye, `removeComments` output byte-identical on
+base and head - so the gate's exit codes, hits and totals are what `fd0b92a` produced.
+
+**🔴 THE CARRIER COUNT IS SCOPED TO THIS SUBMODULE, AND THE SCOPING IS THE POINT.** A draft said the
+false disclosure had "exactly four carriers"; the sweep that produced that numeral never left
+`/workspace/dicom`, so the numeral asserted an exhaustiveness it had not measured. **Four carriers
+inside this repository** are corrected: two in `scripts/phi-scan.ts` (the config-parser header list
+and the `splitLines` JSDoc), one in `test/scripts/phi-scan-matchers.test.ts`, and the bullet above.
+The sweep was `-a` and newline-folded, positive control
+`test/integration/fatal-diagnostic-surface.test.ts` - **read whole, 84,556 bytes carrying 4 NULs** -
+so the zero elsewhere is one the sweep could have broken. **TWO MORE CARRIERS ARE LIVE IN THE
+META-REPO AND ARE NOT THIS PR'S TO EDIT**, both now false by this slice's measurement:
+`operations/BACKLOG.md`'s `DICOM-RESIDUALS` line and
+`documentation/repos/dicom/phi-scan-value-excerpt.md`, each still reading _"`splitLines`'s CRLF half
+is claimed by no test (both callers `trim()`, so a `CR`-blind mutant passes the suite)"_. They are
+handed to the meta-repo, named rather than left to read as current.
+
+**Unchanged by this slice, in either direction:** `hits` unbounded as an array; the relocation,
+`contextPath` and `attributes[].tag`; a flood within one recognizer entry still burying a later hit;
+the never-draining-reader wait and `run-script.ts`'s 1 MiB `maxBuffer`; the `rawRecordMode` shapes
+git cannot emit. **It measures nothing about the heap and nothing about the corpus.**
+
+**🔴 AND ONE THE GATE RAISED THAT IS `PRE-EXISTING` AND IS NOT RE-MEASURED HERE.** `splitLines`
+mirrors `/\r?\n/`, so a LONE `CR` is not a separator; CommonMark counts one as a line ending, which
+makes `overrideLogPaths` diverge on a log carrying one, in the direction that admits an entry a
+human reading the rendered log does not see. The refuter measured it on base `fd0b92a` as well as on
+this head, so it is **not this slice's to carry** (ADR 0016 rule 2: a backlog line, never absorbed
+into a slice) - and **the figure is the gate's, not re-taken here**, because grounding it needs a
+CommonMark oracle this repository does not vendor. It is handed to the meta-repo beside the open
+§4.5 backtick-info-string line, which is its sibling. **Do not read the lone-`CR` pin in
+`test/scripts/phi-scan-matchers.test.ts` as clearing it:** that pin says our split agrees with the
+PATTERN it replaced, which is a different claim from agreeing with CommonMark.

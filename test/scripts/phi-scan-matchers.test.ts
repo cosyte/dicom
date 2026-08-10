@@ -564,6 +564,49 @@ describe("phi-scan parses its own override log the way the pattern did, minus tw
     expect(missingFromOverrideLog(root, ["fenced-template"])).toEqual(new Set(["fenced-template"]));
   });
 
+  /**
+   * 🛑 THE `CRLF` HALF OF `splitLines` IS LOAD-BEARING HERE, AND THE DISCLOSURE SAYING IT WAS
+   * UNOBSERVABLE WAS WRONG. That disclosure reasoned from the two trims - `loadAllowList`'s and
+   * `tripleHashValue`'s - and missed that THIS parser hands the RAW line to `fenceRun`, whose
+   * `bare` admits a space or a tab and nothing else. On a `CRLF` log a `CR`-blind split leaves a
+   * `CR` after the closing run, which makes it an info string rather than a close, so the block
+   * never ends and every entry below the template is dropped.
+   *
+   * The line ending is the only thing that moves between the two arms, so the `LF` arm is what
+   * says this case is about `CRLF` and not about the fence rules the cases above already pin.
+   * Both directions are asked on each log: "everything below is an entry" and "nothing is" are
+   * each refused, so neither a fence-blind parser nor a never-closing one passes.
+   */
+  it("closes a fence whose line ended CRLF, so an entry below the template is still live", () => {
+    const entries = ["crlf-entry-one", "crlf-entry-two"];
+    const lines = [
+      "# log",
+      "",
+      "```",
+      "### fenced-template",
+      "```",
+      "",
+      ...entries.map((e) => `### ${e}`),
+      "",
+    ];
+    // Both arms are RUN before either is asserted, so a mutant that breaks one reports what the
+    // other did in the same failure. Asserting inside the loop would stop at the `CRLF` arm and
+    // leave the control that makes it interpretable unexercised.
+    const measured = (["\r\n", "\n"] as const).map((eol) => {
+      const root = makeConfigRepo({ overrides: lines.join(eol) });
+      return {
+        below: missingFromOverrideLog(root, entries),
+        template: missingFromOverrideLog(root, ["fenced-template"]),
+      };
+    });
+    const [crlf, lf] = measured as [(typeof measured)[0], (typeof measured)[0]];
+    expect({ crlf: crlf.below, lf: lf.below }).toEqual({ crlf: new Set(), lf: new Set() });
+    expect({ crlf: crlf.template, lf: lf.template }).toEqual({
+      crlf: new Set(["fenced-template"]),
+      lf: new Set(["fenced-template"]),
+    });
+  });
+
   it("does not register the lone space an all-whitespace heading used to capture", () => {
     const { cut } = classify(LINES);
     // Non-vacuity: the pattern really does capture something on these lines. If it stopped doing
@@ -601,12 +644,12 @@ describe("phi-scan splits its allow-list into lines the way the pattern did", ()
    * likely to get wrong, and it is observable here because a name with a stray `CR` in it does not
    * equal the name in the corpus and therefore does not excuse it.
    *
-   * 🛑 THE `CRLF` HALF IS NOT OBSERVABLE AND THIS CASE DOES NOT CLAIM IT IS. Both callers trim, so
-   * a `CR` a `CR`-blind split would leave behind is eaten before it reaches anything - measured, a
-   * mutant dropping that test passes every case in this file. The `CRLF` lines below are here so
-   * the shapes are all present, not as evidence about them; the assertion that bites is the lone
-   * `CR`, and a mutant that splits on one turns this case red. The reason the script writes it the
-   * pattern's way anyway is on `splitLines`.
+   * 🛑 THIS CASE STILL DOES NOT CLAIM THE `CRLF` HALF, AND THE REASON IT USED TO GIVE WAS WRONG.
+   * It said the half was unobservable through either caller; `overrideLogPaths` does not trim
+   * before `fenceRun`, and the override-log case above claims it there. What holds is only the
+   * narrower thing: `loadAllowList` trims, so the `CRLF` lines below are here to have the shapes
+   * present, not as evidence about them. The assertion that bites here is the lone `CR`, and a
+   * mutant that splits on one turns this case red.
    */
   it("agrees with the pattern on every line-ending shape, measured by which names are excused", () => {
     const names = ["ALFA", "BRAVO", "CHARLIE", "DELTA", "ECHO", "FOXTROT"].map(
