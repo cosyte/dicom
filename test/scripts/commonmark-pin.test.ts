@@ -3,9 +3,10 @@
  *
  * `scripts/phi-scan.ts` parses `phi-scan-overrides.md` because a `### <path>` heading in it is what
  * lets `--allow-fixture` exempt a PHI scan target. That parser's whole job is to agree with the
- * document a human reviewer sees rendered, so three of its rules are CommonMark's and not ours:
- * what a LINE is (section 2.1), when a fenced code block opens and closes (section 4.5), and that
- * a heading can appear immediately after a paragraph line (section 4.2).
+ * document a human reviewer sees rendered, so its rules are CommonMark's and not ours, and no count
+ * of them is written here: what a LINE and a BLANK LINE are (section 2.1), that a heading can
+ * appear immediately after a paragraph line (section 4.2), when a fenced code block opens and
+ * closes (section 4.5), and which lines an HTML block covers (section 4.6).
  *
  * 🛑 EVERY ONE OF THOSE WAS AN ASSERTED SECTION NUMBER UNTIL THIS FILE EXISTED, AND THIS REPOSITORY
  * HAS PAID FOR THAT SHAPE BEFORE. `#80` cited PS3.5 section 7.5 twice when the sentence is in
@@ -32,6 +33,8 @@ import { describe, it, expect } from "vitest";
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+
+import { htmlBlockConditions } from "../helpers/commonmark-spec.js";
 
 const VENDOR = join(import.meta.dirname, "..", "..", "vendor", "commonmark", "spec");
 
@@ -181,6 +184,68 @@ describe("the vendored CommonMark spec is a precondition, not a citation", () =>
     expect(`${fence.number} ${fence.title}`).toBe("4.5 Fenced code blocks");
     const atx = theSectionCarrying("and they can interrupt paragraphs");
     expect(`${atx.number} ${atx.title}`).toBe("4.2 ATX headings");
+  });
+
+  it("puts HTML blocks in section 4.6, and states the conditions phi-scan implements", () => {
+    // `overrideLogPaths` models section 4.6's HTML blocks because one of them suppresses a heading
+    // exactly as a fenced code block does, and an `<!-- -->` log suppresses it INVISIBLY. Each
+    // sentence the implementation leans on is located here rather than asserted in a comment.
+    const opener = theSectionCarrying(
+      "There are seven kinds of [HTML block], which can be defined by their start and end conditions.",
+    );
+    expect(`${opener.number} ${opener.title}`).toBe("4.6 HTML blocks");
+
+    // The same-line close, which is why `overrideLogPaths` asks the end condition of a start line.
+    const sameLine = theSectionCarrying(
+      "If the first line meets both the [start condition] and the [end condition], the block will " +
+        "contain just that line.",
+    );
+    expect(`${sameLine.number} ${sameLine.title}`).toBe("4.6 HTML blocks");
+
+    // Why nothing inside an open HTML block is looked at: not a fence, not a heading, not a start.
+    const inert = theSectionCarrying(
+      "This means any HTML **within an HTML block** that might otherwise be recognised as a start " +
+        "condition will be ignored by the parser and passed through as-is, without changing the " +
+        "parser's state.",
+    );
+    expect(`${inert.number} ${inert.title}`).toBe("4.6 HTML blocks");
+
+    // 🛑 THE SCOPING SENTENCE. Kind 7 is the one `phi-scan` does not model, and this is the clause
+    // that says modelling it needs paragraph state: the divergence is scoped against the document
+    // rather than against a preference.
+    const seven = theSectionCarrying(
+      "All types of [HTML blocks] except type 7 may interrupt a paragraph. Blocks of type 7 may " +
+        "not interrupt a paragraph.",
+    );
+    expect(`${seven.number} ${seven.title}`).toBe("4.6 HTML blocks");
+
+    // `isBlankLine` ends a kind-6 block, and the definition is in 2.1 rather than in 4.6.
+    const blank = theSectionCarrying(
+      "A line containing no characters, or a line containing only spaces (`U+0020`) or tabs " +
+        "(`U+0009`), is called a [blank line](@).",
+    );
+    expect(`${blank.number} ${blank.title}`).toBe("2.1 Characters and lines");
+  });
+
+  it("carries the two tag lists section 4.6 closes over, and they are read from it", () => {
+    // 🛑 THE TABLES IN `scripts/phi-scan.ts` ARE CHECKED AGAINST THESE, BEHAVIOURALLY, IN
+    // `test/scripts/phi-scan-matchers.test.ts`: one `--allow-fixture` per name through the
+    // membership oracle. What is claimed HERE is only that the reader resolves to section 4.6 and
+    // produces two non-vacuous, disjoint lists. NO COUNT IS WRITTEN, in this file or in the script.
+    const c = htmlBlockConditions();
+    expect(c.section).toBe("4.6");
+    // Non-vacuity, and the property that separates the two conditions: a literal-content tag is
+    // never a condition-6 tag, which is what lets `htmlBlockCloses` build kind 1's end tags from
+    // the first list without asking whether the second holds any of them.
+    expect(c.literalTags).toEqual(["pre", "script", "style", "textarea"]);
+    expect(c.blockTags.length).toBeGreaterThan(50);
+    expect(c.blockTags.filter((t) => c.literalTags.includes(t))).toEqual([]);
+    // Spot checks in both directions, chosen because the behavioural cases use exactly these.
+    expect(c.blockTags).toContain("div");
+    expect(c.blockTags).toContain("p");
+    expect(c.blockTags).not.toContain("span");
+    // Every name is a plain ASCII tag name. A span that had swallowed prose would fail here.
+    for (const t of c.blockTags) expect(t).toMatch(/^[a-z][a-z0-9]*$/);
   });
 
   it("refuses a sentence that is absent, and one that is not unique", () => {

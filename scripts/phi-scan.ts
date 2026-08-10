@@ -458,10 +458,10 @@ function* base64Runs(text: string): Generator<string> {
  * `test/scripts/phi-scan-matchers.test.ts`.
  *
  * 🔴 THE ONE PLACE THAT IS DELIBERATELY NOT AN EQUIVALENCE IS `overrideLogPaths`. Its departures
- * from the pattern it replaces are enumerated on that function. Two of them are narrowings, and a
- * dropped entry REFUSES a `--allow-fixture` bypass at exit 2, so the target is not exempted. The
- * third is the LINE DEFINITION, which is not a narrowing at all and has no direction: see
- * `splitCommonMarkLines`.
+ * from the pattern it replaces are enumerated on that function, and NO COUNT OF THEM IS WRITTEN
+ * HERE. Some are narrowings, where a dropped entry REFUSES a `--allow-fixture` bypass at exit 2 so
+ * the target is not exempted. The rest are BLOCK STRUCTURE, which has no direction at all, because
+ * a block boundary is parity: see `splitCommonMarkLines` and `htmlBlockStart`.
  *
  * 🔴 AND THE CONFIG PARSERS ARE NOT ALL PINNED TO THE SAME STANDARD AS THE SCAN ROUTE. Two
  * `rawRecordMode` shapes git cannot emit are unreachable from outside this script and no test
@@ -1160,11 +1160,253 @@ function tripleHashValue(line: string): string | null {
   return line.slice(start, end);
 }
 
+/** The kinds of CommonMark 0.31.2 section 4.6 HTML block this parser models. */
+type HtmlBlockKind = 1 | 2 | 3 | 4 | 5 | 6;
+
+/**
+ * Start condition 1's tag names, which are also its end tags.
+ *
+ * Section 4.6 spells the end condition "line contains an end tag `</pre>`, `</script>`, `</style>`,
+ * or `</textarea>` (case-insensitive; it need not match the start tag)", so the same set answers
+ * both halves and `htmlBlockCloses` builds the end tags from it rather than repeating them.
+ */
+const HTML_BLOCK_LITERAL_TAGS: ReadonlySet<string> = new Set([
+  "pre",
+  "script",
+  "style",
+  "textarea",
+]);
+
+/**
+ * Start condition 6's tag names, verbatim from CommonMark 0.31.2 section 4.6.
+ *
+ * 🛑 MEMBERSHIP IN A CLOSED TABLE, WHICH IS THE ONLY SHAPE THIS REPOSITORY TRUSTS FOR A NAME, and
+ * NO COUNT OF IT IS WRITTEN ANYWHERE. `test/helpers/commonmark-spec.ts` reads the list out of the
+ * pinned document and `test/scripts/phi-scan-matchers.test.ts` drives one `--allow-fixture` run per
+ * name through the membership oracle, so the table is checked against the spec rather than against
+ * whoever typed it. The controls for the other direction are `<divx` and `<paramx`, which are a
+ * PREFIX of a listed name and are not listed: CommonMark starts no block on either, and this parser
+ * must still register the heading below them.
+ */
+const HTML_BLOCK_TAGS: ReadonlySet<string> = new Set([
+  "address",
+  "article",
+  "aside",
+  "base",
+  "basefont",
+  "blockquote",
+  "body",
+  "caption",
+  "center",
+  "col",
+  "colgroup",
+  "dd",
+  "details",
+  "dialog",
+  "dir",
+  "div",
+  "dl",
+  "dt",
+  "fieldset",
+  "figcaption",
+  "figure",
+  "footer",
+  "form",
+  "frame",
+  "frameset",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "head",
+  "header",
+  "hr",
+  "html",
+  "iframe",
+  "legend",
+  "li",
+  "link",
+  "main",
+  "menu",
+  "menuitem",
+  "nav",
+  "noframes",
+  "ol",
+  "optgroup",
+  "option",
+  "p",
+  "param",
+  "search",
+  "section",
+  "summary",
+  "table",
+  "tbody",
+  "td",
+  "tfoot",
+  "th",
+  "thead",
+  "title",
+  "tr",
+  "track",
+  "ul",
+]);
+
+/** ASCII case folding, which is the whole of "case-insensitive" in section 4.6. */
+function lowerAsciiCode(code: number): number {
+  return isUpperCode(code) ? code + 0x20 : code;
+}
+
+/** An ASCII alphanumeric, which is every character a tag name in either table is made of. */
+function isTagNameCode(code: number): boolean {
+  return isDigitCode(code) || isUpperCode(code) || (code >= 0x61 && code <= 0x7a);
+}
+
+/**
+ * The MAXIMAL tag-name run at `at`, ASCII-lowercased, or `null` where there is none.
+ *
+ * Maximal rather than per-candidate, and the two agree: section 4.6 requires a listed name followed
+ * by a space, a tab, the end of the line, `>` or `/>`, and none of those five is a tag-name
+ * character, so a listed name that is a strict PREFIX of the run is never followed by one of them.
+ * `<paramx>` therefore starts no block, which is what CommonMark does with it.
+ */
+function tagNameAt(line: string, at: number): { name: string; end: number } | null {
+  let end = at;
+  while (end < line.length && isTagNameCode(line.charCodeAt(end))) end += 1;
+  if (end === at) return null;
+  let name = "";
+  for (let k = at; k < end; k += 1) name += String.fromCharCode(lowerAsciiCode(line.charCodeAt(k)));
+  return { name, end };
+}
+
+/** `line.includes(needle)` with ASCII case folding on both sides. `needle` is already lowercase. */
+function includesFolded(line: string, needle: string): boolean {
+  for (let i = 0; i + needle.length <= line.length; i += 1) {
+    let hit = true;
+    for (let k = 0; k < needle.length; k += 1) {
+      if (lowerAsciiCode(line.charCodeAt(i + k)) !== needle.charCodeAt(k)) {
+        hit = false;
+        break;
+      }
+    }
+    if (hit) return true;
+  }
+  return false;
+}
+
+/**
+ * A blank line: no characters, or only spaces and tabs. CommonMark 0.31.2 section 2.1, which is
+ * where the definition lives rather than in section 4.6, and the number is DERIVED by
+ * `test/scripts/commonmark-pin.test.ts` rather than asserted here.
+ *
+ * It is what ends a kind-6 block, and it is spaces and tabs rather than `isSpaceCode` for the same
+ * reason `Fence.bare` is: an invisible `NBSP` on an otherwise empty line is not a blank line, and
+ * reading one as blank would end the block early.
+ */
+function isBlankLine(line: string): boolean {
+  for (let i = 0; i < line.length; i += 1) {
+    const c = line.charCodeAt(i);
+    if (c !== 0x20 && c !== 0x09) return false;
+  }
+  return true;
+}
+
+/**
+ * Which kind of CommonMark 0.31.2 section 4.6 HTML block `line` starts, or `null` for none.
+ *
+ * 🛑 THIS IS A BLOCK BOUNDARY, SO IT IS PARITY AND THERE IS NO SAFE DIRECTION TO ERR IN. The
+ * argument that there was has been refused three times in this lineage on `fenceRun` and on the
+ * line ending, and it is not written again here. Getting a start or an end wrong does not merely
+ * drop or admit that block's headings; it moves every boundary after it, in both directions at
+ * once. What decides this function is the document, and where it is measured to diverge from the
+ * document that divergence is written down rather than argued harmless:
+ * `documentation/agent-notes/dicom-phi-scan-html-blocks.md`.
+ *
+ * The conditions are tried in the spec's order and the first match wins. Indentation is up to three
+ * SPACES, exactly as `fenceRun` allows: a tab anywhere in the indentation reaches column four or
+ * beyond, where section 4.6 admits no start condition at all.
+ *
+ * 🔴 START CONDITION 7 IS NOT MODELLED, AND THAT IS A SCOPE, NOT AN OVERSIGHT. It needs a complete
+ * open or closing tag AND the knowledge that the line does not interrupt a paragraph ("Blocks of
+ * type 7 may not interrupt a paragraph"), which is paragraph state this parser does not have and
+ * cannot acquire without modelling every other leaf block. Its cost is measured in both directions
+ * and pinned by tests: a heading under `<span>` on its own line stays a LIVE allow entry here where
+ * CommonMark hides it, and a heading under `<span>` on the line after a paragraph line is live in
+ * both. Guessing paragraph state is the parity trap above, so it is scoped rather than approximated.
+ */
+function htmlBlockStart(line: string): HtmlBlockKind | null {
+  let i = 0;
+  while (i < 3 && i < line.length && line.charCodeAt(i) === 0x20) i += 1;
+  if (line.charCodeAt(i) !== 0x3c) return null; // <
+
+  // 1: `<pre`, `<script`, `<style` or `<textarea`, then a space, a tab, `>`, or the end of the line.
+  const literal = tagNameAt(line, i + 1);
+  if (literal !== null && HTML_BLOCK_LITERAL_TAGS.has(literal.name)) {
+    if (literal.end >= line.length) return 1;
+    const c = line.charCodeAt(literal.end);
+    if (c === 0x20 || c === 0x09 || c === 0x3e) return 1;
+  }
+  if (line.startsWith("<!--", i)) return 2;
+  if (line.startsWith("<?", i)) return 3;
+  // 4 before 5 is the spec's order; `<!` followed by an ASCII LETTER never reads `<![CDATA[`.
+  const declaration = line.charCodeAt(i + 2);
+  if (
+    line.startsWith("<!", i) &&
+    (isUpperCode(declaration) || (declaration >= 0x61 && declaration <= 0x7a))
+  ) {
+    return 4;
+  }
+  if (line.startsWith("<![CDATA[", i)) return 5;
+
+  // 6: `<` or `</`, a listed name, then a space, a tab, the end of the line, `>`, or `/>`.
+  const named = tagNameAt(line, line.charCodeAt(i + 1) === 0x2f ? i + 2 : i + 1);
+  if (named !== null && HTML_BLOCK_TAGS.has(named.name)) {
+    if (named.end >= line.length) return 6;
+    const c = line.charCodeAt(named.end);
+    if (c === 0x20 || c === 0x09 || c === 0x3e) return 6;
+    if (c === 0x2f && line.charCodeAt(named.end + 1) === 0x3e) return 6;
+  }
+  return null;
+}
+
+/**
+ * Whether `line` meets kind `kind`'s end condition, per CommonMark 0.31.2 section 4.6.
+ *
+ * Kinds 1 to 5 end ON the line that meets the condition, so that line is part of the block and can
+ * be the start line itself. Kind 6 ends on the line BEFORE a blank line, so the blank line is not
+ * part of it; the caller reads a `true` here as "the block is over", which is the same thing for a
+ * parser that is only asking which lines can hold a heading or a fence, since a blank line holds
+ * neither. No indentation allowance applies to any of these: the condition is what the line
+ * CONTAINS.
+ */
+function htmlBlockCloses(line: string, kind: HtmlBlockKind): boolean {
+  switch (kind) {
+    case 1: {
+      for (const name of HTML_BLOCK_LITERAL_TAGS) {
+        if (includesFolded(line, `</${name}>`)) return true;
+      }
+      return false;
+    }
+    case 2:
+      return line.includes("-->");
+    case 3:
+      return line.includes("?>");
+    case 4:
+      return line.includes(">");
+    case 5:
+      return line.includes("]]>");
+    case 6:
+      return isBlankLine(line);
+  }
+}
+
 /**
  * The paths `phi-scan-overrides.md` logs, as `### <path>` headings OUTSIDE any fenced code block.
  *
- * 🛑 THIS IS THE ONE PARSER HERE THAT IS DELIBERATELY NOT AN EQUIVALENCE. Three departures, of
- * which the first two are NARROWINGS: dropping an entry makes `validateAllowFixtures` REFUSE the
+ * 🛑 THIS IS THE ONE PARSER HERE THAT IS DELIBERATELY NOT AN EQUIVALENCE. The departures are
+ * enumerated below and no count of them is written, here or at the head of this file. The first two
+ * are NARROWINGS: dropping an entry makes `validateAllowFixtures` REFUSE the
  * `--allow-fixture` flag naming it (exit 2), so the target is not exempted. Exit 2 does not scan it
  * either: the run stops before enumeration and says nothing about the corpus, which is a refusal
  * and not a clearance. Admitting an entry that no human wrote is the direction that silently
@@ -1199,6 +1441,16 @@ function tripleHashValue(line: string): string | null {
  *    not that it drops more, it is that this parser's whole job is to agree with the rendered
  *    document a human reviews, and a `CR`-blind split hides a fence OPENER from that review.
  *
+ * 4. **What a BLOCK is.** Fenced code blocks were the whole of the block structure here, so a
+ *    `### <path>` a human sees inside an HTML block was a LIVE allow entry: an `<!-- -->` log
+ *    exempted its target at exit 0, invisibly, since a comment renders as nothing at all. Section
+ *    4.6's HTML blocks are modelled now, kinds 1 to 6 (`htmlBlockStart`, `htmlBlockCloses`). Like
+ *    the line ending this has NO DIRECTION: an HTML block hides a fence delimiter as readily as a
+ *    heading, so entries move both ways, and the relation is printed rather than summarised by
+ *    `scripts/measure-phi-scan-html-blocks.ts`. **Kind 7 is out of scope and its cost is measured,
+ *    not assumed**: `htmlBlockStart` says why, and the record is
+ *    `documentation/agent-notes/dicom-phi-scan-html-blocks.md`.
+ *
  * Everything else is the pattern exactly. `test/scripts/phi-scan-matchers.test.ts` holds the
  * pattern itself as the oracle and drives this parser through `--allow-fixture`, which is
  * repeatable and names every path it could not find an entry for - so one run reports exactly which
@@ -1209,11 +1461,25 @@ function tripleHashValue(line: string): string | null {
 function overrideLogPaths(raw: string): string[] {
   const out: string[] = [];
   let open: Fence | null = null;
+  let html: HtmlBlockKind | null = null;
   for (const line of splitCommonMarkLines(raw)) {
+    // Section 4.6: "any HTML within an HTML block that might otherwise be recognised as a start
+    // condition will be ignored by the parser". So is a fence, and so is a heading.
+    if (html !== null) {
+      if (htmlBlockCloses(line, html)) html = null;
+      continue;
+    }
     const fence = fenceRun(line);
     if (open === null) {
       if (fence !== null) {
         open = fence;
+        continue;
+      }
+      const kind = htmlBlockStart(line);
+      if (kind !== null) {
+        // "If the first line meets both the start condition and the end condition, the block will
+        // contain just that line." Kind 6 cannot: its end condition is about the NEXT line.
+        if (kind === 6 || !htmlBlockCloses(line, kind)) html = kind;
         continue;
       }
       const value = tripleHashValue(line);
