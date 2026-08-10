@@ -23,15 +23,7 @@
  */
 
 import { describe, it, expect, afterAll } from "vitest";
-import {
-  mkdtempSync,
-  mkdirSync,
-  writeFileSync,
-  rmSync,
-  copyFileSync,
-  readFileSync,
-  existsSync,
-} from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, copyFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -392,8 +384,11 @@ function makeConfigRepo(opts: { allowList?: string; overrides?: string }): strin
 function missingFromOverrideLog(root: string, candidates: readonly string[]): Set<string> {
   const args: string[] = [];
   for (const c of candidates) {
-    const abs = join(root, c);
-    if (!existsSync(abs)) writeFileSync(abs, "no tokens here\n", "utf8");
+    // Written unconditionally. An `existsSync` guard here was a check-then-act race that CodeQL
+    // reported as `js/file-system-race` (high), and there is nothing to preserve: every candidate
+    // is a throwaway file in a throwaway repository, created only so the refusal can be about the
+    // missing LOG ENTRY rather than about a missing file.
+    writeFileSync(join(root, c), "no tokens here\n", "utf8");
     args.push("--allow-fixture", c);
   }
   const r = runRepoScript("phi-scan.ts", args, { cwd: root });

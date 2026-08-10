@@ -122,6 +122,15 @@ rather than glossed:**
    two code carriers**, which are what a maintainer reads first. Corrected to the wording the fourth
    pass measured as true.
 
+**🔴 And one RED GATE that no refuter pass caught, because it is not a conformance question.** CI's
+`CodeQL` check refused the first push with **1 new high-severity alert in code changed by this PR**:
+`js/file-system-race` on `missingFromOverrideLog`'s `existsSync`-then-`writeFileSync`. A
+check-then-act race, in the helper written to prove the override log is parsed correctly. Closed by
+**deleting the check** and writing unconditionally, which is also what the helper wanted: every
+candidate is a throwaway file whose only job is to make the refusal be about the missing LOG ENTRY
+rather than about a missing file. Worth recording because `scripts/verify.sh dicom` was green
+throughout and **does not run CodeQL**: a locally green gate is not the whole gate.
+
 ## 🔴 One known divergence from §4.5, PRE-EXISTING and disclosed rather than argued harmless
 
 §4.5 also says an info string after a **backtick** fence may not contain backticks. `fenceRun` opens
