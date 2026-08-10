@@ -457,18 +457,20 @@ function* base64Runs(text: string): Generator<string> {
  * pinned by a differential fuzz against the patterns they replace. Both live in
  * `test/scripts/phi-scan-matchers.test.ts`.
  *
- * 🔴 THE ONE PLACE THAT IS DELIBERATELY NOT AN EQUIVALENCE IS `overrideLogPaths`, WHICH IS NARROWER
- * ON PURPOSE AND IN THE FAIL-CLOSED DIRECTION. Its two departures from the pattern it replaces are
- * enumerated on that function, and a dropped entry REFUSES a `--allow-fixture` bypass at exit 2,
- * so the target is not exempted.
+ * 🔴 THE ONE PLACE THAT IS DELIBERATELY NOT AN EQUIVALENCE IS `overrideLogPaths`. Its departures
+ * from the pattern it replaces are enumerated on that function. Two of them are narrowings, and a
+ * dropped entry REFUSES a `--allow-fixture` bypass at exit 2, so the target is not exempted. The
+ * third is the LINE DEFINITION, which is not a narrowing at all and has no direction: see
+ * `splitCommonMarkLines`.
  *
  * 🔴 AND THE CONFIG PARSERS ARE NOT ALL PINNED TO THE SAME STANDARD AS THE SCAN ROUTE. Two
  * `rawRecordMode` shapes git cannot emit are unreachable from outside this script and no test
  * claims them; they are named on that function, with the mutant that passes the suite. They are
  * still written the pattern's way, because a predicate keyed to what today's caller happens to do
  * afterwards is a bound that holds only from the call site - the shape this file refuses elsewhere.
- * `splitLines`'s `CRLF` handling was listed here as a third such shape and that was WRONG: it is
- * observable through `overrideLogPaths`, measured, and claimed by a test. See that function.
+ * `splitLines`'s `CRLF` handling was listed here as a third such shape and that was WRONG: it was
+ * observable through `overrideLogPaths`, measured, and claimed by a test. That caller now splits
+ * CommonMark's way, so read the disclosure on `splitLines` itself rather than this line.
  */
 function isDigitCode(code: number): boolean {
   return code >= 0x30 && code <= 0x39;
@@ -581,7 +583,7 @@ function isAllDigits(text: string): boolean {
 }
 
 /**
- * `text.split(/\r?\n/)`.
+ * `text.split(/\r?\n/)`, which is `scripts/phi-allow-list.txt`'s format and NOT markdown's.
  *
  * A separator is an `LF`, together with a `CR` immediately before it. A lone `CR` is NOT a
  * separator and stays in the line, which is the pattern's behaviour and not an approximation of it:
@@ -591,26 +593,19 @@ function isAllDigits(text: string): boolean {
  * `i - 1` can never already belong to the previous separator, because a separator ends on its `LF`
  * and the character before this `LF` would then be that `LF` rather than a `CR`.
  *
- * 🛑 THE `CRLF` HALF IS LOAD-BEARING, AND A DISCLOSURE STOOD HERE SAYING IT WAS UNOBSERVABLE
- * THROUGH EITHER CALLER AND CLAIMED BY NO TEST. That was WRONG, and wrong in the way this file
- * warns about elsewhere: it reasoned from what the callers do to a line AFTERWARDS. `loadAllowList`
- * trims and `tripleHashValue` trims, but `overrideLogPaths` hands the RAW line to `fenceRun` FIRST,
- * and `bare` there admits a space or a tab and nothing else. So on an override log written with
- * `CRLF`, a `CR`-blind split leaves a `CR` after a closing run, the run is read as an info string
- * rather than as a close, the block never ends, and every entry below it is dropped.
+ * 🛑 THE OVERRIDE LOG NO LONGER USES THIS, AND THE TWO SPLITS ARE DELIBERATELY NOT UNIFIED.
+ * `phi-scan-overrides.md` is a markdown document and goes through `splitCommonMarkLines` below;
+ * this one is the allow list's. They differ on exactly one input, a LONE `CR`, and unifying them
+ * would widen the ALLOW LIST: a `CR`-joined line is a dead entry today, because a name carrying a
+ * `CR` equals nothing a scan produces, and splitting it makes both halves live. A live allow entry
+ * SUPPRESSES a hit, so that is the direction `#97` and `#104` were refused for, taken as a side
+ * effect of a markdown fix.
  *
- * Measured on one such log, entry live below a fenced template: this file exits 0 with the entry
- * honoured, the `CR`-blind mutant exits 2 having dropped it, and with the SAME log written `LF` the
- * two agree. `test/scripts/phi-scan-matchers.test.ts` claims it, in both directions and against the
- * `LF` arm. That a LONE `CR` is not a separator is pinned there too.
- *
- * 🛑 AND NO DIRECTION IS CLAIMED FOR THAT MUTANT. A draft of this paragraph argued it was
- * fail-closed, because a `CR` can only prevent a close and never cause one; that is the parity
- * fallacy `fenceRun` below was refused twice for, and it is now falsified a third time BY
- * MEASUREMENT. On a log whose lines are `CRLF` except one opening fence, the entry sets are
- * `{decoy}` here and `{smuggled}` for the mutant - disjoint, not nested - and the mutant EXEMPTS at
- * exit 0 a target this file refuses at exit 2. A prevented close CAN invert later boundaries, so
- * a wrong answer moves entries in BOTH directions. The argument is DELETED, not narrowed.
+ * 🔴 SO ITS `CRLF` HALF IS UNOBSERVABLE THROUGH ITS ONLY CALLER AGAIN, WHICH TRIMS. Stated, not
+ * argued away, and not a reason to drop the half: that would key the function to what today's
+ * caller does afterwards, which is the bound-from-the-call-site shape this file refuses everywhere
+ * else. It stays an exact representation of the pattern. The OBSERVABLE `CRLF` claim `#115` bought
+ * moved to `splitCommonMarkLines` with the caller, through the same `--allow-fixture` oracle.
  */
 function splitLines(text: string): string[] {
   const out: string[] = [];
@@ -619,6 +614,46 @@ function splitLines(text: string): string[] {
     if (text.charCodeAt(i) !== 0x0a) continue;
     const end = i > 0 && text.charCodeAt(i - 1) === 0x0d ? i - 1 : i;
     out.push(text.slice(start, end));
+    start = i + 1;
+  }
+  out.push(text.slice(start));
+  return out;
+}
+
+/**
+ * CommonMark's LINE ENDING, which is not `/\r?\n/`.
+ *
+ * > A line ending is a line feed (`U+000A`), a carriage return (`U+000D`) not followed by a line
+ * > feed, or a carriage return and a following line feed.
+ *
+ * CommonMark 0.31.2 section 2.1, "Characters and lines". The document is pinned under
+ * `vendor/commonmark/spec/`, and `test/scripts/commonmark-pin.test.ts` re-hashes it, reads the
+ * version out of its own front matter, locates the section by walking every heading, and requires
+ * EXACTLY ONE occurrence of that sentence rather than a first match.
+ *
+ * 🩺 THE ONE INPUT IT AND `splitLines` DISAGREE ON IS A LONE `CR`, AND THAT INPUT IS A SILENTLY
+ * EXEMPTED PHI TARGET. `overrideLogPaths` exists to agree with what a human reviewing the rendered
+ * log sees, and a lone `CR` hides two things from a `CR`-blind split at once: a `###` heading,
+ * because `tripleHashValue` anchors at column 0, and a fence OPENER, because `fenceRun` reads the
+ * first non-space character of the line. A hidden opener means the block never opens, so a
+ * `### <path>` a human sees INSIDE a rendered code block is a LIVE allow entry and `--allow-fixture`
+ * exempts that path at exit 0.
+ *
+ * 🛑 NO DIRECTION IS CLAIMED FOR EITHER SPLIT, BECAUSE FENCE STATE IS PARITY. Reading a line ending
+ * wrongly does not only drop or admit that block's headings, it moves every boundary after it.
+ * Measured on one log the two entry sets are DISJOINT, each exempting at exit 0 a target the other
+ * refuses at exit 2, which is why this is specified against section 2.1 rather than argued to be
+ * the safer of the two. `scripts/measure-phi-scan-line-endings.ts` prints the relation.
+ */
+function splitCommonMarkLines(text: string): string[] {
+  const out: string[] = [];
+  let start = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    const code = text.charCodeAt(i);
+    if (code !== 0x0a && code !== 0x0d) continue;
+    out.push(text.slice(start, i));
+    // A `CR` takes a following `LF` with it; alone it is a line ending on its own.
+    if (code === 0x0d && text.charCodeAt(i + 1) === 0x0a) i += 1;
     start = i + 1;
   }
   out.push(text.slice(start));
@@ -1128,12 +1163,14 @@ function tripleHashValue(line: string): string | null {
 /**
  * The paths `phi-scan-overrides.md` logs, as `### <path>` headings OUTSIDE any fenced code block.
  *
- * 🛑 THIS IS THE ONE PARSER HERE THAT IS DELIBERATELY NOT AN EQUIVALENCE, AND BOTH DEPARTURES ARE
- * FAIL-CLOSED. Dropping an entry makes `validateAllowFixtures` REFUSE the `--allow-fixture` flag
- * naming it (exit 2), so the target is not exempted. Exit 2 does not scan it either: the run stops
- * before enumeration and says nothing about the corpus, which is a refusal and not a clearance.
- * Admitting an entry that no human wrote is the direction that silently exempts a PHI target, and
- * it is what both of these were.
+ * 🛑 THIS IS THE ONE PARSER HERE THAT IS DELIBERATELY NOT AN EQUIVALENCE. Three departures, of
+ * which the first two are NARROWINGS: dropping an entry makes `validateAllowFixtures` REFUSE the
+ * `--allow-fixture` flag naming it (exit 2), so the target is not exempted. Exit 2 does not scan it
+ * either: the run stops before enumeration and says nothing about the corpus, which is a refusal
+ * and not a clearance. Admitting an entry that no human wrote is the direction that silently
+ * exempts a PHI target, and it is what both of those were.
+ *
+ * 🛑 THE THIRD IS NOT A NARROWING AND HAS NO DIRECTION, SO DO NOT READ THE PARAGRAPH ABOVE ONTO IT.
  *
  * 1. **Fence-awareness.** The pattern this replaces was FENCE-BLIND, so the `### <path>` line in
  *    this repository's own committed `phi-scan-overrides.md` - a TEMPLATE, inside the fenced block
@@ -1155,6 +1192,13 @@ function tripleHashValue(line: string): string | null {
  *    inertness, and it is closed here rather than disclosed because it is the same mechanism and
  *    the same two lines of code.
  *
+ * 3. **What a LINE is.** The pattern's caller split on `/\r?\n/`; this one splits CommonMark's way
+ *    (`splitCommonMarkLines`, section 2.1), so a lone `CR` ends a line here and did not there. It
+ *    is listed apart from the two above because it is NOT a narrowing: it moves entries in both
+ *    directions, and on a measured log the two entry sets are disjoint. The reason to prefer it is
+ *    not that it drops more, it is that this parser's whole job is to agree with the rendered
+ *    document a human reviews, and a `CR`-blind split hides a fence OPENER from that review.
+ *
  * Everything else is the pattern exactly. `test/scripts/phi-scan-matchers.test.ts` holds the
  * pattern itself as the oracle and drives this parser through `--allow-fixture`, which is
  * repeatable and names every path it could not find an entry for - so one run reports exactly which
@@ -1165,7 +1209,7 @@ function tripleHashValue(line: string): string | null {
 function overrideLogPaths(raw: string): string[] {
   const out: string[] = [];
   let open: Fence | null = null;
-  for (const line of splitLines(raw)) {
+  for (const line of splitCommonMarkLines(raw)) {
     const fence = fenceRun(line);
     if (open === null) {
       if (fence !== null) {

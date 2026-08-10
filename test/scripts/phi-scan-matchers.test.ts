@@ -565,12 +565,15 @@ describe("phi-scan parses its own override log the way the pattern did, minus tw
   });
 
   /**
-   * 🛑 THE `CRLF` HALF OF `splitLines` IS LOAD-BEARING HERE, AND THE DISCLOSURE SAYING IT WAS
+   * 🛑 THE `CRLF` HALF OF THE LINE SPLIT IS LOAD-BEARING HERE, AND THE DISCLOSURE SAYING IT WAS
    * UNOBSERVABLE WAS WRONG. That disclosure reasoned from the two trims - `loadAllowList`'s and
    * `tripleHashValue`'s - and missed that THIS parser hands the RAW line to `fenceRun`, whose
    * `bare` admits a space or a tab and nothing else. On a `CRLF` log a `CR`-blind split leaves a
    * `CR` after the closing run, which makes it an info string rather than a close, so the block
    * never ends and every entry below the template is dropped.
+   *
+   * The splitter this claims is `splitCommonMarkLines`, which is what `overrideLogPaths` calls;
+   * `splitLines` is the allow list's and is claimed in the other describe below.
    *
    * The line ending is the only thing that moves between the two arms, so the `LF` arm is what
    * says this case is about `CRLF` and not about the fence rules the cases above already pin.
@@ -616,6 +619,109 @@ describe("phi-scan parses its own override log the way the pattern did, minus tw
     expect(missingFromOverrideLog(root, cut)).toEqual(new Set(cut));
   });
 
+  /**
+   * 🩺 THE SILENTLY EXEMPTED PHI TARGET. This is the residual `#115` filed and the reason this
+   * parser splits CommonMark's way rather than the allow list's.
+   *
+   * A LONE `CR` hides two different things from a `/\r?\n/` split, and the second one is the
+   * dangerous one:
+   *
+   * * a `###` heading, because `tripleHashValue` anchors at column 0 and a hidden heading is
+   *   merely a dropped entry (exit 2, the bypass refused);
+   * * a fence OPENER, because `fenceRun` reads the first non-space character of the line. A hidden
+   *   opener means the block never opens, so a `### <path>` a human sees INSIDE a rendered code
+   *   block is a LIVE allow entry and `--allow-fixture` exempts that path at exit 0.
+   *
+   * The log below carries one of each, which is what makes the two answers DISJOINT rather than
+   * nested: a `/\r?\n/` split produces `{smuggled}` and refuses `visible`; CommonMark's produces
+   * `{visible}` and refuses `smuggled`. Each split exempts at exit 0 a target the other refuses at
+   * exit 2, so there is no safer one to fall back on and "narrower is safer" is not available here.
+   * What decides it is the document, not a direction: section 2.1 says the lone `CR` ends a line,
+   * section 4.5 says a fenced block may interrupt a paragraph, and section 4.2 says a heading may.
+   * All three are derived from the pinned spec in `test/scripts/commonmark-pin.test.ts` rather than
+   * asserted, so this case is about what a human reviewing the rendered log sees.
+   *
+   * `scripts/measure-phi-scan-line-endings.ts` prints the same relation against any other tree.
+   */
+  it("refuses a path a lone CR hides inside a rendered code block, and admits the one it hides outside", () => {
+    const CR = String.fromCharCode(0x0d);
+    const fence = "`".repeat(3);
+    const log = [
+      "# log",
+      "",
+      `intro${CR}${fence}`,
+      "### smuggled",
+      fence,
+      `outro${CR}### visible`,
+      "",
+    ].join("\n");
+    const root = makeConfigRepo({ overrides: log });
+    // Both directions are asked, and they are asked in ONE run each so a parser that answered
+    // "everything" or "nothing" fails one of them.
+    expect(missingFromOverrideLog(root, ["smuggled"])).toEqual(new Set(["smuggled"]));
+    expect(missingFromOverrideLog(root, ["visible"])).toEqual(new Set());
+    // The control that says this is about the LINE ENDING and not about the fence rules: with the
+    // two lone `CR`s replaced by `LF`, the same document parses to the same two answers. If the
+    // fence rules alone decided it, this would be the only arm needed.
+    const lf = makeConfigRepo({ overrides: log.split(CR).join("\n") });
+    expect(missingFromOverrideLog(lf, ["smuggled"])).toEqual(new Set(["smuggled"]));
+    expect(missingFromOverrideLog(lf, ["visible"])).toEqual(new Set());
+  });
+
+  /**
+   * The line split itself, differentially, against an INDEPENDENT reading of section 2.1.
+   *
+   * The oracle is `/\r\n|\n|\r/`, which is the sentence's three alternatives written as a pattern,
+   * and `test/scripts/commonmark-pin.test.ts` is what says that sentence is section 2.1's. The log
+   * holds no fence, so every heading the oracle finds is an entry and the membership run answers
+   * for all of them at once.
+   *
+   * 🛑 THE NON-VACUITY CONTROL IS THE OTHER SPLIT. The shapes are chosen so that `/\r?\n/` and
+   * section 2.1 disagree on several of them; if they ever agreed on all, this case would pass
+   * against a `CR`-blind parser and prove nothing.
+   */
+  it("splits lines the way section 2.1 does, not the way the allow list does", () => {
+    const CR = String.fromCharCode(0x0d);
+    const SHAPES = [
+      "\n",
+      `${CR}\n`,
+      CR,
+      `${CR}${CR}`,
+      `\n${CR}`,
+      `${CR}${CR}\n`,
+      `${CR}\n${CR}`,
+      "\n\n",
+    ];
+    const names: string[] = [];
+    let body = "# log\n\n";
+    SHAPES.forEach((shape, i) => {
+      const a = `cm-a${String(i)}`;
+      const b = `cm-b${String(i)}`;
+      names.push(a, b);
+      body += `### ${a}${shape}### ${b}\n`;
+    });
+
+    const entriesUnder = (pattern: RegExp): Set<string> => {
+      const out = new Set<string>();
+      for (const line of body.split(pattern)) {
+        const value = heading(line);
+        if (value !== null) out.add(value);
+      }
+      return out;
+    };
+    const bySpec = entriesUnder(/\r\n|\n|\r/);
+    const byAllowList = entriesUnder(/\r?\n/);
+
+    // Non-vacuity in both directions: the oracle must find most of the names, and the two readings
+    // must actually disagree, or a `CR`-blind parser would pass this case.
+    expect(bySpec.size).toBe(names.length);
+    expect(names.filter((n) => !byAllowList.has(n)).length).toBeGreaterThan(3);
+
+    const root = makeConfigRepo({ overrides: body });
+    const expectedMissing = new Set(names.filter((n) => !bySpec.has(n)));
+    expect(missingFromOverrideLog(root, names)).toEqual(expectedMissing);
+  });
+
   it("treats the committed override log as holding no entries at all", () => {
     // The repository's own file, read as it ships. Its only `###` line is the template inside the
     // fence, so a `--allow-fixture` for it must be refused.
@@ -644,12 +750,14 @@ describe("phi-scan splits its allow-list into lines the way the pattern did", ()
    * likely to get wrong, and it is observable here because a name with a stray `CR` in it does not
    * equal the name in the corpus and therefore does not excuse it.
    *
-   * 🛑 THIS CASE STILL DOES NOT CLAIM THE `CRLF` HALF, AND THE REASON IT USED TO GIVE WAS WRONG.
-   * It said the half was unobservable through either caller; `overrideLogPaths` does not trim
-   * before `fenceRun`, and the override-log case above claims it there. What holds is only the
-   * narrower thing: `loadAllowList` trims, so the `CRLF` lines below are here to have the shapes
-   * present, not as evidence about them. The assertion that bites here is the lone `CR`, and a
-   * mutant that splits on one turns this case red.
+   * 🛑 THIS CASE STILL DOES NOT CLAIM THE `CRLF` HALF. `loadAllowList` trims, so the `CRLF` lines
+   * below are here to have the shapes present, not as evidence about them. The assertion that
+   * bites is the lone `CR`, and a mutant that splits on one turns this case red.
+   *
+   * 🔴 AND THAT IS WHY THE ALLOW LIST DOES NOT GET COMMONMARK'S SPLIT. The override log does, and
+   * the cases above claim it there; unifying the two would make the `CR`-joined pair below TWO
+   * live allow entries instead of one dead one, and a live allow entry SUPPRESSES a hit. This case
+   * is what would go red if anyone did, which is the point of it being here rather than a comment.
    */
   it("agrees with the pattern on every line-ending shape, measured by which names are excused", () => {
     const names = ["ALFA", "BRAVO", "CHARLIE", "DELTA", "ECHO", "FOXTROT"].map(
