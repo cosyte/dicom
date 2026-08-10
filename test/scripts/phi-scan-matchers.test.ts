@@ -526,6 +526,29 @@ describe("phi-scan parses its own override log the way the pattern did, minus tw
     expect(missingFromOverrideLog(root, kept)).toEqual(new Set(kept));
   });
 
+  it("is not closed by a fence run trailed by whitespace that is not a space or a tab", () => {
+    // 🛑 THE REFUTER MEASURED THIS ONE. `bare` was computed over the whole of `\s`, so a closing
+    // run followed by an INVISIBLE character closed the block and everything below it became a
+    // live allow entry. CommonMark ignores only spaces and tabs after a closing run; anything else
+    // is an info string, and an info string does not close. Each case here is a character that
+    // renders as blank, which is what makes it a way to smuggle an entry past a human reviewer.
+    const { kept } = classify(LINES);
+    for (const [name, trailer] of [
+      ["NBSP", String.fromCharCode(0xa0)],
+      ["IDEOGRAPHIC SPACE", String.fromCharCode(0x3000)],
+      ["ZWNBSP", String.fromCharCode(0xfeff)],
+      ["EM SPACE", String.fromCharCode(0x2003)],
+    ] as [string, string][]) {
+      const body = ["# log", "", "```", `\`\`\`${trailer}`, ...LINES, "```", ""].join("\n");
+      const root = makeConfigRepo({ overrides: body });
+      expect(missingFromOverrideLog(root, kept), name).toEqual(new Set(kept));
+    }
+    // The control in the other direction, so this is not just "nothing ever closes": a run trailed
+    // by an ordinary space IS bare, does close, and the entries after it are live again.
+    const closed = ["# log", "", "```", "### fenced", "``` ", ...LINES, ""].join("\n");
+    expect(missingFromOverrideLog(makeConfigRepo({ overrides: closed }), kept)).toEqual(new Set());
+  });
+
   it("reopens after the fence closes, so a real entry below the template still counts", () => {
     const { kept } = classify(LINES);
     const body = ["# log", "", "```", "### fenced-template", "```", "", ...LINES, ""].join("\n");

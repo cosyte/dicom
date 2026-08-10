@@ -439,8 +439,10 @@ function* base64Runs(text: string): Generator<string> {
  * `scripts/phi-allow-list.txt`. That figure is what this pass closed, so the sentence carving the
  * configuration out is DELETED rather than worded again - it was refused in three wordings across
  * `#112`'s passes 1, 2 and 3, and the way to stop wording a carve-out is to remove what it carved
- * out. `scripts/measure-phi-scan-regex-statics.ts` is the instrument, and
- * `test/integration/phi-scan-regex-statics.test.ts` is the pin.
+ * out. `scripts/measure-phi-scan-regex-statics.ts` is the instrument,
+ * `test/integration/phi-scan-regex-statics.test.ts` is the pin, and the two records are
+ * `documentation/agent-notes/dicom-phi-scan-regex-statics.md` (the scan route) and
+ * `documentation/agent-notes/dicom-phi-scan-config-parsers.md` (this one, and what is left).
  *
  * 🛑 THE BOUND IS ON THE SUBJECT, NOT ON A CLEANUP CALL. Overwriting the statics after the scan
  * would be a bound that holds only from where the cleanup is called, and this lineage has ruled
@@ -1039,19 +1041,31 @@ function loadAllowList(): AllowList {
 interface Fence {
   code: number;
   length: number;
-  /** Nothing but whitespace after the run. A CLOSING fence must be bare; an opening one need not. */
+  /**
+   * Nothing but SPACES AND TABS after the run. A CLOSING fence must be bare; an opening one need
+   * not be, because what follows an opening fence is its info string.
+   *
+   * 🛑 SPACE AND TAB, NOT `isSpaceCode`. CommonMark ignores only those two after a closing run, so
+   * any other whitespace is an INFO STRING and does not close the block. A first draft used the
+   * whole of `\s` here and the refuter measured the consequence: a closing run trailed by an
+   * invisible `NBSP` or `IDEOGRAPHIC SPACE` closed the block, and a `### <path>` line written
+   * inside what a human sees as a code block became a live allow entry (exit 0, target exempted).
+   * That is the fail-open direction the function below says it exists to remove.
+   */
   bare: boolean;
 }
 
 /**
  * A fenced-code-block delimiter: three or more backticks or tildes, indented at most three spaces.
  *
- * 🛑 THE TWO DIRECTIONS ARE NOT SYMMETRIC, WHICH IS WHY THIS IS LIBERAL AND `overrideLogPaths` IS
- * STRICT ABOUT CLOSING. Seeing a fence that CommonMark would not is fail-closed: it drops override
- * entries, and a dropped entry refuses a `--allow-fixture` bypass, which runs the scan. MISSING a
- * fence is the fail-open direction, and it is the direction this whole function exists to remove.
- * So the indent allowance and the tilde form are here because omitting them would be a way to
- * smuggle a `###` line past the block state, not because this file renders markdown.
+ * 🛑 THE TWO DIRECTIONS ARE NOT SYMMETRIC, WHICH IS WHY THIS IS LIBERAL ABOUT WHAT OPENS A BLOCK AND
+ * STRICT ABOUT WHAT CLOSES ONE. Seeing a fence that CommonMark would not is fail-closed: it drops
+ * override entries, and a dropped entry refuses a `--allow-fixture` bypass, which runs the scan.
+ * MISSING a fence is the fail-open direction, and it is the direction this whole function exists to
+ * remove. So the indent allowance and the tilde form are here because omitting them would be a way
+ * to smuggle a `###` line past the block state, and `bare` is narrow for the same reason read the
+ * other way round: every character that does not count as bare is one more thing that cannot end
+ * the block early. This file does not render markdown, and none of this is here because it does.
  */
 function fenceRun(line: string): Fence | null {
   let i = 0;
@@ -1063,7 +1077,8 @@ function fenceRun(line: string): Fence | null {
   if (end - i < 3) return null;
   let bare = true;
   for (let k = end; k < line.length; k += 1) {
-    if (!isSpaceCode(line.charCodeAt(k))) {
+    const c = line.charCodeAt(k);
+    if (c !== 0x20 && c !== 0x09) {
       bare = false;
       break;
     }

@@ -5,10 +5,17 @@
 > and the shorthand has been misread twice.** Derive it, never restate it:
 > `git show origin/main:CLAUDE.md | wc -c` against `REPO_CLAUDE` in the meta-repo's
 > `.claude/hooks/doc-budget.mjs`. `documentation/agent-notes.md` is **257,209 B, over its 250,000
-> ceiling** on `main`, so this record is here instead. **No trap deleted, no ceiling raised.**
-> What points at it is `scripts/phi-scan.ts`, `scripts/measure-phi-scan-regex-statics.ts` and
-> `documentation/agent-notes/dicom-phi-scan-regex-statics.md`, which are unbudgeted and cite this
-> slug. **No always-read file does.**
+> ceiling** on `main`, so this record is here instead (**budgeted at `REPO_DOC_MAX`, not unbudgeted**).
+> **No trap deleted, no ceiling raised.** What points at it, verified by `git grep` rather than
+> asserted: `scripts/phi-scan.ts`, `scripts/measure-phi-scan-regex-statics.ts` and
+> `documentation/agent-notes/dicom-phi-scan-regex-statics.md`. **No always-read file does.**
+>
+> 🩺 **The refuter's pass-1 major was this paragraph.** It named those three pointers when only the
+> third existed, called the destination unbudgeted when the hook gives it `REPO_DOC_MAX`, and the
+> same commit **deleted** `scripts/phi-scan.ts`'s only citation of this lineage's record without
+> replacing it. So the one compensating control for `CLAUDE.md`'s six bytes of headroom was a
+> sentence that was false by inspection, in the commit that wrote it. The citations are restored and
+> the claim is now checked by the command above.
 
 `DICOM-RESIDUALS`, `conformance-refuter` gate. Base `01d0983`. Last verified 2026-08-10.
 
@@ -74,6 +81,14 @@ scans the target rather than exempting it. `fenceRun` is deliberately **liberal 
 strict about closings** for the same reason. Seeing a fence CommonMark would not drops entries;
 missing one is the direction that silently exempts a PHI target.
 
+**🩺 THE REFUTER CAUGHT THAT ASYMMETRY BEING VIOLATED BY THE FUNCTION THAT STATES IT.** `bare` was
+first computed with `isSpaceCode`, the whole of `\s`, where CommonMark ignores only spaces and tabs
+after a closing run. Measured on the pass-1 head: a closing run trailed by an invisible `NBSP` or
+`IDEOGRAPHIC SPACE` **closed the block**, so a `### <path>` written inside what a human sees as a
+code block became a live allow entry and the target was exempted at exit 0. Narrowed to space and
+tab, which is strictly fail-closed; the four blank-rendering characters are now a named test with a
+control in the other direction, and the old predicate is a mutant in the grid.
+
 ## 🛑 The inertness was RE-MEASURED, not inherited, and it holds twice over
 
 `#112` recorded the fence-blind entry as inert. Re-measured here, in a throwaway repository with a
@@ -119,11 +134,11 @@ regex has just matched; the equivalence grid must report a one-character mutant;
 comparison names the one route that MUST differ, refusing with `NO CHANGE, where one was intended`
 if the fence fix ever stops working. A control that cannot fail is not a control.
 
-## Tests: 11 new cases, 7 red on base, and why 4 are green by design
+## Tests: 12 new cases, 8 red on base, and why 4 are green by design
 
-**7 of 11 are red on `01d0983`.** The other **4 are GREEN ON BASE BY DESIGN**: they assert that
+**8 of 12 are red on `01d0983`.** The other **4 are GREEN ON BASE BY DESIGN**: they assert that
 removing the regexes moved nothing, so a red one would mean the slice changed behaviour it should
-not have. The figure that says they are not vacuous is the mutation grid, over the 17 cases in the
+not have. The figure that says they are not vacuous is the mutation grid, over the 18 cases in the
 two files:
 
 | mutant | cases red |
@@ -131,12 +146,13 @@ two files:
 | `splitLines` splits on a lone `CR` | 1 |
 | `isAllDigits` widened to `Number()` | 1 |
 | `tripleHashValue` drops the `LineTerminator` check | 1 |
-| `fenceRun` never sees a fence (base behaviour) | **5** |
-| a closing fence need not be bare | 1 |
+| `fenceRun` never sees a fence (base behaviour) | **6** |
+| a closing fence need not be bare | 2 |
 | fence indent allowance removed | 1 |
 | tilde fences not recognized | 1 |
 | all-whitespace narrowing reverted (base behaviour) | 1 |
-| `isSpaceCode` drops `NBSP` | **4** |
+| `isSpaceCode` drops `NBSP` | **5** |
+| **`bare` computed over all of `\s` (the refuter's pass-1 defect)** | **1** |
 | **`rawRecordMode` accepts UPPERCASE hex** | **0** |
 
 The override-log parser is driven as a **membership oracle**: `--allow-fixture` is repeatable and
@@ -156,7 +172,9 @@ of a candidate set the parser produced. Both directions are asked separately.
 - **The `#112` note's own two carriers of the closed disclosure were found by a `-a` phrase sweep
   with newlines folded** and updated rather than left to read as current. The sweep's positive
   control is `test/integration/fatal-diagnostic-surface.test.ts`, which plain `grep` prints nothing
-  for: **7 tracked files in this repo are binary to a plain grep.**
+  for: **5 tracked files in this repo carry a literal NUL.** A first draft said 7, which is what
+  `grep -I` rejects; the other two are the empty `.gitkeep` files, and rejecting-for-no-match is not
+  the same measurement as carrying a NUL.
 - Unchanged by this slice, in either direction: `hits` unbounded as an array; the relocation,
   `contextPath` and `attributes[].tag`; a flood within one recognizer entry still burying a later
   hit; the never-draining-reader wait and `run-script.ts`'s 1 MiB `maxBuffer`; the exit code still
