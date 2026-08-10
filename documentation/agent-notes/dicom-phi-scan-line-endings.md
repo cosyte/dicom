@@ -112,8 +112,8 @@ SHA-256 pin a test re-hashes as a precondition. **It is a second NAMED root, nev
 `vendor/`**: a new vendor root still cannot inherit the exemption without being named, and a full
 SHA-256 still cannot be written as prose. Every hand-written file under `vendor/commonmark/` stays
 in scope (`README.md` and `spec/SHA.txt`), which is where this tree's only real violation was ever
-found. **Measured after the change: 5 files match, up from 4; the gate reports 244 of 250 tracked
-files scanned.**
+found. **Measured after the change: 5 pinned documents match, up from 4, and the gate reports
+`248 of 254 tracked files; 6 skipped`.**
 
 ## Tests: 2 red on base of 1,377, and 6 green on base BY DESIGN
 
@@ -160,5 +160,8 @@ that cannot fire is not a detector.
   hit; the never-draining-reader wait and `run-script.ts`'s 1 MiB `maxBuffer`; the `rawRecordMode`
   shapes git cannot emit. **This slice measures nothing about the heap and nothing about the
   corpus**, and the false-positive count remains a property of the byte histogram rather than a rate.
-- **The scan route is untouched.** Every change to `scripts/phi-scan.ts` outside
-  `splitCommonMarkLines` and the one call site is a comment.
+- **The scan route is untouched, checked with the TypeScript transpiler rather than by eye.**
+  Comment-stripped, base and head differ by exactly the new `splitCommonMarkLines` and the one call
+  site in `overrideLogPaths`, and nothing else: **38,603 B on base, 39,046 B on head** (the base
+  figure is the one `#115` recorded, which is a cross-check rather than an inherited number). The
+  detector produced a real diff, so this is not the empty-output false "identical" `#115` caught.
