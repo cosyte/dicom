@@ -3,7 +3,9 @@
  *
  * `DICOM-RESIDUALS` removed the last route by which a scan target's bytes became a `RegExp`
  * subject, because a matched subject stays readable from `RegExp.input` and `RegExp.lastMatch`,
- * which are process globals. `test/integration/phi-scan-regex-statics.test.ts` pins that property.
+ * which are process globals; a later pass removed the last route by which the gate's own
+ * CONFIGURATION became one, so the script now constructs no `RegExp` at all.
+ * `test/integration/phi-scan-regex-statics.test.ts` pins that property.
  * THIS file pins the other half of it: that removing the regexes did not move a single hit.
  *
  * 🛑 THE ORACLE IS THE PATTERNS THEMSELVES, HELD HERE. A test that asserted a list of expected
@@ -328,5 +330,359 @@ describe("phi-scan trims a value's trailing pad the way the pattern did", () => 
     // Non-vacuity in both directions: some bytes are trimmed and most are not.
     expect(expected.filter((v) => v === name).length).toBeGreaterThan(5);
     expect(expected.filter((v) => v !== name).length).toBeGreaterThan(200);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The gate's own CONFIGURATION parsers
+// ---------------------------------------------------------------------------
+//
+// These were the last `RegExp` subjects in the script, and they are reached from a different route
+// than a scan target: `process.argv`, `scripts/phi-allow-list.txt`, `phi-scan-overrides.md` and
+// `git diff --cached --raw` output. The script runs its scan at module scope, so none of them is
+// importable and every case here drives the CLI.
+//
+// 🛑 THE OVERRIDE-LOG PARSER IS TESTED AS A MEMBERSHIP ORACLE, WHICH IS WHAT MAKES A HUNDRED CASES
+// FIT IN TWO SUBPROCESSES. `--allow-fixture` is repeatable and `validateAllowFixtures` names EVERY
+// path it could not find an entry for, so one run over a candidate set reports exactly which of
+// them the parser did not produce. Both directions are asked separately, because they are different
+// claims: the paths the pattern finds outside a fence must all be present, and the paths it finds
+// INSIDE one - plus the lone space an all-whitespace heading yields - must all be absent.
+
+/** `/^###\s+(.+?)\s*$/`, the pattern `tripleHashValue` replaced, constructed fresh per use. */
+const heading = (line: string): string | null => /^###\s+(.+?)\s*$/.exec(line)?.[1] ?? null;
+
+/** A throwaway repository with a caller-supplied allow-list and override log. */
+function makeConfigRepo(opts: { allowList?: string; overrides?: string }): string {
+  const root = mkdtempSync(join(tmpdir(), "dicom-phi-config-"));
+  roots.push(root);
+  mkdirSync(join(root, "scripts"));
+  mkdirSync(join(root, "test", "fixtures"), { recursive: true });
+  mkdirSync(join(root, "docs-content"));
+  if (opts.allowList === undefined) {
+    copyFileSync(
+      join(REPO_ROOT, "scripts", "phi-allow-list.txt"),
+      join(root, "scripts", "phi-allow-list.txt"),
+    );
+  } else {
+    writeFileSync(join(root, "scripts", "phi-allow-list.txt"), opts.allowList, "utf8");
+  }
+  if (opts.overrides !== undefined) {
+    writeFileSync(join(root, "phi-scan-overrides.md"), opts.overrides, "utf8");
+  }
+  writeFileSync(join(root, "README.md"), "# throwaway\n");
+  writeFileSync(join(root, "docs-content", "intro.md"), "# throwaway doc\n");
+  return root;
+}
+
+/**
+ * Which of `candidates` the override-log parser did NOT produce.
+ *
+ * A path with no entry is named in the refusal, one line each; a path WITH an entry is not. Every
+ * candidate is also a file on disk, so the only reason one can be rejected is the missing entry.
+ */
+function missingFromOverrideLog(root: string, candidates: readonly string[]): Set<string> {
+  const args: string[] = [];
+  for (const c of candidates) {
+    // Written unconditionally. An `existsSync` guard here was a check-then-act race that CodeQL
+    // reported as `js/file-system-race` (high), and there is nothing to preserve: every candidate
+    // is a throwaway file in a throwaway repository, created only so the refusal can be about the
+    // missing LOG ENTRY rather than about a missing file.
+    writeFileSync(join(root, c), "no tokens here\n", "utf8");
+    args.push("--allow-fixture", c);
+  }
+  const r = runRepoScript("phi-scan.ts", args, { cwd: root });
+  if (r.code === 0) return new Set();
+  if (r.code !== 2) throw new Error(`expected exit 0 or 2, got ${String(r.code)}: ${r.stderr}`);
+  const out = new Set<string>();
+  for (const line of r.stderr.split("\n")) {
+    if (line.startsWith("  - ")) out.add(line.slice(4));
+  }
+  return out;
+}
+
+describe("phi-scan parses its own override log the way the pattern did, minus two deliberate cuts", () => {
+  /**
+   * Lines chosen because they are where the pattern and a hand-written scan can part company: the
+   * greedy `\s+` handing a character back to a lazy `(.+?)`, `.` refusing a `LineTerminator` that
+   * `\s` admits, and `####` never being a `###` followed by whitespace.
+   *
+   * Every one is a legal file name on this platform, because each accepted capture is written to
+   * disk and offered back to the scanner.
+   */
+  const LINES = [
+    "### plain",
+    "###  two-spaces",
+    "###   three spaces and words",
+    "### trailing-space ",
+    "### trailing-tab\t",
+    "###\ttab-separated",
+    `###${String.fromCharCode(0xa0)}nbsp-separated`,
+    "### with spaces inside",
+    "### ends-with-cr\r",
+    "### has-a-cr\rinside",
+    "### ",
+    "###  ",
+    "###   ",
+    `###  ${String.fromCharCode(0xa0)}`,
+    "###",
+    "####x",
+    "#### four-hashes",
+    "## two-hashes",
+    " ### indented",
+    "not a heading",
+    "",
+  ];
+
+  /** The captures the pattern produces, split by whether this parser is meant to keep them. */
+  function classify(lines: readonly string[]): { kept: string[]; cut: string[] } {
+    const kept: string[] = [];
+    const cut: string[] = [];
+    for (const line of lines) {
+      const value = heading(line);
+      if (value === null) continue;
+      // NARROWING 2: an all-whitespace heading. The pattern hands one whitespace character back
+      // out of the `\s+` run and captures it; this parser produces nothing.
+      if (value.trim().length === 0) cut.push(value);
+      else kept.push(value);
+    }
+    return { kept, cut };
+  }
+
+  it("produces every path the pattern finds outside a fence", () => {
+    const { kept } = classify(LINES);
+    // Non-vacuity: a case list the pattern matched nothing in would pass against any parser.
+    expect(kept.length).toBeGreaterThan(6);
+    const root = makeConfigRepo({ overrides: `# log\n\n${LINES.join("\n")}\n` });
+    expect(missingFromOverrideLog(root, kept)).toEqual(new Set());
+  });
+
+  it("produces nothing for a line the pattern refuses", () => {
+    // The `⊆` direction on the axes where a hand-written scan is likely to be WIDER than the
+    // pattern. `.` excludes `LineTerminator` while `\s` admits it, so a bare `CR` inside the
+    // captured span makes the whole pattern fail; and `^###` must be followed by whitespace, so a
+    // fourth `#` is not a deeper heading with a `#`-prefixed path.
+    // Each pair is a line in the case list above, beside what a parser that merely trimmed after
+    // the hashes would have produced from it.
+    const pairs: [line: string, naive: string][] = [
+      ["### has-a-cr\rinside", "has-a-cr\rinside"],
+      ["####x", "#x"],
+      ["#### four-hashes", "four-hashes"],
+      [" ### indented", "indented"],
+    ];
+    for (const [line] of pairs) {
+      expect(LINES, "the case list must carry the line").toContain(line);
+      expect(heading(line), `the pattern must refuse ${JSON.stringify(line)}`).toBeNull();
+    }
+    const root = makeConfigRepo({ overrides: `# log\n\n${LINES.join("\n")}\n` });
+    const naive = pairs.map(([, n]) => n);
+    expect(missingFromOverrideLog(root, naive)).toEqual(new Set(naive));
+  });
+
+  it("produces NONE of the paths the pattern finds inside a fenced block", () => {
+    const { kept } = classify(LINES);
+    const fenced = ["# log", "", "```", ...LINES, "```", ""].join("\n");
+    const root = makeConfigRepo({ overrides: fenced });
+    // Every one of them, refused. This is the residual: the committed file's `### <path>` template
+    // sits inside exactly such a block and used to parse as a live allow entry.
+    expect(missingFromOverrideLog(root, kept)).toEqual(new Set(kept));
+  });
+
+  it("produces none of them inside an indented fence, a tilde fence, or a longer one", () => {
+    const { kept } = classify(LINES);
+    for (const [open, close] of [
+      ["   ```", "   ```"],
+      ["~~~", "~~~"],
+      ["````", "````"],
+      ["```ts", "```"],
+      // A fence closed by a LONGER run of the same character is still closed; one closed by a
+      // shorter run, or by the other character, is not - so these two stay open to the end.
+      ["````", "```"],
+      ["```", "~~~"],
+    ]) {
+      const body = ["# log", "", open as string, ...LINES, close as string, ""].join("\n");
+      const root = makeConfigRepo({ overrides: body });
+      expect(missingFromOverrideLog(root, kept), `fence ${String(open)}/${String(close)}`).toEqual(
+        new Set(kept),
+      );
+    }
+  });
+
+  it("is not closed by a fence run that has an info string after it", () => {
+    // A CLOSING fence must be bare, per CommonMark 0.31.2 section 4.5. A block whose body contains
+    // a nested-looking ```` ```js ```` line must stay open across it.
+    // The inner run is the SAME LENGTH as the opening one, so only the info string can decide it.
+    // A shorter inner run would be refused on length alone and would prove nothing about `bare`.
+    const { kept } = classify(LINES);
+    const body = ["# log", "", "```", "```js", ...LINES, "```", ""].join("\n");
+    const root = makeConfigRepo({ overrides: body });
+    expect(missingFromOverrideLog(root, kept)).toEqual(new Set(kept));
+  });
+
+  it("is not closed by a fence run trailed by whitespace that is not a space or a tab", () => {
+    // 🛑 THE REFUTER MEASURED THIS ONE. `bare` was computed over the whole of `\s`, so a closing
+    // run followed by an INVISIBLE character closed the block and everything below it became a
+    // live allow entry. CommonMark ignores only spaces and tabs after a closing run; anything else
+    // is an info string, and an info string does not close. Each case here is a character that
+    // renders as blank, which is what makes it a way to smuggle an entry past a human reviewer.
+    const { kept } = classify(LINES);
+    for (const [name, trailer] of [
+      ["NBSP", String.fromCharCode(0xa0)],
+      ["IDEOGRAPHIC SPACE", String.fromCharCode(0x3000)],
+      ["ZWNBSP", String.fromCharCode(0xfeff)],
+      ["EM SPACE", String.fromCharCode(0x2003)],
+    ] as [string, string][]) {
+      const body = ["# log", "", "```", `\`\`\`${trailer}`, ...LINES, "```", ""].join("\n");
+      const root = makeConfigRepo({ overrides: body });
+      expect(missingFromOverrideLog(root, kept), name).toEqual(new Set(kept));
+    }
+    // The control in the other direction, so this is not just "nothing ever closes". BOTH arms are
+    // here: a run trailed by a space and a run trailed by a TAB are each bare, each close, and the
+    // entries after them are live again. The tab arm was unpinned when this case was first written
+    // and dropping it passed the whole suite, which is how a load-bearing branch gets removed by a
+    // later maintainer who ran the tests.
+    for (const [name, trailer] of [
+      ["space", " "],
+      ["tab", "\t"],
+    ] as [string, string][]) {
+      const closed = ["# log", "", "```", "### fenced", `\`\`\`${trailer}`, ...LINES, ""].join(
+        "\n",
+      );
+      expect(
+        missingFromOverrideLog(makeConfigRepo({ overrides: closed }), kept),
+        `closed by a run trailed by a ${name}`,
+      ).toEqual(new Set());
+    }
+  });
+
+  it("reopens after the fence closes, so a real entry below the template still counts", () => {
+    const { kept } = classify(LINES);
+    const body = ["# log", "", "```", "### fenced-template", "```", "", ...LINES, ""].join("\n");
+    const root = makeConfigRepo({ overrides: body });
+    expect(missingFromOverrideLog(root, kept)).toEqual(new Set());
+    // ...and the fenced one still is not an entry.
+    expect(missingFromOverrideLog(root, ["fenced-template"])).toEqual(new Set(["fenced-template"]));
+  });
+
+  it("does not register the lone space an all-whitespace heading used to capture", () => {
+    const { cut } = classify(LINES);
+    // Non-vacuity: the pattern really does capture something on these lines. If it stopped doing
+    // so, this case would be asserting nothing.
+    expect(cut).toContain(" ");
+    const root = makeConfigRepo({ overrides: `# log\n\n${LINES.join("\n")}\n` });
+    expect(missingFromOverrideLog(root, cut)).toEqual(new Set(cut));
+  });
+
+  it("treats the committed override log as holding no entries at all", () => {
+    // The repository's own file, read as it ships. Its only `###` line is the template inside the
+    // fence, so a `--allow-fixture` for it must be refused.
+    const committed = readFileSync(join(REPO_ROOT, "phi-scan-overrides.md"), "utf8");
+    const parsed = splitCommittedHeadings(committed);
+    expect(parsed).toEqual(["<path>"]);
+    const root = makeConfigRepo({ overrides: committed });
+    expect(missingFromOverrideLog(root, parsed)).toEqual(new Set(parsed));
+  });
+});
+
+/** Every `###` capture the PATTERN finds in `raw`, fence or no fence. */
+function splitCommittedHeadings(raw: string): string[] {
+  const out: string[] = [];
+  for (const line of raw.split(/\r?\n/)) {
+    const value = heading(line);
+    if (value !== null) out.push(value);
+  }
+  return out;
+}
+
+describe("phi-scan splits its allow-list into lines the way the pattern did", () => {
+  /**
+   * `raw.split(/\r?\n/)`: an `LF` ends a line and takes an immediately preceding `CR` with it. A
+   * LONE `CR` is not a separator and stays in the line, which is the half a hand-written scan is
+   * likely to get wrong, and it is observable here because a name with a stray `CR` in it does not
+   * equal the name in the corpus and therefore does not excuse it.
+   *
+   * 🛑 THE `CRLF` HALF IS NOT OBSERVABLE AND THIS CASE DOES NOT CLAIM IT IS. Both callers trim, so
+   * a `CR` a `CR`-blind split would leave behind is eaten before it reaches anything - measured, a
+   * mutant dropping that test passes every case in this file. The `CRLF` lines below are here so
+   * the shapes are all present, not as evidence about them; the assertion that bites is the lone
+   * `CR`, and a mutant that splits on one turns this case red. The reason the script writes it the
+   * pattern's way anyway is on `splitLines`.
+   */
+  it("agrees with the pattern on every line-ending shape, measured by which names are excused", () => {
+    const names = ["ALFA", "BRAVO", "CHARLIE", "DELTA", "ECHO", "FOXTROT"].map(
+      (n) => `${n}${CARET}QZ`,
+    );
+    // ALFA/BRAVO by LF, CHARLIE/DELTA by CRLF, then a LONE CR between ECHO and FOXTROT: the
+    // pattern makes those two ONE line, so neither is a usable entry.
+    const [a, b, c, d, e, f] = names as [string, string, string, string, string, string];
+    const allowList = `# header\r\n${a}\n${b}\n${c}\r\n${d}\r\n${e}\r${f}\n`;
+    const expected = allowList.split(/\r?\n/).map((l) => l.trim());
+
+    const corpus = `${names.join("\n")}\n`;
+    assertNotExcused(names);
+    const root = makeConfigRepo({ allowList });
+    const target = join(root, "test", "fixtures", "corpus.txt");
+    writeFileSync(target, corpus, "utf8");
+    const r = runRepoScript("phi-scan.ts", ["--max-hit-lines", "0", target], { cwd: root });
+    const reported = new Set(parseHits(r.stderr, "(text)").map((h) => h.value));
+
+    // The oracle: a name is excused exactly when it is one of the pattern's lines.
+    const excused = new Set(expected);
+    for (const name of names) {
+      expect(reported.has(name), `${name} reported?`).toBe(!excused.has(name));
+    }
+    // Non-vacuity in both directions, so neither "everything excused" nor "nothing excused" passes.
+    expect(reported.size).toBeGreaterThan(0);
+    expect(names.filter((n) => excused.has(n)).length).toBeGreaterThan(3);
+  });
+});
+
+describe("phi-scan validates --max-hit-lines the way the pattern did", () => {
+  /**
+   * `/^\d+$/`: ASCII digits only, at least one, anchored at both ends with no `m` flag - so `$`
+   * does not admit a trailing newline. Each shape is a class the pattern distinguishes rather than
+   * an arbitrary string, and the oracle is the pattern itself.
+   */
+  const CANDIDATES = [
+    "0",
+    "7",
+    "007",
+    "1234567890",
+    "",
+    " 3",
+    "3 ",
+    "3\n",
+    "\n3",
+    "+1",
+    "-1",
+    "1e9",
+    "0x10",
+    "1.0",
+    "Infinity",
+    "NaN",
+    "banana",
+    "１２", // FULLWIDTH DIGIT ONE, TWO
+    "١٢", // ARABIC-INDIC DIGIT ONE, TWO
+    "3​",
+  ];
+
+  it("accepts exactly the strings the pattern accepts", () => {
+    const root = makeConfigRepo({});
+    let accepted = 0;
+    let refused = 0;
+    for (const value of CANDIDATES) {
+      const wanted = /^\d+$/.test(value);
+      const r = runRepoScript("phi-scan.ts", ["--max-hit-lines", value, "README.md"], {
+        cwd: root,
+      });
+      const gotRefusal =
+        r.code === 2 && r.stderr.includes("--max-hit-lines expects a non-negative integer");
+      expect(gotRefusal, `${JSON.stringify(value)} -> ${r.stderr}`).toBe(!wanted);
+      if (wanted) accepted += 1;
+      else refused += 1;
+    }
+    // Non-vacuity: a candidate list that was all one way would pass against a constant answer.
+    expect(accepted).toBeGreaterThan(3);
+    expect(refused).toBeGreaterThan(10);
   });
 });

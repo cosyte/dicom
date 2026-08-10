@@ -49,8 +49,9 @@ process, with the whole page behind it in `RegExp.input`.
 **The scan route hands no target bytes to a `RegExp`.** Seven sites moved to forward scanners and
 character predicates: the three `scanText` recognizers, the tag route's pad trim, the
 transfer-syntax NUL trim, `checkDate`'s eight-digit test, and the two-letter VR test in
-`readElementExplicit` and `fileMetaStart`. The gate's own configuration is a different route and is
-untouched; the section below measures what it leaves.
+`readElementExplicit` and `fileMetaStart`. The gate's own configuration was a different route and
+was untouched **by this slice**; the section below measures what it left, and a later slice removed
+it too (`dicom-phi-scan-config-parsers.md`), so **the script now constructs no `RegExp` at all.**
 
 **Overwriting the statics after the scan was available and is not what was done.** A scrub is a
 bound that holds only from where the cleanup is called, which this lineage has refused twice
@@ -133,12 +134,16 @@ base, because only it asserts a property base did not have.
 
 ## 🔴 Not closed, and named rather than claimed away
 
-- **The gate's own CONFIGURATION is still a `RegExp` subject**, and the residual is visible in the
-  numbers rather than described: every clean column above reads `input 3772`, which is the exact
-  length in code units of `scripts/phi-allow-list.txt`. The remaining subjects are `process.argv`,
-  the allow-list, `phi-scan-overrides.md` and `git diff --cached --raw` output. **Neither config
-  file is inside `SCAN_ROOTS`** (`test`, `README.md`, `docs-content`), so the walk and `--staged`
-  never reach either as a target. Unchanged here.
+- **✅ CLOSED by a later slice, and the figure below is the SUPERSEDED reading.** It is kept because
+  it is what this slice measured, not because it is current: **the clean columns above now read
+  `input 0`.** The gate's own CONFIGURATION was still a `RegExp` subject here, and the residual was
+  visible in the numbers rather than described: every clean column above reads `input 3772`, which
+  is the exact length in code units of `scripts/phi-allow-list.txt`. The remaining subjects were
+  `process.argv`, the allow-list, `phi-scan-overrides.md` and `git diff --cached --raw` output.
+  **Neither config file is inside `SCAN_ROOTS`** (`test`, `README.md`, `docs-content`), so the walk
+  and `--staged` never reach either as a target. Unchanged **by this slice**; closed in
+  `documentation/agent-notes/dicom-phi-scan-config-parsers.md`, which also re-measured the 3,772
+  and found it is **code units, not the 3,774 BYTES** the file is on disk.
 - `hits` is still unbounded as an array; the relocation, `contextPath` and `attributes[].tag` stand;
   a flood within one recognizer entry still buries a later hit; the never-draining-reader wait and
   `run-script.ts`'s 1 MiB `maxBuffer` are untouched by this slice in either direction.

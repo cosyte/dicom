@@ -418,35 +418,36 @@ function* base64Runs(text: string): Generator<string> {
 }
 
 // ---------------------------------------------------------------------------
-// Matching a scan target's bytes WITHOUT handing them to a RegExp
+// Matching WITHOUT handing anything to a RegExp
 // ---------------------------------------------------------------------------
 
 /**
- * 🛑 THE SCAN ROUTE HANDS NO TARGET BYTES TO A `RegExp`, AND THE PREDICATES BELOW ARE WHAT MAKES
- * THAT TRUE RATHER THAN A CONVENTION.
- *
- * The scan route is `scanTarget` and everything it reaches. The gate's own CONFIGURATION is a
- * different route and is still parsed with patterns: `process.argv`, the allow-list, the override
- * log, and `git diff --cached --raw` output. Neither config file is inside `SCAN_ROOTS`, so the
- * walk and `--staged` never reach either.
- * `documentation/agent-notes/dicom-phi-scan-regex-statics.md` measures what is left.
+ * 🛑 THIS FILE CONSTRUCTS NO `RegExp`, AND THE PREDICATES BELOW ARE WHAT MAKES THAT TRUE RATHER
+ * THAN A CONVENTION.
  *
  * V8 keeps the last successful match on the `RegExp` CONSTRUCTOR: `RegExp.input` (`$_`) is the
  * whole subject string, `RegExp.lastMatch` (`$&`) is the matched text verbatim, and
  * `RegExp.leftContext`, `RegExp.rightContext`, `RegExp.lastParen` and `RegExp.$1` to `RegExp.$9`
- * are the rest of it. Those are readable properties of a global object. So a gate that hands a
- * target's text to a regex leaves that target's bytes readable from anywhere in the process until
- * something else matches, with the matched value (a name, a date) NOT excerpted.
+ * are the rest of it. Those are readable properties of a global object. So a gate that hands text
+ * to a regex leaves that text readable from anywhere in the process until something else matches,
+ * with the matched value (a name, a date) NOT excerpted.
  *
- * `DICOM-RESIDUALS` bounded what a hit line prints (`#109`) and what a hit holds (`#110`). This is
- * the third carrier of the same payload, disclosed by `#110` and unmeasured until now.
- * `scripts/measure-phi-scan-regex-statics.ts` is the instrument, and
- * `test/integration/phi-scan-regex-statics.test.ts` is the pin.
+ * `DICOM-RESIDUALS` bounded what a hit line prints (`#109`), what a hit holds (`#110`), and then
+ * took the scan route's own bytes out of every pattern (`#112`). `#112` left the gate's own
+ * CONFIGURATION parsed with patterns and disclosed it as a measured figure rather than a
+ * description: every clean column of its instrument read `input 3772`, the code-unit length of
+ * `scripts/phi-allow-list.txt`. That figure is what this pass closed, so the sentence carving the
+ * configuration out is DELETED rather than worded again - it was refused in three wordings across
+ * `#112`'s passes 1, 2 and 3, and the way to stop wording a carve-out is to remove what it carved
+ * out. `scripts/measure-phi-scan-regex-statics.ts` is the instrument,
+ * `test/integration/phi-scan-regex-statics.test.ts` is the pin, and the two records are
+ * `documentation/agent-notes/dicom-phi-scan-regex-statics.md` (the scan route) and
+ * `documentation/agent-notes/dicom-phi-scan-config-parsers.md` (this one, and what is left).
  *
  * 🛑 THE BOUND IS ON THE SUBJECT, NOT ON A CLEANUP CALL. Overwriting the statics after the scan
  * would be a bound that holds only from where the cleanup is called, and this lineage has ruled
- * that shape out twice (`#109`, `#111`): remove the slot, do not filter the value. There is no
- * cleanup here because there is nothing to clean up.
+ * that shape out three times (`#109`, `#111`, `#112`): remove the slot, do not filter the value.
+ * There is no cleanup here because there is nothing to clean up.
  *
  * `base64Runs` above already replaced a regex with a forward scanner in this file, for a different
  * reason (a backtrack stack that an 8 MiB run overflowed). This is the same shape and the same
@@ -455,6 +456,18 @@ function* base64Runs(text: string): Generator<string> {
  * EXHAUSTIVELY over every code point their inputs can hold, and the three text recognizers are
  * pinned by a differential fuzz against the patterns they replace. Both live in
  * `test/scripts/phi-scan-matchers.test.ts`.
+ *
+ * 🔴 THE ONE PLACE THAT IS DELIBERATELY NOT AN EQUIVALENCE IS `overrideLogPaths`, WHICH IS NARROWER
+ * ON PURPOSE AND IN THE FAIL-CLOSED DIRECTION. Its two departures from the pattern it replaces are
+ * enumerated on that function, and a dropped entry REFUSES a `--allow-fixture` bypass at exit 2,
+ * so the target is not exempted.
+ *
+ * 🔴 AND THE CONFIG PARSERS ARE NOT ALL PINNED TO THE SAME STANDARD AS THE SCAN ROUTE. Two shapes
+ * are unreachable from outside this script and no test claims them: `splitLines`'s `CRLF` handling
+ * (both callers trim, so a `CR`-blind split is invisible) and two `rawRecordMode` shapes git cannot
+ * emit. Each is named on its own function together with the mutant that passes the suite. They are
+ * still written the pattern's way, because a predicate keyed to what today's caller happens to do
+ * afterwards is a bound that holds only from the call site - the shape this file refuses elsewhere.
  */
 function isDigitCode(code: number): boolean {
   return code >= 0x30 && code <= 0x39;
@@ -546,6 +559,57 @@ function isEightDigits(text: string): boolean {
 /** `/^[A-Z]{2}$/.test(text)`. */
 function isTwoUpperLetters(text: string): boolean {
   return text.length === 2 && isUpperCode(text.charCodeAt(0)) && isUpperCode(text.charCodeAt(1));
+}
+
+/**
+ * ES2023 `LineTerminator`, which is the part of `\s` that `.` does NOT match.
+ *
+ * It is a separate predicate from `isSpaceCode` because the two answer different questions and one
+ * of the patterns below depends on the difference: `\s` admits `\r`, `.` does not, so a `###`
+ * heading with a bare `CR` inside it captures nothing at all.
+ */
+function isLineTerminatorCode(code: number): boolean {
+  return code === 0x0a || code === 0x0d || code === 0x2028 || code === 0x2029;
+}
+
+/** `/^\d+$/.test(text)`: at least one character, every one an ASCII digit. */
+function isAllDigits(text: string): boolean {
+  if (text.length === 0) return false;
+  for (let i = 0; i < text.length; i += 1) if (!isDigitCode(text.charCodeAt(i))) return false;
+  return true;
+}
+
+/**
+ * `text.split(/\r?\n/)`.
+ *
+ * A separator is an `LF`, together with a `CR` immediately before it. A lone `CR` is NOT a
+ * separator and stays in the line, which is the pattern's behaviour and not an approximation of it:
+ * `"a\rb"` is one line, and `"a\r\r\nb"` is `["a\r", "b"]`.
+ *
+ * The `CR` test is against the raw index rather than against the current line's start. A `CR` at
+ * `i - 1` can never already belong to the previous separator, because a separator ends on its `LF`
+ * and the character before this `LF` would then be that `LF` rather than a `CR`.
+ *
+ * 🔴 THE `CRLF` HALF IS NOT OBSERVABLE THROUGH EITHER OF TODAY'S CALLERS, AND NO TEST CLAIMS IT IS.
+ * `loadAllowList` runs `lineRaw.trim()` and `tripleHashValue` trims trailing whitespace, so a `CR`
+ * left on the end of a line by a `CR`-blind split is eaten by both before anything reads it - a
+ * mutant that drops the `i - 1` test passes the whole suite. It is written the pattern's way
+ * regardless, for the reason `isSpaceCode` above gives at length: keying on what today's callers
+ * happen to do afterwards is a bound that holds only from the call site, and it goes wrong silently
+ * the first time a caller stops trimming. What IS observable, and IS pinned, is that a LONE `CR` is
+ * not a separator.
+ */
+function splitLines(text: string): string[] {
+  const out: string[] = [];
+  let start = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    if (text.charCodeAt(i) !== 0x0a) continue;
+    const end = i > 0 && text.charCodeAt(i - 1) === 0x0d ? i - 1 : i;
+    out.push(text.slice(start, end));
+    start = i + 1;
+  }
+  out.push(text.slice(start));
+  return out;
 }
 
 /**
@@ -912,7 +976,7 @@ function parseArgs(argv: string[]): Args {
       // default, because a run that quietly printed a different amount than it
       // was told to is the same shape of unobservable behaviour this whole
       // script is written against.
-      if (!/^\d+$/.test(next)) {
+      if (!isAllDigits(next)) {
         throw new InvocationError(
           `--max-hit-lines expects a non-negative integer, got ${JSON.stringify(next)} ` +
             "(use 0 to print every hit line).",
@@ -957,7 +1021,7 @@ function loadAllowList(): AllowList {
   const pnExact = new Set<string>();
   const pnPrefix: string[] = [];
   const dates = new Set<string>();
-  for (const lineRaw of raw.split(/\r?\n/)) {
+  for (const lineRaw of splitLines(raw)) {
     const line = lineRaw.trim();
     if (line.length === 0 || line.startsWith("#")) continue;
     if (line.startsWith("DATE:")) {
@@ -973,17 +1037,147 @@ function loadAllowList(): AllowList {
   return { pnExact, pnPrefix, dates };
 }
 
+/** An opening or closing code fence: which character, how many, and whether anything follows. */
+interface Fence {
+  code: number;
+  length: number;
+  /**
+   * Nothing but SPACES AND TABS after the run. A CLOSING fence must be bare; an opening one need
+   * not be, because what follows an opening fence is its info string.
+   *
+   * 🛑 SPACE AND TAB, NOT `isSpaceCode`, AND BOTH ARMS ARE LOAD-BEARING. CommonMark 0.31.2 §4.5:
+   * a closing fence "may be followed only by spaces or tabs, which are ignored." Anything else is
+   * an info string and does not close. Dropping either arm reds one case in
+   * `test/scripts/phi-scan-matchers.test.ts`, and it is the same case for both. What a wrong answer
+   * here does is on `fenceRun` below; it is not a thing this field can be reasoned about locally.
+   */
+  bare: boolean;
+}
+
+/**
+ * A fenced-code-block delimiter: three or more backticks or tildes, indented at most three spaces.
+ *
+ * 🛑 FENCE STATE IS PARITY, SO THERE IS NO SAFE DIRECTION TO ERR IN AND THE ARGUMENT THAT THERE WAS
+ * IS DELETED RATHER THAN WORDED AGAIN. Two drafts of this comment claimed one, each refused by a
+ * gate, and the second was refused with the measurement that kills the whole shape: getting one
+ * fence wrong does not merely drop or admit that block's headings, it swaps every block boundary
+ * after it. On `open / A / close-with-a-trailer / B / close / C`, reading the trailer as bare drops
+ * `A` and `C` and admits `B`; reading it as an info string drops `A` and `B` and admits `C`. A
+ * wrong answer moves entries in BOTH directions at once.
+ *
+ * What is left is not a safety heuristic but a specification: this follows CommonMark 0.31.2 §4.5,
+ * and where it is measured to diverge that divergence is written down rather than argued to be
+ * harmless. `documentation/agent-notes/dicom-phi-scan-config-parsers.md` carries the one known
+ * divergence. This file does not render markdown and none of this is here because it does; it is
+ * here because `overrideLogPaths` has to agree with what a human reviewing that file sees.
+ */
+function fenceRun(line: string): Fence | null {
+  let i = 0;
+  while (i < 3 && i < line.length && line.charCodeAt(i) === 0x20) i += 1;
+  const code = line.charCodeAt(i);
+  if (code !== 0x60 && code !== 0x7e) return null; // ` and ~
+  let end = i;
+  while (end < line.length && line.charCodeAt(end) === code) end += 1;
+  if (end - i < 3) return null;
+  let bare = true;
+  for (let k = end; k < line.length; k += 1) {
+    const c = line.charCodeAt(k);
+    if (c !== 0x20 && c !== 0x09) {
+      bare = false;
+      break;
+    }
+  }
+  return { code, length: end - i, bare };
+}
+
+/**
+ * `/^###\s+(.+?)\s*$/` over one line, as a forward scan.
+ *
+ * The pattern is: exactly `###` at column 0, at least one whitespace character, then a capture that
+ * runs to the last non-whitespace character on the line. The capture is written `(.+?)` and `.`
+ * excludes `LineTerminator`, so a bare `CR` or `LS`/`PS` inside the captured span makes the whole
+ * pattern fail - which is why `isLineTerminatorCode` exists separately from `isSpaceCode`.
+ */
+function tripleHashValue(line: string): string | null {
+  if (!line.startsWith("###")) return null;
+  let start = 3;
+  while (start < line.length && isSpaceCode(line.charCodeAt(start))) start += 1;
+  if (start === 3) return null; // `\s+` needs at least one
+  let end = line.length;
+  while (end > start && isSpaceCode(line.charCodeAt(end - 1))) end -= 1;
+  if (end === start) return null; // NARROWING 2, see `overrideLogPaths`
+  for (let k = start; k < end; k += 1) {
+    if (isLineTerminatorCode(line.charCodeAt(k))) return null;
+  }
+  return line.slice(start, end);
+}
+
+/**
+ * The paths `phi-scan-overrides.md` logs, as `### <path>` headings OUTSIDE any fenced code block.
+ *
+ * 🛑 THIS IS THE ONE PARSER HERE THAT IS DELIBERATELY NOT AN EQUIVALENCE, AND BOTH DEPARTURES ARE
+ * FAIL-CLOSED. Dropping an entry makes `validateAllowFixtures` REFUSE the `--allow-fixture` flag
+ * naming it (exit 2), so the target is not exempted. Exit 2 does not scan it either: the run stops
+ * before enumeration and says nothing about the corpus, which is a refusal and not a clearance.
+ * Admitting an entry that no human wrote is the direction that silently exempts a PHI target, and
+ * it is what both of these were.
+ *
+ * 1. **Fence-awareness.** The pattern this replaces was FENCE-BLIND, so the `### <path>` line in
+ *    this repository's own committed `phi-scan-overrides.md` - a TEMPLATE, inside the fenced block
+ *    under "Format", showing a contributor what to write - parsed as a live allow entry.
+ *    `DICOM-RESIDUALS` `#112` disclosed it as `PRE-EXISTING` and inert. Re-measured here rather
+ *    than inherited, and the inertness holds twice over: no tracked path normalizes to `<path>`,
+ *    AND the placeholder normalizes to a ROOT-LEVEL path, which neither of the two gating routes
+ *    can ever produce a target for (`all` enumerates `SCAN_ROOTS`, `--staged` filters to
+ *    `SCAN_SCOPE`; a root-level file named `<path>` was staged and dropped by both). It was live
+ *    only in explicit-paths mode, where a caller names the file itself - measured, exit 0 with the
+ *    target exempted, against exit 1 for the same bytes without the flag and exit 2 for a path
+ *    with no entry at all.
+ *
+ * 2. **A heading whose text is entirely whitespace no longer registers one.** Found while measuring
+ *    the pattern rather than inherited from anywhere: `\s+` is greedy and `(.+?)` needs one
+ *    character, so on `###` followed by two or more spaces the engine gives ONE SPACE back out of
+ *    the whitespace run and captures it. `"###  "` yields `" "`, which `normalizePath` turns into a
+ *    root-level entry for a file named with a single space. Same shape as the template line, same
+ *    inertness, and it is closed here rather than disclosed because it is the same mechanism and
+ *    the same two lines of code.
+ *
+ * Everything else is the pattern exactly. `test/scripts/phi-scan-matchers.test.ts` holds the
+ * pattern itself as the oracle and drives this parser through `--allow-fixture`, which is
+ * repeatable and names every path it could not find an entry for - so one run reports exactly which
+ * of a candidate set the parser produced. Both directions are asked: the captures the pattern finds
+ * outside a fence must all be present, and the ones it finds inside a fence, the lone space, and
+ * what a merely-trimming parser would have produced must all be absent.
+ */
+function overrideLogPaths(raw: string): string[] {
+  const out: string[] = [];
+  let open: Fence | null = null;
+  for (const line of splitLines(raw)) {
+    const fence = fenceRun(line);
+    if (open === null) {
+      if (fence !== null) {
+        open = fence;
+        continue;
+      }
+      const value = tripleHashValue(line);
+      if (value !== null) out.push(value);
+      continue;
+    }
+    // Strict on the way out: same character, at least as long, and nothing after it.
+    if (fence !== null && fence.bare && fence.code === open.code && fence.length >= open.length) {
+      open = null;
+    }
+  }
+  return out;
+}
+
 function loadOverrideLog(): Set<string> {
   if (!existsSync(OVERRIDE_LOG_PATH)) {
     return new Set();
   }
-  const raw = readFileSync(OVERRIDE_LOG_PATH, "utf8");
   const out = new Set<string>();
-  for (const lineRaw of raw.split(/\r?\n/)) {
-    const m = /^###\s+(.+?)\s*$/.exec(lineRaw);
-    if (m && m[1] !== undefined) {
-      out.add(normalizePath(m[1]));
-    }
+  for (const value of overrideLogPaths(readFileSync(OVERRIDE_LOG_PATH, "utf8"))) {
+    out.add(normalizePath(value));
   }
   return out;
 }
@@ -1326,8 +1520,57 @@ function gitModeKind(mode: string): string {
   return `a git mode-${mode} entry`;
 }
 
-/** `:<srcmode> <dstmode> <srcsha> <dstsha> <status>` - the info half of a `--raw -z` record. */
-const RAW_RECORD = /^:(?:\d{6}) (\d{6}) [0-9a-f]+ [0-9a-f]+ [A-Z]\d*$/;
+/**
+ * The DESTINATION MODE out of `:<srcmode> <dstmode> <srcsha> <dstsha> <status>`, the info half of a
+ * `--raw -z` record, or `null` if the record is not that shape.
+ *
+ * `/^:(?:\d{6}) (\d{6}) [0-9a-f]+ [0-9a-f]+ [A-Z]\d*$/` as a forward scan. Every field is
+ * fixed-width or a run of a closed character class, so there is nothing to backtrack and the two
+ * are the same predicate rather than an approximation of it.
+ *
+ * 🔴 WHAT PINS IT IS THE `--staged` SUITE IN `test/scripts/phi-scan.test.ts`, AND THAT IS NARROWER
+ * THAN A DIFFERENTIAL. Measured rather than assumed: a mutant that never parses a record reds 14 of
+ * its 138 cases and one that returns the SOURCE mode reds 12, so the field this reads and the fact
+ * that it reads one at all are both covered. Two shapes are NOT covered and cannot be, because the
+ * subject is `git diff --cached --raw` output and no test can make git emit them: a sha in UPPERCASE
+ * hex, and trailing bytes after the status. Mutants widening either pass the whole suite. They are
+ * written the pattern's way regardless, on the same reasoning as `splitLines` - a predicate keyed to
+ * what today's producer happens to emit is not a predicate - and a record that fails to parse
+ * REFUSES the scan, which is the fail-closed direction.
+ */
+function rawRecordMode(info: string): string | null {
+  let i = 0;
+  const lit = (code: number): boolean => {
+    if (info.charCodeAt(i) !== code) return false;
+    i += 1;
+    return true;
+  };
+  const digits = (n: number): boolean => {
+    for (let k = 0; k < n; k += 1) {
+      if (!isDigitCode(info.charCodeAt(i))) return false;
+      i += 1;
+    }
+    return true;
+  };
+  const hexRun = (): boolean => {
+    const from = i;
+    while (i < info.length) {
+      const c = info.charCodeAt(i);
+      if (!(isDigitCode(c) || (c >= 0x61 && c <= 0x66))) break; // 0-9 a-f
+      i += 1;
+    }
+    return i > from;
+  };
+  if (!lit(0x3a) || !digits(6) || !lit(0x20)) return null; // `:` <srcmode> ` `
+  const modeAt = i;
+  if (!digits(6) || !lit(0x20)) return null; // <dstmode> ` `
+  if (!hexRun() || !lit(0x20)) return null; // <srcsha> ` `
+  if (!hexRun() || !lit(0x20)) return null; // <dstsha> ` `
+  if (!isUpperCode(info.charCodeAt(i))) return null; // <status>
+  i += 1;
+  while (i < info.length && isDigitCode(info.charCodeAt(i))) i += 1; // the score suffix
+  return i === info.length ? info.slice(modeAt, modeAt + 6) : null;
+}
 
 function buildTargetsForStaged(): Target[] {
   // SECURITY: array-form execFileSync, no shell.
@@ -1376,7 +1619,7 @@ function buildTargetsForStaged(): Target[] {
 
   // `--raw -z` emits `<info>\0<path>\0` per record. `R` (rename) and `C` (copy)
   // are the only statuses carrying a SECOND path, and `--no-renames` above means
-  // git cannot emit either, so the stride is two fields. The regex still admits a
+  // git cannot emit either, so the stride is two fields. `rawRecordMode` still admits a
   // score-suffixed status: if one ever reached here the stride would desync and
   // the next record would fail to parse, which REFUSES - the same outcome as any
   // other unparseable record, and the safe one. A record that does not parse
@@ -1396,8 +1639,7 @@ function buildTargetsForStaged(): Target[] {
       i += 1;
       continue;
     }
-    const m = RAW_RECORD.exec(info);
-    const mode = m?.[1];
+    const mode = rawRecordMode(info) ?? undefined;
     const path = fields[i + 1];
     if (mode === undefined || path === undefined || path.length === 0) {
       throw new InvocationError(

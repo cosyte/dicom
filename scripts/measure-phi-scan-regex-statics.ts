@@ -14,9 +14,10 @@
  * matched value (a patient name, a date) VERBATIM rather than excerpted.
  *
  * `DICOM-RESIDUALS` bounded what a hit line PRINTS (`#109`) and what a hit HOLDS (`#110`). This is
- * the third carrier of the same payload, disclosed by `#110` and not measured since. The record,
+ * the third carrier of the same payload, disclosed by `#110` and not measured since. The records,
  * the figures below and what is left open are in
- * `documentation/agent-notes/dicom-phi-scan-regex-statics.md`.
+ * `documentation/agent-notes/dicom-phi-scan-regex-statics.md` (the scan route) and
+ * `documentation/agent-notes/dicom-phi-scan-config-parsers.md` (the gate's own configuration).
  *
  * ## Why an in-process assertion cannot answer it
  *
@@ -438,6 +439,128 @@ function verifyDetectorFires(): Reading {
 }
 
 // ---------------------------------------------------------------------------
+// The gate's own CONFIGURATION as a RegExp subject
+// ---------------------------------------------------------------------------
+
+/**
+ * The shapes above all reach the scan route. This section reaches the other one.
+ *
+ * `#112` took the scan route's bytes out of every pattern and left the gate's own configuration
+ * parsed with them, disclosing that residual AS A NUMBER rather than as a sentence: every clean
+ * column above read `input 3772`, the code-unit length of `scripts/phi-allow-list.txt`. So the
+ * headline for this section is `input`, not `carriers` - no planted token is ever a config byte, so
+ * a carrier column would read clean on both trees and say nothing.
+ *
+ * Four routes, because they are parsed by four different things: the allow-list (every run), the
+ * override log and `process.argv` (`--allow-fixture`, `--max-hit-lines`), and `git diff --cached
+ * --raw` output (`--staged`).
+ */
+interface ConfigRoute {
+  name: string;
+  args: string[];
+  /** Stage everything under the throwaway repo first, for the `--staged` route. */
+  stage: boolean;
+  expect: number;
+  /**
+   * Whether this route's whole output must be byte-identical to base.
+   *
+   * 🛑 ONE ROUTE IS DELIBERATELY EXCLUDED AND IT IS NAMED IN THE OUTPUT RATHER THAN DROPPED
+   * QUIETLY. `--allow-fixture` reads the override log, and `overrideLogPaths` is NARROWER than the
+   * pattern it replaces on purpose: a fence-blind parse used to admit this repository's committed
+   * `### <path>` TEMPLATE as a live allow entry. Comparing that route byte for byte would report
+   * the fix as a violation, and suppressing the violation without saying so would hide the only
+   * behaviour this pass deliberately changed.
+   */
+  equivalent: boolean;
+}
+
+const CONFIG_ROUTES: ConfigRoute[] = [
+  {
+    name: "no arguments (the allow-list alone)",
+    args: [],
+    stage: false,
+    expect: 0,
+    equivalent: true,
+  },
+  {
+    name: "--max-hit-lines, a valid value",
+    args: ["--max-hit-lines", "5"],
+    stage: false,
+    expect: 0,
+    equivalent: true,
+  },
+  {
+    name: "--max-hit-lines, a refused value",
+    args: ["--max-hit-lines", "banana"],
+    stage: false,
+    expect: 2,
+    equivalent: true,
+  },
+  {
+    name: "--allow-fixture (reads the override log)",
+    args: ["--allow-fixture", "test/fixtures/absent.txt"],
+    stage: false,
+    expect: 2,
+    equivalent: true,
+  },
+  {
+    // The one deliberate behaviour change: base honours the fenced TEMPLATE line as an entry.
+    name: "--allow-fixture <the template placeholder>",
+    args: ["--allow-fixture", "<path>"],
+    stage: false,
+    expect: 2,
+    equivalent: false,
+  },
+  {
+    name: "--staged (reads git's raw records)",
+    args: ["--staged"],
+    stage: true,
+    expect: 0,
+    equivalent: true,
+  },
+];
+
+interface ConfigReading {
+  input: number;
+  code: number;
+  text: string;
+}
+
+/** The `RegExp` subject a config route leaves behind, with the exit code and output it left. */
+function configReading(scanner: string, route: ConfigRoute): ConfigReading {
+  const { root } = makeRepo(SHAPES[0] as Shape);
+  copyFileSync(join(REPO_ROOT, "phi-scan-overrides.md"), join(root, "phi-scan-overrides.md"));
+  // A file whose repo-relative path IS the committed template's placeholder, so the fence-blind
+  // parse has something to exempt. Nothing under `SCAN_ROOTS` can ever normalize to it, which is
+  // why the residual was inert; naming it explicitly is the only way to reach the route at all.
+  writeFileSync(join(root, "<path>"), "placeholder\n", "utf8");
+  if (route.stage) {
+    spawnSync("git", ["add", "-A", "."], { cwd: root, shell: false });
+  }
+  const dir = mkdtempSync(join(tmpdir(), "dicom-regex-statics-cfg-"));
+  roots.push(dir);
+  const report = join(dir, "samples.json");
+  writeFileSync(report, "[]", "utf8");
+  const observer = writeObserver(dir, report);
+  const r = spawnSync(process.execPath, ["--require", observer, scanner, ...route.args], {
+    cwd: root,
+    shell: false,
+    encoding: "utf8",
+    maxBuffer: 256 * 1024 * 1024,
+  });
+  const samples = JSON.parse(readFileSync(report, "utf8")) as Sample[];
+  const atExit = samples[samples.length - 1];
+  if (atExit === undefined || atExit.where !== "exit") {
+    throw new Error(`instrument: no exit reading on config route "${route.name}"`);
+  }
+  return {
+    input: atExit.inputLength,
+    code: r.status ?? -1,
+    text: `${r.stdout ?? ""}${r.stderr ?? ""}`,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // The equivalence grid: did removing the regexes change what the gate REPORTS?
 // ---------------------------------------------------------------------------
 
@@ -820,6 +943,60 @@ function main(): number {
   if (base !== undefined) {
     out.push(`  shapes where the BASE tree left a carrier      ${String(baseLeaks)}`);
     out.push(`  shapes compared against base                  ${String(compared)}`);
+  }
+  out.push("");
+
+  // The gate's OWN configuration, which is the other route and the residual `#112` disclosed as a
+  // number. The headline here is `input`: a config byte is never a planted token, so a carrier
+  // column would read clean on both trees and prove nothing.
+  out.push("The gate's own CONFIGURATION as a `RegExp` subject, by the route that parses it.");
+  out.push("`input` is the length in code units of the subject the process still holds at exit.");
+  out.push("");
+  let shippedHeld = 0;
+  let baseHeld = 0;
+  let sameOutput = 0;
+  let differing = 0;
+  let intended = 0;
+  for (const route of CONFIG_ROUTES) {
+    const here = configReading(SHIPPED, route);
+    if (here.code !== route.expect) {
+      throw new Error(
+        `instrument: config route "${route.name}" exited ${String(here.code)}, expected ` +
+          `${String(route.expect)}. A route that did not run the parser it is named for leaves ` +
+          `no subject behind and would read as the strongest possible result.`,
+      );
+    }
+    if (here.input > 0) shippedHeld += 1;
+    let line = `  ${route.name.padEnd(42)} shipped input ${String(here.input).padStart(6)}`;
+    if (base !== undefined) {
+      const there = configReading(base, route);
+      if (there.input > 0) baseHeld += 1;
+      const same = there.code === here.code && there.text === here.text;
+      line += `   base input ${String(there.input).padStart(6)}`;
+      if (route.equivalent) {
+        if (same) sameOutput += 1;
+        else {
+          differing += 1;
+          line += "   🛑 OUTPUT DIFFERS";
+        }
+      } else {
+        intended += 1;
+        line += same
+          ? "   🛑 NO CHANGE, where one was intended"
+          : "   <- INTENDED difference (the fence)";
+        if (same) differing += 1;
+      }
+    }
+    out.push(line);
+  }
+  out.push("");
+  out.push(`  routes measured                               ${String(CONFIG_ROUTES.length)}`);
+  out.push(`  routes where SHIPPED still holds a subject    ${String(shippedHeld)}`);
+  if (base !== undefined) {
+    out.push(`  routes where BASE still holds a subject       ${String(baseHeld)}`);
+    out.push(`  routes byte-identical to base, as required    ${String(sameOutput)}`);
+    out.push(`  routes DELIBERATELY different (the fence)     ${String(intended)}`);
+    out.push(`  routes disagreeing with the above             ${String(differing)}  <- must be 0`);
   }
   out.push("");
   process.stdout.write(`${out.join("\n")}\n`);
