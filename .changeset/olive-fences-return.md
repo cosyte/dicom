@@ -24,8 +24,8 @@ entry sets are disjoint rather than nested, and the mutant exempts at exit 0 a t
 script refuses at exit 2. Fence state is parity, so a wrong answer moves entries in both directions.
 
 The behaviour was already correct and is unchanged: comment-stripped, `scripts/phi-scan.ts` is
-byte-identical on base and head. What changed is that the branch is now claimed by a test, and four
-carriers of the false disclosure inside this package are corrected.
+byte-identical on base and head. What changed is that four carriers of the false disclosure inside
+this package are corrected.
 
 The mutation figure that stood here is DELETED rather than restated: a later change in this same
 release moved `overrideLogPaths` onto its own CommonMark splitter, so the `CR`-blind mutant of

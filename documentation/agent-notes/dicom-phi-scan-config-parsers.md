@@ -216,8 +216,7 @@ of a candidate set the parser produced. Both directions are asked separately.
 - **One shape is unreachable from outside the script and NO TEST CLAIMS IT.** `rawRecordMode`
   cannot be shown an uppercase-hex sha or trailing bytes after the status, because git does not emit
   either, and mutants widening both pass. **`splitLines`'s `CRLF` handling was named here as a
-  second such shape and that was WRONG** - it is observable through `overrideLogPaths`, and the
-  section below closes it. **A first draft of this
+  second such shape and that was WRONG** - the section below closes it. **A first draft of this
   slice's JSDoc claimed an exhaustive differential for each. Both sentences were DELETED** rather
   than reworded, on this repo's own rule that a disclosure naming a test must name one that exists.
   What does pin `rawRecordMode` was measured instead: a mutant that never parses a record reds **14**

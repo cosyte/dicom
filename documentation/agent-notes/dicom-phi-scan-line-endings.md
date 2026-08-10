@@ -183,7 +183,9 @@ slice rather than against it, and it is named here because `fenceRun`'s own rule
 divergence gets written down rather than argued harmless. **It is a backlog line and not this
 slice's to close**: modelling section 4.6 means seven start conditions and their end conditions,
 which is a block-structure feature, not a fourth selection change on a function that has already
-cost this lineage two passes.
+cost this lineage two passes. **It is HANDED TO THE META-REPO as its own `DICOM-RESIDUALS` open
+line, now and not "later"**, beside the section 4.5 backtick-info-string entry that is its sibling.
+Filing it as a sentence in this record alone would be the shape this lineage refuses.
 
 **Read every claim in this record as scoped to fenced code blocks.** "No longer a live allow entry"
 means the fenced route, measured; it is not a statement that the parser now agrees with a renderer.
