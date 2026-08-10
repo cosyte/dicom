@@ -960,9 +960,10 @@ describe("phi-scan suppresses a heading inside a CommonMark section 4.6 HTML blo
    * parser does not have; guessing at it is the parity trap. So a heading under `<span>` on its own
    * line is still a LIVE allow entry here where CommonMark hides it.
    *
-   * Both arms are asserted because only one of them is a divergence: after a PARAGRAPH line,
-   * condition 7 cannot fire, so the heading is live in CommonMark too and the parsers agree. A case
-   * that asserted only the first would read as an accepted behaviour rather than as a measured gap.
+   * The agreeing arm is asserted beside it, because only one of the two is a divergence: after a
+   * PARAGRAPH line, condition 7 cannot fire, so the heading is live in CommonMark too and the
+   * parsers agree. A case asserting the divergence alone would read as an accepted behaviour rather
+   * than as a measured gap.
    *
    * 🔴 AND THE THIRD ARM IS THIS SLICE WIDENING THE HOLE, DISCLOSED AGAINST ITSELF. A gate found it;
    * the class was disclosed and this INSTANCE of it was not. `</pre>` alone on a line is a complete

@@ -1184,9 +1184,9 @@ const HTML_BLOCK_LITERAL_TAGS: ReadonlySet<string> = new Set([
  * NO COUNT OF IT IS WRITTEN ANYWHERE. `test/helpers/commonmark-spec.ts` reads the list out of the
  * pinned document and `test/scripts/phi-scan-matchers.test.ts` drives one `--allow-fixture` run per
  * name through the membership oracle, so the table is checked against the spec rather than against
- * whoever typed it. The controls for the other direction are `<divx` and `<paramx`, which are a
- * PREFIX of a listed name and are not listed: CommonMark starts no block on either, and this parser
- * must still register the heading below them.
+ * whoever typed it. The controls for the other direction are `<divx` and `<paramx`, each a listed
+ * name FOLLOWED BY MORE tag-name characters and so listed nowhere: CommonMark starts no block on
+ * either, and this parser must still register the heading below them.
  */
 const HTML_BLOCK_TAGS: ReadonlySet<string> = new Set([
   "address",

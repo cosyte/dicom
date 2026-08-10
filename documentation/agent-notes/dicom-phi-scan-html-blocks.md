@@ -46,7 +46,7 @@ start condition is a complete open or closing tag alone on a line, and section 4
 does not have and cannot acquire without modelling every other leaf block, and **approximating it is
 the parity trap below**: a guess that a line is not in a paragraph opens blocks CommonMark does not,
 which moves entries in both directions at once. So it is scoped, named on the function, and pinned
-by a test, arm by arm, with no count of them written:
+by a test, arm by arm:
 
 | log                                            | CommonMark         | base `8139687`  | here            |
 | ---------------------------------------------- | ------------------ | --------------- | --------------- |
@@ -169,7 +169,8 @@ shipped table means that tag starts no block, so the heading under it is a live 
 **No exhaustiveness is claimed in the other direction.** An over-wide table is caught only for
 NAMED controls: `divx` and `paramx`, each a LISTED NAME FOLLOWED BY MORE tag-name characters, which
 is what pins the maximal-munch read (the listed name is the prefix, not the control), plus `source`,
-`canvas` and `video`, which are unrelated names a table grown by one entry would fail on. A method plus a named list, asserting no completeness.
+`canvas` and `video`, which are unrelated names a table grown by one entry would fail on. A method
+plus a named list, asserting no completeness.
 
 Both mutants the gate used are now red, re-measured on the remedy rather than argued:
 
@@ -222,8 +223,9 @@ caught.
   `U+2029`), and **section 4.5's backtick-info-string opener** is untouched. Both `PRE-EXISTING`.
 - **🔴 AND `tripleHashValue` ADMITS IN THE OTHER DIRECTION TOO, WHICH WAS UNNAMED UNTIL A GATE NAMED
   IT.** It separates the `###` run from the text with `isSpaceCode`, the whole of `\s`, where
-  section 4.2 allows only a space or a tab. So a heading whose separator is any other whitespace
-  renders as a PARAGRAPH and is a **live allow entry on both trees**. **The enumeration that stood
+  section 4.2 allows only a space or a tab. So a heading whose separator is whitespace that section
+  4.2 does not admit and that does not end the line renders as a PARAGRAPH and is a **live allow
+  entry on both trees**. **The enumeration that stood
   here is DELETED rather than completed**: it named six such characters and a gate measured three
   more, and this lineage's rule is that a list corrected once is cut, not extended. The predicate is
   the whole of `\s`, which is complete and does not need an illustration. That is the exempting
