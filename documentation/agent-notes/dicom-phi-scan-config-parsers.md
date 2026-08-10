@@ -216,8 +216,7 @@ of a candidate set the parser produced. Both directions are asked separately.
 - **One shape is unreachable from outside the script and NO TEST CLAIMS IT.** `rawRecordMode`
   cannot be shown an uppercase-hex sha or trailing bytes after the status, because git does not emit
   either, and mutants widening both pass. **`splitLines`'s `CRLF` handling was named here as a
-  second such shape and that was WRONG** - it is observable through `overrideLogPaths`, and the
-  section below closes it. **A first draft of this
+  second such shape and that was WRONG** - the section below closes it. **A first draft of this
   slice's JSDoc claimed an exhaustive differential for each. Both sentences were DELETED** rather
   than reworded, on this repo's own rule that a disclosure naming a test must name one that exists.
   What does pin `rawRecordMode` was measured instead: a mutant that never parses a record reds **14**
@@ -235,6 +234,11 @@ of a candidate set the parser produced. Both directions are asked separately.
 
 ## 🛑 The `CRLF` half WAS observable, and the disclosure saying it was not is DELETED
 
+> **This section is `#115`'s record and describes the call graph AS IT WAS.** `#116` moved
+> `overrideLogPaths` onto its own CommonMark splitter, so the caller named below is now
+> `splitCommonMarkLines` and `splitLines` is the allow list's alone. The finding stands; the
+> function names have moved. See `dicom-phi-scan-line-endings.md`.
+
 `#113` shipped `splitLines` with a 🔴 disclosure on it: the `CRLF` half was unobservable through
 either caller and claimed by no test, because `loadAllowList` trims and `tripleHashValue` trims.
 Those two premises are true. **The conclusion is FALSE, and false in exactly the way this file's own
@@ -251,11 +255,11 @@ ends, and every entry below it is dropped.
 **Measured on one log - a fenced template, two live entries below it - both `--allow-fixture`
 directions asked on each arm:**
 
-| arm                            | the two entries below the fence | the fenced template |
-| ------------------------------ | ------------------------------- | ------------------- |
-| shipped, `CRLF` log            | exit 0, both honoured           | exit 2, refused     |
-| `CR`-blind mutant, `CRLF` log  | **exit 2, both dropped**        | exit 2, refused     |
-| shipped AND mutant, `LF` log   | exit 0, both honoured           | exit 2, refused     |
+| arm                           | the two entries below the fence | the fenced template |
+| ----------------------------- | ------------------------------- | ------------------- |
+| shipped, `CRLF` log           | exit 0, both honoured           | exit 2, refused     |
+| `CR`-blind mutant, `CRLF` log | **exit 2, both dropped**        | exit 2, refused     |
+| shipped AND mutant, `LF` log  | exit 0, both honoured           | exit 2, refused     |
 
 The `LF` row is what makes this a fact about the line ending rather than about the fence rules
 `#113` already pinned, and the template column is the other direction, so a parser that made
@@ -271,10 +275,10 @@ exempted target. **That is the parity fallacy, it is the THIRD attempt at a fail
 `fenceRun` in this lineage, and the gate falsified it with an input.** On a log whose lines are all
 `CRLF` except one opening fence:
 
-| target                   | shipped                    | `CR`-blind mutant             |
-| ------------------------ | -------------------------- | ----------------------------- |
-| `--allow-fixture decoy`    | **exit 0, exempted**       | exit 2, refused               |
-| `--allow-fixture smuggled` | exit 2, refused            | **exit 0, EXEMPTED**          |
+| target                     | shipped              | `CR`-blind mutant    |
+| -------------------------- | -------------------- | -------------------- |
+| `--allow-fixture decoy`    | **exit 0, exempted** | exit 2, refused      |
+| `--allow-fixture smuggled` | exit 2, refused      | **exit 0, EXEMPTED** |
 
 The two entry sets are `{decoy}` and `{smuggled}` - **disjoint, not nested** - and the mutant
 exempts a target the shipped script refuses. A prevented close CAN invert later boundaries, which
@@ -312,13 +316,9 @@ handed to the meta-repo, named rather than left to read as current.
 the never-draining-reader wait and `run-script.ts`'s 1 MiB `maxBuffer`; the `rawRecordMode` shapes
 git cannot emit. **It measures nothing about the heap and nothing about the corpus.**
 
-**🔴 AND ONE THE GATE RAISED THAT IS `PRE-EXISTING` AND IS NOT RE-MEASURED HERE.** `splitLines`
-mirrors `/\r?\n/`, so a LONE `CR` is not a separator; CommonMark counts one as a line ending, which
-makes `overrideLogPaths` diverge on a log carrying one, in the direction that admits an entry a
-human reading the rendered log does not see. The refuter measured it on base `fd0b92a` as well as on
-this head, so it is **not this slice's to carry** (ADR 0016 rule 2: a backlog line, never absorbed
-into a slice) - and **the figure is the gate's, not re-taken here**, because grounding it needs a
-CommonMark oracle this repository does not vendor. It is handed to the meta-repo beside the open
-§4.5 backtick-info-string line, which is its sibling. **Do not read the lone-`CR` pin in
-`test/scripts/phi-scan-matchers.test.ts` as clearing it:** that pin says our split agrees with the
-PATTERN it replaced, which is a different claim from agreeing with CommonMark.
+**🟢 AND ONE THE GATE RAISED THAT IS NOW CLOSED.** `splitLines` mirrored `/\r?\n/`, so a LONE `CR`
+was not a separator; CommonMark counts one as a line ending, which made `overrideLogPaths` diverge
+on a log carrying one, in the direction that admits an entry a human reading the rendered log does
+not see. It was filed here as a backlog line rather than absorbed (ADR 0016 rule 2), with the figure
+left un-retaken because grounding it needed a CommonMark oracle this repository did not vendor.
+**`#116` vendored one and closed it**: `dicom-phi-scan-line-endings.md`.

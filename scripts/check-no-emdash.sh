@@ -348,10 +348,26 @@ fi
 # here reads the sibling `SHA.txt`. What actually enforces that is the generators, which
 # re-hash their pinned inputs and refuse on a mismatch. This pattern is a path rule that
 # happens to select the vendored documents; it is not proof that they are vendored. So
-# the anchor plus the 64-hex requirement is the real guard. Measured today: exactly 4
-# files match, the four NEMA normative documents, and only `part05.xml` actually contains
-# the character.
-VENDOR_PINNED_DOC='^vendor/nema/[^/]+/[0-9a-f]{64}/'
+# the anchor plus the 64-hex requirement is the real guard.
+#
+# THE SECOND ANCHOR, `commonmark`, added when `vendor/commonmark/spec/<sha256>/spec.txt` was pinned
+# as the normative source for what a LINE is in `phi-scan-overrides.md`. It carries FIVE em dashes,
+# all in the document's prose (two inside quotations of Gruber's original syntax description, so do
+# not attribute them to one author), and the case is byte for byte the NEMA one above: the
+# rule's own remedy ("rewrite the sentence") cannot be applied to a document vendored VERBATIM, and
+# editing one byte breaks the SHA-256 pin that `test/scripts/commonmark-pin.test.ts` re-hashes as a
+# precondition. The pin is a safety property, the brand rule is a voice property, and on a file
+# cosyte did not write the pin wins and the scan yields.
+#
+# It is a SECOND NAMED ROOT, never a widening to `vendor/`. Both guards survive intact: a new vendor
+# root still cannot inherit the exemption without being named here, and a full SHA-256 still cannot
+# be written as prose. Every HAND-WRITTEN file under `vendor/commonmark/` stays in scope, which is
+# `README.md` and `spec/SHA.txt` (and a hand-written `SHA.txt` is exactly where this tree's only
+# real violation was ever found).
+#
+# Measured after the addition: exactly 5 files match, the four NEMA normative documents plus
+# `spec.txt`, and `part05.xml` and `spec.txt` are the two that actually contain the character.
+VENDOR_PINNED_DOC='^vendor/(nema|commonmark)/[^/]+/[0-9a-f]{64}/'
 
 grep -zvxF 'scripts/check-no-emdash.sh' < "$FILELIST" |
   grep -zvP "$VENDOR_PINNED_DOC" > "$SCANLIST" || true
