@@ -1,5 +1,118 @@
 # Changelog
 
+## 0.0.19
+
+### Patch Changes
+
+- 58c9f2e: Stop the PHI gate constructing any `RegExp` at all, and stop its override log honouring a template
+  line as a live bypass. Both were disclosed by the previous slice and turn out to be one mechanism.
+  V8 keeps the last successful match on the `RegExp` constructor, so a matched subject stays readable
+  from `RegExp.input` and `RegExp.lastMatch` anywhere in the process. The scan route stopped handing
+  target bytes to a pattern last time; the gate's own configuration did not, and that residual was
+  disclosed as a number rather than a description, every clean column of the instrument reading
+  `input 3772`. Re-measured before building to it: that is `scripts/phi-allow-list.txt` in UTF-16 code
+  units, not the 3,774 bytes the file is on disk.
+
+  A runtime census of every pattern the script runs found five live sites, all four config parsers,
+  and `loadOverrideLog` held two of them. On the route that reads the override log the retained
+  subject IS the fence-blind template line, held verbatim, which is what made this one slice and not
+  two. All five are now forward scanners, so the carve-out sentence that was refused in three wordings
+  is deleted rather than worded again. A scrub was available and refused once more: a bound that holds
+  only from where a cleanup is called is not a bound.
+
+  `overrideLogPaths` is the one parser deliberately narrower than the pattern it replaces, in the
+  fail-closed direction, because a dropped entry makes `--allow-fixture` refuse the run at exit 2
+  rather than exempt the target.
+  It is fence-aware, so the committed `### <path>` template inside the "Format" block is no longer an
+  allow entry, and an all-whitespace heading no longer registers a lone space as a path. The template
+  entry's inertness was re-measured rather than inherited and holds twice over: neither gating route
+  can produce a target that normalizes to a root-level path, and it was live only where a caller names
+  the file itself.
+
+  Everything else is equivalence, measured: 0 differing bytes across 34 cells and 9,283 hit lines
+  against a mutation control differing in 17, and 5 of 6 config routes byte-identical with the sixth
+  required to differ. Developer-facing only, no public API change.
+
+- 7754a6c: Make the PHI gate's hit excerpt own its bytes, so a hit cannot retain the payload it was cut from.
+  `scripts/phi-scan.ts` bounded what a hit line prints, but not what a hit holds: V8 answers
+  `raw.slice(0, n)`, and a regexp match, with a string that points into its parent, so a 19 character
+  name matched inside an 8 MiB page kept that whole page alive for the rest of the run, and `hits`
+  lives for the whole run. Measured against `88be779`, retained memory grew by one whole file for
+  every hit-bearing file scanned and now does not grow at all: 178 MiB against 34 MiB over a 160 MiB
+  corpus, with a hit-free control of the same size reading 26 MiB on both.
+
+  The copy is inside the one factory that makes a hit value, so the bound is on the slot rather than
+  on a caller, and it is on both branches: a value already under the excerpt bound is a pointer too,
+  which is the route the text sweep's name recognizer takes. The round trip is `utf16le` rather than
+  `utf8` because `utf8` turns an unpaired surrogate into a replacement character, and a report naming
+  a value the file does not carry is the same class of wrong answer as a report printing too much.
+
+  The cost direction is stated rather than claimed away, and it is narrow: where one page is nothing
+  but violating tokens, a resident copy per hit replaces a resident pointer per hit, and the two are
+  within a few MiB of each other in either direction depending on token length.
+
+  Nothing printed changes: 42 of 42 grid cells across six routes, five value lengths and three cap
+  settings are byte-identical on exit code, stdout and stderr.
+  `pnpm measure:phi-scan-retention` re-derives both tables and the grid against any base.
+  Developer-facing only, no public API change.
+
+- 01d0983: Stop the PHI gate's scan route handing a target's bytes to a regular expression. The tag and text
+  sweeps now leave nothing in V8's legacy `RegExp` statics, where the whole of a scanned page and an
+  unexcerpted matched name were readable after a scan. Reported hits are unchanged, byte for byte.
+- 7fbc8e9: Spend the PHI gate's per-file print budget per recognizer, so one recognizer's flood cannot spend
+  another's share. `scripts/phi-scan.ts` printed the first `n` of a file's hits in scan order, and a
+  file's routes do not queue independently: the tag walk appends before the text sweep, so how many of
+  the text sweep's findings a reader saw was decided by how many the tag walk had already made. The
+  text sweep's PN recognizer is the only route that can see a caret-joined name in bytes the tag table
+  never typed, and it is the one at the end of the queue. Nothing was ever mis-counted, and this was
+  not a false green: the exit code, the total, the set of files named and the withheld count are
+  computed off the hits and were right throughout. What moved was which lines a reader saw.
+
+  The budget is now spent per entry of a closed recognizer table, per file, so whether a hit prints
+  depends on its own recognizer and its index among that file's hits from that recognizer, and on
+  nothing another recognizer found. The table is a type rather than an analysis of today's push sites:
+  budgeting on the printed reason string would have let one future recognizer interpolate a
+  payload-derived token into it and hand the payload a vote on how many classes exist. The `hits`
+  array is still deliberately not capped, because a cap there would make the totals a claim about what
+  was kept rather than about what was found.
+
+  Because a hit among a file's first `n` overall is among its own recognizer's first `n`, the printed
+  set is a superset of the previous scanner's at every cap: 72 grid cells over nine corpus shapes and
+  eight caps, zero cells where a line the old scanner printed goes unprinted, 29 cells printing
+  strictly more, and 23 cells where the old scanner printed nothing at all from a recognizer that had
+  hits. With the two scanners swapped the same grid reports 332 violations, so the zero is a
+  measurement rather than a blind check. `pnpm measure:phi-scan-monotonicity` re-derives it against
+  any base.
+
+  This is not monotonicity and is not described as it: under any finite budget `n+1` hits from one
+  entry print `n`, so adding a hit can always remove a line. Several sweeps also share an entry, which
+  costs more than the same sweep twice: the two text date passes share one, so over 200 ISO dates
+  followed by 200 compact ones the report prints 20 ISO lines and no compact one, and the compact pass
+  is the only route that sees a bare eight-digit date. That is measured, identical on the previous
+  scanner, unchanged here, and pinned by a test rather than argued away.
+
+  The cost is stated rather than claimed away: a file's report can be longer, bounded by the cap times
+  the closed table instead of by the cap, measured at 20 lines against 61 on the loudest grid shape at
+  the default budget. `--max-hit-lines 0` still prints every line. Developer-facing only, no public API
+  change.
+
+- 88be779: Bound the value a PHI-gate hit line echoes. `scripts/phi-scan.ts` printed the whole violating value
+  on one stderr line, and how large that was is chosen by the payload: an element declares its own
+  length, so a `(0010,0010)` claiming the rest of the object put the rest of the object on one line
+  to report that a name was not on the allow-list. It was the only unbounded payload-derived field on
+  the line; the others are a path, a rendered tag, an offset and a literal reason.
+
+  A hit now carries an excerpt of at most 194, bounded where the hit is made rather than where it is
+  printed: `Hit.value` is no longer a `string`, and one factory is the only way to make one. 194 is
+  PS3.5 2026c Table 6.2-1's PN arithmetic (three component groups of 64, two delimiters), but that
+  table measures in characters and this scanner measures a latin1 decode, so 194 bounds what the
+  report prints and says nothing about what the standard admits: a conformant 194-character PN under
+  `ISO_IR 192` is cut here, and a test pins it. Every cut states exactly how much was withheld,
+  outside the quotes.
+
+  Detection is unchanged: the exit code, the totals and the set of files named come from the hits and
+  not from what was printed. Developer-facing only, no public API change.
+
 ## 0.0.18
 
 ### Patch Changes
