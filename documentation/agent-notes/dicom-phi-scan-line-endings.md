@@ -6,9 +6,15 @@
 > `git show origin/main:CLAUDE.md | wc -c` against `REPO_CLAUDE` in the meta-repo's
 > `.claude/hooks/doc-budget.mjs`. `documentation/agent-notes.md` is **257,209 B, over its 250,000
 > ceiling** on `main`, so this record is here instead (budgeted at `REPO_DOC_MAX`, 90,000).
-> **No trap deleted, no ceiling raised.** What points at it, verified by `git grep` rather than
-> asserted: `scripts/phi-scan.ts`, `scripts/measure-phi-scan-line-endings.ts` and
-> `vendor/commonmark/README.md`. **No always-read file does.**
+> **No trap deleted, no ceiling raised.** What points at it, derived with
+> `git grep -an dicom-phi-scan-line-endings` rather than asserted: `scripts/phi-scan.ts`,
+> `scripts/measure-phi-scan-line-endings.ts`, `vendor/commonmark/README.md` and
+> `documentation/agent-notes/dicom-phi-scan-config-parsers.md`. **No always-read file does.**
+>
+> 🩺 **The gate's pass-1 major was this paragraph, for the second slice running.** It named three
+> pointers when `scripts/phi-scan.ts` did not yet carry one, which is the verbatim `#113` pass-1
+> major recurring inside the paragraph that records it. The citation was added rather than the
+> sentence reworded, and the list is now derived by the command above.
 
 `DICOM-RESIDUALS`, `conformance-refuter` gate. Base `734736f` (`#115`). Last verified 2026-08-10.
 
@@ -22,9 +28,9 @@ exempted PHI scan target, which is the one direction this parser exists to refus
 `overrideLogPaths` produces the set of paths `--allow-fixture` will exempt. A lone `CR` hides two
 different things from a `/\r?\n/` split:
 
-| what the `CR` hides | why                                                       | cost                         |
-| ------------------- | --------------------------------------------------------- | ---------------------------- |
-| a `###` heading     | `tripleHashValue` anchors `###` at column 0                | a dropped entry, exit 2      |
+| what the `CR` hides | why                                                        | cost                           |
+| ------------------- | ---------------------------------------------------------- | ------------------------------ |
+| a `###` heading     | `tripleHashValue` anchors `###` at column 0                | a dropped entry, exit 2        |
 | a fence **OPENER**  | `fenceRun` reads the first non-space character of the line | **an exempted target, exit 0** |
 
 A hidden opener means the block never opens, so every `### <path>` a human sees inside that code
@@ -35,13 +41,13 @@ block is live.
 Measured with `scripts/measure-phi-scan-line-endings.ts` (shipped), head against `734736f` restored
 **by file copy**:
 
-| log                | head (section 2.1)  | base `734736f` (`/\r?\n/`) | relation           |
-| ------------------ | ------------------- | -------------------------- | ------------------ |
-| `committed`        | `{}`                | `{}`                       | equal (the anchor) |
-| `hidden-opener`    | `{visible}`         | **`{smuggled}`**           | **disjoint**       |
-| `hidden-opener-lf` | `{visible}`         | `{visible}`                | equal (the control)|
-| `crlf-close`       | `{below-one}`       | `{below-one}`              | equal              |
-| `heading-shapes`   | 14 of 14            | 8 of 14                    | base is a SUBSET   |
+| log                | head (section 2.1) | base `734736f` (`/\r?\n/`) | relation            |
+| ------------------ | ------------------ | -------------------------- | ------------------- |
+| `committed`        | `{}`               | `{}`                       | equal (the anchor)  |
+| `hidden-opener`    | `{visible}`        | **`{smuggled}`**           | **disjoint**        |
+| `hidden-opener-lf` | `{visible}`        | `{visible}`                | equal (the control) |
+| `crlf-close`       | `{below-one}`      | `{below-one}`              | equal               |
+| `heading-shapes`   | 14 of 14           | 8 of 14                    | base is a SUBSET    |
 
 `smuggled` is a path base **exempts at exit 0** and head refuses at exit 2. `visible` is the
 reverse. One log reads **disjoint** and another reads **strict subset**, which is why "narrower is
@@ -56,12 +62,20 @@ fence rules `#113` already pinned: the same document with every lone `CR` writte
 `splitCommonMarkLines` implements CommonMark 0.31.2 section 2.1's line ending; `overrideLogPaths`
 calls it. **`loadAllowList` keeps `splitLines`, which stays `/\r?\n/` exactly.**
 
-That split is deliberate and is the reason this is not one function. `scripts/phi-allow-list.txt` is
-not a markdown document, and unifying the two would make a `CR`-joined line TWO live allow entries
-where it is one dead one today (a name carrying a `CR` equals nothing a scan produces). **A live
-allow entry SUPPRESSES a hit**, so unifying would widen the allow list as a side effect of a
-markdown fix, which is the shape `#97` and `#104` were refused for. The case that would go red if
-anyone did it is already in `test/scripts/phi-scan-matchers.test.ts`.
+That split is deliberate and is the reason this is not one function: **`scripts/phi-allow-list.txt`
+is not a markdown document, so CommonMark's line rule does not govern it.** That is the whole
+reason. The case that would go red if anyone unified them anyway is already in
+`test/scripts/phi-scan-matchers.test.ts`.
+
+**🛑 A SECOND REASON WAS DRAFTED AND IS DELETED, BECAUSE IT WAS THE PARITY FALLACY ONE FUNCTION
+OVER.** It argued that unifying would WIDEN the allow list, on the premise that a `CR`-joined line
+is a dead entry today. The gate falsified both halves with controls: `trimTrailingPad` strips only
+TRAILING pad, so an interior `CR` survives into the compared value, and a `CR`-joined line is a
+LIVE entry that exempts a hit at exit 0. The two readings' allow-entry sets are `{"ALFA\rBRAVO"}`
+and `{"ALFA", "BRAVO"}`, **disjoint rather than nested**, each exempting at exit 0 something the
+other reports at exit 1. So the allow list has no safe direction either, and the sentence claiming
+one is deleted rather than worded a second time. Behaviour there is `PRE-EXISTING` and identical on
+both trees; only the sentence was new.
 
 **🔴 THE COST, STATED RATHER THAN ARGUED AWAY:** `splitLines`'s `CRLF` half is unobservable through
 its only caller again, because `loadAllowList` trims. That is a fact about the caller and not a
@@ -102,8 +116,9 @@ inside the file written to avoid it.
 
 ## 🛑 The em-dash gate needed a second named vendor root, and that is a real widening
 
-`vendor/commonmark/spec/<sha256>/spec.txt` carries **five em dashes**, every one in John
-MacFarlane's own prose. `VENDOR_PINNED_DOC` in `scripts/check-no-emdash.sh` becomes
+`vendor/commonmark/spec/<sha256>/spec.txt` carries **five em dashes**, all in the document's prose
+(two of them inside quotations of John Gruber's original syntax description, so no single author is
+named for them). `VENDOR_PINNED_DOC` in `scripts/check-no-emdash.sh` becomes
 `^vendor/(nema|commonmark)/[^/]+/[0-9a-f]{64}/`.
 
 The case is byte for byte the NEMA one the script already argues: the rule's own remedy ("rewrite
@@ -145,6 +160,33 @@ phi-scan's own message), the **committed-log anchor** (every script must read ze
 this repository's own log), and the **positive control** (the corpus must produce both an empty and
 a non-empty entry set, and a comparison must produce at least one non-`equal` relation). A detector
 that cannot fire is not a detector.
+
+## 🛑 What is closed is the FENCED-BLOCK route, and section 4.6 is a hole in the ADMITTING direction
+
+**`overrideLogPaths` is now spec-grounded on section 2.1's line, but its block structure is a
+hand-rolled subset of section 4: fenced code blocks and nothing else.** Section 4.6's HTML blocks
+also suppress headings in a rendered document, and this parser does not model them, so a `### <path>`
+a human sees inside an HTML block is a LIVE allow entry. Re-measured here on both trees rather than
+inherited from the gate that raised it, `--allow-fixture commented` against a log carrying
+`intro / <!-- / ### commented / -->`:
+
+| log                     | head                 | base `734736f`       |
+| ----------------------- | -------------------- | -------------------- |
+| HTML comment, `LF`      | **exit 0, EXEMPTED** | **exit 0, EXEMPTED** |
+| HTML comment, lone `CR` | **exit 0, EXEMPTED** | exit 2, refused      |
+| `<div>` block, `LF`     | **exit 0, EXEMPTED** | **exit 0, EXEMPTED** |
+
+So the class is `PRE-EXISTING` and unchanged in the `LF` shapes, **and this slice moves one more
+input into it**: a lone `CR` inside an HTML block used to hide the whole construct from the parse
+and now does not. That is the parity property this record states everywhere else, landing on this
+slice rather than against it, and it is named here because `fenceRun`'s own rule is that a measured
+divergence gets written down rather than argued harmless. **It is a backlog line and not this
+slice's to close**: modelling section 4.6 means seven start conditions and their end conditions,
+which is a block-structure feature, not a fourth selection change on a function that has already
+cost this lineage two passes.
+
+**Read every claim in this record as scoped to fenced code blocks.** "No longer a live allow entry"
+means the fenced route, measured; it is not a statement that the parser now agrees with a renderer.
 
 ## 🔴 Not closed, and named rather than claimed away
 

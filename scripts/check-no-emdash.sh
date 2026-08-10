@@ -352,7 +352,8 @@ fi
 #
 # THE SECOND ANCHOR, `commonmark`, added when `vendor/commonmark/spec/<sha256>/spec.txt` was pinned
 # as the normative source for what a LINE is in `phi-scan-overrides.md`. It carries FIVE em dashes,
-# every one in John MacFarlane's own prose, and the case is byte for byte the NEMA one above: the
+# all in the document's prose (two inside quotations of Gruber's original syntax description, so do
+# not attribute them to one author), and the case is byte for byte the NEMA one above: the
 # rule's own remedy ("rewrite the sentence") cannot be applied to a document vendored VERBATIM, and
 # editing one byte breaks the SHA-256 pin that `test/scripts/commonmark-pin.test.ts` re-hashes as a
 # precondition. The pin is a safety property, the brand rule is a voice property, and on a file

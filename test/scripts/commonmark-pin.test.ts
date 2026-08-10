@@ -111,9 +111,12 @@ function theSectionCarrying(sentence: string): Section {
   const only = hits[0];
   if (only === undefined) throw new Error("unreachable");
   // Exactly one OCCURRENCE, not merely one section: a sentence appearing twice in one section is
-  // still a citation that cannot be resolved to a single place.
-  const occurrences = fold(prose(RAW)).split(needle).length - 1;
-  expect(occurrences, `occurrences of: ${needle}`).toBe(1);
+  // still a citation that cannot be resolved to a single place. Counted in the PROSE and again in
+  // the RAW document, because the two are different claims: the prose count is what the locator
+  // resolves over, and the raw count is what "occurs once in the document" means to a reader who
+  // greps it. A gate caught this file asserting the second while measuring only the first.
+  expect(fold(prose(RAW)).split(needle).length - 1, `prose occurrences: ${needle}`).toBe(1);
+  expect(fold(RAW).split(needle).length - 1, `raw occurrences: ${needle}`).toBe(1);
   return only;
 }
 

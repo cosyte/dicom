@@ -595,11 +595,9 @@ function isAllDigits(text: string): boolean {
  *
  * 🛑 THE OVERRIDE LOG NO LONGER USES THIS, AND THE TWO SPLITS ARE DELIBERATELY NOT UNIFIED.
  * `phi-scan-overrides.md` is a markdown document and goes through `splitCommonMarkLines` below;
- * this one is the allow list's. They differ on exactly one input, a LONE `CR`, and unifying them
- * would widen the ALLOW LIST: a `CR`-joined line is a dead entry today, because a name carrying a
- * `CR` equals nothing a scan produces, and splitting it makes both halves live. A live allow entry
- * SUPPRESSES a hit, so that is the direction `#97` and `#104` were refused for, taken as a side
- * effect of a markdown fix.
+ * `scripts/phi-allow-list.txt` is not one, so CommonMark's line rule does not govern it. That is
+ * the whole reason, and a draft that gave a second one asserting which way unifying them would err
+ * was DELETED after a gate measured the two readings' allow-entry sets as DISJOINT.
  *
  * 🔴 SO ITS `CRLF` HALF IS UNOBSERVABLE THROUGH ITS ONLY CALLER AGAIN, WHICH TRIMS. Stated, not
  * argued away, and not a reason to drop the half: that would key the function to what today's
@@ -643,7 +641,9 @@ function splitLines(text: string): string[] {
  * wrongly does not only drop or admit that block's headings, it moves every boundary after it.
  * Measured on one log the two entry sets are DISJOINT, each exempting at exit 0 a target the other
  * refuses at exit 2, which is why this is specified against section 2.1 rather than argued to be
- * the safer of the two. `scripts/measure-phi-scan-line-endings.ts` prints the relation.
+ * the safer of the two. `scripts/measure-phi-scan-line-endings.ts` prints the relation, and
+ * `documentation/agent-notes/dicom-phi-scan-line-endings.md` is the record, including the block
+ * classes where this parser is still measured to diverge from the spec it now cites.
  */
 function splitCommonMarkLines(text: string): string[] {
   const out: string[] = [];

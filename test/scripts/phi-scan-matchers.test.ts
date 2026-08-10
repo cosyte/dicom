@@ -755,9 +755,10 @@ describe("phi-scan splits its allow-list into lines the way the pattern did", ()
    * bites is the lone `CR`, and a mutant that splits on one turns this case red.
    *
    * 🔴 AND THAT IS WHY THE ALLOW LIST DOES NOT GET COMMONMARK'S SPLIT. The override log does, and
-   * the cases above claim it there; unifying the two would make the `CR`-joined pair below TWO
-   * live allow entries instead of one dead one, and a live allow entry SUPPRESSES a hit. This case
-   * is what would go red if anyone did, which is the point of it being here rather than a comment.
+   * the cases above claim it there; `scripts/phi-allow-list.txt` is not a markdown document, so
+   * CommonMark's line rule does not govern it. This case is what would go red if anyone unified
+   * them anyway, which is the point of it being here rather than a comment. NO DIRECTION IS CLAIMED
+   * for that change either: a gate measured the two readings' allow-entry sets as DISJOINT.
    */
   it("agrees with the pattern on every line-ending shape, measured by which names are excused", () => {
     const names = ["ALFA", "BRAVO", "CHARLIE", "DELTA", "ECHO", "FOXTROT"].map(
