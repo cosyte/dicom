@@ -28,6 +28,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { runRepoScript } from "../helpers/run-script.js";
+import { htmlBlockConditions } from "../helpers/commonmark-spec.js";
 
 const REPO_ROOT = join(import.meta.dirname, "..", "..");
 const CARET = String.fromCharCode(0x5e);
@@ -730,6 +731,279 @@ describe("phi-scan parses its own override log the way the pattern did, minus tw
     expect(parsed).toEqual(["<path>"]);
     const root = makeConfigRepo({ overrides: committed });
     expect(missingFromOverrideLog(root, parsed)).toEqual(new Set(parsed));
+  });
+});
+
+/**
+ * 🩺 SECTION 4.6 HTML BLOCKS, THE OTHER WAY A RENDERED DOCUMENT HIDES A HEADING.
+ *
+ * A fenced code block SHOWS its contents; an HTML comment shows nothing at all. So a
+ * `### <path>` written inside `<!-- -->` was a live allow entry that `--allow-fixture` honoured at
+ * exit 0 while no human reviewing the rendered log could see it, which is the one direction this
+ * parser exists to refuse. `overrideLogPaths` models kinds 1 to 6 now.
+ *
+ * 🛑 EVERY CASE HERE ASKS BOTH DIRECTIONS, because a block boundary is PARITY. A case that only
+ * showed a heading being dropped would pass against a parser that dropped everything, and this
+ * lineage has been refused three times for arguing that dropping more is the safer error.
+ *
+ * The tag tables are checked against the PINNED SPEC rather than against whoever typed them:
+ * `test/helpers/commonmark-spec.ts` reads condition 6's list out of the document and every name in
+ * it is driven through the membership oracle. `scripts/measure-phi-scan-html-blocks.ts` prints the
+ * same relation against any other tree.
+ */
+describe("phi-scan suppresses a heading inside a CommonMark section 4.6 HTML block", () => {
+  const CR = String.fromCharCode(0x0d);
+  const FENCE = "`".repeat(3);
+  const OPEN_COMMENT = "<!--";
+  const CLOSE_COMMENT = "-->";
+
+  it("suppresses a heading under every tag BOTH tag conditions list, and under none of its named controls", () => {
+    // 🛑 BOTH TABLES, NOT ONE. Condition 1's four names are as unguarded as condition 6's sixty if
+    // only condition 6 is driven here, and the unguarded direction is the leak direction: a name
+    // missing from the shipped table means that tag starts no block, so the heading under it is a
+    // LIVE allow entry exempting a PHI scan target at exit 0. A gate found exactly that gap, with a
+    // one-name mutant of condition 1's table passing the whole suite.
+    const { literalTags, blockTags } = htmlBlockConditions();
+    // Non-vacuity: both lists are read from the spec, so an extraction that silently produced
+    // nothing would make this case assert nothing at all.
+    expect(literalTags.length).toBeGreaterThan(3);
+    expect(blockTags.length).toBeGreaterThan(50);
+
+    const smuggled = [...literalTags.map((t) => `s1-${t}`), ...blockTags.map((t) => `s6-${t}`)];
+    // 🛑 THE OTHER DIRECTION, IN THE SAME RUN, AND NO EXHAUSTIVENESS IS CLAIMED OVER IT. These are
+    // NAMED controls, not a proof that the tables hold nothing else. Each is a name that section
+    // 4.6 lists in neither condition, written without a `>` so it is not a complete tag either and
+    // condition 7 cannot reach it: CommonMark starts no block, and the heading below it is real.
+    // The first two are each a LISTED NAME FOLLOWED BY MORE tag-name characters, which is what pins
+    // the maximal-munch read: the listed name is the prefix, not the control. The rest are unrelated
+    // names, which is what a table grown by one entry would fail on.
+    const unlisted = ["divx", "paramx", "source", "canvas", "video"];
+    const lines = ["# log", ""];
+    // Kind 1 ends on the line carrying its end tag and NOT at a blank line, so each block is closed
+    // explicitly. A parser that failed to close one would swallow every entry after it, including
+    // `live-at-the-end`.
+    for (const t of literalTags) lines.push(`<${t}>`, `### s1-${t}`, `</${t}>`, "");
+    for (const t of blockTags) lines.push(`<${t}>`, `### s6-${t}`, "");
+    for (const t of unlisted) lines.push(`<${t}`, `### live-${t}`, "");
+    lines.push("### live-at-the-end", "");
+
+    const candidates = [...smuggled, ...unlisted.map((t) => `live-${t}`), "live-at-the-end"];
+    const root = makeConfigRepo({ overrides: lines.join("\n") });
+    expect(missingFromOverrideLog(root, candidates)).toEqual(new Set(smuggled));
+  });
+
+  it("refuses the path an HTML comment hides, and admits the one below it, LF and lone CR alike", () => {
+    // 🩺 THE FILED RESIDUAL. `#116` measured this exempting its target at exit 0 on head AND on
+    // base in the `LF` form, and moving base exit 2 to head exit 0 in the lone-`CR` form, which is
+    // the widening it disclosed against itself. Both forms are asserted here, in both directions.
+    const body = (ending: string): string =>
+      [
+        "# log",
+        "",
+        `intro${ending}${OPEN_COMMENT}`,
+        "### commented",
+        CLOSE_COMMENT,
+        "### visible",
+        "",
+      ].join("\n");
+    for (const [name, ending] of [
+      ["lf", "\n"],
+      ["lone-cr", CR],
+    ] as [string, string][]) {
+      const root = makeConfigRepo({ overrides: body(ending) });
+      expect(missingFromOverrideLog(root, ["commented"]), name).toEqual(new Set(["commented"]));
+      expect(missingFromOverrideLog(root, ["visible"]), name).toEqual(new Set());
+    }
+  });
+
+  it("ends a kind 1 to 5 block on the line meeting its end condition, including the start line", () => {
+    // One log per kind, each with a heading INSIDE and a heading AFTER, so neither a parser that
+    // never closes the block nor one that never opens it can pass. The `one-line` arms are section
+    // 4.6's "if the first line meets both the start condition and the end condition, the block will
+    // contain just that line", which is the rule that stops a whole log going dark.
+    const cases: { name: string; open: string; close: string }[] = [
+      { name: "comment", open: OPEN_COMMENT, close: CLOSE_COMMENT },
+      { name: "instruction", open: `<${"?"}`, close: `?${">"}` },
+      { name: "declaration", open: `<${"!"}DOCTYPE`, close: ">" },
+      { name: "cdata", open: `<${"!"}[CDATA[`, close: "]]>" },
+      { name: "literal-tag", open: "<pre>", close: "</pre>" },
+    ];
+    for (const { name, open, close } of cases) {
+      const spread = makeConfigRepo({
+        overrides: ["# log", "", open, `### in-${name}`, close, `### after-${name}`, ""].join("\n"),
+      });
+      expect(missingFromOverrideLog(spread, [`in-${name}`, `after-${name}`]), name).toEqual(
+        new Set([`in-${name}`]),
+      );
+      const oneLine = makeConfigRepo({
+        overrides: ["# log", "", `${open} x ${close}`, `### after-${name}`, ""].join("\n"),
+      });
+      expect(missingFromOverrideLog(oneLine, [`after-${name}`]), `${name} one-line`).toEqual(
+        new Set(),
+      );
+    }
+  });
+
+  it("keeps a kind 1 block open across a blank line and a kind 6 block open past its closing tag", () => {
+    // The two end conditions are different in a way a single model cannot hold, and each arm is the
+    // other's control. A blank line ends a `<div>` block and does NOT end a `<pre>` one; a closing
+    // tag ends a `<pre>` block and does NOT end a `<div>` one.
+    const pre = makeConfigRepo({
+      overrides: [
+        "# log",
+        "",
+        "<pre>",
+        "### in-pre",
+        "",
+        "### still-in-pre",
+        "</pre>",
+        "### after-pre",
+        "",
+      ].join("\n"),
+    });
+    expect(missingFromOverrideLog(pre, ["in-pre", "still-in-pre", "after-pre"])).toEqual(
+      new Set(["in-pre", "still-in-pre"]),
+    );
+
+    const div = makeConfigRepo({
+      overrides: [
+        "# log",
+        "",
+        "<div>",
+        "### in-div",
+        "</div>",
+        "### still-in-div",
+        "",
+        "### after-div",
+        "",
+      ].join("\n"),
+    });
+    expect(missingFromOverrideLog(div, ["in-div", "still-in-div", "after-div"])).toEqual(
+      new Set(["in-div", "still-in-div"]),
+    );
+  });
+
+  it("allows up to three spaces of indentation before a start condition, and not four", () => {
+    // Four spaces is an indented code block, where section 4.6 admits no start condition at all, so
+    // the heading below it is live. Same allowance `fenceRun` makes, and the same reason.
+    const root = makeConfigRepo({
+      overrides: [
+        "# log",
+        "",
+        `   ${OPEN_COMMENT}`,
+        "### indented-three",
+        CLOSE_COMMENT,
+        "",
+        `    ${OPEN_COMMENT}`,
+        "### indented-four",
+        `    ${CLOSE_COMMENT}`,
+        "",
+      ].join("\n"),
+    });
+    expect(missingFromOverrideLog(root, ["indented-three", "indented-four"])).toEqual(
+      new Set(["indented-three"]),
+    );
+  });
+
+  it("starts no HTML block inside a fenced block, and reads no fence inside an HTML block", () => {
+    // The two block classes nest rather than interleave, and each arm moves an entry the OTHER way,
+    // which is the parity property stated as a test instead of as a direction.
+    const inFence = makeConfigRepo({
+      overrides: ["# log", "", FENCE, OPEN_COMMENT, FENCE, "### after-fence", ""].join("\n"),
+    });
+    expect(missingFromOverrideLog(inFence, ["after-fence"])).toEqual(new Set());
+
+    const inComment = makeConfigRepo({
+      overrides: [
+        "# log",
+        "",
+        OPEN_COMMENT,
+        FENCE,
+        "### in-comment-fence",
+        CLOSE_COMMENT,
+        "### after-comment",
+        "",
+      ].join("\n"),
+    });
+    expect(missingFromOverrideLog(inComment, ["in-comment-fence", "after-comment"])).toEqual(
+      new Set(["in-comment-fence"]),
+    );
+  });
+
+  it("moves entries BOTH ways against a fence-only reading, which is why no direction is claimed", () => {
+    // 🛑 THE DISJOINTNESS CASE, and the reason this slice claims a specification rather than a
+    // safer error. An ODD number of fence delimiters inside the comment: a reading that models the
+    // comment sees `alpha` outside every block and `bravo` inside a fence, and a fence-only reading
+    // sees exactly the reverse. Each exempts at exit 0 a target the other refuses at exit 2, so
+    // "narrower is safer" is not available and is not asserted.
+    const root = makeConfigRepo({
+      overrides: [
+        "# log",
+        "",
+        OPEN_COMMENT,
+        FENCE,
+        CLOSE_COMMENT,
+        "### alpha",
+        FENCE,
+        "### bravo",
+        "",
+      ].join("\n"),
+    });
+    expect(missingFromOverrideLog(root, ["alpha", "bravo"])).toEqual(new Set(["bravo"]));
+  });
+
+  /**
+   * 🔴 THE DIVERGENCE THIS SLICE SCOPES OUT, PINNED RATHER THAN DESCRIBED.
+   *
+   * Start condition 7 is a complete open or closing tag alone on a line, and section 4.6 says
+   * blocks of type 7 may not interrupt a paragraph. Modelling it needs paragraph state, which this
+   * parser does not have; guessing at it is the parity trap. So a heading under `<span>` on its own
+   * line is still a LIVE allow entry here where CommonMark hides it.
+   *
+   * The agreeing arm is asserted beside it, because only one of the two is a divergence: after a
+   * PARAGRAPH line, condition 7 cannot fire, so the heading is live in CommonMark too and the
+   * parsers agree. A case asserting the divergence alone would read as an accepted behaviour rather
+   * than as a measured gap.
+   *
+   * 🔴 AND THE THIRD ARM IS THIS SLICE WIDENING THE HOLE, DISCLOSED AGAINST ITSELF. A gate found it;
+   * the class was disclosed and this INSTANCE of it was not. `</pre>` alone on a line is a complete
+   * closing tag, so CommonMark starts a kind-7 block there that runs to the end of the document and
+   * no heading below it exists at all. Neither tree models that. But the comment opener beneath it
+   * is now read, and it swallows the fence delimiter that used to hide the heading, so **this tree
+   * exempts at exit 0 a target base refused at exit 2.** Named here rather than left to the record.
+   */
+  it("does not model start condition 7, the case where that agrees, and the input it widens", () => {
+    const diverges = makeConfigRepo({
+      overrides: ["# log", "", "<span>", "### under-span", ""].join("\n"),
+    });
+    expect(missingFromOverrideLog(diverges, ["under-span"])).toEqual(new Set());
+
+    const agrees = makeConfigRepo({
+      overrides: ["# log", "", "intro", "<span>", "### under-span-para", ""].join("\n"),
+    });
+    expect(missingFromOverrideLog(agrees, ["under-span-para"])).toEqual(new Set());
+
+    const widened = makeConfigRepo({
+      overrides: [
+        "# log",
+        "",
+        "</pre>",
+        OPEN_COMMENT,
+        FENCE,
+        CLOSE_COMMENT,
+        "### widened",
+        "",
+      ].join("\n"),
+    });
+    expect(missingFromOverrideLog(widened, ["widened"])).toEqual(new Set());
+  });
+
+  it("leaves the committed override log holding no entries at all", () => {
+    // The anchor, re-asked under the new block class: this repository's own log carries no HTML, so
+    // adding section 4.6 must not have moved it. Its only heading is still the fenced template.
+    const committed = readFileSync(join(REPO_ROOT, "phi-scan-overrides.md"), "utf8");
+    const root = makeConfigRepo({ overrides: committed });
+    expect(missingFromOverrideLog(root, ["<path>"])).toEqual(new Set(["<path>"]));
   });
 });
 
