@@ -543,10 +543,23 @@ describe("phi-scan parses its own override log the way the pattern did, minus tw
       const root = makeConfigRepo({ overrides: body });
       expect(missingFromOverrideLog(root, kept), name).toEqual(new Set(kept));
     }
-    // The control in the other direction, so this is not just "nothing ever closes": a run trailed
-    // by an ordinary space IS bare, does close, and the entries after it are live again.
-    const closed = ["# log", "", "```", "### fenced", "``` ", ...LINES, ""].join("\n");
-    expect(missingFromOverrideLog(makeConfigRepo({ overrides: closed }), kept)).toEqual(new Set());
+    // The control in the other direction, so this is not just "nothing ever closes". BOTH arms are
+    // here: a run trailed by a space and a run trailed by a TAB are each bare, each close, and the
+    // entries after them are live again. The tab arm was unpinned when this case was first written
+    // and dropping it passed the whole suite, which is exactly how a fail-open branch gets removed
+    // by a later maintainer who ran the tests.
+    for (const [name, trailer] of [
+      ["space", " "],
+      ["tab", "\t"],
+    ] as [string, string][]) {
+      const closed = ["# log", "", "```", "### fenced", `\`\`\`${trailer}`, ...LINES, ""].join(
+        "\n",
+      );
+      expect(
+        missingFromOverrideLog(makeConfigRepo({ overrides: closed }), kept),
+        `closed by a run trailed by a ${name}`,
+      ).toEqual(new Set());
+    }
   });
 
   it("reopens after the fence closes, so a real entry below the template still counts", () => {

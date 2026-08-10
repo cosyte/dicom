@@ -76,18 +76,44 @@ that holds only from where a cleanup is called is not a bound. There is nothing 
    the engine hand one space back out of the run and capture it. `normalizePath(" ")` is then a
    root-level entry for a file named with a single space.
 
-Both directions are fail-closed: a dropped entry makes `--allow-fixture` **refuse** (exit 2), which
-scans the target rather than exempting it. `fenceRun` is deliberately **liberal about openings and
-strict about closings** for the same reason. Seeing a fence CommonMark would not drops entries;
-missing one is the direction that silently exempts a PHI target.
+Both narrowings are fail-closed **as narrowings of `overrideLogPaths`**: a dropped entry makes
+`--allow-fixture` **refuse** (exit 2), which scans the target rather than exempting it.
 
-**🩺 THE REFUTER CAUGHT THAT ASYMMETRY BEING VIOLATED BY THE FUNCTION THAT STATES IT.** `bare` was
-first computed with `isSpaceCode`, the whole of `\s`, where CommonMark ignores only spaces and tabs
-after a closing run. Measured on the pass-1 head: a closing run trailed by an invisible `NBSP` or
-`IDEOGRAPHIC SPACE` **closed the block**, so a `### <path>` written inside what a human sees as a
-code block became a live allow entry and the target was exempted at exit 0. Narrowed to space and
-tab, which is strictly fail-closed; the four blank-rendering characters are now a named test with a
-control in the other direction, and the old predicate is a mutant in the grid.
+## 🛑 But `fenceRun` has no safe direction, and two passes were spent learning it
+
+**FENCE STATE IS PARITY.** Three drafts of `fenceRun`'s comment claimed a fail-safe direction and
+two gates refused it, the second with the measurement that kills the shape entirely. On
+`open / A / close-with-a-trailer / B / close / C`:
+
+| how the trailer is read | dropped | live |
+| --- | --- | --- |
+| as bare, so it closes | `A`, `C` | **`B`** |
+| as an info string, so it does not | `A`, `B` | **`C`** |
+
+Getting one fence wrong does not merely drop or admit that block's headings, **it swaps every block
+boundary after it**, moving entries in both directions at once. So "narrower is safer" is false
+here, and the argument is **DELETED rather than worded a third time**. What replaces it is not a
+safety heuristic but a specification: CommonMark 0.31.2 §4.5.
+
+Two defects were found this way, each by a different pass, each measured on the head that carried
+it and each now a named test plus a mutant:
+
+1. **Pass 1:** `bare` used `isSpaceCode`, the whole of `\s`. §4.5 admits only spaces and tabs after
+   a closing run. A closing run trailed by an invisible `NBSP` or `IDEOGRAPHIC SPACE` **closed the
+   block**, and a heading written inside what a human sees as a code block became a live allow
+   entry, exempting the target at exit 0.
+2. **Pass 2:** after narrowing to space and tab, **the tab arm was unpinned** and dropping it passed
+   all 18 cases. Dropped, the same parity flip happens with a tab. The control in the other
+   direction had only ever used a space; it now uses both.
+
+## 🔴 One known divergence from §4.5, PRE-EXISTING and disclosed rather than argued harmless
+
+§4.5 also says an info string after a **backtick** fence may not contain backticks. `fenceRun` opens
+on ` ```a\`b ` anyway. Measured: on `open-with-that-info-string / X / close / Y / close`, this tree
+makes `Y` a live allow entry where CommonMark renders it inside a code block. **Base `01d0983` is
+fence-blind and makes both live**, so this tree is strictly the smaller surface and the divergence
+is `PRE-EXISTING` in outcome. It is a backlog line, not this slice's to close: narrowing the opener
+is a third selection change on a function that has already cost two passes.
 
 ## 🛑 The inertness was RE-MEASURED, not inherited, and it holds twice over
 

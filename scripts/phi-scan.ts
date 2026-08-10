@@ -1045,12 +1045,12 @@ interface Fence {
    * Nothing but SPACES AND TABS after the run. A CLOSING fence must be bare; an opening one need
    * not be, because what follows an opening fence is its info string.
    *
-   * 🛑 SPACE AND TAB, NOT `isSpaceCode`. CommonMark ignores only those two after a closing run, so
-   * any other whitespace is an INFO STRING and does not close the block. A first draft used the
-   * whole of `\s` here and the refuter measured the consequence: a closing run trailed by an
-   * invisible `NBSP` or `IDEOGRAPHIC SPACE` closed the block, and a `### <path>` line written
-   * inside what a human sees as a code block became a live allow entry (exit 0, target exempted).
-   * That is the fail-open direction the function below says it exists to remove.
+   * 🛑 SPACE AND TAB, NOT `isSpaceCode`, AND BOTH ARMS ARE LOAD-BEARING. CommonMark 0.31.2 §4.5:
+   * a closing fence "may be followed only by spaces or tabs, which are ignored." Anything else is
+   * an info string and does not close. Measured on a draft that used the whole of `\s`: a closing
+   * run trailed by an invisible `NBSP` closed the block and a heading below it became a live allow
+   * entry. Measured on a draft with the tab arm dropped: the same, with a tab. Both are pinned in
+   * `test/scripts/phi-scan-matchers.test.ts`.
    */
   bare: boolean;
 }
@@ -1058,14 +1058,19 @@ interface Fence {
 /**
  * A fenced-code-block delimiter: three or more backticks or tildes, indented at most three spaces.
  *
- * 🛑 THE TWO DIRECTIONS ARE NOT SYMMETRIC, WHICH IS WHY THIS IS LIBERAL ABOUT WHAT OPENS A BLOCK AND
- * STRICT ABOUT WHAT CLOSES ONE. Seeing a fence that CommonMark would not is fail-closed: it drops
- * override entries, and a dropped entry refuses a `--allow-fixture` bypass, which runs the scan.
- * MISSING a fence is the fail-open direction, and it is the direction this whole function exists to
- * remove. So the indent allowance and the tilde form are here because omitting them would be a way
- * to smuggle a `###` line past the block state, and `bare` is narrow for the same reason read the
- * other way round: every character that does not count as bare is one more thing that cannot end
- * the block early. This file does not render markdown, and none of this is here because it does.
+ * 🛑 FENCE STATE IS PARITY, SO THERE IS NO SAFE DIRECTION TO ERR IN AND THE ARGUMENT THAT THERE WAS
+ * IS DELETED RATHER THAN WORDED AGAIN. Two drafts of this comment claimed one, each refused by a
+ * gate, and the second was refused with the measurement that kills the whole shape: getting one
+ * fence wrong does not merely drop or admit that block's headings, it swaps every block boundary
+ * after it. On `open / A / close-with-a-trailer / B / close / C`, reading the trailer as bare drops
+ * `A` and `C` and admits `B`; reading it as an info string drops `A` and `B` and admits `C`. A
+ * wrong answer moves entries in BOTH directions at once.
+ *
+ * What is left is not a safety heuristic but a specification: this follows CommonMark 0.31.2 §4.5,
+ * and where it is measured to diverge that divergence is written down rather than argued to be
+ * harmless. `documentation/agent-notes/dicom-phi-scan-config-parsers.md` carries the one known
+ * divergence. This file does not render markdown and none of this is here because it does; it is
+ * here because `overrideLogPaths` has to agree with what a human reviewing that file sees.
  */
 function fenceRun(line: string): Fence | null {
   let i = 0;
