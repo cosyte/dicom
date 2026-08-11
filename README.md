@@ -213,7 +213,8 @@ report.attributes.length; // count of attributes acted on (each carries tag/keyw
 report.warnings; // e.g. DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED
 report.unauditableSequences; // carriers this run did not look inside. READ `.applied` FIRST:
 // "emptied" = that value is NOT in your output; "kept" = it IS, verbatim and unexamined
-// (the "kept" class fires per retained private attribute, so it is scope, not a finding)
+// (the "kept" class fires on ordinary vendor values too: it is scope, not a finding, and
+// not a census either. See "Known limitations" for the three things it does not report)
 report.undefinedVrElements; // elements emptied because their on-wire VR is not a VR
 ```
 

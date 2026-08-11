@@ -184,8 +184,7 @@ spell such a block. **That route is no longer only the carriers a profile declar
 retained-carrier disclosure it also names every private attribute retained under `RetainSafePrivate`
 that this run kept unexamined, so on a **conformant** file this array is populated rather than empty,
 once per such attribute, each entry carrying `tag` and `byteLength`, plus an unbounded
-`contextPath` on the entries that are inside a sequence item (it is omitted at the root, which is
-where most of this class fires).
+`contextPath` on the entries that are inside a sequence item (it is omitted at the root).
 Sending a report to a log that leaves the box is a decision to make per field, and this field grew. The package normally answers a fabricated header with `undefinedVrElements`,
 which carries a byte offset and **no tag**, and it still does whenever the fabricated VR is not one
 of the 34 PS3.5 §6.2 defines. It cannot when the fabricated VR is one of them, because a fabricated
