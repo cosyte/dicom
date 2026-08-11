@@ -771,8 +771,15 @@ function emptyUnauditableCarrier(
 
   // The RECORD is capped, per `#48`'s discipline for consumer-controlled
   // diagnostics, against a budget that spans the whole run rather than this one
-  // Data Set. `report.unauditableSequences.length === MAX_UNAUDITABLE_SEQUENCE_
-  // FINDINGS` is the signal that more were emptied than are listed.
+  // Data Set.
+  //
+  // 🛑 THE TRUNCATION SIGNAL IS PER CLASS, NOT `report.unauditableSequences.
+  // length`. That array carries the retained class too, on its own counter, so
+  // the array's own length is neither necessary nor sufficient: 64 kept and 0
+  // emptied reads 64 with nothing truncated, and 5 kept plus 65 emptied reads 69
+  // while the emptied class IS truncated. Count the entries whose `applied` is
+  // `"emptied"` and compare THAT to `MAX_UNAUDITABLE_SEQUENCE_FINDINGS`. Both
+  // measured; the public statement is on `DeidentifyReport.unauditableSequences`.
   if (ctx.budget.unauditableSequences >= MAX_UNAUDITABLE_SEQUENCE_FINDINGS) return;
   ctx.budget.unauditableSequences += 1;
   out.unauditableSequences.push({

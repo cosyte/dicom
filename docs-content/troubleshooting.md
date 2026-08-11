@@ -183,7 +183,9 @@ named there, and a length under-declared upstream can resynchronize the reader o
 spell such a block. **That route is no longer only the carriers a profile declares `SQ`.** Since the
 retained-carrier disclosure it also names every private attribute retained under `RetainSafePrivate`
 that this run kept unexamined, so on a **conformant** file this array is populated rather than empty,
-once per such attribute, each entry carrying `tag`, `byteLength` and an unbounded `contextPath`.
+once per such attribute, each entry carrying `tag` and `byteLength`, plus an unbounded
+`contextPath` on the entries that are inside a sequence item (it is omitted at the root, which is
+where most of this class fires).
 Sending a report to a log that leaves the box is a decision to make per field, and this field grew. The package normally answers a fabricated header with `undefinedVrElements`,
 which carries a byte offset and **no tag**, and it still does whenever the fabricated VR is not one
 of the 34 PS3.5 §6.2 defines. It cannot when the fabricated VR is one of them, because a fabricated
@@ -266,10 +268,11 @@ Each is tracked as a future companion package, not a gap to be filled here:
   `DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED` is raised. **Carriers are string VRs only, and the gap
   is live rather than theoretical**: the identical over-declare into an `OB`, `OW`, `UN` or `US`
   carrier still writes the identifier into de-identified output with no warning and no report entry.
-  That is measured and still exactly true for this route, which is every default `deidentify()` run:
-  the only carrier that gets a diagnostic is one that is itself a private attribute being retained
-  under `RetainSafePrivate` plus a `Profile`, and what that diagnostic says is "unaudited", never "a
-  swallow was detected here".
+  That is measured and still exactly true for this route, which is every default `deidentify()` run.
+  The only carrier that gets a diagnostic is one that is itself a private attribute reached through
+  `RetainSafePrivate` plus a `Profile`, and what such a diagnostic says is "this value was not
+  enumerated" (kept) or "this value was dropped" (emptied, where the profile declares it `SQ`), never
+  "a swallow was detected here".
   Arbitrary bytes are what those VRs are for, so no content test can tell a swallow from a legitimate
   value there. Treat a file that raised this warning as a file whose _sender_ is malformed: other
   attributes in it may be carrying the same defect where it cannot be seen.

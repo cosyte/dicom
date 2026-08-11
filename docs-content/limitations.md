@@ -76,10 +76,11 @@ structural fact about DICOM that no reader can resolve from the wire.
 - **An over-declared Value Length into a binary carrier still leaks.** A length that swallows the
   following element into an `OB`, `OW`, `US` or `UN` value is not detected, and a `(0010,0020)`
   Patient ID inside it reaches de-identified output with **no warning and no report entry**. That is
-  measured and still exactly true for this route, which is every default `deidentify()` run: the only
-  carrier that gets a diagnostic is one that is itself a private attribute being retained under
-  `RetainSafePrivate` plus a `Profile` (the bullet above), and what that diagnostic says is
-  "unaudited", never "a swallow was detected here". Arbitrary
+  measured and still exactly true for this route, which is every default `deidentify()` run. The only
+  carrier that gets a diagnostic is one that is itself a private attribute reached through
+  `RetainSafePrivate` plus a `Profile` (the bullet above), and what such a diagnostic says is "this
+  value was not enumerated" (kept) or "this value was dropped" (emptied, where the profile declares
+  it `SQ`), never "a swallow was detected here". Arbitrary
   bytes are exactly what those VRs are for, so no content test can decide it. String carriers **are**
   covered, because there the same bytes are provably outside the VR's repertoire. If you accept files
   from a sender you do not control, treat a binary attribute's declared length as untrusted.
