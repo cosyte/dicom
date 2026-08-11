@@ -45,9 +45,10 @@ reported `OK: no hits` at exit 0.
 parameters in Part A, an allow-list holding the single line `EMAILDOMAIN example.com`, and NO
 detector, the run reports `[phi-scan] OK: no hits` and exits **0**. It raises no completeness
 refusal, so every target the roots enumerate is one the read filter also admits. With an EMPTY
-allow-list the same run exits **1** with **6** hits across **2** files, and they are named rather
-than counted: five `t@example.com` and one `changelog@example.com`, all from the engine's email
-floor, no SSN shape anywhere in the corpus.
+allow-list the same run exits **1** with **6** hits across **2** files, and both the files and the
+values are named rather than counted: five `t@example.com` and one `changelog@example.com`, in
+`test/scripts/phi-scan.test.ts` and `test/scripts/changelog-generation.test.ts`, all from the
+engine's email floor. No SSN shape anywhere in the corpus.
 
 ---
 
@@ -460,8 +461,14 @@ each.
 `content.matchAll(/...@.../g)` over every target's text, and `loadAllowList` / `loadOverrideLog` run
 `raw.split(/\r?\n/)` over their own files. V8 keeps the last successful match on the `RegExp`
 CONSTRUCTOR: after one match `RegExp.input` holds the WHOLE SCANNED FILE and `RegExp.lastMatch` holds
-the matched identifier VERBATIM, and both are readable properties of a global object. Confirmed in
-process on node in this container.
+the matched identifier VERBATIM, and both are readable properties of a global object.
+
+**Measured THROUGH `runPhiScan` itself, not in isolation, because a snippet proves nothing about what
+the engine leaves behind.** Driving the run described at the top of this note over this repo's own
+corpus and then reading the constructor from the caller: `RegExp.input.length` is **153,954** and the
+string is one of the scanned files, and `RegExp.lastMatch` is `"t@example.com"`, the identifier the
+last floor match found. Both survive the return of `runPhiScan`, so they are readable for the rest of
+the process's life or until something else matches.
 
 `dicom` closed exactly this in `#109`, `#111` and `#112` and the file constructs no `RegExp` at all
 today. **Adoption reintroduces it, and it is an ENGINE defect rather than a local one.** The remedy
