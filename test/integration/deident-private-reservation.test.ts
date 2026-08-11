@@ -113,6 +113,7 @@ import {
   profiles,
   serializeDicom,
 } from "../../src/index.js";
+import { MAX_UNAUDITABLE_SEQUENCE_FINDINGS } from "../../src/deident/deidentify.js";
 import { WARNING_MESSAGES } from "../../src/parser/warnings.js";
 import type { BuildDicomOptions } from "../helpers/build-dicom.js";
 import { buildDicom } from "../helpers/build-dicom.js";
@@ -1043,7 +1044,9 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
         items: number | undefined;
         leaks: boolean;
         codes: string[];
+        deidCodes: string[];
         unauditable: readonly string[];
+        applied: readonly string[];
         identityRemoved: string | undefined;
       } => {
         const ds = parseOptions === undefined ? parseDicom(buf) : parseDicom(buf, parseOptions);
@@ -1054,7 +1057,9 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
           items: el?.items?.length,
           leaks: serializeDicom(dataset).toString("latin1").includes(NESTED_NAME),
           codes: ds.warnings.map((w) => w.code),
+          deidCodes: report.warnings.map((w) => w.code),
           unauditable: report.unauditableSequences.map((f) => f.tag),
+          applied: report.unauditableSequences.map((f) => f.applied),
           identityRemoved: dataset.get("00120062")?.rawBytes.toString("latin1").trimEnd(),
         };
       };
@@ -1072,6 +1077,19 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       expect(resolved.leaks).toBe(false);
       expect(resolved.codes).toEqual([]);
       expect(resolved.unauditable).toEqual([]);
+      // 🩺 THE STRONGEST NEGATIVE CONTROL FOR
+      // `DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE`, AND THE ONLY ONE THAT
+      // ISOLATES ITS PREDICATE. This is a retained private carrier, reached with
+      // `RetainSafePrivate` + the same profile, on the SAME BYTES as the row
+      // below - and it is silent, because the run WALKED it: the items were
+      // materialized, every nested element went through the action table, and
+      // the `(0010,0010)` inside is gone from the output. That is an enumeration
+      // actually performed, so there is nothing to disclose. A detector that
+      // also fired here would be measuring "a private element was retained"
+      // rather than "a private value was shipped unexamined".
+      expect(resolved.deidCodes).not.toContain(
+        WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE,
+      );
 
       // Identical bytes, profile withheld from the parse. The element is still
       // `UN` with no items - no parser file is touched and no reading changes -
@@ -1082,6 +1100,13 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       expect(unresolved.items).toBeUndefined();
       expect(unresolved.leaks).toBe(false);
       expect(unresolved.unauditable).toEqual(["00091001"]);
+      // Emptied, on the emptied class's own code. The two classes share this
+      // array and are told apart by `applied`, never by the array alone.
+      expect(unresolved.applied).toEqual(["emptied"]);
+      expect(unresolved.deidCodes).toContain(WARNING_CODES.DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE);
+      expect(unresolved.deidCodes).not.toContain(
+        WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE,
+      );
       // 🛑 THE STAMP IS STILL `YES` ON BOTH ROWS, and that is the point of
       // reporting the drop: the attestation alone never distinguished them.
       expect(resolved.identityRemoved).toBe("YES");
@@ -1161,7 +1186,10 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
         readonly leaks: boolean;
         readonly identityRemoved: string | undefined;
         readonly unauditable: readonly string[];
+        readonly unauditableApplied: readonly string[];
         readonly parseCodes: readonly string[];
+        readonly deidCodes: readonly string[];
+        readonly deidMessages: readonly string[];
       }
 
       const outcome = (
@@ -1206,7 +1234,15 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
           leaks: serializeDicom(dataset).toString("latin1").includes(NESTED_NAME),
           identityRemoved: dataset.get("00120062")?.rawBytes.toString("latin1").trimEnd(),
           unauditable: report.unauditableSequences.map((f) => f.tag),
+          unauditableApplied: report.unauditableSequences.map((f) => f.applied),
           parseCodes: ds.warnings.map((w) => w.code),
+          // The de-identify channel. It is NOT `ds.warnings` and never was:
+          // `deidentify()` builds the output object with the SOURCE dataset's
+          // parse warnings, so everything this run has to say about its own
+          // decisions is on `report.warnings`. Reading the wrong one is how this
+          // surface got called silent while a code was firing.
+          deidCodes: report.warnings.map((w) => w.code),
+          deidMessages: report.warnings.map((w) => w.message),
         };
       };
 
@@ -1241,17 +1277,52 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
         expect(cell.leaks, cell.key).toBe(false);
         expect(cell.outputLength, cell.key).toBe(0);
         expect(cell.unauditable, cell.key).toEqual([PRIVATE_TAG]);
+        // 🩺 NEGATIVE CONTROL FOR THE NEW CODE, AND THE REASON THE FINDING NOW
+        // CARRIES `applied`. These carriers were EMPTIED. A caller reading
+        // `unauditableSequences` has always been entitled to read an entry as
+        // "this content is not in the output", and the new class must not
+        // silently re-scope that. The emptied class keeps its own code.
+        expect(cell.unauditableApplied, cell.key).toEqual(["emptied"]);
+        expect(cell.deidCodes, cell.key).toContain(
+          WARNING_CODES.DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE,
+        );
+        expect(cell.deidCodes, cell.key).not.toContain(
+          WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE,
+        );
+      }
+
+      // 🩺 THE SECOND NEGATIVE CONTROL, AND THE ONE THAT PROVES THE NEW CODE IS
+      // NOT SIMPLY "always". These five cells are retained private carriers too,
+      // reached by the identical route with the identical options - and the
+      // embedded-attribute scanner READ their values and emptied them, so this
+      // run did not keep anything unexamined and says nothing about them on the
+      // new channel. A detector that fires on every cell measures nothing.
+      const scannerCaught = cells.filter((cell) => !cell.leaks && !cell.key.startsWith("decl=SQ "));
+      expect(scannerCaught.map((cell) => cell.key).sort()).toEqual([
+        "decl=LO wire=LO ELE",
+        "decl=OB wire=LO ELE",
+        "decl=OW wire=LO ELE",
+        "decl=ST wire=LO ELE",
+        "decl=UN wire=LO ELE",
+      ]);
+      for (const cell of scannerCaught) {
+        expect(cell.unauditable, cell.key).toEqual([]);
+        expect(cell.deidCodes, cell.key).toContain(
+          WARNING_CODES.DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED,
+        );
+        expect(cell.deidCodes, cell.key).not.toContain(
+          WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE,
+        );
       }
 
       // 🩺 THE RESIDUAL, AS A MEASURED SET. Every cell not listed here keeps the
       // carrier VERBATIM - byte-identical to the file's own value - so the nested
-      // `(0010,0010)` ships into output, and it does so SILENTLY: nothing on
-      // `report.unauditableSequences`, nothing on `ds.warnings`, under a
-      // `(0012,0062) Patient Identity Removed = YES` stamp. The non-`SQ` rows
-      // that do NOT leak are exactly the ones the embedded-attribute scanner
-      // could read: a parsed VR that is a string carrier, under the encoding the
-      // tiles were written for. That is a content test, and it is the only thing
-      // standing between a retained private value and output.
+      // `(0010,0010)` ships into output under a `(0012,0062) Patient Identity
+      // Removed = YES` stamp. The non-`SQ` rows that do NOT leak are exactly the
+      // ones the embedded-attribute scanner could read AND caught: a parsed VR
+      // that is a string carrier, under the encoding the tiles were written for.
+      // That is a content test, and it is the only thing standing between a
+      // retained private value and output.
       const emptied = cells.filter((cell) => !cell.leaks);
       expect(emptied.map((cell) => cell.key).sort()).toEqual([
         "decl=LO wire=LO ELE",
@@ -1265,12 +1336,67 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
         "decl=ST wire=LO ELE",
         "decl=UN wire=LO ELE",
       ]);
-      for (const cell of cells.filter((c) => c.leaks)) {
+
+      // 🛑 THE 20 LEAKING CELLS ARE STILL LEAKING, AND THEY ARE NO LONGER
+      // SILENT. Those are two different facts and this block asserts both, in
+      // that order, because a later slice that "fixes" the first one has to
+      // change a decision that was taken rather than a test that was lax:
+      // emptying these carriers needs a content test on exactly the VRs
+      // arbitrary bytes are for, so it also empties conformant binary values on
+      // legitimate files (`DICOM-DEIDENT-OVER-REDACTION`). Weighed, and refused.
+      //
+      // 🩺 AND THE PREDICATE IS "THIS RUN KEPT THE VALUE", NOT "THE SCANNER
+      // COULD NOT READ IT". Two of these twenty - `decl=LO ILE` and
+      // `decl=ST ILE` - are perfectly SCANNABLE string carriers whose values the
+      // scanner did read and found nothing in, because the nested tiles are
+      // Explicit VR and the file is Implicit. A predicate keyed on the scanner's
+      // reach would leave exactly those two silent while they leak, which is why
+      // it is keyed on what the run DID instead.
+      const leaking = cells.filter((cell) => cell.leaks);
+      expect(leaking).toHaveLength(20);
+      expect(
+        leaking.filter(
+          (cell) =>
+            cell.key === "decl=LO ILE (no wire VR)" || cell.key === "decl=ST ILE (no wire VR)",
+        ),
+      ).toHaveLength(2);
+      for (const cell of leaking) {
+        // Unchanged, and deliberately: the leak is NOT closed by this slice.
         expect(cell.keptVerbatim, cell.key).toBe(true);
-        expect(cell.unauditable, cell.key).toEqual([]);
-        expect(cell.parseCodes, cell.key).toEqual([]);
         expect(cell.identityRemoved, cell.key).toBe("YES");
+        // Unchanged: the file is conformant, so the PARSE still says nothing.
+        // Adding a Tier-2 code here would throw under `{ strict: true }` on a
+        // conformant file, which this package does not do.
+        expect(cell.parseCodes, cell.key).toEqual([]);
+        // THE FLIP. Was `[]` on every one of these twenty cells.
+        expect(cell.unauditable, cell.key).toEqual([PRIVATE_TAG]);
+        expect(cell.unauditableApplied, cell.key).toEqual(["kept"]);
+        expect(cell.deidCodes, cell.key).toContain(
+          WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE,
+        );
       }
+
+      // 🛑 A DIAGNOSTIC ABOUT A PHI LEAK IS ITSELF A PHI SURFACE, and this
+      // fixture is name-bearing, so the question is answerable here rather than
+      // in prose. No message on any cell may quote the payload, any run of it,
+      // or the byte count the carrier's header declared - `#91` bound that
+      // number out of the two sibling factories and a new one must not reopen
+      // it. The tag is a private one, so `renderTag`'s membership test renders
+      // `<withheld>` and no element number is published either.
+      for (const cell of cells) {
+        for (const message of cell.deidMessages) {
+          expect(message, cell.key).not.toContain(NESTED_NAME);
+          expect(message, cell.key).not.toContain("BOND");
+          expect(message, cell.key).not.toContain("JAMES");
+          expect(message, cell.key).not.toContain(String(itemStream.length));
+          expect(message, cell.key).not.toContain(PRIVATE_TAG);
+        }
+      }
+      // Non-vacuity for the sweep above: the payload really is what the messages
+      // are about, and a message really is being produced to sweep.
+      expect(
+        leaking.flatMap((cell) => cell.deidMessages).filter((m) => m.includes("<withheld>")).length,
+      ).toBeGreaterThan(0);
     });
 
     it("a FABRICATED header keeps the tag-free diagnostic only when its VR is outside the 34", () => {
@@ -1496,8 +1622,49 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       const ds = parseDicom(buf);
       const { dataset, report } = deidentify(ds, GE_RETAIN);
       expect(serializeDicom(dataset).includes(ascii(SECRET))).toBe(true);
-      expect(report.unauditableSequences).toEqual([]);
       expect(report.removedPrivateTags).toEqual([]);
+
+      // 🩺 IT IS KEPT, AND IT IS NOW SAID OUT LOUD. Nothing above changed: the
+      // value ships, which is what this control exists to hold. What is added is
+      // that the run no longer implies it audited it. This is the ORDINARY
+      // vendor value - a conformant `LO` with nothing hidden in it - so the code
+      // firing here is not a false positive, it is the scope: `RetainSafePrivate`
+      // asks this package to ship values it has no table for, and the report says
+      // so once per value rather than pretending to a scrub it never performed.
+      expect(report.unauditableSequences).toEqual([
+        { tag: PRIVATE_TAG, applied: "kept", byteLength: ascii(SECRET).length },
+      ]);
+      expect(report.warnings.map((w) => w.code)).toContain(
+        WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE,
+      );
+
+      // 🛑 THE PRIVATE CREATOR IS RETAINED HERE TOO AND IS DELIBERATELY NOT
+      // REPORTED. `keepsPrivate` retains a `(gggg,00EE)` only when its whole
+      // decoded value is a MEMBER of the profile's private dictionary, a closed
+      // table the caller supplied - so that value was read and matched, which is
+      // an enumeration, and a creator carrying anything else fails the lookup and
+      // is removed instead. One entry, not two.
+      expect(dataset.get(CREATOR_TAG)?.rawBytes.toString("latin1").trimEnd()).toBe(CREATOR);
+      expect(report.unauditableSequences.map((f) => f.tag)).not.toContain(CREATOR_TAG);
+    });
+
+    it("a creator whose value carries more than the profile's entry is REMOVED, not kept unreported", () => {
+      // The claim the exclusion above rests on, measured rather than asserted:
+      // there is no room in a retained Private Creator for an unexamined Data
+      // Set, because a creator value that is not exactly a dictionary member is
+      // never retained in the first place. Same file, same profile, four extra
+      // bytes on the creator.
+      const buf = buildDicom({
+        transferSyntax: EXPLICIT_LE,
+        elements: [
+          nameEl,
+          { tag: CREATOR_TAG, vr: "LO", value: ascii("GEMS_PETD_01 ZZZZ") },
+          secretEl,
+        ],
+      });
+      const { report } = deidentify(parseDicom(buf), GE_RETAIN);
+      expect(report.removedPrivateTags).toContain(CREATOR_TAG);
+      expect(report.unauditableSequences.map((f) => f.tag)).not.toContain(CREATOR_TAG);
     });
   });
 
@@ -1569,5 +1736,241 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
         PRIVATE_TAG,
       ]);
     });
+  });
+});
+
+/**
+ * `DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE` - the disclosure over a retained
+ * private value this run kept without enumerating.
+ *
+ * 🛑 **THIS IS A DISCLOSURE, NOT A REMEDY, AND THE DISTINCTION IS THE WHOLE
+ * SLICE.** The value still ships. Emptying it needs a content test on exactly
+ * the VRs arbitrary bytes are for, which empties conformant binary values on
+ * legitimate files (`DICOM-DEIDENT-OVER-REDACTION`) - weighed and refused. Every
+ * assertion below that says "still in the output" is load-bearing: a later slice
+ * that closes the leak has to change a decision, not delete a lax expectation.
+ */
+describe("DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE", () => {
+  const NESTED = "BOND^JAMES";
+
+  /** A well-formed `(FFFE,E000)` Item holding one `(0010,0010)`, Explicit VR LE. */
+  const itemStream = ((): Buffer => {
+    const body = Buffer.concat([
+      Buffer.from([0x10, 0x00, 0x10, 0x00]),
+      Buffer.from("PN", "ascii"),
+      Buffer.from([NESTED.length, 0x00]),
+      Buffer.from(NESTED, "ascii"),
+    ]);
+    const header = Buffer.alloc(8);
+    header.writeUInt16LE(0xfffe, 0);
+    header.writeUInt16LE(0xe000, 2);
+    header.writeUInt32LE(body.length, 4);
+    return Buffer.concat([header, body]);
+  })();
+
+  const acme = defineProfile({
+    name: "acme-ob",
+    description: "Synthetic vendor block, honest Value Length, declared OB.",
+    privateTags: { ACME: { "0009XX01": { vr: "OB", keyword: "AcmeBlob", name: "Acme Blob" } } },
+  });
+
+  const file = buildDicom({
+    transferSyntax: EXPLICIT_LE,
+    elements: [
+      nameEl,
+      { tag: "00090010", vr: "LO", value: ascii("ACME") },
+      { tag: PRIVATE_TAG, vr: "OB", value: itemStream },
+    ],
+  });
+
+  const codes = (report: { warnings: readonly { code: string }[] }): readonly string[] =>
+    report.warnings.map((w) => w.code);
+
+  it("fires on the leaking shape, and the value it discloses is STILL in the output", () => {
+    // Non-vacuity by fixture: the payload is a real `(0010,0010)` carrying a real
+    // name, and it is on the wire before either call. A PHI test whose payload
+    // carries no name proves nothing.
+    expect(itemStream.toString("latin1")).toContain(NESTED);
+
+    const ds = parseDicom(file, { profile: acme });
+    const { dataset, report } = deidentify(ds, { retain: ["RetainSafePrivate"], profile: acme });
+
+    // The file is fully conformant: the Value Length is honest on every element,
+    // so the PARSE says nothing. It did not before this slice either, and adding
+    // a Tier-2 code here would throw under `{ strict: true }` on a conformant
+    // file.
+    expect(ds.warnings).toEqual([]);
+
+    // 🛑 THE LEAK IS OPEN. Byte-verbatim carrier, nested name in the serialized
+    // output, `(0012,0062) = YES`. Do not "fix" this expectation.
+    expect(dataset.get(PRIVATE_TAG)?.rawBytes.equals(itemStream)).toBe(true);
+    expect(serializeDicom(dataset).toString("latin1")).toContain(NESTED);
+    expect(dataset.get("00120062")?.rawBytes.toString("latin1").trimEnd()).toBe("YES");
+
+    // ...and it is no longer silent, on BOTH channels.
+    expect(codes(report)).toContain(WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE);
+    expect(report.unauditableSequences).toEqual([
+      { tag: PRIVATE_TAG, applied: "kept", byteLength: itemStream.length },
+    ]);
+
+    // The diagnostic is not itself a PHI surface: no payload, no run of it, and
+    // not the byte count off the carrier's own header (`#91` bound that number
+    // out of the two sibling factories). The tag is private, so `renderTag`'s
+    // membership test publishes `<withheld>` rather than an element number.
+    const message =
+      report.warnings.find(
+        (w) => w.code === WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE,
+      )?.message ?? "";
+    expect(message).toContain("<withheld>");
+    expect(message).not.toContain(NESTED);
+    expect(message).not.toContain("BOND");
+    expect(message).not.toContain(String(itemStream.length));
+    // The strongest form available: the message IS its registry entry with the
+    // one structural token filled in. Any interpolation of anything else, from
+    // any slot, breaks this regardless of what was planted - the `transform`
+    // property the package's PHI sweep is built on.
+    expect(message).toBe(
+      WARNING_MESSAGES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE.replace("{tag}", "<withheld>"),
+    );
+  });
+
+  it("stays QUIET when the same bytes are not retained - the mutation control", () => {
+    // The detector has to be able to be off. Same file, same parse; drop the
+    // option that makes this route reachable at all and the private element is
+    // REMOVED, so nothing is kept unexamined and nothing is said. A detector
+    // that reports on every run is a gap, not a clearance.
+    const ds = parseDicom(file, { profile: acme });
+
+    const noRetain = deidentify(ds, { profile: acme });
+    expect(serializeDicom(noRetain.dataset).toString("latin1")).not.toContain(NESTED);
+    expect(noRetain.report.removedPrivateTags).toContain(PRIVATE_TAG);
+    expect(noRetain.report.unauditableSequences).toEqual([]);
+    expect(codes(noRetain.report)).not.toContain(
+      WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE,
+    );
+
+    // And with the option but no profile: `keepsPrivate` has nothing to vouch
+    // with, so again nothing is retained and nothing is disclosed.
+    const noProfile = deidentify(ds, { retain: ["RetainSafePrivate"] });
+    expect(serializeDicom(noProfile.dataset).toString("latin1")).not.toContain(NESTED);
+    expect(noProfile.report.unauditableSequences).toEqual([]);
+    expect(codes(noProfile.report)).not.toContain(
+      WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE,
+    );
+  });
+
+  it("says nothing about a zero-length retained value, which encodes no Data Set", () => {
+    // The third of the three bounds the docs name, measured rather than
+    // asserted. It is also what keeps the audit a fixed point over an object
+    // some other rule already emptied: without it, a carrier emptied on run one
+    // is reported as a KEPT unexamined value on run two, which is a claim about
+    // content that is not there.
+    const empty = buildDicom({
+      transferSyntax: EXPLICIT_LE,
+      elements: [
+        nameEl,
+        { tag: "00090010", vr: "LO", value: ascii("ACME") },
+        { tag: PRIVATE_TAG, vr: "OB", value: Buffer.alloc(0) },
+      ],
+    });
+    const { dataset, report } = deidentify(parseDicom(empty, { profile: acme }), {
+      retain: ["RetainSafePrivate"],
+      profile: acme,
+    });
+    // Non-vacuity: the attribute really is retained, so the silence is the
+    // exclusion and not a removal.
+    expect(dataset.get(PRIVATE_TAG)).toBeDefined();
+    expect(report.removedPrivateTags).not.toContain(PRIVATE_TAG);
+    expect(report.unauditableSequences).toEqual([]);
+    expect(codes(report)).not.toContain(WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE);
+  });
+
+  it("says the same thing on its own output, so the audit is a fixed point too", () => {
+    // `DICOM-DEIDENT-NOT-A-FIXED-POINT` is about the bytes; this is the audit
+    // half of it. The carrier is kept, so the second run keeps it again and must
+    // report it again - identically. A disclosure that grew or vanished on a
+    // re-run would be describing the run rather than the object.
+    const opts: DeidentifyOptions = { retain: ["RetainSafePrivate"], profile: acme };
+    const first = deidentify(parseDicom(file, { profile: acme }), opts);
+    const second = deidentify(first.dataset, opts);
+    expect(second.report.unauditableSequences).toEqual(first.report.unauditableSequences);
+    expect(
+      codes(second.report).filter(
+        (c) => c === WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE,
+      ),
+    ).toHaveLength(1);
+  });
+
+  it("is not raised over an emptied carrier, so the two classes never double-count", () => {
+    // The same element, the same options, the profile declaring `SQ` instead of
+    // `OB`: it is emptied through the sibling route. Exactly one finding, and it
+    // is the EMPTIED one - a carrier must never be reported as both dropped and
+    // kept.
+    const asSq = defineProfile({
+      name: "acme-sq",
+      description: "Same block, declared SQ.",
+      privateTags: { ACME: { "0009XX01": { vr: "SQ", keyword: "AcmeSeq", name: "Acme Seq" } } },
+    });
+    const { dataset, report } = deidentify(parseDicom(file, { profile: asSq }), {
+      retain: ["RetainSafePrivate"],
+      profile: asSq,
+    });
+    expect(serializeDicom(dataset).toString("latin1")).not.toContain(NESTED);
+    expect(report.unauditableSequences).toEqual([
+      { tag: PRIVATE_TAG, applied: "emptied", byteLength: itemStream.length },
+    ]);
+    expect(codes(report)).not.toContain(WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE);
+  });
+
+  it("budgets the two classes APART, so a flood of kept carriers cannot silence a dropped one", () => {
+    // Both classes land in `report.unauditableSequences`, and a shared counter
+    // would let an attacker-chosen count of harmless retained values spend the
+    // budget that reports DROPPED content - the amplification this repo's own
+    // PHI gate split per recognizer in `#111`. The emptied carrier is written
+    // LAST here, after more than a full budget of kept ones, so a shared counter
+    // reds this test.
+    const many = MAX_UNAUDITABLE_SEQUENCE_FINDINGS * 2;
+    const privateTags: Record<string, { vr: "OB" | "SQ"; keyword: string; name: string }> = {
+      "0009XXFF": { vr: "SQ", keyword: "AcmeSeq", name: "Acme Seq" },
+    };
+    for (let i = 0; i < many; i += 1) {
+      privateTags[`0009XX${(0x10 + i).toString(16).toUpperCase().padStart(2, "0")}`] = {
+        vr: "OB",
+        keyword: `AcmeBlob${String(i)}`,
+        name: `Acme Blob ${String(i)}`,
+      };
+    }
+    const flooded = defineProfile({
+      name: "acme-flood",
+      description: "Synthetic vendor block with many retained attributes.",
+      privateTags: { ACME: privateTags },
+    });
+    const buf = buildDicom({
+      transferSyntax: EXPLICIT_LE,
+      elements: [
+        nameEl,
+        { tag: "00090010", vr: "LO", value: ascii("ACME") },
+        ...Array.from({ length: many }, (_unused, i) => ({
+          tag: `0009${(0x1010 + i).toString(16).toUpperCase().padStart(4, "0")}`,
+          vr: "OB" as const,
+          value: itemStream,
+        })),
+        { tag: "000910FF", vr: "OB" as const, value: itemStream },
+      ],
+    });
+    const { report } = deidentify(parseDicom(buf, { profile: flooded }), {
+      retain: ["RetainSafePrivate"],
+      profile: flooded,
+    });
+
+    const kept = report.unauditableSequences.filter((f) => f.applied === "kept");
+    const dropped = report.unauditableSequences.filter((f) => f.applied === "emptied");
+    // Non-vacuity: the flood really is bigger than one budget, so the cap really
+    // is the thing being exercised.
+    expect(many).toBeGreaterThan(MAX_UNAUDITABLE_SEQUENCE_FINDINGS);
+    expect(kept).toHaveLength(MAX_UNAUDITABLE_SEQUENCE_FINDINGS);
+    // THE POINT: the dropped carrier is still named, behind a full budget of
+    // kept ones.
+    expect(dropped.map((f) => f.tag)).toEqual(["000910FF"]);
   });
 });

@@ -230,11 +230,16 @@ export interface EmbeddedAttributeFinding {
 }
 
 /**
- * One Sequence-of-Items carrier that was emptied because this run had no item
- * stream to walk, so the de-identifier had no Data Sets to reach.
+ * One carrier this run could not reach the Data Sets inside - **either because
+ * it emptied the carrier having no item stream to walk, or because it kept a
+ * retained private value it never enumerated.** {@link
+ * UnauditableSequenceFinding.applied} is which, and it is the field to read
+ * first: the two are opposite outcomes for the caller, and only one of them
+ * means content left the object.
  *
- * **Two producers, and the second is not a parsed `SQ`.** The ordinary one is an
- * `SQ` element whose `items` the parser never materialized. The other is a
+ * **Three producers, and the third is the one that ships bytes.** The ordinary
+ * one is an
+ * `SQ` element whose `items` the parser never materialized. The second is a
  * private data element retained under `RetainSafePrivate` whose `Profile` entry
  * declares it `SQ` while the parse tree says otherwise - `UN` under Implicit VR
  * LE when the profile was passed to `deidentify()` but not to `parseDicom`, or
@@ -244,6 +249,20 @@ export interface EmbeddedAttributeFinding {
  * obligation below falls on the carrier just the same. Such an element keeps its
  * parsed VR in the output and is emptied rather than re-typed to `SQ`
  * (`DICOM-PRIVATE-SQ-PARSE-VR`).
+ *
+ * **The third producer is `applied: "kept"`, and nothing was dropped for it.** A
+ * private data element the profile vouched for that this run **retained with its
+ * value unchanged**, having enumerated nothing inside it. §E.3.10's licence is
+ * over the Attribute and not over a Data Set nested in its value, so if the
+ * sender encoded one there it is in the de-identified output, verbatim, under
+ * `(0012,0062) = YES`. That is a disclosed limit of this package rather than a
+ * defect being reported: emptying such a carrier would empty conformant binary
+ * values on legitimate files, which is a product call
+ * (`DICOM-DEIDENT-OVER-REDACTION`) that has been weighed and **not** taken. The
+ * matching warning is `DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE`, which says
+ * KEPT where its two siblings say emptied. **A run without
+ * `RetainSafePrivate` + a `Profile` produces none of these**, because no private
+ * value is kept at all.
  *
  * PS3.5 2026c §7.5.1 "Item Encoding Rules" states that "Each Item Value shall
  * contain a DICOM Data Set composed of Data Elements", so an `SQ` element's
@@ -293,9 +312,29 @@ export interface EmbeddedAttributeFinding {
  * ```
  */
 export interface UnauditableSequenceFinding {
-  /** The `SQ` element that was emptied. */
+  /** The carrier element. */
   readonly tag: Tag;
-  /** Byte length of the value field that was dropped. Structural, never a value. */
+  /**
+   * What happened to that carrier's value, and **the field to read before the
+   * other two**.
+   *
+   * - `"emptied"` - the value is not in the de-identified output. Producers one
+   *   and two above.
+   * - `"kept"` - the value **is** in the de-identified output, byte for byte,
+   *   under `(0012,0062) = YES`. Producer three above: a private attribute
+   *   retained under `RetainSafePrivate` that this run never enumerated.
+   *
+   * It exists because this array carried only the first meaning for its whole
+   * life, and adding the second without a discriminator would have told every
+   * caller already reading the field that content had been dropped when it had
+   * been shipped. A report that misstates which is worse than no report.
+   */
+  readonly applied: "emptied" | "kept";
+  /**
+   * Byte length of the carrier's value field - **dropped when
+   * {@link UnauditableSequenceFinding.applied} is `"emptied"`, still in the
+   * output when it is `"kept"`.** Structural, never a decoded value.
+   */
   readonly byteLength: number;
   /**
    * Tag/index chain when the carrier is inside a sequence item; omitted at the
@@ -446,8 +485,9 @@ export interface UndefinedVrFinding {
  *   theoretical.
  * - **`unauditableSequences[].tag`** - see
  *   {@link UnauditableSequenceFinding}. Same shape as `removedPrivateTags` by a
- *   narrower route: a private carrier a {@link Profile} declares `SQ` is named
- *   there, and an under-declared length upstream can resynchronize the reader
+ *   narrower route: a private carrier a {@link Profile} vouched for is named
+ *   there - emptied when the profile declares it `SQ`, kept otherwise, and on
+ *   both - and an under-declared length upstream can resynchronize the reader
  *   onto four bytes that spell such a block. The package's usual answer to a
  *   fabricated header, `undefinedVrElements`, carries a byte offset and no tag,
  *   and still answers it whenever the fabricated VR is outside the 34 PS3.5
@@ -527,18 +567,44 @@ export interface DeidentifyReport {
    */
   readonly embeddedAttributes: readonly EmbeddedAttributeFinding[];
   /**
-   * `SQ` elements emptied because the parser did not materialize their items, so
-   * the run had no Data Sets to walk and could not discharge PS3.15 §E.1.1's
-   * obligation inside them. Empty on a well-formed file; a non-empty array means
-   * content was dropped from the de-identified output, and the matching
-   * `DICOM_SQ_NOT_DESCENDED` entry on `Dataset.warnings` says why the parse
-   * refused. See {@link UnauditableSequenceFinding}.
+   * Carriers whose nested Data Sets this run could not reach - **each one either
+   * emptied or kept, and {@link UnauditableSequenceFinding.applied} says
+   * which.**
+   *
+   * `"emptied"`: an `SQ` whose items the parser did not materialize, so the run
+   * had no Data Sets to walk and could not discharge PS3.15 §E.1.1's obligation
+   * inside them; content was dropped from the de-identified output, and the
+   * matching `DICOM_SQ_NOT_DESCENDED` entry on `Dataset.warnings` says why the
+   * parse refused.
+   *
+   * `"kept"`: a private attribute retained under `RetainSafePrivate` whose value
+   * this run never enumerated. **Nothing was dropped and nothing is claimed to
+   * have been:** the value is in the output verbatim, so if the sender encoded a
+   * Data Set inside it, that Data Set is in the output too, under
+   * `(0012,0062) = YES`. Read a `"kept"` entry as the package telling you what
+   * it shipped without auditing, not as a scrub it performed.
+   *
+   * **This array is NOT empty on a well-formed file once a run retains private
+   * values** - i.e. with `RetainSafePrivate` + a `Profile`. A perfectly
+   * conformant file with vouched-for private attributes populates it, by design.
+   *
+   * 🛑 **It is not a census of them, and "one entry per retained attribute" is
+   * false in three ways.** A retained Private Creator `(gggg,00EE)` raises
+   * nothing, because it is retained only when its whole decoded value is a
+   * member of the profile's private dictionary, which is an enumeration; a
+   * zero-length value raises nothing, because it encodes no Data Set; and the
+   * record stops at the cap below. Read the array as "at least these", never as
+   * "these are all of them" - the retention itself is never capped or excepted.
    *
    * **Capped, and the cap is on the record only.** A crafted input can carry
    * tens of thousands of un-auditable elements, so this array (and its matching
-   * warnings) stops at `MAX_UNAUDITABLE_SEQUENCE_FINDINGS`. Every un-auditable
-   * sequence is still emptied; an array exactly that long means "at least this
-   * many", so read it as truncated rather than as a total.
+   * warnings) stops at `MAX_UNAUDITABLE_SEQUENCE_FINDINGS` **per `applied`
+   * value, counted separately**: a flood of one class must not spend the other
+   * class's budget and silence it, so the two are budgeted apart and this array
+   * can hold up to twice that many entries. Every un-auditable sequence is still
+   * emptied and every retained carrier is still kept whether or not it is
+   * listed; either half being exactly that long means "at least this many", so
+   * read it as truncated rather than as a total.
    *
    * **It covers private sequences too, since `DICOM-PRIVATE-SQ-CARVE-OUT`.** A
    * private `SQ` a {@link Profile} vouches for under `RetainSafePrivate` used to

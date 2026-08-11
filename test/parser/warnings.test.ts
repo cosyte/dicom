@@ -17,6 +17,7 @@ import {
   pixelDataLengthMismatch,
   privateCreatorUnknown,
   privateTagNoCreator,
+  privateCarrierNotAuditable,
   sequenceNotAuditable,
   unParsedAsSQ,
   undefinedVrNotAuditable,
@@ -241,6 +242,36 @@ describe("warning factories (D-12 - one named factory per active-emit code)", ()
     // is not one call site remembering to omit an argument.
     expect(WARNING_MESSAGES.DICOM_ITEM_CROSSES_SEQUENCE_END).not.toContain("{n}");
     expect(WARNING_MESSAGES.DICOM_ITEM_CROSSES_SEQUENCE_END).not.toContain("{n2}");
+  });
+
+  it("privateCarrierNotAuditable takes no byte span either, and says KEPT", () => {
+    // The third member of the family, and the shape is copied from its siblings
+    // deliberately: `Element.rawBytes.length` EQUALS the declared Value Length
+    // off the element header, so a new factory taking one would reopen exactly
+    // what `#91` bound out of the two below. The bound is the SIGNATURE - two
+    // parameters, neither of them a length - and the registry template has no
+    // numeric slot for a call site to fill.
+    expect(privateCarrierNotAuditable.length).toBe(2);
+    expect(WARNING_MESSAGES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE).not.toContain("{n}");
+    expect(WARNING_MESSAGES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE).not.toContain("{n2}");
+
+    // 🛑 AND IT SAYS KEPT WHERE ITS SIBLINGS SAY EMPTIED. That is not a wording
+    // preference: those two report a value this run DROPPED, this one reports a
+    // value this run SHIPPED. Reusing their string would tell a caller their
+    // nested Data Set had been removed while it is byte-for-byte in the output.
+    const kept = privateCarrierNotAuditable(pos, "00091001");
+    expect(kept.code).toBe(WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE);
+    expect(kept.message).toContain("KEPT");
+    expect(kept.message).toContain("withheld");
+    expect(WARNING_MESSAGES.DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE).toContain("emptied");
+
+    // A private tag has no literal PS3.6 row, so `renderTag`'s membership test
+    // withholds it - which is every element this code can fire on. A literal row
+    // still renders, so the bound costs a well-formed file nothing it could
+    // otherwise have had.
+    expect(kept.message).toContain("<withheld>");
+    expect(kept.message).not.toContain("00091001");
+    expect(privateCarrierNotAuditable(pos, "00081115").message).toContain("00081115");
   });
 
   it("sequenceNotAuditable takes no byte span, so no call site can pass one", () => {
