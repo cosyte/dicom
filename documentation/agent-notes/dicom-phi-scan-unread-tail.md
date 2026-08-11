@@ -197,6 +197,27 @@ A page carrying ten thousand halting objects prints ONE line with the count on i
   more. Teaching `scanDicom` to descend an undefined-length Sequence is a separate change with its
   own false-positive surface, and it is deliberately not made here.
 
+## Where this went next: `PHI-SCAN-ADOPT`
+
+**`dicom-phi-scan-adopt-derivation.md`** turns everything on this page into a specification for the
+SHARED engine. `PHI-SCAN-ADOPT` replaces every repo's hand-maintained scanner with
+`runPhiScan(config)` from `@cosyte/script-utils/phi-scan`, and a founder directive re-scoped it so
+that **all process lives in the engine and is parameterized**: a local `unread` tally is exactly the
+hand-maintained machinery the item exists to delete, so it may not survive the adoption in this repo.
+
+`DetectContext` has no channel for any of it. (The dispatch that opened the slice says `dicom` is the
+only repo in the fleet doing this bookkeeping, and therefore that the engine's completeness API would
+be shaped by this page. That is a cross-repo claim, it is not measurable from inside this submodule,
+and nothing below rests on it.) The derivation proposes `incompleteReasons` as a caller-declared
+closed vocabulary plus
+`ctx.incomplete({ bytes, reason })`, carries the exit-code decision and its 🔴 residual unchanged, and
+records the one design constraint this page's own open item places on the API: **the file-meta halt
+means a detector must be able to report MORE THAN ONCE per target.**
+
+**Nothing is adopted yet and `scripts/phi-scan.ts` is unchanged.** Read the derivation before
+touching `scanDicom`, `recordUnread` or `reportUnread`, because the shape they should end up in is
+being decided in `cosyte/config` rather than here.
+
 ## For the next worker
 
 - **Rebuild the matrix rather than trusting the table**, and it is one command:
