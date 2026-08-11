@@ -1139,15 +1139,40 @@ function fenceRun(line: string): Fence | null {
 }
 
 /**
- * `/^###\s+(.+?)\s*$/` over one line, as a forward scan.
+ * `/^###\s+(.+?)\s*$/` over one line, as a forward scan, with ONE conjunct added.
  *
- * The pattern is: exactly `###` at column 0, at least one whitespace character, then a capture that
- * runs to the last non-whitespace character on the line. The capture is written `(.+?)` and `.`
- * excludes `LineTerminator`, so a bare `CR` or `LS`/`PS` inside the captured span makes the whole
- * pattern fail - which is why `isLineTerminatorCode` exists separately from `isSpaceCode`.
+ * 🛑 THE SEPARATOR IS A SPACE OR A TAB, NOT `isSpaceCode`, FOR THE REASON `Fence.bare` AND
+ * `isBlankLine` GIVE. CommonMark 0.31.2 section 4.2: "The opening sequence of `#` characters must
+ * be followed by spaces or tabs, or by the end of line." The pattern separated with the whole of
+ * `\s`, so a `###` run followed by an INVISIBLE character - which section 4.2 does not admit, and
+ * which therefore renders as a PARAGRAPH - was a live allow entry and `--allow-fixture` exempted
+ * that PHI scan target at exit 0. Measured on three trees before it was changed. The section number
+ * is DERIVED, not asserted: `test/scripts/commonmark-pin.test.ts` locates the sentence by walking
+ * the pinned document's headings and requires it to occur exactly once.
+ *
+ * 🛑 IT IS ONE CONJUNCT AND NOT A REWRITE, WHICH IS THE WHOLE OF WHY THIS IS SAFE TO STATE. What
+ * this returns is either what the pattern returned or `null`, never a third answer, so no line that
+ * was not already an entry becomes one and every change is a REFUSAL at exit 2. A draft that also
+ * made the STRIP section 4.2's was refused by a gate and is DELETED rather than reworded: it made
+ * `### x<NBSP>` name `x<NBSP>` where the pattern named `x`, which exempted at exit 0 a target this
+ * parser had refused at exit 2, and the reference implementation of the pinned document trims the
+ * whole of `\s` there. That divergence is measured, disclosed and NOT taken:
+ * `documentation/agent-notes/dicom-phi-scan-atx-heading.md`.
+ *
+ * The rest is the pattern exactly. A heading whose text is entirely whitespace names no path
+ * (NARROWING 2, see `overrideLogPaths`), and the capture is written `(.+?)` where `.` excludes
+ * `LineTerminator` while `\s` admits it, so a bare `CR` or `LS`/`PS` inside the captured span makes
+ * the whole pattern fail - which is why `isLineTerminatorCode` exists separately from
+ * `isSpaceCode`.
  */
 function tripleHashValue(line: string): string | null {
   if (!line.startsWith("###")) return null;
+  // Section 4.2's separator, and the ONLY departure from the pattern here. The end of line is
+  // section 4.2's other alternative and needs no arm: an empty heading names no path either way.
+  if (line.length > 3) {
+    const after = line.charCodeAt(3);
+    if (after !== 0x20 && after !== 0x09) return null;
+  }
   let start = 3;
   while (start < line.length && isSpaceCode(line.charCodeAt(start))) start += 1;
   if (start === 3) return null; // `\s+` needs at least one
@@ -1405,16 +1430,19 @@ function htmlBlockCloses(line: string, kind: HtmlBlockKind): boolean {
  * The paths `phi-scan-overrides.md` logs, as `### <path>` headings OUTSIDE any fenced code block.
  *
  * 🛑 THIS IS THE ONE PARSER HERE THAT IS DELIBERATELY NOT AN EQUIVALENCE. The departures are
- * enumerated below and no count of them is written, here or at the head of this file. The first two
- * are NARROWINGS: dropping an entry makes `validateAllowFixtures` REFUSE the
- * `--allow-fixture` flag naming it (exit 2), so the target is not exempted. Exit 2 does not scan it
- * either: the run stops before enumeration and says nothing about the corpus, which is a refusal
- * and not a clearance. Admitting an entry that no human wrote is the direction that silently
- * exempts a PHI target, and it is what both of those were.
+ * enumerated below and no count of them is written, here or at the head of this file, and each one
+ * SAYS which of the two kinds it is rather than leaving it to an ordinal - two drafts of this
+ * paragraph named ordinals and both went stale the next time the list grew.
  *
- * 🛑 THE THIRD IS NOT A NARROWING AND HAS NO DIRECTION, SO DO NOT READ THE PARAGRAPH ABOVE ONTO IT.
+ * A NARROWING drops an entry, which makes `validateAllowFixtures` REFUSE the `--allow-fixture` flag
+ * naming it (exit 2), so the target is not exempted. Exit 2 does not scan it either: the run stops
+ * before enumeration and says nothing about the corpus, which is a refusal and not a clearance.
+ * Admitting an entry that no human wrote is the direction that silently exempts a PHI target.
  *
- * 1. **Fence-awareness.** The pattern this replaces was FENCE-BLIND, so the `### <path>` line in
+ * 🛑 THE OTHER KIND IS BLOCK STRUCTURE, WHICH HAS NO DIRECTION AT ALL BECAUSE A BLOCK BOUNDARY IS
+ * PARITY, SO DO NOT READ THE PARAGRAPH ABOVE ONTO ONE OF THOSE.
+ *
+ * 1. **Fence-awareness. A NARROWING.** The pattern this replaces was FENCE-BLIND, so the `### <path>` line in
  *    this repository's own committed `phi-scan-overrides.md` - a TEMPLATE, inside the fenced block
  *    under "Format", showing a contributor what to write - parsed as a live allow entry.
  *    `DICOM-RESIDUALS` `#112` disclosed it as `PRE-EXISTING` and inert. Re-measured here rather
@@ -1426,7 +1454,7 @@ function htmlBlockCloses(line: string, kind: HtmlBlockKind): boolean {
  *    target exempted, against exit 1 for the same bytes without the flag and exit 2 for a path
  *    with no entry at all.
  *
- * 2. **A heading whose text is entirely whitespace no longer registers one.** Found while measuring
+ * 2. **A heading whose text is entirely whitespace no longer registers one. A NARROWING.** Found while measuring
  *    the pattern rather than inherited from anywhere: `\s+` is greedy and `(.+?)` needs one
  *    character, so on `###` followed by two or more spaces the engine gives ONE SPACE back out of
  *    the whitespace run and captures it. `"###  "` yields `" "`, which `normalizePath` turns into a
@@ -1434,14 +1462,14 @@ function htmlBlockCloses(line: string, kind: HtmlBlockKind): boolean {
  *    inertness, and it is closed here rather than disclosed because it is the same mechanism and
  *    the same two lines of code.
  *
- * 3. **What a LINE is.** The pattern's caller split on `/\r?\n/`; this one splits CommonMark's way
+ * 3. **What a LINE is. BLOCK STRUCTURE.** The pattern's caller split on `/\r?\n/`; this one splits CommonMark's way
  *    (`splitCommonMarkLines`, section 2.1), so a lone `CR` ends a line here and did not there. It
  *    is listed apart from the two above because it is NOT a narrowing: it moves entries in both
  *    directions, and on a measured log the two entry sets are disjoint. The reason to prefer it is
  *    not that it drops more, it is that this parser's whole job is to agree with the rendered
  *    document a human reviews, and a `CR`-blind split hides a fence OPENER from that review.
  *
- * 4. **What a BLOCK is.** Fenced code blocks were the whole of the block structure here, so a
+ * 4. **What a BLOCK is. BLOCK STRUCTURE.** Fenced code blocks were the whole of the block structure here, so a
  *    `### <path>` a human sees inside an HTML block was a LIVE allow entry: an `<!-- -->` log
  *    exempted its target at exit 0, invisibly, since a comment renders as nothing at all. Section
  *    4.6's HTML blocks are modelled now, kinds 1 to 6 (`htmlBlockStart`, `htmlBlockCloses`). Like
@@ -1451,12 +1479,27 @@ function htmlBlockCloses(line: string, kind: HtmlBlockKind): boolean {
  *    not assumed**: `htmlBlockStart` says why, and the record is
  *    `documentation/agent-notes/dicom-phi-scan-html-blocks.md`.
  *
- * Everything else is the pattern exactly. `test/scripts/phi-scan-matchers.test.ts` holds the
- * pattern itself as the oracle and drives this parser through `--allow-fixture`, which is
- * repeatable and names every path it could not find an entry for - so one run reports exactly which
- * of a candidate set the parser produced. Both directions are asked: the captures the pattern finds
- * outside a fence must all be present, and the ones it finds inside a fence, the lone space, and
- * what a merely-trimming parser would have produced must all be absent.
+ * 5. **What SEPARATES `###` from the path. A NARROWING.** The pattern's separator was `\s`;
+ *    section 4.2's is a space or a tab, so a `###` run followed by an invisible character was a
+ *    live allow entry where the document renders a PARAGRAPH. It is a single conjunct on the
+ *    pattern, so `tripleHashValue` returns the pattern's answer or nothing. **THAT IS A PROPERTY OF
+ *    THE SOURCE AND NO CASE HERE PROVES IT** - a draft that claimed one did, and the case was true
+ *    by construction over a test-local oracle and could not go red. What stands behind it is the
+ *    comment-stripped diff, which is a single added early return, and behaviourally the per-log
+ *    relation the instrument prints against a base. **Section 4.2's
+ *    optional CLOSING sequence, its INLINE parsing, and the STRIP are all out of scope with their
+ *    cost measured rather than assumed** - the strip because the prose and the reference
+ *    implementation of the pinned document disagree about it, and a draft that took the prose
+ *    exempted at exit 0 a target this parser refuses at exit 2. The record is
+ *    `documentation/agent-notes/dicom-phi-scan-atx-heading.md`, and
+ *    `scripts/measure-phi-scan-atx-heading.ts` prints the relation against any tree.
+ *
+ * Everything else is the pattern exactly. `test/scripts/phi-scan-matchers.test.ts` holds
+ * `/^###\s+(.+?)\s*$/` as the oracle, and section 4.2's separator sentence as a conjunct on it, and
+ * drives this parser through `--allow-fixture`, which is repeatable and names every path it could
+ * not find an entry for, so one run reports exactly which of a candidate set the parser produced.
+ * What a given case asks is stated on that case: a universal here saying they all ask BOTH
+ * directions was measured false against a stub that answered nothing, and is deleted.
  */
 function overrideLogPaths(raw: string): string[] {
   const out: string[] = [];

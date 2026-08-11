@@ -465,9 +465,11 @@ interface ConfigRoute {
    * Whether this route's whole output must be byte-identical to base.
    *
    * 🛑 ONE ROUTE IS DELIBERATELY EXCLUDED AND IT IS NAMED IN THE OUTPUT RATHER THAN DROPPED
-   * QUIETLY. `--allow-fixture` reads the override log, and `overrideLogPaths` is NARROWER than the
-   * pattern it replaces on purpose: a fence-blind parse used to admit this repository's committed
-   * `### <path>` TEMPLATE as a live allow entry. Comparing that route byte for byte would report
+   * QUIETLY. `--allow-fixture` reads the override log, and `overrideLogPaths` is deliberately NOT
+   * an equivalence with the pattern it replaces: a fence-blind parse used to admit this
+   * repository's committed `### <path>` TEMPLATE as a live allow entry, and the departures since
+   * are enumerated on that function, some of them moving entries in BOTH directions rather than
+   * only dropping them. Comparing that route byte for byte would report
    * the fix as a violation, and suppressing the violation without saying so would hide the only
    * behaviour this pass deliberately changed.
    */

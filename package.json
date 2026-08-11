@@ -87,6 +87,7 @@
     "measure:phi-scan-regex-statics": "node scripts/measure-phi-scan-regex-statics.ts",
     "measure:phi-scan-line-endings": "node scripts/measure-phi-scan-line-endings.ts",
     "measure:phi-scan-html-blocks": "node scripts/measure-phi-scan-html-blocks.ts",
+    "measure:phi-scan-atx-heading": "node scripts/measure-phi-scan-atx-heading.ts",
     "phi-scan": "tsx scripts/phi-scan.ts",
     "smoke": "tsx scripts/smoke.ts",
     "pack:docs": "bash scripts/build-docs-artifacts.sh",
