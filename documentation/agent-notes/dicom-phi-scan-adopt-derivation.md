@@ -189,8 +189,11 @@ synthetic. Everything else is exact. `DOB` entries are raw 8-character `YYYYMMDD
 example.com` is required by the engine's own email floor and by nothing this repo does today: it is
 the six addresses measured above.
 
-🛑 **AND FOUR OF THE TEN `DATE:` ENTRIES ARE NOT DATES, WHICH IS A LABEL THE TRANSLATION MAKES WORSE
-AND THE ENGINE HAS NOWHERE TO PUT.** `scripts/phi-allow-list.txt` flags them in place: `40101006`,
+🛑 **AND FOUR OF THE EIGHT `DATE:` ENTRIES ARE NOT DATES, WHICH IS A LABEL THE TRANSLATION MAKES
+WORSE AND THE ENGINE HAS NOWHERE TO PUT.** (Eight, counted with `rg -c` and `grep -c` alike. A draft
+of this very sentence wrote "ten", which is the defect it was written to describe wearing the
+author's hat, one line below this note's own two-tool rule.) `scripts/phi-allow-list.txt` flags them
+in place: `40101006`,
 `70011001`, `70011002` and `70011003` are DICOM TAG NUMBERS that happen to satisfy the `YYYYMMDD`
 shape, so the text sweep's compact-date pass matches them, and the date allow-list is the only
 mechanism available to excuse them. Under the shared format they land under a key literally named
@@ -214,7 +217,9 @@ are plausible real birth and study dates.
 
 # PART C. ENGINE SPECIFICATION 1: completeness reporting for a detector that reads a target in part
 
-**This is the one the fleet has no other instance of, and it is the reason `dicom` is not mechanical.**
+**This is the reason `dicom` is not a mechanical adoption.** (The dispatch says the fleet has no other
+instance of it, which is why the engine's API would be shaped by this section. That is a cross-repo
+claim, it is not measurable from inside this submodule, and nothing below rests on it.)
 
 ## The defect it exists to close
 
@@ -283,12 +288,17 @@ of reasons.
 **Print one stderr line per locus, plus a total.** The line SHAPE is worth keeping verbatim; the
 ORDER is a decision the engine has to take, and this note must not pretend base settles it. Base is
 `reportExemptions(); reportUnread(unread); report(hits, ...)`, so every `PARTIAL` line PRECEDES every
-hit line and both totals, all on stderr except the clean line. The engine deliberately prints hits
-FIRST so that a refusal cannot swallow a finding already made, which is the opposite convention and
-was itself paid for by a refuter. **A draft of this clause wrote "after the hits" and asserted it as
-base's shape, which would have had a `config` worker implement the reverse of what base does.** Both
-orders are defensible and only one can be chosen; what is NOT negotiable is that neither the hits nor
-the `PARTIAL` lines may be dropped when both are present.
+hit line and both totals. The `PARTIAL` lines, the `PARTIAL` total, the hit lines and the hit total
+are all stderr; the clean line and `reportExemptions`'s own line are stdout.
+
+**A draft of this clause wrote "after the hits" and asserted it as base's shape, which would have had
+a `config` worker implement the reverse of what base does.** The correction stops at the measurement:
+base's order is as above, the engine currently prints hits first, and this note does not say which is
+right. **A second draft reached further and called the engine's order "the opposite convention",
+which compares two different things**: the engine's stated reason is that a REFUSAL terminates the
+run and would discard findings already made, and a `PARTIAL` line refuses nothing and terminates
+nothing under the report-only policy above, so its reason does not transfer. What is NOT negotiable
+is only this: neither the hits nor the `PARTIAL` lines may be dropped when both are present.
 
 ```
 [phi-scan] PARTIAL: <locus>: the DICOM sweep stopped before the end of N object(s),
@@ -442,13 +452,14 @@ isWalkReadable defaults to: (relPath) => isDeclaredFileRoot(relPath) || exemptsM
 roots are all directories is unaffected, because the new arm only fires on a root that is itself a
 file.
 
-🛑 **NO COUNT OF THE SIBLINGS AFFECTED IS WRITTEN HERE, AND A DRAFT THAT WROTE ONE WAS WRONG.** It
-said "the twelve repos that root at `["."]`" and "zero repos lose anything". Neither is measurable
-from inside this submodule, both are outside this note's own provenance clause, and the umbrella's
-own same-day survey records the thirteen declaring roots in six shapes with plain names such as
-`"src"` and `"test"`, and two spellings nobody has classified. **Whoever makes the change counts
-them, from the survey.** The cost above is stated as a rule over root kinds precisely so it needs no
-count.
+🛑 **NO FIGURE ABOUT THE SIBLINGS IS WRITTEN HERE, AND TWO DRAFTS WROTE ONE.** The first said "the
+twelve repos that root at `["."]`" and "zero repos lose anything"; the second deleted those and then
+quoted three more numbers off the umbrella's survey in the very paragraph declaring that none is
+written. None of them is measurable from inside this submodule, and all of them are outside this
+note's own provenance clause. What is true and sufficient: the umbrella carries a survey of how the
+siblings declare their roots, it records shapes that nobody has classified, and **whoever makes this
+change reads it there.** The cost above is stated as a rule over root kinds precisely so that it
+needs no figure at all.
 
 **The wider question the fleet has already answered, and it is not mine to decide:** `phi-scan.md`
 records this as the THIRD escape class, confirmed independently in three repos, with `deid`'s direct
@@ -456,7 +467,8 @@ probe showing a full HL7 message and a bare SSN in markdown returning `OK, no hi
 the identical bytes in `src/control.ts` returned 7 hits at exit 1. Dropping `exemptsMarkdown` as a
 default entirely would close the class rather than this instance of it, at the cost of every repo's
 `.md` prose that legitimately describes a violator value. **`dicom` needs only the file-root arm.**
-Whether the wider default moves is a `cosyte/config` decision with thirteen consumers.
+Whether the wider default moves is a `cosyte/config` decision, taken across all of its consumers
+rather than here.
 
 ---
 
@@ -476,13 +488,34 @@ remedy this lineage forbids.
 **Parameter:** none needed; this is a straight engine fix. Optionally
 `missingRootPolicy?: "refuse" | "skip"`, defaulting to `"refuse"`.
 
-**This is the most serious item in Part E and it is fail-open.** Base's `enumerateAll` collects a
-declared root it cannot `lstat` into `missingRoots`, and `buildTargetsForAll` refuses at exit 2
-naming each one: _"A declared root that is not there opens nothing and reports clean on every run it
-ever makes. Restore it, or remove it from the declared scope deliberately."_ The engine's walk does
-`if (stats === null) continue;`, and `lstatOrNull` swallows the error, so a missing root is skipped in
-silence. **Deleting or renaming `docs-content/` therefore moves this repo from exit 2 to
-`OK: no hits` at exit 0 over a corpus that no longer exists.**
+Base's `enumerateAll` collects a declared root it cannot `lstat` into `missingRoots`, and
+`buildTargetsForAll` refuses at exit 2 naming each one: _"A declared root that is not there opens
+nothing and reports clean on every run it ever makes. Restore it, or remove it from the declared
+scope deliberately."_ The engine's walk does `if (stats === null) continue;`, and `lstatOrNull`
+swallows the error, so a missing root is skipped in silence.
+
+🛑 **THE INDEX UNION IS A REAL BACKSTOP HERE, AND A DRAFT OF THIS ITEM DEDUCED ITS CONSEQUENCE FROM
+THE WALK ALONE.** It said deleting or renaming `docs-content/` moves this repo from exit 2 to
+`OK: no hits` at exit 0 over a corpus that no longer exists, and that is false in the commonest case
+and mis-describes the dangerous one. `unionCandidatePaths` filters the INDEX on
+`regularBlobModes.has(mode) && isUnderScanRoot(p) && isWalkReadable(p)`, and `isUnderScanRoot`
+compares against the CONFIGURED roots rather than against what is on disk, so an in-scope tracked path
+survives its directory vanishing. Three mutations that the one word "deleting or renaming" bundled,
+behaving three different ways:
+
+| mutation                              | index still carries the paths?      | engine result                                                      |
+| ------------------------------------- | ----------------------------------- | ------------------------------------------------------------------ |
+| `rm -rf docs-content` (worktree only) | yes                                 | all twelve read from git objects. NOT fail-open                    |
+| `git rm -r docs-content` (committed)  | no                                  | exit 0, and the corpus really is gone. Nothing is missed           |
+| `git mv docs-content elsewhere`       | yes, at `elsewhere/*`, out of scope | exit 0 over a LIVE corpus nothing reads. **This is the fail-open** |
+
+**So the gap is narrower than base's refusal and it is still real.** Base refuses on ANY absent
+declared root and says which; the engine is silent on all three, and is covered only where git
+happens to carry the same paths under the same names. What the union cannot backstop, and these are
+the states the remedy is for: a root moved OUT of scope, a root that never existed (a typo in the
+config), and UNTRACKED content under a root, which git carries nothing for. **The remedy direction is
+unchanged: an absent declared root should refuse, because the engine cannot tell those three apart
+and base did not have to.**
 
 Base ALSO refuses a shape mismatch, naming the kind: a directory where a regular file is declared, a
 regular file where a directory is declared, and anything that is neither. The engine derives the kind
@@ -491,7 +524,11 @@ and explains nothing about a root that is not there at all, which has no kind to
 
 The engine's own docblock already names the missing-root case among the states in which a root
 contributes nothing without saying so, **and then says no claim is made that it is the last such
-state.** That sentence is the right one to keep; what is missing is the refusal.
+state.** That sentence is the right one to keep; what is missing is the refusal. **And the same
+paragraph names an UNREADABLE root, which `lstatOrNull`'s bare catch reports exactly as it reports a
+missing one, so an `EACCES` on a parent directory or an `ELOOP` arrives at the skip above wearing the
+word MISSING.** Base's catch is bare too, so base REFUSES on it; the engine skips. Whatever shape the
+remedy takes, it has to cover that state or it closes the word and not the behaviour.
 
 ## 1. A hit line echoes the violating value unbounded
 

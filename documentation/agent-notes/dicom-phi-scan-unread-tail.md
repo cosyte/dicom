@@ -205,8 +205,10 @@ SHARED engine. `PHI-SCAN-ADOPT` replaces every repo's hand-maintained scanner wi
 that **all process lives in the engine and is parameterized**: a local `unread` tally is exactly the
 hand-maintained machinery the item exists to delete, so it may not survive the adoption in this repo.
 
-`DetectContext` has no channel for any of it, and **`dicom` is the only repo in the fleet doing this
-bookkeeping**, so the engine's completeness API will be shaped almost entirely by this page. The
+`DetectContext` has no channel for any of it. The dispatch that opened the slice says `dicom` is the
+only repo in the fleet doing this bookkeeping, so the engine's completeness API will be shaped almost
+entirely by this page; **that is a cross-repo claim, it is not measurable from inside this submodule,
+and nothing on this page rests on it.** The
 derivation proposes `incompleteReasons` as a caller-declared closed vocabulary plus
 `ctx.incomplete({ bytes, reason })`, carries the exit-code decision and its 🔴 residual unchanged, and
 records the one design constraint this page's own open item places on the API: **the file-meta halt
