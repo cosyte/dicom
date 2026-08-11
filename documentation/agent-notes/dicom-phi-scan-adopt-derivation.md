@@ -1,17 +1,31 @@
 # `PHI-SCAN-ADOPT`: what `dicom` needs `@cosyte/script-utils/phi-scan` to parameterize
 
-_Derivation only. **Nothing is adopted, nothing ships, and this branch must not be merged.**
-`scripts/phi-scan.ts` on this branch is byte-identical to `origin/main`. Written 2026-08-11 against
-`b8fd5ae` (branch base, which was `origin/main`'s tip) with `@cosyte/script-utils@0.0.2` installed as
-a devDependency so the engine could be driven directly._
+**Where to find this, because a record nobody can reach is the same shape as a root nobody notices is
+empty.** It is the `PHI-SCAN-ADOPT` record. `dicom-phi-scan-unread-tail.md` points here under "Where
+this went next", which is the note this file's central specification is derived from.
 
-**Why this file exists rather than a pull request.** Adoption was re-scoped mid-slice by founder
+**Neither `CLAUDE.md` nor `documentation/agent-notes.md` carries an entry, and for two DIFFERENT
+reasons that must not be collapsed.** `CLAUDE.md` has none deliberately: a line there would have to
+state a rule about a scanner that has not changed, and this repo's fourth standing discipline is that
+`CLAUDE.md` gets its one line plus an anchor when a claim lands, not before. `agent-notes.md` has none
+because it is **already over its 250,000-byte budget** and the write was refused by
+`.claude/hooks/doc-budget.mjs`. That is a real gap in this repo's own index and it is disclosed rather
+than worked around: the remedy under ADR 0023 is relocation out of `agent-notes.md`, which is its own
+slice and is not this one. **Raising the budget as a side effect of landing this note is exactly what
+that hook exists to refuse.**
+
+_Derivation and engine specification. **No adoption is performed here, and nothing in it ships.** As
+of 2026-08-11 `scripts/phi-scan.ts` is unchanged: written against `b8fd5ae`, which was `origin/main`'s
+tip, with `@cosyte/script-utils@0.0.2` installed as a devDependency so the engine could be driven
+directly._
+
+**Why this is a derivation and not an adoption.** `PHI-SCAN-ADOPT` was re-scoped mid-slice by founder
 directive: _"all updates go to script-utils to parameterize the process"_. Process means walking,
 reading, enumeration, the index union, staged-blob handling, completeness and bookkeeping, reporting,
-exit codes and refusals. None of it is this repo's. `dicom` carries the largest hand-maintained
-scanner in the fleet, so the gap between what it does and what the engine can express is the widest,
-and closing it repo-locally is exactly what this item exists to delete. **The adoption is blocked on
-an engine that does not have these parameters yet.**
+exit codes and refusals. None of it is this repo's, so a gap the engine cannot express may not be
+covered locally. **The adoption is blocked on an engine that does not have these parameters yet.**
+(The dispatch that opened this slice describes `dicom`'s scanner as the largest in the fleet. That is
+a cross-repo claim, it is not measurable from inside this submodule, and nothing here rests on it.)
 
 ## Provenance, and how the numbers here were taken
 
@@ -41,14 +55,29 @@ so the two keys cannot drift apart. This matters because a staged **mode-120000*
 root was measured in a sibling to be enumerated, read, handed the LINK'S TARGET PATH as content, and
 reported `OK: no hits` at exit 0.
 
-**Validated end to end, not reasoned about.** Driving `runPhiScan` against this working tree with the
-parameters in Part A, an allow-list holding the single line `EMAILDOMAIN example.com`, and NO
-detector, the run reports `[phi-scan] OK: no hits` and exits **0**. It raises no completeness
-refusal, so every target the roots enumerate is one the read filter also admits. With an EMPTY
-allow-list the same run exits **1** with **6** hits across **2** files, and both the files and the
-values are named rather than counted: five `t@example.com` and one `changelog@example.com`, in
-`test/scripts/phi-scan.test.ts` and `test/scripts/changelog-generation.test.ts`, all from the
-engine's email floor. No SSN shape anywhere in the corpus.
+**The parameters were driven against this working tree, and here is exactly what that shows and what
+it does not.** With the Part A parameters, an allow-list holding the single line
+`EMAILDOMAIN example.com`, and NO detector, `runPhiScan` reports `[phi-scan] OK: no hits` and exits
+**0**. With an EMPTY allow-list the same run exits **1** with **6** hits across **2** files, and both
+the files and the values are named rather than counted: five `t@example.com` and one
+`changelog@example.com`, in `test/scripts/phi-scan.test.ts` and
+`test/scripts/changelog-generation.test.ts`, all from the engine's email floor. No SSN shape anywhere
+in the corpus.
+
+🛑 **THE ABSENCE OF A COMPLETENESS REFUSAL IN THAT RUN IS NOT EVIDENCE THAT THE READ FILTER AND THE
+ROOTS AGREE, AND A DRAFT OF THIS PARAGRAPH SAID IT WAS.** A read filter drops a path UPSTREAM of
+enumeration, so a dropped path never becomes a target and the completeness rule has nothing to fire
+on. That is the same mechanism Part D is about, and reading a null result from it as a validation is
+that defect wearing the reviewer's hat. What the two runs show is that the parameters are ACCEPTED by
+`normalizeConfig`, that the corpus enumerates and reads without a refusal, and that the floor's
+verdict moves with the allow-list. They show nothing about what the filter dropped.
+
+**Re-measured 2026-08-11 under repo-namespaced scratch filenames, after a fleet-wide warning that the
+shared scratchpad was clobbering generically-named probe scripts between workers.** All three figures
+reproduced identically. The strongest corroboration is external: the `conformance-refuter`, which
+cannot run node, independently re-derived the six matches, their two files and their split (5 and 1)
+by reading the tree, and confirmed `RegExp.input.length = 153,954` is exactly the UTF-16 code-unit
+length of `test/scripts/phi-scan.test.ts`.
 
 ---
 
@@ -76,11 +105,24 @@ markdown, and the text sweep alone cannot see into one.
 
 **The root KIND is derived from the filesystem under the engine, and this repo used to declare it.**
 `Root { rel, shape: "directory" | "file" }` refused a root that was not the shape it was declared to
-be. The engine derives instead, and the item is right that the shape is expressible without the
-richer type: a file root is scanned as one target, a link-shaped root is refused rather than followed
-(`lstat`, never `stat`), a root that is neither is refused, a missing one is skipped. **What
-deriving gives up is what the declaration bought: a root that CHANGES KIND is silently treated as
-what it has become.** That is a shared boundary and a low-priority engine item, listed in Part E.
+be. The engine derives instead, and the item is right that a file root is expressible without the
+richer type: it is scanned as one target, a link-shaped root is refused rather than followed
+(`lstat`, never `stat`), a root that is neither file nor directory is refused.
+
+🛑 **DERIVING GIVES UP AT LEAST TWO THINGS THE DECLARATION BOUGHT, AND NO CLAIM IS MADE THAT THOSE ARE
+ALL OF THEM.** A first draft here named only the first and wrote it in the closure form ("what the
+declaration bought"), which is this lineage's own recurring defect. The engine's docblock says the
+same thing about its own list and is worth copying rather than improving on: it names the states in
+which a root contributes nothing without saying so, and then says no claim is made that it is the
+last such state.
+
+1. **A root that CHANGES KIND is silently treated as what it has become.**
+2. **A MISSING declared root is SKIPPED, where base REFUSES AT EXIT 2.** This is the more serious of
+   the two and it is a fail-open regression, so it is specified in Part E rather than left as a note
+   here. `buildTargetsForAll` refuses on `missingRoots` with the reason written out: _"A declared root
+   that is not there opens nothing and reports clean on every run it ever makes."_ A prior slice paid
+   a refuter pass for it (`phi-scan-walk-root-scope.md` records the state as base exit 0 with
+   `OK - no hits`, head exit 2).
 
 **AXIS 2, the subtractive half: the corpus exemption does NOT go in `excludedPaths`, and that is
 load-bearing.** `test/fixtures/phi-scan/README.md` documents the synthetic violator values the
@@ -146,6 +188,15 @@ carry this standard's own shape: a trailing caret makes an entry a PREFIX, becau
 synthetic. Everything else is exact. `DOB` entries are raw 8-character `YYYYMMDD`. `EMAILDOMAIN
 example.com` is required by the engine's own email floor and by nothing this repo does today: it is
 the six addresses measured above.
+
+🛑 **AND FOUR OF THE TEN `DATE:` ENTRIES ARE NOT DATES, WHICH IS A LABEL THE TRANSLATION MAKES WORSE
+AND THE ENGINE HAS NOWHERE TO PUT.** `scripts/phi-allow-list.txt` flags them in place: `40101006`,
+`70011001`, `70011002` and `70011003` are DICOM TAG NUMBERS that happen to satisfy the `YYYYMMDD`
+shape, so the text sweep's compact-date pass matches them, and the date allow-list is the only
+mechanism available to excuse them. Under the shared format they land under a key literally named
+`DOB` with no place for the caveat to survive except a `#` comment beside them. The engine's allow-list
+grammar has no tag for "a token that only looks like a date", and inventing one is a change to the
+shared format rather than to this file.
 
 **🛑 THE TRANSLATION LOSES CASE SENSITIVITY, AND THAT IS A WIDENING RATHER THAN A TIDY-UP.** This
 repo's allow-list matched case-sensitively on purpose, and lists `DOE^` and `Doe^` as two entries
@@ -229,8 +280,15 @@ an embedded object's unread tail is attributed to the PAGE, which is the file a 
 edit, exactly as its hits are. One entry per locus holding an occurrence count, a byte sum, and a Set
 of reasons.
 
-**Print one stderr line per locus, after the hits, plus a total.** The shape that exists today and is
-worth keeping verbatim:
+**Print one stderr line per locus, plus a total.** The line SHAPE is worth keeping verbatim; the
+ORDER is a decision the engine has to take, and this note must not pretend base settles it. Base is
+`reportExemptions(); reportUnread(unread); report(hits, ...)`, so every `PARTIAL` line PRECEDES every
+hit line and both totals, all on stderr except the clean line. The engine deliberately prints hits
+FIRST so that a refusal cannot swallow a finding already made, which is the opposite convention and
+was itself paid for by a refuter. **A draft of this clause wrote "after the hits" and asserted it as
+base's shape, which would have had a `config` worker implement the reverse of what base does.** Both
+orders are defensible and only one can be chosen; what is NOT negotiable is that neither the hits nor
+the `PARTIAL` lines may be dropped when both are present.
 
 ```
 [phi-scan] PARTIAL: <locus>: the DICOM sweep stopped before the end of N object(s),
@@ -360,10 +418,13 @@ rmSync(root, { recursive: true, force: true });
 Under the default, **13 of the 101 tracked files under this repo's roots are dropped by both sweeping
 routes**, and they are named rather than counted: `README.md`, the eleven `docs-content/*.md` pages,
 and `test/smoke/README.md`. The fourteenth `.md`, `test/fixtures/phi-scan/README.md`, is this repo's
-declared corpus exemption and is dropped on purpose. So the default does not merely blind a root, it
-blinds the entire DOC corpus, which is the half that carries base64-encoded Part 10 objects and the
-half that **ships**: `README.md` goes in the npm tarball and `docs-content/` goes to
-docs.cosyte.com.
+declared corpus exemption and is dropped on purpose.
+
+So the default does not merely blind a root: **it blinds 12 of the DOC corpus's 13 files**, and the
+survivor is named rather than the loss rounded up, because a draft here wrote "the entire DOC corpus"
+and `docs-content/sidebars.json` is not markdown and is still read. That corpus is the half carrying
+base64-encoded Part 10 objects, and the half that **ships**: `README.md` goes in the npm tarball and
+`docs-content/` goes to docs.cosyte.com.
 
 ## The corrected default
 
@@ -371,15 +432,23 @@ docs.cosyte.com.
 explicitly-named argv path that way ("a `.md` named explicitly on argv IS scanned"), and a scan root
 is a stronger declaration than an argv path: it is committed configuration. A root the caller named
 and the engine silently declined to read is the same defect class as a root nobody notices is empty.
-Minimum fix, and the one with no cost to the twelve repos that root at `["."]`:
+The minimum fix:
 
 ```
 isWalkReadable defaults to: (relPath) => isDeclaredFileRoot(relPath) || exemptsMarkdown(relPath)
 ```
 
-**What it costs:** a repo whose scan roots name a `.md` file starts reading it. That is one file per
-such root and it is a file the repo declared. Zero repos root at `["."]` lose anything, because `.`
-is a directory root.
+**What it costs:** a repo whose scan roots name a `.md` FILE starts reading that file. A repo whose
+roots are all directories is unaffected, because the new arm only fires on a root that is itself a
+file.
+
+🛑 **NO COUNT OF THE SIBLINGS AFFECTED IS WRITTEN HERE, AND A DRAFT THAT WROTE ONE WAS WRONG.** It
+said "the twelve repos that root at `["."]`" and "zero repos lose anything". Neither is measurable
+from inside this submodule, both are outside this note's own provenance clause, and the umbrella's
+own same-day survey records the thirteen declaring roots in six shapes with plain names such as
+`"src"` and `"test"`, and two spellings nobody has classified. **Whoever makes the change counts
+them, from the survey.** The cost above is stated as a rule over root kinds precisely so it needs no
+count.
 
 **The wider question the fleet has already answered, and it is not mine to decide:** `phi-scan.md`
 records this as the THIRD escape class, confirmed independently in three repos, with `deid`'s direct
@@ -391,10 +460,38 @@ Whether the wider default moves is a `cosyte/config` decision with thirteen cons
 
 ---
 
-# PART E. The rest of the gap, as parameters
+# PART E. Further gaps found while deriving, as parameters
 
 Each row is something base does that `@cosyte/script-utils@0.0.2` cannot express. None is
 re-implementable locally under the directive.
+
+🛑 **THIS IS NOT A CENSUS AND MUST NOT BE READ AS ONE.** It is what deriving `dicom`'s parameters
+turned up, from one repo, in one pass, and a refuter found one more after the first draft called
+itself "the rest of the gap" (item 0 below, which base refuses on and the engine skips). A count of
+these items appears nowhere on purpose: the previous framing invited exactly the narrower-enumeration
+remedy this lineage forbids.
+
+## 0. A MISSING declared root is skipped, where base refuses
+
+**Parameter:** none needed; this is a straight engine fix. Optionally
+`missingRootPolicy?: "refuse" | "skip"`, defaulting to `"refuse"`.
+
+**This is the most serious item in Part E and it is fail-open.** Base's `enumerateAll` collects a
+declared root it cannot `lstat` into `missingRoots`, and `buildTargetsForAll` refuses at exit 2
+naming each one: _"A declared root that is not there opens nothing and reports clean on every run it
+ever makes. Restore it, or remove it from the declared scope deliberately."_ The engine's walk does
+`if (stats === null) continue;`, and `lstatOrNull` swallows the error, so a missing root is skipped in
+silence. **Deleting or renaming `docs-content/` therefore moves this repo from exit 2 to
+`OK: no hits` at exit 0 over a corpus that no longer exists.**
+
+Base ALSO refuses a shape mismatch, naming the kind: a directory where a regular file is declared, a
+regular file where a directory is declared, and anything that is neither. The engine derives the kind
+instead, which is item 8. The two are separate: derivation explains the shape mismatch going quiet,
+and explains nothing about a root that is not there at all, which has no kind to derive.
+
+The engine's own docblock already names the missing-root case among the states in which a root
+contributes nothing without saying so, **and then says no claim is made that it is the last such
+state.** That sentence is the right one to keep; what is missing is the refusal.
 
 ## 1. A hit line echoes the violating value unbounded
 
@@ -419,7 +516,12 @@ says what this scanner prints and nothing about what the standard admits.
   PARENT, so an excerpt cut from an 8 MiB decode keeps the whole 8 MiB alive for the run. Measured:
   retention grew by one whole file per hit-bearing file, and did not grow at all once the excerpt
   owned its bytes. The round trip must be `utf16le`, because `Buffer.from(s, "utf8")` turns an
-  unpaired surrogate into U+FFFD and would print a character the file does not contain.
+  unpaired surrogate into U+FFFD and would print a character the file does not contain. ⚖️ \*\*That
+  last clause is an ARGUMENT, not a measurement, and its source marks it so:
+  `dicom-phi-scan-value-retention.md` records that NO TEST DISCRIMINATES the three encodings and that
+  nothing reachable through the CLI can hand the excerpt an unpaired surrogate today, and refuses to
+  dress it as a measurement. It is the right slot to build defensively, because it is one recognizer
+  away from being reachable, and that is the whole of the case for it.
 - **The withheld amount is printed OUTSIDE the quotes and carries NO UNIT**, because the two routes
   measure in two different ones.
 
@@ -453,6 +555,16 @@ each.
   entry's budget being spent by ANOTHER entry's findings. A claim that the general property holds was
   refused here.
 
+🛑 **AND THE FOUR-RECOGNIZER TABLE IS HANDED OVER WITH ITS MEASURED COST, NOT WITHOUT IT.** `text-date`
+covers BOTH of `scanText`'s date passes, the ISO one and the compact `YYYYMMDD` one, and
+`dicom-phi-scan-report-monotonicity.md` pins the consequence identically on base and head: over 200
+ISO dates followed by 200 compact ones the report prints 20 ISO and **0** compact, and adding a
+twentieth ISO date in front of one compact DOB takes that DOB off the default report. **The only
+route that sees a bare eight-digit date can therefore be suppressed in full by a loud enough ISO
+pass.** `PRE-EXISTING` in this repo and not introduced by the cap; splitting the two date passes into
+separate recognizers is available and splitting per embedded object is NOT, because the number of
+objects is the payload's choice. A `config` worker taking the table should take this with it.
+
 ## 3. The engine hands scan-target bytes to a `RegExp`, which leaves them on a process global
 
 **Parameter:** none. This is a straight engine fix.
@@ -470,7 +582,11 @@ string is one of the scanned files, and `RegExp.lastMatch` is `"t@example.com"`,
 last floor match found. Both survive the return of `runPhiScan`, so they are readable for the rest of
 the process's life or until something else matches.
 
-`dicom` closed exactly this in `#109`, `#111` and `#112` and the file constructs no `RegExp` at all
+`dicom` closed this in TWO slices and both halves matter, because item 3 names both: **`#112` took the
+SCAN TARGET'S bytes out of every pattern, and `#113` took the GATE'S OWN CONFIG out of them**, which
+is the `loadAllowList` / `loadOverrideLog` half. (An earlier draft cited `#109` and `#111` here and
+they are different work: `#109` bounded the excerpt a hit line echoes and `#111` split the print
+budget per recognizer. Neither touched the statics.) The file constructs no `RegExp` at all
 today. **Adoption reintroduces it, and it is an ENGINE defect rather than a local one.** The remedy
 this repo has already paid for is a forward scanner per pattern, pinned by differential fuzz against
 the pattern it replaces (`test/scripts/phi-scan-matchers.test.ts`), plus
@@ -535,24 +651,29 @@ caller pick; a boolean flag would make one repo's choice change the shape every 
 **Parameter:** none, or `reportDroppedPaths?: boolean`. The engine should print, per run, the
 in-scope paths its read filters dropped.
 
-Base prints `[phi-scan] corpus exemption in force for N file(s): <paths>` on **every** run, from the
-paths the walk actually reached and skipped. **An exemption nobody can see is the same shape as a root
-nobody notices is empty**, and this is an OBSERVATION rather than a declaration: it goes stale
-visibly the moment the file it names moves. It is deliberately not a denominator.
+Base prints `[phi-scan] corpus exemption in force for N file(s): <paths>` on every **`all`-mode** run
+that skipped something, from the paths the walk actually reached and skipped. It prints nothing on a
+`--staged` or a positional-paths run, because `exemptThisRun` is populated only by
+`buildTargetsForAll` and is explicitly zeroed for `--staged`, and nothing at all when the list is
+empty. **An exemption nobody can see is the same shape as a root nobody notices is empty**, and this
+is an OBSERVATION rather than a declaration: it goes stale visibly the moment the file it names
+moves. It is deliberately not a denominator. (A draft here wrote "on **every** run", which is three
+quantifiers too wide and is the reason the qualifiers above are spelled out.)
 
 ## 8. A root that changes kind is silently treated as what it became
 
 **Parameter:** allow `scanRoots: readonly (string | { path: string; kind: "file" | "directory" })[]`.
 
-Base declares `{ rel, shape }` and refuses a mismatch; the engine derives. Lowest priority of the
-eight, listed because it is a real property this adoption gives up and the item's own note about
-derivation says the same thing.
+Base declares `{ rel, shape }` and refuses a mismatch, naming the kind it found; the engine derives.
+Listed because it is a real property this adoption gives up, and the engine's own note about
+derivation says the same thing. It is a different state from item 0: a root that is not there has no
+kind to derive.
 
 ---
 
-# What this branch does NOT do, and why
+# What this slice does NOT do, and why
 
-- **No adoption.** `scripts/phi-scan.ts` is byte-identical to `origin/main`.
+- **No adoption.** `scripts/phi-scan.ts` is unchanged from `b8fd5ae`.
 - **No changeset, no CHANGELOG entry, no version bump.** Nothing ships. (This repo's `CHANGELOG.md`
   is GENERATED from changeset summaries and must never be hand-edited or given back an
   `[Unreleased]` heading.)
@@ -560,8 +681,12 @@ derivation says the same thing.
   `test/scripts/phi-scan-matchers.test.ts` (1,320) and
   `test/integration/phi-scan-regex-statics.test.ts` (238) all assert behaviour the engine will move,
   and cutting them before the engine's messages are settled would be re-done.
-- **The only tracked change is the `@cosyte/script-utils@^0.0.2` devDependency and its lockfile
-  entry**, which is what made every measurement above possible.
+- **The tracked changes are this note, the pointer to it in `dicom-phi-scan-unread-tail.md`, and the
+  `@cosyte/script-utils@^0.0.2` devDependency with its lockfile entry.** The devDependency is what
+  made every measurement above possible. `pnpm add -D` also deleted `package.json`'s empty
+  `"dependencies": {}` key as a side effect; it is restored by hand, because that key is the
+  documented statement that this package takes none of its allowed three runtime dependencies, and a
+  side effect is not a decision.
 - **`DICOM-RESIDUALS` is untouched.** One residual is NAMED here because the completeness API must
   accept more than one report per target or the remedy for it is not expressible: the file-meta halt
   under Implicit VR LE. Nothing about it is closed, and none of the rest of that ledger is this
