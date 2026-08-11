@@ -1859,6 +1859,32 @@ describe("DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE", () => {
     );
   });
 
+  it("says nothing about a zero-length retained value, which encodes no Data Set", () => {
+    // The third of the three bounds the docs name, measured rather than
+    // asserted. It is also what keeps the audit a fixed point over an object
+    // some other rule already emptied: without it, a carrier emptied on run one
+    // is reported as a KEPT unexamined value on run two, which is a claim about
+    // content that is not there.
+    const empty = buildDicom({
+      transferSyntax: EXPLICIT_LE,
+      elements: [
+        nameEl,
+        { tag: "00090010", vr: "LO", value: ascii("ACME") },
+        { tag: PRIVATE_TAG, vr: "OB", value: Buffer.alloc(0) },
+      ],
+    });
+    const { dataset, report } = deidentify(parseDicom(empty, { profile: acme }), {
+      retain: ["RetainSafePrivate"],
+      profile: acme,
+    });
+    // Non-vacuity: the attribute really is retained, so the silence is the
+    // exclusion and not a removal.
+    expect(dataset.get(PRIVATE_TAG)).toBeDefined();
+    expect(report.removedPrivateTags).not.toContain(PRIVATE_TAG);
+    expect(report.unauditableSequences).toEqual([]);
+    expect(codes(report)).not.toContain(WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE);
+  });
+
   it("says the same thing on its own output, so the audit is a fixed point too", () => {
     // `DICOM-DEIDENT-NOT-A-FIXED-POINT` is about the bytes; this is the audit
     // half of it. The carrier is kept, so the second run keeps it again and must

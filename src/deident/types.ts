@@ -584,10 +584,17 @@ export interface DeidentifyReport {
    * `(0012,0062) = YES`. Read a `"kept"` entry as the package telling you what
    * it shipped without auditing, not as a scrub it performed.
    *
-   * **This array is empty on a well-formed file only when that file's run kept
-   * no private values** - i.e. without `RetainSafePrivate` + a `Profile`. With
-   * them, a perfectly conformant file with a vouched-for private attribute
-   * produces one `"kept"` entry per retained attribute, by design.
+   * **This array is NOT empty on a well-formed file once a run retains private
+   * values** - i.e. with `RetainSafePrivate` + a `Profile`. A perfectly
+   * conformant file with vouched-for private attributes populates it, by design.
+   *
+   * 🛑 **It is not a census of them, and "one entry per retained attribute" is
+   * false in three ways.** A retained Private Creator `(gggg,00EE)` raises
+   * nothing, because it is retained only when its whole decoded value is a
+   * member of the profile's private dictionary, which is an enumeration; a
+   * zero-length value raises nothing, because it encodes no Data Set; and the
+   * record stops at the cap below. Read the array as "at least these", never as
+   * "these are all of them" - the retention itself is never capped or excepted.
    *
    * **Capped, and the cap is on the record only.** A crafted input can carry
    * tens of thousands of un-auditable elements, so this array (and its matching

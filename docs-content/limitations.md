@@ -57,11 +57,17 @@ structural fact about DICOM that no reader can resolve from the wire.
   survives depends on where the sender put the Private Creator, which VR the carrier was written
   under, and whether the profile also reached `parseDicom`. The surface is **pinned as a measured
   matrix** in `test/integration/deident-private-reservation.test.ts` rather than described in prose,
-  because the prose has been wrong twice. **Every retained private value this package keeps
-  unexamined raises `DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE` and adds a
-  `report.unauditableSequences` entry with `applied: "kept"`** - so a Data Set the sender nested
+  because the prose has been wrong twice. **A retained private value this package keeps unexamined
+  raises `DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE` and adds a `report.unauditableSequences` entry
+  with `applied: "kept"`, subject to the three bounds named next** - so a Data Set the sender nested
   inside such a value still reaches your output verbatim under `(0012,0062) = YES`, but no longer
-  under an empty report. 🛑 **That is a disclosure, not a fix: the value is still there.** Emptying
+  under an empty report. **The three bounds, because "every" would be false:** a retained Private
+  Creator `(gggg,00EE)` raises nothing (it is retained only when its whole decoded value is a member
+  of your profile's private dictionary, which is an enumeration), a zero-length value raises nothing
+  (it encodes no Data Set), and the record stops at 64 entries of this class, so an array with 64 of
+  them means "at least 64" and not a total. The action is not capped by any of that, because there is
+  no action: the value is kept either way. 🛑 **That is a disclosure, not a fix: the value is still
+  there.** Emptying
   it needs a content test on exactly the VRs arbitrary bytes are for, which would also empty
   conformant binary values on legitimate files - an open product question, weighed and deliberately
   answered the other way. Detail:
@@ -69,7 +75,11 @@ structural fact about DICOM that no reader can resolve from the wire.
 
 - **An over-declared Value Length into a binary carrier still leaks.** A length that swallows the
   following element into an `OB`, `OW`, `US` or `UN` value is not detected, and a `(0010,0020)`
-  Patient ID inside it reaches de-identified output. Arbitrary
+  Patient ID inside it reaches de-identified output with **no warning and no report entry**. That is
+  measured and still exactly true for this route, which is every default `deidentify()` run: the only
+  carrier that gets a diagnostic is one that is itself a private attribute being retained under
+  `RetainSafePrivate` plus a `Profile` (the bullet above), and what that diagnostic says is
+  "unaudited", never "a swallow was detected here". Arbitrary
   bytes are exactly what those VRs are for, so no content test can decide it. String carriers **are**
   covered, because there the same bytes are provably outside the VR's repertoire. If you accept files
   from a sender you do not control, treat a binary attribute's declared length as untrusted.
