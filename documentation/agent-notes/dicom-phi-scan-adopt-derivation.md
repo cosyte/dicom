@@ -482,36 +482,35 @@ nothing and reports clean on every run it ever makes. Restore it, or remove it f
 scope deliberately."_ The engine's walk does `if (stats === null) continue;`, and `lstatOrNull`
 swallows the error, so a missing root is skipped in silence.
 
-🛑 **THE CONSEQUENCE MUST NOT BE DEDUCED FROM THE WALK ALONE: THE INDEX UNION BACKSTOPS PART OF IT,
-AND `isWalkReadable` DECIDES HOW MUCH.** `unionCandidatePaths` filters the INDEX on
+🛑 **THE CONSEQUENCE MUST NOT BE DEDUCED FROM THE WALK ALONE: THE INDEX UNION BACKSTOPS PART OF IT.**
+`unionCandidatePaths` filters the INDEX on
 `regularBlobModes.has(mode) && isUnderScanRoot(p) && isWalkReadable(p)`, and `isUnderScanRoot`
 compares against the CONFIGURED roots rather than against what is on disk, so an in-scope tracked
-path can survive its directory vanishing. Whether it does is decided by the THIRD conjunct, so the
-answer differs between this repo's parameters and the engine's shipped defaults. Three mutations, and
-the word "deleting" bundles all three:
+path survives its directory vanishing. Three mutations, and the word "deleting" bundles all three:
 
 | mutation                              | index still carries the paths?      | engine result                                                      |
 | ------------------------------------- | ----------------------------------- | ------------------------------------------------------------------ |
-| `rm -rf docs-content` (worktree only) | yes                                 | see the two readings below. NOT the same answer under both         |
+| `rm -rf docs-content` (worktree only) | yes                                 | the union reads the blobs back. NOT a loss                         |
 | `git rm -r docs-content` (committed)  | no                                  | exit 0, and the corpus really is gone. Nothing is missed           |
 | `git mv docs-content elsewhere`       | yes, at `elsewhere/*`, out of scope | exit 0 over a LIVE corpus nothing reads. **This is the fail-open** |
 
-🛑 **ROW 1 HAS TWO ANSWERS AND THE SHIPPED ONE IS THE BAD ONE.** Under Part A's `isWalkReadable`,
-which admits markdown, the union reads all twelve `docs-content` blobs from git objects and nothing
-is lost. **Under the engine's SHIPPED default, `exemptsMarkdown`, the third conjunct drops the eleven
-`.md` pages from the union as well as from the walk, so `rm -rf docs-content` leaves eleven tracked
-pages read by NEITHER route, at exit 0.** That is the same defect Part D specifies, reached through a
-second door, and Part D's proposed corrected default does not close this one: its new arm fires on a
-root that is itself a file, and `docs-content` is a directory root. **The two items therefore have to
-be fixed together or row 1 stays fail-open in the default configuration.**
+**Row 1 is measured rather than derived**, on a throwaway repository shaped like this one: a
+`docs-content` root holding eleven `.md` pages, one carrying a live dashed identifier, plus a
+`sidebars.json`. With the directory REMOVED from the working tree and the index intact, the run
+exits **1** and reports the hit as `docs-content/page3.md (as git carries it)`, which is the union
+reading it out of a git object. The same repository under the engine's SHIPPED `exemptsMarkdown`
+default exits **0** both before and after the deletion, so **the deletion changes nothing there: the
+pages were already read by neither route while the directory was still present.** That is Part D's
+defect and not this one, and the two must not be run together. Part D's proposed corrected default
+would not reach these pages either, because its new arm fires on a root that is itself a file and
+`docs-content` is a directory root.
 
 **So the gap is narrower than base's refusal and it is still real.** Base refuses on ANY absent
-declared root and says which; the engine is silent on all three rows, and is covered only where git
-carries the same paths under the same names AND the read filter admits them. What the union cannot
-backstop in any configuration: a root moved OUT of scope, a root that never existed (a typo in the
-config), and UNTRACKED content under a root, which git carries nothing for. **The remedy direction is
-unchanged: an absent declared root should refuse, because the engine cannot tell these states apart
-and base did not have to.**
+declared root and says which; the engine is silent on all three rows. At least three states have no
+backstop, and no claim is made that they are all of them: a root moved OUT of scope, a root that
+never existed (a typo in the config), and UNTRACKED content under a root, which git carries nothing
+for. **The remedy direction is unchanged: an absent declared root should refuse, because the engine
+cannot tell these states apart and base did not have to.**
 
 Base ALSO refuses a shape mismatch, naming the kind: a directory where a regular file is declared, a
 regular file where a directory is declared, and anything that is neither. The engine derives the kind
