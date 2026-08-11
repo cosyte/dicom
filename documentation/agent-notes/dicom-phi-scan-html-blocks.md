@@ -222,7 +222,7 @@ caught.
 - **`tripleHashValue` still refuses a heading whose text contains `LS` or `PS`** (`U+2028`,
   `U+2029`), and **section 4.5's backtick-info-string opener** is untouched. Both `PRE-EXISTING`.
 - **🟢 `tripleHashValue` ADMITTED IN THE OTHER DIRECTION TOO, WHICH WAS UNNAMED UNTIL A GATE NAMED
-  IT, AND IT IS CLOSED NOW** (`D-R6`). It separated the `###` run from the text with
+  IT, AND IT IS CLOSED NOW** (`D-R6`, `#118`). It separated the `###` run from the text with
   `isSpaceCode`, the whole of `\s`, where section 4.2 allows only a space or a tab. So a heading
   whose separator is whitespace that section 4.2 does not admit and that does not end the line
   renders as a PARAGRAPH and was a **live allow entry on both trees**. **The enumeration that stood

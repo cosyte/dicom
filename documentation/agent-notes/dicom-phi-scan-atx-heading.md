@@ -16,7 +16,8 @@
 > gate: the ones it omitted were added by the same commit, which is exactly why the derivation has
 > to be re-run against the commit rather than written from memory.
 
-`DICOM-RESIDUALS`, `conformance-refuter` gate. Base `94069e8` (`#117`). Last verified 2026-08-11.
+`DICOM-RESIDUALS`, `conformance-refuter` gate. `#118`, base `94069e8` (`#117`). Last verified
+2026-08-11.
 No pass count is written here: a draft carried one that had not happened yet when it was typed.
 
 Closes the residual `#117`'s first pass named and left open, **`D-R6`**: `tripleHashValue`
