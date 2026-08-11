@@ -81,6 +81,7 @@ export const WARNING_CODES = {
   DICOM_DEIDENT_METHOD_NOT_LO: "DICOM_DEIDENT_METHOD_NOT_LO", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_METHOD_PRIOR_RETAINED: "DICOM_DEIDENT_METHOD_PRIOR_RETAINED", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH: "DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH", // emitted by deidentify(), never by the parser
+  DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE: "DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE: "DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE: "DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE", // emitted by deidentify(), never by the parser
   DICOM_PRIVATE_CREATOR_UNKNOWN: "DICOM_PRIVATE_CREATOR_UNKNOWN", // reserved by Phase 6 - not emitted in Phase 2
@@ -334,6 +335,24 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
     "Pixel Data is present and Burned In Annotation is not 'NO'; this metadata-only de-identifier cannot inspect or clean pixels. Recognizable text may remain burned into the image.",
   DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED:
     "Element ({tag}) {vr} was kept by the action table, but its value ends with {n} whole Data Element(s) - an over-declared Value Length swallowed what followed it. Emptied rather than kept, because the action table cannot see an attribute encoded inside a value. report.embeddedAttributes names the ones this run acts on that also have a literal Table E.1-1 row, which may be none of them.",
+  // Deliberately short, for the reason the two codes below it are short: one is
+  // raised per retained private element and the element count is chosen by the
+  // input.
+  //
+  // 🩺 NO BYTE COUNT, AND THAT IS NOT CAUTION - IT IS THE SAME BOUND `#91` TOOK
+  // OUT OF THE TWO CODES BELOW. `Element.rawBytes.length` EQUALS the Value
+  // Length read off the element header, so on a header an under-declared length
+  // upstream composed out of somebody's value the decimal is four document
+  // bytes. The tag survives because `renderTag` is a membership test against
+  // PS3.6's registry, and a private tag - which every element raising this code
+  // carries - renders `<withheld>` there. See `privateCarrierNotAuditable`.
+  //
+  // 🛑 IT SAYS "KEPT", AND SAYING SO IS THE WHOLE CODE. Its two siblings report
+  // a value this run DROPPED; this one reports a value this run SHIPPED. A
+  // message that read like theirs would tell a caller their nested Data Set was
+  // removed when it is byte-for-byte in the output.
+  DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE:
+    "Element ({tag}) is a Private Attribute retained under RetainSafePrivate; its value was KEPT unchanged and was never enumerated, so any Data Set encoded inside it is unaudited and reaches the output (PS3.15 E.3.10 vouches for the Attribute, not for a Data Set nested in its value; E.1.1). NOT emptied. The byte count is withheld; see report.unauditableSequences.",
   // Deliberately short. One of these is raised per un-auditable element, so a
   // long message is multiplied by an element count the input controls; the
   // reasoning belongs in the docs, not in a string repeated thousands of times.
@@ -1429,6 +1448,76 @@ export function embeddedAttributeRemoved(
     vr,
     n: count,
   });
+}
+
+/**
+ * Build a `DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE` warning. Emitted by
+ * `deidentify()` - never by the parser - when a private data element a
+ * {@link Profile} vouched for under `RetainSafePrivate` is **kept, value
+ * unchanged**, and nothing in the run enumerated what that value encodes.
+ *
+ * ## Why a third code rather than one of the two below
+ *
+ * Its siblings report a value this run **dropped**. This one reports a value
+ * this run **shipped**, on a file that may be entirely conformant, under
+ * `(0012,0062) Patient Identity Removed = YES`. Reusing
+ * `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` would have told a caller their nested
+ * Data Set was emptied while it is byte-for-byte in the output, which is the
+ * false-audit class this module has been refused for before. The **report**
+ * channel is shared - one {@link UnauditableSequenceFinding}, discriminated by
+ * its `applied` field - because the finding is the same fact; the message could
+ * not be, because it states an action.
+ *
+ * ## What raises it, and why the predicate has no content test in it
+ *
+ * PS3.15 2026c section E.3.10 licenses retention for "Private Attributes that
+ * are known by the de-identifier to be safe from identity leakage". That is
+ * knowledge about **one private attribute**, never about a Data Set nested
+ * inside its value - PS3.5 2026c section 7.5.1 says an Item Value "shall contain
+ * a DICOM Data Set composed of Data Elements", and PS3.15 section E.1.1 obliges
+ * the de-identifier over the Attributes in Table E.1-1 "whether contained in the
+ * top level Data Set or embedded in an Item of a Sequence of Items". So a
+ * retained private value this run did not walk carries an obligation it did not
+ * discharge, and this code says exactly that and nothing more.
+ *
+ * **The embedded-attribute scanner's silence is NOT a clearance and this code
+ * does not treat it as one.** That scan answers a much narrower question - does
+ * this value's tail tile as a Data Element run, **in this file's own transfer
+ * syntax**, holding an actionable tag and a byte outside the carrier VR's
+ * repertoire - so a nested Data Set written in another transfer syntax, or
+ * holding no Table E.1-1 row, passes it untouched on a string carrier as
+ * readily as on a binary one. A predicate keyed on "the scanner could not read
+ * it" would therefore have left cells silent that leak, which is measured in
+ * `test/integration/deident-private-reservation.test.ts`. The predicate is
+ * "this run kept the value and never enumerated it", which is a fact about what
+ * the run did rather than an inference from the bytes - so there is no scan, no
+ * cost that grows with an attacker-chosen value length, and nothing to be wrong
+ * about.
+ *
+ * **It therefore fires on ordinary, harmless vendor values too, and that is the
+ * honest reading rather than a defect.** A caller who passes
+ * `retain: ["RetainSafePrivate"]` and a `Profile` is asking this package to ship
+ * values it has no table for; the code is the disclosure that it did so. It
+ * costs nothing on a run without that option, because then no private value is
+ * kept at all.
+ *
+ * **🩺 NO BYTE COUNT, AND THE SHAPE IS COPIED FROM ITS SIBLINGS DELIBERATELY.**
+ * `Element.rawBytes.length` equals the Value Length off the element header, and
+ * an under-declared length upstream can compose that header out of somebody's
+ * value - the measurement that took `{n}` out of {@link sequenceNotAuditable}
+ * and {@link undefinedVrNotAuditable} in `#91`. There is no `renderLength` and
+ * there must not be one. `tag` is `renderTag`'s membership test against PS3.6's
+ * element registry, which for the private tag every element raising this code
+ * carries renders `<withheld>` - so this message names no element number at all,
+ * and the byte offset locates it.
+ *
+ * @example
+ * ```ts
+ * const w = privateCarrierNotAuditable({ byteOffset: 320 }, "00091001");
+ * ```
+ */
+export function privateCarrierNotAuditable(position: DicomPosition, tag: Tag): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE, position, { tag });
 }
 
 /**

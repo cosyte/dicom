@@ -59,6 +59,17 @@
  *   wins). A carrier the profile declares `SQ` and the tree did not resolve is
  *   emptied rather than kept, keeping its parsed VR
  *   (`DICOM-PRIVATE-SQ-PARSE-VR`). See {@link keepRetainedPrivate}.
+ * - **Every retained private value that IS kept verbatim is now DISCLOSED, one
+ *   line per element** (`DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE` +
+ *   a `report.unauditableSequences` entry with `applied: "kept"`). The run
+ *   enumerated nothing inside it, so a Data Set the sender encoded there reaches
+ *   the output verbatim - which it always did, on a **fully conformant** file,
+ *   with `ds.warnings = []` and `report.unauditableSequences = []` under
+ *   `(0012,0062) = YES`. 🛑 **The value is still kept: this closes the SILENCE,
+ *   not the leak.** Emptying it needs a content test on exactly the VRs
+ *   arbitrary bytes are for, which empties conformant binary values on
+ *   legitimate files - weighed, and refused (`DICOM-DEIDENT-OVER-REDACTION`).
+ *   See {@link retainedCarrierNotAuditable}.
  * - A `SQ` whose `items` the parser did not
  *   materialize is **emptied**, not kept:
  *   its value is by PS3.5 §7.5.1 a stream of Data Sets, and a run that cannot
@@ -160,6 +171,7 @@ import {
   deidentMethodPriorRetained,
   deidentMethodValueOverLength,
   embeddedAttributeRemoved,
+  privateCarrierNotAuditable,
   sequenceNotAuditable,
   undefinedVrNotAuditable,
 } from "../parser/warnings.js";
@@ -239,7 +251,18 @@ interface DeidentifyContext {
    * bound each item independently and not the run - which is exactly the
    * amplification the cap exists to stop.
    */
-  readonly budget: { unauditableSequences: number; undefinedVrElements: number };
+  readonly budget: {
+    unauditableSequences: number;
+    /**
+     * Counted apart from `unauditableSequences` even though both classes land in
+     * `report.unauditableSequences`, so that a flood of retained private
+     * carriers cannot spend the emptied class's budget and silence it. One
+     * class's amplification must not buy another class's silence - the same
+     * per-recognizer split this repo's own PHI gate took in `#111`.
+     */
+    retainedCarriers: number;
+    undefinedVrElements: number;
+  };
 }
 
 /** Validate caller-supplied options; throws {@link DeidentifyError} on misconfig. */
@@ -754,6 +777,7 @@ function emptyUnauditableCarrier(
   ctx.budget.unauditableSequences += 1;
   out.unauditableSequences.push({
     tag: el.tag,
+    applied: "emptied",
     byteLength: el.rawBytes.length,
     ...(contextPath.length > 0 ? { contextPath: [...contextPath] } : {}),
   });
@@ -761,6 +785,98 @@ function emptyUnauditableCarrier(
   // carrier may be a header an under-declared length composed out of a value, so
   // `el.rawBytes.length` is that header's declared Value Length.
   out.warnings.push(sequenceNotAuditable({ byteOffset: el.byteOffset }, el.tag));
+}
+
+/**
+ * Record that a retained private carrier's value was **kept unchanged and never
+ * enumerated**. Nothing is written back: the element is already in `out` exactly
+ * as the file carried it, and this function does not touch it.
+ *
+ * ## Why the package says this at all
+ *
+ * PS3.15 2026c §E.3.10 licenses retention for "Private Attributes that are known
+ * by the de-identifier to be safe from identity leakage". A {@link Profile}
+ * entry is that knowledge, and it is knowledge about **one private attribute** -
+ * never about a Data Set nested inside its value. PS3.5 2026c §7.5.1 makes an
+ * Item Value "a DICOM Data Set composed of Data Elements", and PS3.15 §E.1.1
+ * obliges the de-identifier over Table E.1-1 "whether contained in the top level
+ * Data Set or embedded in an Item of a Sequence of Items". So when this run
+ * keeps such a value without walking it, there is an obligation it did not
+ * discharge, and until this code existed the object went out stamped
+ * `(0012,0062) Patient Identity Removed = YES` with **`ds.warnings = []` and
+ * `report.unauditableSequences = []`** over a nested `(0010,0010)` that reached
+ * the output byte-verbatim, on a **fully conformant** file. That silence is what
+ * this function ends. It does not end the leak.
+ *
+ * ## 🛑 THE VALUE IS DELIBERATELY NOT EMPTIED, AND THAT IS A PRODUCT DECISION
+ * TAKEN AND RECORDED, NOT AN OMISSION
+ *
+ * Emptying was weighed and refused. Separating a nested Data Set from a
+ * legitimate binary blob needs a content test on exactly the VRs arbitrary bytes
+ * are for, so the remedy empties conformant `OB`/`OW`/`US`/`UN` values on
+ * legitimate files - data loss, and it widens an over-redaction cost already
+ * measured in the thousands of grid cells (`DICOM-DEIDENT-OVER-REDACTION`). The
+ * leak stays a **documented limit**; what changed is that it is a disclosed one.
+ * Do not "finish the job" here by adding an empty: that is a different product
+ * decision, and it is the one that was rejected.
+ *
+ * ## Why the predicate is "kept", and not "the scanner could not read it"
+ *
+ * Because the scanner's silence is not a clearance, and keying on it would leave
+ * cells silent that leak. {@link findEmbeddedAttributes} asks whether the value's
+ * tail tiles as a Data Element run **in this file's own transfer syntax**, with
+ * an actionable tag and a byte outside the carrier VR's repertoire. A nested
+ * Data Set written in a different transfer syntax satisfies none of that on a
+ * perfectly scannable `LO` or `ST` carrier - measured, two cells of the matrix in
+ * `test/integration/deident-private-reservation.test.ts` - so "the scanner could
+ * not read it" is a strictly narrower set than "this run did not enumerate it",
+ * and only the second one is what the caller is being told.
+ *
+ * It follows that this fires on ordinary vendor values too. That is the honest
+ * reading: with `RetainSafePrivate` the caller has asked for values this package
+ * has no table for, and one line per retained attribute is the price of the
+ * report not implying an audit it never performed. A run without the option
+ * keeps no private value and produces none of these.
+ *
+ * ## The two elements it deliberately does not fire on
+ *
+ * - **A Private Creator `(gggg,00EE)`.** {@link keepsPrivate} retains one only
+ *   when `decodeCreator(el)` - the whole value, less its pad - is a **member of
+ *   the profile's private dictionary**, a closed table the caller supplied. That
+ *   value was read and membership-tested, so it *was* enumerated; there is no
+ *   room in it for an unexamined Data Set, and a creator whose value carries
+ *   extra bytes fails that lookup and is removed rather than retained.
+ * - **A zero-length value**, which encodes no Data Set. This is also what keeps
+ *   the audit a fixed point over an already-de-identified object
+ *   (`DICOM-DEIDENT-NOT-A-FIXED-POINT`): a carrier some other rule emptied must
+ *   not then be reported as a kept one on the next run.
+ */
+function retainedCarrierNotAuditable(
+  el: Element,
+  ctx: DeidentifyContext,
+  contextPath: readonly string[],
+  out: ProcessResult,
+): void {
+  // Capped like every other consumer-controlled diagnostic here, and against its
+  // OWN counter: this class and the emptied class share `report.
+  // unauditableSequences`, and a crafted file carrying tens of thousands of
+  // retained private carriers must not exhaust the budget that reports dropped
+  // content. Nothing about the element's fate depends on the cap - it is kept
+  // either way, which is precisely why the cap here bounds only what is said.
+  if (ctx.budget.retainedCarriers >= MAX_UNAUDITABLE_SEQUENCE_FINDINGS) return;
+  ctx.budget.retainedCarriers += 1;
+  out.unauditableSequences.push({
+    tag: el.tag,
+    applied: "kept",
+    byteLength: el.rawBytes.length,
+    ...(contextPath.length > 0 ? { contextPath: [...contextPath] } : {}),
+  });
+  // The byte count goes on the finding and NOT into the message, exactly as it
+  // does for the emptied class: `el.rawBytes.length` equals the Value Length off
+  // the element header, and an under-declared length upstream can have composed
+  // that header out of somebody's value. `#91` bound it out of the two sibling
+  // factories; a new one must not reopen it.
+  out.warnings.push(privateCarrierNotAuditable({ byteOffset: el.byteOffset }, el.tag));
 }
 
 /**
@@ -1141,6 +1257,16 @@ function declaredPrivateVr(
  * item stream carrying a `(0010,0010)` is kept verbatim across a whole surface
  * of cells, not on the one shape four artifacts used to name.
  *
+ * 🛑 **THAT SURFACE IS NO LONGER SILENT, AND "no longer silent" IS NOT "closed".**
+ * Whatever survives `keepOrEmpty` is now reported, every time, by
+ * {@link retainedCarrierNotAuditable}: a warning plus a
+ * `report.unauditableSequences` entry stamped `applied: "kept"`. The bytes are
+ * unchanged, the nested `(0010,0010)` still reaches the output and the stamp is
+ * still `YES` - what a caller no longer gets is an empty report over it. Do not
+ * read the diagnostic as a remedy, and do not let the next slice quietly turn it
+ * into one: emptying here is the product call recorded below, and it was made
+ * the other way.
+ *
  * 🩺 **That prose enumeration is DELETED rather than reworded a third time.** It
  * read "a profile entry declaring a binary VR (`OB`/`OW`/`UN`)", and the measured
  * set is **neither narrower nor wider - the two are incomparable**: a profile
@@ -1238,7 +1364,20 @@ function keepRetainedPrivate(
     emptyUnauditableCarrier(el, ctx, contextPath, out, freshScalar(el, Buffer.alloc(0), 0));
     return;
   }
-  keepOrEmpty(el, ctx, contextPath, out);
+  // Everything still here is retained on the profile's word alone. `keepOrEmpty`
+  // may still empty it - an on-wire VR outside the 34, or a value whose tail the
+  // embedded scanner reads as a swallowed Data Element run - and both of those
+  // announce themselves on their own channels. What is left, the `true` branch,
+  // is the one outcome in this module that writes a private source value into
+  // de-identified output unexamined, and it used to be silent.
+  //
+  // 🛑 IT IS NOT EMPTIED HERE AND MUST NOT BECOME SO. See
+  // {@link retainedCarrierNotAuditable} for the product decision, which was
+  // taken against emptying because the content test it needs would empty
+  // conformant binary values on legitimate files.
+  if (!keepOrEmpty(el, ctx, contextPath, out)) return;
+  if (isPrivateCreatorElement(el.tag) || el.rawBytes.length === 0) return;
+  retainedCarrierNotAuditable(el, ctx, contextPath, out);
 }
 
 /**
@@ -1977,7 +2116,7 @@ export function deidentify(
     profile: options.profile,
     encoding,
     littleEndian,
-    budget: { unauditableSequences: 0, undefinedVrElements: 0 },
+    budget: { unauditableSequences: 0, retainedCarriers: 0, undefinedVrElements: 0 },
   };
 
   // The root starts usable. That is a LIMITATION, not a proof: an Item that

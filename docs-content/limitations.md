@@ -51,19 +51,25 @@ stream rather than the pixels.
 any of them.** Each is either a product decision this package has deliberately not made, or a
 structural fact about DICOM that no reader can resolve from the wire.
 
-- **A retained private attribute can leak through routes whose extent is a matrix, not a sentence.**
-  `RetainSafePrivate` plus a `Profile` is the only route in the package that writes a private value
-  into de-identified output, and what survives depends on where the sender put the Private Creator,
-  which VR the carrier was written under, and whether the profile also reached `parseDicom`. The
-  surface is **pinned as a measured matrix** in `test/integration/deident-private-reservation.test.ts`
-  rather than described in prose, because the prose has been wrong twice. Closing the remainder needs
-  a content test on exactly the VRs arbitrary bytes are for, which would also empty conformant binary
-  values: that is an open product question, not a defect with a known fix. Detail:
+- **A retained private attribute can leak through routes whose extent is a matrix, not a sentence -
+  and every one of them is now DISCLOSED rather than silent.** `RetainSafePrivate` plus a `Profile`
+  is the only route in the package that writes a private value into de-identified output, and what
+  survives depends on where the sender put the Private Creator, which VR the carrier was written
+  under, and whether the profile also reached `parseDicom`. The surface is **pinned as a measured
+  matrix** in `test/integration/deident-private-reservation.test.ts` rather than described in prose,
+  because the prose has been wrong twice. **Every retained private value this package keeps
+  unexamined raises `DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE` and adds a
+  `report.unauditableSequences` entry with `applied: "kept"`** - so a Data Set the sender nested
+  inside such a value still reaches your output verbatim under `(0012,0062) = YES`, but no longer
+  under an empty report. 🛑 **That is a disclosure, not a fix: the value is still there.** Emptying
+  it needs a content test on exactly the VRs arbitrary bytes are for, which would also empty
+  conformant binary values on legitimate files - an open product question, weighed and deliberately
+  answered the other way. Detail:
   [Known limitations in the README](https://github.com/cosyte/dicom#known-limitations--non-goals).
 
 - **An over-declared Value Length into a binary carrier still leaks.** A length that swallows the
   following element into an `OB`, `OW`, `US` or `UN` value is not detected, and a `(0010,0020)`
-  Patient ID inside it reaches de-identified output with **no warning and no report entry**. Arbitrary
+  Patient ID inside it reaches de-identified output. Arbitrary
   bytes are exactly what those VRs are for, so no content test can decide it. String carriers **are**
   covered, because there the same bytes are provably outside the VR's repertoire. If you accept files
   from a sender you do not control, treat a binary attribute's declared length as untrusted.
