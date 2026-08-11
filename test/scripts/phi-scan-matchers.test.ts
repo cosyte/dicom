@@ -347,11 +347,56 @@ describe("phi-scan trims a value's trailing pad the way the pattern did", () => 
 // FIT IN TWO SUBPROCESSES. `--allow-fixture` is repeatable and `validateAllowFixtures` names EVERY
 // path it could not find an entry for, so one run over a candidate set reports exactly which of
 // them the parser did not produce. Both directions are asked separately, because they are different
-// claims: the paths the pattern finds outside a fence must all be present, and the paths it finds
-// INSIDE one - plus the lone space an all-whitespace heading yields - must all be absent.
+// claims: the paths section 4.2 names outside a fence must all be present, and the ones it names
+// INSIDE one - plus every capture the pattern makes that section 4.2 does not name - must all be
+// absent.
 
 /** `/^###\s+(.+?)\s*$/`, the pattern `tripleHashValue` replaced, constructed fresh per use. */
 const heading = (line: string): string | null => /^###\s+(.+?)\s*$/.exec(line)?.[1] ?? null;
+
+/**
+ * The pattern, INTERSECTED with CommonMark 0.31.2 section 4.2's separator sentence.
+ *
+ * "The opening sequence of `#` characters must be followed by spaces or tabs, or by the end of
+ * line", where the pattern's separator was `\s`. `test/scripts/commonmark-pin.test.ts` is what says
+ * that sentence is section 4.2's, by walking the pinned document rather than asserting a number.
+ *
+ * 🛑 IT IS WRITTEN AS AN INTERSECTION BECAUSE THE SHIPPED PARSER IS ONE, and that shape is what
+ * says no line which was not already an entry can become one. **THAT IS A PROPERTY OF THE SOURCE,
+ * NOT SOMETHING A CASE HERE PROVES**, and a case that asserted it over this oracle would be true by
+ * construction and could not go red. A draft of this file shipped exactly that and a gate deleted
+ * it. What stands behind the property is the comment-stripped diff (one added early return, nothing
+ * else) and, behaviourally, the per-log relation
+ * `scripts/measure-phi-scan-atx-heading.ts` prints against a base;
+ * `documentation/agent-notes/dicom-phi-scan-atx-heading.md` carries both.
+ */
+const atxSeparator = (line: string): string | null => {
+  if (line.length > 3) {
+    const after = line.charCodeAt(3);
+    if (after !== 0x20 && after !== 0x09) return null;
+  }
+  return heading(line);
+};
+
+/**
+ * The whole of `\s` that section 4.2 does NOT admit as a separator, minus what ends a line.
+ *
+ * 🛑 DERIVED FROM THE LANGUAGE OVER EVERY CODE POINT, NOT TYPED. `isSpaceCode` is the whole of
+ * ES2023 `\s`; that is the set the parser separated with, so the set it must now refuse is exactly
+ * `\s` less a space and a tab. `LF` and `CR` come out because section 2.1 ends the line at them,
+ * which is a different slice with its own cases above.
+ */
+const INVISIBLE_WHITESPACE: readonly number[] = (() => {
+  const out: number[] = [];
+  for (let code = 0; code <= 0xffff; code += 1) {
+    if (!/\s/.test(String.fromCharCode(code))) continue;
+    if (code === 0x20 || code === 0x09 || code === 0x0a || code === 0x0d) continue;
+    out.push(code);
+  }
+  return out;
+})();
+
+const hex4 = (code: number): string => code.toString(16).padStart(4, "0");
 
 /** A throwaway repository with a caller-supplied allow-list and override log. */
 function makeConfigRepo(opts: { allowList?: string; overrides?: string }): string {
@@ -402,15 +447,17 @@ function missingFromOverrideLog(root: string, candidates: readonly string[]): Se
   return out;
 }
 
-describe("phi-scan parses its own override log the way the pattern did, minus two deliberate cuts", () => {
+describe("phi-scan parses its own override log the way the pattern did, minus deliberate cuts", () => {
   /**
    * Lines chosen because they are where the pattern and a hand-written scan can part company: the
    * greedy `\s+` handing a character back to a lazy `(.+?)`, `.` refusing a `LineTerminator` that
-   * `\s` admits, and `####` never being a `###` followed by whitespace.
+   * `\s` admits, `####` never being a `###` followed by whitespace, and - the cut this slice added
+   * - whitespace that `\s` admits as the SEPARATOR and section 4.2 does not.
    *
    * Every one is a legal file name on this platform, because each accepted capture is written to
    * disk and offered back to the scanner.
    */
+  const NBSP = String.fromCharCode(0xa0);
   const LINES = [
     "### plain",
     "###  two-spaces",
@@ -418,14 +465,16 @@ describe("phi-scan parses its own override log the way the pattern did, minus tw
     "### trailing-space ",
     "### trailing-tab\t",
     "###\ttab-separated",
-    `###${String.fromCharCode(0xa0)}nbsp-separated`,
+    `###${NBSP}nbsp-separated`,
+    `### nbsp-trailer${NBSP}`,
+    `### ${NBSP}nbsp-leader`,
     "### with spaces inside",
     "### ends-with-cr\r",
     "### has-a-cr\rinside",
     "### ",
     "###  ",
     "###   ",
-    `###  ${String.fromCharCode(0xa0)}`,
+    `###  ${NBSP}`,
     "###",
     "####x",
     "#### four-hashes",
@@ -435,24 +484,33 @@ describe("phi-scan parses its own override log the way the pattern did, minus tw
     "",
   ];
 
-  /** The captures the pattern produces, split by whether this parser is meant to keep them. */
+  /**
+   * The paths this parser names in these lines, and the captures the PATTERN makes that it does not.
+   *
+   * Both oracles are applied per LINE, after section 2.1's split, because that is what the parser
+   * sees: `"### ends-with-cr\r"` is two lines, and applying either oracle to the unsplit string
+   * would agree with the parser only by coincidence.
+   */
   function classify(lines: readonly string[]): { kept: string[]; cut: string[] } {
     const kept: string[] = [];
-    const cut: string[] = [];
-    for (const line of lines) {
-      const value = heading(line);
-      if (value === null) continue;
-      // NARROWING 2: an all-whitespace heading. The pattern hands one whitespace character back
-      // out of the `\s+` run and captures it; this parser produces nothing.
-      if (value.trim().length === 0) cut.push(value);
-      else kept.push(value);
+    const captured: string[] = [];
+    for (const raw of lines) {
+      for (const line of raw.split(/\r\n|\n|\r/)) {
+        const spec = atxSeparator(line);
+        // NARROWING 2: an all-whitespace heading. The pattern hands one whitespace character back
+        // out of the `\s+` run and captures it; this parser produces nothing.
+        if (spec !== null && spec.trim().length > 0) kept.push(spec);
+        const pattern = heading(line);
+        if (pattern !== null) captured.push(pattern);
+      }
     }
-    return { kept, cut };
+    const unique = [...new Set(kept)];
+    return { kept: unique, cut: [...new Set(captured.filter((v) => !unique.includes(v)))] };
   }
 
-  it("produces every path the pattern finds outside a fence", () => {
+  it("produces every path the pattern finds outside a fence that section 4.2 also names", () => {
     const { kept } = classify(LINES);
-    // Non-vacuity: a case list the pattern matched nothing in would pass against any parser.
+    // Non-vacuity: a case list the oracle named nothing in would pass against any parser.
     expect(kept.length).toBeGreaterThan(6);
     const root = makeConfigRepo({ overrides: `# log\n\n${LINES.join("\n")}\n` });
     expect(missingFromOverrideLog(root, kept)).toEqual(new Set());
@@ -480,7 +538,7 @@ describe("phi-scan parses its own override log the way the pattern did, minus tw
     expect(missingFromOverrideLog(root, naive)).toEqual(new Set(naive));
   });
 
-  it("produces NONE of the paths the pattern finds inside a fenced block", () => {
+  it("produces NONE of the paths section 4.2 names inside a fenced block", () => {
     const { kept } = classify(LINES);
     const fenced = ["# log", "", "```", ...LINES, "```", ""].join("\n");
     const root = makeConfigRepo({ overrides: fenced });
@@ -611,13 +669,161 @@ describe("phi-scan parses its own override log the way the pattern did, minus tw
     });
   });
 
-  it("does not register the lone space an all-whitespace heading used to capture", () => {
+  it("registers none of the captures the pattern makes that this parser cuts", () => {
     const { cut } = classify(LINES);
-    // Non-vacuity: the pattern really does capture something on these lines. If it stopped doing
-    // so, this case would be asserting nothing.
+    // Non-vacuity, and it names the two shapes rather than trusting a length. The lone space is
+    // NARROWING 2 - the pattern hands one character back out of an all-whitespace run and captures
+    // it. The other is section 4.2's separator: a path the pattern reached across an invisible
+    // character where the document renders a paragraph.
     expect(cut).toContain(" ");
+    expect(cut).toContain("nbsp-separated");
     const root = makeConfigRepo({ overrides: `# log\n\n${LINES.join("\n")}\n` });
     expect(missingFromOverrideLog(root, cut)).toEqual(new Set(cut));
+  });
+
+  /**
+   * 🩺 THE FILED RESIDUAL, OVER EVERY CODE POINT `\s` ADMITS RATHER THAN OVER A CHOSEN FEW.
+   *
+   * `tripleHashValue` separated the `###` run with the whole of `\s`, where section 4.2 admits a
+   * space or a tab. Every character in the gap renders as blank or as nothing at all, so each was a
+   * way to write a line that a human reviewing the RENDERED log sees as a PARAGRAPH and that
+   * `--allow-fixture` honoured at exit 0. Measured live on `58c9f2e`, `8139687` and `94069e8`
+   * before it was changed; `scripts/measure-phi-scan-atx-heading.ts` prints the same grid against
+   * any other tree.
+   *
+   * The enumeration is DERIVED from `\s` over all 65,536 code points rather than typed, because a
+   * chosen few is a list somebody wrote: an earlier draft of this class named six characters and a
+   * gate measured three more.
+   *
+   * Both directions in one run: the two separators section 4.2 DOES admit must still produce their
+   * paths, or a parser that refused every heading would pass.
+   */
+  it("separates the ### run the way section 4.2 does, over every code point `\\s` admits", () => {
+    // Non-vacuity: the derivation must find the class it is about.
+    expect(INVISIBLE_WHITESPACE.length).toBeGreaterThan(15);
+    const smuggled = INVISIBLE_WHITESPACE.map((c) => `sep-${hex4(c)}`);
+    const admitted = ["by-space", "by-tab"];
+    const lines = [
+      ...INVISIBLE_WHITESPACE.map((c) => `###${String.fromCharCode(c)}sep-${hex4(c)}`),
+      "### by-space",
+      "###\tby-tab",
+    ];
+    const root = makeConfigRepo({ overrides: `# log\n\n${lines.join("\n")}\n` });
+    expect(missingFromOverrideLog(root, [...smuggled, ...admitted])).toEqual(new Set(smuggled));
+  });
+
+  /**
+   * 🔴 THE STRIP, WHICH IS CONTESTED AND DELIBERATELY NOT TAKEN. This case is what says so.
+   *
+   * Section 4.2's prose says the raw contents are "stripped of leading and trailing space or tabs";
+   * `commonmark@0.31.2`, the reference implementation of the PINNED document version, strips them
+   * with `String.prototype.trim`, which is the whole of `\s` - what this parser does and what the
+   * pattern did. Two readings of one document, and the gate whose job is to agree with a rendered
+   * page cannot pick the losing one on prose alone.
+   *
+   * A draft of this slice took the prose. It made `### x<NBSP>` name `x<NBSP>` where this parser
+   * names `x`, which EXEMPTED at exit 0 a target this parser refuses at exit 2 - a new invisible
+   * route, in the remedy for an invisible route. It was refused by the gate and DELETED, not
+   * reworded, and this case is the pin that stops it coming back by accident.
+   *
+   * Both directions in one run: the path WITHOUT the invisible character is named, the path WITH it
+   * is not, over every code point `\s` admits and at both ends of the text.
+   */
+  it("leaves the contested strip alone, so the heading text is still trimmed of all of `\\s`", () => {
+    const lines: string[] = [];
+    const named: string[] = [];
+    const notNamed: string[] = [];
+    for (const c of INVISIBLE_WHITESPACE) {
+      const ch = String.fromCharCode(c);
+      lines.push(`### tail-${hex4(c)}${ch}`, `### ${ch}lead-${hex4(c)}`);
+      named.push(`tail-${hex4(c)}`, `lead-${hex4(c)}`);
+      notNamed.push(`tail-${hex4(c)}${ch}`, `${ch}lead-${hex4(c)}`);
+    }
+    // Non-vacuity in both directions: neither side may be empty, or this passes against a parser
+    // that answered one way throughout.
+    expect(named.length).toBeGreaterThan(15);
+    expect(notNamed.length).toBeGreaterThan(15);
+    const root = makeConfigRepo({ overrides: `# log\n\n${lines.join("\n")}\n` });
+    expect(missingFromOverrideLog(root, [...named, ...notNamed])).toEqual(new Set(notNamed));
+  });
+
+  it("still registers nothing for a heading whose text is entirely whitespace", () => {
+    // NARROWING 2, unchanged by this slice and pinned because the refused draft would have undone
+    // it: under a strip that took only spaces and tabs, `###<space><space><NBSP>` has an `NBSP`
+    // left in its text and the parser would name a path made of one invisible character. Every arm
+    // in one run, and a real heading beside them so a parser that dropped everything fails too.
+    const lines = INVISIBLE_WHITESPACE.map((c) => `###  ${String.fromCharCode(c)}`);
+    const candidates = INVISIBLE_WHITESPACE.map((c) => String.fromCharCode(c));
+    const root = makeConfigRepo({ overrides: `# log\n\n${lines.join("\n")}\n### visible\n` });
+    expect(missingFromOverrideLog(root, [...candidates, "visible"])).toEqual(new Set(candidates));
+  });
+
+  it("refuses a heading whose text carries an LS or a PS, which nothing else pinned", () => {
+    // 🔴 THE LAST OF THE PATTERN'S `(.+?)`, AND IT WAS A SENTENCE UNTIL A GATE MEASURED IT. `.`
+    // excludes `LineTerminator` where `\s` admits it, so an `LS` or `PS` inside the captured span
+    // makes the whole pattern fail and this parser drops the entry. `splitCommonMarkLines` does not
+    // end a line at either, so they are the only two that reach it. Unchanged by this slice and
+    // PRE-EXISTING - and pinned here because narrowing `isLineTerminatorCode` to `LF` and `CR` left
+    // the WHOLE SUITE GREEN. It is the only thing between `### a<LS>b.dcm` and a live allow entry,
+    // and a rule no test can break is a rule a later maintainer removes. Both directions, one run.
+    const dropped = [`ls-a${String.fromCharCode(0x2028)}b`, `ps-a${String.fromCharCode(0x2029)}b`];
+    const root = makeConfigRepo({
+      overrides: [
+        "# log",
+        "",
+        ...dropped.map((d) => `### ${d}`),
+        "### terminator-visible",
+        "",
+      ].join("\n"),
+    });
+    expect(missingFromOverrideLog(root, [...dropped, "terminator-visible"])).toEqual(
+      new Set(dropped),
+    );
+  });
+
+  /**
+   * 🔴 WHAT THIS PARSER STILL DOES NOT MODEL, PINNED RATHER THAN DESCRIBED, IN BOTH DIRECTIONS.
+   *
+   * Each unchanged by this slice and each `PRE-EXISTING`, and each is a case rather
+   * than a sentence because a divergence nothing asserts is a divergence a later reader takes for
+   * an accepted behaviour:
+   *
+   * * section 4.2's optional CLOSING sequence. "The optional closing sequence of `#`s must be
+   *   preceded by spaces or tabs and may be followed by spaces or tabs only", so `### x ###` is a
+   *   heading whose contents are `x` and `### ###` is one whose contents are empty. This parser
+   *   names `x ###` and `###`. A gate found the second shape after the first was disclosed alone;
+   * * INLINE parsing. The heading's contents are "parsed as inline content", so a backslash escape
+   *   and an emphasis run render as something other than themselves. This parser names the RAW
+   *   contents, so what it exempts and what a reviewer reads can differ by those characters;
+   * * CONTAINER blocks. A `###` is only ever recognised at column 0, so a heading a reviewer sees
+   *   inside a block quote or a list item is a DROPPED entry - a refusal at exit 2, the direction
+   *   that does not exempt anything.
+   *
+   * None is swept in here, and the reason is the one thing that separates them from the separator
+   * this slice cut: **all three are VISIBLE to whoever reviews the rendered log.** Each is a
+   * `DICOM-RESIDUALS` row.
+   */
+  it("models neither the closing sequence, inline parsing, nor container blocks", () => {
+    const BS = String.fromCharCode(0x5c);
+    const STAR = String.fromCharCode(0x2a);
+    const root = makeConfigRepo({
+      overrides: [
+        "# log",
+        "",
+        "### closing ###",
+        "### ###",
+        `### escaped-a${BS}_b`,
+        `### emphasis-a${STAR}b${STAR}c`,
+        "> ### in-block-quote",
+        "- ### in-list-item",
+        "",
+      ].join("\n"),
+    });
+    // Every path a RENDERER would show, none of which this parser names, against every path it
+    // does name. Both directions in one run, so a parser that answered either way throughout fails.
+    const rendered = ["closing", "escaped-a_b", "emphasis-abc", "in-block-quote", "in-list-item"];
+    const raw = ["closing ###", "###", `escaped-a${BS}_b`, `emphasis-a${STAR}b${STAR}c`];
+    expect(missingFromOverrideLog(root, [...rendered, ...raw])).toEqual(new Set(rendered));
   });
 
   /**

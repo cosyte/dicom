@@ -1,8 +1,10 @@
 # vendor/commonmark/
 
 A pinned copy of the **CommonMark specification**, the normative source for what a line is in
-`phi-scan-overrides.md` and for the BLOCK rules the PHI gate's override-log parser follows: fenced
-code blocks, and the HTML blocks that hide a heading without showing anything at all.
+`phi-scan-overrides.md`, for the BLOCK rules the PHI gate's override-log parser follows (fenced code
+blocks, and the HTML blocks that hide a heading without showing anything at all), and for what
+whitespace an ATX heading admits, which is what decides whether an invisible character can make a
+paragraph a live allow entry.
 
 Runtime has zero dependency on this file, and it is not published: `package.json`'s `files` list
 ships `dist` only. It is read by `test/scripts/commonmark-pin.test.ts`, which re-hashes it, reads
@@ -56,9 +58,11 @@ PRs (the same rule `vendor/nema/` states).
 ## What cites it
 
 - `scripts/phi-scan.ts`: `splitCommonMarkLines` (section 2.1, the line ending and the blank line),
-  `fenceRun` and `overrideLogPaths` (section 4.5, fenced code blocks), `htmlBlockStart` and
-  `htmlBlockCloses` (section 4.6, HTML blocks).
+  `tripleHashValue` (section 4.2, the whitespace an ATX heading admits), `fenceRun` and
+  `overrideLogPaths` (section 4.5, fenced code blocks), `htmlBlockStart` and `htmlBlockCloses`
+  (section 4.6, HTML blocks).
 - `test/scripts/commonmark-pin.test.ts`: the precondition, the version, and the section locator.
 - `test/helpers/commonmark-spec.ts`: section 4.6's tag lists, read out of the document.
-- `documentation/agent-notes/dicom-phi-scan-line-endings.md` and
-  `documentation/agent-notes/dicom-phi-scan-html-blocks.md`: the records.
+- `documentation/agent-notes/dicom-phi-scan-line-endings.md`,
+  `documentation/agent-notes/dicom-phi-scan-html-blocks.md` and
+  `documentation/agent-notes/dicom-phi-scan-atx-heading.md`: the records.

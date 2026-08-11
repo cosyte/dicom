@@ -186,6 +186,48 @@ describe("the vendored CommonMark spec is a precondition, not a citation", () =>
     expect(`${atx.number} ${atx.title}`).toBe("4.2 ATX headings");
   });
 
+  it("puts the ATX separator rule in 4.2, which is what `tripleHashValue` implements", () => {
+    // 🩺 THE SENTENCE THAT DECIDES WHETHER AN INVISIBLE CHARACTER CAN EXEMPT A PHI TARGET. The
+    // parser separated the `###` run with the whole of `\s`, so a `###` followed by an `NBSP` -
+    // which renders as a PARAGRAPH - was a live allow entry that `--allow-fixture` honoured at
+    // exit 0.
+    const separator = theSectionCarrying(
+      "The opening sequence of `#` characters must be followed by spaces or tabs, or by the end " +
+        "of line.",
+    );
+    expect(`${separator.number} ${separator.title}`).toBe("4.2 ATX headings");
+
+    // 🔴 THE THREE RULES THIS PARSER DOES NOT TAKE, located rather than asserted, for the same
+    // reason kind 7 is above: a divergence located in the document is a measured gap, and one
+    // asserted in a comment is a preference. Each is a `DICOM-RESIDUALS` row.
+    //
+    // The STRIP is the one to read carefully. Its sentence says spaces or tabs; `commonmark@0.31.2`,
+    // the reference implementation of THIS pinned version, strips with `String.prototype.trim`,
+    // which is the whole of `\s` and is what this parser does. Locating the sentence is therefore
+    // NOT an argument that the parser should follow it, and a draft that did follow it exempted at
+    // exit 0 a target this parser refuses at exit 2. See
+    // `documentation/agent-notes/dicom-phi-scan-atx-heading.md`.
+    const strip = theSectionCarrying(
+      "The raw contents of the heading are stripped of leading and trailing space or tabs before " +
+        "being parsed as inline content.",
+    );
+    expect(`${strip.number} ${strip.title}`).toBe("4.2 ATX headings");
+
+    // `### x ###` is a heading whose contents are `x`, and this parser names `x ###`.
+    const closing = theSectionCarrying(
+      "The optional closing sequence of `#`s must be preceded by spaces or tabs and may be " +
+        "followed by spaces or tabs only.",
+    );
+    expect(`${closing.number} ${closing.title}`).toBe("4.2 ATX headings");
+
+    // The `###` run is anchored at column 0 here, where section 4.2 allows up to three spaces of
+    // indentation. Dropping an indented heading is a REFUSAL at exit 2 rather than an exemption.
+    const indent = theSectionCarrying(
+      "The opening `#` character may be preceded by up to three spaces of indentation.",
+    );
+    expect(`${indent.number} ${indent.title}`).toBe("4.2 ATX headings");
+  });
+
   it("puts HTML blocks in section 4.6, and states the conditions phi-scan implements", () => {
     // `overrideLogPaths` models section 4.6's HTML blocks because one of them suppresses a heading
     // exactly as a fenced code block does, and an `<!-- -->` log suppresses it INVISIBLY. Each

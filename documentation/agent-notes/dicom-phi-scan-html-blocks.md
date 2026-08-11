@@ -36,23 +36,23 @@ a diagnostic field, a memory bound or a decision already taken.
 
 CommonMark 0.31.2 section 4.6 defines seven kinds of HTML block by a start and an end condition.
 `htmlBlockStart` and `htmlBlockCloses` implement **kinds 1 to 6**, and `overrideLogPaths` treats an
-open block the way section 4.6 says a parser must: *"any HTML within an HTML block that might
-otherwise be recognised as a start condition will be ignored by the parser"*, and so is a fence, and
+open block the way section 4.6 says a parser must: _"any HTML within an HTML block that might
+otherwise be recognised as a start condition will be ignored by the parser"_, and so is a fence, and
 so is a heading.
 
 **🔴 KIND 7 IS SCOPED OUT, WITH ITS COST MEASURED IN BOTH DIRECTIONS RATHER THAN ASSUMED.** Its
 start condition is a complete open or closing tag alone on a line, and section 4.6 adds that
-*"blocks of type 7 may not interrupt a paragraph"*. That is **paragraph state**, which this parser
+_"blocks of type 7 may not interrupt a paragraph"_. That is **paragraph state**, which this parser
 does not have and cannot acquire without modelling every other leaf block, and **approximating it is
 the parity trap below**: a guess that a line is not in a paragraph opens blocks CommonMark does not,
 which moves entries in both directions at once. So it is scoped, named on the function, and pinned
 by a test, arm by arm:
 
-| log                                            | CommonMark         | base `8139687`  | here            |
-| ---------------------------------------------- | ------------------ | --------------- | --------------- |
-| `<span>` after a BLANK line                    | kind 7, no heading | live entry      | **live entry**  |
-| `<span>` after a PARAGRAPH line                | no block, heading  | live entry      | live entry      |
-| `</pre>`, then a comment holding a fence opener | kind 7, no heading | **exit 2**      | **exit 0, EXEMPTED** |
+| log                                             | CommonMark         | base `8139687` | here                 |
+| ----------------------------------------------- | ------------------ | -------------- | -------------------- |
+| `<span>` after a BLANK line                     | kind 7, no heading | live entry     | **live entry**       |
+| `<span>` after a PARAGRAPH line                 | no block, heading  | live entry     | live entry           |
+| `</pre>`, then a comment holding a fence opener | kind 7, no heading | **exit 2**     | **exit 0, EXEMPTED** |
 
 The second row is why the case asserts more than one arm: a test showing only the first would read
 as an accepted behaviour rather than as a measured gap.
@@ -174,10 +174,10 @@ plus a named list, asserting no completeness.
 
 Both mutants the gate used are now red, re-measured on the remedy rather than argued:
 
-| mutant                                         | before the remedy   | after     |
-| ---------------------------------------------- | ------------------- | --------- |
-| condition 1's table reduced to one name        | **whole suite green** | 1 case red |
-| `source` added to condition 6's table          | both test files green | 1 case red |
+| mutant                                  | before the remedy     | after      |
+| --------------------------------------- | --------------------- | ---------- |
+| condition 1's table reduced to one name | **whole suite green** | 1 case red |
+| `source` added to condition 6's table   | both test files green | 1 case red |
 
 **The control for the other direction is `<divx` and `<paramx`**: a listed name followed by more
 tag-name characters. CommonMark starts no block on either, and they are not complete tags so
@@ -221,18 +221,17 @@ caught.
 - **Start condition 7**, above. It is a `DICOM-RESIDUALS` line, not a sentence filed here alone.
 - **`tripleHashValue` still refuses a heading whose text contains `LS` or `PS`** (`U+2028`,
   `U+2029`), and **section 4.5's backtick-info-string opener** is untouched. Both `PRE-EXISTING`.
-- **🔴 AND `tripleHashValue` ADMITS IN THE OTHER DIRECTION TOO, WHICH WAS UNNAMED UNTIL A GATE NAMED
-  IT.** It separates the `###` run from the text with `isSpaceCode`, the whole of `\s`, where
-  section 4.2 allows only a space or a tab. So a heading whose separator is whitespace that section
-  4.2 does not admit and that does not end the line renders as a PARAGRAPH and is a **live allow
-  entry on both trees**. **The enumeration that stood
+- **🟢 `tripleHashValue` ADMITTED IN THE OTHER DIRECTION TOO, WHICH WAS UNNAMED UNTIL A GATE NAMED
+  IT, AND IT IS CLOSED NOW** (`D-R6`). It separated the `###` run from the text with
+  `isSpaceCode`, the whole of `\s`, where section 4.2 allows only a space or a tab. So a heading
+  whose separator is whitespace that section 4.2 does not admit and that does not end the line
+  renders as a PARAGRAPH and was a **live allow entry on both trees**. **The enumeration that stood
   here is DELETED rather than completed**: it named six such characters and a gate measured three
   more, and this lineage's rule is that a list corrected once is cut, not extended. The predicate is
-  the whole of `\s`, which is complete and does not need an illustration. That is the exempting
-  direction, it is `PRE-EXISTING` (head equals base), and it is
-  a `DICOM-RESIDUALS` line rather than this slice's to close: it is a further selection change on
-  the heading recognizer, and the existing cases assert the current answer for an `NBSP` separator
-  deliberately.
+  the whole of `\s`, which is complete and does not need an illustration. **Only the SEPARATOR is
+  closed.** The strip is a second class, it is contested between the pinned document and its
+  reference implementation, and a draft that changed it opened a new exit-0 exemption and was
+  refused. The record is `documentation/agent-notes/dicom-phi-scan-atx-heading.md`.
 - **This parser still models no CONTAINER blocks.** A `### <path>` is only ever recognised at column
   0, so a heading inside a block quote or a list item is a dropped entry rather than an admitted
   one, and nothing here changes that. It is stated because "models section 4.6" must not be read as
