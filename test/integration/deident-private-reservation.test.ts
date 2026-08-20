@@ -2196,6 +2196,57 @@ describe("DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE", () => {
     }
   });
 
+  it("removes ONE INSTANCE of a tag and leaves its sibling in another Data Set alone", () => {
+    // 🛑 EVERY PREDICATE HERE IS PER OCCURRENCE, NEVER PER TAG. Private blocks
+    // are reserved per Data Set (PS3.5 §7.8.1), so the same private tag can
+    // occur several times in one object with different enumerability. The root's
+    // occurrence is zero-length, which encodes no Data Set and is retained; the
+    // one inside the sequence item carries the nested name and is removed. A
+    // rule keyed on the tag would take both or neither, and the record names
+    // the Data Set precisely so a reader can tell which occurrence went.
+    const buf = buildDicom({
+      transferSyntax: EXPLICIT_LE,
+      elements: [
+        nameEl,
+        { tag: "00090010", vr: "LO", value: ascii("ACME") },
+        { tag: PRIVATE_TAG, vr: "OB", value: Buffer.alloc(0) },
+        {
+          tag: CARRIER,
+          items: [
+            {
+              elements: [
+                { tag: "00090010", vr: "LO", value: ascii("ACME") },
+                { tag: PRIVATE_TAG, vr: "OB", value: itemStream },
+              ],
+            },
+          ],
+        },
+      ] as never,
+    });
+    const ds = parseDicom(buf, { profile: acme });
+    // Non-vacuity: both occurrences really are on the wire, in two Data Sets.
+    expect(ds.get(PRIVATE_TAG)?.rawBytes.length).toBe(0);
+    expect(ds.get(CARRIER)?.items?.[0]?.get(PRIVATE_TAG)?.rawBytes.length).toBe(itemStream.length);
+
+    const { dataset, report } = deidentify(ds, { retain: ["RetainSafePrivate"], profile: acme });
+    // The root's occurrence survives, zero-length, exactly as it arrived.
+    expect(dataset.get(PRIVATE_TAG)).toBeDefined();
+    expect(dataset.get(PRIVATE_TAG)?.rawBytes.length).toBe(0);
+    // The item's occurrence is gone, and so are its bytes.
+    expect(dataset.get(CARRIER)?.items?.[0]?.has(PRIVATE_TAG)).toBe(false);
+    expect(serializeDicom(dataset).toString("latin1")).not.toContain(NESTED);
+    // One entry, naming the Data Set that held it.
+    expect(report.unenumerablePrivateRemovals).toEqual([
+      {
+        tag: PRIVATE_TAG,
+        applied: "removed",
+        reason: "unenumerable",
+        contextPath: [`${CARRIER}[0]`],
+      },
+    ]);
+    expect(report.removedPrivateTags).toEqual([PRIVATE_TAG]);
+  });
+
   it("a profile dictionary lookup that MISSES is removed by the Basic Profile, never recorded here", () => {
     // 🛑 THE UNENUMERABLE CLASS IS A STRICT SUBSET OF THE CLASS THE PROFILE
     // VOUCHED FOR, and this is the row that keeps it strict. The option is on

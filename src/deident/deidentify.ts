@@ -211,8 +211,10 @@ const BODY_ENCODING: Readonly<Record<string, BodyEncoding>> = {
 };
 
 /**
- * Cap on how many un-auditable sequences one run will *describe*
- * ({@link DeidentifyReport.unauditableSequences} and the matching warnings).
+ * Cap on how many un-auditable carriers one run will *describe*
+ * ({@link DeidentifyReport.unauditableSequences} and the matching warnings), and,
+ * on its own separate counter, on how many unenumerable-removal **warnings** it
+ * will raise.
  *
  * `#48` bound every consumer-controlled diagnostic in this package for a reason:
  * a finding emitted per element is amplified by an element count the input
@@ -220,8 +222,13 @@ const BODY_ENCODING: Readonly<Record<string, BodyEncoding>> = {
  * elements. It is a bound on the **record**, never on the action - every
  * un-auditable sequence is emptied whether or not it is listed.
  *
- * A report whose array is exactly this long means "at least this many"; treat it
- * as truncated.
+ * 🛑 **IT DOES NOT BOUND {@link DeidentifyReport.unenumerablePrivateRemovals}**,
+ * which is the record of an action rather than a diagnostic and is complete at
+ * any input size; see {@link removeUnenumerablePrivate}. The two classes count
+ * against this number separately, so neither can spend the other's budget.
+ *
+ * A report whose findings array is exactly this long means "at least this many";
+ * treat it as truncated.
  */
 export const MAX_UNAUDITABLE_SEQUENCE_FINDINGS = 64;
 
