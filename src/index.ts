@@ -112,4 +112,5 @@ export type {
   EmbeddedAttributeFinding,
   UnauditableSequenceFinding,
   UndefinedVrFinding,
+  UnenumerablePrivateRemoval,
 } from "./deident/index.js";

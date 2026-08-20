@@ -230,15 +230,11 @@ export interface EmbeddedAttributeFinding {
 }
 
 /**
- * One carrier this run could not reach the Data Sets inside - **either because
- * it emptied the carrier having no item stream to walk, or because it kept a
- * retained private value it never enumerated.** {@link
- * UnauditableSequenceFinding.applied} is which, and it is the field to read
- * first: the two are opposite outcomes for the caller, and only one of them
- * means content left the object.
+ * One carrier this run could not reach the Data Sets inside, and **emptied** for
+ * it. {@link UnauditableSequenceFinding.applied} names that outcome and is the
+ * field to read first; it is the only outcome this finding has.
  *
- * **Three producers, and the third is the one that ships bytes.** The ordinary
- * one is an
+ * **Two producers, and neither ships bytes.** The ordinary one is an
  * `SQ` element whose `items` the parser never materialized. The second is a
  * private data element retained under `RetainSafePrivate` whose `Profile` entry
  * declares it `SQ` while the parse tree says otherwise - `UN` under Implicit VR
@@ -250,19 +246,18 @@ export interface EmbeddedAttributeFinding {
  * parsed VR in the output and is emptied rather than re-typed to `SQ`
  * (`DICOM-PRIVATE-SQ-PARSE-VR`).
  *
- * **The third producer is `applied: "kept"`, and nothing was dropped for it.** A
- * private data element the profile vouched for that this run **retained with its
- * value unchanged**, having enumerated nothing inside it. §E.3.10's licence is
- * over the Attribute and not over a Data Set nested in its value, so if the
- * sender encoded one there it is in the de-identified output, verbatim, under
- * `(0012,0062) = YES`. That is a disclosed limit of this package rather than a
- * defect being reported: emptying such a carrier would empty conformant binary
- * values on legitimate files, which is a product call
- * (`DICOM-DEIDENT-OVER-REDACTION`) that has been weighed and **not** taken. The
- * matching warning is `DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE`, which says
- * KEPT where its two siblings say emptied. **A run without
- * `RetainSafePrivate` + a `Profile` produces none of these**, because no private
- * value is kept at all.
+ * **🛑 THERE WAS A THIRD PRODUCER AND IT IS RETIRED: `applied: "kept"` IS GONE
+ * FROM THIS TYPE AND FROM EVERY RUN.** Through `0.0.19` a private data element
+ * the profile vouched for whose value this run never enumerated was **retained
+ * verbatim** and named here with `applied: "kept"` - the package reporting that
+ * it had shipped a value it did not read. Such an instance is now **removed**
+ * instead, and its record moved to
+ * {@link DeidentifyReport.unenumerablePrivateRemovals}, which is a different
+ * surface with a different guarantee: uncapped, complete, and stating a reason.
+ * This array never carries a retained private value again, so an entry here
+ * always means content is **not** in your output. That is an audit-contract
+ * change for anyone who switched on `applied`; see
+ * {@link UnenumerablePrivateRemoval}.
  *
  * PS3.5 2026c §7.5.1 "Item Encoding Rules" states that "Each Item Value shall
  * contain a DICOM Data Set composed of Data Elements", so an `SQ` element's
@@ -315,30 +310,136 @@ export interface UnauditableSequenceFinding {
   /** The carrier element. */
   readonly tag: Tag;
   /**
-   * What happened to that carrier's value, and **the field to read before the
-   * other two**.
+   * What happened to that carrier's value: `"emptied"`, always. The value is not
+   * in the de-identified output.
    *
-   * - `"emptied"` - the value is not in the de-identified output. Producers one
-   *   and two above.
-   * - `"kept"` - the value **is** in the de-identified output, byte for byte,
-   *   under `(0012,0062) = YES`. Producer three above: a private attribute
-   *   retained under `RetainSafePrivate` that this run never enumerated.
-   *
-   * It exists because this array carried only the first meaning for its whole
-   * life, and adding the second without a discriminator would have told every
-   * caller already reading the field that content had been dropped when it had
-   * been shipped. A report that misstates which is worse than no report.
+   * **🛑 `"kept"` WAS A MEMBER OF THIS UNION AND IS NOT ANY MORE.** It meant "the
+   * value IS in the output, byte for byte, unexamined", and a report field that
+   * can say so is exactly what this package no longer does: that instance is
+   * removed now and recorded on
+   * {@link DeidentifyReport.unenumerablePrivateRemovals}. The field itself is
+   * kept, so `applied === "emptied"` keeps compiling and keeps meaning what it
+   * always meant; a comparison against `"kept"` does not compile any more, which
+   * is the intended way to find out.
    */
-  readonly applied: "emptied" | "kept";
+  readonly applied: "emptied";
   /**
-   * Byte length of the carrier's value field - **dropped when
-   * {@link UnauditableSequenceFinding.applied} is `"emptied"`, still in the
-   * output when it is `"kept"`.** Structural, never a decoded value.
+   * Byte length of the carrier's value field that was **dropped**. Structural,
+   * never a decoded value.
    */
   readonly byteLength: number;
   /**
    * Tag/index chain when the carrier is inside a sequence item; omitted at the
    * root. **Built by the same descent as
+   * {@link DeidentifiedAttribute.contextPath} and carrying the same caveat:
+   * each segment's tag is read off the wire, bound by nothing, so on a
+   * desynchronized read it can be four bytes of a value.** Read that field's
+   * note before logging this one.
+   */
+  readonly contextPath?: readonly string[];
+}
+
+/**
+ * One private attribute **removed** because this run did not enumerate its
+ * value - the record that discharges the audit half of the fail-safe, and the
+ * one report surface that is complete at any input size.
+ *
+ * ## What "enumerated" means here, and what it deliberately does not
+ *
+ * A run has enumerated a private value when it **walked it as DICOM Data
+ * Elements** and put each of them through the Annex E action table (a private
+ * `SQ` the parser materialized items for), when the whole value **was matched
+ * as a member of a closed table the caller supplied** (a Private Creator
+ * `(gggg,00EE)` whose decoded value is in the profile's private dictionary), or
+ * when the value is **zero-length** and so encodes no Data Set. Nothing else.
+ *
+ * **🛑 DECODING A VALUE UNDER THE VR THE PROFILE RESOLVED FOR IT IS NOT
+ * ENUMERATION, AND NEITHER IS THE EMBEDDED-ATTRIBUTE SCANNER'S SILENCE.** A
+ * decoded `LO`, `ST`, `OB`, `OW` or `UN` value is a byte run that can carry a
+ * Data Set written in a transfer syntax this run never tested for; two cells of
+ * the matrix in `test/integration/deident-private-reservation.test.ts` are
+ * perfectly scannable Implicit VR LE string carriers whose values the scanner
+ * DID read and found nothing in, and which carried a nested `(0010,0010)`
+ * anyway, because the nested tiles are Explicit VR and the file is Implicit. So
+ * the predicate is **what the run did with the value**, never the VR and never
+ * the scanner's reach.
+ *
+ * ## The cost, stated at its real size
+ *
+ * With `RetainSafePrivate` plus a `Profile`, exactly three classes of private
+ * value now reach the output: an instance the run walked as Data Elements, a
+ * Private Creator the profile's dictionary vouches for, and a zero-length value.
+ * **An ordinary vendor scalar under an ordinary string VR is removed**, because
+ * this package enumerates nothing inside a retained private value that is not
+ * one of those three. That is over-redaction traded for a closed identity leak:
+ * PS3.15 2026c §E.3.10 retains Private Attributes "known by the de-identifier to
+ * be safe from identity leakage" and sends "all other Private Attributes" to
+ * removal or to the `(0008,0307)` element-specific action, which this library
+ * does not implement - and a value nothing enumerated is not known to be safe
+ * however ordinary it looks. Through `0.0.19` such a value was **kept** and
+ * disclosed instead; the disclosure said outright that it was not a fix.
+ *
+ * ## Per INSTANCE, never per tag
+ *
+ * An entry names one **occurrence**: a tag together with the Data Set it lived
+ * in, which `contextPath` identifies (absent means the root Data Set). Private
+ * blocks are reserved per Data Set (PS3.5 §7.8.1), so the same private tag can
+ * occur several times in one object with different enumerability, and removing
+ * one occurrence never removes a sibling one.
+ *
+ * ## Uncapped, and that is a decision rather than an oversight
+ *
+ * Every consumer-controlled **diagnostic** in this package is capped, because a
+ * finding emitted per element is amplified by an element count the input
+ * chooses. This is not a diagnostic: it is the record of an **action**, on the
+ * same footing as {@link DeidentifyReport.removedPrivateTags}, which is uncapped
+ * for the same reason. A caller's whole guarantee is that they can separate the
+ * unenumerable removals from the Annex E ones for **every** removal, so a cap
+ * here would silently take the guarantee away exactly on the files that need it
+ * most. The matching warnings stay bounded; this array does not.
+ *
+ * ## What it carries, and what that is worth logging
+ *
+ * `tag` is composed from four bytes of the source. On a well-formed file it is
+ * the sender's own private tag number and carries nothing, but on a file whose
+ * Value Lengths disagree with its bytes those four bytes can be document
+ * content - the standing exception {@link DeidentifyReport.removedPrivateTags}
+ * and {@link UnauditableSequenceFinding} already carry, by the same route, and
+ * `contextPath` is unbound in the same way. It is published anyway, because
+ * *which* attribute was removed and *where* is the whole audit value of the
+ * record. Treat this array as PHI when the source is untrusted.
+ *
+ * @example
+ * ```ts
+ * import { deidentify, parseDicom, type UnenumerablePrivateRemoval } from "@cosyte/dicom";
+ * const { report } = deidentify(parseDicom(buf), { retain: ["RetainSafePrivate"], profile });
+ * report.unenumerablePrivateRemovals.forEach((r: UnenumerablePrivateRemoval) => {
+ *   console.warn(`${r.tag} ${r.applied} (${r.reason})`, r.contextPath ?? "root");
+ * });
+ * ```
+ */
+export interface UnenumerablePrivateRemoval {
+  /** The removed instance's tag. */
+  readonly tag: Tag;
+  /**
+   * The outcome, always `"removed"`: the Data Set that held this instance
+   * carries no element bearing that tag, in the returned dataset and in the
+   * serialized bytes. Distinct from **emptied**, where an element with that tag
+   * is present carrying a zero-length value.
+   */
+  readonly applied: "removed";
+  /**
+   * Why, always `"unenumerable"`: this run did not enumerate the value, so
+   * PS3.15 §E.3.10's "known ... to be safe" was never established for it. This
+   * is what separates an entry here from an attribute the Annex E action table
+   * removed (`report.attributes`, `applied: "removed"`) and from one whose value
+   * was emptied.
+   */
+  readonly reason: "unenumerable";
+  /**
+   * Tag/index chain naming the Data Set this instance lived in; **omitted at the
+   * root**, which is what identifies the removal as per-instance rather than
+   * per-tag. **Built by the same descent as
    * {@link DeidentifiedAttribute.contextPath} and carrying the same caveat:
    * each segment's tag is read off the wire, bound by nothing, so on a
    * desynchronized read it can be four bytes of a value.** Read that field's
@@ -485,14 +586,18 @@ export interface UndefinedVrFinding {
  *   theoretical.
  * - **`unauditableSequences[].tag`** - see
  *   {@link UnauditableSequenceFinding}. Same shape as `removedPrivateTags` by a
- *   narrower route: a private carrier a {@link Profile} vouched for is named
- *   there - emptied when the profile declares it `SQ`, kept otherwise, and on
- *   both - and an under-declared length upstream can resynchronize the reader
- *   onto four bytes that spell such a block. The package's usual answer to a
+ *   narrower route: a private carrier a {@link Profile} vouched for and this run
+ *   emptied is named there, and an under-declared length upstream can
+ *   resynchronize the reader onto four bytes that spell such a block. The
+ *   package's usual answer to a
  *   fabricated header, `undefinedVrElements`, carries a byte offset and no tag,
  *   and still answers it whenever the fabricated VR is outside the 34 PS3.5
  *   §6.2 defines. It cannot when the fabricated VR is one of them, because those
  *   two files are byte-identical.
+ * - **`unenumerablePrivateRemovals[].tag`** - see
+ *   {@link UnenumerablePrivateRemoval}. The same four bytes by the same route,
+ *   on the record of the removal rather than of an emptying, and this one is
+ *   **uncapped** because it is the record of an action rather than a diagnostic.
  * - **`undefinedVrElements[].byteLength` and
  *   `unauditableSequences[].byteLength`** - the declared Value Length read off
  *   the element header, so on a fabricated header it is four document bytes
@@ -540,7 +645,14 @@ export interface DeidentifyReport {
   /** Per-attribute outcomes for every attribute Annex E acted on. */
   readonly attributes: readonly DeidentifiedAttribute[];
   /**
-   * Private tags removed under the Basic Profile (kept ones are omitted).
+   * Private tags removed (kept ones are omitted) - **every one of them,
+   * whichever rule removed it**: the Basic Profile's default removal, a
+   * reservation the file did not settle, and, since the unenumerable class
+   * became a removal, a private attribute this run did not enumerate. Its
+   * meaning is unchanged and it is still uncapped; what it does not carry is a
+   * **reason**, which is why the unenumerable removals are also recorded on
+   * {@link DeidentifyReport.unenumerablePrivateRemovals}, where they can be told
+   * apart from the rest.
    *
    * **This is the second field that is not value-free, and the qualification is
    * measured.** A tag here is composed from four bytes of the source, and on a
@@ -567,44 +679,33 @@ export interface DeidentifyReport {
    */
   readonly embeddedAttributes: readonly EmbeddedAttributeFinding[];
   /**
-   * Carriers whose nested Data Sets this run could not reach - **each one either
-   * emptied or kept, and {@link UnauditableSequenceFinding.applied} says
-   * which.**
+   * Carriers whose nested Data Sets this run could not reach and **emptied** for
+   * it: an `SQ` whose items the parser did not materialize, so the run had no
+   * Data Sets to walk and could not discharge PS3.15 §E.1.1's obligation inside
+   * them, and a private carrier a {@link Profile} declares `SQ` that the parse
+   * tree resolved otherwise. Content was dropped from the de-identified output,
+   * and for the first producer the matching `DICOM_SQ_NOT_DESCENDED` entry on
+   * `Dataset.warnings` says why the parse refused.
    *
-   * `"emptied"`: an `SQ` whose items the parser did not materialize, so the run
-   * had no Data Sets to walk and could not discharge PS3.15 §E.1.1's obligation
-   * inside them; content was dropped from the de-identified output, and the
-   * matching `DICOM_SQ_NOT_DESCENDED` entry on `Dataset.warnings` says why the
-   * parse refused.
+   * 🛑 **THIS ARRAY NO LONGER PRODUCES `applied: "kept"`, AND THAT IS AN
+   * AUDIT-CONTRACT CHANGE.** A private attribute retained under
+   * `RetainSafePrivate` whose value this run never enumerated used to be listed
+   * here, kept verbatim, with the array saying so. That instance is **removed**
+   * now and recorded on
+   * {@link DeidentifyReport.unenumerablePrivateRemovals}. An entry here has one
+   * meaning again: this content is **not** in your output.
    *
-   * `"kept"`: a private attribute retained under `RetainSafePrivate` whose value
-   * this run never enumerated. **Nothing was dropped and nothing is claimed to
-   * have been:** the value is in the output verbatim, so if the sender encoded a
-   * Data Set inside it, that Data Set is in the output too, under
-   * `(0012,0062) = YES`. Read a `"kept"` entry as the package telling you what
-   * it shipped without auditing, not as a scrub it performed.
-   *
-   * **This array is NOT empty on a well-formed file once a run retains private
-   * values** - i.e. with `RetainSafePrivate` + a `Profile`. A perfectly
-   * conformant file with vouched-for private attributes populates it, by design.
-   *
-   * 🛑 **It is not a census of them, and "one entry per retained attribute" is
-   * false in three ways.** A retained Private Creator `(gggg,00EE)` raises
-   * nothing, because it is retained only when its whole decoded value is a
-   * member of the profile's private dictionary, which is an enumeration; a
-   * zero-length value raises nothing, because it encodes no Data Set; and the
-   * record stops at the cap below. Read the array as "at least these", never as
-   * "these are all of them" - the retention itself is never capped or excepted.
+   * **Empty on a well-formed file**, including one whose private attributes a
+   * profile vouches for. It stopped being populated by ordinary conformant files
+   * when the retained class left it.
    *
    * **Capped, and the cap is on the record only.** A crafted input can carry
    * tens of thousands of un-auditable elements, so this array (and its matching
-   * warnings) stops at `MAX_UNAUDITABLE_SEQUENCE_FINDINGS` **per `applied`
-   * value, counted separately**: a flood of one class must not spend the other
-   * class's budget and silence it, so the two are budgeted apart and this array
-   * can hold up to twice that many entries. Every un-auditable sequence is still
-   * emptied and every retained carrier is still kept whether or not it is
-   * listed; either half being exactly that long means "at least this many", so
-   * read it as truncated rather than as a total.
+   * warnings) stops at `MAX_UNAUDITABLE_SEQUENCE_FINDINGS`. Every un-auditable
+   * carrier is still emptied whether or not it is listed; an array exactly that
+   * long means "at least this many", so read it as truncated rather than as a
+   * total. The unenumerable **removals** are budgeted apart from it and their
+   * record is not capped at all.
    *
    * **It covers private sequences too, since `DICOM-PRIVATE-SQ-CARVE-OUT`.** A
    * private `SQ` a {@link Profile} vouches for under `RetainSafePrivate` used to
@@ -613,6 +714,31 @@ export interface DeidentifyReport {
    * is over a private attribute and not over an item stream nothing could read.
    */
   readonly unauditableSequences: readonly UnauditableSequenceFinding[];
+  /**
+   * Private attributes **removed because this run did not enumerate their
+   * value** - one entry per instance, naming the tag, the outcome (`"removed"`),
+   * the reason (`"unenumerable"`) and the Data Set it lived in.
+   *
+   * **This is the surface the fail-safe's audit half is built on, and it is the
+   * one array on this report that is never capped or truncated.** A caller can
+   * separate, from this record alone and for every such removal at any input
+   * size, the attributes removed for being unenumerable from the attributes
+   * removed by the Annex E action table (`report.attributes`) and from the ones
+   * whose value was emptied. The matching warnings ARE bounded, so past their
+   * cap this record is the only complete account and the diagnostics are the
+   * bounded one.
+   *
+   * **Empty unless `RetainSafePrivate` plus a `Profile` is active**, because
+   * without both nothing private is retained far enough to be judged: the Basic
+   * Profile removes every private attribute and names it in
+   * {@link DeidentifyReport.removedPrivateTags} instead. A profile lookup that
+   * **misses** is that case too, and never appears here.
+   *
+   * See {@link UnenumerablePrivateRemoval} for what counts as enumeration, for
+   * the over-redaction this costs, and for why it names an instance rather than
+   * a tag.
+   */
+  readonly unenumerablePrivateRemovals: readonly UnenumerablePrivateRemoval[];
   /**
    * Elements emptied because their on-wire VR is not one of the 34 PS3.5 §6.2
    * defines, so their bytes are not a Value Field this library decoded and

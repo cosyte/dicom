@@ -33,4 +33,5 @@ export {
   type EmbeddedAttributeFinding,
   type UnauditableSequenceFinding,
   type UndefinedVrFinding,
+  type UnenumerablePrivateRemoval,
 } from "./types.js";

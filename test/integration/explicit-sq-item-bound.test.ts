@@ -469,9 +469,16 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the PHI leak a bound would ope
   it("removes it for the RIGHT reason - a control that reds if the creator is at the root", () => {
     // The mirror, and the proof the assertion above is not vacuous: the same
     // creator declared at the ROOT - which is exactly what a clamp manufactures -
-    // DOES get the private element retained. So "removed" above is the block
+    // DOES get the private element vouched for. So "removed" above is the block
     // reservation doing its work, not `deidentify()` removing everything private
     // regardless of the options.
+    //
+    // 🩺 THE DISCRIMINATOR IS THE RECORD, NOT THE BYTES, SINCE
+    // `DICOM-DEIDENT-UNENUMERATED-PRIVATE`. A vouched-for value nothing walked
+    // is removed too, so both rows now remove the element; what tells them apart
+    // is that a vouched-for removal is stamped `unenumerable` on
+    // `report.unenumerablePrivateRemovals` while a refused reservation is not
+    // recorded there at all.
     const ds = parseDicom(
       buildDicom({
         transferSyntax: EXPLICIT_LE,
@@ -487,8 +494,11 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the PHI leak a bound would ope
       profile: profiles.ge,
     });
 
-    expect(report.removedPrivateTags).toEqual([]);
-    expect(serializeDicom(dataset).includes(Buffer.from(SECRET, "ascii"))).toBe(true);
+    expect(report.unenumerablePrivateRemovals).toEqual([
+      { tag: PRIVATE_TAG, applied: "removed", reason: "unenumerable" },
+    ]);
+    expect(dataset.has("00090010")).toBe(true);
+    expect(serializeDicom(dataset).includes(Buffer.from(SECRET, "ascii"))).toBe(false);
   });
 });
 

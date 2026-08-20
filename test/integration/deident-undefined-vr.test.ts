@@ -323,8 +323,17 @@ describe("DICOM-CARRIER-LEAF-LEAKS: an on-wire VR that is not a VR", () => {
       retain: ["RetainSafePrivate"],
       profile,
     });
+    // THE ASSERTION THIS TEST OWNS: the undefined-VR rule did not fire, on a
+    // transfer syntax that cannot produce a VR outside the 34.
     expect(report.undefinedVrElements).toEqual([]);
-    expect(serializeDicom(dataset).toString("latin1")).toContain(keep);
+    // 🩺 AND THE VALUE IS STILL GONE, BY A DIFFERENT RULE, WHICH IS WHY THE
+    // ASSERTION ABOVE IS NOT "the value survives". The carrier is a vouched-for
+    // private scalar nothing enumerated, so it is removed and recorded there
+    // instead. Reading its absence as evidence for this rule would be reading
+    // the wrong channel: this rule names a byte offset and no tag, and it named
+    // none here.
+    expect(serializeDicom(dataset).toString("latin1")).not.toContain(keep);
+    expect(report.unenumerablePrivateRemovals.map((r) => r.tag)).toEqual(["00091001"]);
   });
 
   // -------------------------------------------------------------------------

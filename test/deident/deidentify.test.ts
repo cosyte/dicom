@@ -295,7 +295,13 @@ describe("deidentify - private attributes", () => {
     expect(report.removedPrivateTags).toContain("00091001");
   });
 
-  it("RetainSafePrivate keeps creator-recognized private attributes", () => {
+  it("RetainSafePrivate keeps a recognized creator, and removes a value it did not enumerate", () => {
+    // 🛑 VOUCHING IS NOT RETENTION, AND THIS TEST NAMES BOTH HALVES. The
+    // creator's whole decoded value is a member of the profile's dictionary, so
+    // it WAS enumerated and is kept. Its data element is an ordinary `LO` scalar
+    // that nothing walked, so it is removed and recorded - decoding a value
+    // under the VR the profile resolved is not an enumeration of what the value
+    // encodes.
     const profile = defineProfile({
       name: "acme",
       privateTags: {
@@ -303,9 +309,13 @@ describe("deidentify - private attributes", () => {
       },
     });
     const ds = buildPhiDataset(withPrivate);
-    const { dataset } = deidentify(ds, { retain: ["RetainSafePrivate"], profile });
-    expect(dataset.has("00091001")).toBe(true);
-    expect(dataset.has("00090010")).toBe(true); // recognized creator kept too
+    const { dataset, report } = deidentify(ds, { retain: ["RetainSafePrivate"], profile });
+    expect(dataset.has("00090010")).toBe(true); // recognized creator kept
+    expect(dataset.has("00091001")).toBe(false);
+    expect(report.unenumerablePrivateRemovals).toEqual([
+      { tag: "00091001", applied: "removed", reason: "unenumerable" },
+    ]);
+    expect(report.removedPrivateTags).toEqual(["00091001"]);
   });
 
   it("RetainSafePrivate without a profile keeps nothing (fail-safe)", () => {
@@ -352,7 +362,7 @@ describe("deidentify - private attributes", () => {
     }
 
     it("does not retain an item's private element on the ROOT's reservation", () => {
-      const { dataset } = deidentify(shadowedBlock(), {
+      const { dataset, report } = deidentify(shadowedBlock(), {
         retain: ["RetainSafePrivate"],
         profile,
       });
@@ -362,8 +372,15 @@ describe("deidentify - private attributes", () => {
       expect(serializeDicom(dataset).includes(Buffer.from("NOT-VOUCHED-FOR", "latin1"))).toBe(
         false,
       );
-      // The root's own vouched element is unaffected.
-      expect(dataset.has("00091001")).toBe(true);
+      // 🩺 THE TWO OCCURRENCES ARE JUDGED SEPARATELY, WHICH IS THE PER-DATA-SET
+      // SCOPE THIS BLOCK IS ABOUT. The root's copy IS vouched for and is removed
+      // for being unenumerable, from the root (no `contextPath`); the item's
+      // copy is not vouched for at all and is removed by the Basic Profile,
+      // recorded nowhere. Same tag, two Data Sets, two reasons.
+      expect(report.unenumerablePrivateRemovals).toEqual([
+        { tag: "00091001", applied: "removed", reason: "unenumerable" },
+      ]);
+      expect(dataset.has("00091001")).toBe(false);
     });
 
     it("removes an item's private element whose reservation exists only at the root", () => {
@@ -411,9 +428,20 @@ describe("deidentify - private attributes", () => {
       );
       const { dataset, report } = deidentify(ds, { retain: ["RetainSafePrivate"], profile });
       const item = dataset.get("00081115")?.items?.[0];
-      expect(item?.has("00091001")).toBe(true);
+      // The reservation inside the Item is ACCEPTED - which is what this test is
+      // about, and the creator staying is how you can tell. The data element's
+      // value is still removed for being unenumerable, and the record names the
+      // Item it lived in rather than the tag alone.
       expect(item?.has("00090010")).toBe(true);
-      expect(report.removedPrivateTags).not.toContain("00091001");
+      expect(item?.has("00091001")).toBe(false);
+      expect(report.unenumerablePrivateRemovals).toEqual([
+        {
+          tag: "00091001",
+          applied: "removed",
+          reason: "unenumerable",
+          contextPath: ["00081115[0]"],
+        },
+      ]);
     });
   });
 });
