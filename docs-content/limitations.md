@@ -51,27 +51,41 @@ stream rather than the pixels.
 any of them.** Each is either a product decision this package has deliberately not made, or a
 structural fact about DICOM that no reader can resolve from the wire.
 
-- **A retained private attribute can leak through routes whose extent is a matrix, not a sentence -
-  and every one of them is now DISCLOSED rather than silent.** `RetainSafePrivate` plus a `Profile`
-  is the only route in the package that writes a private value into de-identified output, and what
-  survives depends on where the sender put the Private Creator, which VR the carrier was written
-  under, and whether the profile also reached `parseDicom`. The surface is **pinned as a measured
+- **`RetainSafePrivate` now keeps only what this run could account for, and everything else private
+  is REMOVED.** It plus a `Profile` is still the only route in the package that writes a private
+  value into de-identified output, and exactly three classes of value take it: one the run **walked
+  as Data Elements** and put through the Annex E action table (a private `SQ` whose items the parser
+  materialized), a **Private Creator `(gggg,00EE)` whose whole decoded value is a member of your
+  profile's private dictionary**, and a **zero-length** value, which encodes no Data Set. Anything
+  else a profile vouches for is removed, recorded per instance in
+  `report.unenumerablePrivateRemovals` with `applied: "removed"` and `reason: "unenumerable"`, named
+  in `report.removedPrivateTags`, and warned under
+  `DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE`. **The removal record is complete and never capped**
+  at any input size; only the warnings are bounded.
+  🛑 **The cost is over-redaction and it is nearly all of the option: an ordinary vendor scalar under
+  an ordinary string VR is removed.** Decoding a value under the VR your profile declares for it is not
+  an enumeration of what the value encodes, and neither is the embedded-attribute scanner's silence:
+  that scanner reads string carriers only and decodes tiles in the file's own encoding, so a nested
+  Data Set written in another transfer syntax passed it untouched on a perfectly scannable `LO`
+  carrier - measured, and the reason the predicate is what the run DID with the value rather than the
+  VR or the scanner's reach. If you need those values back, that needs a content test separating a
+  nested Data Set from a legitimate binary blob, which is an open product question and not a flag.
+  Through `0.0.19` this class was **kept** verbatim under `(0012,0062) = YES` and merely disclosed,
+  which was a disclosure and not a fix. The surface it shipped through is **pinned as a measured
   matrix** in `test/integration/deident-private-reservation.test.ts` rather than described in prose,
-  because the prose has been wrong twice. **A retained private value this package keeps unexamined
-  raises `DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE` and adds a `report.unauditableSequences` entry
-  with `applied: "kept"`, subject to the three bounds named next** - so a Data Set the sender nested
-  inside such a value still reaches your output verbatim under `(0012,0062) = YES`, but no longer
-  under an empty report. **The three bounds, because "every" would be false:** a retained Private
-  Creator `(gggg,00EE)` raises nothing (it is retained only when its whole decoded value is a member
-  of your profile's private dictionary, which is an enumeration), a zero-length value raises nothing
-  (it encodes no Data Set), and the record stops at 64 entries of this class, so an array with 64 of
-  them means "at least 64" and not a total. The action is not capped by any of that, because there is
-  no action: the value is kept either way. 🛑 **That is a disclosure, not a fix: the value is still
-  there.** Emptying
-  it needs a content test on exactly the VRs arbitrary bytes are for, which would also empty
-  conformant binary values on legitimate files - an open product question, weighed and deliberately
-  answered the other way. Detail:
+  because the prose has been wrong twice. Detail:
   [Known limitations in the README](https://github.com/cosyte/dicom#known-limitations--non-goals).
+
+- **Two audit-contract changes came with that, and a consumer switching on either has to act.**
+  `report.unauditableSequences` no longer produces its retired `kept` outcome for a retained private
+  value - its `applied` field was `"emptied" | "kept"` and is `"emptied"` alone now, so an entry
+  there means content is **not** in your output, which is what it meant before that second outcome
+  joined it - and `DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE` changes meaning
+  from "this value was shipped unexamined" to "this attribute was removed unexamined". The published
+  **warning-code set is unchanged**, so narrowing on that code name keeps compiling: re-read what it
+  now means rather than re-typing it. The removal record
+  (`report.unenumerablePrivateRemovals`) is a **new** report surface, and it is the only one that can
+  tell you an attribute went for being unenumerable rather than by the action table.
 
 - **An over-declared Value Length into a binary carrier still leaks.** A length that swallows the
   following element into an `OB`, `OW`, `US` or `UN` value is not detected, and a `(0010,0020)`
@@ -79,8 +93,8 @@ structural fact about DICOM that no reader can resolve from the wire.
   measured and still exactly true for this route, which is every default `deidentify()` run. The only
   carrier that gets a diagnostic is one that is itself a private attribute reached through
   `RetainSafePrivate` plus a `Profile` (the bullet above), and what such a diagnostic says is "this
-  value was not enumerated" (kept) or "this value was dropped" (emptied, where the profile declares
-  it `SQ`), never "a swallow was detected here". Arbitrary
+  value was not enumerated, so the attribute was removed" or "this value was dropped" (emptied, where
+  the profile declares it `SQ`), never "a swallow was detected here". Arbitrary
   bytes are exactly what those VRs are for, so no content test can decide it. String carriers **are**
   covered, because there the same bytes are provably outside the VR's repertoire. If you accept files
   from a sender you do not control, treat a binary attribute's declared length as untrusted.

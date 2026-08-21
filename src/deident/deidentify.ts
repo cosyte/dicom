@@ -59,17 +59,19 @@
  *   wins). A carrier the profile declares `SQ` and the tree did not resolve is
  *   emptied rather than kept, keeping its parsed VR
  *   (`DICOM-PRIVATE-SQ-PARSE-VR`). See {@link keepRetainedPrivate}.
- * - **Every retained private value that IS kept verbatim is now DISCLOSED, one
- *   line per element** (`DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE` +
- *   a `report.unauditableSequences` entry with `applied: "kept"`). The run
- *   enumerated nothing inside it, so a Data Set the sender encoded there reaches
- *   the output verbatim - which it always did, on a **fully conformant** file,
- *   with `ds.warnings = []` and `report.unauditableSequences = []` under
- *   `(0012,0062) = YES`. 🛑 **The value is still kept: this closes the SILENCE,
- *   not the leak.** Emptying it needs a content test on exactly the VRs
- *   arbitrary bytes are for, which empties conformant binary values on
- *   legitimate files - weighed, and refused (`DICOM-DEIDENT-OVER-REDACTION`).
- *   See {@link retainedCarrierNotAuditable}.
+ * - **A retained private value this run did not ENUMERATE is REMOVED**, named in
+ *   `report.removedPrivateTags` and recorded per instance in
+ *   `report.unenumerablePrivateRemovals` with its reason, under the existing
+ *   `DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE` warning. Through `0.0.19` it
+ *   was kept verbatim and merely disclosed, which shipped a Data Set the sender
+ *   nested inside it into output stamped `(0012,0062) = YES` on a **fully
+ *   conformant** file. 🛑 **The cost is priced at its real size and is not a
+ *   corner of the option:** this package enumerates nothing inside a retained
+ *   private value beyond the three classes named on
+ *   {@link removeUnenumerablePrivate}, so an ordinary vendor scalar under an
+ *   ordinary string VR is removed too. Getting those values back needs the
+ *   content test that separates a nested Data Set from a legitimate binary blob,
+ *   which is an open product question (`DICOM-DEIDENT-OVER-REDACTION`).
  * - A `SQ` whose `items` the parser did not
  *   materialize is **emptied**, not kept:
  *   its value is by PS3.5 §7.5.1 a stream of Data Sets, and a run that cannot
@@ -191,6 +193,7 @@ import {
   type EmbeddedAttributeFinding,
   type UnauditableSequenceFinding,
   type UndefinedVrFinding,
+  type UnenumerablePrivateRemoval,
 } from "./types.js";
 import { makeUidRemapper, type UidRemapper } from "./uid.js";
 
@@ -208,8 +211,10 @@ const BODY_ENCODING: Readonly<Record<string, BodyEncoding>> = {
 };
 
 /**
- * Cap on how many un-auditable sequences one run will *describe*
- * ({@link DeidentifyReport.unauditableSequences} and the matching warnings).
+ * Cap on how many un-auditable carriers one run will *describe*
+ * ({@link DeidentifyReport.unauditableSequences} and the matching warnings), and,
+ * on its own separate counter, on how many unenumerable-removal **warnings** it
+ * will raise.
  *
  * `#48` bound every consumer-controlled diagnostic in this package for a reason:
  * a finding emitted per element is amplified by an element count the input
@@ -217,8 +222,13 @@ const BODY_ENCODING: Readonly<Record<string, BodyEncoding>> = {
  * elements. It is a bound on the **record**, never on the action - every
  * un-auditable sequence is emptied whether or not it is listed.
  *
- * A report whose array is exactly this long means "at least this many"; treat it
- * as truncated.
+ * 🛑 **IT DOES NOT BOUND {@link DeidentifyReport.unenumerablePrivateRemovals}**,
+ * which is the record of an action rather than a diagnostic and is complete at
+ * any input size; see {@link removeUnenumerablePrivate}. The two classes count
+ * against this number separately, so neither can spend the other's budget.
+ *
+ * A report whose findings array is exactly this long means "at least this many";
+ * treat it as truncated.
  */
 export const MAX_UNAUDITABLE_SEQUENCE_FINDINGS = 64;
 
@@ -254,13 +264,17 @@ interface DeidentifyContext {
   readonly budget: {
     unauditableSequences: number;
     /**
-     * Counted apart from `unauditableSequences` even though both classes land in
-     * `report.unauditableSequences`, so that a flood of retained private
-     * carriers cannot spend the emptied class's budget and silence it. One
-     * class's amplification must not buy another class's silence - the same
-     * per-recognizer split this repo's own PHI gate took in `#111`.
+     * The unenumerable-removal WARNINGS, counted apart from
+     * `unauditableSequences` so that a flood of one class cannot spend the
+     * other's budget and silence it. One class's amplification must not buy
+     * another class's silence - the same per-recognizer split this repo's own
+     * PHI gate took in `#111`.
+     *
+     * 🛑 **IT BOUNDS THE WARNINGS AND NOTHING ELSE.** The removals themselves,
+     * `report.removedPrivateTags` and `report.unenumerablePrivateRemovals` are
+     * all uncapped; see {@link removeUnenumerablePrivate}.
      */
-    retainedCarriers: number;
+    unenumerableRemovals: number;
     undefinedVrElements: number;
   };
 }
@@ -424,6 +438,7 @@ interface ProcessResult {
   readonly removedPrivateTags: Tag[];
   readonly embeddedAttributes: EmbeddedAttributeFinding[];
   readonly unauditableSequences: UnauditableSequenceFinding[];
+  readonly unenumerablePrivateRemovals: UnenumerablePrivateRemoval[];
   readonly undefinedVrElements: UndefinedVrFinding[];
   readonly warnings: DicomParseWarning[];
 }
@@ -529,6 +544,13 @@ function hasUndefinedVr(el: Element): boolean {
  * the tree did not resolve is emptied (`DICOM-PRIVATE-SQ-PARSE-VR`) - though an
  * element whose on-wire VR is not one of the 34 still arrives here first, so
  * that route keeps its tag-free diagnostic. See {@link keepRetainedPrivate}.
+ *
+ * 🛑 **KEEPING A PRIVATE VALUE HERE IS NO LONGER THE LAST WORD ON IT.** The
+ * `true` branch writes the element back, and {@link keepRetainedPrivate} then
+ * **removes** it again unless this run enumerated the value - a Private Creator
+ * matched against the profile's dictionary, or a zero-length value. That order
+ * is deliberate: the undefined-VR refusal below has to be reached first, because
+ * it is the one route in the module that names no tag.
  *
  * Order matters and is not arbitrary. The undefined-VR test comes first because
  * it is the cheaper and the stronger of the two: it settles the element from a
@@ -773,13 +795,12 @@ function emptyUnauditableCarrier(
   // diagnostics, against a budget that spans the whole run rather than this one
   // Data Set.
   //
-  // 🛑 THE TRUNCATION SIGNAL IS PER CLASS, NOT `report.unauditableSequences.
-  // length`. That array carries the retained class too, on its own counter, so
-  // the array's own length is neither necessary nor sufficient: 64 kept and 0
-  // emptied reads 64 with nothing truncated, and 5 kept plus 65 emptied reads 69
-  // while the emptied class IS truncated. Count the entries whose `applied` is
-  // `"emptied"` and compare THAT to `MAX_UNAUDITABLE_SEQUENCE_FINDINGS`. Both
-  // measured; the public statement is on `DeidentifyReport.unauditableSequences`.
+  // 🛑 THE COUNTER IS THIS CLASS'S OWN AND IS NOT `report.unauditableSequences.
+  // length` EITHER, EVEN NOW THAT THE ARRAY CARRIES ONE CLASS AGAIN. The
+  // retained class left this array when it became a removal, but its warnings
+  // are still budgeted separately (`ctx.budget.unenumerableRemovals`), and one
+  // class's amplification must never buy another class's silence. The public
+  // statement is on `DeidentifyReport.unauditableSequences`.
   if (ctx.budget.unauditableSequences >= MAX_UNAUDITABLE_SEQUENCE_FINDINGS) return;
   ctx.budget.unauditableSequences += 1;
   out.unauditableSequences.push({
@@ -795,58 +816,61 @@ function emptyUnauditableCarrier(
 }
 
 /**
- * Record that a retained private carrier's value was **kept unchanged and never
- * enumerated**. Nothing is written back: the element is already in `out` exactly
- * as the file carried it, and this function does not touch it.
+ * **Remove** a retained private instance whose value this run never enumerated,
+ * and record the removal.
  *
- * ## Why the package says this at all
+ * ## Why removal, and not the disclosure this replaced
  *
  * PS3.15 2026c §E.3.10 licenses retention for "Private Attributes that are known
- * by the de-identifier to be safe from identity leakage". A {@link Profile}
- * entry is that knowledge, and it is knowledge about **one private attribute** -
- * never about a Data Set nested inside its value. PS3.5 2026c §7.5.1 makes an
+ * by the de-identifier to be safe from identity leakage", and sends "all other
+ * Private Attributes" to removal or to the `(0008,0307)` element-specific action,
+ * which this library does not implement - so removal is the branch available
+ * here. A {@link Profile} entry is knowledge about **one private attribute**,
+ * never about a Data Set nested inside its value: PS3.5 2026c §7.5.1 makes an
  * Item Value "a DICOM Data Set composed of Data Elements", and PS3.15 §E.1.1
  * obliges the de-identifier over Table E.1-1 "whether contained in the top level
- * Data Set or embedded in an Item of a Sequence of Items". So when this run
- * keeps such a value without walking it, there is an obligation it did not
- * discharge, and until this code existed the object went out stamped
- * `(0012,0062) Patient Identity Removed = YES` with **`ds.warnings = []` and
- * `report.unauditableSequences = []`** over a nested `(0010,0010)` that reached
- * the output byte-verbatim, on a **fully conformant** file. That silence is what
- * this function ends. It does not end the leak.
+ * Data Set or embedded in an Item of a Sequence of Items". A value nothing
+ * enumerated is therefore not known to be safe, however ordinary it looks.
  *
- * ## 🛑 THE VALUE IS DELIBERATELY NOT EMPTIED, AND THAT IS A PRODUCT DECISION
- * TAKEN AND RECORDED, NOT AN OMISSION
+ * Through `0.0.19` such a value was **kept** and disclosed - a warning plus a
+ * `report.unauditableSequences` entry stamped `applied: "kept"` - and the
+ * package said outright that this was a disclosure and not a fix. It was not:
+ * the object still went out stamped `(0012,0062) Patient Identity Removed = YES`
+ * over a nested `(0010,0010)` that reached the output byte-verbatim, on a **fully
+ * conformant** file. The fail-safe is remove and report, never keep and disclose.
  *
- * Emptying was weighed and refused. Separating a nested Data Set from a
- * legitimate binary blob needs a content test on exactly the VRs arbitrary bytes
- * are for, so the remedy empties conformant `OB`/`OW`/`US`/`UN` values on
- * legitimate files - data loss, and it widens an over-redaction cost already
- * measured in the thousands of grid cells (`DICOM-DEIDENT-OVER-REDACTION`). The
- * leak stays a **documented limit**; what changed is that it is a disclosed one.
- * Do not "finish the job" here by adding an empty: that is a different product
- * decision, and it is the one that was rejected.
+ * ## 🛑 THE PREDICATE IS WHAT THE RUN DID WITH THE VALUE. NOT THE VR, AND NOT
+ * THE SCANNER'S REACH
  *
- * ## Why the predicate is "kept", and not "the scanner could not read it"
- *
- * Because the scanner's silence is not a clearance, and keying on it would leave
- * cells silent that leak. {@link findEmbeddedAttributes} asks whether the value's
- * tail tiles as a Data Element run **in this file's own transfer syntax**, with
- * an actionable tag and a byte outside the carrier VR's repertoire. A nested
- * Data Set written in a different transfer syntax satisfies none of that on a
+ * Decoding a value under the VR the profile resolved for it is **not**
+ * enumeration. {@link findEmbeddedAttributes} asks whether the value's tail tiles
+ * as a Data Element run **in this file's own transfer syntax**, with an
+ * actionable tag and a byte outside the carrier VR's repertoire. A nested Data
+ * Set written in a different transfer syntax satisfies none of that on a
  * perfectly scannable `LO` or `ST` carrier - measured, two cells of the matrix in
  * `test/integration/deident-private-reservation.test.ts` - so "the scanner could
- * not read it" is a strictly narrower set than "this run did not enumerate it",
- * and only the second one is what the caller is being told.
+ * not read it" is a strictly narrower set than "this run did not enumerate it".
+ * Neither is the VR a proxy: a profile entry declaring `LO` over a carrier the
+ * sender wrote `OB` leaks and one declaring `OB` over a carrier the sender wrote
+ * `LO` does not, so the two sets are incomparable and an implementer who keys
+ * this on binary VRs has implemented a different and smaller rule.
  *
- * It follows that this fires on ordinary vendor values too. That is the honest
- * reading: with `RetainSafePrivate` the caller has asked for values this package
- * has no table for, and one line per retained attribute is the price of the
- * report not implying an audit it never performed. A run without the option
- * keeps no private value and produces none of these.
+ * It follows that this fires on ordinary vendor values too, and **that is the
+ * size of the change rather than a corner of it**: this package enumerates
+ * nothing inside a retained private value that is not one of the three classes
+ * below, so an ordinary vendor scalar under an ordinary string VR is now
+ * removed. A caller who needs those values back needs a content test that
+ * separates a nested Data Set from a legitimate binary blob, which is an open
+ * product question (`DICOM-DEIDENT-OVER-REDACTION`) and not a flag on this path.
+ * A run without `RetainSafePrivate` plus a `Profile` reaches none of this,
+ * because it retains no private value at all.
  *
- * ## The two elements it deliberately does not fire on
+ * ## The three values that DO reach the output, and are not touched here
  *
+ * - **A value the run walked as Data Elements.** A private `SQ` whose items the
+ *   parser materialized is descended by {@link keepRetainedPrivate}, every
+ *   nested element goes through the action table on its own merits, and the
+ *   carrier is rebuilt from that walk. That is an enumeration performed.
  * - **A Private Creator `(gggg,00EE)`.** {@link keepsPrivate} retains one only
  *   when `decodeCreator(el)` - the whole value, less its pad - is a **member of
  *   the profile's private dictionary**, a closed table the caller supplied. That
@@ -856,33 +880,57 @@ function emptyUnauditableCarrier(
  * - **A zero-length value**, which encodes no Data Set. This is also what keeps
  *   the audit a fixed point over an already-de-identified object
  *   (`DICOM-DEIDENT-NOT-A-FIXED-POINT`): a carrier some other rule emptied must
- *   not then be reported as a kept one on the next run.
+ *   not then be removed and reported on the next run.
+ *
+ * ## Per INSTANCE, and why the element is deleted rather than never written
+ *
+ * `out.elements` is the Data Set this instance lives in and nothing else, so a
+ * sibling instance of the same tag in another Data Set is untouched by the
+ * delete below. The delete follows {@link keepOrEmpty} rather than preempting
+ * it, and the order is load-bearing: `keepOrEmpty` is where an element whose
+ * on-wire VR is not one of the 34 is answered by {@link emptyUndefinedVrElement},
+ * the one route in this module that deliberately names **no tag**, because the
+ * condition raising it is that the header was fabricated out of bytes inside
+ * some element's value. Deciding removal ahead of that test would publish the
+ * fabricated tag on the record below. Three warning codes have been refused for
+ * exactly that echo.
  */
-function retainedCarrierNotAuditable(
+function removeUnenumerablePrivate(
   el: Element,
   ctx: DeidentifyContext,
   contextPath: readonly string[],
   out: ProcessResult,
 ): void {
-  // Capped like every other consumer-controlled diagnostic here, and against its
-  // OWN counter: this class and the emptied class share `report.
-  // unauditableSequences`, and a crafted file carrying tens of thousands of
-  // retained private carriers must not exhaust the budget that reports dropped
-  // content. Nothing about the element's fate depends on the cap - it is kept
-  // either way, which is precisely why the cap here bounds only what is said.
-  if (ctx.budget.retainedCarriers >= MAX_UNAUDITABLE_SEQUENCE_FINDINGS) return;
-  ctx.budget.retainedCarriers += 1;
-  out.unauditableSequences.push({
+  // The ACTION is never capped, and neither is the RECORD of it. A bound on how
+  // much we are willing to *say* must never become a bound on what we are
+  // willing to *remove* - and here it must not become a bound on the audit
+  // either: a caller's whole guarantee is that they can tell an unenumerable
+  // removal from an Annex E one for EVERY removal, so a cap on this array would
+  // take the guarantee away on exactly the files that need it. It is the record
+  // of an action, like `removedPrivateTags`, and not a diagnostic.
+  out.elements.delete(el.tag);
+  out.removedPrivateTags.push(el.tag);
+  out.unenumerablePrivateRemovals.push({
     tag: el.tag,
-    applied: "kept",
-    byteLength: el.rawBytes.length,
+    applied: "removed",
+    reason: "unenumerable",
     ...(contextPath.length > 0 ? { contextPath: [...contextPath] } : {}),
   });
-  // The byte count goes on the finding and NOT into the message, exactly as it
-  // does for the emptied class: `el.rawBytes.length` equals the Value Length off
-  // the element header, and an under-declared length upstream can have composed
-  // that header out of somebody's value. `#91` bound it out of the two sibling
-  // factories; a new one must not reopen it.
+
+  // The WARNING is capped, like every other consumer-controlled diagnostic here,
+  // and against its own counter so that a flood of these cannot spend the budget
+  // that reports emptied carriers and silence it. Nothing about the element's
+  // fate depends on the cap - it is removed either way, and named above either
+  // way, which is precisely why the cap bounds only what is said.
+  if (ctx.budget.unenumerableRemovals >= MAX_UNAUDITABLE_SEQUENCE_FINDINGS) return;
+  ctx.budget.unenumerableRemovals += 1;
+  // No byte count on the message, exactly as for the emptied class:
+  // `el.rawBytes.length` equals the Value Length off the element header, and an
+  // under-declared length upstream can have composed that header out of
+  // somebody's value. `#91` bound it out of the two sibling factories; a new one
+  // must not reopen it. It is not on the record above either - a removal record
+  // says which attribute went and why, and the length of a value that is no
+  // longer in the output is not part of that.
   out.warnings.push(privateCarrierNotAuditable({ byteOffset: el.byteOffset }, el.tag));
 }
 
@@ -1182,8 +1230,11 @@ function declaredPrivateVr(
 }
 
 /**
- * Retain a private element the profile vouches for - **walking it first when it
- * is an `SQ`**.
+ * Dispose of a private element the profile vouches for: **walk it when it is an
+ * `SQ`**, empty it when the profile declares a Sequence the parse tree did not
+ * resolve, keep it when this run enumerated its value, and otherwise **remove
+ * it** ({@link removeUnenumerablePrivate}). Vouching is a necessary condition
+ * for retention here and has never been a sufficient one.
  *
  * ## What a {@link Profile} does and does not vouch for
  *
@@ -1256,44 +1307,40 @@ function declaredPrivateVr(
  * one field off the profile the caller supplied, which is the same object that
  * decided to retain the element in the first place.
  *
- * **What it still does not cover, and deliberately.** Every retained private
- * carrier this branch does not answer falls through to {@link keepOrEmpty},
- * where the only thing between the value and the output is the
- * embedded-attribute scanner - and that scanner reads **string carriers only**,
- * decoding tiles in the **file's own encoding**. So a value that is a well-formed
- * item stream carrying a `(0010,0010)` is kept verbatim across a whole surface
- * of cells, not on the one shape four artifacts used to name.
+ * **What this branch does not answer is now REMOVED rather than kept.** Every
+ * retained private carrier it does not empty falls through to
+ * {@link keepOrEmpty}, where the only thing that could ever have stopped the
+ * value reaching the output was the embedded-attribute scanner - and that
+ * scanner reads **string carriers only**, decoding tiles in the **file's own
+ * encoding**, so a value that is a well-formed item stream carrying a
+ * `(0010,0010)` passed it across a whole surface of cells. Whatever survives
+ * `keepOrEmpty` is therefore taken out again by
+ * {@link removeUnenumerablePrivate}, which is the fail-safe the disclosure that
+ * preceded it was not: through `0.0.19` those bytes were unchanged, the nested
+ * `(0010,0010)` reached the output and the stamp was still `YES`, and the
+ * package said so rather than acting on it.
  *
- * 🛑 **THAT SURFACE IS NO LONGER SILENT, AND "no longer silent" IS NOT "closed".**
- * Whatever survives `keepOrEmpty` is now reported, every time, by
- * {@link retainedCarrierNotAuditable}: a warning plus a
- * `report.unauditableSequences` entry stamped `applied: "kept"`. The bytes are
- * unchanged, the nested `(0010,0010)` still reaches the output and the stamp is
- * still `YES` - what a caller no longer gets is an empty report over it. Do not
- * read the diagnostic as a remedy, and do not let the next slice quietly turn it
- * into one: emptying here is the product call recorded below, and it was made
- * the other way.
+ * 🩺 **The prose enumeration of that surface stays DELETED rather than reworded
+ * a third time, and the removal rule keys on none of it.** It read "a profile
+ * entry declaring a binary VR (`OB`/`OW`/`UN`)", and the measured set is
+ * **neither narrower nor wider - the two are incomparable**: a profile entry
+ * declaring `LO` over a carrier the sender wrote `OB` carried the identical
+ * nested name, while one declaring `OB` over a carrier the sender wrote `LO` was
+ * emptied by the scanner. The matrix in
+ * `test/integration/deident-private-reservation.test.ts` is the enumeration, it
+ * is measured on every run, and no artifact carries a list.
  *
- * 🩺 **That prose enumeration is DELETED rather than reworded a third time.** It
- * read "a profile entry declaring a binary VR (`OB`/`OW`/`UN`)", and the measured
- * set is **neither narrower nor wider - the two are incomparable**: a profile
- * entry declaring `LO` over a carrier the sender wrote `OB` leaks the identical
- * nested name, while one declaring `OB` over a carrier the sender wrote `LO` is
- * emptied by the scanner. **The predicate has two conjuncts and the deleted
- * wording named neither** - this branch does not answer it, *and* the scanner
- * cannot read it. The matrix in
- * `test/integration/deident-private-reservation.test.ts` is the enumeration now,
- * it is measured on every run, and no artifact carries a list.
- *
- * Closing any of those cells needs a content test on exactly the VRs arbitrary
- * bytes are for. The one remedy that needs no content test - refusing retention
- * wherever the profile's declared VR and the parse tree disagree - drops the
- * vendor value out of every ordinary `UN`-converted private element, which is
- * over-redaction (`DICOM-DEIDENT-OVER-REDACTION`), a **PRODUCT call** and not a
- * bug fix. **It is NOT `DICOM-BINARY-CARRIER-OVERDECLARE`, which the founder
- * accepted on 2026-08-05** - that decision priced a measured over-declare
- * swallow; this is an honest length reached through `RetainSafePrivate`. Do not
- * describe it as decided, and do not grow the guard for it here.
+ * **What it costs, priced rather than glossed.** Removing on "this run did not
+ * enumerate the value" drops the vendor value out of every ordinary private
+ * element a profile vouches for and nothing walked - a conformant `LO` scalar
+ * included. That is over-redaction (`DICOM-DEIDENT-OVER-REDACTION`) and it is
+ * deliberate here, because the alternative is retaining a value under
+ * PS3.15 §E.3.10's "known ... to be safe" that nothing established as safe.
+ * **It is NOT `DICOM-BINARY-CARRIER-OVERDECLARE`, which the founder accepted on
+ * 2026-08-05** - that decision priced a measured over-declare swallow; this is
+ * an honest length reached through `RetainSafePrivate`. Returning any of those
+ * values to the output needs the content test that separates a nested Data Set
+ * from a legitimate binary blob, which is the open question and not a flag.
  *
  * **What it DOES now cover that no artifact should call exempt: the CP-246 `UN`.**
  * An undefined-length `UN` whose CP-246 descent this parser refused **is**
@@ -1372,19 +1419,21 @@ function keepRetainedPrivate(
     return;
   }
   // Everything still here is retained on the profile's word alone. `keepOrEmpty`
-  // may still empty it - an on-wire VR outside the 34, or a value whose tail the
+  // may still EMPTY it - an on-wire VR outside the 34, or a value whose tail the
   // embedded scanner reads as a swallowed Data Element run - and both of those
-  // announce themselves on their own channels. What is left, the `true` branch,
-  // is the one outcome in this module that writes a private source value into
-  // de-identified output unexamined, and it used to be silent.
+  // announce themselves on their own channels and leave no value in the output,
+  // so neither is the class below and both are unchanged here.
   //
-  // 🛑 IT IS NOT EMPTIED HERE AND MUST NOT BECOME SO. See
-  // {@link retainedCarrierNotAuditable} for the product decision, which was
-  // taken against emptying because the content test it needs would empty
-  // conformant binary values on legitimate files.
+  // 🛑 WHAT IS LEFT, THE `true` BRANCH, USED TO BE THE ONE OUTCOME IN THIS
+  // MODULE THAT WROTE A PRIVATE SOURCE VALUE INTO DE-IDENTIFIED OUTPUT
+  // UNEXAMINED. It is now REMOVED instead: `keepOrEmpty` has written the element
+  // back, and {@link removeUnenumerablePrivate} takes it out again and records
+  // why. The two survivors below are the values this run DID enumerate - a
+  // Private Creator matched against the profile's dictionary, and a zero-length
+  // value, which encodes no Data Set - and they are retained unchanged.
   if (!keepOrEmpty(el, ctx, contextPath, out)) return;
   if (isPrivateCreatorElement(el.tag) || el.rawBytes.length === 0) return;
-  retainedCarrierNotAuditable(el, ctx, contextPath, out);
+  removeUnenumerablePrivate(el, ctx, contextPath, out);
 }
 
 /**
@@ -1457,6 +1506,7 @@ function processElements(
     removedPrivateTags: [],
     embeddedAttributes: [],
     unauditableSequences: [],
+    unenumerablePrivateRemovals: [],
     undefinedVrElements: [],
     warnings: [],
   };
@@ -1582,6 +1632,7 @@ function descendSequence(
     out.removedPrivateTags.push(...inner.removedPrivateTags);
     out.embeddedAttributes.push(...inner.embeddedAttributes);
     out.unauditableSequences.push(...inner.unauditableSequences);
+    out.unenumerablePrivateRemovals.push(...inner.unenumerablePrivateRemovals);
     out.undefinedVrElements.push(...inner.undefinedVrElements);
     out.warnings.push(...inner.warnings);
     newItems.push(new Item({ index, warnings: [], elements: inner.elements }));
@@ -2123,7 +2174,7 @@ export function deidentify(
     profile: options.profile,
     encoding,
     littleEndian,
-    budget: { unauditableSequences: 0, retainedCarriers: 0, undefinedVrElements: 0 },
+    budget: { unauditableSequences: 0, unenumerableRemovals: 0, undefinedVrElements: 0 },
   };
 
   // The root starts usable. That is a LIMITATION, not a proof: an Item that
@@ -2138,6 +2189,7 @@ export function deidentify(
     removedPrivateTags,
     embeddedAttributes,
     unauditableSequences,
+    unenumerablePrivateRemovals,
     undefinedVrElements,
   } = processed;
 
@@ -2207,6 +2259,7 @@ export function deidentify(
     removedPrivateTags,
     embeddedAttributes,
     unauditableSequences,
+    unenumerablePrivateRemovals,
     undefinedVrElements,
     uidMap: remap.cache,
     warnings,

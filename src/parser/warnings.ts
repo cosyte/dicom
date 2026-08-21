@@ -336,7 +336,7 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED:
     "Element ({tag}) {vr} was kept by the action table, but its value ends with {n} whole Data Element(s) - an over-declared Value Length swallowed what followed it. Emptied rather than kept, because the action table cannot see an attribute encoded inside a value. report.embeddedAttributes names the ones this run acts on that also have a literal Table E.1-1 row, which may be none of them.",
   // Deliberately short, for the reason the two codes below it are short: one is
-  // raised per retained private element and the element count is chosen by the
+  // raised per removed private element and the element count is chosen by the
   // input.
   //
   // 🩺 NO BYTE COUNT, AND THAT IS NOT CAUTION - IT IS THE SAME BOUND `#91` TOOK
@@ -347,12 +347,14 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   // PS3.6's registry, and a private tag - which every element raising this code
   // carries - renders `<withheld>` there. See `privateCarrierNotAuditable`.
   //
-  // 🛑 IT SAYS "KEPT", AND SAYING SO IS THE WHOLE CODE. Its two siblings report
-  // a value this run DROPPED; this one reports a value this run SHIPPED. A
-  // message that read like theirs would tell a caller their nested Data Set was
-  // removed when it is byte-for-byte in the output.
+  // 🛑 IT SAID "KEPT" UNTIL THE RUN STOPPED KEEPING THE VALUE, AND THE CODE
+  // NAME IS UNCHANGED WHILE THE MEANING IS NOT. Through `0.0.19` this reported a
+  // value the run SHIPPED unexamined; it now reports one the run REMOVED
+  // unexamined. A consumer narrowing on the code keeps compiling and has to
+  // re-read what it means - which is why the wording states the outcome
+  // outright and why the published code SET did not move.
   DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE:
-    "Element ({tag}) is a Private Attribute retained under RetainSafePrivate; its value was KEPT unchanged and was never enumerated, so any Data Set encoded inside it is unaudited and reaches the output (PS3.15 E.3.10 vouches for the Attribute, not for a Data Set nested in its value; E.1.1). NOT emptied. The byte count is withheld; see report.unauditableSequences.",
+    "Element ({tag}) is a Private Attribute a profile vouched for under RetainSafePrivate whose value this run did not enumerate, so any Data Set encoded inside it could not be audited (PS3.15 E.3.10 vouches for the Attribute, not for a Data Set nested in its value; E.1.1). REMOVED rather than retained. The byte count is withheld; see report.unenumerablePrivateRemovals.",
   // Deliberately short. One of these is raised per un-auditable element, so a
   // long message is multiplied by an element count the input controls; the
   // reasoning belongs in the docs, not in a string repeated thousands of times.
@@ -1453,20 +1455,30 @@ export function embeddedAttributeRemoved(
 /**
  * Build a `DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE` warning. Emitted by
  * `deidentify()` - never by the parser - when a private data element a
- * {@link Profile} vouched for under `RetainSafePrivate` is **kept, value
- * unchanged**, and nothing in the run enumerated what that value encodes.
+ * {@link Profile} vouched for under `RetainSafePrivate` is **removed** because
+ * nothing in the run enumerated what its value encodes.
  *
- * ## Why a third code rather than one of the two below
+ * ## 🛑 THE CODE IS UNCHANGED AND ITS MEANING IS NOT: "shipped unexamined"
+ * BECAME "removed unexamined"
  *
- * Its siblings report a value this run **dropped**. This one reports a value
- * this run **shipped**, on a file that may be entirely conformant, under
- * `(0012,0062) Patient Identity Removed = YES`. Reusing
- * `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` would have told a caller their nested
- * Data Set was emptied while it is byte-for-byte in the output, which is the
- * false-audit class this module has been refused for before. The **report**
- * channel is shared - one {@link UnauditableSequenceFinding}, discriminated by
- * its `applied` field - because the finding is the same fact; the message could
- * not be, because it states an action.
+ * Through `0.0.19` this reported a value the run **kept** verbatim, on a file
+ * that may be entirely conformant, under `(0012,0062) Patient Identity Removed =
+ * YES`. That was a disclosure rather than a remedy and it is not what the run
+ * does any more: the instance is removed, named in `report.removedPrivateTags`,
+ * and recorded with its reason in `report.unenumerablePrivateRemovals`. The code
+ * NAME is deliberately kept, so a consumer narrowing on it keeps compiling and
+ * the package's published warning-code set does not move; the message states the
+ * outcome outright so that re-reading it is enough.
+ *
+ * ## Why not one of the two codes below
+ *
+ * Its siblings report a value this run **emptied** - an element with that tag is
+ * still in the output carrying nothing. This one reports an attribute that is
+ * **gone**, which is a different fact for a caller diffing an object or
+ * reconciling an audit, and the report channels differ with it: those two share
+ * {@link UnauditableSequenceFinding}, this one has
+ * {@link UnenumerablePrivateRemoval}, which is uncapped where the findings are
+ * capped.
  *
  * ## What raises it, and why the predicate has no content test in it
  *
@@ -1476,9 +1488,11 @@ export function embeddedAttributeRemoved(
  * inside its value - PS3.5 2026c section 7.5.1 says an Item Value "shall contain
  * a DICOM Data Set composed of Data Elements", and PS3.15 section E.1.1 obliges
  * the de-identifier over the Attributes in Table E.1-1 "whether contained in the
- * top level Data Set or embedded in an Item of a Sequence of Items". So a
- * retained private value this run did not walk carries an obligation it did not
- * discharge, and this code says exactly that and nothing more.
+ * top level Data Set or embedded in an Item of a Sequence of Items". A value
+ * nothing enumerated is therefore not known to be safe, and E.3.10's other
+ * branch - "all other Private Attributes shall be removed **or processed in the
+ * element-specific manner recommended by Deidentification Action (0008,0307)**"
+ * - is the one available here, since `(0008,0307)` is not implemented.
  *
  * **The embedded-attribute scanner's silence is NOT a clearance and this code
  * does not treat it as one.** That scan answers a much narrower question - does
@@ -1487,19 +1501,20 @@ export function embeddedAttributeRemoved(
  * repertoire - so a nested Data Set written in another transfer syntax, or
  * holding no Table E.1-1 row, passes it untouched on a string carrier as
  * readily as on a binary one. A predicate keyed on "the scanner could not read
- * it" would therefore have left cells silent that leak, which is measured in
+ * it" would therefore have left cells silent that leaked, which is measured in
  * `test/integration/deident-private-reservation.test.ts`. The predicate is
- * "this run kept the value and never enumerated it", which is a fact about what
- * the run did rather than an inference from the bytes - so there is no scan, no
- * cost that grows with an attacker-chosen value length, and nothing to be wrong
- * about.
+ * "this run did not enumerate the value", which is a fact about what the run did
+ * rather than an inference from the bytes - so there is no scan, no cost that
+ * grows with an attacker-chosen value length, and nothing to be wrong about.
  *
  * **It therefore fires on ordinary, harmless vendor values too, and that is the
- * honest reading rather than a defect.** A caller who passes
- * `retain: ["RetainSafePrivate"]` and a `Profile` is asking this package to ship
- * values it has no table for; the code is the disclosure that it did so. It
+ * size of the trade rather than a defect.** A caller who passes
+ * `retain: ["RetainSafePrivate"]` and a `Profile` is asking this package to keep
+ * values it has no table for, and it keeps only the three it can account for: a
+ * value it walked as Data Elements, a Private Creator its dictionary matched,
+ * and a zero-length value. Everything else is over-redacted deliberately. It
  * costs nothing on a run without that option, because then no private value is
- * kept at all.
+ * retained at all.
  *
  * **🩺 NO BYTE COUNT, AND THE SHAPE IS COPIED FROM ITS SIBLINGS DELIBERATELY.**
  * `Element.rawBytes.length` equals the Value Length off the element header, and

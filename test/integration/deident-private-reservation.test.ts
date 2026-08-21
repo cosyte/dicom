@@ -102,7 +102,7 @@ import { Buffer } from "node:buffer";
 
 import { describe, expect, it } from "vitest";
 
-import type { DeidentifyOptions } from "../../src/deident/types.js";
+import type { DeidentifyOptions, UnenumerablePrivateRemoval } from "../../src/deident/types.js";
 import {
   Dataset,
   DicomParseError,
@@ -161,6 +161,23 @@ const nameEl = { tag: "00100010", vr: "PN" as const, value: ascii("ROOT^PATIENT"
 
 interface Outcome {
   readonly removedPrivateTags: readonly string[];
+  /**
+   * The tags of `report.unenumerablePrivateRemovals`, and **the field that keeps
+   * every over-removal control in this file discriminating** now that a vouched
+   * carrier whose value nothing walked is removed rather than kept.
+   *
+   * Before that change a control asserted "the value ships" against "the value
+   * goes", and the two mechanisms were told apart by the bytes. They are told
+   * apart here instead, and more sharply: a reservation this run REFUSED puts
+   * the tag in `removedPrivateTags` with **nothing** here (the Basic Profile
+   * removed it, per PS3.15 §E.3.10's "all other Private Attributes"), while a
+   * reservation it ACCEPTED and then could not enumerate puts the tag in both,
+   * with a reason. A remedy that broke the reservation rule would empty this
+   * array on exactly the files these controls are about.
+   */
+  readonly unenumerable: readonly string[];
+  /** The whole removal record, for the tests that assert its per-instance shape. */
+  readonly unenumerableEntries: readonly UnenumerablePrivateRemoval[];
   readonly secretInOutput: boolean;
   readonly rootPrivateInOutput: boolean;
   readonly identityRemoved: string | undefined;
@@ -173,6 +190,8 @@ function run(buf: Buffer, options: DeidentifyOptions = GE_RETAIN): Outcome {
   const bytes = serializeDicom(dataset);
   return {
     removedPrivateTags: report.removedPrivateTags,
+    unenumerable: report.unenumerablePrivateRemovals.map((r) => r.tag),
+    unenumerableEntries: report.unenumerablePrivateRemovals,
     secretInOutput: bytes.includes(ascii(SECRET)),
     rootPrivateInOutput: bytes.includes(ascii(ROOT_PRIVATE)),
     identityRemoved: dataset.get("00120062")?.rawBytes.toString("latin1").trimEnd(),
@@ -293,27 +312,55 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
     });
   });
 
+  /**
+   * 🛑 **THESE CONTROLS NOW READ "the reservation was ACCEPTED", NOT "the value
+   * ships".** An ordinary vendor scalar a profile vouches for is removed since
+   * `DICOM-DEIDENT-UNENUMERATED-PRIVATE`, because nothing enumerated its value,
+   * so "the value is in the output" is no longer available as the control for a
+   * reservation this rule must not break. The discriminator is
+   * `report.unenumerablePrivateRemovals`: a reservation this run REFUSED removes
+   * the tag with no entry there, an accepted one that could not be enumerated
+   * removes it WITH an entry. Weaken that to `removedPrivateTags` alone and
+   * every test in this block passes against a guard that refuses every
+   * reservation, which is exactly the degeneration they exist to catch.
+   */
   describe("what must NOT change - the over-removal controls", () => {
     it.each([
       ["Explicit VR LE", EXPLICIT_LE],
       ["Explicit VR BE", EXPLICIT_BE],
       ["Implicit VR LE", IMPLICIT_LE],
-    ])("%s: a conformant reservation inside an Item is still retained", (_label, ts) => {
+    ])("%s: a conformant reservation inside an Item is still accepted", (_label, ts) => {
       const out = run(bothInItem(ts));
 
-      expect(out.removedPrivateTags).toEqual([]);
-      expect(out.secretInOutput).toBe(true);
+      // The value goes, because nothing walked it. What the reservation rule
+      // must not do is refuse the block: the removal is recorded as
+      // unenumerable, from inside the Item it lived in.
+      expect(out.secretInOutput).toBe(false);
+      expect(out.unenumerableEntries).toEqual([
+        {
+          tag: PRIVATE_TAG,
+          applied: "removed",
+          reason: "unenumerable",
+          contextPath: [`${CARRIER}[0]`],
+        },
+      ]);
+      // The creator itself is enumerated - its whole decoded value is a member
+      // of the profile's dictionary - so it is retained and never recorded.
+      expect(out.removedPrivateTags).toEqual([PRIVATE_TAG]);
     });
 
     it("a file whose two length fields lie by the SAME amount does not contradict itself", () => {
       // The Item's declared end still coincides with the sequence's declared end,
       // so this is a conformant file that simply puts both elements in the Item.
-      // A remedy keyed on "any non-zero delta" would empty it; this one does not.
+      // A remedy keyed on "any non-zero delta" would refuse the reservation; this
+      // one does not, and the removal below says `unenumerable` rather than
+      // reading as a refusal.
       const delta = wireSize(SECRET);
       const out = run(creatorInItem(EXPLICIT_LE, delta, delta));
 
-      expect(out.removedPrivateTags).toEqual([]);
-      expect(out.secretInOutput).toBe(true);
+      expect(out.removedPrivateTags).toEqual([PRIVATE_TAG]);
+      expect(out.unenumerable).toEqual([PRIVATE_TAG]);
+      expect(out.secretInOutput).toBe(false);
     });
 
     it("a root reservation the sender wrote at the root survives an over-running sequence", () => {
@@ -338,8 +385,14 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       });
       const out = run(buf);
 
-      expect(out.removedPrivateTags).toEqual([]);
-      expect(out.secretInOutput).toBe(true);
+      // The root's own reservation is untouched by the sequence's lie: the
+      // removal that follows is the unenumerable one, at the root (no
+      // `contextPath`), not a refusal of the block.
+      expect(out.removedPrivateTags).toEqual([PRIVATE_TAG]);
+      expect(out.unenumerableEntries).toEqual([
+        { tag: PRIVATE_TAG, applied: "removed", reason: "unenumerable" },
+      ]);
+      expect(out.secretInOutput).toBe(false);
     });
 
     it("Implicit VR LE is untouched: its item stream is sliced, so no Item can over-run", () => {
@@ -347,6 +400,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       const honest = run(creatorInItem(IMPLICIT_LE, 0));
 
       expect(lying.removedPrivateTags).toEqual(honest.removedPrivateTags);
+      expect(lying.unenumerable).toEqual(honest.unenumerable);
       expect(lying.secretInOutput).toBe(false);
       expect(honest.secretInOutput).toBe(false);
     });
@@ -376,7 +430,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       expect(out.secretInOutput).toBe(false);
     });
 
-    it("the same nesting with no length lie retains it", () => {
+    it("the same nesting with no length lie accepts the reservation", () => {
       const buf = buildDicom({
         transferSyntax: EXPLICIT_LE,
         elements: [
@@ -394,8 +448,18 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       });
       const out = run(buf);
 
-      expect(out.removedPrivateTags).toEqual([]);
-      expect(out.secretInOutput).toBe(true);
+      // Two levels down, the reservation is real and is accepted; the value goes
+      // for being unenumerable, and the record names the Data Set it was in.
+      expect(out.removedPrivateTags).toEqual([PRIVATE_TAG]);
+      expect(out.unenumerableEntries).toEqual([
+        {
+          tag: PRIVATE_TAG,
+          applied: "removed",
+          reason: "unenumerable",
+          contextPath: [`${CARRIER}[0]`, "00089215[0]"],
+        },
+      ]);
+      expect(out.secretInOutput).toBe(false);
     });
   });
 
@@ -456,17 +520,24 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
         });
 
       // Control first: the profile really does vouch for this tag, so the test
-      // below cannot pass vacuously.
+      // below cannot pass vacuously. Vouching no longer means the value ships -
+      // nothing walked it, so it is removed - and the control is that the
+      // removal is the UNENUMERABLE one rather than a refused reservation.
       const conformant = parseDicom(
         buildDicom({
           transferSyntax: EXPLICIT_LE,
           elements: [nameEl, siemensCreator, siemensPrivate] as never,
         }),
       );
-      expect(deidentify(conformant, opts).report.removedPrivateTags).toEqual([]);
+      const vouched = deidentify(conformant, opts).report;
+      expect(vouched.unenumerablePrivateRemovals.map((r) => r.tag)).toEqual(["00291009"]);
 
       const out = run(build(wireSize(SECRET)), opts);
       expect(out.removedPrivateTags).toContain("00291009");
+      // The disputed file's removal is a REFUSAL, so it carries no record entry:
+      // the reservation was never accepted, and that is the difference this test
+      // is about.
+      expect(out.unenumerable).toEqual([]);
       expect(out.secretInOutput).toBe(false);
     });
   });
@@ -601,15 +672,22 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
           elements: [nameEl, creatorEl, secretEl] as never,
         }),
       );
-      expect(conformant.removedPrivateTags).toEqual([]);
-      expect(conformant.secretInOutput).toBe(true);
+      // ACCEPTED, which is the property this control needs: the removal that
+      // follows is the unenumerable one and not a refused reservation. The
+      // creator stays, so `RetainSafePrivate` + `profiles.ge` demonstrably
+      // reaches a retention decision under this transfer syntax.
+      expect(conformant.unenumerable).toEqual([PRIVATE_TAG]);
+      expect(conformant.removedPrivateTags).toEqual([PRIVATE_TAG]);
+      expect(conformant.secretInOutput).toBe(false);
 
       const honest = run(build(0));
       expect(honest.removedPrivateTags).toEqual([PRIVATE_TAG]);
+      expect(honest.unenumerable).toEqual([]);
       expect(honest.secretInOutput).toBe(false);
 
       const lying = run(build(-wireSize(CREATOR)));
       expect(lying.removedPrivateTags).toEqual([CREATOR_TAG, PRIVATE_TAG]);
+      expect(lying.unenumerable).toEqual([]);
       expect(lying.secretInOutput).toBe(false);
       expect(lying.parseWarnings).toContain("DICOM_SQ_NOT_DESCENDED");
     });
@@ -713,16 +791,27 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
           });
 
         // Control: no lie, so the Item's copy stays inside the Item and the
-        // root's own reservation is retained with its own value intact.
-        // The Item's own copy has no creator inside the Item, so it is removed
-        // on both files; the root's own reservation is what differs.
+        // root's own reservation is ACCEPTED.
+        //
+        // 🩺 AND THIS IS THE PER-INSTANCE SHAPE, MEASURED. Both Data Sets hold
+        // `(0009,1001)` and the two are judged separately: the Item's copy has
+        // no creator inside the Item, so it is REFUSED and removed with no
+        // record entry, while the root's copy is vouched for, could not be
+        // enumerated, and is removed WITH one - at the root, so with no
+        // `contextPath`. One tag, two occurrences, two different reasons.
         const honest = run(build(0, 0));
-        expect(honest.removedPrivateTags).toEqual([PRIVATE_TAG]);
+        expect(honest.removedPrivateTags).toEqual([PRIVATE_TAG, PRIVATE_TAG]);
+        expect(honest.unenumerableEntries).toEqual([
+          { tag: PRIVATE_TAG, applied: "removed", reason: "unenumerable" },
+        ]);
         expect(honest.secretInOutput).toBe(false);
-        expect(honest.rootPrivateInOutput).toBe(true);
+        expect(honest.rootPrivateInOutput).toBe(false);
 
         const lying = run(build(sqDelta, itemDelta));
         expect(lying.removedPrivateTags).toEqual([PRIVATE_TAG]);
+        // The ejected element is refused rather than judged, so nothing is
+        // recorded as unenumerable on this row.
+        expect(lying.unenumerable).toEqual([]);
         expect(lying.secretInOutput).toBe(false);
         // The substitution, pinned rather than described: the root's own value
         // is gone from the parsed object before `deidentify()` is ever called,
@@ -808,11 +897,16 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
         });
 
       const honest = run(build(0));
-      expect(honest.removedPrivateTags).toEqual([]);
-      expect(honest.secretInOutput).toBe(true);
+      // Accepted: the reservation is real and the removal is the unenumerable
+      // one, so the creator survives beside it.
+      expect(honest.removedPrivateTags).toEqual([PRIVATE_TAG]);
+      expect(honest.unenumerable).toEqual([PRIVATE_TAG]);
+      expect(honest.secretInOutput).toBe(false);
 
       const lying = run(build(wireSize("MR")));
+      // Refused: the creator goes too, and nothing is recorded as unenumerable.
       expect(lying.removedPrivateTags).toEqual([CREATOR_TAG, PRIVATE_TAG]);
+      expect(lying.unenumerable).toEqual([]);
       expect(lying.secretInOutput).toBe(false);
     });
   });
@@ -988,15 +1082,27 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
         });
 
       // §7.8.1-conformant: the Item carries its own Private Creator, so the
-      // reservation is real inside the Item and the value is retained. This row
-      // is what stops the remedy from being "empty every private sequence".
+      // reservation is real inside the Item and the nested element is judged
+      // rather than refused. Its value goes for being unenumerable - nothing
+      // walked a `SH` scalar - and the record says so from inside the Item.
       const conformant = run(build(true));
-      expect(conformant.removedPrivateTags).toEqual([]);
-      expect(conformant.secretInOutput).toBe(true);
+      expect(conformant.removedPrivateTags).toEqual(["00091002"]);
+      expect(conformant.unenumerableEntries).toEqual([
+        {
+          tag: "00091002",
+          applied: "removed",
+          reason: "unenumerable",
+          contextPath: [`${PRIVATE_TAG}[0]`],
+        },
+      ]);
+      expect(conformant.secretInOutput).toBe(false);
 
-      // Reserved only at the root: the Item never had that block, so it goes.
+      // Reserved only at the root: the Item never had that block, so it is
+      // REFUSED - removed with no record entry, which is the difference this
+      // test is pinning.
       const inherited = run(build(false));
       expect(inherited.removedPrivateTags).toEqual(["00091002"]);
+      expect(inherited.unenumerable).toEqual([]);
       expect(inherited.secretInOutput).toBe(false);
     });
 
@@ -1182,11 +1288,16 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
         readonly declaredLength: number | undefined;
         readonly rawLength: number | undefined;
         readonly keptVerbatim: boolean;
+        /** `undefined` when the Data Set holds no element bearing that tag at all. */
         readonly outputLength: number | undefined;
+        /** AC4's distinction: an element present with a zero-length value is EMPTIED, not removed. */
+        readonly present: boolean;
         readonly leaks: boolean;
         readonly identityRemoved: string | undefined;
         readonly unauditable: readonly string[];
         readonly unauditableApplied: readonly string[];
+        readonly removals: readonly UnenumerablePrivateRemoval[];
+        readonly removedPrivateTags: readonly string[];
         readonly parseCodes: readonly string[];
         readonly deidCodes: readonly string[];
         readonly deidMessages: readonly string[];
@@ -1231,10 +1342,13 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
           // the SAME BYTES the file carried, nested Patient's Name and all.
           keptVerbatim: out?.rawBytes.equals(itemStream) ?? false,
           outputLength: out?.rawBytes.length,
+          present: out !== undefined,
           leaks: serializeDicom(dataset).toString("latin1").includes(NESTED_NAME),
           identityRemoved: dataset.get("00120062")?.rawBytes.toString("latin1").trimEnd(),
           unauditable: report.unauditableSequences.map((f) => f.tag),
           unauditableApplied: report.unauditableSequences.map((f) => f.applied),
+          removals: report.unenumerablePrivateRemovals,
+          removedPrivateTags: report.removedPrivateTags,
           parseCodes: ds.warnings.map((w) => w.code),
           // The de-identify channel. It is NOT `ds.warnings` and never was:
           // `deidentify()` builds the output object with the SOURCE dataset's
@@ -1291,13 +1405,17 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
         );
       }
 
-      // 🩺 THE SECOND NEGATIVE CONTROL, AND THE ONE THAT PROVES THE NEW CODE IS
-      // NOT SIMPLY "always". These five cells are retained private carriers too,
-      // reached by the identical route with the identical options - and the
-      // embedded-attribute scanner READ their values and emptied them, so this
-      // run did not keep anything unexamined and says nothing about them on the
-      // new channel. A detector that fires on every cell measures nothing.
-      const scannerCaught = cells.filter((cell) => !cell.leaks && !cell.key.startsWith("decl=SQ "));
+      // 🩺 THE SECOND NEGATIVE CONTROL, AND THE ONE THAT PROVES THE REMOVAL RULE
+      // IS NOT SIMPLY "always". These five cells are vouched-for private
+      // carriers too, reached by the identical route with the identical
+      // options - and the embedded-attribute scanner READ their values and
+      // EMPTIED them before the removal rule could be reached. No value of
+      // theirs is in the output either, so they are outside the class this slice
+      // converts, and they keep the code and the outcome they always had. A rule
+      // that fired on every cell would measure nothing.
+      const scannerCaught = cells.filter(
+        (cell) => cell.present && !cell.key.startsWith("decl=SQ "),
+      );
       expect(scannerCaught.map((cell) => cell.key).sort()).toEqual([
         "decl=LO wire=LO ELE",
         "decl=OB wire=LO ELE",
@@ -1306,7 +1424,9 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
         "decl=UN wire=LO ELE",
       ]);
       for (const cell of scannerCaught) {
+        expect(cell.outputLength, cell.key).toBe(0);
         expect(cell.unauditable, cell.key).toEqual([]);
+        expect(cell.removals, cell.key).toEqual([]);
         expect(cell.deidCodes, cell.key).toContain(
           WARNING_CODES.DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED,
         );
@@ -1315,15 +1435,14 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
         );
       }
 
-      // 🩺 THE RESIDUAL, AS A MEASURED SET. Every cell not listed here keeps the
-      // carrier VERBATIM - byte-identical to the file's own value - so the nested
-      // `(0010,0010)` ships into output under a `(0012,0062) Patient Identity
-      // Removed = YES` stamp. The non-`SQ` rows that do NOT leak are exactly the
-      // ones the embedded-attribute scanner could read AND caught: a parsed VR
-      // that is a string carrier, under the encoding the tiles were written for.
-      // That is a content test, and it is the only thing standing between a
-      // retained private value and output.
-      const emptied = cells.filter((cell) => !cell.leaks);
+      // 🩺 THE EMPTIED SET, AS A MEASURED SET, AND IT IS UNCHANGED BY THIS
+      // SLICE. These ten cells leave an element bearing the tag in the output
+      // carrying a ZERO-LENGTH value: the five the profile declares `SQ`, and
+      // the five the embedded-attribute scanner could read and caught. They are
+      // NOT removals, and AC4's distinction is exactly that - `present` is still
+      // true here, so a reader of this matrix can tell an intentional
+      // zero-length residual from a missed removal.
+      const emptied = cells.filter((cell) => cell.present && cell.outputLength === 0);
       expect(emptied.map((cell) => cell.key).sort()).toEqual([
         "decl=LO wire=LO ELE",
         "decl=OB wire=LO ELE",
@@ -1336,44 +1455,73 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
         "decl=ST wire=LO ELE",
         "decl=UN wire=LO ELE",
       ]);
+      for (const cell of emptied) {
+        // No value of theirs reached the output before this slice either, so
+        // none of them is in the removal record: the class this slice converts
+        // is the one that SHIPPED a value.
+        expect(cell.removals, cell.key).toEqual([]);
+      }
 
-      // 🛑 THE 20 LEAKING CELLS ARE STILL LEAKING, AND THEY ARE NO LONGER
-      // SILENT. Those are two different facts and this block asserts both, in
-      // that order, because a later slice that "fixes" the first one has to
-      // change a decision that was taken rather than a test that was lax:
-      // emptying these carriers needs a content test on exactly the VRs
-      // arbitrary bytes are for, so it also empties conformant binary values on
-      // legitimate files (`DICOM-DEIDENT-OVER-REDACTION`). Weighed, and refused.
+      // 🛑 THE 20 CELLS THAT SHIPPED THE NESTED NAME ARE NOW REMOVALS. Every one
+      // of them kept the carrier VERBATIM under `(0012,0062) = YES` through
+      // `0.0.19`, with the run disclosing that it had done so; the attribute is
+      // gone now, and the record says removed-for-being-unenumerable.
       //
-      // 🩺 AND THE PREDICATE IS "THIS RUN KEPT THE VALUE", NOT "THE SCANNER
-      // COULD NOT READ IT". Two of these twenty - `decl=LO ILE` and
-      // `decl=ST ILE` - are perfectly SCANNABLE string carriers whose values the
-      // scanner did read and found nothing in, because the nested tiles are
-      // Explicit VR and the file is Implicit. A predicate keyed on the scanner's
-      // reach would leave exactly those two silent while they leak, which is why
-      // it is keyed on what the run DID instead.
-      const leaking = cells.filter((cell) => cell.leaks);
-      expect(leaking).toHaveLength(20);
+      // 🩺 THE PREDICATE IS "THIS RUN DID NOT ENUMERATE THE VALUE", NOT "THE
+      // SCANNER COULD NOT READ IT" AND NOT THE VR. Two of these twenty -
+      // `decl=LO ILE` and `decl=ST ILE` - are perfectly SCANNABLE string
+      // carriers whose values the scanner did read and found nothing in, because
+      // the nested tiles are Explicit VR and the file is Implicit. A rule keyed
+      // on the scanner's reach would leave exactly those two shipping. And the
+      // set spans every declared VR including `LO` and `ST`, so a rule keyed on
+      // binary VRs would leave them shipping too.
+      const removed = cells.filter((cell) => !cell.present);
+      expect(removed).toHaveLength(20);
       expect(
-        leaking.filter(
+        removed.filter(
           (cell) =>
             cell.key === "decl=LO ILE (no wire VR)" || cell.key === "decl=ST ILE (no wire VR)",
         ),
       ).toHaveLength(2);
-      for (const cell of leaking) {
-        // Unchanged, and deliberately: the leak is NOT closed by this slice.
-        expect(cell.keptVerbatim, cell.key).toBe(true);
+      // Every declared VR the profile can carry that is not `SQ` is in this set,
+      // string VRs included: a rule keyed on binary VRs would leave `LO` and
+      // `ST` shipping, and the deleted prose enumeration named exactly those.
+      expect(
+        new Set(removed.map((cell) => cell.key.slice("decl=".length, "decl=".length + 2))),
+      ).toEqual(new Set(["OB", "OW", "UN", "LO", "ST"]));
+      for (const cell of removed) {
+        // THE FLIP. Was `keptVerbatim: true` with the nested name in the output
+        // on every one of these twenty cells.
+        expect(cell.keptVerbatim, cell.key).toBe(false);
+        expect(cell.outputLength, cell.key).toBeUndefined();
         expect(cell.identityRemoved, cell.key).toBe("YES");
         // Unchanged: the file is conformant, so the PARSE still says nothing.
         // Adding a Tier-2 code here would throw under `{ strict: true }` on a
         // conformant file, which this package does not do.
         expect(cell.parseCodes, cell.key).toEqual([]);
-        // THE FLIP. Was `[]` on every one of these twenty cells.
-        expect(cell.unauditable, cell.key).toEqual([PRIVATE_TAG]);
-        expect(cell.unauditableApplied, cell.key).toEqual(["kept"]);
+        // The findings array no longer carries this class at all - it is not
+        // "emptied" and there is no "kept" outcome to carry it.
+        expect(cell.unauditable, cell.key).toEqual([]);
+        expect(cell.unauditableApplied, cell.key).toEqual([]);
+        // The removal record is where the duty is discharged, per instance, with
+        // the reason on it and no `contextPath` because the carrier is at the
+        // root of these files.
+        expect(cell.removals, cell.key).toEqual([
+          { tag: PRIVATE_TAG, applied: "removed", reason: "unenumerable" },
+        ]);
+        // ...and the pin's own private removal list still names it, unchanged in
+        // meaning: every removed private tag, whichever rule removed it.
+        expect(cell.removedPrivateTags, cell.key).toEqual([PRIVATE_TAG]);
         expect(cell.deidCodes, cell.key).toContain(
           WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE,
         );
+      }
+
+      // 🛑 AND THE WHOLE POINT, ON EVERY CELL OF THE MATRIX AT ONCE: the nested
+      // `(0010,0010)` bytes are in NO cell's serialized output, by removal on
+      // twenty cells and by emptying on ten.
+      for (const cell of cells) {
+        expect(cell.leaks, cell.key).toBe(false);
       }
 
       // 🛑 A DIAGNOSTIC ABOUT A PHI LEAK IS ITSELF A PHI SURFACE, and this
@@ -1395,8 +1543,90 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       // Non-vacuity for the sweep above: the payload really is what the messages
       // are about, and a message really is being produced to sweep.
       expect(
-        leaking.flatMap((cell) => cell.deidMessages).filter((m) => m.includes("<withheld>")).length,
+        removed.flatMap((cell) => cell.deidMessages).filter((m) => m.includes("<withheld>")).length,
       ).toBeGreaterThan(0);
+    });
+
+    it("THE MUTATION CONTROL: reverting the retention decision reds the matrix's own assertions", () => {
+      // 🛑 THE MATRIX ABOVE IS SATISFIABLE BY AN ASSERTION EDIT AND THIS TEST IS
+      // WHY IT IS NOT SATISFIED BY ONE. It takes the acceptance predicate the
+      // matrix applies to each of its twenty converted cells, feeds it the
+      // outcome the package produced BEFORE this slice - the carrier retained,
+      // its value verbatim in the output, and no removal recorded - and requires
+      // that predicate to THROW. If the retention decision is ever reverted, the
+      // matrix reds; if the matrix's assertions are ever weakened to something a
+      // retained carrier also satisfies, this test reds instead.
+      //
+      // The mutant is reconstructed from the real run rather than hand-written:
+      // the source element is put back into the de-identified object, which is
+      // exactly what "retain it" did, and the record it never wrote is the empty
+      // array. Nothing about the fixture, the profile or the parse changes.
+      const NESTED_NAME = "BOND^JAMES";
+      const itemStream = ((): Buffer => {
+        const body = Buffer.concat([
+          Buffer.from([0x10, 0x00, 0x10, 0x00]),
+          Buffer.from("PN", "ascii"),
+          Buffer.from([NESTED_NAME.length, 0x00]),
+          Buffer.from(NESTED_NAME, "ascii"),
+        ]);
+        const header = Buffer.alloc(8);
+        header.writeUInt16LE(0xfffe, 0);
+        header.writeUInt16LE(0xe000, 2);
+        header.writeUInt32LE(body.length, 4);
+        return Buffer.concat([header, body]);
+      })();
+      const profile = defineProfile({
+        name: "acme-mutation-control",
+        description: "Synthetic vendor block, honest Value Length, declared OB.",
+        privateTags: { ACME: { "0009XX01": { vr: "OB", keyword: "AcmeBlob", name: "Acme Blob" } } },
+      });
+      const buf = buildDicom({
+        transferSyntax: EXPLICIT_LE,
+        elements: [
+          nameEl,
+          { tag: "00090010", vr: "LO", value: ascii("ACME") },
+          { tag: PRIVATE_TAG, vr: "OB", value: itemStream },
+        ],
+      });
+
+      /** The matrix's acceptance predicate for a converted cell, applied to one run. */
+      const acceptRemoved = (
+        object: Dataset,
+        removals: readonly UnenumerablePrivateRemoval[],
+      ): void => {
+        expect(object.get(PRIVATE_TAG)).toBeUndefined();
+        expect(serializeDicom(object).toString("latin1")).not.toContain(NESTED_NAME);
+        expect(removals).toEqual([
+          { tag: PRIVATE_TAG, applied: "removed", reason: "unenumerable" },
+        ]);
+      };
+
+      const ds = parseDicom(buf, { profile });
+      const source = ds.get(PRIVATE_TAG);
+      if (source === undefined) throw new Error("fixture must carry the private carrier");
+      const { dataset, report } = deidentify(ds, { retain: ["RetainSafePrivate"], profile });
+
+      // The current decision passes the predicate.
+      acceptRemoved(dataset, report.unenumerablePrivateRemovals);
+
+      // The reverted decision: the same run, with the retention put back.
+      const fileMeta = dataset.fileMeta;
+      const mutant = new Dataset({
+        warnings: dataset.warnings,
+        elements: new Map([
+          ...dataset.elements().map((el) => [el.tag, el] as const),
+          [PRIVATE_TAG, source] as const,
+        ]),
+        ...(fileMeta !== undefined ? { fileMeta } : {}),
+      });
+      // Non-vacuity: retaining it really does put the nested name back on the
+      // wire, so the mutant is the leak and not merely a different object.
+      expect(serializeDicom(mutant).toString("latin1")).toContain(NESTED_NAME);
+      expect(mutant.get("00120062")?.rawBytes.toString("latin1").trimEnd()).toBe("YES");
+
+      expect(() => {
+        acceptRemoved(mutant, []);
+      }).toThrow();
     });
 
     it("a FABRICATED header keeps the tag-free diagnostic only when its VR is outside the 34", () => {
@@ -1609,30 +1839,35 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       expect(WARNING_MESSAGES.DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE).toContain("{tag}");
     });
 
-    it("the rule empties only what the profile declares SQ - a declared LO is still kept verbatim", () => {
-      // The control that stops the remedy degenerating into "empty every
-      // retained private element". `profiles.ge` documents `(0009,xx01)` as
-      // `LO`, the file writes `LO`, and the value ships exactly as before.
-      // Without this row the two above would pass against a guard that emptied
-      // everything `RetainSafePrivate` touches.
+    it("a declared LO the profile vouches for is REMOVED, and emptying stays reserved for a declared SQ", () => {
+      // 🛑 THE ORDINARY VENDOR VALUE, AND THE SIZE OF THIS SLICE IN ONE ROW.
+      // `profiles.ge` documents `(0009,xx01)` as `LO`, the file writes `LO`,
+      // there is nothing hidden in the value, and it is REMOVED - because
+      // nothing enumerated it, and decoding a value under the VR the profile
+      // resolved is not enumeration. Through `0.0.19` it shipped with a
+      // disclosure. A reader looking for the cost of this change should read
+      // this test first: it is not a corner of `RetainSafePrivate`, it is nearly
+      // all of it.
+      //
+      // What the row still controls is that removal and EMPTYING stay different
+      // outcomes: this carrier is gone, while a declared `SQ` leaves a
+      // zero-length element behind (the tests above).
       const buf = buildDicom({
         transferSyntax: EXPLICIT_LE,
         elements: [nameEl, creatorEl, secretEl],
       });
       const ds = parseDicom(buf);
       const { dataset, report } = deidentify(ds, GE_RETAIN);
-      expect(serializeDicom(dataset).includes(ascii(SECRET))).toBe(true);
-      expect(report.removedPrivateTags).toEqual([]);
+      expect(serializeDicom(dataset).includes(ascii(SECRET))).toBe(false);
+      expect(dataset.get(PRIVATE_TAG)).toBeUndefined();
+      expect(report.removedPrivateTags).toEqual([PRIVATE_TAG]);
 
-      // 🩺 IT IS KEPT, AND IT IS NOW SAID OUT LOUD. Nothing above changed: the
-      // value ships, which is what this control exists to hold. What is added is
-      // that the run no longer implies it audited it. This is the ORDINARY
-      // vendor value - a conformant `LO` with nothing hidden in it - so the code
-      // firing here is not a false positive, it is the scope: `RetainSafePrivate`
-      // asks this package to ship values it has no table for, and the report says
-      // so once per value rather than pretending to a scrub it never performed.
-      expect(report.unauditableSequences).toEqual([
-        { tag: PRIVATE_TAG, applied: "kept", byteLength: ascii(SECRET).length },
+      // The findings array is not where this is said - it carries dropped
+      // carriers that are still present as zero-length elements - and the
+      // removal record is.
+      expect(report.unauditableSequences).toEqual([]);
+      expect(report.unenumerablePrivateRemovals).toEqual([
+        { tag: PRIVATE_TAG, applied: "removed", reason: "unenumerable" },
       ]);
       expect(report.warnings.map((w) => w.code)).toContain(
         WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE,
@@ -1697,15 +1932,20 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
           ] as never,
         });
 
-      // Control: nobody lies, item 0's block is retained.
+      // Control: nobody lies, so item 0's block is ACCEPTED. Its value goes for
+      // being unenumerable, which is a different mechanism and says so.
       const honest = run(build(0));
-      expect(honest.removedPrivateTags).toEqual([]);
-      expect(honest.secretInOutput).toBe(true);
+      expect(honest.removedPrivateTags).toEqual([PRIVATE_TAG]);
+      expect(honest.unenumerable).toEqual([PRIVATE_TAG]);
+      expect(honest.secretInOutput).toBe(false);
 
       // `descendSequence` decides once for the whole sequence, so item 0 pays for
-      // item 1's lie. Disclosed as a cost, not defended as a virtue.
+      // item 1's lie: the block is REFUSED, the creator goes with it, and nothing
+      // is recorded as unenumerable. Disclosed as a cost, not defended as a
+      // virtue.
       const lying = run(build(wireSize("MR")));
       expect(lying.removedPrivateTags).toEqual([CREATOR_TAG, PRIVATE_TAG]);
+      expect(lying.unenumerable).toEqual([]);
       expect(lying.secretInOutput).toBe(false);
     });
 
@@ -1722,7 +1962,11 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
         elements: [nameEl, { tag: CARRIER, items: [{ elements: [creatorEl, secretEl] }] }] as never,
       });
       const ds = parseDicom(buf);
-      expect(deidentify(ds, GE_RETAIN).report.removedPrivateTags).toEqual([]);
+      // Honestly labelled: the reservation is ACCEPTED, so the only removal is
+      // the unenumerable one and the creator survives.
+      const honest = deidentify(ds, GE_RETAIN).report;
+      expect(honest.removedPrivateTags).toEqual([PRIVATE_TAG]);
+      expect(honest.unenumerablePrivateRemovals.map((r) => r.tag)).toEqual([PRIVATE_TAG]);
 
       const fileMeta = ds.fileMeta;
       if (fileMeta === undefined) throw new Error("fixture must carry File Meta");
@@ -1731,24 +1975,32 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
         elements: new Map(ds.elements().map((el) => [el.tag, el])),
         fileMeta: { ...fileMeta, transferSyntaxUID: IMPLICIT_LE },
       });
-      expect(deidentify(relabelled, GE_RETAIN).report.removedPrivateTags).toEqual([
-        CREATOR_TAG,
-        PRIVATE_TAG,
-      ]);
+      // Re-labelled: the block is REFUSED, which is the over-removal this test
+      // exists to disclose, and the empty record is how the two are told apart.
+      const mislabelled = deidentify(relabelled, GE_RETAIN).report;
+      expect(mislabelled.removedPrivateTags).toEqual([CREATOR_TAG, PRIVATE_TAG]);
+      expect(mislabelled.unenumerablePrivateRemovals).toEqual([]);
     });
   });
 });
 
 /**
- * `DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE` - the disclosure over a retained
- * private value this run kept without enumerating.
+ * `DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE` - the **removal** of a private
+ * value this run did not enumerate, and the record of it.
  *
- * 🛑 **THIS IS A DISCLOSURE, NOT A REMEDY, AND THE DISTINCTION IS THE WHOLE
- * SLICE.** The value still ships. Emptying it needs a content test on exactly
- * the VRs arbitrary bytes are for, which empties conformant binary values on
- * legitimate files (`DICOM-DEIDENT-OVER-REDACTION`) - weighed and refused. Every
- * assertion below that says "still in the output" is load-bearing: a later slice
- * that closes the leak has to change a decision, not delete a lax expectation.
+ * 🛑 **THE CODE IS THE PIN'S AND ITS MEANING IS NOT: "shipped unexamined"
+ * BECAME "removed unexamined".** Through `0.0.19` every assertion in this block
+ * said "still in the output" and the package called that a disclosure rather
+ * than a fix. The value is gone now, `report.unenumerablePrivateRemovals` says
+ * which attribute went and why, and the warning-code SET is unchanged - so a
+ * consumer narrowing on this code keeps compiling and has to re-read what it
+ * means.
+ *
+ * The price is over-redaction and it is not a corner of `RetainSafePrivate`:
+ * with the option plus a `Profile`, the values that still reach the output are a
+ * carrier the run walked as Data Elements, a Private Creator the profile's
+ * dictionary matched, and a zero-length value. Each of those three is pinned
+ * below, beside the classes that must NOT be recorded here.
  */
 describe("DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE", () => {
   const NESTED = "BOND^JAMES";
@@ -1786,11 +2038,14 @@ describe("DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE", () => {
   const codes = (report: { warnings: readonly { code: string }[] }): readonly string[] =>
     report.warnings.map((w) => w.code);
 
-  it("fires on the leaking shape, and the value it discloses is STILL in the output", () => {
+  it("REMOVES the leaking shape, in the returned dataset and in the serialized bytes", () => {
     // Non-vacuity by fixture: the payload is a real `(0010,0010)` carrying a real
     // name, and it is on the wire before either call. A PHI test whose payload
     // carries no name proves nothing.
     expect(itemStream.toString("latin1")).toContain(NESTED);
+    expect(serializeDicom(parseDicom(file, { profile: acme })).toString("latin1")).toContain(
+      NESTED,
+    );
 
     const ds = parseDicom(file, { profile: acme });
     const { dataset, report } = deidentify(ds, { retain: ["RetainSafePrivate"], profile: acme });
@@ -1801,17 +2056,32 @@ describe("DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE", () => {
     // file.
     expect(ds.warnings).toEqual([]);
 
-    // 🛑 THE LEAK IS OPEN. Byte-verbatim carrier, nested name in the serialized
-    // output, `(0012,0062) = YES`. Do not "fix" this expectation.
-    expect(dataset.get(PRIVATE_TAG)?.rawBytes.equals(itemStream)).toBe(true);
-    expect(serializeDicom(dataset).toString("latin1")).toContain(NESTED);
+    // 🛑 THE LEAK IS CLOSED, AND ON BOTH SURFACES A CALLER CAN SEE: no element
+    // bearing that tag in the returned Data Set, and none in the bytes. An
+    // element present with a zero-length value would NOT satisfy this.
+    expect(dataset.get(PRIVATE_TAG)).toBeUndefined();
+    expect(dataset.has(PRIVATE_TAG)).toBe(false);
+    expect(serializeDicom(dataset).toString("latin1")).not.toContain(NESTED);
     expect(dataset.get("00120062")?.rawBytes.toString("latin1").trimEnd()).toBe("YES");
+    // The Private Creator that reserved the block is untouched: the profile's
+    // dictionary matched its whole decoded value, which is an enumeration.
+    expect(dataset.get("00090010")?.rawBytes.toString("latin1").trimEnd()).toBe("ACME");
 
-    // ...and it is no longer silent, on BOTH channels.
+    // ...and it is recorded, on BOTH channels, as removed for being unenumerable
+    // rather than as retained.
     expect(codes(report)).toContain(WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE);
-    expect(report.unauditableSequences).toEqual([
-      { tag: PRIVATE_TAG, applied: "kept", byteLength: itemStream.length },
+    expect(report.unenumerablePrivateRemovals).toEqual([
+      { tag: PRIVATE_TAG, applied: "removed", reason: "unenumerable" },
     ]);
+    expect(report.removedPrivateTags).toEqual([PRIVATE_TAG]);
+    // 🩺 AC6's sweep, run over the whole report rather than over one field: no
+    // entry, no field and no message says a private value reached the output
+    // unenumerated. The retired `kept` outcome is the shape that did.
+    expect(report.unauditableSequences).toEqual([]);
+    expect(report.attributes.map((a) => a.tag)).not.toContain(PRIVATE_TAG);
+    expect(report.attributes.filter((a) => a.applied === "kept").map((a) => a.tag)).not.toContain(
+      PRIVATE_TAG,
+    );
 
     // The diagnostic is not itself a PHI surface: no payload, no run of it, and
     // not the byte count off the carrier's own header (`#91` bound that number
@@ -1834,37 +2104,180 @@ describe("DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE", () => {
     );
   });
 
-  it("stays QUIET when the same bytes are not retained - the mutation control", () => {
-    // The detector has to be able to be off. Same file, same parse; drop the
-    // option that makes this route reachable at all and the private element is
-    // REMOVED, so nothing is kept unexamined and nothing is said. A detector
-    // that reports on every run is a gap, not a clearance.
+  it("records NOTHING when the option is off or the profile is absent - every private tag goes anyway", () => {
+    // The record has to be able to be empty, and the two runs that empty it are
+    // the two that never reach a retention decision. `RetainSafePrivate` plus a
+    // `Profile` is the only route in this package that retains a private value,
+    // so with either missing the Basic Profile removes every private attribute
+    // and names it in `removedPrivateTags` - unchanged from the pin, and NOT
+    // recorded as unenumerable, because nothing was ever vouched for.
     const ds = parseDicom(file, { profile: acme });
 
     const noRetain = deidentify(ds, { profile: acme });
     expect(serializeDicom(noRetain.dataset).toString("latin1")).not.toContain(NESTED);
-    expect(noRetain.report.removedPrivateTags).toContain(PRIVATE_TAG);
+    expect(noRetain.report.removedPrivateTags).toEqual(["00090010", PRIVATE_TAG]);
+    expect(noRetain.report.unenumerablePrivateRemovals).toEqual([]);
     expect(noRetain.report.unauditableSequences).toEqual([]);
     expect(codes(noRetain.report)).not.toContain(
       WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE,
     );
 
     // And with the option but no profile: `keepsPrivate` has nothing to vouch
-    // with, so again nothing is retained and nothing is disclosed.
+    // with, so again nothing is retained and nothing is recorded here.
     const noProfile = deidentify(ds, { retain: ["RetainSafePrivate"] });
     expect(serializeDicom(noProfile.dataset).toString("latin1")).not.toContain(NESTED);
-    expect(noProfile.report.unauditableSequences).toEqual([]);
+    expect(noProfile.report.removedPrivateTags).toEqual(["00090010", PRIVATE_TAG]);
+    expect(noProfile.report.unenumerablePrivateRemovals).toEqual([]);
     expect(codes(noProfile.report)).not.toContain(
       WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE,
     );
   });
 
-  it("says nothing about a zero-length retained value, which encodes no Data Set", () => {
-    // The third of the three bounds the docs name, measured rather than
-    // asserted. It is also what keeps the audit a fixed point over an object
-    // some other rule already emptied: without it, a carrier emptied on run one
-    // is reported as a KEPT unexamined value on run two, which is a claim about
-    // content that is not there.
+  it("lets a caller separate the three outcomes FROM THE REMOVAL RECORD ALONE", () => {
+    // 🛑 THE GUARANTEE THE FAIL-SAFE'S AUDIT HALF IS BUILT ON. One file, three
+    // outcomes at once: an attribute the Annex E action table REMOVED, a private
+    // carrier this run EMPTIED, and a private instance removed for being
+    // UNENUMERABLE. A caller holding only `unenumerablePrivateRemovals` must be
+    // able to tell the third from the other two, which is why the entry carries
+    // both a `applied` and a `reason` rather than being a bare tag list.
+    const mixed = defineProfile({
+      name: "acme-mixed",
+      description: "One block declared OB and one declared SQ.",
+      privateTags: {
+        ACME: {
+          "0009XX01": { vr: "OB", keyword: "AcmeBlob", name: "Acme Blob" },
+          "0009XX02": { vr: "SQ", keyword: "AcmeSeq", name: "Acme Seq" },
+        },
+      },
+    });
+    const buf = buildDicom({
+      transferSyntax: EXPLICIT_LE,
+      elements: [
+        nameEl,
+        // `(0010,1000)` Other Patient IDs is an `X` row of Table E.1-1 with no
+        // option override, so the action table removes it on every run.
+        { tag: "00101000", vr: "LO", value: ascii("MRN-22222") },
+        { tag: "00090010", vr: "LO", value: ascii("ACME") },
+        { tag: PRIVATE_TAG, vr: "OB", value: itemStream },
+        { tag: "00091002", vr: "OB", value: itemStream },
+      ],
+    });
+    const { dataset, report } = deidentify(parseDicom(buf, { profile: mixed }), {
+      retain: ["RetainSafePrivate"],
+      profile: mixed,
+    });
+
+    // Non-vacuity: all three outcomes really did happen on this one file.
+    expect(dataset.has("00101000")).toBe(false);
+    expect(dataset.get("00091002")?.rawBytes.length).toBe(0);
+    expect(dataset.has(PRIVATE_TAG)).toBe(false);
+
+    // FROM THE RECORD ALONE: exactly the unenumerable removal, stamped with its
+    // outcome and its reason.
+    expect(report.unenumerablePrivateRemovals).toEqual([
+      { tag: PRIVATE_TAG, applied: "removed", reason: "unenumerable" },
+    ]);
+    // The Annex E removal is on its own surface and is NOT in the record.
+    expect(report.attributes.filter((a) => a.applied === "removed").map((a) => a.tag)).toContain(
+      "00101000",
+    );
+    expect(report.unenumerablePrivateRemovals.map((r) => r.tag)).not.toContain("00101000");
+    // The emptied carrier is on its own surface and is NOT in the record.
+    expect(report.unauditableSequences).toEqual([
+      { tag: "00091002", applied: "emptied", byteLength: itemStream.length },
+    ]);
+    expect(report.unenumerablePrivateRemovals.map((r) => r.tag)).not.toContain("00091002");
+    // 🩺 AC6's other half: nothing on this report says a private value reached
+    // the output unexamined. The retired outcome is the one that did.
+    expect(report.unauditableSequences.every((f) => f.applied === "emptied")).toBe(true);
+    for (const message of report.warnings.map((w) => w.message)) {
+      expect(message).not.toContain("KEPT");
+      expect(message).not.toContain("reaches the output");
+    }
+  });
+
+  it("removes ONE INSTANCE of a tag and leaves its sibling in another Data Set alone", () => {
+    // 🛑 EVERY PREDICATE HERE IS PER OCCURRENCE, NEVER PER TAG. Private blocks
+    // are reserved per Data Set (PS3.5 §7.8.1), so the same private tag can
+    // occur several times in one object with different enumerability. The root's
+    // occurrence is zero-length, which encodes no Data Set and is retained; the
+    // one inside the sequence item carries the nested name and is removed. A
+    // rule keyed on the tag would take both or neither, and the record names
+    // the Data Set precisely so a reader can tell which occurrence went.
+    const buf = buildDicom({
+      transferSyntax: EXPLICIT_LE,
+      elements: [
+        nameEl,
+        { tag: "00090010", vr: "LO", value: ascii("ACME") },
+        { tag: PRIVATE_TAG, vr: "OB", value: Buffer.alloc(0) },
+        {
+          tag: CARRIER,
+          items: [
+            {
+              elements: [
+                { tag: "00090010", vr: "LO", value: ascii("ACME") },
+                { tag: PRIVATE_TAG, vr: "OB", value: itemStream },
+              ],
+            },
+          ],
+        },
+      ] as never,
+    });
+    const ds = parseDicom(buf, { profile: acme });
+    // Non-vacuity: both occurrences really are on the wire, in two Data Sets.
+    expect(ds.get(PRIVATE_TAG)?.rawBytes.length).toBe(0);
+    expect(ds.get(CARRIER)?.items?.[0]?.get(PRIVATE_TAG)?.rawBytes.length).toBe(itemStream.length);
+
+    const { dataset, report } = deidentify(ds, { retain: ["RetainSafePrivate"], profile: acme });
+    // The root's occurrence survives, zero-length, exactly as it arrived.
+    expect(dataset.get(PRIVATE_TAG)).toBeDefined();
+    expect(dataset.get(PRIVATE_TAG)?.rawBytes.length).toBe(0);
+    // The item's occurrence is gone, and so are its bytes.
+    expect(dataset.get(CARRIER)?.items?.[0]?.has(PRIVATE_TAG)).toBe(false);
+    expect(serializeDicom(dataset).toString("latin1")).not.toContain(NESTED);
+    // One entry, naming the Data Set that held it.
+    expect(report.unenumerablePrivateRemovals).toEqual([
+      {
+        tag: PRIVATE_TAG,
+        applied: "removed",
+        reason: "unenumerable",
+        contextPath: [`${CARRIER}[0]`],
+      },
+    ]);
+    expect(report.removedPrivateTags).toEqual([PRIVATE_TAG]);
+  });
+
+  it("a profile dictionary lookup that MISSES is removed by the Basic Profile, never recorded here", () => {
+    // 🛑 THE UNENUMERABLE CLASS IS A STRICT SUBSET OF THE CLASS THE PROFILE
+    // VOUCHED FOR, and this is the row that keeps it strict. The option is on
+    // and a profile is passed, but its dictionary has no entry for this block:
+    // the creator is not a member, so nothing is vouched for, nothing is
+    // retained, and the removal is the Basic Profile's ordinary one. Recording
+    // it as unenumerable would make the record mean "every private tag that
+    // went", which is what `removedPrivateTags` already means.
+    const otherVendor = defineProfile({
+      name: "acme-other-block",
+      description: "Vouches for a DIFFERENT creator, so this file's block misses.",
+      privateTags: {
+        ZEISS: { "0009XX01": { vr: "OB", keyword: "ZeissBlob", name: "Zeiss Blob" } },
+      },
+    });
+    const { dataset, report } = deidentify(parseDicom(file, { profile: otherVendor }), {
+      retain: ["RetainSafePrivate"],
+      profile: otherVendor,
+    });
+    expect(serializeDicom(dataset).toString("latin1")).not.toContain(NESTED);
+    expect(report.removedPrivateTags).toEqual(["00090010", PRIVATE_TAG]);
+    expect(report.unenumerablePrivateRemovals).toEqual([]);
+    expect(codes(report)).not.toContain(WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE);
+  });
+
+  it("RETAINS a zero-length retained value, which encodes no Data Set, and records nothing", () => {
+    // The second of the three values that still reach the output, measured
+    // rather than asserted. It is also what keeps the audit a fixed point over
+    // an object some other rule already emptied: without it, a carrier emptied
+    // on run one is REMOVED on run two, which would take an attribute out of an
+    // object that had nothing left to hide.
     const empty = buildDicom({
       transferSyntax: EXPLICIT_LE,
       elements: [
@@ -1880,25 +2293,157 @@ describe("DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE", () => {
     // Non-vacuity: the attribute really is retained, so the silence is the
     // exclusion and not a removal.
     expect(dataset.get(PRIVATE_TAG)).toBeDefined();
+    expect(dataset.get(PRIVATE_TAG)?.rawBytes.length).toBe(0);
     expect(report.removedPrivateTags).not.toContain(PRIVATE_TAG);
+    expect(report.unenumerablePrivateRemovals).toEqual([]);
     expect(report.unauditableSequences).toEqual([]);
     expect(codes(report)).not.toContain(WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE);
   });
 
-  it("says the same thing on its own output, so the audit is a fixed point too", () => {
+  it("RETAINS a vouched private SQ that parses cleanly, and the DESCENT takes the nested name", () => {
+    // 🩺 THE THIRD VALUE THAT STILL REACHES THE OUTPUT, AND THE ONE THAT MAKES
+    // "enumerated" MEAN SOMETHING. Same profile block, same nested
+    // `(0010,0010)`, but the profile declares it `SQ` and the parse resolved it
+    // as one, so the run WALKED the value: every nested element went through the
+    // Annex E action table on its own merits. That is an enumeration performed,
+    // so the attribute is retained as an attribute - it keeps its tag, its VR
+    // and its items - while the nested name is taken by the descent rather than
+    // by a removal. Retaining the attribute is not a licence for a Table E.1-1
+    // row inside it.
+    const asSq = defineProfile({
+      name: "acme-walked-sq",
+      description: "Same block, declared SQ, and written as a real Sequence.",
+      privateTags: { ACME: { "0009XX01": { vr: "SQ", keyword: "AcmeSeq", name: "Acme Seq" } } },
+    });
+    const buf = buildDicom({
+      transferSyntax: EXPLICIT_LE,
+      elements: [
+        nameEl,
+        { tag: "00090010", vr: "LO", value: ascii("ACME") },
+        {
+          tag: PRIVATE_TAG,
+          items: [
+            {
+              elements: [
+                { tag: "00100010", vr: "PN", value: ascii(NESTED) },
+                { tag: "00080018", vr: "UI", value: Buffer.from("1.2.3.4\0") },
+              ],
+            },
+          ],
+        },
+      ] as never,
+    });
+    const ds = parseDicom(buf, { profile: asSq });
+    // Non-vacuity: the parser really materialized the items, and the name really
+    // is on the wire before the call.
+    expect(ds.get(PRIVATE_TAG)?.vr).toBe("SQ");
+    expect(ds.get(PRIVATE_TAG)?.items).toHaveLength(1);
+    expect(serializeDicom(ds).toString("latin1")).toContain(NESTED);
+
+    const { dataset, report } = deidentify(ds, { retain: ["RetainSafePrivate"], profile: asSq });
+    expect(dataset.get(PRIVATE_TAG)?.vr).toBe("SQ");
+    expect(dataset.get(PRIVATE_TAG)?.items).toHaveLength(1);
+    expect(serializeDicom(dataset).toString("latin1")).not.toContain(NESTED);
+    expect(dataset.get("00120062")?.rawBytes.toString("latin1").trimEnd()).toBe("YES");
+    // Enumerated, so nothing is recorded and nothing is warned: the record is
+    // about values this run could not account for, and it accounted for this one.
+    expect(report.unenumerablePrivateRemovals).toEqual([]);
+    expect(report.unauditableSequences).toEqual([]);
+    expect(codes(report)).not.toContain(WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE);
+    // The descent's own audit, which is where the nested name went.
+    expect(
+      report.attributes
+        .filter((a) => a.contextPath?.[0] === `${PRIVATE_TAG}[0]`)
+        .map((a) => [a.tag, a.applied]),
+    ).toEqual([
+      ["00100010", "emptied"],
+      ["00080018", "uid-remapped"],
+    ]);
+  });
+
+  it("removes the same attribute on its own output only once, so the audit is a fixed point too", () => {
     // `DICOM-DEIDENT-NOT-A-FIXED-POINT` is about the bytes; this is the audit
-    // half of it. The carrier is kept, so the second run keeps it again and must
-    // report it again - identically. A disclosure that grew or vanished on a
-    // re-run would be describing the run rather than the object.
+    // half of it. The carrier is gone after pass one, so pass two has nothing to
+    // remove and must say nothing - a record that reproduced itself over an
+    // object that no longer holds the attribute would be describing the first
+    // run rather than the object in front of it.
     const opts: DeidentifyOptions = { retain: ["RetainSafePrivate"], profile: acme };
     const first = deidentify(parseDicom(file, { profile: acme }), opts);
     const second = deidentify(first.dataset, opts);
-    expect(second.report.unauditableSequences).toEqual(first.report.unauditableSequences);
-    expect(
-      codes(second.report).filter(
-        (c) => c === WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE,
-      ),
-    ).toHaveLength(1);
+    expect(first.report.unenumerablePrivateRemovals.map((r) => r.tag)).toEqual([PRIVATE_TAG]);
+    expect(second.report.unenumerablePrivateRemovals).toEqual([]);
+    expect(second.report.removedPrivateTags).toEqual([]);
+    expect(second.report.unauditableSequences).toEqual([]);
+    expect(codes(second.report)).not.toContain(
+      WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE,
+    );
+    // The bytes are a fixed point too, which is what makes the audit's silence
+    // the right answer rather than a second, different object.
+    expect(serializeDicom(second.dataset).equals(serializeDicom(first.dataset))).toBe(true);
+  });
+
+  it("keeps the block's Private Creator after every element in it is removed - and only if vouched", () => {
+    // PS3.5 §7.8.1's Note permits removing the creator of an emptied block and
+    // does not require it. What this pins is the rule that decides: the creator
+    // is retained if and only if the caller's dictionary vouches for it, and the
+    // removal of every data element in its block does not enter into it.
+    const orphaned = deidentify(parseDicom(file, { profile: acme }), {
+      retain: ["RetainSafePrivate"],
+      profile: acme,
+    });
+    expect(orphaned.report.unenumerablePrivateRemovals.map((r) => r.tag)).toEqual([PRIVATE_TAG]);
+    expect(orphaned.dataset.get("00090010")?.rawBytes.toString("latin1").trimEnd()).toBe("ACME");
+
+    // The mirror: a creator value that is not a member of the dictionary is not
+    // vouched for, so it is removed with the block rather than left orphaned.
+    const strangerCreator = buildDicom({
+      transferSyntax: EXPLICIT_LE,
+      elements: [
+        nameEl,
+        { tag: "00090010", vr: "LO", value: ascii("ACME BUT LONGER") },
+        { tag: PRIVATE_TAG, vr: "OB", value: itemStream },
+      ],
+    });
+    const stranger = deidentify(parseDicom(strangerCreator, { profile: acme }), {
+      retain: ["RetainSafePrivate"],
+      profile: acme,
+    });
+    expect(stranger.dataset.get("00090010")).toBeUndefined();
+    expect(stranger.report.removedPrivateTags).toEqual(["00090010", PRIVATE_TAG]);
+    expect(stranger.report.unenumerablePrivateRemovals).toEqual([]);
+  });
+
+  it("a sequence whose item stream contradicts its declared length still removes and NAMES, unchanged", () => {
+    // AC13's shape, pinned against this slice rather than by it: the private
+    // element is reached inside a sequence the file does not settle the extent
+    // of, so the reservation is refused and the Basic Profile removes it under
+    // PS3.15 §E.3.10's other branch. It is named in `removedPrivateTags`, it is
+    // NOT recorded as unenumerable - nothing was vouched for - and the behaviour
+    // is the pin's.
+    const buf = buildDicom({
+      transferSyntax: EXPLICIT_LE,
+      elements: [
+        nameEl,
+        {
+          tag: CARRIER,
+          items: [
+            {
+              declaredLengthDelta: 8 + ascii("MR").length,
+              elements: [
+                { tag: "00090010", vr: "LO", value: ascii("ACME") },
+                { tag: PRIVATE_TAG, vr: "OB", value: itemStream },
+              ],
+            },
+          ],
+        },
+        { tag: "00080060", vr: "CS", value: ascii("MR") },
+      ] as never,
+    });
+    const ds = parseDicom(buf);
+    const { dataset, report } = deidentify(ds, { retain: ["RetainSafePrivate"], profile: acme });
+    expect(serializeDicom(dataset).toString("latin1")).not.toContain(NESTED);
+    expect(report.removedPrivateTags).toContain(PRIVATE_TAG);
+    expect(report.unenumerablePrivateRemovals).toEqual([]);
   });
 
   it("is not raised over an emptied carrier, so the two classes never double-count", () => {
@@ -1922,13 +2467,16 @@ describe("DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE", () => {
     expect(codes(report)).not.toContain(WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE);
   });
 
-  it("budgets the two classes APART, so a flood of kept carriers cannot silence a dropped one", () => {
-    // Both classes land in `report.unauditableSequences`, and a shared counter
-    // would let an attacker-chosen count of harmless retained values spend the
-    // budget that reports DROPPED content - the amplification this repo's own
-    // PHI gate split per recognizer in `#111`. The emptied carrier is written
-    // LAST here, after more than a full budget of kept ones, so a shared counter
-    // reds this test.
+  it("removes and RECORDS every one past the cap, while the diagnostics stay bounded", () => {
+    // 🛑 THE CAP IS ON WHAT IS SAID AND NEVER ON WHAT IS DONE - AND SINCE THE
+    // RECORD CARRIES A DUTY, NEVER ON THE RECORD EITHER. A crafted file can
+    // carry an attacker-chosen number of unenumerable private attributes, so the
+    // WARNINGS are budgeted; the removals are not, and neither is
+    // `unenumerablePrivateRemovals`, because AC7's guarantee (tell an
+    // unenumerable removal from an Annex E one, from the record alone) would
+    // otherwise evaporate on exactly the files that need it. The emptied carrier
+    // is written LAST here, after more than a full budget of removals, so a
+    // shared counter would silence it and red this test.
     const many = MAX_UNAUDITABLE_SEQUENCE_FINDINGS * 2;
     const privateTags: Record<string, { vr: "OB" | "SQ"; keyword: string; name: string }> = {
       "0009XXFF": { vr: "SQ", keyword: "AcmeSeq", name: "Acme Seq" },
@@ -1958,19 +2506,40 @@ describe("DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE", () => {
         { tag: "000910FF", vr: "OB" as const, value: itemStream },
       ],
     });
-    const { report } = deidentify(parseDicom(buf, { profile: flooded }), {
+    const { dataset, report } = deidentify(parseDicom(buf, { profile: flooded }), {
       retain: ["RetainSafePrivate"],
       profile: flooded,
     });
 
-    const kept = report.unauditableSequences.filter((f) => f.applied === "kept");
-    const dropped = report.unauditableSequences.filter((f) => f.applied === "emptied");
+    const removals = report.unenumerablePrivateRemovals;
+    const warned = codes(report).filter(
+      (c) => c === WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE,
+    );
     // Non-vacuity: the flood really is bigger than one budget, so the cap really
     // is the thing being exercised.
     expect(many).toBeGreaterThan(MAX_UNAUDITABLE_SEQUENCE_FINDINGS);
-    expect(kept).toHaveLength(MAX_UNAUDITABLE_SEQUENCE_FINDINGS);
-    // THE POINT: the dropped carrier is still named, behind a full budget of
-    // kept ones.
-    expect(dropped.map((f) => f.tag)).toEqual(["000910FF"]);
+
+    // THE ACTION: every one of them is gone from the object, cap or no cap.
+    for (let i = 0; i < many; i += 1) {
+      const tag = `0009${(0x1010 + i).toString(16).toUpperCase().padStart(4, "0")}`;
+      expect(dataset.get(tag), tag).toBeUndefined();
+    }
+    expect(serializeDicom(dataset).toString("latin1")).not.toContain(NESTED);
+
+    // THE RECORD: complete, uncapped, one entry per instance, and every one of
+    // them stamped removed-for-being-unenumerable.
+    expect(removals).toHaveLength(many);
+    expect(new Set(removals.map((r) => r.tag))).toHaveLength(many);
+    expect(new Set(removals.map((r) => `${r.applied}/${r.reason}`))).toEqual(
+      new Set(["removed/unenumerable"]),
+    );
+    expect(report.removedPrivateTags).toHaveLength(many);
+
+    // THE DIAGNOSTICS: bounded, at the pin's own bound, on their own counter.
+    expect(warned).toHaveLength(MAX_UNAUDITABLE_SEQUENCE_FINDINGS);
+    // THE POINT of the separate counter: the emptied carrier is still named,
+    // behind a full budget of removals.
+    expect(report.unauditableSequences.map((f) => f.tag)).toEqual(["000910FF"]);
+    expect(report.unauditableSequences.map((f) => f.applied)).toEqual(["emptied"]);
   });
 });
