@@ -110,6 +110,8 @@ export type {
   DeidentifyReport,
   DeidentifyResult,
   EmbeddedAttributeFinding,
+  FileMetaDroppedElement,
+  Group0004Removal,
   UnauditableSequenceFinding,
   UndefinedVrFinding,
   UnenumerablePrivateRemoval,

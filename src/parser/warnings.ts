@@ -76,7 +76,10 @@ export const WARNING_CODES = {
 
   // === Reserved by later phases (declared, not emitted in Phase 2) ===
   DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED: "DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED", // reserved by Phase 7 - not emitted in Phase 2
+  DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED: "DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED: "DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED", // emitted by deidentify(), never by the parser
+  DICOM_DEIDENT_FILE_META_REPLACED: "DICOM_DEIDENT_FILE_META_REPLACED", // emitted by deidentify(), never by the parser
+  DICOM_DEIDENT_GROUP_0004_REMOVED: "DICOM_DEIDENT_GROUP_0004_REMOVED", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_METHOD_NOT_ADDED: "DICOM_DEIDENT_METHOD_NOT_ADDED", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_METHOD_NOT_LO: "DICOM_DEIDENT_METHOD_NOT_LO", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_METHOD_PRIOR_RETAINED: "DICOM_DEIDENT_METHOD_PRIOR_RETAINED", // emitted by deidentify(), never by the parser
@@ -333,6 +336,25 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
     "A private element has a Private Creator the active profile's private dictionary does not name; falling back to UN. The creator string is not reproduced here - read the (gggg,00EE) element if you need it. Its tag is withheld; the byte offset identifies the element.",
   DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED:
     "Pixel Data is present and Burned In Annotation is not 'NO'; this metadata-only de-identifier cannot inspect or clean pixels. Recognizable text may remain burned into the image.",
+  // No tag, no count and no value, and none of the three is caution. This code is
+  // raised ONCE PER RUN rather than once per element, so there is no element to
+  // name and no attacker-chosen multiplier on the string: the tags are on
+  // report.fileMetaElementsDropped, where a caller can read them beside the
+  // total. It fires on a perfectly CONFORMANT file - a Sending AE Title is a
+  // legal (0002,xxxx) element - which is why the tags are not here: the
+  // withholding must not depend on the input being malformed.
+  DICOM_DEIDENT_FILE_META_REPLACED:
+    "The File Meta Information group of the de-identified output describes this de-identifying application, not the source file (PS3.15 E.1.1). The Source Application Entity Title and the source's implementation identity are gone, and every (0002,xxxx) element this library does not model was dropped rather than re-emitted, so the byte-for-byte File Meta round trip does NOT hold for this output. See report.fileMetaElementsDropped for what went and how many.",
+  // Once per run, for the same reason and with the same consequence: no tag, no
+  // count, no context path. report.group0004Removals names the elements it could
+  // fit and report.group0004RemovalCount is the complete total.
+  DICOM_DEIDENT_GROUP_0004_REMOVED:
+    "Data Elements with a Group Number of 0004 were removed from this object, as PS3.15 E.1.1 requires of any SOP Instance or DICOM File other than a DICOMDIR File. Their tags and count are withheld from this message; see report.group0004Removals and report.group0004RemovalCount.",
+  // Once per run. The SOP Class UID that selected this branch is a constant of
+  // the code (it is the one value that reaches it), so it is written out; nothing
+  // else about the file is.
+  DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED:
+    "This object declares Media Storage SOP Class UID 1.2.840.10008.1.3.10 (Media Storage Directory Storage), so PS3.15 E.1.1's carve-out applies and its (0004,xxxx) Data Elements were NOT removed. The rest of that bullet was NOT discharged by this run: this library does not model DICOMDIR, so the directory records were not de-identified, the File-set was not rebuilt from the de-identified DICOM Files it references, and no non-de-identified DICOMDIR File was removed from any File-set. Do not treat this output as a de-identified, File-set-conformant DICOMDIR.",
   DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED:
     "Element ({tag}) {vr} was kept by the action table, but its value ends with {n} whole Data Element(s) - an over-declared Value Length swallowed what followed it. Emptied rather than kept, because the action table cannot see an attribute encoded inside a value. report.embeddedAttributes names the ones this run acts on that also have a literal Table E.1-1 row, which may be none of them.",
   // Deliberately short, for the reason the two codes below it are short: one is
@@ -1236,6 +1258,97 @@ export function privateCreatorUnknown(position: DicomPosition): DicomParseWarnin
  */
 export function burnedInAnnotationNotRemoved(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED, position);
+}
+
+/**
+ * Build a `DICOM_DEIDENT_FILE_META_REPLACED` warning. Emitted by `deidentify()`
+ * when the run dropped at least one non-modeled `(0002,xxxx)` element while
+ * rebuilding the File Meta group to describe this de-identifying application
+ * (PS3.15 2026c §E.1.1).
+ *
+ * @remarks
+ * **Once per run, and that is the bound.** Every other de-identify diagnostic in
+ * this package that names an element is raised per element and is therefore
+ * capped, because the element count is chosen by the input. This one is raised
+ * from `deidentify()` itself after the group has been rebuilt, so an input
+ * carrying ten thousand exotic File Meta elements produces exactly one of these.
+ * The per-element record lives on `report.fileMetaElementsDropped`, which IS
+ * capped, beside a total that is not.
+ *
+ * **It fires on a conformant file, and the message is written for that.** A
+ * `(0002,0017)` Sending AE Title is a legal File Meta element; so is a
+ * `(0002,0102)` Private Information pair. So the message may not lean on "the
+ * source was malformed" for its safety, and it names no tag at all. It is also
+ * why this code is safe to add: `deidentify()` warnings reach
+ * `report.warnings` and are never subject to the parser's `{ strict: true }`
+ * escalation, so no conformant file starts throwing because it exists.
+ *
+ * `position.byteOffset` is `0` and `fileMeta` is `true`: the statement is about
+ * the group as a whole, not about an element inside it.
+ *
+ * @example
+ * ```ts
+ * const w = fileMetaReplaced({ byteOffset: 0, fileMeta: true });
+ * ```
+ */
+export function fileMetaReplaced(position: DicomPosition): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DEIDENT_FILE_META_REPLACED, position);
+}
+
+/**
+ * Build a `DICOM_DEIDENT_GROUP_0004_REMOVED` warning. Emitted by `deidentify()`
+ * when at least one Data Element whose Group Number is `0004` was removed, which
+ * PS3.15 2026c §E.1.1 requires "from any SOP Instance or DICOM File other than a
+ * DICOMDIR File".
+ *
+ * @remarks
+ * **Once per run**, for the reason {@link fileMetaReplaced} states: a per-element
+ * warning is multiplied by an element count the input picks. The elements are on
+ * `report.group0004Removals` (capped) and their true number is on
+ * `report.group0004RemovalCount` (not).
+ *
+ * No tag and no context path. A `(0004,xxxx)` tag is composed from four bytes of
+ * the source and a `contextPath` segment from four more, so both belong on the
+ * report - whose own docstring lists the fields that are not value-free - rather
+ * than in a message a caller is likely to log wholesale.
+ *
+ * @example
+ * ```ts
+ * const w = group0004Removed({ byteOffset: 0, fileMeta: false });
+ * ```
+ */
+export function group0004Removed(position: DicomPosition): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DEIDENT_GROUP_0004_REMOVED, position);
+}
+
+/**
+ * Build a `DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED` warning. Emitted by
+ * `deidentify()` when the source File Meta declares Media Storage SOP Class UID
+ * `1.2.840.10008.1.3.10`, so the group-0004 removal of PS3.15 2026c §E.1.1 does
+ * not apply to it.
+ *
+ * @remarks
+ * **The carve-out is one clause of a bullet with three, and this code exists so
+ * the run says which two it did not discharge.** §E.1.1 continues: a required
+ * DICOMDIR "shall either be created from the de-identified DICOM Files it
+ * references, or an existing DICOMDIR File shall be de-identifed according to
+ * this Profile", and "any existing non-de-identified DICOMDIR File shall be
+ * removed from the File-set". This library does not model DICOMDIR, so it did
+ * neither, and it has no view of a File-set to remove anything from. Retaining
+ * `(0004,xxxx)` while staying silent would let a caller read a compliant
+ * DICOMDIR out of a report that only means "the removal rule was skipped" - the
+ * emptied-audit failure this package keeps opening items for.
+ *
+ * Once per run, no tag, no count. The SOP Class UID in the message is a constant
+ * of the code: it is the only value that reaches this branch.
+ *
+ * @example
+ * ```ts
+ * const w = dicomdirFileSetNotDischarged({ byteOffset: 0, fileMeta: true });
+ * ```
+ */
+export function dicomdirFileSetNotDischarged(position: DicomPosition): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED, position);
 }
 
 /**

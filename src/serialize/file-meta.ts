@@ -23,6 +23,12 @@
  * with the whole group emitted in ascending tag order. So an exotic File Meta
  * group round-trips byte-for-byte, not just the typed fields.
  *
+ * That holds for **parse then serialize**. It does not hold for a `FileMeta`
+ * that came out of `deidentify()`, which drops those elements at the source
+ * rather than here: this encoder is unchanged and simply has nothing to merge.
+ * The carve-out is stated once, on {@link FileMeta.extraElements}, and is not
+ * restated here.
+ *
  * @module
  */
 
@@ -44,6 +50,37 @@ import { padValue } from "./element.js";
  * @internal
  */
 export const COSYTE_IMPLEMENTATION_CLASS_UID = "2.25.200853462534740285303254730069375064698";
+
+/**
+ * The maximum number of characters one `SH` Value may carry: **16**, per PS3.5
+ * 2026c Table 6.2-1, whose `SH` row reads "16 chars maximum". The bound falls on
+ * a Value rather than on the Value Field, exactly as the `LO` bound does.
+ *
+ * @internal
+ */
+export const SH_VALUE_MAX_CHARS = 16;
+
+/**
+ * cosyte's Implementation Version Name, written as `(0002,0013)` by
+ * `deidentify()` so the de-identified File Meta group names **this**
+ * de-identifying application rather than the source's (PS3.15 §E.1.1).
+ *
+ * 🛑 **THE PACKAGE VERSION IS DELIBERATELY NOT IN IT, AND THAT IS THE WHOLE
+ * REASON THIS IS A LITERAL.** `SH` is bounded at {@link SH_VALUE_MAX_CHARS}
+ * characters, and `VERSION` is a string that moves: `"@cosyte/dicom "` plus
+ * `"0.0.19"` is 19 characters today, and any composition that fits today can be
+ * pushed over by a longer version (a prerelease tag alone is longer than the
+ * headroom any legible prefix leaves). That is precisely the shape that shipped
+ * a 76-character `LO` Value into `(0012,0063)` - a value this library wrote
+ * itself that no conformant receiver may accept. A fixed literal cannot overrun
+ * on any file, in any release, so the bound holds by construction rather than by
+ * a check somebody has to keep running. The version-bearing identity is
+ * `(0002,0012)` {@link COSYTE_IMPLEMENTATION_CLASS_UID} plus the package's own
+ * release record, not this 16-character slot.
+ *
+ * @internal
+ */
+export const COSYTE_IMPLEMENTATION_VERSION_NAME = "COSYTE_DICOM";
 
 /** Default File Meta Information Version value - `0x0001` (PS3.10 §7.1). */
 const DEFAULT_FILE_META_VERSION = Buffer.from([0x00, 0x01]);

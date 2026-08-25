@@ -172,13 +172,20 @@ import {
   deidentMethodNotLo,
   deidentMethodPriorRetained,
   deidentMethodValueOverLength,
+  dicomdirFileSetNotDischarged,
   embeddedAttributeRemoved,
+  fileMetaReplaced,
+  group0004Removed,
   privateCarrierNotAuditable,
   sequenceNotAuditable,
   undefinedVrNotAuditable,
 } from "../parser/warnings.js";
 import { resolvePrivateTag } from "../profiles/lookup.js";
 import { type BodyEncoding, encodeDatasetElement } from "../serialize/element.js";
+import {
+  COSYTE_IMPLEMENTATION_CLASS_UID,
+  COSYTE_IMPLEMENTATION_VERSION_NAME,
+} from "../serialize/file-meta.js";
 import { dummyBytes, remapUidBytes, resolveAction, uidValueMultiplicity } from "./actions.js";
 import { findEmbeddedAttributes } from "./embedded.js";
 import {
@@ -191,6 +198,8 @@ import {
   type DeidentifyReport,
   type DeidentifyResult,
   type EmbeddedAttributeFinding,
+  type FileMetaDroppedElement,
+  type Group0004Removal,
   type UnauditableSequenceFinding,
   type UndefinedVrFinding,
   type UnenumerablePrivateRemoval,
@@ -201,6 +210,62 @@ const TAG_PATIENT_IDENTITY_REMOVED: Tag = "00120062";
 const TAG_DEIDENTIFICATION_METHOD: Tag = "00120063";
 const TAG_PIXEL_DATA: Tag = "7FE00010";
 const TAG_BURNED_IN_ANNOTATION: Tag = "00280301";
+
+/**
+ * The Group Number PS3.15 2026c §E.1.1 orders removed "from any SOP Instance or
+ * DICOM File other than a DICOMDIR File", as the four uppercase hex characters
+ * every {@link Tag} in this package starts with.
+ *
+ * A prefix test rather than a numeric parse: `Tag` is documented as an 8-char
+ * uppercase hex string, the parsers compose it that way, and comparing the first
+ * four characters cannot mis-classify a neighbouring group the way an off-by-one
+ * mask can. This is the whole predicate - it is deliberately NOT related to
+ * `matchRepeatingGroup` or to `src/dictionary/repeating-groups.ts`, neither of
+ * which is about group 0004.
+ */
+const GROUP_0004_PREFIX = "0004";
+
+/**
+ * `1.2.840.10008.1.3.10` Media Storage Directory Storage - the SOP Class a
+ * DICOMDIR declares in `(0002,0002)`, and the single value that selects §E.1.1's
+ * DICOMDIR carve-out.
+ *
+ * Registered and current at this build's PS3.6 pin
+ * (`src/dictionary/generated/uids.ts`, `type: "SOPClass"`, `retired: false`).
+ * Written out rather than looked up because the carve-out is keyed to this one
+ * UID and a lookup would invite widening it to "any Media Storage class", which
+ * is not what §E.1.1 says.
+ */
+const MEDIA_STORAGE_DIRECTORY_STORAGE_UID = "1.2.840.10008.1.3.10";
+
+/**
+ * Cap on how many dropped non-modeled File Meta elements one run will *list* on
+ * {@link DeidentifyReport.fileMetaElementsDropped}.
+ *
+ * The amplification is real rather than theoretical: the File Meta pre-pass runs
+ * until `(0002,0000)`'s declared length is consumed or the first non-`0002`
+ * group appears, so a crafted file can make its whole length one File Meta group
+ * of 8-byte short-form elements. It is a bound on the **record**, never on the
+ * action - every non-modeled element is dropped whether or not it is listed -
+ * and {@link DeidentifyReport.fileMetaElementsDroppedCount} carries the complete
+ * total beside it, so nothing about the count is truncated by this number.
+ *
+ * Counted on its own budget line, so a flood of one diagnostic class cannot
+ * spend another's and silence it.
+ */
+export const MAX_FILE_META_DROP_FINDINGS = 64;
+
+/**
+ * Cap on how many removed group-0004 elements one run will *list* on
+ * {@link DeidentifyReport.group0004Removals}.
+ *
+ * Same shape and same reason as {@link MAX_FILE_META_DROP_FINDINGS}: a
+ * `(0004,xxxx)` element costs an input 8 bytes under Explicit VR LE, so the
+ * finding count is chosen by the sender. The removals themselves are not
+ * bounded, and {@link DeidentifyReport.group0004RemovalCount} is complete at any
+ * input size. An array exactly this long means "at least this many".
+ */
+export const MAX_GROUP_0004_FINDINGS = 64;
 
 /** Map a transfer syntax UID to the on-wire element encoding (mirrors the writer). */
 const BODY_ENCODING: Readonly<Record<string, BodyEncoding>> = {
@@ -254,6 +319,35 @@ interface DeidentifyContext {
   readonly profile: Profile | undefined;
   readonly encoding: BodyEncoding;
   readonly littleEndian: boolean;
+  /**
+   * Whether PS3.15 §E.1.1's group-0004 removal applies to this object.
+   *
+   * **Decided ONCE per run, from the source File Meta's `(0002,0002)`, and
+   * carried rather than re-derived.** The carve-out is a property of the object
+   * - "any SOP Instance or DICOM File other than a DICOMDIR File" - not of a
+   * Data Set, so re-asking it at depth could only produce a different answer for
+   * the same file, which is the one thing it must not do. `false` here means the
+   * DICOMDIR branch fired and `DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED`
+   * has been raised for it.
+   */
+  readonly removeGroup0004: boolean;
+  /**
+   * The group-0004 removals this run made: the capped record and the uncapped
+   * total, in traversal order.
+   *
+   * **On the context and not on `ProcessResult`, for the reason the budget is.**
+   * `processElements` builds a fresh result per Data Set and merges upward, so a
+   * per-result array would have to be re-merged at every depth to become one
+   * run's record and a per-result cap would bound each Sequence Item
+   * independently rather than the file. Holding it here makes the cap, the total
+   * and the order all run-scoped by construction, with no merge step to forget.
+   * Deliberately mutable.
+   */
+  readonly group0004: {
+    readonly findings: Group0004Removal[];
+    /** Complete at any input size; the array beside it saturates, this does not. */
+    total: number;
+  };
   /**
    * Run-scoped diagnostic budget. **Deliberately mutable**, and deliberately on
    * the context rather than on a `ProcessResult`: `processElements` builds a
@@ -725,6 +819,36 @@ function emptyUnauditableSequence(
   out: ProcessResult,
 ): void {
   emptyUnauditableCarrier(el, ctx, contextPath, out, rebuildSequence(el, [], ctx.encoding));
+}
+
+/** True when this tag's Group Number is `0004` (PS3.15 §E.1.1). */
+function isGroup0004(tag: Tag): boolean {
+  return tag.slice(0, 4) === GROUP_0004_PREFIX;
+}
+
+/**
+ * Record one group-0004 removal: always on the run's total, and on the capped
+ * finding array while there is budget for it.
+ *
+ * **The caller has already dropped the element by the time this runs.** The
+ * removal is the `continue` in {@link processElements}; this function only
+ * writes the audit, so an exhausted cap silences the record and never the rule.
+ * That split is the same one `MAX_UNAUDITABLE_SEQUENCE_FINDINGS` and
+ * `MAX_UNDEFINED_VR_FINDINGS` take, and it is why the total is incremented
+ * before the cap is consulted rather than inside the branch.
+ */
+function recordGroup0004Removal(
+  tag: Tag,
+  ctx: DeidentifyContext,
+  contextPath: readonly string[],
+): void {
+  ctx.group0004.total++;
+  if (ctx.group0004.findings.length >= MAX_GROUP_0004_FINDINGS) return;
+  ctx.group0004.findings.push({
+    tag,
+    applied: "removed",
+    ...(contextPath.length > 0 ? { contextPath: [...contextPath] } : {}),
+  });
 }
 
 /**
@@ -1521,6 +1645,24 @@ function processElements(
   const creators = creatorsInScope(source.filter((el, at) => isSettled(el, at, bound)));
 
   for (const [at, el] of source.entries()) {
+    // PS3.15 §E.1.1: "All Data Elements with a Group Number of 0004 shall be
+    // removed from any SOP Instance or DICOM File other than a DICOMDIR File."
+    //
+    // It runs FIRST, and above the Table E.1-1 lookup, because it is not an
+    // Annex E action: the table has no row for these tags, so every one of them
+    // would otherwise fall through to the unlisted branch and be kept. It is
+    // also unconditional over the Options - the bullet sits in the list §E.1.1
+    // imposes on any de-identifier claim and no Option qualifies it - so
+    // `ctx.active` is not consulted here.
+    //
+    // Group 0004 is even, so this never intercepts the private branch below.
+    // `ctx.removeGroup0004` is the run's one DICOMDIR decision, read and not
+    // re-derived; see its note on `DeidentifyContext`.
+    if (ctx.removeGroup0004 && isGroup0004(el.tag)) {
+      recordGroup0004Removal(el.tag, ctx, contextPath);
+      continue;
+    }
+
     if (isPrivateTag(el.tag)) {
       if (reservationsUsable && isSettled(el, at, bound) && keepsPrivate(el, ctx, creators))
         keepRetainedPrivate(el, ctx, contextPath, out, reservationsUsable, creators);
@@ -1712,17 +1854,102 @@ function auditAttribute(
   };
 }
 
-/** Rebuild File Meta, remapping the SOP Instance UID unless `RetainUIDs`. */
-function rebuildFileMeta(
-  fileMeta: FileMeta | undefined,
-  ctx: DeidentifyContext,
-): FileMeta | undefined {
-  if (fileMeta === undefined) return undefined;
-  if (ctx.active.has("RetainUIDs") || fileMeta.mediaStorageSOPInstanceUID === undefined)
-    return fileMeta;
+/** What {@link rebuildFileMeta} produced, plus the record of what it dropped. */
+interface RebuiltFileMeta {
+  /** The replacement group, or `undefined` when the source parsed without one. */
+  readonly fileMeta: FileMeta | undefined;
+  /** The capped record of dropped non-modeled elements, in tag order. */
+  readonly dropped: readonly FileMetaDroppedElement[];
+  /** How many were dropped in total. Not capped. */
+  readonly droppedCount: number;
+}
+
+/**
+ * Rebuild the File Meta Information group so it describes **this**
+ * de-identifying application rather than the source file.
+ *
+ * ## What the standard asks for
+ *
+ * PS3.15 2026c §E.1.1: "If the Data Set being de-identified is being stored
+ * within a DICOM File, then the File Meta Information including the 128 byte
+ * preamble, if present, shall be replaced with a description of the
+ * de-identifying application. Otherwise, there is a risk that identity
+ * information may leak through unmodified File Meta Information or preamble.
+ * [...] This includes information regarding Application Entity Titles,
+ * Presentation Addresses, implementation information, and private information."
+ *
+ * The preamble half of that bullet is already discharged elsewhere and is not
+ * re-decided here: `serializeDicom` writes 128 zero bytes unconditionally, on
+ * every path, so there is nothing of the source's to replace.
+ *
+ * ## The split this function makes
+ *
+ * **Identity elements go**, all of them, with no Option and no parse-quality
+ * condition attached:
+ * - `(0002,0016)` Source Application Entity Title - omitted, not blanked. An
+ *   empty AE Title would be an assertion about the sender; absence is not.
+ * - `(0002,0012)` Implementation Class UID and `(0002,0013)` Implementation
+ *   Version Name - **replaced** rather than dropped, because PS3.10 makes the
+ *   Class UID Type 1 and because "a description of the de-identifying
+ *   application" is exactly what those two elements are for. They name
+ *   `@cosyte/dicom` and hold nothing the source carried.
+ * - `extraElements` - dropped in full. A non-modeled `(0002,xxxx)` element is by
+ *   definition one this library cannot describe, and the class contains
+ *   `(0002,0017)`/`(0002,0018)` Sending/Receiving AE Title and
+ *   `(0002,0100)`/`(0002,0102)` Private Information: the four things the bullet
+ *   names, in one array. Drop what cannot be described.
+ *
+ * **Object elements stay.** `(0002,0001)` File Meta Information Version,
+ * `(0002,0002)` Media Storage SOP Class UID and `(0002,0010)` Transfer Syntax
+ * UID identify the object and its encoding, not its sender, and removing them
+ * would break the file for every reader. `(0002,0003)` Media Storage SOP
+ * Instance UID keeps the behaviour it already had: remapped through
+ * {@link UidRemapper} unless `RetainUIDs` is active.
+ *
+ * ## Unconditional on how well the source parsed
+ *
+ * The replacement is a **construction**, not an edit: every field of the result
+ * is written here from a named source. So a File Meta group that parsed with a
+ * missing or wrong `(0002,0000)` group length, or with a duplicate element that
+ * the projection dropped, produces exactly the same identity-free output as a
+ * clean one. There is no branch on parse quality to get wrong, because the
+ * source object is only ever read from, field by field.
+ *
+ * `undefined` in gives `undefined` out: an object that parsed with no File Meta
+ * group is not given one. Fabricating a group would be inventing a
+ * `(0002,0002)`/`(0002,0003)` identity for an object that declares none.
+ */
+function rebuildFileMeta(fileMeta: FileMeta | undefined, ctx: DeidentifyContext): RebuiltFileMeta {
+  if (fileMeta === undefined) return { fileMeta: undefined, dropped: [], droppedCount: 0 };
+
+  const extras = fileMeta.extraElements ?? [];
+  const dropped: FileMetaDroppedElement[] = [];
+  for (const extra of extras) {
+    if (dropped.length >= MAX_FILE_META_DROP_FINDINGS) break;
+    dropped.push({ tag: extra.tag, vr: extra.vr, byteLength: extra.value.length });
+  }
+
+  const sourceSopInstance = fileMeta.mediaStorageSOPInstanceUID;
+  const sopInstance =
+    sourceSopInstance === undefined || ctx.active.has("RetainUIDs")
+      ? sourceSopInstance
+      : ctx.remap.map(sourceSopInstance);
+
   return {
-    ...fileMeta,
-    mediaStorageSOPInstanceUID: ctx.remap.map(fileMeta.mediaStorageSOPInstanceUID),
+    fileMeta: {
+      transferSyntaxUID: fileMeta.transferSyntaxUID,
+      ...(fileMeta.mediaStorageSOPClassUID !== undefined
+        ? { mediaStorageSOPClassUID: fileMeta.mediaStorageSOPClassUID }
+        : {}),
+      ...(sopInstance !== undefined ? { mediaStorageSOPInstanceUID: sopInstance } : {}),
+      ...(fileMeta.fileMetaInformationVersion !== undefined
+        ? { fileMetaInformationVersion: fileMeta.fileMetaInformationVersion }
+        : {}),
+      implementationClassUID: COSYTE_IMPLEMENTATION_CLASS_UID,
+      implementationVersionName: COSYTE_IMPLEMENTATION_VERSION_NAME,
+    },
+    dropped,
+    droppedCount: extras.length,
   };
 }
 
@@ -2168,12 +2395,21 @@ export function deidentify(
   const tsUid = ds.fileMeta?.transferSyntaxUID ?? "";
   const encoding = BODY_ENCODING[tsUid] ?? "explicitLE";
   const littleEndian = encoding !== "explicitBE";
+  // PS3.15 §E.1.1's group-0004 removal applies to "any SOP Instance or DICOM
+  // File other than a DICOMDIR File", so the one question is whether this object
+  // IS a DICOMDIR, and the object's own answer is the SOP Class it declares. An
+  // object that declares none is not one: `undefined` never equals the UID, so
+  // the removal applies to it, which is the fail-safe direction as well as the
+  // literal reading.
+  const isDicomdir = ds.fileMeta?.mediaStorageSOPClassUID === MEDIA_STORAGE_DIRECTORY_STORAGE_UID;
   const ctx: DeidentifyContext = {
     active,
     remap,
     profile: options.profile,
     encoding,
     littleEndian,
+    removeGroup0004: !isDicomdir,
+    group0004: { findings: [], total: 0 },
     budget: { unauditableSequences: 0, unenumerableRemovals: 0, undefinedVrElements: 0 },
   };
 
@@ -2246,7 +2482,27 @@ export function deidentify(
     warnings.push(burnedInAnnotationNotRemoved({ byteOffset: offset, fileMeta: false }));
   }
 
-  const newFileMeta = rebuildFileMeta(ds.fileMeta, ctx);
+  const rebuiltFileMeta = rebuildFileMeta(ds.fileMeta, ctx);
+  // One warning per rule per run, raised here rather than at each element, so
+  // neither string is multiplied by an element count the input chooses. The
+  // per-element records carry the detail and are capped on their own budgets.
+  if (rebuiltFileMeta.droppedCount > 0) {
+    warnings.push(fileMetaReplaced({ byteOffset: 0, fileMeta: true }));
+  }
+  if (ctx.group0004.total > 0) {
+    warnings.push(group0004Removed({ byteOffset: 0, fileMeta: false }));
+  }
+  // 🩺 Raised whenever the carve-out FIRED, not only when the object carried
+  // group-0004 elements. Its subject is the two clauses of §E.1.1's DICOMDIR
+  // bullet this run did not discharge - de-identifying the directory records,
+  // and the File-set the object belongs to - and neither becomes discharged by
+  // the object happening to carry no `(0004,xxxx)` element. A caller must not be
+  // able to read "this is a conformant de-identified DICOMDIR" out of silence.
+  if (isDicomdir) {
+    warnings.push(dicomdirFileSetNotDischarged({ byteOffset: 0, fileMeta: true }));
+  }
+
+  const newFileMeta = rebuiltFileMeta.fileMeta;
   const datasetInit: DatasetInit = {
     warnings: ds.warnings,
     elements,
@@ -2261,6 +2517,10 @@ export function deidentify(
     unauditableSequences,
     unenumerablePrivateRemovals,
     undefinedVrElements,
+    fileMetaElementsDropped: rebuiltFileMeta.dropped,
+    fileMetaElementsDroppedCount: rebuiltFileMeta.droppedCount,
+    group0004Removals: ctx.group0004.findings,
+    group0004RemovalCount: ctx.group0004.total,
     uidMap: remap.cache,
     warnings,
     retained: [...active],
