@@ -425,6 +425,67 @@ describe("serializeDicom - non-modeled File Meta round-trip (lossless)", () => {
     expect(out.includes(priv)).toBe(true);
   });
 
+  /**
+   * The de-identify path drops non-modeled `(0002,xxxx)` elements and removes
+   * group 0004 (PS3.15 §E.1.1). **This is the guard that the loss is scoped to
+   * that path and did not leak into the writer.**
+   *
+   * It is deliberately in the serializer's own suite rather than beside the
+   * de-identify tests: the claim under test is the writer's, and the file it
+   * belongs in is the one a future change to `encodeFileMeta` or `encodeBody`
+   * would be read against.
+   */
+  it("still re-emits non-modeled File Meta elements and group 0004 without deidentify()", () => {
+    const privateInfo = Buffer.from([0xde, 0xad, 0xbe, 0xef]);
+    const buf = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      mediaStorageSOPClassUID: "1.2.840.10008.5.1.4.1.1.7",
+      mediaStorageSOPInstanceUID: "1.2.3.4.5",
+      implementationClassUID: "1.2.276.0.7230010.3.0.3.6.4",
+      implementationVersionName: "OFFIS_DCMTK_364",
+      sourceApplicationEntityTitle: "SEND_AE1",
+      fileMetaExtraElements: [
+        { tag: "00020017", vr: "AE", value: Buffer.from("SEND_AE1", "ascii") },
+        { tag: "00020102", vr: "OB", value: privateInfo },
+      ],
+      elements: [
+        { tag: "00080060", vr: "CS", value: Buffer.from("CT", "ascii") },
+        // A group-0004 leaf at the root ...
+        { tag: "00041130", vr: "CS", value: Buffer.from("FSET_ID1", "ascii") },
+        // ... and one inside a Sequence Item.
+        {
+          tag: "00081115",
+          items: [
+            { elements: [{ tag: "00041500", vr: "CS", value: Buffer.from("DIR/F1", "ascii") }] },
+          ],
+        },
+      ],
+    });
+
+    const { out, ds1, ds2 } = roundTrip(buf);
+
+    // The non-modeled File Meta elements are still there, values intact.
+    expect((ds2.fileMeta?.extraElements ?? []).map((e) => e.tag)).toEqual(["00020017", "00020102"]);
+    for (const [i, before] of (ds1.fileMeta?.extraElements ?? []).entries()) {
+      const after = (ds2.fileMeta?.extraElements ?? [])[i];
+      expect(after?.tag).toBe(before.tag);
+      expect(after?.vr).toBe(before.vr);
+      expect(after?.value.equals(before.value)).toBe(true);
+    }
+    // The modeled identity elements are untouched on this path too.
+    expect(ds2.fileMeta?.sourceApplicationEntityTitle).toBe("SEND_AE1");
+    expect(ds2.fileMeta?.implementationClassUID).toBe("1.2.276.0.7230010.3.0.3.6.4");
+    expect(ds2.fileMeta?.implementationVersionName).toBe("OFFIS_DCMTK_364");
+    expect(out.includes(privateInfo)).toBe(true);
+
+    // Group 0004 survives at the root and inside the Sequence Item.
+    expect(ds2.get("00041130")?.rawBytes.toString("ascii")).toBe("FSET_ID1");
+    const nested = ds2.get("00081115")?.items?.[0]?.elements() ?? [];
+    expect(nested.map((el) => el.tag)).toContain("00041500");
+    expect(out.includes(Buffer.from("FSET_ID1", "ascii"))).toBe(true);
+    expect(out.includes(Buffer.from("DIR/F1", "ascii"))).toBe(true);
+  });
+
   it("emits the whole File Meta group in ascending tag order, extras interleaved", () => {
     // extraElements deliberately supplied out of order to prove the writer sorts.
     const ds = new Dataset({

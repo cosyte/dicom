@@ -326,6 +326,40 @@ report.warnings.length; // => 0
 Buffer.isBuffer(serializeDicom(dataset)); // => true
 ```
 
+### The header stops naming the sending site
+
+§E.1.1 does not stop at Table E.1-1, and two of its unconditional bullets are about the parts of a
+file that are not the Data Set. `deidentify()` discharges both, on every run and under every Option.
+
+**The File Meta group is replaced rather than carried through.** §E.1.1 requires it "replaced with a
+description of the de-identifying application", because otherwise "identity information may leak
+through unmodified File Meta Information ... includ[ing] information regarding Application Entity
+Titles, Presentation Addresses, implementation information, and private information". So:
+
+- `(0002,0016)` Source Application Entity Title is **gone** from the output.
+- `(0002,0012)` Implementation Class UID and `(0002,0013)` Implementation Version Name **name
+  `@cosyte/dicom`** and hold none of the source's values.
+- Every non-modeled `(0002,xxxx)` element is **dropped**, not filtered: `(0002,0017)` Sending
+  Application Entity Title, `(0002,0018)` Receiving Application Entity Title, `(0002,0100)` Private
+  Information Creator UID, `(0002,0102)` Private Information, and anything a vendor invented.
+  **This deliberately breaks the byte-for-byte File Meta round trip** for de-identified
+  output; it still holds for parse-then-serialize. `report.fileMetaElementsDropped` names what went
+  and `report.fileMetaElementsDroppedCount` counts it, complete at any input size.
+- What survives identifies the **object**, not the sender: File Meta Information Version, Media
+  Storage SOP Class UID, Transfer Syntax UID, and the Media Storage SOP Instance UID (remapped
+  unless `RetainUIDs`). The 128-byte preamble was already written as zeros on every path.
+
+**Group 0004 is removed**, at every depth: §E.1.1 requires it "removed from any SOP Instance or DICOM
+File other than a DICOMDIR File". `report.group0004Removals` names them (capped, with a context path
+for the nested ones) and `report.group0004RemovalCount` is the complete total.
+
+**The DICOMDIR carve-out is honoured and is not silent.** If `(0002,0002)` is
+`1.2.840.10008.1.3.10` (Media Storage Directory Storage) the `(0004,xxxx)` elements stay, and the run
+raises `DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED`: this library does not model DICOMDIR, so the
+rest of that bullet - de-identifying the directory records, rebuilding the File-set from the
+de-identified files it references, removing a non-de-identified DICOMDIR from the File-set - was
+**not** done. Do not treat such output as a conformant de-identified DICOMDIR.
+
 This is **metadata-level** de-identification. Pixel data is out of scope: when an object carries
 burned-in annotation this layer cannot remove, you get a `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED`
 warning on the report rather than a false sense of safety. Pixel cleaning is deferred to
@@ -481,6 +515,11 @@ serializeDicom(parseDicom(out)).equals(out); // => true
 Only the typed `FileMeta` fields round-trip through the model; the rest of File Meta is recomputed
 spec-clean on emit. Non-modeled `(0002,xxxx)` elements the source carried are preserved verbatim and
 re-emitted in ascending tag order.
+
+**That is the parse-then-serialize path, and it is not what `deidentify()` output does.** A
+de-identified File Meta group describes this de-identifying application instead of the source, so the
+byte-for-byte round trip above does not hold for it. See
+[De-identify before sharing](#4-de-identify-before-sharing).
 
 ---
 
