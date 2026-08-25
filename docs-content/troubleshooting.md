@@ -441,6 +441,19 @@ Each is tracked as a future companion package, not a gap to be filled here:
   exposes one name for both and it carries the **full-dates** column, so on the 169 attributes where
   the two columns disagree you keep the real value where modified-dates would have cleaned it.
   Activate it only when real dates are genuinely required; date shifting is not done at this layer.
+- **The de-identified object records which of those two states it is in, and you read it off the
+  object rather than asking the sender.** `deidentify()` writes `(0028,0303) Longitudinal Temporal
+  Information Modified` on every run: **`UNMODIFIED`** when `RetainLongitudinalTemporal` was active,
+  **`REMOVED`** when it was not, per PS3.15 §E.3.6 and §E.2. A `REMOVED` and an `UNMODIFIED` on an
+  object with no dates in it mean different things and both are useful: the first says this run was
+  not permitted to keep dates, the second says any dates present are real. **It is replaced rather
+  than added to** (the attribute is `VM 1`), so a value the source file carried is gone from the
+  output and the state you read is this run's. The third state PS3.15 defines, **`MODIFIED`, is never
+  written here** - see [Known limitations](./limitations) - so if you shift dates yourself after the
+  call, the `UNMODIFIED` in your output is wrong for your object and overwriting it is your job.
+  **Read the top-level Data Set's `(0028,0303)`, never one nested in a Sequence Item**: the attribute
+  has no row in Table E.1-1, so a nested copy is retained by omission and still says whatever the
+  sender wrote.
 
 ## Scope (non-goals)
 

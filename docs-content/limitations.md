@@ -160,9 +160,29 @@ structural fact about DICOM that no reader can resolve from the wire.
   unchanged: narrowing it would empty the field on every well-formed file, which is what it exists to
   record.
 
+- **`(0028,0303)` is written in two states and `MODIFIED` is not one of them.** `deidentify()` writes
+  `(0028,0303) Longitudinal Temporal Information Modified` on every run: **`REMOVED`** when no Retain
+  Longitudinal Temporal Information Option was active, **`UNMODIFIED`** when `RetainLongitudinalTemporal`
+  was. PS3.15 2026c §E.3.6 defines a **third** state, `MODIFIED`, for its With Modified Dates Option,
+  and **this library never produces it**, on any option set. That is a limitation and not an
+  oversight, for two reasons that both have to change before it moves: this package exposes one
+  temporal option name and it carries the **full-dates** column, so the modified-dates column is not
+  resolvable here at all; and `MODIFIED` asserts that the object's dates were **aggregated or
+  transformed** to reduce re-identification while preserving longitudinal relationships, which is a
+  date transformation this metadata layer performs on nothing. Writing it would be a claim about work
+  nobody did, in an attribute a recipient acts on and cannot re-derive. **If you shift dates yourself
+  after the call, the `UNMODIFIED` in your output is wrong for your object**: overwrite it, and
+  describe the manner of modification in your Conformance Statement, which §E.3.6 requires of anyone
+  claiming that Option. **The declaration is the top-level Data Set's own**, which is where §E.2 and
+  §E.3.6 put it: `(0028,0303)` has no row in Table E.1-1, so a copy the sender nested inside a
+  Sequence Item is retained by omission like every other unlisted attribute and still says whatever
+  that sender wrote. Read the Data Set's own `(0028,0303)`, never a nested one.
+
 - **A `DeidentifyReport` is not safe to log whole.** The value-bearing fields are named on the
   `DeidentifyReport` type. **Read the list on the type, never a count quoted anywhere** (including
-  here): the count read one, then two, then three, and was wrong each time.
+  here): the count read one, then two, then three, and was wrong each time. `(0028,0303)` is **not**
+  on it either: like `(0012,0062)`, it is a statement the object makes about itself, and the report's
+  shape is unchanged by it.
 
 - **A `DicomParseError` is not safe to log whole.** It carries `snippet`, up to 16 raw source bytes as
   hex, and the library does not redact them. Log `err.code`, `err.byteOffset`, `err.offsetFrame` and

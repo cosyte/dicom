@@ -194,6 +194,22 @@ const LOAD_BEARING: readonly { part: VendoredPart; clause: string; sentence: str
     clause: "E.3.10",
     sentence: "Private Data Element Characteristics Sequence",
   },
+  {
+    // The `REMOVED` half of the temporal declaration. The docs state this as an obligation on the
+    // Basic Profile, so the Basic Profile's own clause has to carry it: §E.3.6 carries the other two
+    // states and citing it for this one would be the §7.5/§7.5.2 confusion again.
+    part: "PS3.15",
+    clause: "E.2",
+    sentence: 'shall be added to the Data Set with a Value of "REMOVED"',
+  },
+  {
+    // The `UNMODIFIED` half, and the clause that also defines the third state this library does not
+    // produce. Pinning the Full Dates sentence rather than the bare attribute name is what keeps the
+    // docs' two-states claim tied to the branch that earns it.
+    part: "PS3.15",
+    clause: "E.3.6",
+    sentence: 'shall be added to the Data Set with a Value of "UNMODIFIED"',
+  },
 ];
 
 /** Markdown the gate covers: the npm-visible README plus everything the docs site ships. */
