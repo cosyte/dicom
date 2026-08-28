@@ -27,6 +27,12 @@
  * - Removes all private attributes by default; with `RetainSafePrivate` + a
  *   {@link Profile}, keeps the private data elements the profile's overlay names
  *   as safe (and the private-creator elements the profile recognizes).
+ * - Writes `(0028,0303)` Longitudinal Temporal Information Modified with the
+ *   state this run's option set put the object in: `UNMODIFIED` under
+ *   `RetainLongitudinalTemporal`, `REMOVED` without it (PS3.15 §E.3.6 and §E.2).
+ *   **Replaced, not joined** - it is `VM 1`, so a prior sender's declaration is
+ *   discarded rather than appended to. The third state `MODIFIED` is never
+ *   emitted; see {@link TEMPORAL_STATE}.
  * - Remaps `(0002,0003)` Media Storage SOP Instance UID consistently (unless
  *   `RetainUIDs`), writes `(0012,0062)` Patient Identity Removed = `YES`, **adds**
  *   its method text to `(0012,0063)` De-identification Method rather than
@@ -42,6 +48,12 @@
  *   dummy is instead removed/emptied.
  * - `C` (clean) is a conservative blank, not a meaning-preserving structured
  *   replacement (which needs domain context the metadata layer lacks).
+ * - The temporal declaration is written at the **top level only**, which is where
+ *   §E.2 and §E.3.6 put it and where a recipient reads it. `(0028,0303)` has no
+ *   row in Table E.1-1, so a copy the sender nested inside a Sequence Item is
+ *   retained by omission like any other unlisted attribute and still says
+ *   whatever that sender wrote. Read the Data Set's own `(0028,0303)`, never a
+ *   nested one.
  * - Pixel-level options (`CleanPixelData`, `CleanRecognizableVisual`) are out of
  *   scope; burned-in text is warned, never cleaned.
  * - A private data element kept under `RetainSafePrivate` is kept *verbatim*
@@ -210,6 +222,50 @@ const TAG_PATIENT_IDENTITY_REMOVED: Tag = "00120062";
 const TAG_DEIDENTIFICATION_METHOD: Tag = "00120063";
 const TAG_PIXEL_DATA: Tag = "7FE00010";
 const TAG_BURNED_IN_ANNOTATION: Tag = "00280301";
+const TAG_LONGITUDINAL_TEMPORAL_INFORMATION_MODIFIED: Tag = "00280303";
+
+/**
+ * The temporal-state Values PS3.15 2026c defines for
+ * `(0028,0303) Longitudinal Temporal Information Modified`, and the two of the
+ * three this library can honestly write.
+ *
+ * - `REMOVED` - §E.2 Basic Application Level Confidentiality Profile: "The
+ *   Attribute Longitudinal Temporal Information Modified (0028,0303) shall be
+ *   added to the Data Set with a Value of "REMOVED" if none of the Retain
+ *   Longitudinal Temporal Information Options is applied."
+ * - `UNMODIFIED` - §E.3.6 Retain Longitudinal Temporal Information Options, Full
+ *   Dates branch: "The Attribute Longitudinal Temporal Information Modified
+ *   (0028,0303) shall be added to the Data Set with a Value of "UNMODIFIED"."
+ *
+ * 🛑 **THE THIRD VALUE IS NOT HERE AND MUST NOT BE ADDED WITHOUT THE COLUMN THAT
+ * EARNS IT.** §E.3.6's Modified Dates branch requires `MODIFIED`, and it means
+ * that the run resolved Table E.1-1's *modified-dates* column and that the dates
+ * in the object were aggregated or transformed. {@link DEIDENTIFY_OPTIONS}
+ * exposes one temporal name, it carries the full-dates column, and this package
+ * performs no date transformation at all - so every value this library could put
+ * in that attribute would be a claim it did not perform. A `MODIFIED` this run
+ * emitted would be a **false safety declaration**, which is the worse half of
+ * every leak this module has been refused for: a recipient acts on it and never
+ * re-derives it. It arrives with the second column, not before.
+ */
+const TEMPORAL_STATE = { removed: "REMOVED", unmodified: "UNMODIFIED" } as const;
+
+/**
+ * The temporal state this run's option set puts the object in, as the exact
+ * Value §E.2 and §E.3.6 name.
+ *
+ * The predicate is the **option set**, never what the input happened to contain:
+ * the attribute records what the run was *permitted* to do with dates, so a Data
+ * Set carrying no date or time attribute at all still gets the state its options
+ * earned. That is what makes it readable by a recipient who cannot see the
+ * source - "there were no dates here" and "the dates were taken out" are the same
+ * output, and only this attribute separates them.
+ */
+function temporalState(active: ReadonlySet<DeidentifyOption>): string {
+  return active.has("RetainLongitudinalTemporal")
+    ? TEMPORAL_STATE.unmodified
+    : TEMPORAL_STATE.removed;
+}
 
 /**
  * The Group Number PS3.15 2026c §E.1.1 orders removed "from any SOP Instance or
@@ -2375,6 +2431,13 @@ function hasUncleanedBurnedIn(ds: Dataset): boolean {
  * map. Everything in it is composed from static tables except `uidMap`, whose
  * keys are the source UIDs the file carried: treat that field as PHI.
  *
+ * The returned Data Set says what this run did to its **dates** as well as to its
+ * identity: `(0028,0303) Longitudinal Temporal Information Modified` carries
+ * `UNMODIFIED` when `RetainLongitudinalTemporal` was active and `REMOVED` when it
+ * was not, replacing any value the source carried at that tag. It is **not** on
+ * {@link DeidentifyReport} - like `(0012,0062)`, it is a statement the object
+ * makes about itself, and the report's shape is unchanged by it.
+ *
  * @throws {@link DeidentifyError} (`INVALID_OPTIONS`) for an unknown Retain option
  *   or a malformed `uidRoot`.
  *
@@ -2440,6 +2503,34 @@ export function deidentify(
   elements.set(
     TAG_DEIDENTIFICATION_METHOD,
     insertedScalar(TAG_DEIDENTIFICATION_METHOD, "LO", deidentMethod.value, littleEndian),
+  );
+  // 🩺 THE TEMPORAL DECLARATION, AND IT REPLACES RATHER THAN JOINS. PS3.15
+  // 2026c §E.2 and §E.3.6 both say the attribute "shall be added to the Data Set
+  // with a Value of" one named state - the same verb §E.1.1 uses for
+  // `(0012,0062)` two lines above, and NOT the "inserted in or added to" that
+  // makes `(0012,0063)` a provenance chain. `(0028,0303)` is `VM 1`: a prior
+  // sender's state joined to this run's would encode two contradictory claims in
+  // one single-valued attribute, and a recipient reading either of them would be
+  // reading a state no run produced. `Map.set` on a tag the source carried
+  // replaces the element **in place**, keeping its position, so this leaves
+  // exactly one `(0028,0303)` whatever the source had there - including one under
+  // some other VR, or holding a value the standard does not define, since what is
+  // written is a fresh `CS` element rather than an edit of the old one.
+  //
+  // It is written unconditionally, on the option set alone. `(0028,0303)` has no
+  // row in Table E.1-1 (checked: the generated action table carries no entry for
+  // it), so no action code resolves it and the per-element pass neither audits
+  // nor rewrites a source-supplied value - which is exactly why this replacement
+  // is the only thing standing between a recipient and a prior sender's stale
+  // declaration.
+  elements.set(
+    TAG_LONGITUDINAL_TEMPORAL_INFORMATION_MODIFIED,
+    insertedScalar(
+      TAG_LONGITUDINAL_TEMPORAL_INFORMATION_MODIFIED,
+      "CS",
+      Buffer.from(temporalState(active), "latin1"),
+      littleEndian,
+    ),
   );
 
   const warnings: DicomParseWarning[] = [...processed.warnings];

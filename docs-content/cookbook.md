@@ -317,6 +317,17 @@ dataset.study.accessionNumber; // => undefined
 // UIDs are remapped to deterministic 2.25 replacements that stay consistent across files.
 dataset.study.instanceUid?.startsWith("2.25."); // => true
 
+// The object says what this run did to its DATES, so a recipient does not have to
+// guess. PS3.15 2026c section E.2 requires REMOVED when no Retain Longitudinal
+// Temporal Information Option is applied, which is this call.
+dataset.get("00280303")?.vr; // => "CS"
+dataset.get("00280303")?.value; // => { kind: "strings", values: ["REMOVED"] }
+
+// The other state, and the only other one this library writes: section E.3.6's
+// Full Dates branch requires UNMODIFIED, and the real dates are then in the output.
+const dated = deidentify(ds, { retain: ["RetainLongitudinalTemporal"] }).dataset;
+dated.get("00280303")?.value; // => { kind: "strings", values: ["UNMODIFIED"] }
+
 // The report lists what was acted on. It is NOT value-free: see the fields
 // named on DeidentifyReport before logging one whole.
 report.attributes.length > 0; // => true
@@ -365,6 +376,21 @@ burned-in annotation this layer cannot remove, you get a `DICOM_BURNED_IN_ANNOTA
 warning on the report rather than a false sense of safety. Pixel cleaning is deferred to
 `@cosyte/dicom-pixel`. Opt into any of the nine metadata-affecting Annex E Options (e.g. `RetainUIDs`,
 `RetainLongitudinalTemporal`, `CleanDescriptors`) via `deidentify(ds, { retain: [...] })`.
+
+**The de-identified object declares what happened to its dates, in two states and only two.**
+`(0028,0303) Longitudinal Temporal Information Modified` is written on every run: **`REMOVED`** when
+no Retain Longitudinal Temporal Information Option was active, **`UNMODIFIED`** when
+`RetainLongitudinalTemporal` was. PS3.15 2026c §E.2 states the first ("The Attribute Longitudinal
+Temporal Information Modified (0028,0303) shall be added to the Data Set with a Value of `REMOVED`
+if none of the Retain Longitudinal Temporal Information Options is applied") and §E.3.6 the second,
+for its Full Dates branch. That is the whole point of the attribute: without it, a recipient holding
+dates cannot tell real ones from scrubbed ones, and a study with no dates to begin with is
+indistinguishable from one this run emptied. **It is replaced, not added to** - the attribute is
+`VM 1`, so a `(0028,0303)` the source already carried is discarded rather than joined, which is the
+opposite of what `(0012,0063)` does with a prior method text and is the standard's own asymmetry.
+**The third state, `MODIFIED`, is never written by this library**: see
+[Known limitations](./limitations) for why, and for what to do if you shift dates yourself after the
+call.
 
 **Before you rely on this on real data, read [Known limitations](./limitations).** Several routes are
 measured, disclosed and open, and the report reading clean is not by itself proof that nothing
