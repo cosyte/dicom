@@ -31,6 +31,8 @@ export {
   type DeidentifyReport,
   type DeidentifyResult,
   type EmbeddedAttributeFinding,
+  type FileMetaDroppedElement,
+  type Group0004Removal,
   type UnauditableSequenceFinding,
   type UndefinedVrFinding,
   type UnenumerablePrivateRemoval,

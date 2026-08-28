@@ -25,6 +25,11 @@ import type { Tag, VR } from "../dictionary/types.js";
  * on-wire value, even-length per PS3.5 §6.2) rather than dropped. `value` is a
  * defensive copy, so the view never aliases the parsed input buffer.
  *
+ * 🛑 **THE ROUND TRIP IS PARSE-THEN-SERIALIZE ONLY. `deidentify()` DROPS EVERY
+ * ELEMENT THIS TYPE DESCRIBES**, and the exact examples above are why: a Sending
+ * AE Title and a Private Information pair are the identity information PS3.15
+ * §E.1.1 names. See {@link FileMeta.extraElements} for the whole carve-out.
+ *
  * @example
  * ```ts
  * import { parseDicom } from "@cosyte/dicom";
@@ -80,6 +85,32 @@ export interface FileMeta {
    * Any `(0002,xxxx)` elements the source carried that the typed fields above
    * do not model, preserved in tag order so a round-trip re-emits the File Meta
    * group byte-for-byte. Omitted when the group held only modeled elements.
+   *
+   * ## 🛑 The byte-for-byte round trip does NOT hold for `deidentify()` output
+   *
+   * That promise is about **parse then serialize**, and it is scoped to it
+   * deliberately rather than by omission. `deidentify()` rebuilds this group to
+   * describe the de-identifying application instead of the source (PS3.15
+   * §E.1.1: the File Meta Information "shall be replaced with a description of
+   * the de-identifying application", because otherwise "identity information may
+   * leak through unmodified File Meta Information ... includ[ing] information
+   * regarding Application Entity Titles, Presentation Addresses, implementation
+   * information, and private information"). So on the de-identify path this
+   * array is **dropped in full** - not filtered, not sampled - and
+   * `sourceApplicationEntityTitle` goes with it, while
+   * `implementationClassUID` and `implementationVersionName` are replaced with
+   * this library's own.
+   *
+   * The elements that survive are the ones that identify the **object** rather
+   * than its sender: `fileMetaInformationVersion`, `mediaStorageSOPClassUID`,
+   * `transferSyntaxUID`, and `mediaStorageSOPInstanceUID` (remapped unless
+   * `RetainUIDs` is active). What was dropped is counted on the report
+   * `deidentify()` returns, so a caller learns the fidelity loss from the run
+   * rather than by diffing the bytes.
+   *
+   * A caller that needs the source group verbatim must read it off the
+   * **parsed** dataset; it is not recoverable from de-identified output, and it
+   * is not meant to be.
    */
   readonly extraElements?: readonly FileMetaRawElement[];
 }

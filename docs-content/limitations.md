@@ -37,6 +37,7 @@ These are non-goals, not gaps. Each is a companion package or another tool's job
 | **Terminology resolution.** Coded values are surfaced with their designator and canonical source but are never validated, looked up, or cross-mapped; `SRT` is not normalized to `SCT`              | `@cosyte/terminology` |
 | **Typed SR and RT models.** SR content trees and RT objects are navigable as raw structure, with no clinical model over them. Deliberately flagged and deferred rather than half-built              | out of scope for v1   |
 | **Patient matching.** Patient ID is surfaced with its issuer; the library never decides that two identifiers are the same person                                                                    | out of scope          |
+| **DICOMDIR modelling.** A Media Storage Directory Storage object parses as an ordinary Data Set; there is no directory-record model and no File-set view, so `deidentify()` cannot rebuild one      | out of scope for v1   |
 
 Supported transfer syntaxes, and exactly these four: Implicit VR LE `1.2.840.10008.1.2`, Explicit VR
 LE `...1.2.1`, Deflated Explicit VR LE `...1.2.1.99`, Explicit VR BE `...1.2.2` (retired,
@@ -160,6 +161,18 @@ structural fact about DICOM that no reader can resolve from the wire.
   unchanged: narrowing it would empty the field on every well-formed file, which is what it exists to
   record.
 
+- **A de-identified DICOMDIR is NOT File-set conformant, and the run says so rather than implying
+  otherwise.** PS3.15 §E.1.1's group-0004 bullet has three clauses. This package discharges the
+  first - `(0004,xxxx)` removed from everything that is not a DICOMDIR - and honours the carve-out
+  for an object whose `(0002,0002)` is `1.2.840.10008.1.3.10`, keeping its `(0004,xxxx)` elements.
+  The other two clauses need a DICOMDIR model and a File-set view this library does not have: the
+  directory records are not de-identified as directory records, no File-set is rebuilt from the
+  de-identified files it references, and no existing non-de-identified DICOMDIR is removed from any
+  File-set. Every such run raises `DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED`, **including one
+  where the object carried no `(0004,xxxx)` element at all**, because what was not discharged has
+  nothing to do with what the object happened to carry. Build a de-identified File-set from the
+  de-identified files, not from this output.
+
 - **`(0028,0303)` is written in two states and `MODIFIED` is not one of them.** `deidentify()` writes
   `(0028,0303) Longitudinal Temporal Information Modified` on every run: **`REMOVED`** when no Retain
   Longitudinal Temporal Information Option was active, **`UNMODIFIED`** when `RetainLongitudinalTemporal`
@@ -210,6 +223,13 @@ on the wire.
   Measure it rather than assuming one.
 - **A failed CP-246 `UN` descent emits nothing.** The honest test for a consumer is
   `el.items === undefined`, **not** `ds.warnings`.
+- **The byte-for-byte File Meta round trip is scoped to parse-then-serialize, and `deidentify()` is
+  outside it on purpose.** A de-identified File Meta group describes this de-identifying application
+  (PS3.15 §E.1.1), so every non-modeled `(0002,xxxx)` element the source carried is dropped and the
+  Source AE Title and the source's implementation identity go with it. This is a deliberate fidelity
+  loss, recorded on `report.fileMetaElementsDropped` and counted on
+  `report.fileMetaElementsDroppedCount`, and it is **not** recoverable from the output. If you need
+  the source group verbatim, read it off the parsed dataset before the call.
 - **`NESTING_DEPTH_LIMIT` is this library's bound, not the standard's.** A fully conformant file
   nested deeper than it is refused, and a sequence refused that way is emptied by `deidentify()`
   rather than shipped, so expect data loss on such a file.

@@ -564,6 +564,138 @@ export interface UndefinedVrFinding {
 }
 
 /**
+ * One non-modeled `(0002,xxxx)` File Meta element `deidentify()` **dropped**
+ * rather than re-emitting into de-identified output.
+ *
+ * ## Why the drop is unconditional
+ *
+ * PS3.15 2026c §E.1.1 requires the File Meta Information of a de-identified
+ * DICOM File to "be replaced with a description of the de-identifying
+ * application", because otherwise "identity information may leak through
+ * unmodified File Meta Information ... [t]his includes information regarding
+ * Application Entity Titles, Presentation Addresses, implementation
+ * information, and private information". A non-modeled `(0002,xxxx)` element is
+ * by definition one this library cannot describe: `(0002,0017)` Sending AE
+ * Title, `(0002,0018)` Receiving AE Title, `(0002,0100)` Private Information
+ * Creator UID and `(0002,0102)` Private Information are all in that class, and
+ * so is anything a vendor invented. The fail-safe direction is to drop what
+ * cannot be described, so no Annex E Option and no parse quality changes the
+ * outcome.
+ *
+ * ## Capped record, complete count
+ *
+ * The array is bounded per run (`MAX_FILE_META_DROP_FINDINGS`) because the
+ * number of elements a crafted File Meta group can carry is chosen by the input.
+ * The **action** is not bounded: every such element is dropped whether or not it
+ * is listed, and {@link DeidentifyReport.fileMetaElementsDroppedCount} is the
+ * complete total at any input size. An array exactly the cap's length means "at
+ * least this many"; read the count, not the length.
+ *
+ * ## What it carries
+ *
+ * `tag` and `vr` come off the wire. The File Meta pre-pass stops at the first
+ * element whose group is not `0002`, so a tag reaching this record always has
+ * `0002` as its group, but its element number is two bytes the file supplied and
+ * a File Meta element that over-declared its length can desynchronize the
+ * pre-pass onto two bytes of somebody's value. Same standing exception as
+ * {@link DeidentifyReport.removedPrivateTags}, by a narrower route and with two
+ * bytes rather than four. `byteLength` is the length of the value that was
+ * dropped, read off that same header. It is published because *what* was dropped
+ * is the whole audit value of a record of a deliberate fidelity loss.
+ *
+ * @example
+ * ```ts
+ * import { deidentify, parseDicom, type FileMetaDroppedElement } from "@cosyte/dicom";
+ * const { report } = deidentify(parseDicom(buf));
+ * report.fileMetaElementsDropped.forEach((d: FileMetaDroppedElement) => {
+ *   console.warn(`${d.tag} ${d.vr}: ${String(d.byteLength)} bytes not re-emitted`);
+ * });
+ * ```
+ */
+export interface FileMetaDroppedElement {
+  /** The dropped element's `(0002,xxxx)` tag. */
+  readonly tag: Tag;
+  /** The VR the source file wrote for it (the File Meta group is Explicit VR LE). */
+  readonly vr: VR;
+  /** Byte length of the value that is not in the de-identified output. */
+  readonly byteLength: number;
+}
+
+/**
+ * One Data Element whose Group Number is `0004`, **removed** from de-identified
+ * output.
+ *
+ * ## The rule, and the one object it does not apply to
+ *
+ * PS3.15 2026c §E.1.1: "All Data Elements with a Group Number of 0004 shall be
+ * removed from any SOP Instance or DICOM File other than a DICOMDIR File." The
+ * rule is unconditional over the Annex E Options - it sits in the list §E.1.1
+ * imposes on any de-identifier claim and no Option qualifies it - so no
+ * `retain` argument brings a `(0004,xxxx)` element back.
+ *
+ * The DICOMDIR carve-out is decided once per run from the source File Meta's
+ * `(0002,0002)` Media Storage SOP Class UID, and only the value
+ * `1.2.840.10008.1.3.10` (Media Storage Directory Storage) selects it. An object
+ * that declares no Media Storage SOP Class UID at all is therefore **not** a
+ * DICOMDIR and the removal applies to it. When the carve-out does fire, this
+ * array is empty and `DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED` says what
+ * else the run did not do.
+ *
+ * ## Every depth, and the removal decides nothing below it
+ *
+ * The test runs on each element of each Data Set the run reaches, root and
+ * Sequence Item alike, so a `(0004,xxxx)` planted inside an item is removed
+ * there too. It is a test on **one element's tag**: it never stands in for a
+ * decision about the Data Sets nested inside some other element, which is the
+ * shape `DICOM-PRIVATE-SQ-CARVE-OUT` was opened for. Removing a `(0004,xxxx)`
+ * that is itself a Sequence removes its items with it, exactly as a Table E.1-1
+ * `X` action does.
+ *
+ * ## Capped record, complete count
+ *
+ * Bounded per run at `MAX_GROUP_0004_FINDINGS`, on its own counter so a flood of
+ * one diagnostic class cannot spend another's budget. The removal itself is not
+ * bounded, and {@link DeidentifyReport.group0004RemovalCount} is complete at any
+ * input size.
+ *
+ * ## What it carries
+ *
+ * `tag` is composed from four bytes of the source and `contextPath` from four
+ * more per segment - the standing exception
+ * {@link DeidentifyReport.removedPrivateTags} and
+ * {@link UnauditableSequenceFinding} already carry, by the same route. On a
+ * well-formed file these are the DICOMDIR directory-structuring tags PS3.6
+ * registers and carry nothing.
+ *
+ * @example
+ * ```ts
+ * import { deidentify, parseDicom, type Group0004Removal } from "@cosyte/dicom";
+ * const { report } = deidentify(parseDicom(buf));
+ * report.group0004Removals.forEach((r: Group0004Removal) => {
+ *   console.warn(`${r.tag} removed`, r.contextPath ?? "root");
+ * });
+ * ```
+ */
+export interface Group0004Removal {
+  /** The removed element's tag. Its group is always `0004`. */
+  readonly tag: Tag;
+  /**
+   * The outcome, always `"removed"`: no element bearing that tag is in the Data
+   * Set that held it, in the returned dataset or in the serialized bytes.
+   */
+  readonly applied: "removed";
+  /**
+   * Tag/index chain when the element was inside a sequence item; omitted at the
+   * root. **Built by the same descent as
+   * {@link DeidentifiedAttribute.contextPath} and carrying the same caveat:
+   * each segment's tag is read off the wire, bound by nothing, so on a
+   * desynchronized read it can be four bytes of a value.** Read that field's
+   * note before logging this one.
+   */
+  readonly contextPath?: readonly string[];
+}
+
+/**
  * The audit trail returned alongside the de-identified dataset.
  *
  * Most fields are composed from static tables: Part 6 keywords, Annex E action
@@ -610,7 +742,17 @@ export interface UndefinedVrFinding {
  *   them is a product call rather than a defect fix: a bound empties the field
  *   on every well-formed file, where the number is exactly the audit
  *   information it exists to carry.
- * - **`contextPath`, on all four findings that carry one** - see
+ * - **`group0004Removals[].tag`** - see {@link Group0004Removal}. The same four
+ *   bytes by the same route as `removedPrivateTags`, on the record of a removal
+ *   PS3.15 §E.1.1 requires. On a well-formed file these are PS3.6's registered
+ *   DICOMDIR directory-structuring tags and carry nothing.
+ * - **`fileMetaElementsDropped[].tag` and `.vr`** - see
+ *   {@link FileMetaDroppedElement}. Two bytes rather than four: the File Meta
+ *   pre-pass stops at the first non-`0002` group, so the group half of the tag
+ *   is fixed and only the element number is free, and the VR is two more bytes
+ *   the same desynchronized read would supply. `.byteLength` joins
+ *   `undefinedVrElements[].byteLength` in the entry above by the same route.
+ * - **`contextPath`, on every finding that carries one** - see
  *   {@link DeidentifiedAttribute.contextPath}, which holds the measurement. The
  *   segment tags come off the wire with no table behind them, so a fabricated
  *   `SQ` header the reader descended is named there, `PRE-EXISTING`, with **no
@@ -778,6 +920,57 @@ export interface DeidentifyReport {
    * because a vouched-for private `SQ` is routed into the ordinary `SQ` branches.
    */
   readonly undefinedVrElements: readonly UndefinedVrFinding[];
+  /**
+   * Non-modeled `(0002,xxxx)` File Meta elements this run **dropped** instead of
+   * re-emitting, because the de-identified File Meta group describes this
+   * de-identifying application rather than the source (PS3.15 §E.1.1). Empty
+   * when the source group held only modeled elements, and empty when the source
+   * parsed with no File Meta group at all.
+   *
+   * **This is the record of a deliberate fidelity loss, not of a defect.** The
+   * byte-for-byte File Meta round trip `FileMeta.extraElements` documents is
+   * scoped to parse-then-serialize and does not hold here.
+   *
+   * **Capped; the count beside it is not.** See {@link FileMetaDroppedElement}
+   * and {@link DeidentifyReport.fileMetaElementsDroppedCount}.
+   */
+  readonly fileMetaElementsDropped: readonly FileMetaDroppedElement[];
+  /**
+   * How many non-modeled `(0002,xxxx)` elements this run dropped, **complete at
+   * any input size**.
+   *
+   * The field exists because its sibling array is capped: a caller that needs to
+   * *count* the fidelity loss cannot get the number from an array whose length
+   * saturates, and re-parsing the output does not give it either - the elements
+   * are gone from the output by design. One number cannot be inflated by an
+   * attacker-chosen element count, so bounding it would buy nothing.
+   */
+  readonly fileMetaElementsDroppedCount: number;
+  /**
+   * Data Elements whose Group Number is `0004`, **removed** at every depth this
+   * run reached, as PS3.15 §E.1.1 requires "from any SOP Instance or DICOM File
+   * other than a DICOMDIR File".
+   *
+   * Empty when the object carried none, and empty when it declared Media Storage
+   * SOP Class UID `1.2.840.10008.1.3.10` - the carve-out, which is disclosed on
+   * {@link DeidentifyReport.warnings} as
+   * `DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED` rather than left to be
+   * inferred from an empty array.
+   *
+   * **Capped; the count beside it is not.** See {@link Group0004Removal} and
+   * {@link DeidentifyReport.group0004RemovalCount}.
+   */
+  readonly group0004Removals: readonly Group0004Removal[];
+  /**
+   * How many `(0004,xxxx)` elements this run removed, **complete at any input
+   * size**, for the reason
+   * {@link DeidentifyReport.fileMetaElementsDroppedCount} states.
+   *
+   * It is also the field that tells the two §E.1.1 rules apart at a glance: this
+   * one counts group-0004 removals, the other counts File Meta drops, and
+   * neither can be read off the other.
+   */
+  readonly group0004RemovalCount: number;
   /**
    * Source UID → replacement UID, for cross-file consistency. The **keys are
    * document values**, not composed identifiers: this is the one field of the

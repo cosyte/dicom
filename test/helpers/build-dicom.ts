@@ -230,6 +230,17 @@ export interface BuildDicomOptions {
   readonly implementationClassUID?: string;
   readonly implementationVersionName?: string;
   /**
+   * `(0002,0016)` Source Application Entity Title - the AE Title of the system
+   * that wrote the file, and the element PS3.15 §E.1.1 names first among the
+   * identity information a de-identified File Meta group must not carry.
+   *
+   * A typed option rather than a `fileMetaExtraElements` entry because the tag
+   * is modeled: the parser projects it onto `FileMeta.sourceApplicationEntityTitle`
+   * and excludes it from `extraElements`, so a fixture that wrote it as an
+   * "extra" would be asserting against the wrong field.
+   */
+  readonly sourceApplicationEntityTitle?: string;
+  /**
    * Non-modeled `(0002,xxxx)` File Meta elements (e.g. Sending/Receiving AE
    * Title, Private Information), emitted Explicit VR LE inside the File Meta
    * group and counted in `(0002,0000)`. Caller passes even-length values.
@@ -273,6 +284,11 @@ export function buildDicom(opts: BuildDicomOptions): Buffer {
   if (opts.implementationVersionName !== undefined) {
     fileMetaElements.push(
       buildExplicitLeElement("00020013", "SH", padText(opts.implementationVersionName)),
+    );
+  }
+  if (opts.sourceApplicationEntityTitle !== undefined) {
+    fileMetaElements.push(
+      buildExplicitLeElement("00020016", "AE", padText(opts.sourceApplicationEntityTitle)),
     );
   }
   for (const extra of opts.fileMetaExtraElements ?? []) {
