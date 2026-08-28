@@ -34,6 +34,18 @@
  * Part 10 output AND asserts the decoded value is a single-element array, and the
  * mutation controls below prove both halves can go red.
  *
+ * ## Why the last describe block exists
+ *
+ * Two §E.1.1 rules landed on this same de-identify path from another slice - the
+ * File Meta group is replaced, and group 0004 is removed from everything that is
+ * not a DICOMDIR. Neither touches `(0028,0303)`: one rewrites `(0002,xxxx)`,
+ * which is not the Data Set, and the other tests a Group Number this attribute
+ * does not have. That is an argument, and an argument is not a measurement, so
+ * the final block runs the two rules and this one in the **same call** and pins
+ * that each still does its own job. It asserts the other rule actually fired
+ * rather than assuming it, because a fixture that quietly stopped triggering it
+ * would make the whole block vacuous.
+ *
  * Everything is synthetic: fixtures are built in memory by `build-dicom` and no
  * real patient data is used.
  *
@@ -48,9 +60,14 @@ import { deidentify, parseDicom, serializeDicom } from "../../src/index.js";
 import type { Dataset } from "../../src/dataset/dataset.js";
 import { DEIDENTIFY_OPTIONS, type DeidentifyOption } from "../../src/deident/types.js";
 import type { Tag, VR } from "../../src/dictionary/types.js";
+import { COSYTE_IMPLEMENTATION_CLASS_UID } from "../../src/serialize/file-meta.js";
 import { buildDicom, type BuildDicomOptions } from "../helpers/build-dicom.js";
 
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
+/** Media Storage Directory Storage - the one SOP Class the group-0004 carve-out is keyed to. */
+const SOP_CLASS_DICOMDIR = "1.2.840.10008.1.3.10";
+/** Anything else; here, CT Image Storage. */
+const SOP_CLASS_CT = "1.2.840.10008.5.1.4.1.1.2";
 
 /** `(0028,0303)`, the attribute under test. */
 const TEMPORAL: Tag = "00280303";
@@ -446,5 +463,126 @@ describe("(0028,0303): survives serialize-then-reparse, with no pad in the compa
       if (decoded?.kind === "strings") codes.push(...(decoded.warnings ?? []).map((w) => w.code));
     }
     expect(codes).toStrictEqual([]);
+  });
+});
+
+describe("(0028,0303) beside the other PS3.15 §E.1.1 rules on this path", () => {
+  /**
+   * A dated object that also carries `(0004,xxxx)` at the root and inside a
+   * Sequence Item, plus an identity-bearing File Meta group.
+   *
+   * The nested `(0004,xxxx)` sits inside `(0008,1115)` and not inside a
+   * `(0004,xxxx)` carrier, so it is reached by descent rather than removed with
+   * its parent.
+   */
+  function buildDirectoryBearingDated(
+    overrides: Partial<BuildDicomOptions> = {},
+  ): BuildDicomOptions {
+    return {
+      transferSyntax: TS_EXPLICIT_LE,
+      mediaStorageSOPClassUID: SOP_CLASS_CT,
+      mediaStorageSOPInstanceUID: "1.2.840.113619.2.55.3.1",
+      sourceApplicationEntityTitle: "ACMEGEN_CT01",
+      fileMetaExtraElements: [{ tag: "00020017", vr: "AE", value: pad("ACMEGEN_SEND") }],
+      elements: [
+        { tag: STUDY_DATE, vr: "DA", value: pad("20240115") },
+        { tag: STUDY_TIME, vr: "TM", value: pad("101500") },
+        { tag: "00100010", vr: "PN", value: pad("DOE^JANE") },
+        { tag: "00041130", vr: "CS", value: pad("ACMEGEN_FILESET") },
+        {
+          tag: REF_SERIES_SQ,
+          // The Series Instance UID keeps the item non-empty once the
+          // `(0004,xxxx)` beside it is removed: an item emptied by that removal
+          // reparses with `DICOM_EMPTY_ITEM_IN_SEQUENCE`, which is a fact about
+          // the fixture rather than about either rule under test.
+          items: [
+            {
+              elements: [
+                { tag: "0020000E", vr: "UI", value: pad("1.2.840.113619.2.55.3.3") },
+                { tag: "00041500", vr: "CS", value: pad("DICOM/PAT001") },
+              ],
+            },
+          ],
+        },
+      ],
+      ...overrides,
+    };
+  }
+
+  it("group-0004 removal fires in the same run, and the declaration is still written", () => {
+    for (const retain of [[], [TEMPORAL_OPTION]] as readonly (readonly DeidentifyOption[])[]) {
+      const { dataset, report } = deidentify(parseDicom(buildDicom(buildDirectoryBearingDated())), {
+        retain,
+      });
+      const want = retain.includes(TEMPORAL_OPTION) ? "UNMODIFIED" : "REMOVED";
+
+      // Non-vacuity: the other rule really ran on this input, at both depths.
+      expect(report.group0004RemovalCount).toBe(2);
+      expect(dataset.has("00041130")).toBe(false);
+
+      expect(decodedValues(dataset, TEMPORAL)).toStrictEqual([want]);
+      expect(dataset.get(TEMPORAL)?.vr).toBe("CS");
+      expect(countHeaders(serializeDicom(dataset), TEMPORAL, "CS")).toBe(1);
+    }
+  });
+
+  it("the DICOMDIR carve-out keeps group 0004 and does not suppress the declaration", () => {
+    // The other rule's opposite branch: when the object declares Media Storage
+    // Directory Storage its `(0004,xxxx)` elements stay. The temporal
+    // declaration is a Data Set statement either way, so it is written here too
+    // - if the two rules shared a predicate, this is the row that would go red.
+    for (const retain of [[], [TEMPORAL_OPTION]] as readonly (readonly DeidentifyOption[])[]) {
+      const { dataset, report } = deidentify(
+        parseDicom(
+          buildDicom(buildDirectoryBearingDated({ mediaStorageSOPClassUID: SOP_CLASS_DICOMDIR })),
+        ),
+        { retain },
+      );
+      const want = retain.includes(TEMPORAL_OPTION) ? "UNMODIFIED" : "REMOVED";
+
+      expect(report.group0004RemovalCount).toBe(0);
+      expect(dataset.has("00041130")).toBe(true);
+
+      expect(decodedValues(dataset, TEMPORAL)).toStrictEqual([want]);
+      expect(countHeaders(serializeDicom(dataset), TEMPORAL, "CS")).toBe(1);
+    }
+  });
+
+  it("survives the replaced File Meta group, through serialize and reparse", () => {
+    // The File Meta group is rebuilt rather than edited, and `(0028,0303)` is a
+    // Data Set element rather than a `(0002,xxxx)` one. This runs both in one
+    // call and reads the result back off the wire, so "different groups, no
+    // interaction" is measured on the bytes a recipient actually gets.
+    for (const retain of [[], [TEMPORAL_OPTION]] as readonly (readonly DeidentifyOption[])[]) {
+      const { dataset, report } = deidentify(parseDicom(buildDicom(buildDirectoryBearingDated())), {
+        retain,
+      });
+      const want = retain.includes(TEMPORAL_OPTION) ? "UNMODIFIED" : "REMOVED";
+
+      // Non-vacuity: the File Meta replacement really ran on this input.
+      expect(dataset.fileMeta?.sourceApplicationEntityTitle).toBeUndefined();
+      expect(dataset.fileMeta?.implementationClassUID).toBe(COSYTE_IMPLEMENTATION_CLASS_UID);
+      expect(report.fileMetaElementsDroppedCount).toBe(1);
+
+      const bytes = serializeDicom(dataset);
+      const reparsed = parseDicom(bytes);
+      expect(reparsed.get(TEMPORAL)?.vr).toBe("CS");
+      expect(soleValue(reparsed, TEMPORAL)).toBe(want);
+      expect(countHeaders(bytes, TEMPORAL, "CS")).toBe(1);
+      expect(reparsed.warnings.map((w) => w.code)).toStrictEqual([]);
+    }
+  });
+
+  it("neither rule moves the value: the temporal option is still the only input to it", () => {
+    // The mutation control for this block. Each of the other eight names, alone,
+    // must leave the Basic Profile state in place on an input that exercises
+    // both of the other rules - a sweep blind to `retain` would pass every row
+    // above and fail this one.
+    const source = parseDicom(buildDicom(buildDirectoryBearingDated()));
+    for (const option of DEIDENTIFY_OPTIONS) {
+      const { dataset } = deidentify(source, { retain: [option] });
+      const want = option === TEMPORAL_OPTION ? "UNMODIFIED" : "REMOVED";
+      expect(soleValue(dataset, TEMPORAL), option).toBe(want);
+    }
   });
 });
