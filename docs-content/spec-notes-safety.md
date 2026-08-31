@@ -2,7 +2,6 @@
 id: spec-notes-safety
 title: Safety-critical views
 sidebar_label: Safety-critical views
-sidebar_position: 4
 ---
 
 # Safety-critical views: patient, study, series, image
@@ -98,3 +97,27 @@ if (ds.image.isEnhancedMultiFrame) {
 missing from **both** the per-frame and shared groups. And the message carries only structural facts
 (the frame index, the macro tag), never PHI. An optional macro that is simply absent stays
 `undefined`; only a *required* one missing from both groups is an error.
+
+## The exported shapes
+
+The four views and the types under them are exported, so you can hold, pass and narrow one without
+re-deriving its shape. Every field on every one of them is optional in the same deliberate way: a
+value that was not in the object is typed-absent, never substituted.
+
+| Export                  | What it is                                                                                                                                                       |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PatientView`           | `ds.patient`. Identity, and the wrong-patient failure class. `id` is not globally unique on its own: correct cross-system matching needs `id` with `issuerOfId` and the issuer qualifiers, plus `otherIds`. |
+| `OtherPatientId`        | One entry in `patient.otherIds`: `id` with its `issuer` and `typeCode`.                                                                                          |
+| `StudyView`             | `ds.study`. Study identity, dates, accession, referring physician.                                                                                               |
+| `SeriesView`            | `ds.series`. Modality, series identity and number, and the series-level geometry inputs.                                                                          |
+| `ImageView`             | `ds.image`. Pixel-interpretation and geometry metadata: the "wrong pixels look fine" and "looks fine, measures wrong" classes. The omissions listed above are on this type. |
+| `RealWorldValueMap`     | A Real World Value Mapping: `slope`, `intercept` and the units `CodedConcept`. Authoritative over the linear `rescale*` pair when the object carries one.         |
+| `CodedConcept`          | The coded triplet `readCode` returns, with `schemeUid` where a designator maps to one.                                                                           |
+| `FrameFunctionalGroups` | What `image.frame(i)` returns: the functional-group macros resolved for one frame, each typed-absent when present in neither the per-frame nor the shared group.  |
+| `VALUE_ERROR_CODES`     | The frozen registry of codes this layer throws: `FRAME_INDEX_OUT_OF_RANGE` and `MISSING_REQUIRED_FUNCTIONAL_GROUP`.                                               |
+| `ValueErrorCode`        | The discriminant type over that registry, so a `switch` on a caught code is exhaustive.                                                                          |
+| `DicomValueError`       | The thrown class. Its message is built from the code and structural facts alone, so it is not a PHI surface the way a `DicomParseError` snippet is.               |
+
+Where a view's absence is load-bearing rather than incidental, it is stated once, on
+[Known limitations](./limitations). Read that page before treating an `undefined` here as a default
+you may fill in.

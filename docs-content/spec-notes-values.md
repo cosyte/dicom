@@ -2,7 +2,6 @@
 id: spec-notes-values
 title: Typed values & VR decode
 sidebar_label: Typed values
-sidebar_position: 3
 ---
 
 # Typed values & VR decode
@@ -49,6 +48,38 @@ day?.year; // => 1900
 const num = ds.get("00200011")?.value; // Series Number
 num?.kind; // => "integerString"
 ```
+
+### The typed payloads
+
+Each temporal and name payload keeps the on-wire string beside the parsed parts, so nothing is lost
+when the parse is partial. `valid` is `true` only when the whole value parsed cleanly; when it is
+`false`, `raw` is the source of truth and the numeric fields are absent rather than guessed.
+
+| Export            | The value it carries                                                                                                                                             |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `DicomValue`      | The discriminated union itself. Switch on `.kind`.                                                                                                               |
+| `DicomDate`       | A `DA`: `raw`, `valid`, and `year` / `month` / `day` when it parsed.                                                                                              |
+| `DicomTime`       | A `TM`: `raw`, `valid`, `hours` / `minutes` / `seconds`, and `fractionalSeconds` as a number in `[0,1)`.                                                          |
+| `DicomDateTime`   | A `DT`: the date and time parts together, plus `offsetMinutes` as a signed UTC offset when the value carried one. Without an offset it is a **local** time; decide the offset at your own boundary. |
+| `PersonName`      | A `PN`: up to three component groups, `alphabetic` always present, `ideographic` and `phonetic` only when the value supplied them (PS3.5 §6.2.1.1).               |
+| `PersonNameGroup` | One of those groups: `familyName`, `givenName`, `middleName`, `namePrefix`, `nameSuffix`, never flattened into a display string.                                  |
+
+### Decoding a value yourself
+
+The pieces the `.value` getter uses are exported, for the cases where you hold bytes rather than an
+`Element`, or a string rather than an element at all. None of them throws.
+
+| Export                       | What it does                                                                                                                             |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `decodeElementValue`         | The decode itself: takes an `Element` and returns its `DicomValue`. This is what `.value` calls and caches.                              |
+| `parsePersonName`            | Parses one `PN` string into a `PersonName`.                                                                                              |
+| `parseDate`                  | Parses one `DA` string, and reports whether it used the legacy `YYYY.MM.DD` form.                                                        |
+| `parseTime`                  | Parses one `TM` string.                                                                                                                  |
+| `parseDateTime`              | Parses one `DT` string, and reports a non-standard UTC offset.                                                                           |
+| `parseSpecificCharacterSet`  | Splits a `(0008,0005)` value into its defined terms. A component outside the closed table reads `<withheld>` rather than being returned.  |
+| `isKnownCharsetTerm`         | Whether a defined term is one this build can map to a decoder.                                                                           |
+| `resolveDecoderLabel`        | The `TextDecoder` label to use for a term list, preferring a multibyte decoder and falling back to the default repertoire.                |
+| `decodeText`                 | Decodes bytes under that resolved charset, never throwing: an unsupported label falls back to UTF-8, then to Latin-1.                     |
 
 ## Decode is fail-safe: a bad token is `null`, never a plausible wrong number
 

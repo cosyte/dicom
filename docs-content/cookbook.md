@@ -1,7 +1,7 @@
 ---
 id: cookbook
 title: Cookbook
-sidebar_position: 2
+sidebar_label: Cookbook
 ---
 
 # Cookbook
@@ -105,10 +105,10 @@ ds.warnings.length; // => 0
 
 Over a real folder, wrap the parse per file. A quirky object is tolerated rather than rejected and
 absent fields come back `undefined`, but **a folder walk still needs a `try`/`catch`**, because the
-four Tier-3 conditions throw and a real archive meets all four: `UNSUPPORTED_TRANSFER_SYNTAX` for a
-pixel-compressed object, which this parser does not read; `INVALID_FILE_META` for a truncated or
-partly-copied file; `NOT_DICOM_PART_10` for whatever non-DICOM file wandered into the folder; and
-`EMPTY_INPUT` for a zero-byte one. All four throw the one class, so catch `DicomParseError` per file
+Tier-3 conditions throw and a real archive meets every one of them: `UNSUPPORTED_TRANSFER_SYNTAX`
+for a pixel-compressed object, which this parser does not read; `INVALID_FILE_META` for a truncated
+or partly-copied file; `NOT_DICOM_PART_10` for whatever non-DICOM file wandered into the folder; and
+`EMPTY_INPUT` for a zero-byte one. Each throws the one class, so catch `DicomParseError` per file
 and skip.
 
 ```ts
@@ -593,8 +593,8 @@ outright rather than reading it structurally: see [Known limitations](./limitati
 **The problem:** you want to log or triage every tolerated deviation without your pipeline throwing on
 a vendor quirk.
 
-Every recoverable deviation collects on `ds.warnings` with a stable code and a byte offset; only the
-four fatal conditions throw. Each message is looked up in a frozen registry keyed by the code, with
+Every recoverable deviation collects on `ds.warnings` with a stable code and a byte offset; only a
+`FATAL_CODES` member throws. Each message is looked up in a frozen registry keyed by the code, with
 only structural substitutions (a tag, a VR, a number).
 
 **What a message may contain is a mechanism, not a verdict**, and the verdict form of this paragraph
@@ -602,9 +602,9 @@ was corrected twice, so it is gone rather than tried a third time. `{tag}` rende
 element registry carries a **literal row** for and `<withheld>` otherwise; `{vr}` renders only one of
 the 34 VRs PS3.5 defines; and a raw number a header carries is bound out of the factory signature
 where it is bound at all, so `DICOM_ODD_LENGTH_VALUE_PADDED` no longer prints the odd length and
-`DICOM_NONZERO_RESERVED_BYTES` no longer prints its two reserved bytes. **Two `deidentify()` codes
-still print a length that is the header's own, `PRE-EXISTING` and disclosed rather than closed** -
-see the troubleshooting page. The cost is that a message about a private, Group Length or
+`DICOM_NONZERO_RESERVED_BYTES` no longer prints its two reserved bytes. **Where a `deidentify()`
+code still prints a length that is the header's own, that is `PRE-EXISTING` and disclosed rather than
+closed** - see the troubleshooting page. The cost is that a message about a private, Group Length or
 repeating-group element no longer names its tag. A thrown `DicomParseError`'s `message` comes from
 its own frozen registry, whose factories have no tag slot at all, but the error still carries a
 16-byte hex `snippet` of the source. All of it is measured and covered in

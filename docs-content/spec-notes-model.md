@@ -2,7 +2,6 @@
 id: spec-notes-model
 title: The object model
 sidebar_label: The object model
-sidebar_position: 1
 ---
 
 # The object model: Part 10 framing, File Meta, dataset

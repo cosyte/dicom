@@ -1,7 +1,7 @@
 ---
 id: quickstart
 title: Quickstart
-sidebar_position: 1
+sidebar_label: Quickstart
 ---
 
 # Quickstart
@@ -96,8 +96,9 @@ ds.has("00100010"); // => true
 
 ## Unrecoverable input throws: everything else is a warning
 
-Only **four** unrecoverable structural conditions throw a typed `DicomParseError`
-(`NOT_DICOM_PART_10`, `INVALID_FILE_META`, `UNSUPPORTED_TRANSFER_SYNTAX`, `EMPTY_INPUT`). A
+Only an unrecoverable structural condition throws a typed `DicomParseError`, and `FATAL_CODES` is the
+whole set of them (`NOT_DICOM_PART_10`, `INVALID_FILE_META`, `UNSUPPORTED_TRANSFER_SYNTAX`,
+`EMPTY_INPUT`). A
 well-formed object with vendor quirks never throws; the quirks collect on `.warnings` with a stable
 code and a byte offset.
 
@@ -115,8 +116,13 @@ parseDicom(Buffer.from("this is not a DICOM file, just some ASCII text here", "a
   codes, the typed value layer, the safety-critical views, and the source-profile system.
 - [Cookbook](./cookbook): recipes: re-serialize spec-clean bytes, de-identify before sharing, read
   raw pixel data, and triage warnings.
-- [Troubleshooting & known limitations](./troubleshooting): the fatal codes, the fail-safe rules,
-  and the explicit "what's not parsed" list (no pixel decode, no DIMSE, no DICOMweb).
+- [Troubleshooting](./troubleshooting): symptom to cause, the fatal codes, and what a diagnostic may
+  and may not carry.
+- [Known limitations](./limitations): the "do not over-trust" list. What is out of scope (no pixel
+  decode, no DIMSE, no DICOMweb), which PHI residuals are measured and still open, and what is never
+  defaulted. Read it before you point this package at real data.
+- [Serialization](./serialization) and [De-identification](./deidentification): writing spec-clean
+  bytes back out, and stripping identifying metadata before you share an object.
 
 > **About runnable examples.** The blocks tagged ` ```ts runnable ` above are extracted by the test
 > suite, executed against the built package, and their `// =>` results asserted, so a documented

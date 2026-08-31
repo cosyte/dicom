@@ -1,0 +1,5 @@
+{
+  "$schema": "https://json.schemastore.org/base.json",
+  "comment": "Public exports of src/index.ts that docs-content/ deliberately does not document, each with the reason. test/docs-content-structure.test.ts reads this file: an entry naming a name the entry point no longer exports fails the suite, so an exemption cannot outlive the export it excused. Documenting the export on the page that owns its subject is always the preferred fix; an entry here is a decision, not a backlog.",
+  "exemptions": []
+}

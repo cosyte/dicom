@@ -1,7 +1,7 @@
 ---
 id: installation
 title: Installation
-sidebar_position: 1
+sidebar_label: Installation
 ---
 
 # Installation
@@ -71,6 +71,11 @@ const { parseDicom, serializeDicom, deidentify } = require("@cosyte/dicom");
 The single top-level entry point (`@cosyte/dicom`) publishes per-condition types (`.d.ts` for
 `import`, `.d.cts` for `require`), gated by `attw` on every release. Editor IntelliSense matches the
 build you actually load.
+
+The package also exports `VERSION`, the version constant of the build you have loaded. It is there so
+a bug report can say which build produced a result, and it is deliberately not reproduced in this
+documentation: read it off the loaded package, or ask npm, rather than trusting a numeral written in
+a doc.
 
 ## PHI discipline
 
