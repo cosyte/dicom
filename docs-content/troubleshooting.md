@@ -194,7 +194,7 @@ of the 34 PS3.5 §6.2 defines. It cannot when the fabricated VR is one of them, 
 `OB` header and a genuine one are byte-identical, and no bound can tell them apart. The alternative
 was keeping that carrier verbatim, which is what earlier releases did and what shipped the nested
 value itself, so this is the better of the two. **`undefinedVrElements[].byteLength` and
-`unauditableSequences[].byteLength` joined the list** when the two `DICOM_DEIDENT_*_NOT_AUDITABLE`
+`unauditableSequences[].byteLength` joined the list** when the `DICOM_DEIDENT_*_NOT_AUDITABLE`
 messages stopped rendering it: the number is `Element.rawBytes.length`, which equals the declared
 Value Length off the element header, so on a fabricated header `"SO\0\0"` publishes `20307`. Moving
 it off the message left these fields its only publisher, which is a smaller surface and not a closed

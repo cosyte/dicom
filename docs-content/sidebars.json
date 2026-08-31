@@ -1,16 +1,8 @@
 {
   "docs": [
     "intro",
-    {
-      "type": "category",
-      "label": "Installation",
-      "items": ["installation"]
-    },
-    {
-      "type": "category",
-      "label": "Quickstart",
-      "items": ["quickstart"]
-    },
+    "installation",
+    "quickstart",
     {
       "type": "category",
       "label": "Core Concepts",
@@ -30,7 +22,7 @@
     },
     {
       "type": "category",
-      "label": "Troubleshooting",
+      "label": "Diagnosing & limits",
       "items": ["troubleshooting", "limitations"]
     }
   ]

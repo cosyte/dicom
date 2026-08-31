@@ -4,6 +4,8 @@ import { join } from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
+import { extractRunnableSnippets } from "@cosyte/vitest-config/snippets";
+
 /**
  * Structural conformance gate for `docs-content/`, the narrative bundle
  * `scripts/build-docs-artifacts.sh` tars into the release artifact that
@@ -13,11 +15,17 @@ import { describe, expect, it } from "vitest";
  * This one proves the documented SITE still holds together: every public export
  * reaches a page or a reasoned exemption, every sidebar id resolves to exactly
  * one page and every page is reached by exactly one id, page frontmatter is
- * uniform, page order has a single source, no two entries share a name, the
+ * uniform, page order has a single source, no two entries share a name (a
+ * category label included, since it renders as an entry of its own), the
  * "do not over-trust" material has exactly one owning page, no page ships empty
  * or with entirely unexecuted code, and no page states a release version, a
  * count of the warning or fatal code registries, or a Node engine floor the
  * package does not declare.
+ *
+ * Where the two gates overlap - what counts as a fenced TypeScript block, and
+ * which blocks are executed - this one asks the runner (`extractRunnableSnippets`)
+ * rather than deciding again, so the set of blocks the structural rule judges
+ * cannot drift from the set that actually runs.
  *
  * Every rule below is a pure function over strings plus one assertion against
  * the live tree, and each pure function carries its own synthetic red case. A
@@ -113,30 +121,96 @@ function loadPages(): readonly Page[] {
 // Public export surface
 // ---------------------------------------------------------------------------
 
+/** Code-unit order: locale-independent, so a report reads the same everywhere. */
+function byCodeUnit(a: string, b: string): number {
+  if (a < b) return -1;
+  return a > b ? 1 : 0;
+}
+
+/** True when a statement carries the `export` modifier. */
+function isExported(statement: ts.Statement): boolean {
+  if (!ts.canHaveModifiers(statement)) return false;
+  return (ts.getModifiers(statement) ?? []).some(
+    (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+  );
+}
+
+/**
+ * The names one `export`-modified declaration introduces. A form this function
+ * does not model throws: a declaration that is cheaper to skip than to model is
+ * exactly how an export ships undocumented behind a green suite.
+ */
+function declaredNames(fileName: string, statement: ts.Statement): readonly string[] {
+  const kind = ts.SyntaxKind[statement.kind];
+  const unmodelled = (detail: string): Error =>
+    new Error(`${fileName}: exported ${kind} cannot be enumerated (${detail}); name the exports`);
+
+  if (ts.isVariableStatement(statement)) {
+    return statement.declarationList.declarations.map((declaration) => {
+      if (!ts.isIdentifier(declaration.name)) throw unmodelled("binding pattern");
+      return declaration.name.text;
+    });
+  }
+  if (
+    ts.isFunctionDeclaration(statement) ||
+    ts.isClassDeclaration(statement) ||
+    ts.isInterfaceDeclaration(statement) ||
+    ts.isTypeAliasDeclaration(statement) ||
+    ts.isEnumDeclaration(statement) ||
+    ts.isModuleDeclaration(statement)
+  ) {
+    const name = statement.name;
+    if (name === undefined || !ts.isIdentifier(name)) throw unmodelled("no declared identifier");
+    return [name.text];
+  }
+  throw unmodelled("unmodelled declaration form");
+}
+
 /**
  * Every name the package entry point exports, values and types alike, read off
- * the barrel with the TypeScript parser rather than a regex. A re-export form
- * this function does not model throws instead of contributing nothing, so the
- * gate cannot silently narrow the surface it is checking.
+ * the entry point with the TypeScript parser rather than a regex. Both halves of
+ * the surface count: the re-export forms a barrel is made of (`export { a } from
+ * "..."`, `export * as N from "..."`) and every form the entry point declares
+ * and exports itself (`export const`, `export function`, `export class`,
+ * `export type`, `export interface`, `export enum`, `export namespace`).
+ *
+ * An export form this function does not model throws instead of contributing
+ * nothing, so the gate cannot silently narrow the surface it is checking. That
+ * property is what the rule is worth: `src/index.ts` is a pure barrel today, so
+ * a walker that saw re-exports only would be green by accident of style, and the
+ * first `export const` added to the entry point would ship undocumented.
+ *
+ * Reported re-exports first, then the entry point's own declarations, each group
+ * in code-unit order.
  */
 export function exportedNames(fileName: string, source: string): readonly string[] {
   const sourceFile = ts.createSourceFile(fileName, source, ts.ScriptTarget.ESNext, true);
-  const names: string[] = [];
+  const reexported: string[] = [];
+  const declared: string[] = [];
   for (const statement of sourceFile.statements) {
-    if (!ts.isExportDeclaration(statement)) continue;
-    const clause = statement.exportClause;
-    if (clause === undefined) {
-      throw new Error(
-        `${fileName}: bare "export * from" re-export cannot be enumerated; name the exports`,
-      );
-    }
-    if (ts.isNamespaceExport(clause)) {
-      names.push(clause.name.text);
+    if (ts.isExportDeclaration(statement)) {
+      const clause = statement.exportClause;
+      if (clause === undefined) {
+        throw new Error(
+          `${fileName}: bare "export * from" re-export cannot be enumerated; name the exports`,
+        );
+      }
+      if (ts.isNamespaceExport(clause)) {
+        reexported.push(clause.name.text);
+        continue;
+      }
+      for (const element of clause.elements) reexported.push(element.name.text);
       continue;
     }
-    for (const element of clause.elements) names.push(element.name.text);
+    if (ts.isExportAssignment(statement)) {
+      throw new Error(
+        `${fileName}: a default export carries no name to document; name the exports`,
+      );
+    }
+    if (!isExported(statement)) continue;
+    declared.push(...declaredNames(fileName, statement));
   }
-  return [...names].sort((a, b) => a.localeCompare(b));
+  return [...reexported.sort(byCodeUnit), ...declared.sort(byCodeUnit)];
 }
 
 /** An export deliberately left out of the narrative docs, with the reason why. */
@@ -236,6 +310,33 @@ export function sidebarIds(source: string): readonly string[] {
   return ids;
 }
 
+/**
+ * Every category label the sidebar declares, in declaration order. A category is
+ * a rendered entry with a name of its own, so a category whose label repeats the
+ * label of a page inside it renders that name twice down one branch of the tree.
+ *
+ * An entry shape this walker does not model is refused by {@link sidebarIds},
+ * which parses the same file and throws on one, so nothing goes unchecked by
+ * being skipped here.
+ */
+export function sidebarCategoryLabels(source: string): readonly string[] {
+  const parsed: unknown = JSON.parse(source);
+  const labels: string[] = [];
+  const walkItem = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      for (const child of node) walkItem(child);
+      return;
+    }
+    if (typeof node !== "object" || node === null) return;
+    const record = node as Record<string, unknown>;
+    const label: unknown = record["label"];
+    if (record["type"] === "category" && typeof label === "string") labels.push(label);
+    if ("items" in record) walkItem(record["items"]);
+  };
+  for (const list of Object.values(parsed as Record<string, unknown>)) walkItem(list);
+  return labels;
+}
+
 /** Values that occur more than once, each reported once, in first-seen order. */
 export function findDuplicates(values: readonly string[]): readonly string[] {
   const seen = new Set<string>();
@@ -252,34 +353,95 @@ export function findDuplicates(values: readonly string[]): readonly string[] {
 // ---------------------------------------------------------------------------
 
 interface Fence {
-  /** The info string after the opening backticks, e.g. `ts runnable throws`. */
+  /** The info string after the opening marker, e.g. `ts runnable throws`. */
   readonly info: string;
+  /** 1-based line of the opening marker, within the body it was read from. */
+  readonly line: number;
 }
 
-/** Every fenced block on a page, in order, with its info string. */
+/**
+ * The fence grammar `extractRunnableSnippets` opens on: three or more backticks
+ * or tildes, at any indentation. A code block indented under a list item and a
+ * `~~~` block are both real blocks it extracts and runs.
+ */
+const FENCE_OPEN = /^(\s*)(`{3,}|~{3,})\s*(.*)$/u;
+
+/** Its closing grammar: the same marker character, no shorter, same indent. */
+const FENCE_CLOSE = /^(\s*)(`{3,}|~{3,})\s*$/u;
+
+/**
+ * Every fenced block on a page, in order, with its info string.
+ *
+ * The runner extracts only the blocks it will execute, so enumerating the rest
+ * cannot be delegated to it; its grammar is mirrored here instead, and the
+ * mirror is pinned by "agrees with the doc-snippet runner about which blocks it
+ * executes" below, which compares this scanner's executed blocks to the runner's
+ * own extraction, page by page and line by line. Classification is delegated
+ * outright: {@link isTypeScript} and {@link isExecuted} ask the runner.
+ *
+ * A structural gate that reads a NARROWER set of fences than the gate that
+ * executes them decides criterion 13 on a different set of blocks than the one
+ * that runs: a page whose only TypeScript is indented would pass while violating
+ * it, and a page whose only executed block is indented would be reported
+ * unverified while the runner was running it.
+ */
 export function fences(body: string): readonly Fence[] {
+  const lines = body.split(/\r?\n/u);
   const found: Fence[] = [];
-  let open = false;
-  for (const line of body.split("\n")) {
-    if (!line.startsWith("```")) continue;
-    if (open) {
-      open = false;
+  let i = 0;
+  while (i < lines.length) {
+    const open = FENCE_OPEN.exec(lines[i] ?? "");
+    if (open === null) {
+      i += 1;
       continue;
     }
-    open = true;
-    found.push({ info: line.slice(3).trim() });
+    const indent = open[1] ?? "";
+    const marker = open[2] ?? "";
+    found.push({ info: (open[3] ?? "").trim(), line: i + 1 });
+    let j = i + 1;
+    let closed = false;
+    while (j < lines.length) {
+      const close = FENCE_CLOSE.exec(lines[j] ?? "");
+      const marks = close?.[2] ?? "";
+      if (
+        close !== null &&
+        marks[0] === marker[0] &&
+        marks.length >= marker.length &&
+        (close[1] ?? "").length === indent.length
+      ) {
+        closed = true;
+        break;
+      }
+      j += 1;
+    }
+    i = closed ? j + 1 : j;
   }
   return found;
 }
 
-/** A TypeScript block: the doc-snippet runner keys on the `ts` language tag. */
-function isTypeScript(fence: Fence): boolean {
-  return fence.info === "ts" || fence.info.startsWith("ts ");
+/** The opt-in tag the doc-snippet runner executes on, its own default. */
+const RUNNABLE_TAG = "runnable";
+
+/**
+ * Ask the runner itself whether it would extract a block carrying this info
+ * string, by handing it a one-block document. Both classifiers below are that
+ * question, so the executable language set and the placement of the opt-in tag
+ * are read off the runner rather than restated here, where they would drift:
+ * the runner takes `ts`, `typescript` and `tsx`, and accepts `runnable`
+ * anywhere in the info string rather than first.
+ */
+function runnerExtracts(info: string): boolean {
+  return extractRunnableSnippets(["```" + info, "```", ""].join("\n")).length === 1;
 }
 
-/** An EXECUTED block: `ts runnable` (and `ts runnable throws`), never plain `ts`. */
+/** A TypeScript block: one the runner would execute if it were tagged runnable. */
+function isTypeScript(fence: Fence): boolean {
+  return runnerExtracts(`${fence.info} ${RUNNABLE_TAG}`);
+}
+
+/** An EXECUTED block: one the runner extracts and runs as it stands. */
 function isExecuted(fence: Fence): boolean {
-  return fence.info === "ts runnable" || fence.info.startsWith("ts runnable ");
+  return runnerExtracts(fence.info);
 }
 
 // ---------------------------------------------------------------------------
@@ -391,6 +553,7 @@ const exports_ = exportedNames(ENTRY, readFileSync(ENTRY, "utf8"));
 const exemptions = parseExemptions(readFileSync(EXEMPTIONS_FILE, "utf8"));
 const exemptNames = exemptions.map((e) => e.name);
 const declaredIds = sidebarIds(readFileSync(SIDEBARS_FILE, "utf8"));
+const categoryLabels = sidebarCategoryLabels(readFileSync(SIDEBARS_FILE, "utf8"));
 
 describe("docs-content: public surface coverage", () => {
   it("documents every name the package entry point exports, or exempts it with a reason", () => {
@@ -411,6 +574,46 @@ describe("docs-content: public surface coverage", () => {
     expect(findStaleExemptions(["stillExported"], ["stillExported", "wasRemoved"])).toEqual([
       "wasRemoved",
     ]);
+  });
+
+  it("enumerates the forms the entry point declares itself, not only the ones it re-exports", () => {
+    const source = [
+      'export { reexported } from "./elsewhere.js";',
+      'export * as ns from "./namespace.js";',
+      "export const DIRECT_CONST = 1;",
+      "export function directFunction(): void {}",
+      "export class DirectClass {}",
+      "export type DirectType = string;",
+      "export interface DirectInterface {",
+      "  a: string;",
+      "}",
+      "export enum DirectEnum {",
+      "  A,",
+      "}",
+      "const notExported = 1;",
+      'import { unused } from "./unused.js";',
+    ].join("\n");
+
+    expect(exportedNames("index.ts", source)).toEqual([
+      "ns",
+      "reexported",
+      "DIRECT_CONST",
+      "DirectClass",
+      "DirectEnum",
+      "DirectInterface",
+      "DirectType",
+      "directFunction",
+    ]);
+  });
+
+  it("throws on an export form it does not model, rather than narrowing the surface", () => {
+    expect(() => exportedNames("index.ts", 'export * from "./everything.js";\n')).toThrow(
+      /cannot be enumerated/u,
+    );
+    expect(() => exportedNames("index.ts", "export default 1;\n")).toThrow(/carries no name/u);
+    expect(() => exportedNames("index.ts", "export const [first, second] = [1, 2];\n")).toThrow(
+      /binding pattern/u,
+    );
   });
 });
 
@@ -494,6 +697,33 @@ describe("docs-content: page frontmatter", () => {
     expect(findDuplicates(pages.map((p) => p.frontmatter.get("sidebar_label") ?? ""))).toEqual([]);
   });
 
+  it("gives every sidebar category a name no page inside the tree already uses", () => {
+    const pageNames = new Set(
+      pages
+        .flatMap((p) => [
+          p.frontmatter.get("title") ?? "",
+          p.frontmatter.get("sidebar_label") ?? "",
+        ])
+        .map((n) => n.toLowerCase()),
+    );
+    expect(findDuplicates(categoryLabels)).toEqual([]);
+    expect(categoryLabels.filter((label) => pageNames.has(label.toLowerCase()))).toEqual([]);
+  });
+
+  it("names a category that repeats a page's own name", () => {
+    const source = JSON.stringify({
+      docs: [
+        { type: "category", label: "Installation", items: ["installation"] },
+        { type: "category", label: "Guides", items: ["cookbook"] },
+      ],
+    });
+    const labels = sidebarCategoryLabels(source);
+    expect(labels).toEqual(["Installation", "Guides"]);
+    expect(labels.filter((label) => label.toLowerCase() === "installation")).toEqual([
+      "Installation",
+    ]);
+  });
+
   it("reports a repeated title and a colliding order declaration", () => {
     expect(findDuplicates(["Quickstart", "Cookbook", "Quickstart"])).toEqual(["Quickstart"]);
     expect(findDuplicates(["1", "1", "2"])).toEqual(["1"]);
@@ -549,6 +779,58 @@ describe("docs-content: every page carries content and verified code", () => {
     expect(blocks.map((b) => b.info)).toEqual(["ts", "ts runnable throws"]);
     expect(blocks.filter(isTypeScript).length).toBe(2);
     expect(blocks.filter(isExecuted).length).toBe(1);
+  });
+
+  it("agrees with the doc-snippet runner about which blocks it executes", () => {
+    for (const page of pages) {
+      // The runner's `line` is the first BODY line of the block; the scanner's
+      // is the opening fence, one above it.
+      const executed = fences(page.body)
+        .filter(isExecuted)
+        .map((f) => f.line + 1);
+      expect(executed, page.file).toEqual(extractRunnableSnippets(page.body).map((s) => s.line));
+    }
+  });
+
+  it("reads the fence forms the runner reads, not only an unindented triple backtick", () => {
+    const indented = [
+      "1. A recipe step, with its code indented under the list item:",
+      "",
+      "   ```ts runnable",
+      "   const answer = 1; // => 1",
+      "   ```",
+      "",
+    ].join("\n");
+    expect(extractRunnableSnippets(indented)).toHaveLength(1);
+    expect(fences(indented).map((f) => f.info)).toEqual(["ts runnable"]);
+    expect(fences(indented).filter(isExecuted)).toHaveLength(1);
+
+    const tilde = ["~~~ts", "const illustrative = 1;", "~~~", ""].join("\n");
+    expect(fences(tilde).map((f) => f.info)).toEqual(["ts"]);
+    expect(fences(tilde).filter(isTypeScript)).toHaveLength(1);
+    expect(fences(tilde).filter(isExecuted)).toHaveLength(0);
+  });
+
+  it("classifies a block the way the runner does, by language and by tag position", () => {
+    const info = (text: string): Fence => ({ info: text, line: 1 });
+    for (const lang of ["ts", "typescript", "tsx"]) {
+      expect(isTypeScript(info(lang)), lang).toBe(true);
+      expect(isExecuted(info(`${lang} runnable`)), lang).toBe(true);
+    }
+    // `runnable` counts wherever it sits in the info string, as the runner has it.
+    expect(isExecuted(info("ts throws runnable"))).toBe(true);
+    expect(isExecuted(info("ts"))).toBe(false);
+    expect(isTypeScript(info("bash"))).toBe(false);
+    expect(isTypeScript(info(""))).toBe(false);
+  });
+
+  it("names a page whose only TypeScript sits in a fence a naive scanner cannot see", () => {
+    const page = ["- A step:", "", "   ```ts", "   const illustrative = 1;", "   ```", ""].join(
+      "\n",
+    );
+    const blocks = fences(page);
+    expect(blocks.some(isTypeScript)).toBe(true);
+    expect(blocks.some(isExecuted)).toBe(false);
   });
 });
 
