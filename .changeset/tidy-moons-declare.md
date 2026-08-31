@@ -1,5 +1,5 @@
 ---
-"@cosyte/dicom": patch
+"@cosyte/dicom": minor
 ---
 
 Write `(0028,0303) Longitudinal Temporal Information Modified` on every `deidentify()` run, so a
