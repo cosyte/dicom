@@ -60,6 +60,14 @@ const ORDER_KEY = "sidebar_position";
 /** The page that owns the "do not over-trust" material, by file stem. */
 const LIMITATIONS_STEM = "limitations";
 
+/**
+ * What counts as a page. The artifact contract calls the bundle "narrative MDX +
+ * sidebars.json" and the site ingests `.mdx` as a page, so an `.mdx` file would
+ * tar into the release artifact for real: reading only `.md` would leave it
+ * outside every rule below rather than outside the bundle.
+ */
+const PAGE_EXTENSION = /\.mdx?$/u;
+
 // ---------------------------------------------------------------------------
 // Page model
 // ---------------------------------------------------------------------------
@@ -82,7 +90,7 @@ interface Page {
  * unparsed page would pass every rule below by vacancy.
  */
 export function parsePage(file: string, text: string): Page {
-  const stem = file.replace(/\.md$/u, "");
+  const stem = file.replace(PAGE_EXTENSION, "");
   const lines = text.split("\n");
   if (lines[0] !== "---") {
     throw new Error(`${file}: no opening frontmatter fence`);
@@ -112,7 +120,7 @@ export function parsePage(file: string, text: string): Page {
 
 function loadPages(): readonly Page[] {
   return readdirSync(DOCS_DIR)
-    .filter((f) => f.endsWith(".md"))
+    .filter((f) => PAGE_EXTENSION.test(f))
     .sort()
     .map((f) => parsePage(f, readFileSync(join(DOCS_DIR, f), "utf8")));
 }
@@ -494,11 +502,23 @@ const NON_COUNT_PATTERNS: readonly RegExp[] = [
 ];
 
 const CARDINAL = "(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\\d{1,4})";
-const CODE_QUALIFIER =
-  "(?:unrecoverable|structural|fatal|warning|tolerated|distinct|separate|different|stable|remaining|other|new)";
+/**
+ * Whatever word the sentence happens to put between the cardinal and the noun.
+ * A closed vocabulary of qualifiers is the wrong shape for this rule: the count
+ * is stale whatever adjective carries it, and a list can only ever enumerate the
+ * phrasings already written. So the window binds on shape alone, and any word
+ * counts.
+ */
+const CODE_QUALIFIER = "(?:[A-Za-z][A-Za-z-]*)";
 const CODE_NOUN = "(?:codes?|conditions?|errors?|warnings?|fatals?)";
+/**
+ * A cardinal, then at most three words, then the noun - and the noun ENDS the
+ * phrase. Without that last condition an any-word window swallows the cardinal
+ * before the real one: `one of the four fatal codes` would report as
+ * `one of the four fatal`, because `fatal` is itself a noun in the set.
+ */
 const CODE_COUNT = new RegExp(
-  `\\b${CARDINAL}\\b(?:\\s+${CODE_QUALIFIER}\\b){0,3}\\s+${CODE_NOUN}\\b`,
+  `\\b${CARDINAL}\\b(?:\\s+${CODE_QUALIFIER}\\b){0,3}\\s+${CODE_NOUN}\\b(?!\\s+${CODE_NOUN}\\b)`,
   "giu",
 );
 
@@ -728,6 +748,22 @@ describe("docs-content: page frontmatter", () => {
     expect(findDuplicates(["Quickstart", "Cookbook", "Quickstart"])).toEqual(["Quickstart"]);
     expect(findDuplicates(["1", "1", "2"])).toEqual(["1"]);
   });
+
+  it("reads an .mdx page under the same stem rule as an .md one", () => {
+    const source = [
+      "---",
+      "id: guide",
+      "title: Guide",
+      "sidebar_label: Guide",
+      "---",
+      "",
+      "Body.",
+    ].join("\n");
+    expect(parsePage("guide.mdx", source).stem).toBe("guide");
+    expect(parsePage("guide.md", source).stem).toBe("guide");
+    expect(PAGE_EXTENSION.test("guide.mdx")).toBe(true);
+    expect(PAGE_EXTENSION.test("sidebars.json")).toBe(false);
+  });
 });
 
 describe("docs-content: one owner for the do-not-over-trust material", () => {
@@ -860,6 +896,11 @@ describe("docs-content: numerals that go stale in silence", () => {
       "four unrecoverable conditions",
     ]);
     expect(findCodeCountMentions("one of the four fatal codes")).toEqual(["four fatal codes"]);
+    // The qualifier is any word, not a listed one: the phrasing below shipped
+    // past a closed vocabulary of qualifiers on this very page.
+    expect(findCodeCountMentions("and its two sibling private-tag codes take no tag")).toEqual([
+      "two sibling private-tag codes",
+    ]);
     expect(findCodeCountMentions("Tier-2 warning codes promoted to a throw")).toEqual([]);
     expect(findCodeCountMentions("the nine metadata-affecting Annex E Options")).toEqual([]);
     expect(findCodeCountMentions("a transfer syntax outside the four supported ones")).toEqual([]);
@@ -869,7 +910,10 @@ describe("docs-content: numerals that go stale in silence", () => {
     const declared = declaredNodeFloor(readFileSync(PACKAGE_FILE, "utf8"));
     const stated = pages.flatMap((p) => findNodeFloors(p.body).map((f) => `${p.file}: ${f}`));
     expect(stated.length, "docs-content states no Node engine floor at all").toBeGreaterThan(0);
-    expect(stated.filter((s) => !s.endsWith(`: ${declared}`))).toEqual([]);
+    expect(
+      stated.filter((s) => !s.endsWith(`: ${declared}`)),
+      `package.json declares Node ${declared}; these pages state a different floor`,
+    ).toEqual([]);
   });
 
   it("reports both values when a stated floor disagrees with the package", () => {

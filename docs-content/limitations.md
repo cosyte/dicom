@@ -147,9 +147,10 @@ structural fact about DICOM that no reader can resolve from the wire.
   Full treatment: [Keeping PHI out of logs](./troubleshooting#keeping-phi-out-of-logs).
 
 - **Two carriers this list once named as open are now bound, and neither bound is an all-clear.**
-  `DICOM_PRIVATE_TAG_NO_CREATOR` and its two sibling private-tag codes take no tag at all any more,
-  because an odd group is the one class of tag no closed table this library holds can vouch for; the
-  element is still in the object and `position.byteOffset` still locates it.
+  `DICOM_PRIVATE_TAG_NO_CREATOR`, `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR` and
+  `DICOM_PRIVATE_CREATOR_UNKNOWN` take no tag at all any more, because an odd group is the one class
+  of tag no closed table this library holds can vouch for; the element is still in the object and
+  `position.byteOffset` still locates it.
   `report.embeddedAttributes[].hidden` now lists only tags this run acted on that have a **literal
   row** in PS3.15 Table E.1-1 - 652 of them - rather than any four bytes a run tiled over. **A
   repeating-group mask hit is excluded and that exclusion is the whole bound**: `(50xx,xxxx)` Curve
