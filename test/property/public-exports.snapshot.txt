@@ -1,0 +1,94 @@
+# Locked public export surface of the package root entry (`src/index.ts`).
+#
+# NAMES ONLY, values and types alike. No value, no type text and no signature is
+# recorded here: the set is what an installer can reach through `@cosyte/dicom`,
+# and a name is the whole of what a rename, an addition or a removal moves.
+#
+# `public-exports.snapshot.test.ts` compares this list against the barrel's export
+# set on every run and names each differing export when they disagree. Editing
+# this file is the explicit acknowledgement that the public surface moved, and a
+# changeset is owed with it.
+#
+# Order is code-unit ascending, which is locale-independent. Blank lines and
+# lines opening with `#` are comments.
+
+AppliedAction
+CODING_SCHEME_OIDS
+CodedConcept
+DEFAULT_UID_ROOT
+DEIDENTIFY_ERROR_CODES
+DEIDENTIFY_OPTIONS
+Dataset
+DefineProfileOptions
+DeidentifiedAttribute
+DeidentifyError
+DeidentifyErrorCode
+DeidentifyOption
+DeidentifyOptions
+DeidentifyReport
+DeidentifyResult
+DicomDate
+DicomDateTime
+DicomParseError
+DicomParseWarning
+DicomPosition
+DicomSerializeError
+DicomTime
+DicomValue
+DicomValueError
+Dictionary
+Element
+EmbeddedAttributeFinding
+FATAL_CODES
+FatalCode
+FileMeta
+FileMetaDroppedElement
+FileMetaRawElement
+FrameFunctionalGroups
+Group0004Removal
+ImageView
+Item
+OFFSET_FRAMES
+OffsetFrame
+OnWarningCallback
+OtherPatientId
+ParseOptions
+PatientView
+PersonName
+PersonNameGroup
+PrivateTagDefinition
+Profile
+ProfileDefinitionError
+ProfilePrivateTags
+RealWorldValueMap
+SERIALIZE_ERROR_CODES
+Sequence
+SerializeErrorCode
+SeriesView
+StudyView
+UidRemapper
+UnauditableSequenceFinding
+UndefinedVrFinding
+UnenumerablePrivateRemoval
+VALUE_ERROR_CODES
+VERSION
+ValueErrorCode
+WARNING_CODES
+WarningCode
+codingSchemeOid
+decodeElementValue
+decodeText
+defineProfile
+deidentify
+isKnownCharsetTerm
+makeUidRemapper
+parseDate
+parseDateTime
+parseDicom
+parsePersonName
+parseSpecificCharacterSet
+parseTime
+profiles
+readCode
+resolveDecoderLabel
+serializeDicom

@@ -1,5 +1,5 @@
 ---
-"@cosyte/dicom": patch
+"@cosyte/dicom": minor
 ---
 
 Remove a retained private value this run did not enumerate, instead of shipping it under

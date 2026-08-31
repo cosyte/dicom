@@ -1,5 +1,5 @@
 ---
-"@cosyte/dicom": patch
+"@cosyte/dicom": minor
 ---
 
 Disclose a retained private value this run kept without enumerating it, instead of stamping

@@ -1,5 +1,5 @@
 ---
-"@cosyte/dicom": patch
+"@cosyte/dicom": minor
 ---
 
 Stop the de-identified header naming the sending site: replace the File Meta group and remove group
