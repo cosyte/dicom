@@ -13,7 +13,8 @@ touched.
 
 Audit base: `fd0b92a` (`Version Packages (#114)`), the commit that wrote the `0.0.19` section of
 `CHANGELOG.md` and set `package.json` to that version.
-Audit head: `c041d23` (`S0203-dicom-description-1: propose the suite-formula repo description`).
+Audit head: `0ba157b` (`S0236-dicom-ci-ci: realign the README description with package.json`),
+the tip of `main` that this branch is based on.
 
 ## Verdict
 
@@ -37,7 +38,8 @@ What certification here does NOT mean, stated so it cannot be read as more than 
 
 ## Change classification since `0.0.19`
 
-Twelve commits have landed on `main` since `fd0b92a`, listed oldest first. `minor` is used for a
+Fourteen commits have landed on `main` since `fd0b92a`, listed oldest first, which is what
+`git rev-list --count fd0b92a..main` answers at the audit head above. `minor` is used for a
 user-visible feature or a new public export; `patch` is used for a fix or an internal-only change.
 "Shipped code" is read as this item's contract defines it: anything under `src/`, the `exports` or
 `files` map in `package.json`, or committed generated dictionary output.
@@ -56,9 +58,13 @@ user-visible feature or a new public export; `patch` is used for a fix or an int
 | 10 | `5448e93` | Raise security-flagged transitive deps via `pnpm` overrides | `patch` | `package.json` `pnpm.overrides` and `pnpm-lock.yaml`. `dependencies` is empty and stays empty, so the overrides resolve development transitives only; neither the `exports` map nor the `files` map moves | none required |
 | 11 | `9defcde` | Declare the temporal state at `(0028,0303)` on every `deidentify()` run | `minor` | Shipped code, and a user-visible feature: de-identified output now carries an attribute it never carried, so a recipient reading `(0028,0303)` gets an answer where it previously got whatever the sender left there. No export is added | `.changeset/tidy-moons-declare.md` |
 | 12 | `c041d23` | Propose the suite-formula repo description | `patch` | `package.json` `description` and a new `.github/repo-description.md`. Published metadata rather than shipped code by the definition above, and no behaviour, type or export moves | none required |
+| 13 | `1a5d86f` | Restructure `README.md` to the house skeleton and gate it | `patch` | `README.md` and a new `test/docs/readme-structure.test.ts`. Prose and a documentation gate; `README.md` ships in the tarball but is not `src/`, the `exports` map, the `files` map or dictionary output, so no behaviour, type or export moves | none required |
+| 14 | `0ba157b` | Realign the `README.md` description with `package.json` | `patch` | `README.md` alone, one line. It moves the README to match the `description` that row 12 set, so it does not change published metadata either; nothing under `src/` and no export moves | none required |
 
 Rows 5, 6, 7 and 11 are the four that alter shipped code. Each one has a pending changeset, and the
-changeset for each is at the classification this table assigns.
+changeset for each is at the classification this table assigns. The other ten rows are developer
+tooling, CI configuration, published metadata or documentation, and none of them owes a changeset
+under the definition above.
 
 ### Why four entries were re-classified, and why that is not a manufactured bump
 
@@ -138,7 +144,7 @@ reds the suite, and the failure names each differing export on its own line. A r
 addition and one removal, which is the honest reading: nothing on either side records that the two
 are the same export under a new name.
 
-Three properties of that guard, stated so nobody has to re-derive them:
+Four properties of that guard, stated so nobody has to re-derive them:
 
 - **It walks the barrel through the TypeScript compiler, not the built module.** A runtime
   `import * as` walk sees value exports only, and most of this package's surface is types. A type
@@ -148,10 +154,18 @@ Three properties of that guard, stated so nobody has to re-derive them:
   `WARNING_CODES` and `FATAL_CODES` are locked separately by
   `test/property/warning-codes.snapshot.test.ts`, and a file that recorded values would make every
   unrelated registry edit look like a public surface change.
+- **Its size check is the committed file, not a literal.** The walk's length is asserted equal to the
+  committed snapshot's length rather than against a hard-coded floor. A literal floor cannot be
+  maintained against a surface that moves every phase, so it drifts downward in meaning until it
+  would clear a walk that resolved a fraction of the barrel; and the equality carries one property
+  the set comparison cannot see, because that comparison is over sets: a name committed twice makes
+  the file disagree with the surface it claims to pin while every set difference stays empty.
 - **Its boundary is stated rather than hidden.** Because the snapshot is names only, a name that
   changes from a type export to a value export, or the reverse, keeps the same name and this guard
   stays green. `typecheck`, `attw` and `typecheck:exports` are the gates that speak to that, not this
-  one.
+  one. Nor can any assertion inside the file separate a walk that shrinks from a snapshot regenerated
+  out of that same shrunken walk, since both sides move together; the committed diff is the control
+  there, which is why the surface is a file under review rather than a number in a test.
 
 The guard carries a mutation control, in the same file, that compiles a fixture in memory, compares
 it against a deliberately stale list, and requires the comparator to separate the added names from
@@ -309,7 +323,7 @@ gate grounds.
 |---|---|---|
 | typecheck | `pnpm run typecheck` | PASS. `tsc --noEmit`, no diagnostics |
 | lint | `pnpm run lint` | PASS. ESLint at `--max-warnings=0` over `src`, `scripts` and `test` |
-| test | `pnpm run test` | PASS. 83 test files, 1529 passed and 1 todo of 1530 |
+| test | `pnpm run test` | PASS. 84 test files, 1546 passed and 1 todo of 1547 |
 | build | `pnpm run build` | PASS. `tsup` emitted `dist/index.mjs`, `dist/index.cjs`, `dist/index.d.ts` and `dist/index.d.cts` |
 | attw | `pnpm run attw` | PASS. `scripts/attw.mjs`, not the bare CLI. No problems found; `node10`, `node16` from CJS, `node16` from ESM and `bundler` all green for `.` and for `./package.json` |
 | typecheck:exports | `pnpm run typecheck:exports` | PASS. `scripts/attw.mjs --profile node16`. No problems found, `node10` ignored by profile |
@@ -318,10 +332,11 @@ The `attw` and `typecheck:exports` scripts run `scripts/attw.mjs` rather than th
 purpose: the bare CLI reports "does not contain types" and exits 0, so the wrapper is the gate.
 [`#the-attw-wrapper-gate`](agent-notes.md#the-attw-wrapper-gate)
 
-The suite counts above are this branch's, including the export snapshot guard this item adds. The
-same suite at the audit head, before that guard, read 82 test files and 1527 passed with 1 todo of
-1528. A
-suite count is a moving base and is quoted here only against the two shas it was measured on.
+A suite count is a moving base and is not a fact without its sha, so both figures here carry one and
+both were measured rather than derived. On this branch, whose base is `0ba157b`, the suite reads 84
+test files and 1546 passed with 1 todo of 1547. The same suite checked out at `0ba157b` itself, with
+this item's guard absent, reads 83 test files and 1544 passed with 1 todo of 1545. The difference is
+this item's one added test file and the two tests in it.
 
 ## Version and source-tree state
 

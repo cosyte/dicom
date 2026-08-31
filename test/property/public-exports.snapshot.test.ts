@@ -106,12 +106,25 @@ describe("dicom public API: the root entry's export surface is locked", () => {
     const program = ts.createProgram([ENTRY], COMPILER_OPTIONS);
     const actual = exportedNames(program, ENTRY);
 
-    // Not a claim about the size of the surface, which moves every phase: a floor that proves the
-    // compiler resolved the barrel at all, so a zero-export read cannot pass as a matching set.
-    expect(actual.length).toBeGreaterThan(20);
-
     const snapshot = readSnapshot(SNAPSHOT_PATH);
+
+    // FIRST, AND DELIBERATELY SO: this is the assertion that NAMES the export that differs, and an
+    // added, removed or renamed export has to red on this one rather than on the length below it.
+    // Both would red, and whichever runs first is the message the developer who broke it reads: one
+    // of them names the export, the other reports two numbers that differ by one and identifies
+    // nothing. Every assertion below is a supplement to this line and must stay below it.
     expect(drift(actual, snapshot)).toStrictEqual([]);
+
+    // The size check is the committed file itself, never a literal sitting under it. A hard-coded
+    // floor cannot be maintained against a surface that moves every phase, so it drifts downward in
+    // meaning until it would clear a walk that resolved a fraction of the barrel. It also carries
+    // one property `drift` cannot see, because `drift` compares SETS: a name committed twice makes
+    // the file disagree with the surface it claims to pin while every set difference stays empty.
+    //
+    // What it does NOT close, stated rather than implied: a walk that shrinks and a snapshot
+    // regenerated out of that same shrunken walk move together, so no assertion in this file can
+    // separate them. The committed diff is the control there, which is why the surface is a file.
+    expect(actual.length).toBe(snapshot.length);
 
     // The sets agreeing is the contract; this pins the committed file to the canonical order too, so
     // the next reviewer reads a diff of what changed rather than a reshuffle.
