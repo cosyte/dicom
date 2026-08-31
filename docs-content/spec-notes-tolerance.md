@@ -2,7 +2,6 @@
 id: spec-notes-tolerance
 title: Tolerance & the warning model
 sidebar_label: Tolerance & warnings
-sidebar_position: 2
 ---
 
 # Tolerance & the warning model
@@ -22,9 +21,11 @@ always emits spec-clean Part 10). A recoverable quirk is **never** a silent chan
   the registry held more, and the README's copy of the same numeral was corrected twice before being
   deleted. `WARNING_CODES` is the list, and the locked snapshot under
   `test/property/__snapshots__/` measures it on every run.
-- **Unrecoverable structural corruption → a throw.** Only **four** Tier-3 conditions throw a typed
-  `DicomParseError`: `NOT_DICOM_PART_10`, `INVALID_FILE_META`, `UNSUPPORTED_TRANSFER_SYNTAX`, and
-  `EMPTY_INPUT`. Everything short of "these bytes are not a readable Part 10 object" is a warning.
+- **Unrecoverable structural corruption → a throw.** A Tier-3 condition throws a typed
+  `DicomParseError`, and the whole set is `NOT_DICOM_PART_10`, `INVALID_FILE_META`,
+  `UNSUPPORTED_TRANSFER_SYNTAX` and `EMPTY_INPUT`. **No count is written here either**, for the same
+  reason as above: `FATAL_CODES` is the registry and enumerating it is the honest form. Everything
+  short of "these bytes are not a readable Part 10 object" is a warning.
 
 ```ts runnable
 import { parseDicom, WARNING_CODES } from "@cosyte/dicom";
@@ -49,7 +50,7 @@ typeof ds.warnings[0]?.position?.byteOffset; // => "number"
 
 ## Fatal input throws a typed error
 
-An unreadable object throws `DicomParseError`, whose `.code` is one of the four fatal codes. Narrow
+An unreadable object throws `DicomParseError`, whose `.code` is a member of `FATAL_CODES`. Narrow
 on it with `err instanceof DicomParseError`:
 
 ```ts runnable
@@ -94,7 +95,7 @@ be interpolated even by a future call site that tries. A token that fails its ch
 not restated here** - the `WARNING_MESSAGES` docblock in `src/parser/warnings.ts`. No count of the copies is quoted, here or
 there: this package deletes a count it has corrected twice rather than incrementing it.
 
-**What the membership rule closed.** Through `0.0.14` `renderTag` validated a tag's _shape_, and a
+**What the membership rule closed.** In an earlier release `renderTag` validated a tag's _shape_, and a
 shape test admits all 2^32 tags. Measured: a `(0008,4000)` `ST` carrying `"MR BRAIN SMITHSON "` whose
 Value Length under-declares by 12 desynchronizes the **Explicit VR LE** reader onto a fabricated
 header whose declared length is odd, and `DICOM_ODD_LENGTH_VALUE_PADDED` rendered four bytes of the
@@ -129,9 +130,9 @@ real finding, and it is still uncapped.
 
 **A Tier-3 fatal's `message` is bounded the same way, and it was not always.** Every message
 `parseDicom` throws now comes from a second frozen registry, keyed by the structural reason for the
-refusal rather than by the fatal code (the four codes are locked, and several of them are raised for
-more than one reason). Until this release four of those messages were assembled at the throw site out
-of template literals and printed the element's tag, its declared length, or both. That reads as
+refusal rather than by the fatal code (`FATAL_CODES` is locked, and several of its members are raised
+for more than one reason). Until this release several of those messages were assembled at the throw
+site out of template literals and printed the element's tag, its declared length, or both. That reads as
 harmless and is not. **The reason is NOT that such a fatal fires only when a length field is lying.**
 It fires on an honestly truncated file too, where every declared length is correct and the transport
 simply lost bytes: a spec-clean object cut short by two bytes raises
@@ -151,7 +152,7 @@ constant or the caller's own cap, PS3.6's registry name for an unsupported Trans
 zlib error code checked against zlib's own nine-name table.
 
 **And a count of the bytes left in the buffer is not on that list any more, which is a change to two
-message texts in this release.** Through `0.0.14` `ELEMENT_LENGTH_EXCEEDS_BUFFER` and
+message texts in this release.** In an earlier release `ELEMENT_LENGTH_EXCEEDS_BUFFER` and
 `FILE_META_GROUP_LENGTH_OVERRUNS` each printed `buffer.length - cursor.position`, defended as bounded
 by bytes actually present. That bounds the number's magnitude. The parser reads a defined-length
 Sequence Item from a **slice**, so inside one the buffer is that Item and the subtraction publishes
@@ -225,7 +226,7 @@ though it were not:
 | `DeidentifyReport.removedPrivateTags` / `.retained`                                            | Tags, and the option names you passed in.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `contextPath`, on `DeidentifiedAttribute` and on all three findings that carry one             | **Unbounded, and this row is the correction.** A segment is `TAG[index]`; the tag half is whatever tag the descent walked, read off the wire, with neither a shape test nor a closed table behind it. On a file whose under-declared Value Length desynchronized the reader onto four bytes inside somebody's value, those four bytes are published here. Measured: a `LO` carrier holding `MRS BRAIN SMITHSON` yields `contextPath: ["53484E4F[0]"]`, which is `HSON` in wire order, with no warning and every finding array empty. Treat it as PHI when the source is untrusted.                                                                                                                                                                                                                                                                                                                    |
 | `EmbeddedAttributeFinding.tag` / `.vr` / `.hidden`                                             | Composed. `hidden` holds tags this parser built from four bytes each, and the bytes were sitting inside a value - so they are re-composed as `Tag` here, never echoed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| `UnauditableSequenceFinding.tag` / `.applied` / `.byteLength`, `UndefinedVrFinding.byteLength` | Composed, plus an input-derived number, and **the number is the part this row exists to correct**. `byteLength` is `Element.rawBytes.length`, which EQUALS the declared Value Length read off the element header, so where that header was fabricated by an under-declared length upstream it is four document bytes wearing a decimal: `"SO\0\0"` publishes `20307`, two letters of a surname, put back with one `readUInt32LE`. The bytes are never echoed; the number they decode to is. `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` and `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` rendered the same number through `0.0.14` and do not any more, which leaves these fields its only publisher. **`applied` is one of two literals this package writes (`"emptied"` / `"kept"`), so it is composed; read it before the other two, because it is what says whether the value is still in your output.** |
+| `UnauditableSequenceFinding.tag` / `.applied` / `.byteLength`, `UndefinedVrFinding.byteLength` | Composed, plus an input-derived number, and **the number is the part this row exists to correct**. `byteLength` is `Element.rawBytes.length`, which EQUALS the declared Value Length read off the element header, so where that header was fabricated by an under-declared length upstream it is four document bytes wearing a decimal: `"SO\0\0"` publishes `20307`, two letters of a surname, put back with one `readUInt32LE`. The bytes are never echoed; the number they decode to is. `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` and `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` rendered the same number in an earlier release and do not any more, which leaves these fields its only publisher. **`applied` is one of two literals this package writes (`"emptied"` / `"kept"`), so it is composed; read it before the other two, because it is what says whether the value is still in your output.** |
 
 Everything else on the model is a **value**, and carries whatever the file carried:
 `Element.rawBytes`, `Element.value`, `FileMeta.mediaStorageSOPClassUID`,
@@ -242,3 +243,27 @@ The tolerance posture is not fixed. A [source profile](./spec-notes-profiles) ca
 warning codes to a thrown error (a stricter gate for a trusted sender) or **suppress** benign,
 high-volume codes for a known-quirky source, without ever loosening a correct decode. The built-in
 `profiles.strict` and `profiles.lenient` are the two ends of that dial.
+
+`ParseOptions` is the per-call form of the same dial, and every field is optional:
+
+| Field                | What it does                                                                                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `strict`             | Escalates **every** Tier-2 warning to a thrown `DicomParseError`. 🛑 That error carries a raw `snippet` the warning does not, so a PHI review of the lenient path does not transfer to the strict one. |
+| `onWarning`          | An `OnWarningCallback`, invoked once per Tier-2 warning as it is emitted. It fires after the warning is recorded, and a throw from it is swallowed rather than failing the parse. |
+| `stripPreamble`      | How to treat an object that arrives without the 128-byte preamble and `DICM`.                                                                                    |
+| `copyValues`         | Whether element values are copied out of the input buffer or held as views into it.                                                                              |
+| `profile`            | The `Profile` to parse under.                                                                                                                                    |
+
+## The exported diagnostic types
+
+| Export              | What it is                                                                                                                                                        |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WARNING_CODES`     | The frozen Tier-2 registry. **It is the list**, and the locked snapshot under `test/property/__snapshots__/` measures it on every run. Read it rather than a numeral written anywhere. |
+| `WarningCode`       | The discriminant type over that registry, so a `switch` over warning codes is exhaustive.                                                                          |
+| `DicomParseWarning` | One recorded deviation: its `code`, its `position`, and a `message` looked up in the frozen registry.                                                              |
+| `FATAL_CODES`       | The frozen Tier-3 registry. Same rule: enumerate it, never count it.                                                                                              |
+| `FatalCode`         | The discriminant type over that registry.                                                                                                                         |
+| `DicomParseError`   | The thrown class. Carries `code`, `byteOffset`, `offsetFrame`, `message` and a raw hex `snippet` of the source. **Treat `snippet` as PHI.**                        |
+| `DicomPosition`     | Where a diagnostic happened: `byteOffset`, plus `fileMeta` / `deflated` flags and a `contextPath` for a nested Sequence Item. Read the frame note below before indexing anything with it. |
+| `OFFSET_FRAMES`     | The frozen set of frames a `byteOffset` may be counted in: the caller's own input, the inflated Data Set of a Deflated object, or a slice this parser cut from inside a Value Field. |
+| `OffsetFrame`       | The discriminant type over that set. **Only the input frame's offsets index the buffer you passed in**, and `DicomParseError.offsetFrame` is what says which frame you have. |

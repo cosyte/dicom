@@ -92,7 +92,8 @@ export function parsePage(file: string, text: string): Page {
       throw new Error(`${file}: frontmatter line ${String(i + 1)} is not "key: value": ${line}`);
     }
     const key = match[1] ?? "";
-    const value = (match[2] ?? "").trim();
+    // A YAML scalar carrying a colon is quoted; the quotes are syntax, not value.
+    const value = (match[2] ?? "").trim().replace(/^"(.*)"$/su, "$1");
     if (frontmatter.has(key)) {
       throw new Error(`${file}: duplicate frontmatter key "${key}"`);
     }

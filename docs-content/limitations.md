@@ -2,7 +2,6 @@
 id: limitations
 title: Known limitations
 sidebar_label: Known limitations
-sidebar_position: 3
 ---
 
 # Known limitations: the "do not over-trust" list
@@ -71,7 +70,7 @@ structural fact about DICOM that no reader can resolve from the wire.
   carrier - measured, and the reason the predicate is what the run DID with the value rather than the
   VR or the scanner's reach. If you need those values back, that needs a content test separating a
   nested Data Set from a legitimate binary blob, which is an open product question and not a flag.
-  Through `0.0.19` this class was **kept** verbatim under `(0012,0062) = YES` and merely disclosed,
+  Earlier releases **kept** this class verbatim under `(0012,0062) = YES` and merely disclosed it,
   which was a disclosure and not a fix. The surface it shipped through is **pinned as a measured
   matrix** in `test/integration/deident-private-reservation.test.ts` rather than described in prose,
   because the prose has been wrong twice. Detail:
@@ -134,8 +133,8 @@ structural fact about DICOM that no reader can resolve from the wire.
   there: this package deletes a count it has corrected twice rather than incrementing it.
   **What that closed, measured on an `ST` carrying `"MR BRAIN SMITHSON "` whose Value Length
   under-declares:** under Explicit VR LE the reader desynchronizes onto a fabricated header whose
-  declared length is odd, and through `0.0.14` `DICOM_ODD_LENGTH_VALUE_PADDED` rendered **four bytes
-  of the name as the tag and four more as the decimal length** - eight payload bytes in one message.
+  declared length is odd, and in an earlier release `DICOM_ODD_LENGTH_VALUE_PADDED` rendered **four
+  bytes of the name as the tag and four more as the decimal length** - eight payload bytes in one message.
   `DICOM_NONZERO_RESERVED_BYTES` printed two more as decimals on six other deltas. Both are closed.
   **What it costs, stated rather than minimised:** a message about a **private** element, a **Group
   Length** `(gggg,0000)` or a **repeating-group member** such as `(6000,3000)` Overlay Data no longer
@@ -147,7 +146,7 @@ structural fact about DICOM that no reader can resolve from the wire.
   fixtures and not a promise about the parser. Treat both channels the same way.
   Full treatment: [Keeping PHI out of logs](./troubleshooting#keeping-phi-out-of-logs).
 
-- **Two carriers this list named at `0.0.13` are now bound, and neither bound is an all-clear.**
+- **Two carriers this list once named as open are now bound, and neither bound is an all-clear.**
   `DICOM_PRIVATE_TAG_NO_CREATOR` and its two sibling private-tag codes take no tag at all any more,
   because an odd group is the one class of tag no closed table this library holds can vouch for; the
   element is still in the object and `position.byteOffset` still locates it.
@@ -255,10 +254,12 @@ than substituting a plausible value. `undefined` means the object did not carry 
 
 | Topic                                                                       | Page                                                                 |
 | --------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| The error model, symptom-by-symptom triage, and the full boundary narrative | [Troubleshooting](./troubleshooting)                                 |
+| The error model and symptom-by-symptom triage                               | [Troubleshooting](./troubleshooting)                                 |
 | What a diagnostic carries and what it does not                              | [Tolerance](./spec-notes-tolerance)                                  |
 | Keeping PHI out of logs                                                     | [Keeping PHI out of logs](./troubleshooting#keeping-phi-out-of-logs) |
 | The safety-critical views and their fail-safe rules                         | [Safety](./spec-notes-safety)                                        |
+| Writing spec-clean bytes back out, and what the writer will not do          | [Serialization](./serialization)                                     |
+| The de-identification surface and the scope limits on it                    | [De-identification](./deidentification)                              |
 | Working recipes, each citing the PS3 clause it reads                        | [Cookbook](./cookbook)                                               |
 
 Everything on this page is a documented boundary rather than a bug. Where a limitation applies, the

@@ -1,7 +1,7 @@
 ---
 id: intro
 title: Getting started
-sidebar_position: 1
+sidebar_label: Getting started
 ---
 
 # @cosyte/dicom
@@ -29,6 +29,27 @@ page is a deliverable of this package rather than a footnote. A de-identified ou
 
 ```bash
 npm install @cosyte/dicom
+```
+
+## One line to a useful field
+
+Every DICOM object on this site is **synthetic**: an invented patient and obviously-fake UIDs,
+encoded as a small base64 Part 10 buffer so an example needs no file on disk. This one is executed
+against the built package on every test run, so what it asserts is what the shipped code returns.
+
+```ts runnable
+import { parseDicom } from "@cosyte/dicom";
+
+// Synthetic Part 10 object (base64): a tiny CT header, invented MRN, fake UIDs. No real PHI.
+const buf = Buffer.from(
+  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABESUNNAgAAAFVMBAAcAAAAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xAAgAYABDUwIAQ1QQACAATE8GAE1STi00Mg==",
+  "base64",
+);
+
+const ds = parseDicom(buf);
+
+ds.series.modality; // => "CT"
+ds.patient.id; // => "MRN-42"
 ```
 
 ## Read a file
@@ -113,9 +134,10 @@ if (img.isEnhancedMultiFrame) {
 
 The parser is **lenient by default**: the quirks real scanners emit (odd-length values, missing
 padding, off-spec VRs) become warnings carrying a stable code and the byte offset where they
-occurred, not failures. Only four unrecoverable structural conditions throw. When you re-serialize,
-the writer always emits spec-clean Part 10: correct File Meta group length, even-length values,
-proper padding (Postel's Law).
+occurred, not failures. Only an unrecoverable structural condition throws, and `FATAL_CODES` is the
+whole set of them. When you re-serialize, the writer always emits spec-clean Part 10: correct File
+Meta group length, even-length values, proper padding (Postel's Law). See
+[Serialization](./serialization) for what the writer will and will not do.
 
 ## Source profiles
 
