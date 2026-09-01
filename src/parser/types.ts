@@ -1,11 +1,14 @@
 /**
  * Shared parser-pipeline types for `@cosyte/dicom`.
  *
- * Phase 2 core-parser context:
- *   - D-02 - `ParseOptions` shape (Phase 2 only; no `profile` field).
- *   - D-03 - `OnWarningCallback` ordering contract (invoked AFTER push to `ctx.warnings`).
- *   - D-07 - `DicomPosition` shape (`byteOffset`, optional `fileMeta` / `deflated` / `contextPath`).
- *   - D-45 - `ParseContext.profile?: unknown` is reserved for Phase 6; Phase 2 never sets it.
+ * The contracts that live here:
+ *   - `ParseOptions`, the shape a caller passes to `parseDicom`.
+ *   - `OnWarningCallback`, whose ordering contract is that it is invoked
+ *     AFTER the push to `ctx.warnings`.
+ *   - `DicomPosition` (`byteOffset`, optional `fileMeta` / `deflated` /
+ *     `contextPath`).
+ *   - `ParseContext`, the parser's internal state, including the active
+ *     source/vendor `Profile`.
  *
  * Public types (exported via `src/index.ts`): `DicomPosition`, `ParseOptions`, `OnWarningCallback`.
  * Internal type (NOT exported from `src/index.ts`): `ParseContext`.
@@ -40,7 +43,7 @@ export interface PrivateTagDefinition {
 }
 
 /**
- * A source/vendor tolerance preset (Phase 6). A `Profile` bundles three
+ * A source/vendor tolerance preset. A `Profile` bundles three
  * things that only ever **tighten or annotate** a parse - never loosen it
  * past the Postel's-Law default:
  *
@@ -84,7 +87,7 @@ export interface Profile {
  * Positional context for a `DicomParseWarning` or `DicomParseError`.
  *
  * **🛑 `byteOffset` IS NOT ALWAYS RELATIVE TO THE SOURCE BUFFER, AND THIS
- * JSDOC SAID IT WAS.** For the Deflated Explicit VR LE transfer syntax (D-27),
+ * JSDOC SAID IT WAS.** For the Deflated Explicit VR LE transfer syntax,
  * `deflated: true` says the offset indexes the inflated dataset buffer rather
  * than the on-disk source. That flag is the only frame this type carries, and
  * it is not the only frame this parser has: a defined-length Sequence Item is
@@ -121,7 +124,7 @@ export interface DicomPosition {
 /**
  * Synchronous callback invoked once per Tier-2 warning emitted during parse.
  *
- * Per `02-CONTEXT.md` D-03, the callback fires AFTER the warning has been
+ * The callback fires AFTER the warning has been
  * pushed to `ctx.warnings`; if the callback throws, the parser silently
  * swallows the exception and continues (mirrors `@cosyte/hl7` sibling).
  *
@@ -140,8 +143,7 @@ export type OnWarningCallback = (warning: DicomParseWarning) => void;
 /**
  * Options accepted by `parseDicom`.
  *
- * Per `02-CONTEXT.md` D-02 - Phase 2 form only. No `profile` field; Phase 6
- * adds it. With `exactOptionalPropertyTypes: true`, callers omit unset keys
+ * With `exactOptionalPropertyTypes: true`, callers omit unset keys
  * rather than passing `undefined` for any field below.
  *
  * @example
@@ -187,7 +189,7 @@ export interface ParseOptions {
    * treatment is in the package's troubleshooting docs. The `DicomParseError`
    * this option raises in its place is a different and larger surface: it also
    * carries `snippet`,
-   * **16 raw bytes, unredacted** (D-10), read at the warning's own `byteOffset`.
+   * **16 raw bytes, unredacted**, read at the warning's own `byteOffset`.
    * A message-only PHI review of the lenient path therefore does not transfer to
    * the strict one. Log `err.code`, `err.byteOffset`, `err.offsetFrame` and
    * `err.message`; treat `err.snippet` as PHI.
@@ -231,7 +233,7 @@ export interface ParseOptions {
   /**
    * Synchronous callback invoked once per Tier-2 warning, after the warning
    * has been pushed to `Dataset.warnings`. Throwing handlers are silently
-   * swallowed (parser-state safety per D-03).
+   * swallowed, for parser-state safety.
    *
    * Omit to skip the callback entirely.
    */
@@ -242,11 +244,11 @@ export interface ParseOptions {
    * default), `Element.rawBytes` is `Buffer.subarray(slice)` - a zero-copy
    * view that pins the source ArrayBuffer until every Element is GC'd.
    *
-   * Per D-16 / MODEL-03. Omit to use the default.
+   * Omit to use the default.
    */
   readonly copyValues?: boolean;
   /**
-   * Source/vendor tolerance preset (Phase 6, D-45). Applies the profile's
+   * Source/vendor tolerance preset. Applies the profile's
    * `escalations` / `suppressions` to warning emission and its
    * `privateDictionary` to Implicit-VR resolution of private data elements.
    * A profile only tightens or annotates - it never makes the default
@@ -262,8 +264,7 @@ export interface ParseOptions {
 /**
  * Internal pipeline state threaded through every parser stage.
  *
- * Not exported from `src/index.ts`. Phase 6 will populate the `profile`
- * field reserved here per D-45; Phase 2 always leaves it absent.
+ * Not exported from `src/index.ts`.
  *
  * @internal
  */
@@ -318,8 +319,8 @@ export interface ParseContext {
   /**
    * Group → block-id (low byte `0x10..0xFF`) → creator string for **the Data
    * Set currently being parsed**. Populated as Private Creator elements
-   * `(gggg,00XX)` are seen during parse. Phase 2's private-creator stack
-   * tracking lives here (D-33).
+   * `(gggg,00XX)` are seen during parse. The private-creator stack
+   * tracking lives here.
    *
    * **Mutable, and per Data Set rather than per parse.** PS3.5 section 7.5.1
    * says "Each Item Value shall contain a DICOM Data Set composed of Data
@@ -333,34 +334,33 @@ export interface ParseContext {
    */
   creators: Map<number, Map<number, string>>;
   /**
-   * Sequence-encoding stack - the top entry determines FFFE-marker semantics
-   * per D-28. Initial stack is `["Root"]`.
+   * Sequence-encoding stack - the top entry determines FFFE-marker
+   * semantics. Initial stack is `["Root"]`.
    */
   readonly encodingContextStack: Array<"Root" | "SqItem" | "EncapsulatedPixelData">;
   /**
    * Hard-cap counter - incremented on SQ descent, decremented on ascent.
-   * Plan 02-04 enforces a depth cap; Phase 2-06 adds the overflow security
-   * test (T-02-01-07).
+   * `parseSequence` enforces the depth cap against it.
    */
   nestingDepth: number;
   /**
    * The `(0008,0005)` Specific Character Set terms resolved so far during
-   * this parse, threaded onto each `Element` so Phase 3 text decoders can
+   * this parse, threaded onto each `Element` so the text decoders can
    * honour the dataset's charset. Mutable: set when `(0008,0005)` is read,
    * inherited into SQ items and restored per-item by `parseSequence`.
    * `undefined` means the Default Repertoire (ISO_IR 6).
    */
   currentCharset?: readonly string[];
   /**
-   * Active source/vendor {@link Profile} (Phase 6, D-45). Threaded from
-   * `ParseOptions.profile`. When absent the parse is unprofiled (the Phase 2
-   * baseline). Consulted by the emitter (escalations / suppressions) and by
+   * Active source/vendor {@link Profile}. Threaded from
+   * `ParseOptions.profile`. When absent the parse is unprofiled, which is the
+   * baseline. Consulted by the emitter (escalations / suppressions) and by
    * Implicit-VR private-tag resolution (private-dictionary overlay).
    */
   readonly profile?: Profile;
   /**
    * When `true`, `Element.rawBytes` is `Buffer.from(slice)` (copy); when
-   * `false` (default), `Buffer.subarray(slice)` (view). Per D-16.
+   * `false` (default), `Buffer.subarray(slice)` (view).
    */
   readonly copyValues: boolean;
 }

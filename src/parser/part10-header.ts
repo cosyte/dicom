@@ -1,14 +1,14 @@
 /**
  * Part 10 framing detection - preamble + DICM magic recognition.
  *
- * Phase 2 core-parser context:
- *   - D-14 - `stripPreamble` tri-state semantics (`"tolerate"` default,
- *     `"require"` strict-equivalent for this one code).
- *   - D-15 - NOT_DICOM_PART_10 detection heuristic: input must have either
+ * Three rules govern it:
+ *   - `stripPreamble` is tri-state (`"tolerate"` default, `"require"`
+ *     strict-equivalent for this one code).
+ *   - NOT_DICOM_PART_10 detection heuristic: input must have either
  *     `DICM` magic at offset 128 OR a plausible `(0002,0000)` File Meta
  *     Group Length element in valid Explicit VR LE form at offset 0.
- *   - T-02-02-02 / T-02-02-03 - Truncated and spoofed inputs are rejected
- *     with a fatal throw rather than indexing past buffer end.
+ *   - Truncated and spoofed inputs are rejected with a fatal throw rather
+ *     than indexing past buffer end.
  *
  * @module
  */
@@ -34,7 +34,7 @@ export interface Part10HeaderResult {
  * Detect the Part 10 framing (128-byte preamble + `DICM` magic) and return
  * the offset where the File Meta group begins.
  *
- * Behavior per CONTEXT.md D-14 + D-15:
+ * Behavior:
  *
  * - `DICM` at offset 128 → strip 128 + 4 bytes; `{ datasetStart: 132,
  *   hadPreamble: true }` (silent).
@@ -46,7 +46,7 @@ export interface Part10HeaderResult {
  *     - Else → throw `DicomParseError(NOT_DICOM_PART_10)`.
  *
  * Buffers shorter than 12 bytes that lack `DICM` magic are always thrown as
- * `NOT_DICOM_PART_10` rather than indexing past the buffer end (T-02-02-02).
+ * `NOT_DICOM_PART_10` rather than indexing past the buffer end.
  *
  * @internal
  */
@@ -74,7 +74,7 @@ export function parsePart10Header(
 }
 
 /**
- * Heuristic per CONTEXT.md D-15: detect a `(0002,0000)`
+ * Heuristic: detect a `(0002,0000)`
  * FileMetaInformationGroupLength element at offset 0 in valid Explicit VR LE
  * form.
  *

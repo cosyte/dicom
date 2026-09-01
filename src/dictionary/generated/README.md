@@ -1,6 +1,6 @@
 # Generated DICOM dictionary modules
 
-**DO NOT EDIT BY HAND.** All files in this directory are produced by `scripts/generate-dictionary.ts` (run via `pnpm gen:dictionary`) and `scripts/generate-annex-e.ts` (run via `pnpm gen:annex-e`). CI gates a byte-identical regen on every PR: see `.github/workflows/ci.yml` and `.github/workflows/dictionary-regen.yml` (committed by Phase 1 Plan 05).
+**DO NOT EDIT BY HAND.** All files in this directory are produced by `scripts/generate-dictionary.ts` (run via `pnpm gen:dictionary`) and `scripts/generate-annex-e.ts` (run via `pnpm gen:annex-e`). CI gates a byte-identical regen on every PR: see `.github/workflows/ci.yml` and `.github/workflows/dictionary-regen.yml`.
 
 ## Files
 
@@ -38,4 +38,4 @@ git diff src/dictionary/generated/    # MUST be empty for the inputs at the pinn
 
 Keeping it out of `gen:all` also keeps a failed regen non-destructive. The generators throw on malformed or missing vendor input, which is exactly the state you are in part-way through the re-pinning procedure in `vendor/innolitics/README.md`; a `gen:clean` chained ahead of them would leave this directory empty and the build broken until `git checkout`. Run `pnpm gen:clean` by hand when you want to prove locally what CI proves, and `git checkout -- src/dictionary/generated/` restores everything, since every file here is reproducible from the pinned inputs.
 
-If the diff is non-empty after a fresh regen against unchanged inputs, the generator has non-determinism. File an issue. The byte-identical regen is a Phase 1 Plan 05 CI gate (DICT-05).
+If the diff is non-empty after a fresh regen against unchanged inputs, the generator has non-determinism. File an issue. The byte-identical regen is a CI gate.

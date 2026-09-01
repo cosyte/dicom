@@ -1,16 +1,11 @@
 /**
  * Transfer Syntax dispatch table - maps TS UIDs to per-strategy parsers.
  *
- * D-20: a frozen `Readonly<Record<string, ParserStrategy>>` with EXACTLY four
- * entries:
- * the only Transfer Syntax UIDs supported by `@cosyte/dicom` v1.
- *
- * Plan 02-02 shipped stubs returning empty element maps. Plan 02-03
- * replaced the Implicit VR LE stub. Plan 02-04 replaced the Explicit
- * VR LE + BE stubs. Plan 02-05 (this commit) replaces the LAST stub:
- * Deflated LE - with the real `zlib.inflateRawSync` + delegate-to-
- * Explicit-LE pipeline imported from `./deflated-le.js`. All four v1
- * transfer syntaxes are now backed by real implementations.
+ * A frozen `Readonly<Record<string, ParserStrategy>>` with EXACTLY four
+ * entries: the only Transfer Syntax UIDs supported by `@cosyte/dicom` v1.
+ * All four are backed by real implementations, Deflated LE by the
+ * `zlib.inflateRawSync` + delegate-to-Explicit-LE pipeline in
+ * `./deflated-le.js`.
  *
  * @module
  */
@@ -34,7 +29,7 @@ export { parseImplicitLE, parseExplicitLE, parseExplicitBE, parseDeflatedLE };
  * `endOffset` is OPTIONAL - the top-level `parseDicom` dispatch ignores
  * it (the dataset is parsed to end-of-buffer), but SQ-inner descents
  * (via the {@link InnerParser} contract in `parser/sequence.ts`) require
- * it. Plans 02-04 / 02-05 implementations always populate it.
+ * it. Every shipped implementation populates it.
  */
 export type ParserStrategy = (
   buffer: Buffer,
@@ -44,7 +39,7 @@ export type ParserStrategy = (
 ) => { elements: ReadonlyMap<Tag, Element>; endOffset?: number };
 
 /**
- * Frozen dispatch table per CONTEXT.md D-20. Exactly the four v1 Transfer
+ * Frozen dispatch table. Exactly the four v1 Transfer
  * Syntax UIDs are registered. Any other UID → fatal
  * `UNSUPPORTED_TRANSFER_SYNTAX` from `parseDicom`.
  *

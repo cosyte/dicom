@@ -1,9 +1,8 @@
 /**
- * Type definitions for the Phase 1 public Dictionary namespace.
+ * Type definitions for the public Dictionary namespace.
  *
- * Frozen surface. Phase 2 (parser), Phase 3 (dataset/VR), and Phase 7
- * (validate) all depend on this
- * shape - schema-breaking changes here cascade through the codebase.
+ * Frozen surface. The parser, the VR decoders and `validate()` all depend on
+ * this shape - schema-breaking changes here cascade through the codebase.
  *
  * @module
  */

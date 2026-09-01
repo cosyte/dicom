@@ -1,0 +1,77 @@
+name: Public-surface gate
+
+# Founder directive of 2026-07-27: no internal project bookkeeping on any
+# surface a consumer of `@cosyte/dicom` reads. Work-item and roadmap ids, phase
+# and wave language, roadmap and plan citations, ADR numbers, meta-repo paths
+# and commentary about how the work is being run belong in the changelog, the
+# changesets, commit messages, pull request text, `test/`, and this repository's
+# own agent-context docs. This workflow is the CI half of that rule for dicom.
+#
+# The rule and the reasoning live in `scripts/check-no-internal-refs.ts`, which
+# is the single source of truth for what is a finding and where it looks. This
+# file only decides WHEN it runs. Run it locally with
+# `pnpm check:no-internal-refs`.
+#
+# dicom was NOT already clean when this landed, and that is the thing worth
+# reading twice. Measured with the checker's own rules at `91b2c33`: 530
+# findings, 526 of them under `src/`, against 4 in the markdown a documentation
+# review actually reads. The build copies `src/` comment blocks verbatim into
+# the published `dist/index.d.ts` and `dist/index.d.cts`, so that is where the
+# rule regrows unseen and why a note would not have held. The change that added
+# this workflow rewrote all 530.
+#
+# WHY A SEPARATE WORKFLOW, and not a job in ci.yml:
+#
+#   The reusable pipeline is not an option. dicom's `ci` job calls
+#   cosyte/.github/.github/workflows/ci.yml@main, which runs a fixed ladder and
+#   no arbitrary repo script; that repository publishes no reusable for this
+#   gate. The correct rule set also differs per repo, because what counts as a
+#   project prefix and what counts as a domain designator is a property of the
+#   package (here `CP-246` is a DICOM Change Proposal and `MRN-42` is example
+#   patient-identifier data, and neither is a work item). So the gate stays
+#   per-repo: this workflow plus this repository's own checker under `scripts/`.
+#   That is the same shape `no-emdash.yml` takes, for the same reasons.
+#
+#   Unlike `no-emdash.yml` this gate has NO pull-request-text half and wants no
+#   `edited` trigger. Commit messages and pull request text are surfaces the
+#   identifiers BELONG on, so there is nothing there to scan; the checker reads
+#   tracked files and nothing else.
+#
+# WHY NO `pnpm install`. The checker has no dependencies and is run by `node`
+# directly, the way `measure:phi-scan-retention` already is. A checkout and one
+# process is the whole job, which is what keeps this cheap enough to run on
+# every push.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  no-internal-refs:
+    name: no internal references on a consumer surface
+    runs-on: ubuntu-latest
+    steps:
+      # The checker delimits its scope with `git ls-files` and refuses to report
+      # anything from an empty list, so it needs the repository, not a sparse or
+      # partial view of it. Depth 1 is enough: nothing here reads history.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # Pinned to the major this package's `engines.node` requires. The checker
+      # is TypeScript run through Node's own type stripping, which is on by
+      # default from Node 22.18.
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Check consumer surfaces
+        run: node scripts/check-no-internal-refs.ts

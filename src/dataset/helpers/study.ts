@@ -1,5 +1,5 @@
 /**
- * Study-identity view builder (§4.1 - the wrong-patient/wrong-study class).
+ * Study-identity view builder (the wrong-patient/wrong-study class).
  *
  * `instanceUid` is the cross-system study key; `accessionNumber` ties the
  * study back to the placer/filler order. Every field is fail-safe

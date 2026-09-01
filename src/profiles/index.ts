@@ -1,5 +1,5 @@
 /**
- * Public barrel for the Phase 6 profile system.
+ * Public barrel for the profile system.
  *
  * A {@link Profile} is a source/vendor tolerance preset that only ever
  * *tightens or annotates* a parse - it bundles warning `escalations` /

@@ -2,19 +2,18 @@
  * Shared SQ (Sequence) + FFFE marker parser used by all three structural
  * transfer-syntax strategies (Implicit-LE, Explicit-LE, Explicit-BE).
  *
- * Phase 2 core-parser context:
- *   - D-25 - FFFE item-marker reads route through the same endian-aware
- *     ByteCursor as every other read (closes the BE-FFFE bug per
- *     PITFALLS.md §2.3).
- *   - D-28 - Encoding-context stack (`Root | SqItem | EncapsulatedPixelData`).
- *     Empty item (`(FFFE,E000) length=0`) is tolerated - emit
+ * Five rules govern it:
+ *   - FFFE item-marker reads route through the same endian-aware
+ *     ByteCursor as every other read, which is what closes the BE-FFFE bug.
+ *   - An encoding-context stack (`Root | SqItem | EncapsulatedPixelData`) is
+ *     maintained. An empty item (`(FFFE,E000) length=0`) is tolerated: emit
  *     `DICOM_EMPTY_ITEM_IN_SEQUENCE` and continue.
- *   - D-29 - Undefined-length SQ in Explicit VR is legal but emits
+ *   - An undefined-length SQ in Explicit VR is legal but emits
  *     `DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR` (caller responsibility - the
  *     warning fires from the per-TS strategy, NOT from inside parseSequence
  *     because Implicit-LE-undefined-length-SQ is the spec-default form for
  *     that TS).
- *   - D-30 - CP-246 fallback: when `VR=UN` AND `length=0xFFFFFFFF`, attempt
+ *   - CP-246 fallback: when `VR=UN` AND `length=0xFFFFFFFF`, attempt
  *     SQ descent using **Implicit VR LE inner encoding**. On success →
  *     promote element to `VR=SQ` + emit `DICOM_UN_PARSED_AS_SQ`. On failure →
  *     restore state + NO warning. Implemented as `tryParseUnAsSQ`, and called
@@ -23,21 +22,21 @@
  *     typically for a private element whose Data Set claimed no block). Under
  *     Implicit VR LE the alternative is a Tier-3 fatal on the whole object,
  *     which PS3.5 section 7.5.1 does not license for a readable Data Set.
- *   - D-31 - Encapsulated pixel data (`(7FE0,0010) VR=OB length=0xFFFFFFFF`):
- *     each FFFE,E000 item is a fragment (Phase 2 records the structure as
- *     empty Items; Phase 4 surfaces fragments + Basic Offset Table via
- *     `ds.pixelData`).
+ *   - Encapsulated pixel data (`(7FE0,0010) VR=OB length=0xFFFFFFFF`):
+ *     each FFFE,E000 item is a fragment (the parser records the structure as
+ *     empty Items; the domain helpers surface fragments + Basic Offset Table
+ *     via `ds.pixelData`).
  *
  * Threat model:
- *   - T-02-04-01: Buffer over-read on truncated input. All `cursor.slice(N)`
+ *   - Buffer over-read on truncated input. All `cursor.slice(N)`
  *     and `cursor.position + N > buffer.length` paths throw
  *     `DicomParseError(INVALID_FILE_META)` with header offset + 16-byte
  *     hex snippet. RangeError-from-cursor is caught and re-thrown.
- *   - T-02-04-02: Stack overflow via deeply-nested SQ. `ctx.nestingDepth`
+ *   - Stack overflow via deeply-nested SQ. `ctx.nestingDepth`
  *     increments on entry and decrements on exit; on exceed 64, throws
  *     `DicomParseError(INVALID_FILE_META, 'SQ nesting depth exceeds 64',
  *     ...)`.
- *   - T-02-04-03: CPU DoS via pathological CP-246. tryParseUnAsSQ caps
+ *   - CPU DoS via pathological CP-246. tryParseUnAsSQ caps
  *     attempts at the same nesting-depth limit; on parse failure, state
  *     is restored - no infinite retry loop.
  *     **No primitive here parses the same bytes twice, and that is the
@@ -50,7 +49,7 @@
  *     sequences against 0.7 ms for one pass. `tryParseDefinedLengthSQ` and
  *     `tryParseUnAsSQ` roll back and return rather than re-running; the
  *     `DICOM_ITEM_CROSSES_SEQUENCE_END` disclosure below is one integer
- *     comparison and walks nothing. Adding a retry here reopens T-02-04-03.
+ *     comparison and walks nothing. Adding a retry here reopens that threat.
  *
  * Circular-import note: `parseSequence` calls into the per-TS parsers
  * (Implicit-LE / Explicit-LE / Explicit-BE), and those parsers ALSO call
@@ -94,7 +93,7 @@ const SEQ_DELIM_TAG: Tag = "FFFEE0DD";
 const UNDEFINED_LENGTH = 0xffffffff;
 
 /**
- * Hard cap on SQ nesting depth (T-02-04-02). Exceeding this throws
+ * Hard cap on SQ nesting depth. Exceeding this throws
  * `DicomParseError(INVALID_FILE_META, 'SQ nesting depth exceeds 64', ...)`.
  */
 export const NESTING_DEPTH_LIMIT = 64;
@@ -134,7 +133,7 @@ export interface ParseSequenceOptions {
   /** Per-TS element parser; passed in by the calling strategy. */
   readonly innerStrategy: InnerParser;
   /**
-   * `true` when the SQ wraps encapsulated pixel data (D-31). Each FFFE,E000
+   * `true` when the SQ wraps encapsulated pixel data. Each FFFE,E000
    * item is a raw fragment (no inner element parsing); the first item is
    * the Basic Offset Table per PS3.5 §A.4.
    */
@@ -155,10 +154,10 @@ export interface ParseSequenceResult {
  * the item bodies + delimiters and returns the items array + the offset
  * where parsing finished.
  *
- * Phase 2 surfaces only the structural shape - the per-TS strategy DOES
- * NOT thread the resulting items onto the SQ Element. Per D-04, Phase 2
- * SQ Elements expose only `rawBytes` covering the on-wire span; Phase 3
- * lazily re-parses for navigation.
+ * This surfaces only the structural shape - the per-TS strategy DOES
+ * NOT thread the resulting items onto the SQ Element. A structural SQ
+ * Element exposes only `rawBytes` covering the on-wire span; navigation
+ * re-parses lazily.
  *
  * @internal
  */
@@ -267,9 +266,10 @@ export function parseSequence(
       }
 
       if (opts.encapsulatedPixelData === true) {
-        // Pixel-data fragment: consume `itemLength` bytes verbatim. Phase 4
-        // surfaces the bytes; Phase 2 records each fragment as a structural
-        // (empty) Item and advances the cursor past its raw bytes.
+        // Pixel-data fragment: consume `itemLength` bytes verbatim. The
+        // domain helpers surface the bytes; the parser records each fragment
+        // as a structural (empty) Item and advances the cursor past its raw
+        // bytes.
         if (cursor.position + itemLength > buffer.length) {
           throw encapsulatedFragmentExceedsBuffer(ctx.frame, itemHeaderStart);
         }
@@ -317,16 +317,16 @@ export function parseSequence(
         // That indistinguishability is the whole reason no bound ships here, and
         // it is sufficient on its own.
         //
-        // **🛑 DO NOT ADD A FAIL-SAFE-DIRECTION ARGUMENT BACK. `#51` WAS REFUSED
-        // FOR ONE, IN FIVE ARTIFACTS AT ONCE.** The retracted claim was that
+        // **🛑 DO NOT ADD A FAIL-SAFE-DIRECTION ARGUMENT BACK. AN EARLIER PASS
+        // WAS REFUSED FOR ONE, IN FIVE ARTIFACTS AT ONCE.** The retracted claim was that
         // following the item's field is the safe half, because a Private Creator
         // swallowed INTO an item leaves the enclosing block unclaimed and an
         // unclaimed block is removed. It is false: which direction leaks depends
         // on where the SENDER put the Private Creator, not on which length field
         // a reader follows. Put the creator in the item's genuine content and
         // the absorb direction leaks too - `DICOM-PRIVATE-CREATOR-RESERVATION-
-        // LEAK`, measured on `164eb39` and closed at the de-identify boundary by
-        // `#66`, never here. The eject direction is still open and pinned as a
+        // LEAK`, measured on `164eb39` and closed at the de-identify boundary,
+        // never here. The eject direction is still open and pinned as a
         // residual. Neither reading is safe by construction, which is exactly
         // why this reports rather than decides.
         if (
@@ -391,7 +391,7 @@ export function parseSequence(
  * The distinction is what makes a rollback safe: a Tier-3 fatal thrown mid-descent
  * means the bytes are not what we guessed and the caller may fall back, while a
  * strict-mode escalation is the caller's own `{ strict: true }` contract being
- * honoured at the `emit` chokepoint (D-36) and must propagate untouched. Swallowing
+ * honoured at the `emit` chokepoint, and must propagate untouched. Swallowing
  * one would make `strict` silently weaker inside a sequence than outside it.
  */
 function isStrictEscalation(err: unknown): boolean {
@@ -506,7 +506,7 @@ export function tryParseDefinedLengthSQ(
 }
 
 /**
- * CP-246 fallback per D-30. When an element has `VR=UN` AND
+ * CP-246 fallback. When an element has `VR=UN` AND
  * `length=0xFFFFFFFF`, attempt to descend the bytes as Implicit VR LE SQ
  * items. On any failure, restore parser state (warnings, nestingDepth,
  * encodingContextStack) and signal failure to the caller.
@@ -537,7 +537,7 @@ export function tryParseUnAsSQ(
   implicitLeInner: InnerParser,
   tag: Tag,
 ): { success: boolean; items: readonly Item[]; endOffset: number } {
-  // Save state for rollback (T-02-04-03 mitigation).
+  // Save state for rollback, which is what keeps a failed descent from retrying.
   const savedDepth = ctx.nestingDepth;
   const savedStackLen = ctx.encodingContextStack.length;
   const savedWarningsLen = ctx.warnings.length;
@@ -549,7 +549,7 @@ export function tryParseUnAsSQ(
         : buffer.subarray(valueStart, valueStart + valueLength);
     const opts: ParseSequenceOptions = {
       explicitLength: valueLength === UNDEFINED_LENGTH ? undefined : valueLength,
-      littleEndian: true, // CP-246: Implicit VR LE inner per D-30.
+      littleEndian: true, // CP-246: the inner encoding is Implicit VR LE.
       innerStrategy: implicitLeInner,
     };
     // Same frame swap as `tryParseDefinedLengthSQ`, and restored before the
@@ -570,7 +570,7 @@ export function tryParseUnAsSQ(
       endOffset: valueStart + result.endOffset,
     };
   } catch (err) {
-    // Strict-mode escalation (D-36): the emit chokepoint throws
+    // Strict-mode escalation: the emit chokepoint throws
     // `DicomParseError` carrying a Tier-2 `WarningCode` when ctx.strict is
     // true. Those throws must propagate. Tier-3 structural fatals
     // (`FatalCode`) thrown mid-descent indicate the bytes don't actually

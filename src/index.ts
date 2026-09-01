@@ -1,22 +1,19 @@
 /**
  * `@cosyte/dicom` - developer-focused DICOM Part 10 parser + utility library.
  *
- * Phase 1 surface (already shipped):
+ * The public surface, grouped by what it does:
  *  - `VERSION` - package version constant.
  *  - `Dictionary` namespace - Part 6 + UID + Annex E lookups.
- *
- * Phase 2 surface: parser entry, structural `Dataset` shell, warning / error
- * registries (D-04).
- *
- * Subsequent phases extend this surface.
+ *  - the parser entry, the `Dataset` model, and the warning / error registries.
+ *  - VR value decoding, the safety-critical domain helpers, the spec-clean
+ *    serializer, the source/vendor profile system, and de-identification.
  */
 
 export { VERSION } from "./version.js";
 
-// PLAN-02-INSERTION-POINT: Dictionary namespace re-export.
 export * as Dictionary from "./dictionary/index.js";
 
-// === Phase 2 - D-04 public surface delta ===
+// === Parser, dataset model, and the warning / error registries ===
 
 export { parseDicom } from "./parser/index.js";
 
@@ -38,7 +35,7 @@ export {
 
 export type { DicomPosition, ParseOptions, OnWarningCallback } from "./parser/types.js";
 
-// === Phase 3 - VR value decode surface (D-42) ===
+// === VR value decode surface ===
 
 export type {
   DicomValue,
@@ -58,7 +55,7 @@ export {
 export { parsePersonName } from "./dataset/vr/person-name.js";
 export { parseDate, parseTime, parseDateTime } from "./dataset/vr/datetime.js";
 
-// === Phase 4 - safety-critical domain helper surface (§4) ===
+// === Safety-critical domain helper surface ===
 
 export type {
   PatientView,
@@ -77,7 +74,7 @@ export {
   DicomValueError,
 } from "./dataset/helpers/errors.js";
 
-// === Phase 5 - spec-clean serializer surface (§5) ===
+// === Spec-clean serializer surface ===
 
 export { serializeDicom } from "./serialize/serialize.js";
 export {
@@ -86,7 +83,7 @@ export {
   DicomSerializeError,
 } from "./serialize/errors.js";
 
-// === Phase 6 - source/vendor profile surface (D-45) ===
+// === Source/vendor profile surface ===
 
 export { defineProfile, profiles, ProfileDefinitionError } from "./profiles/index.js";
 export type {
@@ -96,7 +93,7 @@ export type {
   ProfilePrivateTags,
 } from "./profiles/index.js";
 
-// === Phase 7 - metadata de-identification surface (PS3.15 Annex E) ===
+// === Metadata de-identification surface (PS3.15 Annex E) ===
 
 export { deidentify, makeUidRemapper, DEFAULT_UID_ROOT } from "./deident/index.js";
 export { DEIDENTIFY_OPTIONS, DEIDENTIFY_ERROR_CODES, DeidentifyError } from "./deident/index.js";

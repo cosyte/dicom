@@ -1,8 +1,8 @@
 /**
- * Typed view model for the Phase 4 safety-critical domain helpers
+ * Typed view model for the safety-critical domain helpers
  * (`Dataset.patient` / `study` / `series` / `image`).
  *
- * Every field here obeys the §4 fail-safe contract from the dicom roadmap:
+ * Every field here obeys the same fail-safe contract:
  * a missing value is **typed-absent** (`undefined`), never a substituted
  * default; a malformed numeric component stays `null` inside its array
  * rather than being coerced; raw bytes are always still reachable via the
@@ -40,7 +40,7 @@ export interface OtherPatientId {
 }
 
 /**
- * Patient & study identity (§4.1 - the wrong-patient failure class).
+ * Patient & study identity (the wrong-patient failure class).
  *
  * `id` is **not globally unique**; correct cross-system matching needs the
  * `{id, issuerOfId, issuerQualifiers}` tuple plus `otherIds`. `name` keeps
@@ -66,7 +66,7 @@ export interface PatientView {
 }
 
 /**
- * Study-level identity (§4.1). `instanceUid` is the cross-system study key;
+ * Study-level identity. `instanceUid` is the cross-system study key;
  * `accessionNumber` ties the study to the order.
  *
  * @example
@@ -87,7 +87,7 @@ export interface StudyView {
 }
 
 /**
- * Series-level identity & co-registration (§4.1, §4.3). Images sharing a
+ * Series-level identity & co-registration. Images sharing a
  * `frameOfReferenceUid` are spatially co-registered.
  *
  * @example
@@ -132,7 +132,7 @@ export interface CodedConcept {
 }
 
 /**
- * A Real World Value Mapping (§4.5) - slope/intercept bound atomically to
+ * A Real World Value Mapping - slope/intercept bound atomically to
  * its UCUM measurement-units code, so a number is never detached from its
  * units. From Real World Value Mapping Sequence `(0040,9096)`.
  *
@@ -150,7 +150,7 @@ export interface RealWorldValueMap {
 
 /**
  * The five Enhanced multi-frame functional-group macros, resolved for a
- * single frame Per-Frame-else-Shared (§4.4, PS3.3 §C.7.6.16). Each macro is
+ * single frame Per-Frame-else-Shared (PS3.3 §C.7.6.16). Each macro is
  * typed-absent when present in neither the per-frame nor the shared group
  * (the three *geometry* macros are treated as required for an enhanced
  * object - see {@link ImageView.frame}).
@@ -188,7 +188,7 @@ export interface FrameFunctionalGroups {
 }
 
 /**
- * Pixel-interpretation + geometry metadata (§4.2 / §4.3 / §4.4 / §4.5) - the
+ * Pixel-interpretation + geometry metadata - the
  * "wrong pixels look fine" and "looks fine, measures wrong" classes. v1 does
  * not decode pixels; this view surfaces exactly what a renderer needs so it
  * does not have to guess.

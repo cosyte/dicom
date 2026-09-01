@@ -1,5 +1,5 @@
 /**
- * Private-dictionary resolution for the Phase 6 profile system.
+ * Private-dictionary resolution for the profile system.
  *
  * A private data element is addressed as `(gggg,BBLL)` where `BB` is the
  * **file-assigned** private block byte (`0x10..0xFF`) and `LL` is the

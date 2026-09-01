@@ -1,7 +1,7 @@
 /**
- * Serializer error taxonomy for the Phase 5 Part 10 writer.
+ * Serializer error taxonomy for the Part 10 writer.
  *
- * Like the Phase 4 {@link "../dataset/helpers/errors".DicomValueError}, this
+ * Like {@link "../dataset/helpers/errors".DicomValueError}, this
  * is **separate** from the parser's four-code `FATAL_CODES` /
  * `DicomParseError` (which are locked to *read*-side Part 10 structural
  * corruption - see `../parser/errors.ts`). The serializer throws only when
@@ -22,7 +22,7 @@
  */
 
 /**
- * Stable string codes the Phase 5 serializer may throw. Narrow on
+ * Stable string codes the serializer may throw. Narrow on
  * {@link DicomSerializeError.code} to react to a specific failure.
  *
  * @example

@@ -1,5 +1,5 @@
 /**
- * `serializeDicom` - the Phase 5 Part 10 writer (the conservative half of
+ * `serializeDicom` - the Part 10 writer (the conservative half of
  * Postel's Law).
  *
  * Takes a {@link Dataset} (from `parseDicom`, or hand-built) and emits a

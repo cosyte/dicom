@@ -1,16 +1,16 @@
 /**
  * File Meta Information group parser - hard-wired Explicit VR LE.
  *
- * Phase 2 core-parser context:
+ * Four rules govern it:
  *
- *   - D-17 - Always Explicit VR LE; does NOT consult the dispatch table.
- *   - D-18 - `(0002,0000)` group-length missing / present-but-wrong handling
+ *   - Always Explicit VR LE; it does NOT consult the dispatch table.
+ *   - `(0002,0000)` group-length missing / present-but-wrong handling
  *     emits `DICOM_FILE_META_GROUP_LENGTH_{MISSING,MISMATCH}`.
- *   - D-19 - `(0002,0010)` Transfer Syntax UID is the ONLY parser-blocking
+ *   - `(0002,0010)` Transfer Syntax UID is the ONLY parser-blocking
  *     element; missing throws `INVALID_FILE_META` regardless of strict mode.
- *     All other FM Type-1 elements are projected when present, NOT enforced
- *     (Phase 7's `validate()` enforces them).
- *   - T-02-02-01 - Truncated File Meta (declared length > remaining buffer)
+ *     All other File Meta Type-1 elements are projected when present, NOT
+ *     enforced (`validate()` is what enforces them).
+ *   - Truncated File Meta (declared length > remaining buffer)
  *     throws `INVALID_FILE_META` rather than over-reading.
  *
  * A repeated `(0002,xxxx)` tag is lossy here without being an overwrite. The
@@ -82,7 +82,7 @@ export interface FileMetaResult {
 /**
  * Parse the Part 10 File Meta Information group starting at `datasetStart`.
  *
- * Always Explicit VR LE per FM-01 / D-17. Returns a typed `FileMeta`
+ * Always Explicit VR LE. Returns a typed `FileMeta`
  * projection plus the offset where the post-FM dataset begins.
  *
  * @internal
@@ -117,7 +117,7 @@ export function parseFileMeta(
     firstElement.value.length === 4
   ) {
     declaredFmLength = firstElement.value.readUInt32LE(0);
-    // T-02-02-01: declared length must fit in the remaining buffer.
+    // Truncation guard: declared length must fit in the remaining buffer.
     if (cursor.position + declaredFmLength > buffer.length) {
       // NEITHER length is passed. The declared one is four document bytes; the
       // remaining count was `buffer.length - cursor.position`, which the factory
@@ -151,7 +151,7 @@ export function parseFileMeta(
     consumedAfterGroupLength += next.bytesConsumed;
   }
 
-  // Step 3: Validate declared vs actual (D-18).
+  // Step 3: Validate declared vs actual.
   if (declaredFmLength !== undefined && consumedAfterGroupLength !== declaredFmLength) {
     emit(
       fileMetaGroupLengthMismatch(
@@ -185,7 +185,7 @@ export function parseFileMeta(
   // answered by a first-match search and is then EXCLUDED from `extraElements`,
   // so a second copy of one is in neither the typed fields nor the verbatim
   // residue. It simply left the object. `(0002,0010)` makes that the more
-  // dangerous half of `#70`'s shape: it is the element that decides how every
+  // dangerous half of that shape: it is the element that decides how every
   // byte after this group is read.
   //
   // Nothing about the reading moves. The first copy still wins, no value is

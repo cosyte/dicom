@@ -1,20 +1,20 @@
 /**
- * Shared element-header primitives for Phase 2's transfer-syntax parsers.
+ * Shared element-header primitives for the transfer-syntax parsers.
  *
- * Phase 2 core-parser context:
- *   - D-22 - `LONG_FORM_VRS` is the set of VRs that use the long-form
- *     header layout (2-byte VR + 2 reserved bytes + 4-byte length).
- *     Internally exported for the Phase 5 serializer per D-44.
- *   - D-21 - `resolveImplicitVR` implements the 5-case Implicit VR LE
- *     fallback decision tree (single VR / multi-VR / repeating-group
- *     family / private tag → UN / unknown standard tag → UN).
- *   - D-33 / D-34 + PITFALLS §7.1 - private-creator stack tracking via
- *     `registerPrivateCreator` / `resolvePrivateCreator`. Implements the
- *     PS3.5 §7.8 block-reservation rule (creator at `(gggg,00XX)` reserves
- *     `(gggg,XX00)..(gggg,XXFF)`) and closes the off-by-0x1000 trap.
+ * Three of them carry rules worth stating up front:
+ *   - `LONG_FORM_VRS` is the set of VRs that use the long-form header layout
+ *     (2-byte VR + 2 reserved bytes + 4-byte length). Internally exported so
+ *     the serializer encodes symmetrically.
+ *   - `resolveImplicitVR` implements the 5-case Implicit VR LE fallback
+ *     decision tree (single VR / multi-VR / repeating-group family / private
+ *     tag → UN / unknown standard tag → UN).
+ *   - `registerPrivateCreator` / `resolvePrivateCreator` track the
+ *     private-creator stack. They implement the PS3.5 §7.8 block-reservation
+ *     rule (creator at `(gggg,00XX)` reserves `(gggg,XX00)..(gggg,XXFF)`) and
+ *     close the off-by-0x1000 trap.
  *
  * The module is internal-export only; consumers reach these primitives
- * through the per-TS parser strategies (plans 02-03 / 02-04 / 02-05).
+ * through the per-TS parser strategies.
  *
  * @module
  */
@@ -73,11 +73,11 @@ export function applySpecificCharacterSet(
  * bytes (must be `0x00 0x00`; non-zero emits
  * `DICOM_NONZERO_RESERVED_BYTES`) + 4-byte length.
  *
- * Per D-22, corrected for CP-2199: the 13-VR set is the union of
+ * Corrected for CP-2199: the 13-VR set is the union of
  * OB/OW/OF/OD/OL/OV (octet-stream variants), SQ (sequences),
  * UT/UN/UC/UR (unlimited-length text / unknown / unlimited-character / URI),
- * and the 64-bit SV/UV (which are long-form, NOT short-form). Phase 5
- * serializer reuses this set for symmetric long-form encoding (D-44).
+ * and the 64-bit SV/UV (which are long-form, NOT short-form). The serializer
+ * reuses this set for symmetric long-form encoding.
  *
  * @example
  * ```ts
@@ -103,12 +103,11 @@ export const LONG_FORM_VRS: ReadonlySet<VR> = new Set<VR>([
 ]);
 
 // ---------------------------------------------------------------------------
-// Implicit VR LE - VR resolution (D-21)
+// Implicit VR LE - VR resolution
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve the VR for an Implicit VR LE element via the 5-case fallback per
- * CONTEXT.md D-21:
+ * Resolve the VR for an Implicit VR LE element via the 5-case fallback:
  *
  *   1. Standard tag with single VR in dict → use it.
  *   2. Standard tag with multi-VR entry → use the first array entry. The
@@ -120,11 +119,11 @@ export const LONG_FORM_VRS: ReadonlySet<VR> = new Set<VR>([
  *   4. Private tag (odd group):
  *        - `(gggg,0010..00FF)` Private Creator slot → VR=LO (PS3.5 §7.8).
  *        - No creator registered for the block → fallback UN; emit
- *          `DICOM_PRIVATE_TAG_NO_CREATOR` (TOL-09) +
+ *          `DICOM_PRIVATE_TAG_NO_CREATOR` +
  *          `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR`.
  *        - Creator registered + active profile resolves the
  *          `(group, creator, element-byte)` triple → vendor-documented VR,
- *          no warning (Phase 6 / D-45).
+ *          no warning.
  *        - Creator registered but unresolved → fallback UN; emit
  *          `DICOM_PRIVATE_CREATOR_UNKNOWN` when an active profile does not
  *          recognize the creator, plus
@@ -156,7 +155,7 @@ export function resolveImplicitVR(
       emit(implicitVRForPrivateTagWithoutVR(position));
       return "UN";
     }
-    // Phase 6 (D-45): an active profile's private-dictionary overlay may
+    // An active profile's private-dictionary overlay may
     // resolve the VR from the live creator string. A hit returns the
     // vendor-documented VR with no warning; otherwise we degrade to UN. When
     // the profile does not recognize the creator at all, that degrade is
@@ -189,7 +188,7 @@ export function resolveImplicitVR(
 }
 
 // ---------------------------------------------------------------------------
-// Private-creator stack (D-33 / D-34, PITFALLS §7.1)
+// Private-creator stack (PS3.5 §7.8 block reservation)
 // ---------------------------------------------------------------------------
 
 /**
@@ -290,7 +289,7 @@ export function registerPrivateCreator(tag: Tag, value: Buffer, ctx: ParseContex
 }
 
 // ---------------------------------------------------------------------------
-// Repeating-group family resolution (D-21 case 3)
+// Repeating-group family resolution (case 3 of the fallback above)
 // ---------------------------------------------------------------------------
 
 /**
@@ -343,7 +342,7 @@ function matchesFamilyPattern(pattern: string, concrete: Tag): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Explicit VR LE / BE - element-header reader (D-22 + D-25)
+// Explicit VR LE / BE - element-header reader
 // ---------------------------------------------------------------------------
 
 /**
@@ -363,7 +362,7 @@ export interface ExplicitElementHeader {
 }
 
 /**
- * Read an Explicit-VR element header from `cursor` per D-22:
+ * Read an Explicit-VR element header from `cursor`:
  *   - Short-form: group(2) + element(2) + VR(2 ASCII) + length(2).
  *   - Long-form (when VR ∈ {@link LONG_FORM_VRS}, **or when the VR is not one
  *     of the 34 this edition of PS3.5 defines**): group(2) + element(2) +
@@ -389,7 +388,7 @@ export interface ExplicitElementHeader {
  * never byte-swapped; reserved bytes are read directly from the buffer
  * (also endian-agnostic - they're a 2-byte zero-pad regardless).
  *
- * Non-zero reserved bytes emit `DICOM_NONZERO_RESERVED_BYTES` (D-22)
+ * Non-zero reserved bytes emit `DICOM_NONZERO_RESERVED_BYTES`
  * and parsing continues - length is read from the explicit 4-byte field
  * regardless of the reserved-byte payload.
  *
@@ -416,7 +415,7 @@ export function readExplicitElementHeader(
   let length: number;
   let headerLength: 8 | 12;
   if (LONG_FORM_VRS.has(vr) || !isRecognizedVr(vr)) {
-    // 2 reserved bytes (must be 0x00 0x00 per D-22) + 4-byte length.
+    // 2 reserved bytes (must be 0x00 0x00) + 4-byte length.
     const reserved0 = cursor.buffer[cursor.position];
     const reserved1 = cursor.buffer[cursor.position + 1];
     cursor.position += 2;

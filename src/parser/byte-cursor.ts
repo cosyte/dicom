@@ -1,13 +1,12 @@
 /**
  * Endian-aware cursor over a Node `Buffer` - the single byte-level read
- * primitive shared by all four Phase 2 transfer-syntax parsers (D-05).
+ * primitive shared by all four transfer-syntax parsers.
  *
  * Uses Node `Buffer.readUInt16LE/BE` and `Buffer.readUInt32LE/BE` rather
- * than `DataView` per `02-CONTEXT.md` specifics § (Buffer methods are
- * faster and the project idiom). Every read validates
- * `position + N <= buffer.length` before touching memory and throws a
- * `RangeError` on under-read - this is the cross-cutting truncation
- * mitigation declared by the Phase 2 threat model T-02-01-06.
+ * than `DataView`: the Buffer methods are faster and are this package's
+ * idiom. Every read validates `position + N <= buffer.length` before
+ * touching memory and throws a `RangeError` on under-read - this is the
+ * cross-cutting truncation mitigation the parser's threat model requires.
  *
  * @module
  */
@@ -16,7 +15,7 @@ import { Buffer } from "node:buffer";
 
 /**
  * Copy `src` into a freshly allocated, **standalone** Buffer for the
- * `copyValues: true` path (D-16 / T-02-05-04).
+ * `copyValues: true` path.
  *
  * `Buffer.from(src)` is not sufficient: for small slices Node serves the
  * copy from the shared internal Buffer pool, so its backing `ArrayBuffer`
@@ -36,7 +35,7 @@ export function copyValueBytes(src: Buffer): Buffer {
 }
 
 /**
- * Endian-aware Buffer cursor used by all Phase 2 parser strategies.
+ * Endian-aware Buffer cursor used by every parser strategy.
  *
  * The cursor carries a mutable `position` and an immutable `littleEndian`
  * orientation. Reads at `position` advance the cursor; reads at an

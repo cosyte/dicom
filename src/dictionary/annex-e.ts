@@ -2,20 +2,19 @@
  * PS3.15 Annex E attribute-action table - DICOM Basic Application Confidentiality
  * Profile + 11 retention/clean option sets.
  *
- * Phase 1 deliverable (D-08 / D-09 / D-14). Consumed by Phase 7 `anonymize()`
- * (ANON-01..ANON-10).
+ * Consumed by the de-identifier.
  *
- * NOTE: This module is NOT re-exported from the package's `src/index.ts` (per D-10 +
- * D-27 - Phase 1's external surface is `Dictionary.{lookup,byKeyword,uid}` + `VERSION`
- * only). Phase 7 imports `annexE` via the `@cosyte/dicom/dictionary/annex-e` internal
- * path, which the `package.json` `exports` map will admit when Phase 7 lands its plans.
+ * NOTE: This module is NOT re-exported from the package's `src/index.ts`. The
+ * `Dictionary` namespace's external surface is `Dictionary.{lookup,byKeyword,uid}`
+ * plus `VERSION`; `annexE` is reached internally through
+ * `@cosyte/dicom/dictionary/annex-e`.
  *
  * The 9 *metadata-affecting* PS3.15 Annex E option-set columns (E.3.3–E.3.11 plus the
  * collapsed E.3.6 "RetainLongitudinalTemporal") populate `AnnexEAction.optionSet`
  * keys per attribute. The two *pixel-level* options - E.3.1 `CleanPixelData` and
  * E.3.2 `CleanRecognizableVisual` - are not represented per-attribute (PS3.15 Table
- * E.1-1 has no column for them); Phase 7 enforces them at the pixel-decode layer.
- * Both names remain in `AnnexEOption` for completeness and for Phase 7's API.
+ * E.1-1 has no column for them); they are enforced at the pixel-decode layer.
+ * Both names remain in `AnnexEOption` for completeness and for that API.
  */
 
 import type { Tag } from "./types.js";
@@ -33,7 +32,7 @@ import { matchesRepeatingPattern } from "./repeating-groups.js";
  * - `U` = replace UID with a consistent new UID per session
  *
  * Compound codes (`Z/D`, `X/Z/D`, `X/Z/U*`, `C/X`) are preserved verbatim from the
- * Annex E source; Phase 7 interprets them per the table's per-attribute semantics
+ * Annex E source; the de-identifier interprets them per the table's per-attribute semantics
  * (e.g. `Z/D` = `Z` if absent, `D` if present).
  *
  * @example
@@ -56,10 +55,10 @@ export type AnnexEActionCode =
 /**
  * One of the 11 PS3.15 Annex E option sets (E.3.1–E.3.11).
  *
- * Names match REQUIREMENTS.md ANON-02 verbatim. `CleanPixelData` (E.3.1) and
+ * Names match PS3.15 Annex E verbatim. `CleanPixelData` (E.3.1) and
  * `CleanRecognizableVisual` (E.3.2) act on pixel data, not metadata, and never
  * appear as `optionSet` keys in the generated `ANNEX_E` map; they remain in the
- * union for Phase 7's pixel-decode API.
+ * union for the pixel-decode API.
  *
  * @example
  *   const opt: AnnexEOption = "RetainLongitudinalTemporal";
@@ -135,7 +134,7 @@ export interface AnnexERepeatingRule {
  * Look up the PS3.15 Annex E action for a DICOM tag.
  *
  * Returns `undefined` for tags not listed in Annex E Table E.1-1; those attributes
- * are unaffected by anonymization (effectively `K` - keep). Phase 7's
+ * are unaffected by anonymization (effectively `K` - keep).
  * `deidentify()` consumes this; library users invoke `deidentify()` directly,
  * not `annexE()`.
  *

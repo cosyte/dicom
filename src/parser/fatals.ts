@@ -5,7 +5,7 @@
  * This module is to {@link DicomParseError} what `./warnings.ts` is to
  * `DicomParseWarning`, and it exists for one reason: **a diagnostic about a PHI
  * leak is itself a PHI surface.** Tier-2 messages have been built from a frozen
- * registry since `#48`; Tier-3 messages were still assembled at the throw site
+ * registry for several releases; Tier-3 messages were still assembled at the throw site
  * out of template literals, and four of them interpolated a tag, a VR or a raw
  * 32-bit length read off the wire.
  *
@@ -23,9 +23,9 @@
  * - `Item length=1109414477 exceeds remaining buffer` - `"MR B"`.
  * - `Unexpected FFFE marker FFFEE00D (length=1109414477)` - `"MR B"`.
  *
- * `#55` shipped that shape under a *"safe to log"* claim and paid a blocker for
- * it; `#64` hit it again through `DICOM_NONZERO_RESERVED_BYTES` and fixed it the
- * durable way. This module copies that remedy exactly.
+ * A released version shipped that shape under a *"safe to log"* claim and paid a
+ * blocker for it; the same defect recurred through `DICOM_NONZERO_RESERVED_BYTES`
+ * and was fixed the durable way. This module copies that remedy exactly.
  *
  * ## The bound is the factory signature, not a branch
  *
@@ -63,7 +63,7 @@
  * the detector in `test/integration/fatal-diagnostic-surface.test.ts` can hunt
  * it: that arm covers the 8-byte case and says so on its own constant. The
  * remedy does not depend on the shift's size, because the bound is the
- * signature - the same conclusion `#88`, `#90`, `#91` and `#92` each reached.
+ * signature - the same conclusion every earlier pass over this surface reached.
  *
  * **There is no string parameter for a value to travel through.** The two
  * exceptions look like one and are not: {@link unsupportedTransferSyntax} takes
@@ -75,22 +75,22 @@
  * ## What this module does NOT do
  *
  * **It does not make `DicomParseError` PHI-free, and it must never be described
- * that way.** `DicomParseError.snippet` is 16 raw source bytes rendered as hex
- * (D-10), it is attached to every fatal here, and hex is a re-encoding the
+ * that way.** `DicomParseError.snippet` is 16 raw source bytes rendered as hex,
+ * it is attached to every fatal here, and hex is a re-encoding the
  * shared PHI runner cannot match. The registry bounds the **message**. The
  * snippet is documented as PHI on `ParseOptions.strict` and on the class, and
  * that documentation is the whole of the guarantee there.
  *
  * ## The tenth instance: the locator had no frame
  *
- * `#93` bound the last wire-derived number out of these signatures and left
+ * An earlier pass bound the last wire-derived number out of these signatures and left
  * `err.byteOffset` as the sole locator for the two messages it changed. That
  * offset is **slice-relative inside a defined-length Sequence Item** - it reads
  * `0`, `24`, `40` for the same file depending on where in the Item the element
  * sits - and nothing on `DicomParseError` said so. A locator that looks
  * absolute and is not is not a smaller defect than a locator that leaks; it is
  * a diagnostic pointing a consumer at somebody else's bytes, which is how the
- * `{ strict: true }` snippet went wrong in `#80`.
+ * `{ strict: true }` snippet itself once went wrong.
  *
  * So every factory here takes a {@link ParseFrame} rather than a `Buffer`: one
  * object carrying the frame's bytes AND the frame's name, so no call site can
@@ -154,7 +154,7 @@ const ZLIB_CODES: ReadonlySet<string> = Object.freeze(
 /**
  * Stable keys for every distinct Tier-3 message this parser can throw.
  *
- * A key is **not** a {@link FatalCode}. The four codes are locked (D-09) and
+ * A key is **not** a {@link FatalCode}. The four codes are locked, and
  * several of them are raised for structurally different reasons, so the code is
  * what a consumer narrows on and the key is what selects the prose. The mapping
  * from key to code lives in {@link FATAL_MESSAGES} and is total over this union,
@@ -437,7 +437,7 @@ export function emptyInput(): DicomParseError {
 }
 
 /**
- * `EMPTY_INPUT` for a view that normalizes to zero bytes (D-13's second half).
+ * `EMPTY_INPUT` for a view that normalizes to zero bytes.
  *
  * @example
  * ```ts
@@ -450,7 +450,7 @@ export function emptyInputAfterNormalization(): DicomParseError {
 
 /**
  * `NOT_DICOM_PART_10` under `stripPreamble: "require"`, where the absence of
- * `DICM` at offset 128 is refused rather than tolerated (D-14).
+ * `DICM` at offset 128 is refused rather than tolerated.
  *
  * @example
  * ```ts

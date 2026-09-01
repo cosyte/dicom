@@ -1,9 +1,8 @@
 /**
- * Tag hex utilities for the structural Phase 2 dataset shell.
+ * Tag hex utilities for the structural dataset shell.
  *
- * Per `02-CONTEXT.md` Claude's discretion §: Phase 2 ships utility
- * functions only - no `Tag` class. Phase 3 may promote to a class if
- * navigation methods need to hang off the type.
+ * Utility functions only, deliberately: there is no `Tag` class, because
+ * nothing here needs navigation methods hanging off the type.
  *
  * @module
  */

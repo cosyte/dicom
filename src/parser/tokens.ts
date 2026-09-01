@@ -137,9 +137,9 @@ const TAG_SHAPE = /^[0-9A-F]{8}$/u;
  * A tag PS3.6 does not name one at a time stops appearing in every message. Three
  * classes lose their name on a well-formed file: **private** tags, **Group
  * Length** `(gggg,0000)` tags, and **repeating-group members** such as
- * `(6000,3000)` Overlay Data. No count is written here - the per-code
- * measurement is in `documentation/agent-notes.md`, pinned to the sha that took
- * it, because a numeral in a docstring is a claim nothing re-measures. The tag
+ * `(6000,3000)` Overlay Data. No count is written here, because a numeral in a
+ * docstring is a claim nothing re-measures; the per-code measurement is kept
+ * with the repository's own notes, pinned to the sha that took it. The tag
  * has not left the object in any of those cases: the element is in the Data Set
  * under it, and `position.byteOffset` - a count this parser kept - locates the
  * header, with the frame-of-reference caveat every offset here carries.

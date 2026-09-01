@@ -1,9 +1,9 @@
 /**
- * Value-layer error taxonomy for the Phase 4 domain helpers.
+ * Value-layer error taxonomy for the domain helpers.
  *
  * This is **separate** from the parser's four-code `FATAL_CODES` /
  * `DicomParseError` (locked to unrecoverable Part 10 structural corruption
- * - see `../../parser/errors.ts`). The §4 helpers are otherwise fail-safe:
+ * - see `../../parser/errors.ts`). The domain helpers are otherwise fail-safe:
  * a missing *value* is typed-absent (`undefined`), never an exception. The
  * helper layer throws only for a **structural contract violation** the
  * caller asked it to resolve and that cannot be answered safely:
@@ -20,7 +20,7 @@
  */
 
 /**
- * Stable string codes the Phase 4 helpers may throw. Narrow on
+ * Stable string codes the domain helpers may throw. Narrow on
  * {@link DicomValueError.code} to react to a specific contract violation.
  *
  * @example
@@ -54,7 +54,7 @@ export const VALUE_ERROR_CODES = {
 export type ValueErrorCode = (typeof VALUE_ERROR_CODES)[keyof typeof VALUE_ERROR_CODES];
 
 /**
- * Thrown by the Phase 4 helpers for a structural contract violation that
+ * Thrown by the domain helpers for a structural contract violation that
  * cannot be answered safely (see module doc). Never carries a decoded
  * value, so it is safe to log without leaking PHI: the `message` is built
  * only from the code and structural facts (indices, tag/macro names).

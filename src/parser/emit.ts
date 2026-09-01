@@ -1,18 +1,17 @@
 /**
  * Single chokepoint for Tier-2 warning emission.
  *
- * Phase 2 core-parser context:
- *   - D-03 - Push order: warning is appended to `ctx.warnings` BEFORE the
+ * Three rules govern it:
+ *   - Push order: a warning is appended to `ctx.warnings` BEFORE the
  *     `onWarning` callback fires. The callback observes the warning
  *     already present in `ctx.warnings.length`.
- *   - D-11 - Every Tier-2 emission flows through this one function. No
+ *   - Every Tier-2 emission flows through this one function. No
  *     per-call-site `if (ctx.strict) throw` checks anywhere else in the
  *     parser tree.
- *   - D-35 - Strict-mode escalation: when `ctx.strict === true` the
- *     closure throws `DicomParseError` carrying the warning code (cast
- *     through `as unknown as FatalCode` per the HL7 sibling Plan 06
- *     decision (b)). Strict mode bypasses `ctx.warnings` entirely - no
- *     residue.
+ *   - Strict-mode escalation: when `ctx.strict === true` the closure throws
+ *     `DicomParseError` carrying the warning code (cast through
+ *     `as unknown as FatalCode`, the same choice the `@cosyte/hl7` sibling
+ *     made). Strict mode bypasses `ctx.warnings` entirely - no residue.
  *
  * This module is the ONLY reader of {@link ParseContext.frame}, and both the
  * snippet cut below and the `offsetFrame` published beside it are the reason
@@ -22,7 +21,7 @@
  * never asked about - or, worse, hands back a correct offset a consumer then
  * reads in the wrong frame.
  *
- * Threat model T-02-01-02: a consumer-supplied `onWarning` that throws
+ * Threat model: a consumer-supplied `onWarning` that throws
  * MUST NOT corrupt parser state - wrapped in try/catch with silent swallow.
  *
  * @module
@@ -36,21 +35,20 @@ import { DicomParseError, buildSnippet, type FatalCode } from "./errors.js";
  * Build the per-context Tier-2 emission chokepoint.
  *
  * Lenient (`ctx.strict === false`): push warning into `ctx.warnings`
- * FIRST (D-03 ordering), then invoke `ctx.onWarning` (if defined) inside
+ * FIRST, then invoke `ctx.onWarning` (if defined) inside
  * its own try/catch. Throwing handlers are silently swallowed.
  *
  * Strict (`ctx.strict === true`): throw `DicomParseError` carrying the
  * warning code. The `code` field is typed `FatalCode` at compile time
  * but at runtime carries the `WarningCode` literal - consumers narrow
- * on `err.code` after catch (HL7 sibling Plan 06 decision (b); D-35
- * cast).
+ * on `err.code` after catch.
  *
  * @internal
  */
 export function makeEmitter(ctx: ParseContext): (w: DicomParseWarning) => void {
   const escalate = (w: DicomParseWarning): never => {
     throw new DicomParseError(
-      // D-35 cast: the WarningCode union does not overlap FatalCode at the
+      // The cast is deliberate: the WarningCode union does not overlap FatalCode at the
       // type level, but at runtime the strict-thrown error carries the
       // warning code so consumers can narrow on err.code uniformly.
       w.code as unknown as FatalCode,
@@ -66,10 +64,10 @@ export function makeEmitter(ctx: ParseContext): (w: DicomParseWarning) => void {
     );
   };
   return (w) => {
-    // Global strict mode (D-35) escalates every Tier-2 code, overriding any
+    // Global strict mode escalates every Tier-2 code, overriding any
     // profile posture.
     if (ctx.strict) escalate(w);
-    // Profile posture (D-45): suppress drops a tolerated warning entirely;
+    // Profile posture: suppress drops a tolerated warning entirely;
     // escalate promotes it to a thrown error. `defineProfile` guarantees a
     // code is never in both sets, so the order between them is immaterial.
     if (ctx.profile !== undefined) {
@@ -81,8 +79,8 @@ export function makeEmitter(ctx: ParseContext): (w: DicomParseWarning) => void {
       try {
         ctx.onWarning(w);
       } catch {
-        // D-03 silent swallow - a noisy handler must not corrupt parser
-        // state (T-02-01-02). Mirrors @cosyte/hl7 sibling.
+        // Silent swallow - a noisy handler must not corrupt parser
+        // state. Mirrors @cosyte/hl7 sibling.
       }
     }
   };

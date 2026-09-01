@@ -1,17 +1,15 @@
 /**
- * Public Dictionary namespace for `@cosyte/dicom` - Phase 1 deliverable.
- *
- * D-10:
+ * Public Dictionary namespace for `@cosyte/dicom`.
  *
  *  - {@link lookup} - accepts either an 8-char hex tag (`"00100010"`) or a
  *    keyword (`"PatientName"`) and returns the typed {@link DictionaryEntry}
  *    or `undefined`.
  *  - {@link byKeyword} - keyword-only lookup; for cases where the caller has
  *    already validated the input shape and wants a narrower call.
- *  - {@link uid} - UID lookup (DICT-06).
+ *  - {@link uid} - UID lookup.
  *
- * No function throws on miss (D-10: "Returns the typed entry or `undefined`.
- * No throws on miss."). Returned entries are deeply frozen - mutation attempts
+ * No function throws on miss: each returns the typed entry or `undefined`.
+ * Returned entries are deeply frozen - mutation attempts
  * throw `TypeError` in strict mode (which all of `@cosyte/dicom`'s emitted code
  * runs under, given `"use strict"` is implicit for ES modules).
  *
@@ -75,8 +73,8 @@ Object.freeze(KEYWORDS);
  * @example
  *   import { Dictionary } from "@cosyte/dicom";
  *   const a = Dictionary.lookup("00100010");        // by tag
- *   const b = Dictionary.lookup("PatientName");     // by keyword (DICT-04)
- *   const c = Dictionary.lookup("not-real");        // undefined (D-10 no-throw)
+ *   const b = Dictionary.lookup("PatientName");     // by keyword
+ *   const c = Dictionary.lookup("not-real");        // undefined, never a throw
  */
 export function lookup(tagOrKeyword: string): DictionaryEntry | undefined {
   if (typeof tagOrKeyword !== "string" || tagOrKeyword.length === 0) {
@@ -117,8 +115,8 @@ export function byKeyword(keyword: string): DictionaryEntry | undefined {
  * Covers PS3.6 Annex A whole: transfer syntaxes, SOP and Meta SOP Classes,
  * well-known SOP Instances and Frames of Reference, coding schemes and the
  * rest, current and retired alike. Returns `undefined` for unknown UIDs or
- * malformed input. Used by `parseDicom()` (Phase 2) to render human-readable
- * Transfer Syntax names (DICT-06).
+ * malformed input. Used by `parseDicom()` to render human-readable
+ * Transfer Syntax names.
  *
  * @example
  *   import { Dictionary } from "@cosyte/dicom";

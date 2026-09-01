@@ -1,9 +1,9 @@
 /**
- * Fail-safe element readers shared by the Phase 4 domain helpers.
+ * Fail-safe element readers shared by the domain helpers.
  *
  * Each reader pulls a single attribute off a {@link Dataset} (or nested
  * {@link Item}) through the already-decoded `Element.value` and collapses it
- * to a convenient scalar/array, applying the §4 contract uniformly:
+ * to a convenient scalar/array, applying the fail-safe contract uniformly:
  *
  *   - absent tag, empty value, or wrong `kind` → `undefined` (typed-absent);
  *   - a malformed numeric component stays `null` in the returned array

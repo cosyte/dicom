@@ -21,7 +21,7 @@
  *   exact-tag miss. A match is removed *and* reported, with
  *   `DeidentifiedAttribute.repeatingGroup` naming the mask.
  * - Recurses into kept sequences and **re-encodes** them so nested PHI is removed
- *   in the *serialized* bytes too - not just the object model (the Phase 5 writer
+ *   in the *serialized* bytes too - not just the object model (the writer
  *   blits `SQ` spans verbatim, so a rebuilt `items` array alone would not survive
  *   serialization). Rebuilt sequences are normalized to defined length.
  * - Removes all private attributes by default; with `RetainSafePrivate` + a
@@ -135,7 +135,7 @@
  *   which removal is the branch available here (`(0008,0307)` is not
  *   implemented). Every private element the recursion **reaches** in such an
  *   Item, at any depth below it, is removed and named in
- *   `report.removedPrivateTags`. **The carve-out `#54` was refused for asserting
+ *   `report.removedPrivateTags`. **The carve-out an earlier review refused for asserting
  *   away is CLOSED** (`DICOM-PRIVATE-SQ-CARVE-OUT`): `keepsPrivate` still decides
  *   before the descent, but a **private `SQ`** it vouches for now routes through
  *   {@link keepRetainedPrivate} into the ordinary `SQ` branches instead of being
@@ -337,7 +337,7 @@ const BODY_ENCODING: Readonly<Record<string, BodyEncoding>> = {
  * on its own separate counter, on how many unenumerable-removal **warnings** it
  * will raise.
  *
- * `#48` bound every consumer-controlled diagnostic in this package for a reason:
+ * Every consumer-controlled diagnostic in this package is bound, for a reason:
  * a finding emitted per element is amplified by an element count the input
  * chooses, and a 1 MiB crafted file can carry tens of thousands of un-auditable
  * elements. It is a bound on the **record**, never on the action - every
@@ -418,7 +418,7 @@ interface DeidentifyContext {
      * `unauditableSequences` so that a flood of one class cannot spend the
      * other's budget and silence it. One class's amplification must not buy
      * another class's silence - the same per-recognizer split this repo's own
-     * PHI gate took in `#111`.
+     * PHI gate takes.
      *
      * 🛑 **IT BOUNDS THE WARNINGS AND NOTHING ELSE.** The removals themselves,
      * `report.removedPrivateTags` and `report.unenumerablePrivateRemovals` are
@@ -533,7 +533,7 @@ function encodeSequenceValue(items: readonly Item[], encoding: BodyEncoding): Bu
 
 /**
  * Rebuild an `SQ` {@link Element} from cleaned `items`, re-encoding `rawBytes` to
- * the representation the Phase 5 writer expects: value-only for Implicit VR LE
+ * the representation the writer expects: value-only for Implicit VR LE
  * (defined length), full on-wire span for Explicit VR. Always defined length.
  */
 function rebuildSequence(orig: Element, items: readonly Item[], encoding: BodyEncoding): Element {
@@ -654,9 +654,9 @@ function actsOnTag(tag: Tag, ctx: DeidentifyContext): boolean {
  * defect.
  *
  * **There is no account here of what the old reader did with such a file, and
- * that is a decision.** `#55` published "on a file conformant to PS3.5 2026c the
- * cost is zero"; it was never true. Three further attempts were made in the
- * slice that closed `DICOM-UNRECOGNIZED-VR-SHORT-FORM` to say what *was* true in
+ * that is a decision.** An earlier release published "on a file conformant to
+ * PS3.5 2026c the cost is zero"; it was never true. Three further attempts were
+ * made while closing `DICOM-UNRECOGNIZED-VR-SHORT-FORM` to say what *was* true in
  * one sentence, and its gate refuted all three. The behaviour is shape-specific
  * and no sentence covers it. `scripts/measure-unrecognized-vr.ts` prints what
  * each named shape does on each tree - **add a shape rather than a sentence.**
@@ -928,8 +928,8 @@ function recordGroup0004Removal(
  * The audit channel is shared and is not widened beyond that: one
  * {@link UnauditableSequenceFinding} plus one
  * `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE`, against the same per-run budget. No
- * new report field and no new warning code, the same choice `#66`, `#69` and
- * `#77` made.
+ * new report field and no new warning code, the same choice every sibling
+ * finding in this package made.
  *
  * **🩺 On naming the tag, and the residual that claim used to deny.** This repo
  * refuses a diagnostic that names an element whose header might be fabricated,
@@ -971,7 +971,7 @@ function emptyUnauditableCarrier(
   // bound on what we are willing to *remove*.
   out.elements.set(el.tag, replacement);
 
-  // The RECORD is capped, per `#48`'s discipline for consumer-controlled
+  // The RECORD is capped, per this package's discipline for consumer-controlled
   // diagnostics, against a budget that spans the whole run rather than this one
   // Data Set.
   //
@@ -1107,7 +1107,7 @@ function removeUnenumerablePrivate(
   // No byte count on the message, exactly as for the emptied class:
   // `el.rawBytes.length` equals the Value Length off the element header, and an
   // under-declared length upstream can have composed that header out of
-  // somebody's value. `#91` bound it out of the two sibling factories; a new one
+  // somebody's value. It is already bound out of the two sibling factories; a new one
   // must not reopen it. It is not on the record above either - a removal record
   // says which attribute went and why, and the length of a value that is no
   // longer in the output is not part of that.
@@ -1650,8 +1650,8 @@ function keepRetainedPrivate(
  * this Data Set and every private element **this function is given** is removed
  * and named in `report.removedPrivateTags`.
  *
- * **What this used NOT to cover, and no longer needs qualifying** (`#54`'s exact
- * refusal, closed by `DICOM-PRIVATE-SQ-CARVE-OUT`): a **private `SQ`** the
+ * **What this used NOT to cover, and no longer needs qualifying** (the exact
+ * refusal closed by `DICOM-PRIVATE-SQ-CARVE-OUT`): a **private `SQ`** the
  * profile vouches for was settled by `keepsPrivate` -> `keepOrEmpty` **before**
  * {@link descendSequence} ran, so its items were never walked and this flag was
  * never carried into them, and a private element absorbed into such a carrier's
@@ -2255,7 +2255,7 @@ function hasValueOverLoMaximum(field: Buffer): boolean {
  * So when the value this would return exceeds {@link MAX_SHORT_FORM_VALUE_BYTES},
  * this falls back to the **pre-existing replacement** and says so, by returning
  * `replacedPrior`. That is not a new loss - it is what every released version did
- * on *every* file - and this slice narrows it from "always" to "only when the
+ * on *every* file - and the current rule narrows it from "always" to "only when the
  * prior chain is within a few bytes of the ceiling". **It is not silent**: the
  * caller gets `DICOM_DEIDENT_METHOD_NOT_ADDED` on `report.warnings`. Truncating
  * the chain instead was refused: choosing which of the sender's earlier
@@ -2279,8 +2279,8 @@ function hasValueOverLoMaximum(field: Buffer): boolean {
  * **One route to an unencodable value is left exactly as it was on base and is
  * NOT closed here**: a caller who passes a `deidentificationMethod` longer than
  * the ceiling. That is `PRE-EXISTING` - base replaces with it and hits the same
- * `RangeError` - and it is caller-supplied rather than file-supplied, so it is a
- * backlog line and not a rider on this one.
+ * `RangeError` - and it is caller-supplied rather than file-supplied, so it is
+ * tracked separately and is not a rider on this rule.
  *
  * One more bound worth stating: the VR must be `LO`; a `(0012,0063)` a file
  * encoded as something else is not a De-identification Method this can
@@ -2548,7 +2548,7 @@ export function deidentify(
       deidentMethodPriorRetained({ byteOffset: priorMethod?.byteOffset ?? 0, fileMeta: false }),
     );
   }
-  // The other replacement shape, and until this slice the silent one: a
+  // The other replacement shape, and formerly the silent one: a
   // `(0012,0063)` the file encoded under a VR the join is not defined over. Same
   // loss as the ceiling fallback, unrelated cause, so it has its own code.
   if (deidentMethod.replacedNonLoPrior) {

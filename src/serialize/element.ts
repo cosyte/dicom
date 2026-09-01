@@ -1,8 +1,8 @@
 /**
- * Per-element byte encoder for the Phase 5 Part 10 writer.
+ * Per-element byte encoder for the Part 10 writer.
  *
  * Two element shapes are handled, distinguished by the parser's `rawBytes`
- * representation (D-16 + the per-strategy parsers):
+ * representation:
  *
  *  - **Full-span elements** - Explicit-VR `SQ` (defined or undefined length),
  *    *undefined-length* Implicit-VR `SQ`, encapsulated Pixel Data
