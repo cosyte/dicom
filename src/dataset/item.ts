@@ -1,9 +1,8 @@
 /**
- * Phase 2 structural `Item` - a single `(FFFE,E000)`-delimited Item
+ * The structural `Item` - a single `(FFFE,E000)`-delimited Item
  * inside a Sequence, carrying a nested `Dataset`.
  *
- * Per `02-CONTEXT.md` D-04: structural surface only; navigation methods
- * land in Phase 3 (via `Dataset` extension per D-42).
+ * Structural surface only; navigation comes from the `Dataset` superclass.
  *
  * @module
  */
@@ -24,13 +23,13 @@ export interface ItemInit extends DatasetInit {
  * One sequence item. Inherits `fileMeta` (always `undefined` for nested
  * items), `warnings`, and the protected element map from `Dataset`.
  *
- * Phase 3 surfaces `Item.get(...)` / `Item.has(...)` / etc. via the
- * `Dataset` superclass extension per D-42.
+ * `Item.get(...)` / `Item.has(...)` and the rest come from the `Dataset`
+ * superclass.
  *
  * @example
  * ```ts
  * import { Item } from "@cosyte/dicom";
- * // Producers (parser plan 02-04) construct items as follows:
+ * // The parser constructs items as follows:
  * // const item = new Item({ index: 0, warnings: [], elements: new Map() });
  * ```
  */
@@ -39,7 +38,7 @@ export class Item extends Dataset {
 
   /**
    * Construct a new structural `Item`. Producers are the SQ / FFFE
-   * marker parsers in plan 02-04.
+   * marker parsers.
    *
    * @internal
    */

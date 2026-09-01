@@ -1,5 +1,5 @@
 /**
- * File Meta Information (group `0002`) encoder for the Phase 5 writer.
+ * File Meta Information (group `0002`) encoder for the Part 10 writer.
  *
  * PS3.10 §7.1: the File Meta group is **always** Explicit VR Little Endian,
  * regardless of the dataset's transfer syntax, and is preceded by the

@@ -1,36 +1,36 @@
 /**
- * Deflated Explicit VR Little Endian dataset parser - TS-04
+ * Deflated Explicit VR Little Endian dataset parser
  * (`1.2.840.10008.1.2.1.99`).
  *
- * Phase 2 core-parser context:
- *   - D-26 - uses Node's `zlib.inflateRawSync` (RFC 1951 raw deflate).
- *     **MUST NOT** use `inflateSync` (RFC 1950 zlib-wrapped) - that's the
- *     silent-wrong bug per PROJECT.md key decision and PITFALLS.md §1.4.
- *   - D-26 - File Meta is parsed UNCOMPRESSED (FM-01); only the bytes from
- *     `fileMetaEnd` onward are inflated. The inflated bytes are then handed
- *     to `parseExplicitLE` (Deflated TS is just compressed Explicit-LE).
- *   - D-27 - dataset elements parsed from the inflated buffer report
+ * Three rules govern it:
+ *   - It uses Node's `zlib.inflateRawSync` (RFC 1951 raw deflate).
+ *     It **MUST NOT** use `inflateSync` (RFC 1950 zlib-wrapped): that is a
+ *     silent-wrong bug rather than a loud one.
+ *   - File Meta is parsed UNCOMPRESSED; only the bytes from `fileMetaEnd`
+ *     onward are inflated. The inflated bytes are then handed to
+ *     `parseExplicitLE` (Deflated TS is just compressed Explicit-LE).
+ *   - Dataset elements parsed from the inflated buffer report
  *     `position.deflated = true` with byte-offsets relative to the INFLATED
  *     buffer (not the on-disk buffer). File Meta warnings emitted before
  *     inflation carry `position.fileMeta = true` and on-disk byte-offsets.
  *
  * Threat model:
- *   - T-02-05-01 - Decompression bomb. The cap is `DEFAULT_MAX_INFLATED_BYTES`
+ *   - Decompression bomb. The cap is `DEFAULT_MAX_INFLATED_BYTES`
  *     (256 MiB) by default; the test suite overrides via
  *     {@link parseDeflatedLEWithCap}. On exceed, Node throws a `RangeError`
  *     carrying `code === 'ERR_BUFFER_TOO_LARGE'` (or analogous on older
  *     versions); the parser converts to
  *     `DicomParseError(INVALID_FILE_META, ...)`.
- *   - T-02-05-02 - Stream corruption. Any inflate failure is wrapped in
+ *   - Stream corruption. Any inflate failure is wrapped in
  *     `DicomParseError(INVALID_FILE_META, 'Failed to inflate Deflated TS
  *     payload: <message>', ...)` - never a raw zlib `RangeError`.
- *   - T-02-05-04 - Inflated buffer retention. Element `rawBytes` are
- *     subarrays of the inflated buffer; the inflated buffer is held in
- *     memory until every Element is GC'd. Pass `{ copyValues: true }` to
- *     `parseDicom` to release the inflated buffer immediately after parse.
- *   - T-02-05-05 - Position confusion. The inner emit wrapper tags every
- *     emitted warning's position with `deflated: true` so consumers can
- *     distinguish on-disk offsets from inflated-buffer offsets.
+ *   - Inflated buffer retention. Element `rawBytes` are subarrays of the
+ *     inflated buffer; the inflated buffer is held in memory until every
+ *     Element is GC'd. Pass `{ copyValues: true }` to `parseDicom` to
+ *     release the inflated buffer immediately after parse.
+ *   - Position confusion. The inner emit wrapper tags every emitted
+ *     warning's position with `deflated: true` so consumers can distinguish
+ *     on-disk offsets from inflated-buffer offsets.
  *
  * @module
  */
@@ -48,8 +48,8 @@ import type { ParseContext } from "./types.js";
 import type { DicomParseWarning } from "./warnings.js";
 
 /**
- * Default decompression-bomb cap - 256 MiB. Per CONTEXT D-26 + the
- * security threat model T-02-05-01. Exposed via
+ * Default decompression-bomb cap - 256 MiB, set by the parser's own
+ * security threat model. Exposed via
  * {@link parseDeflatedLEWithCap} so the test suite can override the cap to
  * a small value (~1 KiB) for tractable bomb-cap tests; v1.x may expose
  * this through `ParseOptions`.
@@ -59,13 +59,12 @@ import type { DicomParseWarning } from "./warnings.js";
 export const DEFAULT_MAX_INFLATED_BYTES = 256 * 1024 * 1024;
 
 /**
- * Parse a Deflated Explicit VR LE dataset (TS-04).
+ * Parse a Deflated Explicit VR LE dataset.
  *
  * Inflates `buffer.subarray(datasetStart)` via `zlib.inflateRawSync`
- * (RFC 1951 raw deflate; **NOT** `inflateSync` - see PITFALLS §1.4) and
- * delegates to {@link parseExplicitLE} on the inflated bytes. Warnings
- * emitted from the inflated parse carry `position.deflated = true` per
- * D-27.
+ * (RFC 1951 raw deflate; **NOT** `inflateSync`) and delegates to
+ * {@link parseExplicitLE} on the inflated bytes. Warnings emitted from the
+ * inflated parse carry `position.deflated = true`.
  *
  * @remarks
  * Element `rawBytes` from a Deflated TS dataset are subarrays of the
@@ -138,7 +137,7 @@ export function parseDeflatedLEWithCap(
   };
 
   // Inner emit wrapper - tags every emitted warning's position with
-  // `deflated: true` per D-27, then forwards to the outer chokepoint
+  // `deflated: true`, then forwards to the outer chokepoint
   // (which preserves strict-mode escalation + onWarning callback +
   // ds.warnings push semantics).
   //

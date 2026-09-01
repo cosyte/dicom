@@ -1,15 +1,15 @@
 /**
- * Implicit VR Little Endian dataset parser - TS-01 (`1.2.840.10008.1.2`).
+ * Implicit VR Little Endian dataset parser (`1.2.840.10008.1.2`).
  *
- * Phase 2 core-parser context:
- *   - D-21 - VR resolution via the 5-case fallback in `resolveImplicitVR`
+ * Three rules govern it:
+ *   - VR resolution goes through the 5-case fallback in `resolveImplicitVR`
  *     (single VR / multi-VR / repeating-group family / private → UN /
  *     unknown standard → UN silently).
- *   - D-33 / D-34 + PITFALLS §7.1 - private-creator stack tracking and
- *     `Element.privateCreator` population via the block-reservation rule.
- *   - TOL-10 - `(gggg,0000)` group-length elements in non-File-Meta
- *     groups emit `DICOM_GROUP_LENGTH_IN_DATASET`; the value is preserved
- *     but not used for parsing (the cursor advances element-by-element).
+ *   - Private-creator stack tracking and `Element.privateCreator` population
+ *     follow the block-reservation rule of PS3.5 §7.8.1.
+ *   - `(gggg,0000)` group-length elements in non-File-Meta groups emit
+ *     `DICOM_GROUP_LENGTH_IN_DATASET`; the value is preserved but not used
+ *     for parsing (the cursor advances element-by-element).
  *
  * Element layout: `group(2 LE) + element(2 LE) + length(4 LE) + value`.
  * No on-wire VR; VR is inferred. Length `0xFFFFFFFF` is only valid on
@@ -31,11 +31,11 @@
  * leaves a complete alternative reading if the descent fails, so it degrades
  * through `tryParseDefinedLengthSQ`, while undefined length has none and throws.
  *
- * As of plan 02-04, `parseImplicitLE` accepts an optional `stopOnItemDelim`
- * flag and returns `endOffset` - both required by the InnerParser contract
- * the SQ parser invokes for undefined-length item bodies (D-28).
+ * `parseImplicitLE` accepts an optional `stopOnItemDelim` flag and returns
+ * `endOffset` - both required by the InnerParser contract the SQ parser
+ * invokes for undefined-length item bodies.
  *
- * Threat model (T-02-03-01 / T-02-03-02): all `RangeError`s from the
+ * Threat model: all `RangeError`s from the
  * `ByteCursor` are caught and re-thrown as
  * `DicomParseError(INVALID_FILE_META, ..., headerStart, snippet)`; every
  * `length` is bounds-checked against `buffer.length - cursor.position`
@@ -78,7 +78,7 @@ import { groupLengthInDataset, type DicomParseWarning } from "./warnings.js";
  * upon reading `(FFFE,E00D)` ItemDelim - the cursor is advanced past the
  * 4-byte length field (which is always 0) and the post-delim offset is
  * returned. This contract is consumed by `parseSequence` for
- * undefined-length item bodies (D-28).
+ * undefined-length item bodies.
  *
  * @internal
  */
@@ -103,7 +103,7 @@ export function parseImplicitLE(
       length = cursor.readUInt32();
     } catch (err) {
       if (err instanceof RangeError) {
-        // T-02-03-01 mitigation - truncated header.
+        // Truncated-header mitigation.
         throw truncatedDatasetHeader(ctx.frame, headerStart);
       }
       throw err;
@@ -128,7 +128,7 @@ export function parseImplicitLE(
     const vr = resolveImplicitVR(tag, ctx, emit, position);
 
     // length === 0xFFFFFFFF - under Implicit VR LE, only valid for SQ
-    // (delegate to parseSequence, owned by plan 02-04). For non-SQ
+    // (delegate to parseSequence). For non-SQ
     // resolved VRs, this is a malformed file (Implicit-LE has no on-wire
     // VR, so UN cannot be encoded explicitly with undefined length).
     if (length === 0xffffffff) {
@@ -161,7 +161,7 @@ export function parseImplicitLE(
         );
         continue;
       }
-      // CP-246 fallback (D-30), the Implicit-VR-LE half of the same rule
+      // CP-246 fallback, the Implicit-VR-LE half of the same rule
       // `_parseExplicit` already applies: `UN` at undefined length is the
       // shape a sequence takes when the reader could not name its VR, and
       // under this transfer syntax that is exactly what a private element
@@ -214,7 +214,7 @@ export function parseImplicitLE(
       throw undefinedLengthOnNonSqImplicit(ctx.frame, headerStart, vr);
     }
 
-    // T-02-03-02 mitigation - bounds-check declared length before slice.
+    // Over-read mitigation - bounds-check declared length before slice.
     if (cursor.position + length > buffer.length) {
       // Same bound as the Explicit VR loop's, and for the same reason: neither
       // the declared length nor the count of bytes left in this frame has a
@@ -283,7 +283,7 @@ export function parseImplicitLE(
       // element keeps its declared value span with no `items`.
     }
 
-    // TOL-10: group-length elements in non-File-Meta groups.
+    // Group-length elements in non-File-Meta groups.
     if (element === 0x0000 && group !== 0x0002) {
       emit(groupLengthInDataset(position));
     }
@@ -302,7 +302,7 @@ export function parseImplicitLE(
       new Element({
         tag,
         vr,
-        // Phase 2 placeholder - Phase 3 derives VM from VR + value layout.
+        // Placeholder - the value decoders derive VM from VR + value layout.
         vm: 1,
         length,
         rawBytes: valueSlice,

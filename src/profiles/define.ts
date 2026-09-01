@@ -1,6 +1,6 @@
 /**
  * `defineProfile()` - the public factory for building immutable {@link Profile}
- * objects (Phase 6). Mirrors the `@cosyte/hl7` sibling's profile factory: a
+ * objects. Mirrors the `@cosyte/hl7` sibling's profile factory: a
  * validated options object in, a frozen `Profile` with a `describe()` method
  * out. Invalid input throws {@link ProfileDefinitionError} with an actionable
  * message rather than producing a half-built profile.

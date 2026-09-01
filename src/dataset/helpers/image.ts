@@ -1,5 +1,5 @@
 /**
- * Pixel-interpretation + geometry view builder (§4.2 / §4.3 / §4.4 / §4.5).
+ * Pixel-interpretation + geometry view builder.
  *
  * This is the "wrong pixels look fine" / "looks fine, measures wrong"
  * surface. v1 does **not** decode pixels - it surfaces exactly the metadata

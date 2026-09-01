@@ -1,5 +1,5 @@
 /**
- * Public types + error taxonomy for Phase 7 metadata de-identification
+ * Public types + error taxonomy for metadata de-identification
  * (PS3.15 Annex E).
  *
  * @module
@@ -1015,7 +1015,7 @@ export interface DeidentifyOptions {
    */
   readonly uidMap?: Map<string, string>;
   /**
-   * A Phase 6 {@link Profile} whose private-dictionary overlay names the
+   * A {@link Profile} whose private-dictionary overlay names the
    * known-safe private attributes to keep when `RetainSafePrivate` is active.
    * Without it, `RetainSafePrivate` keeps nothing (fail-safe).
    */

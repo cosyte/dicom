@@ -1,5 +1,5 @@
 /**
- * Phase 7 metadata de-identification surface (PS3.15 Annex E).
+ * Metadata de-identification surface (PS3.15 Annex E).
  *
  * `deidentify(ds, options?)` applies the Basic Application Level Confidentiality
  * Profile plus the metadata-affecting Annex E Options, returning a fresh

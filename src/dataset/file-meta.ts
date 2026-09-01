@@ -1,11 +1,10 @@
 /**
- * Phase 2 structural `FileMeta` view-object shape.
+ * The structural `FileMeta` view-object shape.
  *
- * Per `02-CONTEXT.md` D-04 + D-17 + FM-02: a plain interface (not a class)
- * since Phase 2 has no methods. Only `transferSyntaxUID` is required;
- * the rest are populated by `parseFileMeta` (plan 02-02) when present
- * but never enforced (Phase 7's `validate()` enforces FM Type-1 fields
- * per D-19). Phase 3 may promote to a class if helpers are added.
+ * A plain interface rather than a class, because it carries no methods.
+ * Only `transferSyntaxUID` is required; the rest are populated by
+ * `parseFileMeta` when present but never enforced (`validate()` is what
+ * enforces File Meta Type-1 fields).
  *
  * @module
  */
@@ -61,7 +60,7 @@ export interface FileMetaRawElement {
  * Only `transferSyntaxUID` is required because it is the dispatch input
  * for the four v1 transfer-syntax parsers; everything else is optional
  * because real-world clinical files routinely omit one or more
- * Type-1 elements. Phase 7's `validate()` adds opinion-bearing checks
+ * Type-1 elements. `validate()` adds opinion-bearing checks
  * for those missing elements.
  *
  * @example

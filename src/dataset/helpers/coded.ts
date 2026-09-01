@@ -1,5 +1,5 @@
 /**
- * Coded-terminology surfacing (§4.6, PS3.16 §8 Table 8-1).
+ * Coded-terminology surfacing (PS3.16 §8 Table 8-1).
  *
  * A coded concept is the triplet `Code Value (0008,0100)` /
  * `Coding Scheme Designator (0008,0102)` / `Code Meaning (0008,0104)`. This

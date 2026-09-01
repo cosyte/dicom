@@ -1,5 +1,5 @@
 /**
- * Decoded-value model for Phase 3 - the typed result of `Element.value`.
+ * Decoded-value model - the typed result of `Element.value`.
  *
  * `DicomValue` is a discriminated union keyed on `kind`; each variant maps
  * to a family of VRs that share a decode shape (per PS3.5 §6.2 Table 6.2-1):

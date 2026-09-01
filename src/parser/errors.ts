@@ -1,10 +1,10 @@
 /**
  * Fatal error taxonomy for the `@cosyte/dicom` parser pipeline.
  *
- * Phase 2 core-parser context:
- *   - D-09 - `FATAL_CODES` is a frozen `as const` registry with EXACTLY
- *     four codes; anything less severe MUST be a Tier-2 warning.
- *   - D-10 - `DicomParseError` carries `code`, `byteOffset`, `offsetFrame`,
+ * Two rules hold the taxonomy in place:
+ *   - `FATAL_CODES` is a frozen `as const` registry with EXACTLY four codes;
+ *     anything less severe MUST be a Tier-2 warning.
+ *   - `DicomParseError` carries `code`, `byteOffset`, `offsetFrame`,
  *     `snippet` (up to 16 source bytes, space-separated lowercase hex), and
  *     an optional `contextPath`. The thrown `Error.message` is formatted
  *     `[CODE] msg (offset=N frame=F)` with `… in path/segments` appended when
@@ -78,8 +78,7 @@ export type FatalCode = (typeof FATAL_CODES)[keyof typeof FATAL_CODES];
  * RESIDUALS` closed it, nothing on the thrown error said which. A consumer
  * cutting `input.subarray(err.byteOffset, err.byteOffset + 16)` to see what
  * upset the parser was, inside a Sequence Item, cutting an unrelated element -
- * the exact defect the `{ strict: true }` snippet itself was fixed for in
- * `#80`.
+ * the exact defect the `{ strict: true }` snippet itself was once fixed for.
  *
  * **A frame NAME is published; a frame ORIGIN is not, and that asymmetry is
  * deliberate.** The name is drawn from the closed set below, which the parser
@@ -191,7 +190,7 @@ export interface ParseFrame {
  * Thrown by `parseDicom` when the input violates one of the four
  * unrecoverable Tier-3 structural rules - or, under `{ strict: true }`,
  * when any Tier-2 warning is escalated through the single `emit`
- * chokepoint (D-35). Carries byte-offset positional context plus a short
+ * chokepoint. Carries byte-offset positional context plus a short
  * source snippet so consumers can log actionable errors.
  *
  * Message format: `[CODE] msg (offset=N frame=F)`, with `… in a/b/c`
@@ -249,7 +248,7 @@ export class DicomParseError extends Error {
 
   /**
    * Construct a new `DicomParseError`. All fields except `contextPath` are
-   * required so every thrower populates positional context per `TOL-02` - and
+   * required so every thrower populates positional context - and
    * `offsetFrame` is required for the same reason `byteOffset` is, because an
    * offset whose frame is optional is an offset whose frame is usually
    * missing.
@@ -283,7 +282,7 @@ export class DicomParseError extends Error {
  * to 16 bytes rendered as space-separated lowercase 2-char hex.
  *
  * Used by the strict-mode escalation chokepoint to attach a short source
- * snippet to every thrown `DicomParseError` (D-10, D-35).
+ * snippet to every thrown `DicomParseError`.
  *
  * @example
  * ```ts

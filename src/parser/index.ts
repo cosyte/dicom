@@ -1,21 +1,20 @@
 /**
  * Public parser entry - `parseDicom`.
  *
- * Pipeline (Phase 2 plan 02-02):
- *   1. Dual EMPTY_INPUT check (raw input + post-normalize) per CONTEXT D-13.
+ * Pipeline:
+ *   1. Dual EMPTY_INPUT check (raw input + post-normalize).
  *   2. {@link normalizeInput} converts `Buffer | Uint8Array | ArrayBuffer`
- *      to a zero-copy `Buffer` view per PARSE-04.
- *   3. {@link parsePart10Header} resolves preamble + DICM framing per D-14.
+ *      to a zero-copy `Buffer` view.
+ *   3. {@link parsePart10Header} resolves preamble + DICM framing.
  *   4. {@link parseFileMeta} parses the (always Explicit VR LE) File Meta
- *      group per FM-01 / D-17.
- *   5. {@link TRANSFER_SYNTAX_PARSERS} dispatches on TS UID per D-20;
+ *      group.
+ *   5. {@link TRANSFER_SYNTAX_PARSERS} dispatches on TS UID;
  *      unsupported UIDs throw `UNSUPPORTED_TRANSFER_SYNTAX` carrying the
  *      `Dictionary.uid(uid)?.name` in `err.snippet`.
- *   6. The chosen strategy returns a `ReadonlyMap<Tag, Element>` (Phase 2
- *      stubs - real bodies arrive in plans 02-03 / 02-04 / 02-05).
+ *   6. The chosen strategy returns a `ReadonlyMap<Tag, Element>`.
  *   7. The result is assembled into a structural {@link Dataset}.
  *
- * Phase 6 (D-45) wires a source/vendor `Profile` via `ParseOptions.profile`:
+ * A source/vendor `Profile` is wired in through `ParseOptions.profile`:
  * its `escalations` / `suppressions` reshape Tier-2 emission at the
  * {@link makeEmitter} chokepoint, and its private-dictionary overlay resolves
  * the Implicit VR of vendor private data elements.
@@ -59,7 +58,7 @@ import type { DicomParseWarning } from "./warnings.js";
  * import { parseDicom, WARNING_CODES, DicomParseError } from "@cosyte/dicom";
  * import { readFileSync } from "node:fs";
  *
- * // Three input shapes (PARSE-04): Buffer, Uint8Array, ArrayBuffer.
+ * // Three input shapes: Buffer, Uint8Array, ArrayBuffer.
  * const bytes = readFileSync("study.dcm");
  * const ds1 = parseDicom(bytes);
  * const ds2 = parseDicom(new Uint8Array(bytes));
@@ -96,31 +95,31 @@ export function parseDicom(
   input: Buffer | Uint8Array | ArrayBuffer,
   options: ParseOptions = {},
 ): Dataset {
-  // First EMPTY_INPUT check - raw input length (D-13 dual-check, first half).
+  // First EMPTY_INPUT check - raw input length (dual check, first half).
   if (rawInputIsEmpty(input)) {
     throw emptyInput();
   }
 
   const buffer = normalizeInput(input);
 
-  // Second EMPTY_INPUT check - after normalization (D-13 corner-case for views).
+  // Second EMPTY_INPUT check - after normalization (the corner case for views).
   if (buffer.length === 0) {
     throw emptyInputAfterNormalization();
   }
 
-  // Build ParseContext. `copyValues: false` default per D-16. `onWarning` is
-  // omitted (not set to undefined) per exactOptionalPropertyTypes / D-02.
+  // Build ParseContext. `copyValues` defaults to false. `onWarning` is
+  // omitted (not set to undefined) per exactOptionalPropertyTypes.
   const warnings: DicomParseWarning[] = [];
   const ctx: ParseContext = buildContext(buffer, options, warnings);
   const emit = makeEmitter(ctx);
 
-  // Step 1: Detect Part 10 framing (preamble + DICM, with stripPreamble tri-state per D-14).
+  // Step 1: Detect Part 10 framing (preamble + DICM, with the stripPreamble tri-state).
   const { datasetStart } = parsePart10Header(buffer, ctx, emit);
 
-  // Step 2: Parse File Meta (always Explicit VR LE per FM-01 / D-17).
+  // Step 2: Parse File Meta (always Explicit VR LE).
   const { fileMeta, fileMetaEnd } = parseFileMeta(buffer, datasetStart, ctx, emit);
 
-  // Step 3: Dispatch on transfer syntax UID (D-20).
+  // Step 3: Dispatch on transfer syntax UID.
   const tsUid = fileMeta.transferSyntaxUID;
   const strategy = TRANSFER_SYNTAX_PARSERS[tsUid];
   if (strategy === undefined) {
@@ -173,8 +172,8 @@ function buildContext(
     nestingDepth: 0,
     copyValues: options.copyValues === true,
   };
-  // Per D-45 - thread the source/vendor profile (Phase 6) when supplied;
-  // omit the key entirely otherwise (exactOptionalPropertyTypes / D-02).
+  // Thread the source/vendor profile through when supplied; omit the key
+  // entirely otherwise (exactOptionalPropertyTypes).
   const withProfile: Omit<ParseContext, "onWarning"> =
     options.profile !== undefined ? { ...base, profile: options.profile } : base;
   if (options.onWarning !== undefined) {

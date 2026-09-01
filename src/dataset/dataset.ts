@@ -1,12 +1,11 @@
 /**
- * Phase 2 structural `Dataset` - top-level container produced by
+ * The structural `Dataset` - top-level container produced by
  * `parseDicom`.
  *
- * Per `02-CONTEXT.md` D-04 + D-42: only `fileMeta` and `warnings` are
- * public; the element map is held internally and Phase 3 extends this
- * class with the `get` / `has` / `elements` / `getAll` / `setElement` /
- * `addElement` / `removeElement` / `addItem` / `removeItem` navigation
- * surface.
+ * Only `fileMeta` and `warnings` are public data; the element map is held
+ * internally and reached through the `get` / `has` / `elements` / `getAll` /
+ * `setElement` / `addElement` / `removeElement` / `addItem` / `removeItem`
+ * navigation surface.
  *
  * The `warnings` array is frozen at the constructor boundary (mirrors
  * `@cosyte/hl7` sibling `model/message.ts`) so consumers receive
@@ -41,12 +40,11 @@ export interface DatasetInit {
 }
 
 /**
- * One parsed DICOM dataset - the structural shell shipped by Phase 2.
+ * One parsed DICOM dataset - the structural shell.
  *
- * Phase 2 public surface: `fileMeta`, `warnings`. The internal element
- * map is stored on `_elements` (protected) and Phase 3 promotes it to
- * the public `get` / `has` / `elements` / `getAll` navigation API per
- * D-42.
+ * Public data: `fileMeta`, `warnings`. The internal element map is stored
+ * on `_elements` (protected) and reached through the public
+ * `get` / `has` / `elements` / `getAll` navigation API.
  *
  * @example
  * ```ts
@@ -62,23 +60,23 @@ export class Dataset {
   public readonly fileMeta: FileMeta | undefined;
   public readonly warnings: readonly DicomParseWarning[];
   /**
-   * Element map, keyed by uppercase 8-hex tag. Phase 3 promotes to
-   * public navigation surface; Phase 2 keeps it `protected` so only
-   * subclasses (`Item`, future Phase-3 extensions) can introspect.
+   * Element map, keyed by uppercase 8-hex tag. Reached publicly through the
+   * navigation surface; kept `protected` here so only subclasses (`Item`, and
+   * any later extension) can introspect it directly.
    *
    * @internal
    */
   protected readonly _elements: ReadonlyMap<Tag, Element>;
 
-  /** Memoised Phase 4 domain views (built once, on first access). */
+  /** Memoised domain views (built once, on first access). */
   private _patient?: PatientView;
   private _study?: StudyView;
   private _series?: SeriesView;
   private _image?: ImageView;
 
   /**
-   * Construct a new structural `Dataset`. Phase 2 freezes the warnings
-   * array at the model boundary (sibling `message.ts` lines 117–118).
+   * Construct a new structural `Dataset`. The warnings array is frozen at
+   * the model boundary.
    *
    * @internal
    */
@@ -152,7 +150,7 @@ export class Dataset {
   }
 
   /**
-   * Patient-identity view (§4.1). Fail-safe typed-absent fields; `id` is
+   * Patient-identity view. Fail-safe typed-absent fields; `id` is
    * **not** globally unique - match on the `{id, issuerOfId, ...}` tuple
    * plus `otherIds`, never on a bare `(0010,0020)`. Memoised on first read.
    *
@@ -168,7 +166,7 @@ export class Dataset {
   }
 
   /**
-   * Study-identity view (§4.1). `instanceUid` is the cross-system study
+   * Study-identity view. `instanceUid` is the cross-system study
    * key; `accessionNumber` ties it to the order. Memoised on first read.
    *
    * @example
@@ -183,7 +181,7 @@ export class Dataset {
   }
 
   /**
-   * Series-identity & co-registration view (§4.1, §4.3). A shared
+   * Series-identity & co-registration view. A shared
    * `frameOfReferenceUid` means images are spatially co-registered.
    * Memoised on first read.
    *
@@ -199,7 +197,7 @@ export class Dataset {
   }
 
   /**
-   * Pixel-interpretation + geometry view (§4.2–§4.5). Surfaces exactly
+   * Pixel-interpretation + geometry view. Surfaces exactly
    * what a renderer needs without guessing: `rescaleSlope`/`signed`/
    * `photometricInterpretation` stay absent rather than defaulted, and the
    * three pixel-spacing tags are distinct. Memoised on first read.

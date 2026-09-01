@@ -84,6 +84,7 @@
     "gen:clean": "find src/dictionary/generated -mindepth 1 ! -name 'README.md' -delete",
     "gen:all": "pnpm gen:repeating-groups && pnpm gen:dictionary && pnpm gen:annex-e",
     "check:no-emdash": "bash scripts/check-no-emdash.sh",
+    "check:no-internal-refs": "node scripts/check-no-internal-refs.ts",
     "measure:phi-scan-unread": "tsx scripts/measure-phi-scan-unread.ts",
     "measure:phi-scan-retention": "node scripts/measure-phi-scan-retention.ts",
     "measure:phi-scan-monotonicity": "node scripts/measure-phi-scan-monotonicity.ts",

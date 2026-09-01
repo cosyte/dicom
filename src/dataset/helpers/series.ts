@@ -1,5 +1,5 @@
 /**
- * Series-identity & co-registration view builder (§4.1, §4.3).
+ * Series-identity & co-registration view builder.
  *
  * `instanceUid` is the cross-system series key; images that share a
  * `frameOfReferenceUid` are spatially co-registered and may be fused.

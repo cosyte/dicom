@@ -1,5 +1,5 @@
 /**
- * Enhanced multi-frame functional-group resolution (§4.4, PS3.3 §C.7.6.16).
+ * Enhanced multi-frame functional-group resolution (PS3.3 §C.7.6.16).
  *
  * An Enhanced object carries two parallel structures:
  *

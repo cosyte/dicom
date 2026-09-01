@@ -2,13 +2,12 @@
  * Tier-2 warning registry and factories for the `@cosyte/dicom` parser
  * pipeline.
  *
- * Phase 2 core-parser context:
- *   - D-08 - `WARNING_CODES` is a frozen `as const` registry with every code
- *     in the TOL-03 catalog (≥25 entries). Phase 2 actively emits 13;
- *     7 VR-decode-time codes are reserved for Phase 3; 2 charset codes are
- *     reserved for Phase 4; 2 codes are reserved for Phase 6 / Phase 7.
- *   - D-12 - Exactly one named factory per actively-emitted code; each
- *     factory carries its own JSDoc + `@example` and returns a typed
+ * Two rules govern it:
+ *   - `WARNING_CODES` is a frozen `as const` registry carrying every code
+ *     this package defines, including the ones no stage emits yet, so the
+ *     schema is stable for consumers.
+ *   - Exactly one named factory per actively-emitted code; each factory
+ *     carries its own JSDoc + `@example` and returns a typed
  *     `DicomParseWarning`.
  *
  * Consumers compare `warning.code === WARNING_CODES.<CODE>` to narrow and
@@ -28,9 +27,8 @@ import type { DicomPosition } from "./types.js";
  * The registry is frozen via `as const` so TypeScript infers the exact
  * string-literal union for `WarningCode` - there is zero runtime cost and
  * no magic-string comparisons for consumers. Reserved-but-not-emitted
- * codes carry inline comments documenting which phase activates them
- * (Phase 2 declares the union so the schema is stable for downstream
- * phases per D-08, D-42, D-43).
+ * codes carry inline comments documenting which stage activates them; the
+ * union is declared whole so the schema is stable for consumers.
  *
  * @example
  * ```ts
@@ -42,7 +40,7 @@ import type { DicomPosition } from "./types.js";
  * ```
  */
 export const WARNING_CODES = {
-  // === Phase 2 actively emits (D-08 active list - alphabetical-within-prefix per CONTEXT specifics §) ===
+  // === The parser actively emits these (alphabetical within prefix) ===
   DICOM_DUPLICATE_FILE_META_ELEMENT: "DICOM_DUPLICATE_FILE_META_ELEMENT",
   DICOM_DUPLICATE_TAG_IN_DATA_SET: "DICOM_DUPLICATE_TAG_IN_DATA_SET",
   DICOM_EMPTY_ITEM_IN_SEQUENCE: "DICOM_EMPTY_ITEM_IN_SEQUENCE",
@@ -61,7 +59,7 @@ export const WARNING_CODES = {
   DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR: "DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR",
   DICOM_VR_MISMATCH: "DICOM_VR_MISMATCH",
 
-  // === VR-decode-time codes (declared but not emitted in Phase 2; Phase 3 lazy decoders fire these - D-08, D-42) ===
+  // === VR-decode-time codes (declared here; the lazy value decoders fire them) ===
   DICOM_BOM_IN_TEXT_VR: "DICOM_BOM_IN_TEXT_VR",
   DICOM_DA_LEGACY_FORMAT: "DICOM_DA_LEGACY_FORMAT",
   DICOM_DT_NONSTANDARD_OFFSET: "DICOM_DT_NONSTANDARD_OFFSET",
@@ -70,12 +68,12 @@ export const WARNING_CODES = {
   DICOM_TRAILING_NULL_IN_TEXT_VR: "DICOM_TRAILING_NULL_IN_TEXT_VR",
   DICOM_UI_TRAILING_SPACE: "DICOM_UI_TRAILING_SPACE",
 
-  // === Phase 4 charset-decode codes (declared, not emitted in Phase 2 - D-08, D-43) ===
+  // === Charset-decode codes (declared here; the text decoders fire them) ===
   DICOM_CHARSET_AMBIGUOUS_SEPARATOR: "DICOM_CHARSET_AMBIGUOUS_SEPARATOR",
   DICOM_UNSUPPORTED_CHARSET: "DICOM_UNSUPPORTED_CHARSET",
 
-  // === Reserved by later phases (declared, not emitted in Phase 2) ===
-  DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED: "DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED", // reserved by Phase 7 - not emitted in Phase 2
+  // === Declared here, emitted elsewhere or not yet emitted at all ===
+  DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED: "DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED: "DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED: "DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_FILE_META_REPLACED: "DICOM_DEIDENT_FILE_META_REPLACED", // emitted by deidentify(), never by the parser
@@ -87,7 +85,7 @@ export const WARNING_CODES = {
   DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE: "DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE: "DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE: "DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE", // emitted by deidentify(), never by the parser
-  DICOM_PRIVATE_CREATOR_UNKNOWN: "DICOM_PRIVATE_CREATOR_UNKNOWN", // reserved by Phase 6 - not emitted in Phase 2
+  DICOM_PRIVATE_CREATOR_UNKNOWN: "DICOM_PRIVATE_CREATOR_UNKNOWN", // emitted only when a profile is active
 } as const;
 
 /**
@@ -114,7 +112,7 @@ export type WarningCode = (typeof WARNING_CODES)[keyof typeof WARNING_CODES];
  * subclass) so they can be safely accumulated into `Dataset.warnings` and
  * passed to `onWarning` callbacks.
  *
- * Per D-07 there is intentionally NO `snippet` field on warnings:
+ * There is intentionally NO `snippet` field on warnings:
  * real-world files routinely produce 50+ warnings and a per-warning
  * snippet would balloon retained memory. Snippets appear only on
  * `DicomParseError` (the strict-mode escalation path).
@@ -186,9 +184,9 @@ export interface DicomParseWarning {
  * `docs-content/spec-notes-tolerance.md` and `ParseOptions.strict`'s JSDoc point
  * here and restate nothing, because a copy is a claim that goes stale on its
  * own. **That is a statement about the consumer surfaces and not about the
- * repo:** `documentation/agent-notes.md` and a pending changeset each argue the
+ * repo:** this repository's own notes and a pending changeset each argue the
  * same exception in full, deliberately, because they are the record of the
- * slices that took it rather than live documentation.
+ * changes that took it rather than live documentation.
  *
  * - {@link fileMetaGroupLengthMismatch}'s `{n}` is a raw declared length and
  *   stays, because `parseFileMeta` reads it in a frame nothing can
@@ -361,7 +359,7 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   // raised per removed private element and the element count is chosen by the
   // input.
   //
-  // 🩺 NO BYTE COUNT, AND THAT IS NOT CAUTION - IT IS THE SAME BOUND `#91` TOOK
+  // 🩺 NO BYTE COUNT, AND THAT IS NOT CAUTION - IT IS THE SAME BOUND TAKEN
   // OUT OF THE TWO CODES BELOW. `Element.rawBytes.length` EQUALS the Value
   // Length read off the element header, so on a header an under-declared length
   // upstream composed out of somebody's value the decimal is four document
@@ -498,7 +496,7 @@ export function missingPreamble(position: DicomPosition): DicomParseWarning {
  * Build a `DICOM_FILE_META_GROUP_LENGTH_MISSING` warning. Emitted when the
  * File Meta group does not start with `(0002,0000)
  * FileMetaInformationGroupLength` - the parser falls back to scanning
- * forward until the first non-`(0002,xxxx)` element (D-18).
+ * forward until the first non-`(0002,xxxx)` element.
  *
  * @example
  * ```ts
@@ -512,7 +510,7 @@ export function fileMetaGroupLengthMissing(position: DicomPosition): DicomParseW
 /**
  * Build a `DICOM_FILE_META_GROUP_LENGTH_MISMATCH` warning. Emitted when
  * `(0002,0000)` declares a byte count that does not match the actual size
- * of the File Meta group; the parser trusts the actual size (D-18).
+ * of the File Meta group; the parser trusts the actual size.
  *
  * ## `{n}` is a raw declared length and it STAYS. The asymmetry is structural
  *
@@ -551,8 +549,7 @@ export function fileMetaGroupLengthMismatch(
 /**
  * Build a `DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR` warning. Emitted for an
  * SQ element with length `0xFFFFFFFF` parsed under an Explicit VR transfer
- * syntax - legal per the standard but commonly misencoded by older tools
- * (D-29).
+ * syntax - legal per the standard but commonly misencoded by older tools.
  *
  * @example
  * ```ts
@@ -566,7 +563,7 @@ export function undefinedLengthInExplicitVR(position: DicomPosition, tag: Tag): 
 /**
  * Build a `DICOM_ODD_LENGTH_VALUE_PADDED` warning. Emitted when an element's
  * declared length is odd and the parser pads forward by one byte to keep
- * cursor alignment (PITFALLS.md §6.1).
+ * cursor alignment.
  *
  * ## 🛑 THE DECLARED LENGTH IS BOUND OUT OF THIS SIGNATURE AND MUST NOT COME BACK
  *
@@ -580,7 +577,7 @@ export function undefinedLengthInExplicitVR(position: DicomPosition, tag: Tag): 
  * delta -16 the pair is `42204152` (`" BRA"`) and `1213483341` (`"MITH"`).
  *
  * The two halves have **different** remedies, and that is the whole shape of
- * this slice:
+ * the rule:
  *
  * - `{tag}` survives, because `renderTag` is a **membership** test now - PS3.6's
  *   registry either carries a literal row for the tag or it does not, and
@@ -629,7 +626,7 @@ export function vrMismatch(
 /**
  * Build a `DICOM_PRIVATE_TAG_NO_CREATOR` warning. Emitted when a private
  * element `(gggg,EEFF)` is encountered without a preceding Private Creator
- * `(gggg,00EE)` registration in the same group (PITFALLS.md §7.1, D-33).
+ * `(gggg,00EE)` registration in the same group (PS3.5 §7.8.1).
  *
  * ## 🛑 THE TAG IS BOUND OUT OF THIS SIGNATURE AND MUST NOT COME BACK
  *
@@ -712,7 +709,7 @@ export function groupLengthInDataset(position: DicomPosition): DicomParseWarning
 /**
  * Build a `DICOM_NONZERO_RESERVED_BYTES` warning. Emitted when an Explicit
  * VR long-form header has non-zero bytes in its 2-byte reserved field
- * (between VR and the 4-byte length per D-22).
+ * (between VR and the 4-byte length).
  *
  * ## It takes no tag, uniquely among the parser's factories
  *
@@ -728,8 +725,9 @@ export function groupLengthInDataset(position: DicomPosition): DicomParseWarning
  * Measured, on a name-bearing payload: an `ST` carrier holding
  * `"MR BRAIN SMITHSON "` whose Value Length under-declares by 6 desynchronizes
  * the reader onto a fabricated header at `(4854,4F53)` - `"THSO"` in wire order,
- * four letters of the surname - and the old message rendered it. `#55` paid a
- * blocker for the identical mistake in `report.undefinedVrElements[].tag`; the
+ * four letters of the surname - and the old message rendered it. An earlier
+ * release paid a blocker for the identical mistake in
+ * `report.undefinedVrElements[].tag`; the
  * remedy is the same one, and so is the reason it is not a guard: the honestly
  * written case and the fabricated case are indistinguishable here, so the tag is
  * withheld on both rather than on a guess. `position.byteOffset` locates the
@@ -770,7 +768,7 @@ export function nonzeroReservedBytes(position: DicomPosition): DicomParseWarning
 /**
  * Build a `DICOM_UN_PARSED_AS_SQ` warning. Emitted when a `VR=UN` element
  * with undefined length is successfully descended as an Implicit VR LE
- * sequence (CP-246 fallback per D-30).
+ * sequence (the CP-246 fallback).
  *
  * The message says the element *has* `VR=UN` rather than *declared* it, and
  * that distinction is load-bearing on one of the two paths that raise this: an
@@ -888,7 +886,7 @@ export function sqNotDescended(position: DicomPosition, tag: Tag): DicomParseWar
  * as the decimal **1414090067**, `"SMIT"` in wire order, losslessly reversible
  * with one `readUInt32LE` - and it is emitted **above** the truncation guard, so
  * the message reaches `onWarning` on a file the parse then refuses. Identical
- * remedy and identical reasoning to {@link nonzeroReservedBytes} and to `#55`:
+ * remedy and identical reasoning to {@link nonzeroReservedBytes}:
  * where `renderTag` and `renderVr` each check membership in a closed set and a
  * raw length has no such set to check, the bound has to be **the signature**
  * rather than a branch. The
@@ -947,7 +945,7 @@ export function sqNotDescended(position: DicomPosition, tag: Tag): DicomParseWar
  * **It is not bounded, and "at most one per sequence" is not a bound.** The
  * shape does hold - an overrunning item consumes to its own declared end and the
  * item loop then exits - but a file is free to carry as many sequences as it can
- * encode, and `ds.warnings` is uncapped. That is `#48`'s pre-existing,
+ * encode, and `ds.warnings` is uncapped. That is the pre-existing,
  * package-wide posture for parser warnings rather than anything new here. Pinned
  * by a test that asserts the growth rather than a cap.
  *
@@ -962,7 +960,7 @@ export function itemCrossesSequenceEnd(position: DicomPosition, tag: Tag): Dicom
 
 /**
  * Build a `DICOM_EMPTY_ITEM_IN_SEQUENCE` warning. Emitted when an
- * `(FFFE,E000) Item` marker has length 0 - tolerated per D-28 but flagged
+ * `(FFFE,E000) Item` marker has length 0 - tolerated but flagged
  * as it usually signals a sender bug.
  *
  * @example
@@ -1037,7 +1035,7 @@ export function emptyItemInSequence(position: DicomPosition, tag: Tag): DicomPar
  * `DicomParseError` it throws carries `snippet`: 16 raw source bytes at the same
  * offset, rendered as hex. On a plain duplicate that is
  * `10 00 20 00 4c 4f 0e 00 53 4d 49 54 48 53 4f 4e` - the withheld tag, and
- * eight bytes of the value. That is D-10 and package-wide: the same file with
+ * eight bytes of the value. That is package-wide: the same file with
  * its even-length padding removed produces the identical bytes on `0ead071`
  * through `DICOM_ODD_LENGTH_VALUE_PADDED` (`0d` for `0e`), and the
  * PHI-diagnostic runner cannot see either, because hex is a re-encoding. Pinned in `test/integration/tag-collision`, so
@@ -1087,7 +1085,7 @@ export function duplicateTagInDataSet(position: DicomPosition): DicomParseWarnin
  *
  * So the two codes disagree about which copy survives, deliberately, because the
  * two readings do: **the FIRST copy wins in the File Meta group, the LAST read
- * wins in a Data Set**, and neither reading moves. As in `#70`, nothing is
+ * wins in a Data Set**, and neither reading moves. As with its sibling code, nothing is
  * guessed for the copy that lost and no bound is chosen - the remedy is the
  * disclosure and nothing else.
  *
@@ -1128,8 +1126,8 @@ export function duplicateTagInDataSet(position: DicomPosition): DicomParseWarnin
  * graded pass refuted the draft that said it did: `encodeFileMeta` re-emits both
  * copies, so this package writes a `(0002,xxxx)` tag twice on such a file.**
  * That is `PRE-EXISTING` and unchanged here, it is not what "the serializer is
- * conservative" covers, and it is a backlog line rather than a rider on this
- * code - the round-trip promise and the spec-clean promise disagree on exactly
+ * conservative" covers, and it is tracked separately rather than as a rider on
+ * this code - the round-trip promise and the spec-clean promise disagree on exactly
  * this input, and choosing between them is a decision, not a fix.
  *
  * **It does not reach a copy that sits past an honest `(0002,0000)`.** The group
@@ -1137,14 +1135,14 @@ export function duplicateTagInDataSet(position: DicomPosition): DicomParseWarnin
  * second `(0002,0010)` an intermediary appended without updating the group
  * length is never a File Meta element to this parser at all: it is relocated
  * into the main Data Set, silently, on this tree and on every earlier one. Also
- * `PRE-EXISTING`, also a backlog line, and the reason this code is described as
+ * `PRE-EXISTING`, also tracked separately, and the reason this code is described as
  * covering the group **as the parser delimits it** rather than the group.
  *
  * It does not change which copy is read and it adds no residue. And
  * "names no tag" is about this message only: `{ strict: true }` escalates every
  * Tier-2 code through `makeEmitter`, and the `DicomParseError` it throws carries
- * `snippet`, 16 raw source bytes at the same offset rendered as hex (D-10,
- * package-wide).
+ * `snippet`, 16 raw source bytes at the same offset rendered as hex
+ * (package-wide).
  *
  * @example
  * ```ts
@@ -1158,17 +1156,17 @@ export function duplicateFileMetaElement(position: DicomPosition): DicomParseWar
 /**
  * Build a `DICOM_PIXEL_DATA_LENGTH_MISMATCH` warning for a defined-length
  * `(7FE0,0010)` element whose declared length does not match
- * `rows × columns × samplesPerPixel × bitsAllocated/8 × numberOfFrames` (D-32).
+ * `rows × columns × samplesPerPixel × bitsAllocated/8 × numberOfFrames`.
  *
  * @remarks
  * Declared but **not emitted** by this build: no call site exists in `src/`.
- * Kept so the code and its shape stay stable for the phase that activates it.
+ * Kept so the code and its shape stay stable for whatever activates it.
  *
  * **The declared length is bound out of the signature anyway, and "it is not
  * emitted" is the reason to do it now rather than a reason to skip it.** It is a
  * raw 32-bit read off an element header, the same class as
- * {@link oddLengthValuePadded}'s, so a later phase that switched this code on
- * would ship the leak this slice just closed one code over - with no call site
+ * {@link oddLengthValuePadded}'s, so a caller that switched this code on
+ * would ship the leak already closed one code over - with no call site
  * today, the change costs nothing and no measurement can catch it later.
  * `{n2}` stays: it is `rows x columns x samplesPerPixel x bitsAllocated/8 x
  * numberOfFrames`, a product this parser computes, not a number it reads.
@@ -1190,8 +1188,8 @@ export function pixelDataLengthMismatch(
 /**
  * Build a `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR` warning. Emitted
  * under Implicit VR LE for a private tag whose creator is registered but
- * whose VR cannot be resolved (Phase 2 always falls back to UN; Phase 6
- * adds profile-supplied VR overrides per D-21 / D-34).
+ * whose VR cannot be resolved (an unprofiled parse falls back to UN; an
+ * active profile can supply a VR override).
  *
  * **The tag is bound out of this signature for the reason
  * {@link privateTagNoCreator} states, and leaving it here would have made that
@@ -1211,7 +1209,7 @@ export function implicitVRForPrivateTagWithoutVR(position: DicomPosition): Dicom
 }
 
 /**
- * Build a `DICOM_PRIVATE_CREATOR_UNKNOWN` warning (Phase 6, D-45). Emitted
+ * Build a `DICOM_PRIVATE_CREATOR_UNKNOWN` warning. Emitted
  * under Implicit VR LE when a parse-time {@link Profile} is active and a
  * private data element carries a registered Private Creator that the profile's
  * private-dictionary overlay does not recognize - the element degrades to the
@@ -1244,7 +1242,7 @@ export function privateCreatorUnknown(position: DicomPosition): DicomParseWarnin
 }
 
 /**
- * Build a `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED` warning (Phase 7). Emitted by
+ * Build a `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED` warning. Emitted by
  * `deidentify` when a dataset carries Pixel Data `(7FE0,0010)` and either
  * `(0028,0301)` Burned In Annotation is absent or its value is not `"NO"` - the
  * metadata-only de-identifier cannot inspect or clean pixels (that is deferred to
@@ -1633,7 +1631,7 @@ export function embeddedAttributeRemoved(
  * `Element.rawBytes.length` equals the Value Length off the element header, and
  * an under-declared length upstream can compose that header out of somebody's
  * value - the measurement that took `{n}` out of {@link sequenceNotAuditable}
- * and {@link undefinedVrNotAuditable} in `#91`. There is no `renderLength` and
+ * and {@link undefinedVrNotAuditable}. There is no `renderLength` and
  * there must not be one. `tag` is `renderTag`'s membership test against PS3.6's
  * element registry, which for the private tag every element raising this code
  * carries renders `<withheld>` - so this message names no element number at all,
@@ -1775,7 +1773,7 @@ export function undefinedVrNotAuditable(position: DicomPosition): DicomParseWarn
 }
 
 // ---------------------------------------------------------------------------
-// Phase 3 VR-decode-time factories (D-08 / D-42).
+// VR-decode-time factories.
 // ---------------------------------------------------------------------------
 
 /**

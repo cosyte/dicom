@@ -1,16 +1,12 @@
 /**
- * Phase 2 structural `Element` - leaf wrapper over an on-wire DICOM
+ * The structural `Element` - leaf wrapper over an on-wire DICOM
  * Data Element.
  *
- * Per `02-CONTEXT.md` D-04 + D-42: structural fields ONLY. No `.value`
- * getter, no decoders, no `.items` navigation - those land in Phase 3,
- * which extends this class.
- *
- * Per D-16: `rawBytes` is a `Buffer.subarray()` view over the source
- * buffer by default (zero-copy), pinning the source ArrayBuffer until
- * every Element is GC'd. The `parseDicom` `{ copyValues: true }` option
- * flips production to `Buffer.from(slice)` so the source can be
- * released; producers (parser plans 02-04 onward) honour it.
+ * `rawBytes` is a `Buffer.subarray()` view over the source buffer by default
+ * (zero-copy), pinning the source ArrayBuffer until every Element is GC'd.
+ * The `parseDicom` `{ copyValues: true }` option flips production to
+ * `Buffer.from(slice)` so the source can be released; every producer in the
+ * parser honours it.
  *
  * @module
  */
@@ -27,7 +23,7 @@ import type { DicomValue } from "./vr/types.js";
  *
  * `privateCreator` is omitted (not `undefined`) for standard tags;
  * present only when the parser resolved a `(gggg,EEFF)` private element
- * to its registered Private Creator string per D-33 / D-34.
+ * to its registered Private Creator string.
  *
  * @internal
  */
@@ -40,10 +36,10 @@ export interface ElementInit {
   readonly byteOffset: number;
   readonly privateCreator?: string;
   /**
-   * Phase 2 hint set by the parser when an `Element` was promoted from
-   * `VR=UN` with undefined length to `VR=SQ` via the CP-246 fallback (D-30).
-   * Phase 3 reads this to choose the inner SQ decoder (Implicit VR LE) on
-   * first lazy access. Never set on standard SQ elements.
+   * Hint set by the parser when an `Element` was promoted from
+   * `VR=UN` with undefined length to `VR=SQ` via the CP-246 fallback.
+   * The lazy value decoder reads this to choose the inner SQ decoder
+   * (Implicit VR LE) on first access. Never set on standard SQ elements.
    *
    * @internal
    */
@@ -51,14 +47,14 @@ export interface ElementInit {
   /**
    * Byte order of the value bytes, set by the parser per transfer syntax
    * (`true` for Implicit/Explicit VR LE + Deflated; `false` for Explicit VR
-   * BE). Phase 3 numeric decoders read this - signedness comes from the VR,
+   * BE). The numeric decoders read this - signedness comes from the VR,
    * endianness from here.
    */
   readonly littleEndian: boolean;
   /**
    * The dataset's resolved `(0008,0005)` Specific Character Set terms in
    * effect for this element (parent dataset's, or the item's own override).
-   * Omitted when the Default Repertoire (ISO_IR 6) applies. Phase 3
+   * Omitted when the Default Repertoire (ISO_IR 6) applies. The
    * charset-dependent text decoders (`LO SH UC LT ST UT PN`) read this.
    */
   readonly specificCharacterSet?: readonly string[];
@@ -71,13 +67,11 @@ export interface ElementInit {
 }
 
 /**
- * One DICOM Data Element as parsed by Phase 2.
+ * One DICOM Data Element as parsed.
  *
- * Phase 2 surface (this plan): `tag`, `vr`, `vm`, `length`, `rawBytes`,
- * `byteOffset`, `privateCreator`. NO `.value` getter, NO decoders, NO
- * navigation methods. Phase 3 (per D-42) extends this class with a lazy,
- * memoized `.value` getter and the VR-aware decoders under
- * `src/dataset/vr/`.
+ * Structural surface: `tag`, `vr`, `vm`, `length`, `rawBytes`,
+ * `byteOffset`, `privateCreator`. On top of it sits a lazy, memoized
+ * `.value` getter backed by the VR-aware decoders under `src/dataset/vr/`.
  *
  * `rawBytes` retention behaviour: zero-copy `Buffer.subarray` view by
  * default (pins source ArrayBuffer); pass `{ copyValues: true }` to
@@ -110,10 +104,10 @@ export class Element {
   public readonly byteOffset: number;
   public readonly privateCreator: string | undefined;
   /**
-   * Phase 2 hint for Phase 3's lazy SQ decoder per D-30. `true` when this
-   * Element was promoted from `VR=UN` with undefined length to `VR=SQ` via
-   * the CP-246 fallback. Phase 3 uses this to choose the Implicit VR LE
-   * inner decoder. Always `undefined` on standard SQ elements.
+   * Hint for the lazy SQ decoder. `true` when this Element was promoted
+   * from `VR=UN` with undefined length to `VR=SQ` via the CP-246 fallback,
+   * which is what selects the Implicit VR LE inner decoder. Always
+   * `undefined` on standard SQ elements.
    *
    * @internal
    */
@@ -129,9 +123,9 @@ export class Element {
   private _valueCache: DicomValue | undefined;
 
   /**
-   * Construct a new structural `Element`. Producers (parser plans 02-03
-   * onward) build these directly from on-wire bytes; consumers receive
-   * them via `Dataset` after `parseDicom`.
+   * Construct a new structural `Element`. The parser builds these directly
+   * from on-wire bytes; consumers receive them via `Dataset` after
+   * `parseDicom`.
    *
    * @internal
    */
