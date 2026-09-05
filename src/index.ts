@@ -54,6 +54,8 @@ export {
 } from "./dataset/vr/charset.js";
 export { parsePersonName } from "./dataset/vr/person-name.js";
 export { parseDate, parseTime, parseDateTime } from "./dataset/vr/datetime.js";
+export { toObject, toISO, toDate } from "./dataset/vr/date-conversion.js";
+export type { DateParts, ToDateOptions } from "./dataset/vr/date-conversion.js";
 
 // === Safety-critical domain helper surface ===
 
