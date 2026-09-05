@@ -181,6 +181,44 @@ if (name?.kind === "personName") name.values[0]?.alphabetic.givenName; // "Jane"
 
 Decode is fail-safe: it never throws and never coerces a malformed value to a plausible-but-wrong one (a bad `DS`/`IS` token becomes `null`, never `NaN`→0). Per-value deviations surface on the returned value's own `warnings`.
 
+#### Dates and times
+
+`DA`, `TM` and `DT` decode into three different shapes, and the code that consumes them usually wants one. **`toObject`, `toISO` and `toDate` take any of the three** and project it onto a single surface. The same three names, with the same meanings, are exported by every `@cosyte/*` parser that decodes a date.
+
+```ts
+import { parseDate, parseDateTime, parseTime, toDate, toISO, toObject } from "@cosyte/dicom";
+
+toObject(parseDate("20240115").value); // { year: 2024, month: 1, day: 15 }
+toObject(parseTime("133015").value); // { hour: 13, minute: 30, second: 15 }
+toISO(parseDateTime("20240115133015-0500").value); // "2024-01-15T13:30:15-05:00"
+```
+
+**The key set is the precision.** A component the value did not state is absent from the returned `DateParts` rather than present and `undefined`, and nothing is zero-filled, so `Object.keys()` recovers exactly what the sender wrote. There is no `precision` key because the key set is one, and no `raw` or `valid` key because parse bookkeeping is not a calendar component.
+
+**The keys are SINGULAR, and the decoded types are plural.** `DicomTime` and `DicomDateTime` spell the time fields `hours`, `minutes` and `seconds`; `DateParts` spells them **`hour`, `minute` and `second`**, and `month` is 1 to 12 rather than the JS `Date` 0 to 11. That is the rename to expect when you move from a decoded value to a converted one, and it is deliberate: it is the shape `Temporal.PlainDateTime.from` and luxon's `DateTime.fromObject` accept, so deleting `offsetMinutes` leaves an object either constructor takes with no key rename and no value adjustment.
+
+**`toDate` never guesses a zone.** A `DT` that carried an `&ZZXX` offset converts exactly, and that stated offset beats any `assumeOffsetMinutes` the caller passes. A value with no offset converts only when the caller supplies one, an explicit `0` meaning "read this naive value as UTC". **With no stated offset and no `assumeOffsetMinutes`, the answer is `undefined`**: the host machine's zone is never read and UTC is never assumed. A `TM` states no year, so it is never an instant however determinate the caller's zone is.
+
+```ts
+toDate(parseDate("20240115").value); // undefined: neither the value nor the caller named a zone
+toDate(parseDate("20240115").value, { assumeOffsetMinutes: 0 }); // 2024-01-15T00:00:00.000Z
+toDate(parseDateTime("20240115133015-0500").value, { assumeOffsetMinutes: 600 });
+// 2024-01-15T18:30:15.000Z: the stated -0500 wins
+toDate(parseTime("133015").value, { assumeOffsetMinutes: 0 }); // undefined: a time is not an instant
+```
+
+`millisecond` is the first three digits of the stated fraction, taken verbatim and right-padded (`"5"` is 500, `"0500"` is 50, `"123456"` is 123). It is never `fractionalSeconds * 1000`, which is a binary float and cannot be trusted to the last digit. `toISO` renders those digits exactly as written, neither padded to three nor rounded, and it appends `Z` for a stated zero offset, so it is deliberately not a byte round-trip of the wire value: `serializeDicom` remains the route that reproduces the original bytes. All three functions return `undefined` for a value the decoders marked `valid: false`, and none of them throws for any input.
+
+Because the three names are identical across every `@cosyte/*` parser, a file importing two of them has to alias or namespace-import:
+
+```ts
+import { toISO as dicomToISO } from "@cosyte/dicom";
+import { toISO as hl7ToISO } from "@cosyte/hl7";
+
+dicomToISO(parseDateTime("20240115133015").value); // "2024-01-15T13:30:15"
+hl7ToISO(parseDtm("20240115133015").value); // the same string, from an HL7 v2 DTM
+```
+
 ### Error Handling
 
 The library throws five typed errors, all exported from the package barrel. Warnings are data rather than throws unless you ask otherwise: a profile's `escalate` list promotes only the codes it names.

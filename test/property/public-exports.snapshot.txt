@@ -19,6 +19,7 @@ DEFAULT_UID_ROOT
 DEIDENTIFY_ERROR_CODES
 DEIDENTIFY_OPTIONS
 Dataset
+DateParts
 DefineProfileOptions
 DeidentifiedAttribute
 DeidentifyError
@@ -66,6 +67,7 @@ Sequence
 SerializeErrorCode
 SeriesView
 StudyView
+ToDateOptions
 UidRemapper
 UnauditableSequenceFinding
 UndefinedVrFinding
@@ -92,3 +94,6 @@ profiles
 readCode
 resolveDecoderLabel
 serializeDicom
+toDate
+toISO
+toObject
