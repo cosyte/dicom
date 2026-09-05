@@ -96,7 +96,7 @@ same meanings, so a caller that learns them here can read a timestamp out of any
 | `DateParts`     | The shared result shape: `year` / `month` / `day` / `hour` / `minute` / `second` / `millisecond` / `offsetMinutes`, all optional.         |
 | `ToDateOptions` | `toDate`'s only option: `{ assumeOffsetMinutes }`, and no other key.                                                                       |
 
-Three rules make this surface worth having, and each one is a decision the naive version gets wrong.
+Four rules make this surface worth having, and each one is a decision the naive version gets wrong.
 
 **The key set is the precision.** A component the value did not state is absent from `DateParts`
 rather than present and `undefined`, and nothing is zero-filled, so `Object.keys()` of the result
@@ -114,6 +114,17 @@ stated offset beats any `assumeOffsetMinutes` the caller passes. A value with no
 only when the caller supplies one, an explicit `0` meaning "read this naive value as UTC". With
 neither, the answer is `undefined`: the host machine's zone is never read, and a `TM` is never an
 instant at all because it states no year.
+
+**A component outside its range is refused, never rolled over.** The decoders bound each component
+on its own, so a `DA` of `18700230` decodes with `valid: true` and `day: 30`. The conversion surface
+reads the components together: a month outside 1 to 12, a day the month does not really have (full
+4/100/400 leap rule), an hour, minute or second out of range, or a component that is not a whole
+number, and the whole value converts to `undefined`. Rendering it would produce `"1870-02-30"`,
+which every ISO-8601 reader silently moves to 2 March, and converting it would produce a date of
+birth off by a day. `second: 60` is refused with them: `TM` and `DT` permit it for a leap second and
+the decoders keep it, but there is no ISO string for it a reader does not move, and no instant to
+build. The refusal is in the projection alone, so `parseDate`, `parseTime` and `parseDateTime` still
+report exactly what the sender wrote.
 
 ```ts runnable
 import { parseDate, parseDateTime, parseTime, toDate, toISO, toObject } from "@cosyte/dicom";
@@ -141,6 +152,16 @@ toDate(parseDate("20240115").value, { assumeOffsetMinutes: 0 })?.toISOString(); 
 // A stated offset beats whatever the caller assumed.
 const shifted = parseDateTime("20240115133015-0500").value;
 toDate(shifted, { assumeOffsetMinutes: 600 })?.toISOString(); // => "2024-01-15T18:30:15.000Z"
+
+// A day the calendar does not have converts to nothing, never to the day after it.
+toObject(parseDate("18700230").value); // => undefined
+toISO(parseDate("18700431").value); // => undefined
+toDate(parseDate("18700230").value, { assumeOffsetMinutes: 0 }); // => undefined
+toISO(parseTime("133060").value); // => undefined
+
+// The decoders are untouched: the bytes the sender wrote are still readable.
+parseDate("18700230").value.day; // => 30
+parseTime("133060").value.seconds; // => 60
 ```
 
 Two properties are worth stating because a reader will otherwise assume the opposite. `toISO`

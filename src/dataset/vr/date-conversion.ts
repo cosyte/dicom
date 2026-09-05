@@ -21,8 +21,20 @@
  * - **`toDate` never guesses a zone.** A value with no `&ZZXX` offset and no
  *   `assumeOffsetMinutes` is not an instant, so it answers `undefined` rather
  *   than reading the host machine's zone.
+ * - **A component outside its calendar range is REFUSED, never rolled over.**
+ *   The decoders bound the day at 1 to 31 without consulting the month, so
+ *   `parseDate("20240230")` is `valid: true`. Projecting that yields
+ *   `"2024-02-30"`, which every ISO-8601 reader silently moves to 1 March, and
+ *   an instant a day after the one the sender wrote. PatientBirthDate
+ *   (0010,0030) is a `DA`, so the harm is a date of birth shifted by a day with
+ *   nothing thrown. All three functions answer `undefined` instead.
  *
  * None of the three throws, for any input.
+ *
+ * The refusal lives HERE and not in `parseDate` / `parseTime` / `parseDateTime`:
+ * those keep the behaviour they were pinned at, so a caller that wants the
+ * sender's bytes still reads them off the decoded value and off `raw`. What is
+ * refused is the PROJECTION of a value onto a calendar that has no such day.
  *
  * @module
  */
@@ -73,7 +85,13 @@ export interface DateParts {
   readonly hour?: number;
   /** Minute, 0 to 59. */
   readonly minute?: number;
-  /** Second, 0 to 60 (a leap second is decoded rather than rejected). */
+  /**
+   * Second, 0 to 59.
+   *
+   * `TM` and `DT` permit `60` for a leap second and the decoders keep it, but a
+   * value stating it is not projected: there is no ISO rendering of it a reader
+   * does not move, and no instant to build. See the module doc block.
+   */
   readonly second?: number;
   /** The first three digits of the stated fraction, right-padded with zeroes. */
   readonly millisecond?: number;
@@ -127,6 +145,73 @@ function millisecondOf(digits: string): number {
   return Number(`${digits}000`.slice(0, 3));
 }
 
+/** The proleptic Gregorian rule, all three arms: 4, 100, 400. */
+function isLeapYear(year: number): boolean {
+  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+}
+
+/** January to December, February at its common length. */
+const MONTH_LENGTHS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] as const;
+
+/** The widest `&ZZXX` suffix `parseDateTime` accepts: 14 hours 59 minutes. */
+const MAX_OFFSET_MINUTES = 14 * 60 + 59;
+
+/**
+ * The highest day number the month really has.
+ *
+ * With no stated year there is no leap rule to apply, so February is bounded at
+ * 29: refusing 29 February on a value that never said which year would refuse a
+ * real day in every leap year, and the bound exists to catch what no calendar
+ * has rather than what this one calendar does not.
+ */
+function longestDayOfMonth(year: number | undefined, month: number): number {
+  if (month === 2) return year === undefined || isLeapYear(year) ? 29 : 28;
+  return MONTH_LENGTHS[month - 1] ?? 31;
+}
+
+/**
+ * A stated component is a whole number inside its range; an unstated one passes.
+ *
+ * `Number.isInteger` is the first test rather than an afterthought: `NaN`
+ * satisfies neither `<` nor `>`, so a bare comparison pair would wave it
+ * through, and a fractional year renders as `"1870.5"`.
+ */
+function withinBounds(value: number | undefined, low: number, high: number): boolean {
+  return value === undefined || (Number.isInteger(value) && value >= low && value <= high);
+}
+
+/**
+ * Whether the components name a point a calendar really has.
+ *
+ * The decoders range-check each component alone (`day` at 1 to 31, whatever the
+ * month), which lets 30 February, a 29 February outside a leap year and 31
+ * April through as `valid: true`. This is the check that reads them TOGETHER,
+ * and it reads the projected components rather than the parse route, so a
+ * hand-built `DicomDate` is bounded exactly as a decoded one is.
+ *
+ * `second` is bounded at 59, not 60. PS3.5 permits `60` in `TM` and `DT` for a
+ * leap second and `parseTime` keeps it, but this surface cannot project it: the
+ * only ISO string for it is `"13:30:60"`, which V8 reads back as 1960, and the
+ * only instant for it is 13:31:00, a rollover of exactly the shape the rest of
+ * this function refuses.
+ *
+ * `offsetMinutes` is bounded at exactly what the `&ZZXX` suffix can state, 14
+ * hours 59 minutes either way, which is the bound `parseDateTime` already
+ * applies. It can therefore only ever refuse a hand-built value, and it is here
+ * because an unbounded one RENDERS: an `offsetMinutes` of `NaN` produced the
+ * string `"2024+NaN:NaN"`.
+ */
+function statesARealCalendarDate(parts: DateParts): boolean {
+  if (!withinBounds(parts.year, 0, 9999)) return false;
+  if (!withinBounds(parts.month, 1, 12)) return false;
+  if (!withinBounds(parts.hour, 0, 23)) return false;
+  if (!withinBounds(parts.minute, 0, 59)) return false;
+  if (!withinBounds(parts.second, 0, 59)) return false;
+  if (!withinBounds(parts.offsetMinutes, -MAX_OFFSET_MINUTES, MAX_OFFSET_MINUTES)) return false;
+  if (parts.month === undefined) return withinBounds(parts.day, 1, 31);
+  return withinBounds(parts.day, 1, longestDayOfMonth(parts.year, parts.month));
+}
+
 /** The time-of-day part, truncated to the stated precision. */
 function renderTime(parts: DateParts, digits: string | undefined): string | undefined {
   if (parts.hour === undefined) return undefined;
@@ -163,19 +248,22 @@ function renderOffset(offsetMinutes: number | undefined): string {
  * The calendar components a `DA`, `TM` or `DT` value stated, as a frozen object.
  *
  * Returns `undefined` for a value the decoders marked `valid: false`, for
- * `null` / `undefined`, and for a value that stated no component at all. It
- * never throws. `hours` / `minutes` / `seconds` are renamed to the singular
+ * `null` / `undefined`, for a value that stated no component at all, and for
+ * one whose components name no real calendar point (30 February, 29 February
+ * outside a leap year, 31 April, second 60). It never throws.
+ * `hours` / `minutes` / `seconds` are renamed to the singular
  * `hour` / `minute` / `second`; `raw`, `valid` and the `legacy` and
  * `nonstandardOffset` flags the decoders report beside the value never appear.
  *
  * @example
  * ```ts
- * import { parseDateTime, parseTime, toObject } from "@cosyte/dicom";
+ * import { parseDate, parseDateTime, parseTime, toObject } from "@cosyte/dicom";
  *
  * toObject(parseDateTime("20240115133015").value);
  * // { year: 2024, month: 1, day: 15, hour: 13, minute: 30, second: 15 }
  *
  * toObject(parseTime("133015.123456").value).millisecond; // 123, from the digits
+ * toObject(parseDate("18700230").value); // undefined: February has no 30th
  * ```
  */
 export function toObject(value: DicomTemporal | null | undefined): DateParts | undefined {
@@ -204,7 +292,12 @@ export function toObject(value: DicomTemporal | null | undefined): DateParts | u
     ...(digits !== undefined ? { millisecond: millisecondOf(digits) } : {}),
     ...(offsetMinutes !== undefined ? { offsetMinutes } : {}),
   };
-  return Object.keys(parts).length === 0 ? undefined : Object.freeze(parts);
+  if (Object.keys(parts).length === 0) return undefined;
+  // The one refusal gate for all three functions. `toISO` and `toDate` both
+  // start from this result, so none of them can project a day the calendar does
+  // not have while another refuses it.
+  if (!statesARealCalendarDate(parts)) return undefined;
+  return Object.freeze(parts);
 }
 
 /**
@@ -216,17 +309,20 @@ export function toObject(value: DicomTemporal | null | undefined): DateParts | u
  * it is zero; a value that stated NO offset gets nothing appended, because a
  * fabricated `Z` would claim UTC the sender never wrote.
  *
- * Returns `undefined` for an invalid value, for `null` / `undefined`, and for a
- * value that stated no component at all. It never throws. This is not a
+ * Returns `undefined` for an invalid value, for `null` / `undefined`, for a
+ * value that stated no component at all, and for one naming no real calendar
+ * point: a string such as `"2024-02-30"` is worse than no answer, because every
+ * ISO-8601 reader moves it silently to 1 March. It never throws. This is not a
  * byte round-trip of the wire value and is not meant to be: `serializeDicom`
  * remains the route that reproduces the original bytes.
  *
  * @example
  * ```ts
- * import { parseDateTime, parseTime, toISO } from "@cosyte/dicom";
+ * import { parseDate, parseDateTime, parseTime, toISO } from "@cosyte/dicom";
  *
  * toISO(parseDateTime("20240115133015-0500").value); // "2024-01-15T13:30:15-05:00"
  * toISO(parseTime("133015").value); // "13:30:15"
+ * toISO(parseDate("18700431").value); // undefined: April has no 31st
  * ```
  */
 export function toISO(value: DicomTemporal | null | undefined): string | undefined {
@@ -247,7 +343,10 @@ export function toISO(value: DicomTemporal | null | undefined): string | undefin
  * assumed. A value with no year is never an instant, so a `TM` always answers
  * `undefined` however the call is made. A non-finite `assumeOffsetMinutes`
  * (`NaN`, `Infinity`, `-Infinity`) names no zone either, so it answers
- * `undefined` rather than an `Invalid Date` whose `getTime()` is `NaN`.
+ * `undefined` rather than an `Invalid Date` whose `getTime()` is `NaN`, and so
+ * does a finite offset so large that applying it leaves the range a `Date` can
+ * represent. A value naming no real calendar point is refused before any of
+ * that, so an impossible day is never rolled into the next month.
  *
  * Components below the stated precision fill to their lowest legal value for
  * the instant alone; the value's own precision is untouched, and a later
@@ -264,6 +363,8 @@ export function toISO(value: DicomTemporal | null | undefined): string | undefin
  * // "2024-01-15T00:00:00.000Z"
  * toDate(parseDateTime("20240115133015+0100").value)?.toISOString();
  * // "2024-01-15T12:30:15.000Z"
+ * toDate(parseDate("18700230").value, { assumeOffsetMinutes: 0 });
+ * // undefined: never 1 March for a value the sender wrote as February
  * ```
  */
 export function toDate(
@@ -286,5 +387,11 @@ export function toDate(
   const utc = new Date(0);
   utc.setUTCFullYear(parts.year, (parts.month ?? 1) - 1, parts.day ?? 1);
   utc.setUTCHours(parts.hour ?? 0, parts.minute ?? 0, parts.second ?? 0, parts.millisecond ?? 0);
-  return new Date(utc.getTime() - offsetMinutes * 60_000);
+  const instant = new Date(utc.getTime() - offsetMinutes * 60_000);
+  // Re-checked AFTER the offset is applied, because the finiteness test above
+  // cannot see this: an `assumeOffsetMinutes` of `1e15` is a perfectly finite
+  // number that pushes the result past the range a `Date` represents. An
+  // `Invalid Date` is a partial answer wearing the shape of a real one, so the
+  // answer is the absence instead.
+  return Number.isNaN(instant.getTime()) ? undefined : instant;
 }

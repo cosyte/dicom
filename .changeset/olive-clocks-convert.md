@@ -18,7 +18,7 @@ a date, so they collide on import by design. A file that reads two of them alias
 (`import { toISO as dicomToISO } from "@cosyte/dicom"`) or namespace-imports; `README.md` and the
 typed-values page both show the pattern.
 
-Three decisions in the surface are worth knowing before you depend on it.
+Four decisions in the surface are worth knowing before you depend on it.
 
 - **The key set is the precision.** A component the value did not state is absent from `DateParts`
   rather than present and `undefined`, and nothing is zero-filled, so `Object.keys()` recovers what
@@ -35,7 +35,16 @@ Three decisions in the surface are worth knowing before you depend on it.
   only route to an instant, an explicit `0` meaning "read this naive value as UTC". With neither,
   the answer is `undefined`: the host machine's zone is never read and UTC is never assumed. A
   non-finite `assumeOffsetMinutes` names no zone either, so it answers `undefined` rather than an
-  `Invalid Date`. A `TM` states no year, so it is never an instant at all.
+  `Invalid Date`, and so does a finite one so large that applying it leaves the range a `Date`
+  represents. A `TM` states no year, so it is never an instant at all.
+- **An impossible date converts to nothing, never to the day after it.** The decoders range-check
+  each component on its own, so a `DA` of `18700230` decodes with `valid: true` and `day: 30`. The
+  conversion surface reads them together and refuses the whole value: a month outside 1 to 12, a day
+  outside the one its month really has (full 4/100/400 leap rule), an out-of-range hour, minute or
+  second, or a component that is not a whole number. `second: 60` is refused with them, even though
+  `TM` and `DT` permit it for a leap second, because there is no ISO string for it a reader does not
+  move and no instant to build. The refusal is in the projection only: `parseDate`, `parseTime` and
+  `parseDateTime` are unchanged and still report what the sender wrote.
 
 `millisecond` is derived from the digits in `raw`, taken verbatim and right-padded (`"5"` is 500,
 `"0500"` is 50, `"123456"` is 123), and never from `fractionalSeconds`, which is a binary float.

@@ -555,6 +555,44 @@ describe("toDate is honest about the timezone", () => {
     expect(new Date(0 - Number.NaN * 60_000).getTime()).toBeNaN();
   });
 
+  it("refuses a finite assumeOffsetMinutes that leaves the representable range", () => {
+    // The finiteness guard above cannot see this one: `1e15` IS finite, and it
+    // is the offset arithmetic, not the value, that leaves the +/-8.64e15 ms a
+    // `Date` represents. So the check has to run AFTER the offset is applied,
+    // which is what x12 and ncpdp do and what astm and dicom did not.
+    const value = parseDate("20240115").value;
+    for (const assumeOffsetMinutes of [1e15, -1e15, Number.MAX_SAFE_INTEGER]) {
+      expect(toDate(value, { assumeOffsetMinutes }), String(assumeOffsetMinutes)).toBeUndefined();
+      expect(() => toDate(value, { assumeOffsetMinutes })).not.toThrow();
+    }
+    // Non-vacuity, both ways: the offset really does leave the range (so the
+    // case is not passing because 1e15 was rejected as non-finite), and an
+    // offset one step inside the range still converts.
+    expect(Number.isFinite(1e15)).toBe(true);
+    expect(new Date(0 - 1e15 * 60_000).getTime()).toBeNaN();
+    expect(toDate(value, { assumeOffsetMinutes: -720 })?.toISOString()).toBe(
+      "2024-01-15T12:00:00.000Z",
+    );
+  });
+
+  it("never answers a Date whose getTime() is NaN, for any offset", () => {
+    // The property behind both arms, stated once over the whole option domain
+    // this surface can be handed: whatever comes back is either absent or a
+    // Date a caller can compare without testing it for NaN first.
+    const value = parseDate("20240115").value;
+    for (const assumeOffsetMinutes of [
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      1e15,
+      -1e15,
+      8.64e15,
+    ]) {
+      const out = toDate(value, { assumeOffsetMinutes });
+      expect(out, String(assumeOffsetMinutes)).toBeUndefined();
+    }
+  });
+
   it("returns a fresh Date on every call", () => {
     const value = parseDate("20240115").value;
     const first = toDate(value, { assumeOffsetMinutes: 0 });
@@ -614,6 +652,227 @@ describe("nothing in the surface throws, whatever it is handed", () => {
     expect(toObject(monthOnly)).toStrictEqual({ month: 3 });
     expect(toISO(monthOnly)).toBeUndefined();
     expect(toDate(monthOnly, { assumeOffsetMinutes: 0 })).toBeUndefined();
+  });
+});
+
+describe("component bounds: a point no calendar has converts to nothing", () => {
+  // Component-bounds handling is a rule every `@cosyte/*` parser in this suite
+  // follows the same way, and this is that rule for DICOM: an
+  // out-of-range component, a month outside 1 to 12 or a day outside its own
+  // month, is REFUSED, never rolled over into the following month.
+  //
+  // The decoders range-check each component alone, so `parseDate("18700230")`
+  // is `valid: true` with `day: 30`, and projecting that gave `"1870-02-30"`
+  // and, with a zone, the instant for 2 March. PatientBirthDate (0010,0030) is
+  // a `DA`. The refusal is in the conversion surface and NOT in the decoders,
+  // which keep the behaviour they were pinned at.
+  //
+  // 🩺 THE FIXTURE YEARS ARE PRE-1906 ON PURPOSE. `scripts/phi-scan.ts` flags
+  // any 8-digit `YYYYMMDD` run whose year is inside the last 120 years, and the
+  // only ways past it are a date older than that or a line in
+  // `scripts/phi-allow-list.txt`, which that file's own header calls a real,
+  // globally scoped widening. Nothing here turns on the year: 1870 and 1900 are
+  // ordinary non-leap years and 1872 and 1600 are ordinary leap ones.
+
+  /** Days no calendar has, one per way of not having one. */
+  const IMPOSSIBLE = [
+    "18700230", // February never has a 30th
+    "18700229", // 1870 is not a leap year
+    "19000229", // 1900 is divisible by 100 and not by 400
+    "18700431", // April
+    "18700631", // June
+    "18700931", // September
+  ] as const;
+
+  /** Real days, so a fix cannot be "refuse February" or "refuse the 29th". */
+  const REAL = [
+    "18720229", // 1872 is a leap year
+    "16000229", // 1600 is divisible by 400, so it is one too
+    "18700228",
+    "18700430",
+    "18700531",
+    "18700731",
+  ] as const;
+
+  it("still converts every real calendar day (non-vacuity)", () => {
+    for (const raw of REAL) {
+      const value = parseDate(raw).value;
+      expect(toObject(value), raw).toBeDefined();
+      expect(toISO(value), raw).toBe(`${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`);
+      expect(toDate(value, { assumeOffsetMinutes: 0 })?.toISOString(), raw).toBe(
+        `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}T00:00:00.000Z`,
+      );
+    }
+  });
+
+  it("leaves the decoders exactly as they were pinned", () => {
+    // The other half of non-vacuity, and the ADDITIVE ONLY rule made visible:
+    // the refusal is a property of the conversion surface alone. A caller that
+    // wants the bytes the sender wrote still reads them off the value.
+    const { value, legacy } = parseDate("18700230");
+    expect(value).toStrictEqual({ raw: "18700230", valid: true, year: 1870, month: 2, day: 30 });
+    expect(legacy).toBe(false);
+    expect(parseDateTime("18700230").value.valid).toBe(true);
+    expect(parseTime("133060").value).toStrictEqual({
+      raw: "133060",
+      valid: true,
+      hours: 13,
+      minutes: 30,
+      seconds: 60,
+    });
+  });
+
+  it("toObject refuses a DA day the month does not have", () => {
+    for (const raw of IMPOSSIBLE) {
+      expect(parseDate(raw).value.valid, `${raw} still decodes`).toBe(true);
+      expect(toObject(parseDate(raw).value), raw).toBeUndefined();
+    }
+  });
+
+  it("toISO never renders a day an ISO-8601 reader would move", () => {
+    for (const raw of IMPOSSIBLE) {
+      const iso = toISO(parseDate(raw).value);
+      expect(iso, raw).toBeUndefined();
+    }
+    // What the refusal is worth, measured rather than asserted: the string the
+    // surface used to return reads back as a different day.
+    expect(new Date("1870-02-30T00:00:00Z").toISOString()).toBe("1870-03-02T00:00:00.000Z");
+  });
+
+  it("toDate never rolls an impossible DA day into the following month", () => {
+    for (const raw of IMPOSSIBLE) {
+      expect(toDate(parseDate(raw).value, { assumeOffsetMinutes: 0 }), raw).toBeUndefined();
+      expect(toDate(parseDate(raw).value), raw).toBeUndefined();
+    }
+  });
+
+  it("refuses the same day on a DT that carries its own offset", () => {
+    // No caller assumption is involved here at all: the value states its own
+    // zone, so a wrong instant would be entirely the surface's doing.
+    const value = parseDateTime("18700230133000+0000").value;
+    expect(value.valid).toBe(true);
+    expect(toObject(value)).toBeUndefined();
+    expect(toISO(value)).toBeUndefined();
+    expect(toDate(value)).toBeUndefined();
+  });
+
+  it("applies all three arms of the leap rule", () => {
+    for (const [raw, converts] of [
+      ["18720229", true], // divisible by 4
+      ["19000229", false], // and by 100
+      ["16000229", true], // and by 400
+      ["18700229", false], // and by none of them
+    ] as const) {
+      expect(toObject(parseDate(raw).value) !== undefined, raw).toBe(converts);
+    }
+  });
+
+  it("refuses second 60, which the decoders keep and this surface cannot project", () => {
+    // PS3.5 permits `60` in `TM` and `DT` for a leap second, so this is a
+    // deliberate refusal of a conformant value rather than a range error: there
+    // is no ISO string for it a reader does not move and no instant to build.
+    // `parseTime` keeps it (asserted above), so nothing is lost from the value.
+    const time = parseTime("133060").value;
+    expect(time.valid).toBe(true);
+    expect(time.seconds).toBe(60);
+    expect(toObject(time)).toBeUndefined();
+    expect(toISO(time)).toBeUndefined();
+    expect(toDate(time, { assumeOffsetMinutes: 0 })).toBeUndefined();
+
+    const datetime = parseDateTime("18700228133060+0000").value;
+    expect(datetime.seconds).toBe(60);
+    expect(toObject(datetime)).toBeUndefined();
+    expect(toISO(datetime)).toBeUndefined();
+    expect(toDate(datetime)).toBeUndefined();
+
+    // Both halves of what the refusal avoids, measured: the rendering V8 reads
+    // as a different century, and the instant that is a rollover into 13:31.
+    expect(new Date("13:30:60").getUTCFullYear()).toBe(1960);
+    expect(new Date(Number(new Date("1870-02-28T13:30:00Z")) + 60_000).toISOString()).toBe(
+      "1870-02-28T13:31:00.000Z",
+    );
+
+    // Non-vacuity: second 59 is not touched.
+    expect(toISO(parseTime("133059").value)).toBe("13:30:59");
+  });
+
+  it("bounds a hand-built value exactly as it bounds a decoded one", () => {
+    // The route ncpdp's own finding was raised about: the value types are
+    // exported, so a caller can build one the decoders would never emit. The
+    // check reads the projected components, not the parse route, so it binds
+    // both. Every shape below is unreachable through parseDate / parseDateTime.
+    const refused: readonly DicomDateTime[] = [
+      { raw: "x", valid: true, year: 1870, month: 13, day: 1 },
+      { raw: "x", valid: true, year: 1870, month: 0, day: 1 },
+      { raw: "x", valid: true, year: 1870, month: 1, day: 32 },
+      { raw: "x", valid: true, year: 1870, month: 1, day: 0 },
+      { raw: "x", valid: true, year: 1870.5 },
+      { raw: "x", valid: true, year: Number.NaN },
+      { raw: "x", valid: true, year: 10_000 },
+      { raw: "x", valid: true, year: -1 },
+      { raw: "x", valid: true, year: 999_999 },
+      { raw: "x", valid: true, year: 1870, hours: 24 },
+      { raw: "x", valid: true, year: 1870, hours: 1, minutes: 60 },
+      { raw: "x", valid: true, year: 1870, offsetMinutes: Number.NaN },
+      { raw: "x", valid: true, year: 1870, offsetMinutes: 900 },
+      { raw: "x", valid: true, year: 1870, offsetMinutes: -100_000 },
+    ];
+    for (const value of refused) {
+      const label = JSON.stringify(value);
+      expect(toObject(value), label).toBeUndefined();
+      expect(toISO(value), label).toBeUndefined();
+      expect(toDate(value, { assumeOffsetMinutes: 0 }), label).toBeUndefined();
+      expect(() => toISO(value)).not.toThrow();
+    }
+    // Non-vacuity: the same hand-built shape one step inside every bound still
+    // converts, so the block is not passing because hand-built values are
+    // refused wholesale.
+    expect(toISO({ raw: "x", valid: true, year: 1870, month: 12, day: 31 })).toBe("1870-12-31");
+    expect(toISO({ raw: "x", valid: true, year: 0, month: 1, day: 1 })).toBe("0000-01-01");
+    expect(toISO({ raw: "x", valid: true, year: 9999, hours: 23, minutes: 59 })).toBe("9999T23:59");
+    // 899 minutes is exactly what a `&ZZXX` suffix of `+1459` decodes to, so
+    // the offset bound refuses nothing the wire can state.
+    expect(toISO({ raw: "x", valid: true, year: 1870, offsetMinutes: 899 })).toBe("1870+14:59");
+    expect(parseDateTime("1870+1459").value.offsetMinutes).toBe(899);
+  });
+
+  it("refuses February 30 without refusing February, at every precision", () => {
+    // A guard that answered by dropping the day, or by refusing the month,
+    // would satisfy the letter above and lose real values. The whole value is
+    // refused, and only the value with the impossible day.
+    expect(toISO(parseDateTime("1870").value)).toBe("1870");
+    expect(toISO(parseDateTime("187002").value)).toBe("1870-02");
+    expect(toISO(parseDateTime("18700228").value)).toBe("1870-02-28");
+    expect(toISO(parseDateTime("1870022813").value)).toBe("1870-02-28T13");
+    expect(toISO(parseDateTime("18700230").value)).toBeUndefined();
+    expect(toISO(parseDateTime("1870023013").value)).toBeUndefined();
+    expect(toISO(parseDateTime("18700230133015.5").value)).toBeUndefined();
+  });
+
+  it("refuses the legacy dotted DA form on the same rule", () => {
+    // The dotted form is decoded rather than rejected, so it reaches the
+    // surface by a second route and has to be bounded on the same rule.
+    const dotted = parseDate("1870.02.30");
+    expect(dotted.legacy).toBe(true);
+    expect(dotted.value.valid).toBe(true);
+    expect(toObject(dotted.value)).toBeUndefined();
+    expect(toISO(dotted.value)).toBeUndefined();
+    expect(toDate(dotted.value, { assumeOffsetMinutes: 0 })).toBeUndefined();
+    // Non-vacuity: the dotted form of a real day still converts identically.
+    expect(toISO(parseDate("1870.02.28").value)).toBe("1870-02-28");
+  });
+
+  it("agrees with the other five packages on what it refuses", () => {
+    // The item exists so the six answer alike. This is the shape every one of
+    // them answers `undefined` for, in its own wire syntax.
+    for (const raw of IMPOSSIBLE) {
+      const value = parseDate(raw).value;
+      expect([toObject(value), toISO(value), toDate(value, { assumeOffsetMinutes: 0 })]).toEqual([
+        undefined,
+        undefined,
+        undefined,
+      ]);
+    }
   });
 });
 
