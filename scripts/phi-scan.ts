@@ -79,16 +79,20 @@
  *
  * Modes:
  *   --staged                 - scan only files staged in `git diff --cached`
- *   --allow-fixture <path>   - bypass for one path; rejected if not logged in phi-scan-overrides.md
+ *   --allow-fixture <path>   - bypass for one path; rejected if not logged in phi-scan-overrides.md,
+ *                              and an honoured one WITHHOLDS the run's verdict (exit 3) rather
+ *                              than letting the surviving targets report clean on its behalf
  *   --max-hit-lines <n>      - print at most n hit lines PER RECOGNIZER PER FILE; `0` prints
  *                              every one
  *   <path> [<path>...]       - scan specific paths
  *   (no args)                - scan both corpora in the working tree
  *
- * Exit codes: 0 (no hits), 1 (hits found), 2 (invocation error). The word "clean" used to stand
+ * Exit codes: 0 (no hits), 1 (hits found), 2 (invocation error), 3 (the scan was WITHHELD from a
+ * target it enumerated, so it has no verdict about that target). The word "clean" used to stand
  * where "no hits" does, and it is cut rather than qualified: a run can exit 0 having stopped the
  * DICOM sweep partway through an object, which `reportUnread` states on stderr and the exit code
- * deliberately does not carry. See the note at the bottom of `main`.
+ * deliberately does not carry. See the note at the bottom of `main`, which also says why the
+ * withheld rule is a different thing from that one and may not be merged with it.
  *
  * ---------------------------------------------------------------------------
  * AN IN-SCOPE ENTRY THAT IS NOT A REGULAR FILE REFUSES THE SCAN (exit 2). It is
@@ -2819,12 +2823,19 @@ function main(): number {
     throw err;
   }
 
+  // Every path this run DECLARED it would account for, taken before the withdrawal below so the
+  // two sets can disagree. `buildTargetsFor*` has already applied the ignore rule and the corpus
+  // exemption, both of which are decisions about SCOPE: a path they drop was never enumerated, is
+  // named on stdout where it is exempt, and is detected by `reconcileWithGit` where it is not.
+  const enumerated = new Set<string>(targets.map((t) => t.path));
+
   // Filter out --allow-fixture targets entirely. These have already been
   // validated against the override log above.
   targets = targets.filter((t) => !allowedSet.has(t.path));
 
   const hits: Hit[] = [];
   const unread: UnreadByPath = new Map();
+  const scanned = new Set<string>();
   for (const t of targets) {
     try {
       scanTarget(t, allow, hits, unread);
@@ -2835,11 +2846,40 @@ function main(): number {
       }
       throw err;
     }
+    scanned.add(t.path);
   }
 
   reportExemptions();
   reportUnread(unread);
   report(hits, args.maxHitLines, unread.size);
+
+  // 🛑 A TARGET THIS RUN ENUMERATED AND THEN NEVER OPENED WITHDRAWS THE RUN'S VERDICT, AND THE
+  // VERDICT IS THE ONLY THING A CALLER READS. A scan that did not open a file has no clean result
+  // about it, and the shape that costs the most is not the obvious one: withdraw the ONLY
+  // violator in a corpus and the surviving targets report no hits, so the same argv that means
+  // "excuse this one fixture" produces a run indistinguishable from a clean sweep.
+  //
+  // Exit 3, not 1 and not 2, and each is a different sentence. 1 says "PHI is here"; overloading
+  // it would make a bypass look like a finding and a finding look like a bypass. 2 says "the scan
+  // never ran" and is what an UNLOGGED `--allow-fixture` already returns, having opened nothing;
+  // this run opened everything else and its hit lines above are real, so a caller that cannot tell
+  // the two apart cannot tell "log the bypass and re-run" from "the report is partial".
+  //
+  // It is computed off the two SETS and not off `args.allowFixtures`, because the property is
+  // "enumerated and not read" rather than "a flag was passed": any future route that drops a
+  // target after enumerating it is caught by the same line without being taught about.
+  const neverOpened = [...enumerated].filter((p) => !scanned.has(p));
+  if (neverOpened.length > 0) {
+    process.stderr.write(
+      `[phi-scan] WITHHELD: ${String(neverOpened.length)} target(s) were enumerated and never ` +
+        `read, so this run has no verdict about them:\n` +
+        neverOpened.map((p) => `  - ${p}\n`).join("") +
+        "This is not a clean result and it is not a hit. Remove the bypass and re-run to get a " +
+        "verdict, or accept that these paths were not scanned.\n",
+    );
+    return 3;
+  }
+
   // Off `hits`, never off what `report` printed. The print cap must not be able to move this.
   //
   // 🛑 AND `unread` IS NOT IN IT, DELIBERATELY, WITH THE COST STATED RATHER THAN CLAIMED AWAY. An
@@ -2851,12 +2891,17 @@ function main(): number {
   // 🔴 SO A CI JOB THAT READS ONLY THE EXIT CODE STILL CANNOT SEE THIS, AND THAT IS AN OPEN
   // RESIDUAL, not a property being argued for. Making it visible to one is a change to this
   // script's contract with every caller and is its own decision, taken deliberately or not at all.
+  //
+  // 🛑 IT IS ALSO NOT THE WITHHELD RULE ABOVE, AND THE TWO MUST NOT BE MERGED. `unread` is a tail
+  // inside a file the scan DID open, on a file the standard permits; `neverOpened` is a file it
+  // opened not at all, on an operator's explicit instruction. Only the second has a caller who
+  // asked for it and can withdraw the request.
   return hits.length === 0 ? 0 : 1;
 }
 
 /**
  * 🛑 AN UNEXPECTED ERROR MUST NOT EXIT 1. This script's contract is 0 no hits / 1 hits found / 2
- * invocation error, and an uncaught throw exits 1 on Node - the one code that means "PHI was
+ * invocation error / 3 verdict withheld, and an uncaught throw exits 1 on Node - the one code that means "PHI was
  * found", to a CI job that reads exit codes rather than stderr. `readdirSync` raising `EACCES`
  * on an unreadable subdirectory is the live case, and widening the walk root from
  * `test/fixtures/` to `test/` enlarged the surface it can happen on, so it is closed here rather

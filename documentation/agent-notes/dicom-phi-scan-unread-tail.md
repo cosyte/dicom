@@ -72,11 +72,11 @@ footprint. `hits` staying unbounded is this item's other open residual and is un
 
 ## The exit code does not move, and that is a decision with a cost
 
-The banner declares 0 no hits / 1 hits found / 2 invocation error, and **that enumeration is quoted
-from the banner rather than restated**: a draft wrote "0 clean" back into a comment four lines above
-the `return`, in the same commit that cut the word from the banner, and gave exit 2 a second
-definition while it was there. An unread tail is neither non-zero code: nothing was found, and
-nothing refused the scan.
+The banner's enumeration is **quoted from the banner rather than restated**, and this paragraph is
+the reason: a draft wrote "0 clean" back into a comment four lines above the `return`, in the same
+commit that cut the word from the banner, and gave exit 2 a second definition while it was there.
+Read the banner for the current set. An unread tail is none of the non-zero codes in it: nothing was
+found, and nothing refused the scan.
 
 Two reasons it is not exit 2. It would fire on a file **§7.5.2 makes legal**, which is what "do not
 add a code for a conformant file" means on this side of the package. And it would **mask a real
@@ -84,6 +84,17 @@ hit** whenever both were present, downgrading a detection to an invocation error
 
 **🔴 SO A CI JOB THAT READS ONLY THE EXIT CODE STILL CANNOT SEE THIS.** Open, disclosed, not argued
 away. Making it visible to one is a change to this script's contract with every caller.
+
+**🛑 THE BANNER LATER GREW A FOURTH CODE, AND IT IS NOT THIS ONE. DO NOT READ THE TWO AS THE SAME
+RULE.** Exit 3 says the run was handed a target it ENUMERATED and then never OPENED, which today
+means an `--allow-fixture` bypass an operator logged and passed. Everything the two paragraphs above
+argue still holds for the unread tail, because the two cases differ in the only respect that decides
+it: an unread tail is a file the scan **did** open, on an encoding the standard permits and nobody
+asked for, so there is no caller to act on a refusal and no request to withdraw; a withheld target is
+a file it opened **not at all**, on an explicit instruction that can be taken back. That is also why
+3 rather than 2: the run that returns 3 opened every other target and its hit lines are real, where
+an unlogged bypass returns 2 having opened nothing at all. The residual above is unchanged and
+remains open.
 
 **And the word `OK` is CUT rather than qualified.** With any partial file the clean line reads
 `no hits, over a corpus in which the DICOM sweep stopped early in N file(s), listed on stderr. This
