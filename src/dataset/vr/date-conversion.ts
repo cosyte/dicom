@@ -245,7 +245,9 @@ export function toISO(value: DicomTemporal | null | undefined): string | undefin
  * explicit `0` meaning "treat this naive value as UTC". With neither, the
  * answer is `undefined`: the host machine's zone is never read and UTC is never
  * assumed. A value with no year is never an instant, so a `TM` always answers
- * `undefined` however the call is made.
+ * `undefined` however the call is made. A non-finite `assumeOffsetMinutes`
+ * (`NaN`, `Infinity`, `-Infinity`) names no zone either, so it answers
+ * `undefined` rather than an `Invalid Date` whose `getTime()` is `NaN`.
  *
  * Components below the stated precision fill to their lowest legal value for
  * the instant alone; the value's own precision is untouched, and a later
@@ -272,7 +274,11 @@ export function toDate(
   const parts = toObject(value);
   if (parts?.year === undefined) return undefined;
   const offsetMinutes = parts.offsetMinutes ?? options?.assumeOffsetMinutes;
-  if (offsetMinutes === undefined) return undefined;
+  // A non-finite offset is not a zone: arithmetic on it yields an `Invalid
+  // Date`, which is a partial answer wearing the shape of a real one. The
+  // decoded `offsetMinutes` is always finite, so this can only bite a caller's
+  // `assumeOffsetMinutes`.
+  if (offsetMinutes === undefined || !Number.isFinite(offsetMinutes)) return undefined;
 
   // `new Date(0)` plus the UTC setters, never `Date.UTC` and never the
   // constructor: both remap a year below 100 into the 1900s, which would turn

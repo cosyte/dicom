@@ -531,6 +531,30 @@ describe("toDate is honest about the timezone", () => {
     );
   });
 
+  it("refuses a non-finite assumeOffsetMinutes rather than answering an Invalid Date", () => {
+    // A zone the caller cannot name is not a zone. Arithmetic on NaN or an
+    // infinity yields a Date whose getTime() is NaN, which wears the shape of a
+    // real answer and carries no instant: the Contract's "never a partial
+    // answer". The stated-offset arm is unreachable from the decoders, which
+    // only ever produce a finite offsetMinutes, so this can only bite the
+    // option.
+    const value = parseDate("20240115").value;
+    for (const assumeOffsetMinutes of [
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+    ]) {
+      expect(toDate(value, { assumeOffsetMinutes }), String(assumeOffsetMinutes)).toBeUndefined();
+      expect(() => toDate(value, { assumeOffsetMinutes })).not.toThrow();
+    }
+    // Non-vacuity: the same call with a finite offset still converts, and the
+    // route the guard closes really did produce an Invalid Date.
+    expect(toDate(value, { assumeOffsetMinutes: 0 })?.toISOString()).toBe(
+      "2024-01-15T00:00:00.000Z",
+    );
+    expect(new Date(0 - Number.NaN * 60_000).getTime()).toBeNaN();
+  });
+
   it("returns a fresh Date on every call", () => {
     const value = parseDate("20240115").value;
     const first = toDate(value, { assumeOffsetMinutes: 0 });
@@ -590,5 +614,75 @@ describe("nothing in the surface throws, whatever it is handed", () => {
     expect(toObject(monthOnly)).toStrictEqual({ month: 3 });
     expect(toISO(monthOnly)).toBeUndefined();
     expect(toDate(monthOnly, { assumeOffsetMinutes: 0 })).toBeUndefined();
+  });
+});
+
+describe("the README's cross-package aliasing example is worked, not decorative", () => {
+  // The three names are identical in every `@cosyte/*` parser, so the README
+  // owes a file that imports two of them. That example is the only place in the
+  // package where another parser's call shape is written down, and it is
+  // therefore the only place where one can be written down WRONG: `@cosyte/hl7`
+  // is not a dependency here and nothing compiles or runs the fence, so a
+  // decoder-return-shape mistake in it is invisible to every other gate.
+  //
+  // The shipped mistake this pins was `parseDtm(...).value`: `.value` is THIS
+  // package's decoder wrapper (`parseDateTime` answers `{ value,
+  // nonstandardOffset }`) and hl7's `parseDtm` answers its parts directly, so
+  // the line evaluated to hl7's `toISO(undefined)`, which is `undefined`, under
+  // a comment claiming it was the same string the dicom line produced.
+  //
+  // The assertion is over the README text rather than over both packages,
+  // because importing `@cosyte/hl7` to check it would add the dependency this
+  // package refuses to take.
+  const README = join(import.meta.dirname, "..", "README.md");
+
+  /** Every fenced ```ts block in the README, in document order. */
+  function fences(markdown: string): string[] {
+    const out: string[] = [];
+    let open = false;
+    let buffer: string[] = [];
+    for (const line of markdown.split("\n")) {
+      if (!open && /^```ts\s*$/u.test(line)) {
+        open = true;
+        buffer = [];
+        continue;
+      }
+      if (open && /^```\s*$/u.test(line)) {
+        open = false;
+        out.push(buffer.join("\n"));
+        continue;
+      }
+      if (open) buffer.push(line);
+    }
+    return out;
+  }
+
+  const aliasing = fences(readFileSync(README, "utf8")).filter((fence) =>
+    fence.includes("@cosyte/hl7"),
+  );
+
+  it("carries a fence importing the conversion surface from a second parser", () => {
+    expect(aliasing.length).toBeGreaterThan(0);
+    for (const fence of aliasing) {
+      expect(fence).toContain("@cosyte/dicom");
+      expect(fence).toMatch(/toISO as \w+/u);
+    }
+  });
+
+  it("passes hl7's parseDtm result straight in, with no .value wrapper on it", () => {
+    for (const fence of aliasing) {
+      const offending = fence
+        .split("\n")
+        .filter((line) => /parseDtm\([^)]*\)\s*\.\s*value/u.test(line));
+      expect(offending, "@cosyte/hl7's parseDtm returns its parts directly").toStrictEqual([]);
+    }
+  });
+
+  it("keeps this package's own .value, which its decoders really do return", () => {
+    // The asymmetry is the point of the example and is not a slip to be
+    // normalised away: `parseDateTime` here answers a wrapper, `parseDtm` there
+    // does not, and only the three conversion names are shared.
+    expect(parseDateTime("20240115133015")).toHaveProperty("value");
+    expect(aliasing.some((fence) => /parseDateTime\([^)]*\)\s*\.\s*value/u.test(fence))).toBe(true);
   });
 });

@@ -33,8 +33,9 @@ Three decisions in the surface are worth knowing before you depend on it.
 - **`toDate` never guesses a zone.** A stated `&ZZXX` offset converts exactly and beats any
   `assumeOffsetMinutes` the caller passes. With no stated offset, the caller's assumption is the
   only route to an instant, an explicit `0` meaning "read this naive value as UTC". With neither,
-  the answer is `undefined`: the host machine's zone is never read and UTC is never assumed. A `TM`
-  states no year, so it is never an instant at all.
+  the answer is `undefined`: the host machine's zone is never read and UTC is never assumed. A
+  non-finite `assumeOffsetMinutes` names no zone either, so it answers `undefined` rather than an
+  `Invalid Date`. A `TM` states no year, so it is never an instant at all.
 
 `millisecond` is derived from the digits in `raw`, taken verbatim and right-padded (`"5"` is 500,
 `"0500"` is 50, `"123456"` is 123), and never from `fractionalSeconds`, which is a binary float.

@@ -197,7 +197,7 @@ toISO(parseDateTime("20240115133015-0500").value); // "2024-01-15T13:30:15-05:00
 
 **The keys are SINGULAR, and the decoded types are plural.** `DicomTime` and `DicomDateTime` spell the time fields `hours`, `minutes` and `seconds`; `DateParts` spells them **`hour`, `minute` and `second`**, and `month` is 1 to 12 rather than the JS `Date` 0 to 11. That is the rename to expect when you move from a decoded value to a converted one, and it is deliberate: it is the shape `Temporal.PlainDateTime.from` and luxon's `DateTime.fromObject` accept, so deleting `offsetMinutes` leaves an object either constructor takes with no key rename and no value adjustment.
 
-**`toDate` never guesses a zone.** A `DT` that carried an `&ZZXX` offset converts exactly, and that stated offset beats any `assumeOffsetMinutes` the caller passes. A value with no offset converts only when the caller supplies one, an explicit `0` meaning "read this naive value as UTC". **With no stated offset and no `assumeOffsetMinutes`, the answer is `undefined`**: the host machine's zone is never read and UTC is never assumed. A `TM` states no year, so it is never an instant however determinate the caller's zone is.
+**`toDate` never guesses a zone.** A `DT` that carried an `&ZZXX` offset converts exactly, and that stated offset beats any `assumeOffsetMinutes` the caller passes. A value with no offset converts only when the caller supplies one, an explicit `0` meaning "read this naive value as UTC". **With no stated offset and no `assumeOffsetMinutes`, the answer is `undefined`**: the host machine's zone is never read and UTC is never assumed. A non-finite `assumeOffsetMinutes` names no zone either, so it answers `undefined` rather than an `Invalid Date`. A `TM` states no year, so it is never an instant however determinate the caller's zone is.
 
 ```ts
 toDate(parseDate("20240115").value); // undefined: neither the value nor the caller named a zone
@@ -212,12 +212,14 @@ toDate(parseTime("133015").value, { assumeOffsetMinutes: 0 }); // undefined: a t
 Because the three names are identical across every `@cosyte/*` parser, a file importing two of them has to alias or namespace-import:
 
 ```ts
-import { toISO as dicomToISO } from "@cosyte/dicom";
-import { toISO as hl7ToISO } from "@cosyte/hl7";
+import { parseDateTime, toISO as dicomToISO } from "@cosyte/dicom";
+import { parseDtm, toISO as hl7ToISO } from "@cosyte/hl7";
 
 dicomToISO(parseDateTime("20240115133015").value); // "2024-01-15T13:30:15"
-hl7ToISO(parseDtm("20240115133015").value); // the same string, from an HL7 v2 DTM
+hl7ToISO(parseDtm("20240115133015")); // the same string, from an HL7 v2 DTM
 ```
+
+The asymmetric `.value` is not a slip: what is shared across the packages is the three conversion names and their return shapes, never the decoders' own return shapes. `parseDateTime` here answers `{ value, nonstandardOffset }`, so the value comes out of the `.value` field, while `@cosyte/hl7`'s `parseDtm` answers its parts directly and is passed straight in. Read each package's decoder signature; then the conversion is the same call everywhere.
 
 ### Error Handling
 
