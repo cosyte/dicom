@@ -417,6 +417,168 @@ describe("phi-scan: --allow-fixture override (D-17)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// A target this run ENUMERATED and never OPENED withdraws the run's verdict
+// ---------------------------------------------------------------------------
+//
+// 🛑 THE SHAPE THAT COSTS THE MOST IS NOT THE OBVIOUS ONE, AND A FIXTURE THAT ONLY
+// SHOWS THE OBVIOUS ONE IS VACUOUS. Withdraw a target from a corpus that still has
+// another violator in it and the run exits with the hits code either way, which
+// says nothing. Withdraw the ONLY violator and the surviving targets report no
+// hits, so the same argv that means "excuse this one fixture" produces a run
+// indistinguishable from a clean sweep. Both corpora below are built, so the
+// assertions are about the RULE rather than about one arrangement of files.
+//
+// Every corpus is a throwaway directory OUTSIDE this repository, and that is
+// deliberate rather than incidental: the scanner roots itself at `process.cwd()`,
+// and planting a name-bearing payload under `test/` would put it in this gate's
+// own corpus, where it would be read by every other run in this suite.
+
+/**
+ * The one line whose removal removes the completeness rule, and nothing else.
+ *
+ * The mutation control below asserts the replacement LANDED before it grades
+ * anything, so a reworded rule makes the control fail as vacuous rather than
+ * quietly passing over a scanner it did not weaken.
+ */
+const COMPLETENESS_LINE = "const neverOpened = [...enumerated].filter((p) => !scanned.has(p));";
+
+interface ProbeCorpus {
+  /** Directory the scanner is run from, so it is the scanner's own repo root. */
+  root: string;
+  /** Repo-relative path of the name-bearing file. */
+  violator: string;
+  /** Repo-relative path of the clean file the bypass withdraws. */
+  decoy: string;
+}
+
+const probeRoots: string[] = [];
+
+/**
+ * Build a throwaway corpus: one name-bearing target, one clean target, and an
+ * override log that admits a bypass for the clean one.
+ *
+ * @param withScanner - When set, the scanner source to plant at
+ *   `scripts/phi-scan.ts`, which makes the corpus its own tree and lets a caller
+ *   run a MUTATED copy through exactly the path the shipped one takes.
+ */
+function makeProbeCorpus(withScanner?: string): ProbeCorpus {
+  const root = mkdtempSync(join(tmpdir(), "phi-scan-completeness-"));
+  probeRoots.push(root);
+  mkdirSync(join(root, "scripts"), { recursive: true });
+  copyFileSync(
+    join(REPO_ROOT, "scripts", "phi-allow-list.txt"),
+    join(root, "scripts", "phi-allow-list.txt"),
+  );
+  if (withScanner !== undefined) {
+    writeFileSync(join(root, "scripts", "phi-scan.ts"), withScanner, "utf8");
+  }
+  const violator = "probe-violator.txt";
+  const decoy = "probe-decoy.txt";
+  writeFileSync(join(root, violator), `PatientName: ${VIOLATOR_PN}\n`, "utf8");
+  writeFileSync(join(root, decoy), "nothing to see here\n", "utf8");
+  // BOTH paths are logged, because the log is what makes a bypass ADMISSIBLE and the
+  // cases below withdraw one or the other. A run still withdraws only what its own argv
+  // names, so a second entry here cannot make a case pass for the wrong reason.
+  const entry = (path: string): string =>
+    `### ${path}\n\n- **Date:** ${OVERRIDE_LOG_DATE}\n- **Reason:** unit test\n\n`;
+  writeFileSync(
+    join(root, "phi-scan-overrides.md"),
+    `# phi-scan bypass log\n\n## Entries\n\n${entry(violator)}${entry(decoy)}`,
+    "utf8",
+  );
+  return { root, violator, decoy };
+}
+
+afterAll(() => {
+  for (const root of probeRoots) rmSync(root, { recursive: true, force: true });
+});
+
+describe("phi-scan: a withdrawn target withholds the verdict (completeness)", () => {
+  it("refuses with a code that is neither 0 nor the hits code, and still prints the hit", () => {
+    const c = makeProbeCorpus();
+    const r = runRepoScript("phi-scan.ts", [c.violator, c.decoy, "--allow-fixture", c.decoy], {
+      cwd: c.root,
+    });
+    // Not 0: a scan that did not open a file has no clean verdict about it.
+    expect(r.code, `stderr: ${r.stderr}`).not.toBe(0);
+    // Not 1: "PHI is here" and "one target was withheld" are different sentences,
+    // and a caller that cannot tell them apart cannot act on either.
+    expect(r.code, `stderr: ${r.stderr}`).not.toBe(1);
+    expect(r.code).toBe(3);
+    expect(r.stderr).toContain("WITHHELD");
+    expect(r.stderr).toContain(c.decoy);
+    // The target it DID read is still reported in full. A refusal that swallowed the
+    // finding would trade one silent corpus for another.
+    expect(r.stderr).toContain(`HIT: ${c.violator}`);
+    expect(r.stderr).toContain(VIOLATOR_PN);
+  });
+
+  it("refuses even when the withdrawn target was the corpus's ONLY violator", () => {
+    const c = makeProbeCorpus();
+    // The violator is the one withdrawn here, so every target that was actually read
+    // is clean. On the pre-change scanner this run exited 0.
+    const r = runRepoScript("phi-scan.ts", [c.violator, c.decoy, "--allow-fixture", c.violator], {
+      cwd: c.root,
+    });
+    expect(r.code, `stderr: ${r.stderr}`).toBe(3);
+    expect(r.stderr).toContain(c.violator);
+    // Nothing was found, and the run says so, but the exit code no longer reads as clean.
+    expect(r.stdout).toContain("[phi-scan] OK - no hits");
+  });
+
+  it("leaves a run with NO bypass exactly as it was: hits reported at the hits code", () => {
+    const c = makeProbeCorpus();
+    const r = runRepoScript("phi-scan.ts", [c.violator, c.decoy], { cwd: c.root });
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    expect(r.stderr).not.toContain("WITHHELD");
+    expect(r.stderr).toContain(`HIT: ${c.violator}`);
+  });
+
+  it("leaves a clean run with NO bypass exactly as it was: no hits, exit 0", () => {
+    const c = makeProbeCorpus();
+    const r = runRepoScript("phi-scan.ts", [c.decoy], { cwd: c.root });
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+    expect(r.stderr).not.toContain("WITHHELD");
+  });
+
+  it("withholds nothing when the bypass names a path this run never enumerated", () => {
+    // 🛑 THE RULE IS "ENUMERATED AND NOT READ", NOT "A FLAG WAS PASSED", and this is
+    // the boundary. A bypass alone selects `paths` mode with an empty target list, so
+    // there is no target to withdraw and nothing to withhold. Reading the flag instead
+    // of the two sets would turn this run into a refusal it has no grounds for.
+    const c = makeProbeCorpus();
+    const r = runRepoScript("phi-scan.ts", ["--allow-fixture", c.decoy], { cwd: c.root });
+    expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+    expect(r.stderr).not.toContain("WITHHELD");
+  });
+
+  it("MUTATION CONTROL: deleting the rule puts the graded run back on the hits code", () => {
+    const shipped = readFileSync(SCANNER_PATH, "utf8");
+    // Vacuity guard first, in the shape `gradeProbeControls` uses: a control that
+    // cannot be applied is not a control that passed.
+    expect(
+      shipped.includes(COMPLETENESS_LINE),
+      `scripts/phi-scan.ts no longer contains the line this control removes (${COMPLETENESS_LINE}). ` +
+        "Re-derive it before trusting this test.",
+    ).toBe(true);
+    const weakened = shipped.replace(COMPLETENESS_LINE, "const neverOpened: string[] = [];");
+    expect(weakened).not.toBe(shipped);
+
+    const c = makeProbeCorpus(weakened);
+    const args = [c.violator, c.decoy, "--allow-fixture", c.decoy];
+    const mutated = runRepoScript("phi-scan.ts", args, { root: c.root });
+    // Without the rule the run reports only what it happened to read, which is the
+    // whole defect: the hits code over a corpus one of whose targets was never opened.
+    expect(mutated.code, `stderr: ${mutated.stderr}`).toBe(1);
+    expect(mutated.stderr).not.toContain("WITHHELD");
+
+    // Same corpus, same argv, shipped scanner: the verdict is withheld instead.
+    const intact = runRepoScript("phi-scan.ts", args, { cwd: c.root });
+    expect(intact.code, `stderr: ${intact.stderr}`).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Entries that are not regular files, on BOTH enumerating routes
 // ---------------------------------------------------------------------------
 //
