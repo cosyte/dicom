@@ -1,0 +1,8 @@
+# Install-time hardening. `packageManager` above pnpm@10.21.0 is what puts both keys in force:
+# an older pnpm ignores them, which is a settings file that decorates rather than defends.
+#
+# minimumReleaseAge: a package version younger than this many minutes is not installable, so a
+# compromised release has to survive a day of public scrutiny before it can reach this tree.
+# trustPolicy: `no-downgrade` refuses a resolution that moves a package backwards.
+minimumReleaseAge: 1440
+trustPolicy: no-downgrade

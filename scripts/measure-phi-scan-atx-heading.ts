@@ -40,9 +40,17 @@
  *    relation that is not `equal`. A detector that cannot fire is not a detector;
  * 4. 🩺 THE EXEMPTION CONTROL, which is what makes an "entry" mean something. An entry is measured
  *    here by whether `--allow-fixture` is ACCEPTED, and acceptance would be cheap to fake. So one
- *    log is run twice over a target holding a synthetic `PN` the gate hits on: with the flag it
- *    must exit 0 and with the same bytes and no flag it must exit 1. A run that could not produce
- *    that pair is measuring flag validation and not exemption, and reports nothing.
+ *    log is run twice over a target holding a synthetic `PN` the gate hits on: with the flag the
+ *    target must not be REPORTED ON, and with the same bytes and no flag it must exit 1. A run
+ *    that could not produce that pair is measuring flag validation and not exemption, and reports
+ *    nothing.
+ *
+ *    🛑 "NOT REPORTED ON" IS TWO CODES, NOT ONE, AND THE CONTROL IS WRITTEN OVER BOTH SO IT STILL
+ *    RUNS AGAINST A BASE TREE. A scanner that withdraws the target and reports clean exits 0; one
+ *    that withdraws it and WITHHOLDS its verdict exits 3. Either answer proves the log entry
+ *    exempted the target, which is the only thing this control measures. What it must never accept
+ *    is 1 (the target was read and hit anyway, so nothing was exempted) or 2 (the flag was refused
+ *    as unlogged, so the parser never produced the entry at all).
  *
  * ## Running it
  *
@@ -247,8 +255,9 @@ function assertIsPhiScan(script: string): void {
  *
  * Every other figure here reads acceptance of `--allow-fixture` as "the parser produced the entry".
  * That is one inference away from what matters, so this closes it on a real target: the same bytes
- * are scanned twice, and the pair must be exit 0 with the flag against exit 1 without it. A script
- * that exited 0 on both would be finding no PHI at all, and its acceptances would mean nothing.
+ * are scanned twice, and with the flag the target must not be reported on (exit 0 or exit 3, see
+ * the header) against exit 1 without it. A script that exited 0 on both would be finding no PHI at
+ * all, and its acceptances would mean nothing.
  */
 function assertEntryExempts(script: string): void {
   const target = "exemption-control";
@@ -261,11 +270,12 @@ function assertEntryExempts(script: string): void {
   const root = makeRepo(log);
   const exempted = run(script, ["--allow-fixture", target, target], root);
   const bare = run(script, [target], root);
-  if (exempted.code !== 0 || bare.code !== 1) {
+  const withdrawn = exempted.code === 0 || exempted.code === 3;
+  if (!withdrawn || bare.code !== 1) {
     throw new Error(
       `EXEMPTION CONTROL FAILED for ${script}: with the flag exit ${String(exempted.code)} ` +
-        `(expected 0), without it exit ${String(bare.code)} (expected 1). An accepted flag is ` +
-        `only evidence of an exemption if the same bytes are a hit without it.`,
+        `(expected 0 or 3), without it exit ${String(bare.code)} (expected 1). An accepted flag ` +
+        `is only evidence of an exemption if the same bytes are a hit without it.`,
     );
   }
 }
