@@ -1,5 +1,368 @@
 # Changelog
 
+## 0.1.0
+
+### Minor Changes
+
+- 372bacd: Remove a retained private value this run did not enumerate, instead of shipping it under
+  `(0012,0062) = YES`.
+
+  `RetainSafePrivate` plus a `Profile` used to write private values into de-identified output that the
+  run never looked inside. `0.0.19` disclosed that (`DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE` plus
+  a `report.unauditableSequences` entry stamped as kept) and said outright that the disclosure was not
+  a fix. It is fixed now: PS3.15 2026c §E.3.10 retains Private Attributes "known by the de-identifier
+  to be safe from identity leakage" and sends "all other Private Attributes" to removal or to the
+  `(0008,0307)` action this library does not implement, so a value nothing enumerated is removed.
+
+  **The over-redaction is the point rather than a corner case, and this is the size of it.** After this
+  release exactly three classes of private value reach the output: one the run **walked as Data
+  Elements** and put through the Annex E action table (a private `SQ` whose items the parser
+  materialized), a **Private Creator `(gggg,00EE)` whose whole decoded value is a member of your
+  profile's private dictionary**, and a **zero-length** value. Decoding a value under the VR your
+  profile declares for it is not enumeration, and neither is the embedded-attribute scanner's silence,
+  so **an ordinary vendor scalar under an ordinary string VR is removed**. If you carried opaque
+  vendor values through `RetainSafePrivate`, they are gone; getting them back needs the content test
+  that separates a nested Data Set from a legitimate binary blob, which is an open product question.
+
+  **Three things to act on if you consume the audit surfaces.**
+  1. **New report surface.** `report.unenumerablePrivateRemovals` records each removal per instance:
+     the tag, the Data Set it lived in, `applied: "removed"` and `reason: "unenumerable"`. It is
+     complete and **never capped** at any input size, which is what lets you separate an unenumerable
+     removal from an Annex E one and from an emptied value; the matching warnings stay bounded.
+     `report.removedPrivateTags` names these removals too, unchanged in meaning.
+  2. **`report.unauditableSequences` no longer produces its retired `kept` outcome** for a retained
+     private value. Its `applied` field was `"emptied" | "kept"` and is `"emptied"` alone now, so an
+     entry there means content is not in your output again. A comparison against the retired outcome
+     stops compiling, which is the intended way to find out.
+  3. **`DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE` changes meaning**, from "this value was shipped
+     unexamined" to "this attribute was removed unexamined". **The published warning-code SET is
+     unchanged** - no code is added, removed or renamed by this work - so a consumer narrowing on that
+     code name keeps compiling and must re-read what it now means rather than re-type it.
+
+  The measured matrix in `test/integration/deident-private-reservation.test.ts` flips its twenty
+  leaking cells from kept-verbatim to removed, on every combination of profile-declared VR and on-wire
+  VR it enumerates and on the VR-less Implicit VR LE encoding, and gains a mutation control that reds
+  if the retention decision is reverted.
+
+- 460d9f1: Add `toObject`, `toISO` and `toDate`, one conversion surface over the decoded `DA`, `TM` and `DT`
+  values, so reading a timestamp out of an object no longer means writing a per-type projection at
+  every call site.
+
+  `parseDate`, `parseTime` and `parseDateTime` decode three separate wire syntaxes into three separate
+  shapes. The three new functions take any of them and answer in one shape: the calendar components,
+  an ISO-8601 string, or an absolute-instant `Date`. `DateParts` and `ToDateOptions` are exported
+  beside them. Nothing existing moves: the decoders, their `legacy` and `nonstandardOffset` flags and
+  `DicomDate` / `DicomTime` / `DicomDateTime` are all unchanged, and the package still takes no
+  dependency of any kind.
+
+  The same three names, with the same meanings, are exported by every `@cosyte/*` parser that decodes
+  a date, so they collide on import by design. A file that reads two of them aliases
+  (`import { toISO as dicomToISO } from "@cosyte/dicom"`) or namespace-imports; `README.md` and the
+  typed-values page both show the pattern.
+
+  Four decisions in the surface are worth knowing before you depend on it.
+  - **The key set is the precision.** A component the value did not state is absent from `DateParts`
+    rather than present and `undefined`, and nothing is zero-filled, so `Object.keys()` recovers what
+    the sender wrote. There is no `precision` key because the key set is one, and no `raw` or `valid`
+    key because parse bookkeeping is not a calendar component. `toISO` truncates the same way: a `DT`
+    that stated only an hour renders `2024-01-15T13`, never a padded-out `T13:00:00`.
+  - **The keys are singular where the decoded types are plural.** `DicomTime` and `DicomDateTime`
+    spell the time fields `hours` / `minutes` / `seconds`; `DateParts` spells them `hour` / `minute` /
+    `second`, and `month` is 1 to 12 rather than the JS `Date` 0 to 11. That is the shape
+    `Temporal.PlainDateTime.from` and luxon's `DateTime.fromObject` accept, so deleting
+    `offsetMinutes` leaves an object either constructor takes with no key rename.
+  - **`toDate` never guesses a zone.** A stated `&ZZXX` offset converts exactly and beats any
+    `assumeOffsetMinutes` the caller passes. With no stated offset, the caller's assumption is the
+    only route to an instant, an explicit `0` meaning "read this naive value as UTC". With neither,
+    the answer is `undefined`: the host machine's zone is never read and UTC is never assumed. A
+    non-finite `assumeOffsetMinutes` names no zone either, so it answers `undefined` rather than an
+    `Invalid Date`, and so does a finite one so large that applying it leaves the range a `Date`
+    represents. A `TM` states no year, so it is never an instant at all.
+  - **An impossible date converts to nothing, never to the day after it.** The decoders range-check
+    each component on its own, so a `DA` of `18700230` decodes with `valid: true` and `day: 30`. The
+    conversion surface reads them together and refuses the whole value: a month outside 1 to 12, a day
+    outside the one its month really has (full 4/100/400 leap rule), an out-of-range hour, minute or
+    second, or a component that is not a whole number. `second: 60` is refused with them, even though
+    `TM` and `DT` permit it for a leap second, because there is no ISO string for it a reader does not
+    move and no instant to build. The refusal is in the projection only: `parseDate`, `parseTime` and
+    `parseDateTime` are unchanged and still report what the sender wrote.
+
+  `millisecond` is derived from the digits in `raw`, taken verbatim and right-padded (`"5"` is 500,
+  `"0500"` is 50, `"123456"` is 123), and never from `fractionalSeconds`, which is a binary float.
+  `toISO` renders those digits exactly as written, neither padded to three nor rounded. A stated zero
+  offset renders `Z`, so `toISO` is deliberately not a byte round-trip of the wire value;
+  `serializeDicom` remains the route that reproduces the original bytes.
+
+  The retired dotted `YYYY.MM.DD` date converts identically to the canonical form, and the `legacy`
+  flag the decoder reports beside the value never reaches a result. All three functions answer
+  `undefined` for a value the decoders marked `valid: false`, for `null` and `undefined`, and for a
+  value that stated no component at all, and none of them throws for any input.
+
+- 15c4fea: Stop the de-identified header naming the sending site: replace the File Meta group and remove group 0004.
+
+  Two of PS3.15 2026c §E.1.1's unconditional bullets are about the parts of a DICOM File that are not
+  the Data Set, and neither was discharged. A file this library de-identified still carried the sending
+  site's `(0002,0016)` Source Application Entity Title, the source vendor's implementation identity,
+  every non-modeled `(0002,xxxx)` element the source stuffed into the group - Sending and Receiving AE
+  Title, Private Information Creator UID, Private Information - and every `(0004,xxxx)` Data Element,
+  all under a report that said the run succeeded. `rebuildFileMeta` changed exactly one field, the
+  Media Storage SOP Instance UID, and nothing anywhere filtered on group 0004.
+
+  **The File Meta group of de-identified output now describes this de-identifying application.**
+  §E.1.1: the File Meta Information "shall be replaced with a description of the de-identifying
+  application", because otherwise "identity information may leak through unmodified File Meta
+  Information or preamble ... includ[ing] information regarding Application Entity Titles, Presentation
+  Addresses, implementation information, and private information". So `(0002,0016)` is gone,
+  `(0002,0012)`/`(0002,0013)` name `@cosyte/dicom`, and every non-modeled `(0002,xxxx)` element is
+  dropped rather than re-emitted. What survives identifies the **object**: File Meta Information
+  Version, Media Storage SOP Class UID, Transfer Syntax UID, and the Media Storage SOP Instance UID
+  with its existing `RetainUIDs` behaviour unchanged. The replacement is a construction rather than an
+  edit, so it is unconditional on how well the source group parsed and on which Options are active.
+
+  **Group 0004 is removed at every depth**, as §E.1.1 requires "from any SOP Instance or DICOM File
+  other than a DICOMDIR File" - including inside Sequence Items, and including a `(0004,xxxx)` Sequence
+  with everything in it. No Annex E Option qualifies either rule.
+
+  **Two things to act on.**
+  1. **The byte-for-byte File Meta round trip no longer holds for `deidentify()` output**, and that is
+     the point rather than a side effect. It still holds for parse-then-serialize, which is guarded by
+     its own test. If you relied on a non-modeled `(0002,xxxx)` element surviving a de-identify call,
+     read it off the parsed dataset before the call; it is not recoverable from the output.
+  2. **New report surface and three new warning codes.** `report.fileMetaElementsDropped` and
+     `report.group0004Removals` record what went, each capped per run in the style of
+     `MAX_UNAUDITABLE_SEQUENCE_FINDINGS`, each beside an uncapped
+     `...Count` so a caller can count the loss at any input size and tell the two rules apart.
+     `DICOM_DEIDENT_FILE_META_REPLACED` and `DICOM_DEIDENT_GROUP_0004_REMOVED` are raised once per run,
+     not once per element, so neither string is multiplied by an element count the input chooses.
+
+  **A DICOMDIR keeps its `(0004,xxxx)` elements and is told what was not discharged.** An object whose
+  `(0002,0002)` is `1.2.840.10008.1.3.10` takes §E.1.1's carve-out. The rest of that bullet needs a
+  DICOMDIR model this library does not have, so every such run raises
+  `DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED` - including one where the object carried no
+  `(0004,xxxx)` element at all, because what was not discharged has nothing to do with what the object
+  happened to carry. Do not treat that output as a conformant de-identified DICOMDIR.
+
+- b8fd5ae: Disclose a retained private value this run kept without enumerating it, instead of stamping
+  `Patient Identity Removed = YES` in silence over it.
+
+  `RetainSafePrivate` plus a `Profile` is the only route in the package that writes a private value
+  into de-identified output. PS3.15 2026c §E.3.10 licenses that retention for a Private _Attribute_
+  "known by the de-identifier to be safe"; it says nothing about a Data Set the sender nested inside
+  that attribute's value, which PS3.5 §7.5.1 makes Data Elements and PS3.15 §E.1.1 still covers
+  "whether contained in the top level Data Set or embedded in an Item of a Sequence of Items". Where
+  the run neither walked that value nor emptied it, the obligation went undischarged and nothing said
+  so: on a **fully conformant** file, on 20 of the 30 cells of the matrix in
+  `test/integration/deident-private-reservation.test.ts`, a nested `(0010,0010)` reached the output
+  byte-verbatim with `ds.warnings` empty and `report.unauditableSequences` empty. Every one of those
+  cells now raises `DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE` on `report.warnings` and adds a
+  `report.unauditableSequences` entry.
+
+  **The value is still kept, and that is a product decision rather than an unfinished one.** Emptying
+  these carriers needs a content test on exactly the VRs arbitrary bytes are for, so it also empties
+  conformant binary values on legitimate files; the leak stays a documented limit, and what changed is
+  that it is a disclosed one. Nothing about how any file is read or written changes.
+
+  `UnauditableSequenceFinding` gains `applied: "emptied" | "kept"`, and it is the field to read first:
+  that array had one meaning for its whole life - this content is _not_ in your output - and the new
+  class means the opposite. The two are budgeted on separate counters against the same cap, so a
+  crafted file carrying tens of thousands of retained private attributes cannot spend the budget that
+  reports dropped content and silence it. The new message names no byte count, because
+  `Element.rawBytes.length` is the Value Length off a header an under-declared length upstream may
+  have composed out of somebody's value - the bound `#91` took out of the two sibling factories - and
+  the private tag it does name renders `<withheld>` through `renderTag`'s membership test.
+
+  A Private Creator is deliberately not reported: it is retained only when its whole decoded value is
+  a member of the profile's private dictionary, which is an enumeration, and one carrying anything
+  else fails that lookup and is removed.
+
+- 9defcde: Write `(0028,0303) Longitudinal Temporal Information Modified` on every `deidentify()` run, so a
+  de-identified object says what happened to its dates instead of leaving a recipient to guess.
+
+  PS3.15 2026c §E.2 requires the attribute with a Value of `REMOVED` "if none of the Retain
+  Longitudinal Temporal Information Options is applied", and §E.3.6 requires `UNMODIFIED` under the
+  Full Dates Option. This package wrote it in neither state through `0.0.19`, so a receiver reading
+  dates could not tell real ones from scrubbed ones - and guessing wrong hurts in both directions:
+  treating real dates as scrubbed under-protects the patient, and treating scrubbed dates as real
+  corrupts a longitudinal analysis. Both states are written now.
+  - **`REMOVED`** on a run with no Retain Longitudinal Temporal Information Option active, which is the
+    default.
+  - **`UNMODIFIED`** on a run with `RetainLongitudinalTemporal` active, which is this package's name
+    for §E.3.6's Full Dates Option.
+
+  **It is REPLACED rather than added to.** The attribute is `VM 1` and both clauses say the value
+  "shall be added to the Data Set with a Value of" one named state, so a `(0028,0303)` the source file
+  already carried is discarded - including one under another VR or holding a value the standard does
+  not define. That is the opposite of what `(0012,0063)` does with a prior method text, and the
+  asymmetry is the standard's: joining two temporal states into one single-valued attribute would leave
+  a recipient reading a state no run produced. Re-de-identifying an object always leaves exactly one
+  `(0028,0303)`, holding the latest run's state.
+
+  **The third state, `MODIFIED`, is never produced by this library, on any option set.** §E.3.6 defines
+  it for the With Modified Dates Option, and it asserts both that the run resolved Table E.1-1's
+  modified-dates column and that the object's dates were aggregated or transformed. This package
+  exposes one temporal option name carrying the full-dates column, and it transforms no dates, so
+  writing `MODIFIED` would be a claim about work nobody did in an attribute a recipient cannot
+  re-derive. If you shift dates yourself after the call, the `UNMODIFIED` in your output is wrong for
+  your object: overwrite it, and describe the manner of modification in your Conformance Statement as
+  §E.3.6 requires.
+
+  Nothing else moves. `(0012,0062)` and `(0012,0063)` are unchanged, the published warning-code set is
+  unchanged, no warning code is added or retired, and `DeidentifyReport` keeps its shape - like
+  `(0012,0062)`, this is a statement the object makes about itself and it is not reported there. The
+  declaration is written into the **top-level** Data Set only, which is where §E.2 and §E.3.6 put it;
+  `(0028,0303)` has no row in Table E.1-1, so a copy nested in a Sequence Item is retained by omission
+  like every other unlisted attribute and still says whatever the sender wrote.
+
+### Patch Changes
+
+- 94069e8: Model CommonMark's HTML blocks in the PHI gate's override log, so a comment cannot exempt a scan
+  target.
+
+  `scripts/phi-scan.ts` refuses a `--allow-fixture <path>` bypass unless `phi-scan-overrides.md`
+  carries a `### <path>` heading, and its block structure was fenced code blocks and nothing else. A
+  fenced block shows its contents to a reviewer; an HTML comment shows nothing at all, so a heading
+  written inside `<!-- -->` was a live allow entry that exempted its target at exit 0 while the
+  rendered log looked empty. `overrideLogPaths` now models CommonMark 0.31.2 section 4.6's HTML
+  blocks, start conditions 1 to 6 and their end conditions, and ignores fences and headings inside
+  one exactly as section 4.6 requires.
+
+  Start condition 7 is deliberately out of scope, and its cost is measured in both directions rather
+  than assumed: it needs a complete tag AND the knowledge that the line does not interrupt a
+  paragraph, which is paragraph state this parser does not have. A heading under `<span>` on its own
+  line is still a live entry here where CommonMark hides it; after a paragraph line, where condition
+  7 cannot fire, the two agree. Both arms are pinned by tests.
+
+  No direction is claimed. A block boundary is parity, and on a log carrying an odd number of fence
+  delimiters inside a comment the two readings' entry sets are disjoint and both non-empty, each
+  exempting at exit 0 a target the other refuses at exit 2. The tag lists section 4.6 closes over are
+  read out of the vendored spec and driven name by name through the `--allow-fixture` membership
+  oracle, so the tables are checked against the document rather than against whoever typed them, and
+  no count of either is written anywhere. `scripts/measure-phi-scan-html-blocks.ts` ships beside the
+  change so the figures can be re-run against any tree.
+
+- c3f5484: Gate the public surface against internal project bookkeeping, and sweep the tree it would have failed.
+
+  `no-internal-refs.yml` and `scripts/check-no-internal-refs.ts` enforce the founder directive of
+  2026-07-27 on every surface a consumer of `@cosyte/dicom` reads: the published markdown at the
+  repository root, `docs-content/`, the npm `description` and `keywords`, and all of `src/`. Work-item
+  and plan ids, phase and wave language, roadmap and plan citations, ADR numbers, meta-repo paths and
+  commentary about how the work is being run are findings; `CHANGELOG.md`, `.changeset/`, commit
+  messages, pull request text, `test/`, `.github/` and this repository's agent-context docs are
+  excluded, because those are the surfaces the identifiers belong on.
+
+  The gate self-tests before it reports: every rule has to match its own positive sample, a DICOM
+  reference corpus (`PS3.6`, `(0010,0010)`, `PN`, `UI`, `DICOM-SR`, `1.2.840.10008.1.2.1`,
+  `ICD-10-CM`, `CP-246`, `MRN-42` and the rest) has to survive every rule untouched, and the scope
+  function has to classify a fixed list of paths the way the rule says. It refuses to print a result
+  from a scan that read nothing, from a declared surface that selects no tracked file, or from a file
+  in scope it could not read or could not decode as UTF-8. There is no list of excused occurrences and
+  there must not be one.
+
+  The sweep is the other half, and it is why this is a `patch` rather than a chore: 530 findings, 526
+  of them in `src/` comment blocks that `tsup` copies verbatim into the published `dist/index.d.ts` and
+  `dist/index.d.cts`, against 4 in markdown anyone reviews. Comment and documentation TEXT is rewritten
+  and nothing else: no exported symbol, signature, message string or runtime behaviour changes, and the
+  build, the type declarations' shape, the lint ladder and all 1,586 tests are unchanged.
+
+- 734736f: Claim the PHI gate's `CRLF` line split, and delete the disclosure that said it could not be claimed.
+
+  `#113` shipped `scripts/phi-scan.ts`'s `splitLines` with a disclosure that its `CRLF` half was
+  unobservable through either caller and claimed by no test, because `loadAllowList` trims and
+  `tripleHashValue` trims. Both premises are true and the conclusion is false: `overrideLogPaths`
+  hands the RAW line to `fenceRun` before anything trims it, and a closing fence run is `bare` only
+  when it is followed by spaces or tabs (CommonMark 0.31.2 section 4.5). On an override log written
+  with `CRLF`, a `CR`-blind split therefore leaves a `CR` after the closing run, the run reads as an
+  info string rather than as a close, the block never ends, and every entry below it is dropped.
+
+  Measured on one log carrying a fenced template and two live entries below it: the shipped script
+  exits 0 with both entries honoured, a `CR`-blind mutant exits 2 having dropped both, and with the
+  same log written `LF` the two agree. Both `--allow-fixture` directions are asked on each arm, so a
+  parser that made everything below an entry fails it too.
+
+  No direction is claimed for that mutant. A draft called it fail-closed, on the grounds that a `CR`
+  can only prevent a close and never cause one; the gate falsified that with an input, and it is
+  deleted rather than narrowed. On a log whose lines are `CRLF` except one opening fence the two
+  entry sets are disjoint rather than nested, and the mutant exempts at exit 0 a target the shipped
+  script refuses at exit 2. Fence state is parity, so a wrong answer moves entries in both directions.
+
+  The behaviour was already correct and is unchanged: comment-stripped, `scripts/phi-scan.ts` is
+  byte-identical on base and head. What changed is that four carriers of the false disclosure inside
+  this package are corrected.
+
+  The mutation figure that stood here is DELETED rather than restated: a later change in this same
+  release moved `overrideLogPaths` onto its own CommonMark splitter, so the `CR`-blind mutant of
+  `splitLines` no longer reds anything, and both changesets land in one generated `CHANGELOG.md`.
+
+- 09de547: Refuse a `###` run an invisible character separates from the path, in the PHI gate's override log.
+
+  `scripts/phi-scan.ts` refuses a `--allow-fixture <path>` bypass unless `phi-scan-overrides.md`
+  carries a `### <path>` heading. `tripleHashValue` separated the `###` run from the path with the
+  whole of `\s`, where CommonMark 0.31.2 section 4.2 says the opening run "must be followed by spaces
+  or tabs, or by the end of line". So a line whose separator was an invisible character was a live
+  allow entry where the document renders a paragraph, and that target was exempted at exit 0. Measured
+  live on three trees before the change, each against the same bytes without the flag, which exit 1.
+
+  It is one conjunct on the pattern the function replaced, so for every line the parser returns either
+  that pattern's answer or nothing: no line that was not already an entry becomes one, and every
+  difference is a refusal at exit 2. That is a property of the source rather than one a test can
+  prove, and it is left as one: the evidence beside it is the comment-stripped diff, a single added
+  early return, and the per-log relation the shipped instrument prints against a base, which reads as
+  a subset on the one log the two trees differ on.
+
+  Section 4.2's strip is deliberately NOT taken, and that is measured rather than assumed: the prose
+  says leading and trailing spaces or tabs, and `commonmark@0.31.2`, the reference implementation of
+  the pinned document version, strips with `String.prototype.trim`, which is the whole of `\s` and is
+  what this parser does. A draft that took the prose named `path<NBSP>` where this parser names
+  `path`, which exempted at exit 0 a target it refuses at exit 2, and it was deleted. The strip,
+  section 4.2's optional closing sequence and its inline parsing are each pinned as they are, with
+  their cost stated in both directions.
+
+  `scripts/measure-phi-scan-atx-heading.ts` ships beside the change so the figures can be re-run
+  against any tree. It carries a control the sibling instruments do not: an entry must be shown to
+  exempt a real hit, not merely to be accepted.
+
+- 5e7a823: Withhold the PHI gate's verdict over a target it enumerated and never opened, and put the install
+  hardening the estate baseline asks for actually in force.
+
+  `scripts/phi-scan.ts` filters an `--allow-fixture` target out of the run after enumerating it, and
+  until now the run then reported on whatever was left as if that were the whole corpus. The shape
+  that costs the most is not the obvious one: withdraw the ONLY violator and every surviving target is
+  clean, so the same argv that means "excuse this one fixture" produced a run indistinguishable from a
+  clean sweep. The scanner now tracks the paths a run declared against the paths it read, and a
+  non-empty difference exits **3** with a `WITHHELD:` line naming each path, after printing the hit
+  detail for everything it did read.
+
+  3 rather than 1 or 2, and each is a different sentence. 1 says "PHI is here", and overloading it
+  would make a bypass look like a finding and a finding look like a bypass. 2 says "the scan never
+  ran" and is what an UNLOGGED `--allow-fixture` already returns, having opened nothing; a withheld
+  run opened every other target and its hit lines are real. The rule is computed off the two sets
+  rather than off the flag, so the boundary is "enumerated and not read": a bypass naming a path this
+  run never enumerated withdraws nothing and still exits 0.
+
+  Every path with no bypass on it is byte-for-byte unchanged, which is the property the pre-commit
+  hook and CI depend on: `pnpm measure:phi-scan-unread` against the pre-change scanner reports
+  `violations: 0` over 195 cells, identical exit codes and an identical hit-line multiset. The new
+  suite coverage carries a mutation control that removes the rule from a planted copy and asserts the
+  graded run falls back to the hits code, and refuses as vacuous if the line it removes is ever
+  reworded.
+
+  `package.json` gains the `js-yaml@>=4.0.0 <4.3.0` override the shared baseline requires, ordered so
+  the stronger `<4.3.1` pin this repo already carried is the one that applies; no resolved version
+  moves. `pnpm-workspace.yaml` declares `minimumReleaseAge: 1440` and `trustPolicy: no-downgrade`, and
+  `packageManager` moves to `pnpm@10.34.5` because a pnpm below `10.21.0` ignores those keys entirely,
+  which is a settings file that decorates rather than defends.
+
+- 8139687: Parse the PHI gate's override log with CommonMark's line ending, and pin the spec that says so.
+
+  A lone `CR` in `phi-scan-overrides.md` hid a fence OPENER from the gate's line split, so a
+  `### <path>` a human sees inside a rendered code block was a live allow entry and `--allow-fixture`
+  exempted that PHI scan target at exit 0. `overrideLogPaths` now splits per CommonMark 0.31.2 section
+  2.1; the allow list keeps `/\r?\n/` deliberately, because `scripts/phi-allow-list.txt` is not a
+  markdown document. No direction is claimed for either split, on the override log or on the allow
+  list: each has a measured input whose two entry sets are disjoint, so neither is the conservative
+  one. The spec is vendored under `vendor/commonmark/` and re-hashed
+  as a precondition, so the section numbers the gate cites are derived rather than asserted.
+
 ## 0.0.19
 
 ### Patch Changes
