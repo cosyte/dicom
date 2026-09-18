@@ -1500,7 +1500,7 @@ export function deidentMethodNotLo(position: DicomPosition): DicomParseWarning {
  * **It is not on `report.retained`, deliberately.** That field is the list of
  * Annex E option sets active for the run, typed `DeidentifyOption[]`; a retained
  * `(0012,0063)` is not an option set, and widening the type to carry it would
- * break every consumer that switches over the nine names.
+ * break every consumer that switches over the published option names.
  *
  * **No value, no length, no VR** - the retained text is the file's own, and the
  * tag in the message is a constant of this code rather than composed from input,

@@ -1038,9 +1038,10 @@ export interface DeidentifyOptions {
    * fix rather than a style choice.** PS3.5 2026c Table 6.2-1 caps an `LO` at
    * **64 characters per Value**, and `(0012,0063)` is `1-n`; the single-value
    * default this replaced measured 76 characters with no options and 272 with
-   * all nine, so every run this library ever made wrote a value no `LO` may
-   * legally carry. The Profile name is now one Value of 61 characters and each
-   * active option is its own, so no option subset can exceed the maximum.
+   * every option name published at that time, so every run this library ever
+   * made wrote a value no `LO` may legally carry. The Profile name is now one
+   * Value of 61 characters and each active option is its own, so no option
+   * subset can exceed the maximum.
    *
    * **Your string is not bounded here, but it is no longer silent.** A value of
    * your own longer than 64 characters is written through as given - it is

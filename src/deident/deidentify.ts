@@ -2073,17 +2073,18 @@ const DEFAULT_METHOD_PROFILE = "@cosyte/dicom Basic Application Level Confidenti
  * row describes a **Value**; `(0012,0063)` is `1-n`, so the bound falls on each
  * value and not on the Value Field. The single-value string this replaced
  * measured **76** characters with no options, **130** with `RetainUIDs +
- * RetainSafePrivate + RetainDeviceIdentity` and **272** with all nine - every
- * one of the 512 option subsets over the maximum, on every file, in a value this
- * library wrote itself. A receiver that enforces the VR rejects it, and the
- * attribute it rejects is the one carrying the de-identification provenance.
+ * RetainSafePrivate + RetainDeviceIdentity` and **272** with every option name
+ * published at that time - every one of those option subsets over the maximum,
+ * on every file, in a value this library wrote itself. A receiver that enforces
+ * the VR rejects it, and the attribute it rejects is the one carrying the
+ * de-identification provenance.
  *
  * Split per option rather than shortened, because shortening only moves the
- * ceiling: nine option names in one value cannot fit 64 characters however they
- * are abbreviated, and `1-n` is what the standard provides for exactly this.
- * Each name is 28 characters at most (`RetainPatientCharacteristics`), so no
- * subset can produce a value over the maximum - proved by sweeping all 512
- * subsets rather than by argument.
+ * ceiling: the published option names in one value cannot fit 64 characters
+ * however they are abbreviated, and `1-n` is what the standard provides for
+ * exactly this. Every name is inside the per-Value maximum on its own, so no
+ * subset can produce a value over it - proved by sweeping the whole legal
+ * domain of `retain` rather than by argument.
  *
  * **The options are emitted in {@link DEIDENTIFY_OPTIONS} order, not in the
  * caller's**, so two runs that activate the same set write the same bytes
@@ -2147,7 +2148,7 @@ const LO_VALUE_MAX_CHARS = 64;
  *
  * 🩺 **THIS IS A DISCLOSURE, NOT A BOUND. NOTHING IS SHORTENED, SPLIT OR
  * TRUNCATED BY IT.** The text {@link defaultMethod} composes is inside the
- * maximum on all 512 option subsets. The two Values this library does not
+ * maximum on every option subset a call may legally carry. The two Values this library does not
  * compose can be over, and both are still written through as given, because
  * splitting or truncating either would invent a de-identification record nobody
  * made: a caller's `deidentificationMethod`, and a value the source file already
@@ -2607,8 +2608,8 @@ export function deidentify(
   // over the maximum, a prior value the source file wrote over it and kept here,
   // and the replacement fallbacks, which write `added`. It is additive - no
   // existing code stops firing because of it - and it never fires on the text
-  // this library composes for itself, which is proved by sweeping all 512 option
-  // subsets rather than argued.
+  // this library composes for itself, which is proved by sweeping every option
+  // subset a call may legally carry rather than argued.
   if (hasValueOverLoMaximum(deidentMethod.value)) {
     warnings.push(
       deidentMethodValueOverLength({ byteOffset: priorMethod?.byteOffset ?? 0, fileMeta: false }),

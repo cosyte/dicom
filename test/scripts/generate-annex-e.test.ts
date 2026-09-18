@@ -347,7 +347,9 @@ describe("generate-annex-e", () => {
           expect(cells).toHaveLength(15);
           const renamed = cells
             .map((cell, i) =>
-              i === MODIFIED_DATES_COLUMN ? "<th><para>Rtn. Long. Aggr. Dates Opt.</para></th>" : cell,
+              i === MODIFIED_DATES_COLUMN
+                ? "<th><para>Rtn. Long. Aggr. Dates Opt.</para></th>"
+                : cell,
             )
             .join("");
           return xml.replace(thead, `<thead>${renamed}</thead>`);

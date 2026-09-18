@@ -19,7 +19,7 @@ in the same area: open the section first.**
 
 ## Status
 
-- **Phases 4-7 of 8 shipped**: VR value decode, `Dataset`/`Item` navigation, safety-critical domain helpers, the spec-clean Part 10 serializer, the source/vendor profile system, and metadata-level de-identification (PS3.15 Annex E Basic Profile + the nine metadata-affecting Options). Surfaces, scope limits and the known serializer limitation:
+- **Phases 4-7 of 8 shipped**: VR value decode, `Dataset`/`Item` navigation, safety-critical domain helpers, the spec-clean Part 10 serializer, the source/vendor profile system, and metadata-level de-identification (PS3.15 Annex E Basic Profile + the metadata-affecting Options). Surfaces, scope limits and the known serializer limitation:
   [#shipped-phases-4-through-7-of-8](documentation/agent-notes.md#shipped-phases-4-through-7-of-8)
 - Published on npm on the **`0.0.x`-until-first-alpha** ladder. **Never quote a version in this file**: `npm view @cosyte/dicom version` is the only source of truth, ADR 0023 carries the measured history of why, and no numeral belongs in this bullet.
 - **🛑 A "N OF M TESTS RUN RED ON BASE" FIGURE HAS A MOVING BASE AND IS NOT A FACT.** Quote one only with its sha, re-run it after every test you add **or strengthen**, and **replace `src/` rather than overlaying it**.
@@ -160,7 +160,7 @@ dicom inherits the canonical toolchain by depending on the published `@cosyte/*`
   [#dicom-item-eject-route](documentation/agent-notes.md#dicom-item-eject-route)
 - **Over-redaction is a PRODUCT call with its own item (`DICOM-DEIDENT-OVER-REDACTION`), not a bug fix.** Dropping the repertoire conjunct for binary VRs, or widening `embedded.ts`'s tiling scanner to unrecognized VRs, empties conformant values. Do not take either as a side effect.
   [#dicom-carrier-leaf-leaks](documentation/agent-notes.md#dicom-carrier-leaf-leaks) · [#dicom-unrecognized-vr-short-form](documentation/agent-notes.md#dicom-unrecognized-vr-short-form)
-- **`RetainLongitudinalTemporal` collapses PS3.15's two E.3.6 date columns onto the LESS PROTECTIVE branch.** Printed every run and stated in the JSDoc; splitting the option is a public-surface change deliberately not made.
+- **PS3.15's two E.3.6 date columns are two MUTUALLY EXCLUSIVE option names now, and `RetainLongitudinalTemporal` still means FULL dates, the LESS PROTECTIVE branch.** `MODIFIED` asserts a date transformation this library performs on nothing: the CALLER does it, disclosed per run by `DICOM_DEIDENT_DATES_NOT_TRANSFORMED`. **Never write the divergence COUNT into prose** - the generator prints it.
   [#the-ps315-annex-e-action-table-generator](documentation/agent-notes.md#the-ps315-annex-e-action-table-generator)
 - **`UN` is untouched by the undefined-VR rule and that is the whole line.** Widening it to "unknown to the dictionary" would empty every `UN` in every file.
   [#dicom-carrier-leaf-leaks](documentation/agent-notes.md#dicom-carrier-leaf-leaks)

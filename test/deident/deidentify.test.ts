@@ -309,9 +309,9 @@ describe("PS3.15 E.3.6: the two Retain Longitudinal Temporal Options are mutuall
     // columns and different `(0028,0303)` Values, so honouring both would mean
     // picking one silently and stamping the object with a declaration the caller
     // did not choose.
-    expect(() =>
-      deidentify(buildPhiDataset(), { retain: [FULL_DATES, MODIFIED_DATES] }),
-    ).toThrow(DeidentifyError);
+    expect(() => deidentify(buildPhiDataset(), { retain: [FULL_DATES, MODIFIED_DATES] })).toThrow(
+      DeidentifyError,
+    );
     try {
       deidentify(buildPhiDataset(), { retain: [FULL_DATES, MODIFIED_DATES] });
       expect.unreachable("both temporal options in one call must be rejected");
@@ -329,9 +329,10 @@ describe("PS3.15 E.3.6: the two Retain Longitudinal Temporal Options are mutuall
       [FULL_DATES, "RetainUIDs", MODIFIED_DATES],
       ["CleanDescriptors", MODIFIED_DATES, "RetainSafePrivate", FULL_DATES],
     ] as const) {
-      expect(() => deidentify(buildPhiDataset(), { retain: [...retain] }), retain.join("+")).toThrow(
-        DeidentifyError,
-      );
+      expect(
+        () => deidentify(buildPhiDataset(), { retain: [...retain] }),
+        retain.join("+"),
+      ).toThrow(DeidentifyError);
     }
   });
 

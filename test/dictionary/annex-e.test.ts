@@ -362,10 +362,9 @@ describe("PS3.15 E.3.6: the modified-dates column is carried and resolved", () =
     expect(divergent.length).toBeGreaterThan(0);
     expect(everyRow().length - divergent.length).toBeGreaterThan(0);
     for (const row of divergent) {
-      expect(
-        resolveAction(effectiveCode(row, only(FULL_DATES))),
-        row.tag,
-      ).not.toBe(resolveAction(effectiveCode(row, only(MODIFIED_DATES))));
+      expect(resolveAction(effectiveCode(row, only(FULL_DATES))), row.tag).not.toBe(
+        resolveAction(effectiveCode(row, only(MODIFIED_DATES))),
+      );
     }
   });
 

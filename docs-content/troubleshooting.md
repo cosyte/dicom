@@ -429,24 +429,30 @@ that this package reads and writes metadata, where inside the metadata surface d
   them, and records them in the report with a `repeatingGroup` field naming the mask that matched.
   Even groups above the bound and odd groups are not overlay or curve groups and are left alone;
   odd groups are private and go through the private-attribute path instead.
-- **`RetainLongitudinalTemporal` means the standard's full-dates option, the less protective one.**
-  PS3.15 defines two longitudinal-temporal options, full dates and modified dates. This package
-  exposes one name for both and it carries the **full-dates** column, so on the 169 attributes where
-  the two columns disagree you keep the real value where modified-dates would have cleaned it.
-  Activate it only when real dates are genuinely required; date shifting is not done at this layer.
-- **The de-identified object records which of those two states it is in, and you read it off the
-  object rather than asking the sender.** `deidentify()` writes `(0028,0303) Longitudinal Temporal
+- **`RetainLongitudinalTemporal` means the standard's full-dates option, the less protective one;
+  `RetainLongitudinalTemporalModifiedDates` is the other.** PS3.15 §E.3.6 defines two
+  longitudinal-temporal Options and Table E.1-1 gives them separate columns. The first name carries
+  the **full-dates** column, so wherever the two columns disagree you keep the real value where
+  modified-dates would have cleaned it; the second carries the modified-dates column and cleans it.
+  They are **mutually exclusive** and a call naming both is rejected with a `DeidentifyError`.
+  Activate full dates only when real dates are genuinely required. **Neither option shifts a date for
+  you: this library performs no date transformation at all**, so the modification §E.3.6 asks for on
+  the modified-dates branch is yours to do.
+- **The de-identified object records which of those states it is in, and you read it off the object
+  rather than asking the sender.** `deidentify()` writes `(0028,0303) Longitudinal Temporal
   Information Modified` on every run: **`UNMODIFIED`** when `RetainLongitudinalTemporal` was active,
-  **`REMOVED`** when it was not, per PS3.15 §E.3.6 and §E.2. A `REMOVED` and an `UNMODIFIED` on an
-  object with no dates in it mean different things and both are useful: the first says this run was
-  not permitted to keep dates, the second says any dates present are real. **It is replaced rather
-  than added to** (the attribute is `VM 1`), so a value the source file carried is gone from the
-  output and the state you read is this run's. The third state PS3.15 defines, **`MODIFIED`, is never
-  written here** - see [Known limitations](./limitations) - so if you shift dates yourself after the
-  call, the `UNMODIFIED` in your output is wrong for your object and overwriting it is your job.
-  **Read the top-level Data Set's `(0028,0303)`, never one nested in a Sequence Item**: the attribute
-  has no row in Table E.1-1, so a nested copy is retained by omission and still says whatever the
-  sender wrote.
+  **`MODIFIED`** when `RetainLongitudinalTemporalModifiedDates` was, **`REMOVED`** when neither was,
+  per PS3.15 §E.3.6 and §E.2. A `REMOVED` and an `UNMODIFIED` on an object with no dates in it mean
+  different things and both are useful: the first says this run was not permitted to keep dates, the
+  second says any dates present are real. **It is replaced rather than added to** (the attribute is
+  `VM 1`), so a value the source file carried is gone from the output and the state you read is this
+  run's. **A `MODIFIED` says the modified-dates column was resolved, not that this library
+  transformed a date** - every such run raises `DICOM_DEIDENT_DATES_NOT_TRANSFORMED` on
+  `report.warnings`, and [Known limitations](./limitations) has the whole residual - so if you shift
+  dates yourself after a `RetainLongitudinalTemporal` call, the `UNMODIFIED` in your output is wrong
+  for your object and overwriting it is your job. **Read the top-level Data Set's `(0028,0303)`,
+  never one nested in a Sequence Item**: the attribute has no row in Table E.1-1, so a nested copy is
+  retained by omission and still says whatever the sender wrote.
 
 ## Where to go next
 

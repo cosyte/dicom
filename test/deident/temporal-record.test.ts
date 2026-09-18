@@ -325,9 +325,9 @@ describe("(0028,0303) = MODIFIED: the transformation this library did not perfor
     expect(codes).toContain(WARNING_CODES.DICOM_DEIDENT_DATES_NOT_TRANSFORMED);
     // Exactly one per run: the claim is about the run's option set, not about an
     // element, so an input cannot multiply it.
-    expect(codes.filter((c) => c === WARNING_CODES.DICOM_DEIDENT_DATES_NOT_TRANSFORMED)).toHaveLength(
-      1,
-    );
+    expect(
+      codes.filter((c) => c === WARNING_CODES.DICOM_DEIDENT_DATES_NOT_TRANSFORMED),
+    ).toHaveLength(1);
     const warning = report.warnings.find(
       (w) => w.code === WARNING_CODES.DICOM_DEIDENT_DATES_NOT_TRANSFORMED,
     );
@@ -367,18 +367,17 @@ describe("(0028,0303) = MODIFIED: the transformation this library did not perfor
     // The same input, parsed strictly: unchanged by the run beside it, down to
     // the warning list, which strict mode would have thrown on.
     const strict = parseDicom(source, { strict: true });
-    expect(strict.warnings.map((w) => w.code)).toStrictEqual(
-      lenient.warnings.map((w) => w.code),
-    );
+    expect(strict.warnings.map((w) => w.code)).toStrictEqual(lenient.warnings.map((w) => w.code));
     expect(() => parseDicom(serializeDicom(dataset), { strict: true })).not.toThrow();
   });
 
   it("AC-10: neither other branch records it (the code names the branch it belongs to)", () => {
     for (const retain of [[], [TEMPORAL_OPTION]] as readonly (readonly DeidentifyOption[])[]) {
       const { report } = deidentify(buildDated(), { retain });
-      expect(report.warnings.map((w) => w.code), retain.join("+") || "(none)").not.toContain(
-        WARNING_CODES.DICOM_DEIDENT_DATES_NOT_TRANSFORMED,
-      );
+      expect(
+        report.warnings.map((w) => w.code),
+        retain.join("+") || "(none)",
+      ).not.toContain(WARNING_CODES.DICOM_DEIDENT_DATES_NOT_TRANSFORMED);
     }
   });
 

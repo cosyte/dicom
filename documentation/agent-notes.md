@@ -2087,7 +2087,7 @@ is a MATRIX...")` case in `deident-private-reservation.test.ts` asserts the **em
 
 - **Phase 7 of 8 complete** (580 tests passing, 1 todo). Metadata-level de-identification live:
   `deidentify(ds, options?)` applies the PS3.15 Annex E Basic Application Level Confidentiality Profile
-  plus the nine metadata-affecting Options, driven by the generated Table E.1-1 action map. Pure
+  plus the metadata-affecting Options, driven by the generated Table E.1-1 action map. Pure
   function: input `Dataset` never mutated; returns a fresh de-identified `Dataset` + a value-free
   `DeidentifyReport`. Conditional codes collapse to their most-protective leftmost branch (no IOD
   Type-1 analysis: fail-safe toward more removal); `U`-coded UIDs get deterministic, content-derived
@@ -2378,8 +2378,9 @@ is a MATRIX...")` case in `deident-private-reservation.test.ts` asserts the **em
 - **The Annex E action table is sourced from the normative PS3.15 DocBook, not from a mirror alone.**
   `vendor/nema/part15/` pins `part15.xml` (**PS3.15 2026c**) by SHA-256, and
   `scripts/generate-annex-e.ts` overlays Table E.1-1 **per field** on the Innolitics base, the same
-  authority rule the dictionary uses: PS3.15 wins on attribute name / Basic Profile code / the nine
-  option columns for any tag it publishes, PS3.15-only tags are added, mirror-only tags are **kept**.
+  authority rule the dictionary uses: PS3.15 wins on attribute name / Basic Profile code / the
+  metadata-affecting option columns for any tag it publishes, PS3.15-only tags are added, mirror-only
+  tags are **kept**.
   Table: 652 entries, up from 617. The 35 additions were **not cosmetic**: the mirror snapshot was
   2024b-era, and **32 of the 35 missing tags are marked `X` (remove)** by the current standard (the
   other three are `(0040,B020)` `X/D`, `(0070,0006)` `D`, `(300A,0054)` `U`), among them
@@ -2397,11 +2398,34 @@ is a MATRIX...")` case in `deident-private-reservation.test.ts` asserts the **em
   15 cells, an unrecognized tag cell, an unknown action code, an empty Basic Profile cell, an
   unaccounted `<tr>`, or under 600 rows. **No staleness clock, and there must not be one** - same
   reasoning as PS3.6. The mirror-only count prints every run too, so the "retires rather than
-  deletes" assumption stays observable. One deliberate exclusion remains, **printed on every run**
-  rather than assumed: the **169 rows** where PS3.15's two E.3.6 date columns diverge under the
-  single collapsed `RetainLongitudinalTemporal` (which carries the full-dates column, the **less
-  protective** branch - `K` on all 169 where modified-dates says `C`; the JSDoc and troubleshooting
-  doc now say so, and splitting the option is a public-surface change deliberately not made).
+  deletes" assumption stays observable.
+- **The E.3.6 collapse is CLOSED, and the earlier "splitting the option is a public-surface change
+  deliberately not made" is RETRACTED rather than reworded.** PS3.15 §E.3.6 is two mutually exclusive
+  Options and Table E.1-1 gives them separate columns; the generator read index 11
+  (`Rtn. Long. Modif. Dates Opt.`) only to count its divergence from index 10 and then discarded it,
+  so the **more protective** branch was unreachable and `(0028,0303)` could never carry its third
+  Value. Both columns are emitted per attribute now, under `RetainLongitudinalTemporal` (full dates)
+  and `RetainLongitudinalTemporalModifiedDates` (modified dates). The published name **keeps its
+  full-dates meaning**, deliberately: repurposing it would silently move every existing caller's
+  output and stamp `MODIFIED` on objects whose dates nobody shifted. **A column the row is silent
+  about resolves to the BASIC PROFILE, never to the neighbouring temporal column and never to a
+  keep** - the same silent-PHI-leak direction as an action table lagging the dictionary, and PS3.15
+  2026c publishes no row that discriminates it, so it is proved against a constructed row in
+  `test/dictionary/annex-e-precedence.test.ts`.
+- **🛑 `MODIFIED` SAYS THE COLUMN WAS RESOLVED. IT DOES NOT SAY A DATE WAS TRANSFORMED, AND THIS
+  LIBRARY TRANSFORMS NONE.** §E.3.6 also requires the dates themselves to be modified and the manner
+  described in a **Conformance Statement**, and both are permanently the caller's: PS3.2 Annex N
+  scopes a Conformance Statement to a named product and version, which a library is not. So an object
+  a caller stamped `MODIFIED` without shifting anything is a caller defect nothing here can detect,
+  and the answer is a **disclosure, not a guard**: `DICOM_DEIDENT_DATES_NOT_TRANSFORMED`, once per
+  run, on `report.warnings` and **never on `Dataset.warnings`** (a Tier-2 code for a conformant file
+  throws for a `{ strict: true }` caller on exactly that file). Nothing in the package claims PS3.15
+  Annex E conformance for the Modified Dates Option; §E.1.1 makes that claim all-or-nothing.
+- **Do not write the divergence COUNT into prose here or anywhere else.** How far the two E.3.6
+  columns disagree is a fact about the **vendored edition**, it moves when the pin moves, and the
+  generator prints it on every run. The differential test derives the differing set from the
+  generated table at run time for the same reason. An earlier version of this paragraph carried the
+  number and the JSDoc carried it too; both are gone.
 
 ## Repeating-group masks on the de-identify path
 

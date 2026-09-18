@@ -25,14 +25,10 @@ asymmetry is the standard's: joining two temporal states into one single-valued 
 a recipient reading a state no run produced. Re-de-identifying an object always leaves exactly one
 `(0028,0303)`, holding the latest run's state.
 
-**The third state, `MODIFIED`, is never produced by this library, on any option set.** §E.3.6 defines
-it for the With Modified Dates Option, and it asserts both that the run resolved Table E.1-1's
-modified-dates column and that the object's dates were aggregated or transformed. This package
-exposes one temporal option name carrying the full-dates column, and it transforms no dates, so
-writing `MODIFIED` would be a claim about work nobody did in an attribute a recipient cannot
-re-derive. If you shift dates yourself after the call, the `UNMODIFIED` in your output is wrong for
-your object: overwrite it, and describe the manner of modification in your Conformance Statement as
-§E.3.6 requires.
+**The third state, `MODIFIED`, arrives in the same release**, under §E.3.6's With Modified Dates
+Option. See the entry for `RetainLongitudinalTemporalModifiedDates`, which adds that Option's Table
+E.1-1 column, the option name that selects it, and the disclosure that this library resolves the
+column and performs no date transformation.
 
 Nothing else moves. `(0012,0062)` and `(0012,0063)` are unchanged, the published warning-code set is
 unchanged, no warning code is added or retired, and `DeidentifyReport` keeps its shape - like
