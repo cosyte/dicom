@@ -74,6 +74,7 @@ export const WARNING_CODES = {
 
   // === Declared here, emitted elsewhere or not yet emitted at all ===
   DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED: "DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED", // emitted by deidentify(), never by the parser
+  DICOM_DEIDENT_DATES_NOT_TRANSFORMED: "DICOM_DEIDENT_DATES_NOT_TRANSFORMED", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED: "DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED: "DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_FILE_META_REPLACED: "DICOM_DEIDENT_FILE_META_REPLACED", // emitted by deidentify(), never by the parser
@@ -348,6 +349,14 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   // fit and report.group0004RemovalCount is the complete total.
   DICOM_DEIDENT_GROUP_0004_REMOVED:
     "Data Elements with a Group Number of 0004 were removed from this object, as PS3.15 E.1.1 requires of any SOP Instance or DICOM File other than a DICOMDIR File. Their tags and count are withheld from this message; see report.group0004Removals and report.group0004RemovalCount.",
+  // 🩺 Once per run, on the option set alone, and NOT on Dataset.warnings. The
+  // trigger is a choice the caller made rather than anything in the file, so
+  // there is no element to name, no count and no context path; every token below
+  // is a clause reference or a published option name. It states the half of
+  // PS3.15 E.3.6 this library does not perform, which is the half a recipient
+  // reading MODIFIED would otherwise assume was performed.
+  DICOM_DEIDENT_DATES_NOT_TRANSFORMED:
+    "The Retain Longitudinal Temporal Information With Modified Dates Option was active, so this run resolved Table E.1-1's modified-dates column and wrote (0028,0303) = MODIFIED. It did NOT modify any date or time value: PS3.15 E.3.6 also requires the dates themselves to be modified and the manner of modification to be described in a Conformance Statement, and this library performs no date transformation and states no Conformance Statement. The MODIFIED declaration is true only if you transformed the dates yourself; if you did not, the output makes a claim nobody performed.",
   // Once per run. The SOP Class UID that selected this branch is a constant of
   // the code (it is the one value that reaches it), so it is written out; nothing
   // else about the file is.
@@ -1347,6 +1356,42 @@ export function group0004Removed(position: DicomPosition): DicomParseWarning {
  */
 export function dicomdirFileSetNotDischarged(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED, position);
+}
+
+/**
+ * Build a `DICOM_DEIDENT_DATES_NOT_TRANSFORMED` warning. Emitted by
+ * `deidentify()` once per run whose `retain` names
+ * `RetainLongitudinalTemporalModifiedDates`, on `report.warnings`.
+ *
+ * @remarks
+ * **The declaration this run wrote is half of what PS3.15 2026c §E.3.6 asks
+ * for, and this code is the other half said out loud.** §E.3.6 requires that
+ * "any dates and times present in the Attributes listed in Table E.1-1 shall be
+ * modified" and that "the manner of date modification shall be described in the
+ * Conformance Statement". This library resolves the modified-dates column and
+ * writes `(0028,0303) = MODIFIED`; it transforms no date and states no
+ * Conformance Statement, because PS3.2 Annex N scopes one to a named product
+ * and version and a library is neither. So the caller performs the
+ * transformation, and an object stamped `MODIFIED` by a caller who shifted
+ * nothing is a defect this package cannot detect. Silence there would be the
+ * emptied-audit failure: a declaration a recipient acts on and never re-derives.
+ *
+ * 🛑 **IT BELONGS TO THE DE-IDENTIFY REPORT AND NOT TO `Dataset.warnings`.**
+ * The trigger is an option the caller passed, not a deviation in the file, and
+ * a Tier-2 code raised for a conformant file would throw for a `{ strict: true }`
+ * caller on exactly that file. Nothing here reads the Data Set, so a
+ * `{ strict: true }` parse of the same input is byte-for-byte unaffected.
+ *
+ * Once per run, no tag, no count, no context path: every token in the message is
+ * a clause reference or a published option name.
+ *
+ * @example
+ * ```ts
+ * const w = datesNotTransformed({ byteOffset: 0, fileMeta: false });
+ * ```
+ */
+export function datesNotTransformed(position: DicomPosition): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DEIDENT_DATES_NOT_TRANSFORMED, position);
 }
 
 /**

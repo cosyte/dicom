@@ -1,6 +1,6 @@
 /**
  * PS3.15 Annex E attribute-action table - DICOM Basic Application Confidentiality
- * Profile + 11 retention/clean option sets.
+ * Profile plus its retention/clean option sets.
  *
  * Consumed by the de-identifier.
  *
@@ -9,10 +9,13 @@
  * plus `VERSION`; `annexE` is reached internally through
  * `@cosyte/dicom/dictionary/annex-e`.
  *
- * The 9 *metadata-affecting* PS3.15 Annex E option-set columns (E.3.3–E.3.11 plus the
- * collapsed E.3.6 "RetainLongitudinalTemporal") populate `AnnexEAction.optionSet`
- * keys per attribute. The two *pixel-level* options - E.3.1 `CleanPixelData` and
- * E.3.2 `CleanRecognizableVisual` - are not represented per-attribute (PS3.15 Table
+ * The 10 *metadata-affecting* option columns of Table E.1-1 populate
+ * `AnnexEAction.optionSet` keys per attribute. Ten rather than nine because
+ * E.3.6 is two mutually exclusive Options with a column each, and both are
+ * carried: `RetainLongitudinalTemporal` for full dates and
+ * `RetainLongitudinalTemporalModifiedDates` for modified dates. The two
+ * *pixel-level* options - E.3.1 `CleanPixelData` and E.3.2
+ * `CleanRecognizableVisual` - are not represented per-attribute (PS3.15 Table
  * E.1-1 has no column for them); they are enforced at the pixel-decode layer.
  * Both names remain in `AnnexEOption` for completeness and for that API.
  */
@@ -53,15 +56,22 @@ export type AnnexEActionCode =
   | "C/X";
 
 /**
- * One of the 11 PS3.15 Annex E option sets (E.3.1–E.3.11).
+ * One name per PS3.15 Annex E option column (E.3.1 to E.3.11), plus the second
+ * of the two Options E.3.6 defines.
  *
- * Names match PS3.15 Annex E verbatim. `CleanPixelData` (E.3.1) and
- * `CleanRecognizableVisual` (E.3.2) act on pixel data, not metadata, and never
- * appear as `optionSet` keys in the generated `ANNEX_E` map; they remain in the
- * union for the pixel-decode API.
+ * `CleanPixelData` (E.3.1) and `CleanRecognizableVisual` (E.3.2) act on pixel
+ * data, not metadata, and never appear as `optionSet` keys in the generated
+ * `ANNEX_E` map; they remain in the union for the pixel-decode API.
+ *
+ * **E.3.6 is two mutually exclusive Options and Table E.1-1 gives them separate
+ * columns**, so it takes two names here: `RetainLongitudinalTemporal` carries
+ * `Rtn. Long. Full Dates Opt.` (keep the real dates) and
+ * `RetainLongitudinalTemporalModifiedDates` carries `Rtn. Long. Modif. Dates
+ * Opt.` (keep them only as modified values), which is the more protective of
+ * the two on every row where they differ.
  *
  * @example
- *   const opt: AnnexEOption = "RetainLongitudinalTemporal";
+ *   const opt: AnnexEOption = "RetainLongitudinalTemporalModifiedDates";
  */
 export type AnnexEOption =
   | "CleanPixelData"
@@ -70,6 +80,7 @@ export type AnnexEOption =
   | "CleanStructuredContent"
   | "CleanDescriptors"
   | "RetainLongitudinalTemporal"
+  | "RetainLongitudinalTemporalModifiedDates"
   | "RetainPatientCharacteristics"
   | "RetainDeviceIdentity"
   | "RetainUIDs"

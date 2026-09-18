@@ -11,25 +11,34 @@ import type { Profile } from "../parser/types.js";
 import type { DicomParseWarning } from "../parser/warnings.js";
 
 /**
- * The PS3.15 Annex E option sets `deidentify` honours - the nine
+ * The PS3.15 Annex E option sets `deidentify` honours - the
  * *metadata-affecting* columns of Table E.1-1. The two pixel-level options
  * (`CleanPixelData` §E.3.1, `CleanRecognizableVisual` §E.3.2) are deliberately
  * excluded: this is a metadata-only de-identifier and cannot inspect pixels
  * (deferred to `@cosyte/dicom-pixel`). When pixel data is present it always
  * warns rather than claiming the image is clean.
  *
- * **`RetainLongitudinalTemporal` gives you the full-dates branch.** PS3.15
- * §E.3.6 is *two* options, and Table E.1-1 gives them separate columns:
- * `Rtn. Long. Full Dates` (keep dates and times as they are) and
- * `Rtn. Long. Modif. Dates` (keep them only as modified/shifted values). One
- * name here covers both, and it carries the **full-dates** column - the *less*
- * protective branch. That is not a rounding difference: the two columns disagree
- * on **169** rows, and on every one of them full-dates says `K` (keep the real
- * value) where modified-dates says `C` (clean it). Activate it only when real
- * dates are genuinely required; leave it off and the Basic Profile action
- * applies, which removes or empties them. Date *shifting* is not implemented at
- * this layer - a caller who needs the modified-dates behaviour shifts the values
- * themselves after the call.
+ * **§E.3.6 is two Options, and each has its own name here.** Table E.1-1 gives
+ * them separate columns: `Rtn. Long. Full Dates` (keep dates and times as they
+ * are) and `Rtn. Long. Modif. Dates` (keep them only as modified values).
+ *
+ * - `RetainLongitudinalTemporal` carries the **full-dates** column, the *less*
+ *   protective branch: where the two columns differ, it says `K` (keep the real
+ *   value). Activate it only when real dates are genuinely required.
+ * - `RetainLongitudinalTemporalModifiedDates` carries the **modified-dates**
+ *   column, which says `C` (clean it) on every row where the two differ, and
+ *   makes the run write `(0028,0303) = MODIFIED`.
+ *
+ * The two are **mutually exclusive**: §E.3.6 defines them as alternatives, and a
+ * call naming both is rejected with {@link DeidentifyError}. Leave both off and
+ * the Basic Profile action applies, which removes or empties dates.
+ *
+ * 🩺 **Date *modification* is the caller's, on both branches.** This library
+ * applies the column and writes the declaration; it shifts, aggregates and
+ * transforms nothing, so a `MODIFIED` it writes is true only if you performed
+ * the transformation §E.3.6 describes. `report.warnings` carries
+ * `DICOM_DEIDENT_DATES_NOT_TRANSFORMED` on every run that activates the
+ * modified-dates Option, saying exactly that.
  *
  * @example
  *   const retain: DeidentifyOption[] = ["RetainLongitudinalTemporal", "RetainSafePrivate"];
@@ -37,7 +46,7 @@ import type { DicomParseWarning } from "../parser/warnings.js";
 export type DeidentifyOption = Exclude<AnnexEOption, "CleanPixelData" | "CleanRecognizableVisual">;
 
 /**
- * The nine metadata option-set names, frozen for runtime validation.
+ * The metadata option-set names, frozen for runtime validation.
  *
  * @example
  * ```ts
@@ -50,6 +59,7 @@ export const DEIDENTIFY_OPTIONS: readonly DeidentifyOption[] = Object.freeze([
   "CleanStructuredContent",
   "CleanDescriptors",
   "RetainLongitudinalTemporal",
+  "RetainLongitudinalTemporalModifiedDates",
   "RetainPatientCharacteristics",
   "RetainDeviceIdentity",
   "RetainUIDs",
