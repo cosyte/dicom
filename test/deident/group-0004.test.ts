@@ -173,7 +173,11 @@ describe("AC5: group 0004 is removed from a dataset that is not a DICOMDIR", () 
     const cases: readonly (readonly DeidentifyOption[])[] = [
       [],
       ["RetainUIDs", "RetainSafePrivate", "RetainDeviceIdentity"],
-      DEIDENTIFY_OPTIONS,
+      // "All at once" means every option ONE CALL may carry: the two PS3.15
+      // §E.3.6 temporal Options are mutually exclusive, so `DEIDENTIFY_OPTIONS`
+      // whole is not a legal `retain` and dropping one of them is the largest
+      // set that is. Each of them still appears alone in the rows below.
+      DEIDENTIFY_OPTIONS.filter((o) => o !== "RetainLongitudinalTemporalModifiedDates"),
       ...DEIDENTIFY_OPTIONS.map((o) => [o] as const),
     ];
     for (const retain of cases) {
