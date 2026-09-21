@@ -173,23 +173,34 @@ structural fact about DICOM that no reader can resolve from the wire.
   nothing to do with what the object happened to carry. Build a de-identified File-set from the
   de-identified files, not from this output.
 
-- **`(0028,0303)` is written in two states and `MODIFIED` is not one of them.** `deidentify()` writes
-  `(0028,0303) Longitudinal Temporal Information Modified` on every run: **`REMOVED`** when no Retain
-  Longitudinal Temporal Information Option was active, **`UNMODIFIED`** when `RetainLongitudinalTemporal`
-  was. PS3.15 2026c §E.3.6 defines a **third** state, `MODIFIED`, for its With Modified Dates Option,
-  and **this library never produces it**, on any option set. That is a limitation and not an
-  oversight, for two reasons that both have to change before it moves: this package exposes one
-  temporal option name and it carries the **full-dates** column, so the modified-dates column is not
-  resolvable here at all; and `MODIFIED` asserts that the object's dates were **aggregated or
-  transformed** to reduce re-identification while preserving longitudinal relationships, which is a
-  date transformation this metadata layer performs on nothing. Writing it would be a claim about work
-  nobody did, in an attribute a recipient acts on and cannot re-derive. **If you shift dates yourself
-  after the call, the `UNMODIFIED` in your output is wrong for your object**: overwrite it, and
-  describe the manner of modification in your Conformance Statement, which §E.3.6 requires of anyone
-  claiming that Option. **The declaration is the top-level Data Set's own**, which is where §E.2 and
-  §E.3.6 put it: `(0028,0303)` has no row in Table E.1-1, so a copy the sender nested inside a
-  Sequence Item is retained by omission like every other unlisted attribute and still says whatever
-  that sender wrote. Read the Data Set's own `(0028,0303)`, never a nested one.
+- **`(0028,0303) = MODIFIED` is written, and this library performs no date transformation.**
+  `deidentify()` writes `(0028,0303) Longitudinal Temporal Information Modified` on every run, in the
+  three states PS3.15 2026c defines: **`REMOVED`** when no Retain Longitudinal Temporal Information
+  Option was active, **`UNMODIFIED`** when `RetainLongitudinalTemporal` was, and **`MODIFIED`** when
+  `RetainLongitudinalTemporalModifiedDates` was. §E.3.6 defines those last two as **mutually
+  exclusive** Options, so a call naming both is rejected with a `DeidentifyError`.
+
+  **The limitation is what `MODIFIED` does not mean here.** §E.3.6 has two halves: the object's dates
+  "shall be modified", and "the manner of date modification shall be described in the Conformance
+  Statement". This library delivers the half a library can: it resolves Table E.1-1's modified-dates
+  column, which is the more protective of the two temporal columns wherever they differ, and it
+  writes the declaration. It **performs no date transformation** at all, on either branch, and it
+  states no Conformance Statement, because PS3.2 Annex N scopes one to a named product and version
+  and a library is neither. **So you perform
+  the date transformation, and a `MODIFIED` on an object whose dates nobody shifted is a caller
+  defect this package cannot detect.** It is never silent about it: every run under that Option
+  carries `DICOM_DEIDENT_DATES_NOT_TRANSFORMED` on `report.warnings`, naming the half of §E.3.6 the
+  run did not discharge. **Nothing here claims PS3.15 Annex E conformance for the Retain
+  Longitudinal Temporal Information With Modified Dates Option**, which §E.1.1 makes all-or-nothing.
+
+  **If you shift dates yourself after the call under `RetainLongitudinalTemporal`, the `UNMODIFIED`
+  in your output is wrong for your object**: use `RetainLongitudinalTemporalModifiedDates` instead or
+  overwrite the attribute, and describe the manner of modification in your Conformance Statement,
+  which §E.3.6 requires of anyone claiming that Option. **The declaration is the top-level Data Set's
+  own**, which is where §E.2 and §E.3.6 put it: `(0028,0303)` has no row in Table E.1-1, so a copy
+  the sender nested inside a Sequence Item is retained by omission like every other unlisted
+  attribute and still says whatever that sender wrote. Read the Data Set's own `(0028,0303)`, never a
+  nested one.
 
 - **A `DeidentifyReport` is not safe to log whole.** The value-bearing fields are named on the
   `DeidentifyReport` type. **Read the list on the type, never a count quoted anywhere** (including

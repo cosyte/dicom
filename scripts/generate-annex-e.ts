@@ -74,7 +74,7 @@ const INNOLITICS_FIELD_TO_OPTION: Readonly<Record<string, string>> = Object.free
   cleanStructContOpt: "CleanStructuredContent",
   cleanDescOpt: "CleanDescriptors",
   rtnLongFullDatesOpt: "RetainLongitudinalTemporal",
-  // rtnLongModifDatesOpt collapsed into RetainLongitudinalTemporal -- see discovery doc.
+  rtnLongModifDatesOpt: "RetainLongitudinalTemporalModifiedDates",
   rtnPatCharsOpt: "RetainPatientCharacteristics",
   rtnDevIdOpt: "RetainDeviceIdentity",
   rtnUIDsOpt: "RetainUIDs",
@@ -218,9 +218,14 @@ const ANNEX_E_TABLE = "table_E.1-1";
 const NEMA_MIN_ROWS = 600;
 
 /** Column order of Table E.1-1. Index 10 (`Rtn. Long. Full Dates`) supplies
- *  `RetainLongitudinalTemporal`; index 11 (`Rtn. Long. Modif. Dates`) is the
- *  second E.3.6 sub-option and is collapsed away, exactly as the Innolitics
- *  path did. Its divergence from index 10 is counted and printed. */
+ *  `RetainLongitudinalTemporal` and index 11 (`Rtn. Long. Modif. Dates`)
+ *  supplies `RetainLongitudinalTemporalModifiedDates`. PS3.15 section E.3.6 is
+ *  TWO mutually exclusive Options and Table E.1-1 gives them separate columns,
+ *  so both are carried per attribute; index 11 used to be read only to count
+ *  its divergence from index 10 and then discarded, which left the more
+ *  protective branch unreachable. The divergence is still printed, because how
+ *  far the two columns disagree is a fact about the vendored edition worth
+ *  seeing on every run. */
 const NEMA_OPTION_COLUMNS: ReadonlyArray<readonly [number, string]> = [
   [5, "RetainSafePrivate"],
   [6, "RetainUIDs"],
@@ -228,12 +233,16 @@ const NEMA_OPTION_COLUMNS: ReadonlyArray<readonly [number, string]> = [
   [8, "RetainInstitutionIdentity"],
   [9, "RetainPatientCharacteristics"],
   [10, "RetainLongitudinalTemporal"],
+  [11, "RetainLongitudinalTemporalModifiedDates"],
   [12, "CleanDescriptors"],
   [13, "CleanStructuredContent"],
   [14, "CleanGraphics"],
 ];
 
 const NEMA_COLUMN_COUNT = 15;
+/** Index 10, `Rtn. Long. Full Dates Opt.` - the full-dates branch of E.3.6. */
+const NEMA_FULL_DATES_COLUMN = 10;
+/** Index 11, `Rtn. Long. Modif. Dates Opt.` - the modified-dates branch. */
 const NEMA_MODIFIED_DATES_COLUMN = 11;
 
 /**
@@ -290,8 +299,10 @@ interface NemaTable {
    *  `deidentify()` removes private attributes through a separate path, so these
    *  are deliberately not emitted as rules. */
   readonly privateFamilyRows: readonly string[];
-  /** Rows where the two E.3.6 date sub-options disagree, hence rows the collapse
-   *  to `Rtn. Long. Full Dates` loses information about. */
+  /** Rows where the two E.3.6 date sub-options disagree, hence rows on which the
+   *  caller's choice of temporal Option changes what survives. Both columns are
+   *  emitted now, so this is an observation about the vendored edition rather
+   *  than a measure of what the output drops. */
   readonly dateOptionDivergence: number;
 }
 
@@ -627,14 +638,18 @@ function parseNemaAnnexE(xml: string): NemaTable {
       if (code !== undefined) optionPairs.push([option, code]);
     }
 
-    // The second E.3.6 sub-option. Validated like every other column so a shape
-    // change cannot hide in the one column the emitter discards, then compared
-    // against the full-dates column that `RetainLongitudinalTemporal` carries.
+    // Both E.3.6 sub-options are read above, as ordinary option columns. They
+    // are re-read here only to count how far the two disagree: that count is a
+    // property of the vendored edition, printed rather than written anywhere,
+    // and it moves when the pin moves.
     const modifiedDates = parseActionCell(
       cells[NEMA_MODIFIED_DATES_COLUMN] ?? "",
       where + " Rtn. Long. Modif. Dates",
     );
-    const fullDates = parseActionCell(cells[10] ?? "", where + " Rtn. Long. Full Dates");
+    const fullDates = parseActionCell(
+      cells[NEMA_FULL_DATES_COLUMN] ?? "",
+      where + " Rtn. Long. Full Dates",
+    );
     if (modifiedDates !== fullDates) dateOptionDivergence += 1;
 
     const concrete = /^\(([0-9A-Fa-f]{4}),([0-9A-Fa-f]{4})\)$/.exec(tagCell);
@@ -830,8 +845,9 @@ function emit(
       p.innoliticsInputSha,
   );
   lines.push("//");
-  lines.push("// PS3.15 Annex E attribute-action table -- Basic Profile + 9 metadata-affecting");
-  lines.push("// retention/clean option columns from Table E.1-1. Pixel-level options (E.3.1");
+  lines.push("// PS3.15 Annex E attribute-action table -- Basic Profile + 10 metadata-affecting");
+  lines.push("// retention/clean option columns from Table E.1-1, which include BOTH E.3.6");
+  lines.push("// temporal columns (full dates and modified dates). Pixel-level options (E.3.1");
   lines.push("// CleanPixelData, E.3.2 CleanRecognizableVisual) are not represented per-attribute");
   lines.push("// here; they are enforced at the pixel-decode layer.");
   lines.push("");
@@ -997,7 +1013,8 @@ function main(): void {
   console.log(
     "[gen:annex-e] E.3.6 rows where full-dates and modified-dates columns differ: " +
       String(nema.dateOptionDivergence) +
-      " (RetainLongitudinalTemporal carries the full-dates column)",
+      " (RetainLongitudinalTemporal carries the full-dates column, " +
+      "RetainLongitudinalTemporalModifiedDates the modified-dates column)",
   );
 
   const outDir = join(REPO_ROOT, "src", "dictionary", "generated");

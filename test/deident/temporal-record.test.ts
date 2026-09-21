@@ -13,15 +13,21 @@
  * `test/docs/spec-citations.test.ts` re-derives both against it rather than
  * trusting this comment.
  *
- * 🛑 **THE THIRD VALUE IS NOT REACHABLE AND THE SWEEP BELOW IS WHAT SAYS SO.**
- * §E.3.6's Modified Dates branch requires `MODIFIED`, and it asserts that the run
- * resolved Table E.1-1's modified-dates column and that the object's dates were
- * aggregated or transformed. `DEIDENTIFY_OPTIONS` exposes one temporal name, it
- * carries the full-dates column, and this package transforms no dates - so a
- * `MODIFIED` here would be a claim about work nobody did. The whole point of this
- * attribute is that a recipient acts on it without being able to re-derive it, so
- * a wrong value is worse than an absent one, and the never-`MODIFIED` assertion
- * is swept over the entire option domain rather than sampled.
+ * 🩺 **THE THIRD VALUE IS REACHABLE NOW, AND WHAT IT CLAIMS IS NARROWER THAN IT
+ * LOOKS.** §E.3.6's Modified Dates branch requires `MODIFIED`, and
+ * `RetainLongitudinalTemporalModifiedDates` resolves Table E.1-1's
+ * modified-dates column, which is what earns it. It does **not** say this
+ * library transformed a date: §E.3.6 also requires the dates themselves to be
+ * modified and the manner described in a Conformance Statement, and both are
+ * permanently the caller's. So `MODIFIED` is swept over the whole option domain
+ * beside the other two states, and the run that writes it also raises
+ * `DICOM_DEIDENT_DATES_NOT_TRANSFORMED` on the de-identify report. The whole
+ * point of this attribute is that a recipient acts on it without being able to
+ * re-derive it, so the disclosure is asserted rather than left to the docs.
+ *
+ * The two temporal Options are **mutually exclusive**, so a subset naming both
+ * is not a legal call and the sweeps skip it; `deidentify.test.ts` holds the
+ * rejection itself.
  *
  * ## Why "exactly one" is measured in the SERIALIZED BYTES
  *
@@ -56,7 +62,7 @@ import { Buffer } from "node:buffer";
 
 import { describe, expect, it } from "vitest";
 
-import { deidentify, parseDicom, serializeDicom } from "../../src/index.js";
+import { WARNING_CODES, deidentify, parseDicom, serializeDicom } from "../../src/index.js";
 import type { Dataset } from "../../src/dataset/dataset.js";
 import { DEIDENTIFY_OPTIONS, type DeidentifyOption } from "../../src/deident/types.js";
 import type { Tag, VR } from "../../src/dictionary/types.js";
@@ -79,8 +85,10 @@ const REF_SERIES_SQ: Tag = "00081115";
 /** `(0012,0063)` De-identification Method - the joined attribute, used as a contrast control. */
 const DEIDENT_METHOD: Tag = "00120063";
 
-/** The one option name PS3.15 §E.3.6 is exposed under; it carries the full-dates column. */
+/** The §E.3.6 name that carries the full-dates column, and the state it earns. */
 const TEMPORAL_OPTION: DeidentifyOption = "RetainLongitudinalTemporal";
+/** The §E.3.6 name that carries the modified-dates column, and the state it earns. */
+const TEMPORAL_MODIFIED_OPTION: DeidentifyOption = "RetainLongitudinalTemporalModifiedDates";
 
 /** Even-pad a text value (space) so the fixture builder gets a legal length. */
 function pad(s: string): Buffer {
@@ -158,7 +166,14 @@ function countHeaders(buf: Buffer, tag: Tag, vr: VR): number {
   return count;
 }
 
-/** The 512 subsets of the nine option names - the entire domain of `retain`. */
+/**
+ * Every subset of the published option names - the entire domain of `retain`.
+ *
+ * The size is derived from {@link DEIDENTIFY_OPTIONS} rather than written down,
+ * because the list grew by one when the second §E.3.6 column landed and a
+ * literal would have gone stale silently while the sweep still looked
+ * exhaustive.
+ */
 function everySubset(): readonly (readonly DeidentifyOption[])[] {
   const out: (readonly DeidentifyOption[])[] = [];
   for (let mask = 0; mask < 1 << DEIDENTIFY_OPTIONS.length; mask++) {
@@ -167,8 +182,23 @@ function everySubset(): readonly (readonly DeidentifyOption[])[] {
   return out;
 }
 
-describe("(0028,0303): the two states this library can be in", () => {
-  it("writes REMOVED, VR CS, when no temporal option is active", () => {
+/** The whole domain's size, derived the same way the domain is. */
+const SUBSET_COUNT = 1 << DEIDENTIFY_OPTIONS.length;
+
+/** The two §E.3.6 names together, which is not a legal call (see `deidentify.test.ts`). */
+function carriesBothTemporal(retain: readonly DeidentifyOption[]): boolean {
+  return retain.includes(TEMPORAL_OPTION) && retain.includes(TEMPORAL_MODIFIED_OPTION);
+}
+
+/** The exact `(0028,0303)` Value this run's option set earns, per §E.2 and §E.3.6. */
+function wantedState(retain: readonly DeidentifyOption[]): string {
+  if (retain.includes(TEMPORAL_MODIFIED_OPTION)) return "MODIFIED";
+  if (retain.includes(TEMPORAL_OPTION)) return "UNMODIFIED";
+  return "REMOVED";
+}
+
+describe("(0028,0303): the three states PS3.15 defines, and which option earns each", () => {
+  it("AC-6: writes REMOVED, VR CS, when no temporal option is active", () => {
     const { dataset } = deidentify(buildDated());
     const el = dataset.get(TEMPORAL);
     expect(el).toBeDefined();
@@ -177,7 +207,7 @@ describe("(0028,0303): the two states this library can be in", () => {
     expect(countHeaders(serializeDicom(dataset), TEMPORAL, "CS")).toBe(1);
   });
 
-  it("writes UNMODIFIED, VR CS, with the temporal option active", () => {
+  it("AC-5: writes UNMODIFIED, VR CS, with the full-dates option active", () => {
     const { dataset } = deidentify(buildDated(), { retain: [TEMPORAL_OPTION] });
     const el = dataset.get(TEMPORAL);
     expect(el).toBeDefined();
@@ -186,68 +216,237 @@ describe("(0028,0303): the two states this library can be in", () => {
     expect(countHeaders(serializeDicom(dataset), TEMPORAL, "CS")).toBe(1);
   });
 
-  it("the two states are distinguishable, and each matches what the run did to the dates", () => {
-    // The non-vacuity row: if both branches emitted the same value the assertions
+  it("AC-2: writes MODIFIED, VR CS, with the modified-dates option active", () => {
+    const { dataset } = deidentify(buildDated(), { retain: [TEMPORAL_MODIFIED_OPTION] });
+    const el = dataset.get(TEMPORAL);
+    expect(el).toBeDefined();
+    expect(el?.vr).toBe("CS");
+    expect(decodedValues(dataset, TEMPORAL)).toStrictEqual(["MODIFIED"]);
+    expect(countHeaders(serializeDicom(dataset), TEMPORAL, "CS")).toBe(1);
+  });
+
+  it("AC-6: the states are distinguishable, and each matches what the run did to the dates", () => {
+    // The non-vacuity row: if the branches emitted the same value the assertions
     // above would still pass and the attribute would carry no information. This
     // pins that the declaration tracks the run - `REMOVED` beside an output with
-    // no dates left, `UNMODIFIED` beside one that kept the real ones.
+    // no dates left, `UNMODIFIED` beside one that kept the real ones, `MODIFIED`
+    // beside one that resolved the modified-dates column and cleaned them.
     const off = deidentify(buildDated()).dataset;
-    const on = deidentify(buildDated(), { retain: [TEMPORAL_OPTION] }).dataset;
-    expect(soleValue(off, TEMPORAL)).not.toBe(soleValue(on, TEMPORAL));
+    const full = deidentify(buildDated(), { retain: [TEMPORAL_OPTION] }).dataset;
+    const modified = deidentify(buildDated(), { retain: [TEMPORAL_MODIFIED_OPTION] }).dataset;
+    expect(
+      new Set([soleValue(off, TEMPORAL), soleValue(full, TEMPORAL), soleValue(modified, TEMPORAL)])
+        .size,
+    ).toBe(3);
 
     expect(hasAnyDateOrTime(off)).toBe(false);
     // `DA`/`TM` decode to `dates`/`times` rather than `strings`, so the real
     // values are read off the wire bytes here.
-    expect(on.get(STUDY_DATE)?.rawBytes.toString("latin1").trim()).toBe("20240115");
-    expect(on.get(STUDY_TIME)?.rawBytes.toString("latin1").trim()).toBe("101500");
+    expect(full.get(STUDY_DATE)?.rawBytes.toString("latin1").trim()).toBe("20240115");
+    expect(full.get(STUDY_TIME)?.rawBytes.toString("latin1").trim()).toBe("101500");
+    // 🩺 The modified-dates column says `C` on the rows the full-dates column
+    // says `K`, so the real values are NOT in this output: the declaration and
+    // the resolution move together, which is what makes MODIFIED readable.
+    expect(modified.get(STUDY_DATE)?.rawBytes.toString("latin1").trim()).not.toBe("20240115");
+    expect(modified.get(STUDY_TIME)?.rawBytes.toString("latin1").trim()).not.toBe("101500");
+  });
+
+  it("AC-5: the published temporal option is unchanged in both respects", () => {
+    // The criterion is that adding the second name moved nothing about the
+    // first: it still resolves the full-dates column (the real dates survive)
+    // and it still writes UNMODIFIED.
+    const { dataset, report } = deidentify(buildDated(), { retain: [TEMPORAL_OPTION] });
+    expect(decodedValues(dataset, TEMPORAL)).toStrictEqual(["UNMODIFIED"]);
+    expect(dataset.get(STUDY_DATE)?.rawBytes.toString("latin1").trim()).toBe("20240115");
+    expect(dataset.get(STUDY_TIME)?.rawBytes.toString("latin1").trim()).toBe("101500");
+    expect(report.retained).toStrictEqual([TEMPORAL_OPTION]);
+    // ...and it carries no claim about a transformation, which is the other
+    // branch's disclosure and must not leak onto this one.
+    expect(report.warnings.map((w) => w.code)).not.toContain(
+      WARNING_CODES.DICOM_DEIDENT_DATES_NOT_TRANSFORMED,
+    );
   });
 });
 
 describe("(0028,0303): the whole option domain, swept rather than sampled", () => {
-  it("all 512 subsets: the temporal option decides the value and nothing else does", () => {
+  it("AC-2 AC-5 AC-6: every legal subset, and the temporal options alone decide the value", () => {
     let swept = 0;
+    let skipped = 0;
     const unexpected: string[] = [];
 
     for (const retain of everySubset()) {
+      if (carriesBothTemporal(retain)) {
+        skipped++;
+        continue;
+      }
       const { dataset } = deidentify(buildDated(), { retain });
-      const want = retain.includes(TEMPORAL_OPTION) ? "UNMODIFIED" : "REMOVED";
+      const want = wantedState(retain);
       const got = soleValue(dataset, TEMPORAL);
       if (got !== want)
         unexpected.push(`${retain.join("+") || "(none)"}: ${String(got)} != ${want}`);
       swept++;
     }
 
-    expect(swept).toBe(512);
+    // The whole domain is accounted for, and the illegal quarter of it really
+    // was illegal rather than quietly absent.
+    expect(swept + skipped).toBe(SUBSET_COUNT);
+    expect(skipped).toBeGreaterThan(0);
     expect(unexpected).toStrictEqual([]);
   });
 
-  it("all 512 subsets: MODIFIED is never produced, and both reachable values are", () => {
-    // 🛑 The out-of-scope state, asserted over the entire domain because it is the
-    // one wrong value a recipient cannot detect: `MODIFIED` claims the dates were
-    // transformed, and this package transforms none. The `seen` set beside it is
-    // the non-vacuity half - a sweep that produced nothing at all would also
-    // "never produce MODIFIED".
+  it("AC-2 AC-5 AC-6: every legal subset produces exactly the three defined values", () => {
+    // 🩺 The whole vocabulary, asserted over the entire domain because a wrong
+    // value here is the one a recipient cannot detect from their own output. The
+    // `seen` set is also the non-vacuity half - a sweep that produced nothing at
+    // all would satisfy any "never produces X" claim.
     const seen = new Set<string | undefined>();
     for (const retain of everySubset()) {
+      if (carriesBothTemporal(retain)) continue;
       seen.add(soleValue(deidentify(buildDated(), { retain }).dataset, TEMPORAL));
     }
-    expect(seen.has("MODIFIED")).toBe(false);
-    expect([...seen].sort()).toStrictEqual(["REMOVED", "UNMODIFIED"]);
+    expect([...seen].sort()).toStrictEqual(["MODIFIED", "REMOVED", "UNMODIFIED"]);
   });
 
-  it("no option name other than the temporal one moves the value (the sweep can discriminate)", () => {
-    // The mutation control for the sweep: each of the other eight names, alone,
-    // must leave the Basic Profile state in place. A sweep whose measurement was
-    // blind to `retain` would pass the two rows above and fail this one.
+  it("AC-6: no option name other than the two temporal ones moves the value", () => {
+    // The mutation control for the sweep: every other name, alone, must leave
+    // the Basic Profile state in place. A sweep whose measurement was blind to
+    // `retain` would pass the two rows above and fail this one.
     for (const option of DEIDENTIFY_OPTIONS) {
       const { dataset } = deidentify(buildDated(), { retain: [option] });
-      const want = option === TEMPORAL_OPTION ? "UNMODIFIED" : "REMOVED";
-      expect(soleValue(dataset, TEMPORAL), option).toBe(want);
+      expect(soleValue(dataset, TEMPORAL), option).toBe(wantedState([option]));
     }
   });
 });
 
+describe("(0028,0303) = MODIFIED: the transformation this library did not perform", () => {
+  it("AC-10: records a stable code on the de-identify report saying no date was transformed", () => {
+    const { report } = deidentify(buildDated(), { retain: [TEMPORAL_MODIFIED_OPTION] });
+    const codes = report.warnings.map((w) => w.code);
+    expect(codes).toContain(WARNING_CODES.DICOM_DEIDENT_DATES_NOT_TRANSFORMED);
+    // Exactly one per run: the claim is about the run's option set, not about an
+    // element, so an input cannot multiply it.
+    expect(
+      codes.filter((c) => c === WARNING_CODES.DICOM_DEIDENT_DATES_NOT_TRANSFORMED),
+    ).toHaveLength(1);
+    const warning = report.warnings.find(
+      (w) => w.code === WARNING_CODES.DICOM_DEIDENT_DATES_NOT_TRANSFORMED,
+    );
+    // 🩺 `phi-safety` P4: the message names clauses and published option names,
+    // and nothing the file supplied. The fixture's own values are the needles.
+    expect(warning?.message).toContain("Modified Dates Option");
+    expect(warning?.message).not.toContain("20240115");
+    expect(warning?.message).not.toContain("101500");
+    expect(warning?.message).not.toContain("DOE");
+  });
+
+  it("AC-10: the code is not on the parse warnings, so a strict parse is unaffected", () => {
+    // 🛑 A Tier-2 code raised for a CONFORMANT file would throw for every
+    // `{ strict: true }` caller on exactly that file. This one is a statement
+    // about the run's options, so it belongs to the report and nowhere else.
+    const source = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      elements: [
+        { tag: STUDY_DATE, vr: "DA", value: pad("20240115") },
+        { tag: STUDY_TIME, vr: "TM", value: pad("101500") },
+        { tag: "00100010", vr: "PN", value: pad("DOE^JANE") },
+      ],
+    });
+    const lenient = parseDicom(source);
+    const { dataset, report } = deidentify(lenient, { retain: [TEMPORAL_MODIFIED_OPTION] });
+
+    expect(report.warnings.map((w) => w.code)).toContain(
+      WARNING_CODES.DICOM_DEIDENT_DATES_NOT_TRANSFORMED,
+    );
+    expect(lenient.warnings.map((w) => w.code)).not.toContain(
+      WARNING_CODES.DICOM_DEIDENT_DATES_NOT_TRANSFORMED,
+    );
+    expect(dataset.warnings.map((w) => w.code)).not.toContain(
+      WARNING_CODES.DICOM_DEIDENT_DATES_NOT_TRANSFORMED,
+    );
+
+    // The same input, parsed strictly: unchanged by the run beside it, down to
+    // the warning list, which strict mode would have thrown on.
+    const strict = parseDicom(source, { strict: true });
+    expect(strict.warnings.map((w) => w.code)).toStrictEqual(lenient.warnings.map((w) => w.code));
+    expect(() => parseDicom(serializeDicom(dataset), { strict: true })).not.toThrow();
+  });
+
+  it("AC-10: neither other branch records it (the code names the branch it belongs to)", () => {
+    for (const retain of [[], [TEMPORAL_OPTION]] as readonly (readonly DeidentifyOption[])[]) {
+      const { report } = deidentify(buildDated(), { retain });
+      expect(
+        report.warnings.map((w) => w.code),
+        retain.join("+") || "(none)",
+      ).not.toContain(WARNING_CODES.DICOM_DEIDENT_DATES_NOT_TRANSFORMED);
+    }
+  });
+
+  it("AC-10: it is raised on the option set, not on the input carrying a date", () => {
+    // Same reasoning as the declaration it qualifies: a dateless Data Set under
+    // the modified-dates Option still produces an object stamped MODIFIED, so
+    // the residual behind that stamp is the same size and is still disclosed.
+    const { dataset, report } = deidentify(buildUndated(), {
+      retain: [TEMPORAL_MODIFIED_OPTION],
+    });
+    expect(hasAnyDateOrTime(dataset)).toBe(false);
+    expect(report.warnings.map((w) => w.code)).toContain(
+      WARNING_CODES.DICOM_DEIDENT_DATES_NOT_TRANSFORMED,
+    );
+  });
+});
+
 describe("(0028,0303): a value the source already carried is REPLACED, never joined", () => {
+  it("AC-9: every prior value, written at either depth, leaves the Data Set's own declaration this run's", () => {
+    // 🩺 The criterion swept rather than sampled: each of the standard's three
+    // Values plus an out-of-vocabulary one, written at the root and written only
+    // inside a Sequence Item, against each of the three states a run can be in.
+    // The serialized header count is the half that can see a joined second
+    // value; the object model cannot, because a Data Set is a
+    // `Map<Tag, Element>`.
+    //
+    // "Exactly one" is the Data Set's OWN declaration, which is where §E.2 and
+    // §E.3.6 put it and where a recipient reads it. A copy the sender nested
+    // inside a Sequence Item is retained by omission like every other attribute
+    // Table E.1-1 does not list, and is pinned as a limitation two blocks below
+    // rather than removed here.
+    const priors = ["REMOVED", "UNMODIFIED", "MODIFIED", "SHIFTED BY 400 DAYS"] as const;
+    const runs: readonly (readonly DeidentifyOption[])[] = [
+      [],
+      [TEMPORAL_OPTION],
+      [TEMPORAL_MODIFIED_OPTION],
+    ];
+    let swept = 0;
+
+    for (const prior of priors) {
+      for (const nested of [false, true]) {
+        for (const retain of runs) {
+          const ds = buildDated(
+            nested
+              ? [
+                  {
+                    tag: REF_SERIES_SQ,
+                    items: [{ elements: [{ tag: TEMPORAL, vr: "CS", value: pad(prior) }] }],
+                  },
+                ]
+              : [{ tag: TEMPORAL, vr: "CS", value: pad(prior) }],
+          );
+          const label = `${prior}/${nested ? "nested" : "root"}/${retain.join("+") || "(none)"}`;
+          const { dataset } = deidentify(ds, { retain });
+
+          expect(decodedValues(dataset, TEMPORAL), label).toStrictEqual([wantedState(retain)]);
+          expect(dataset.get(TEMPORAL)?.rawBytes.includes(0x5c), label).toBe(false);
+          expect(dataset.get(TEMPORAL)?.vr, label).toBe("CS");
+          if (!nested) {
+            expect(countHeaders(serializeDicom(dataset), TEMPORAL, "CS"), label).toBe(1);
+          }
+          swept++;
+        }
+      }
+    }
+
+    expect(swept).toBe(priors.length * 2 * runs.length);
+  });
+
   it("discards the prior state and leaves exactly one element with one value", () => {
     // The source says UNMODIFIED; this run removes the dates. Carrying the
     // sender's claim through would be a false safety declaration - the object
@@ -368,7 +567,7 @@ describe("(0028,0303): a nested occurrence does not become the object's declarat
 });
 
 describe("(0028,0303): what the run was permitted to do, not what the input held", () => {
-  it("writes REMOVED on a Data Set that carries no date or time attribute at all", () => {
+  it("AC-6: writes REMOVED on a Data Set that carries no date or time attribute at all", () => {
     const ds = buildUndated();
     expect(hasAnyDateOrTime(ds)).toBe(false);
 
@@ -377,12 +576,27 @@ describe("(0028,0303): what the run was permitted to do, not what the input held
     expect(countHeaders(serializeDicom(dataset), TEMPORAL, "CS")).toBe(1);
   });
 
-  it("writes UNMODIFIED on the same dateless Data Set when the option is active", () => {
+  it("AC-5: writes UNMODIFIED on the same dateless Data Set when the option is active", () => {
     // The attribute records the run's permission, so a dateless input under the
     // temporal option says UNMODIFIED: there was nothing to modify and nothing
     // was. A recipient reading it learns that any dates present are real.
     const { dataset } = deidentify(buildUndated(), { retain: [TEMPORAL_OPTION] });
     expect(decodedValues(dataset, TEMPORAL)).toStrictEqual(["UNMODIFIED"]);
+  });
+
+  it("AC-8: writes MODIFIED on the same dateless Data Set under the modified-dates option", () => {
+    // 🩺 The attribute records what the run was PERMITTED to do, so a dateless
+    // input still gets MODIFIED. Conditioning it on the input carrying a date
+    // would make "this study had no dates" and "this run was allowed to keep
+    // modified dates" the same output, which is the exact confusion the
+    // attribute exists to remove.
+    const ds = buildUndated();
+    expect(hasAnyDateOrTime(ds)).toBe(false);
+
+    const { dataset } = deidentify(ds, { retain: [TEMPORAL_MODIFIED_OPTION] });
+    expect(dataset.get(TEMPORAL)?.vr).toBe("CS");
+    expect(decodedValues(dataset, TEMPORAL)).toStrictEqual(["MODIFIED"]);
+    expect(countHeaders(serializeDicom(dataset), TEMPORAL, "CS")).toBe(1);
   });
 });
 
@@ -449,13 +663,25 @@ describe("(0028,0303): survives serialize-then-reparse, with no pad in the compa
     expect(el?.rawBytes.toString("latin1")).toBe("UNMODIFIED");
   });
 
-  it("the round trip raises no warning, on either state", () => {
+  it("AC-2: MODIFIED compares equal after a round trip, and needs no pad", () => {
+    const { dataset } = deidentify(buildDated(), { retain: [TEMPORAL_MODIFIED_OPTION] });
+    const reparsed = parseDicom(serializeDicom(dataset));
+    const el = reparsed.get(TEMPORAL);
+
+    expect(el?.vr).toBe("CS");
+    expect(soleValue(reparsed, TEMPORAL)).toBe("MODIFIED");
+    expect(el?.rawBytes.length).toBe(8);
+    expect(el?.rawBytes.toString("latin1")).toBe("MODIFIED");
+  });
+
+  it("the round trip raises no warning, on any state", () => {
     // 🛑 A NEW ELEMENT THAT MADE A CONFORMANT FILE WARN WOULD COST EVERY
     // `{ strict: true }` CALLER THE OBJECT, because strict turns every Tier-2
-    // warning into a throw. Both states are checked because only one of them is
-    // odd-length, and the odd one is where a pad-related code would fire.
+    // warning into a throw. All three states are checked because only one of
+    // them is odd-length, and the odd one is where a pad-related code would
+    // fire.
     const codes: string[] = [];
-    for (const retain of [[], [TEMPORAL_OPTION]]) {
+    for (const retain of [[], [TEMPORAL_OPTION], [TEMPORAL_MODIFIED_OPTION]]) {
       const { dataset } = deidentify(buildDated(), { retain });
       const reparsed = parseDicom(serializeDicom(dataset));
       codes.push(...reparsed.warnings.map((w) => w.code));
@@ -510,11 +736,15 @@ describe("(0028,0303) beside the other PS3.15 §E.1.1 rules on this path", () =>
   }
 
   it("group-0004 removal fires in the same run, and the declaration is still written", () => {
-    for (const retain of [[], [TEMPORAL_OPTION]] as readonly (readonly DeidentifyOption[])[]) {
+    for (const retain of [
+      [],
+      [TEMPORAL_OPTION],
+      [TEMPORAL_MODIFIED_OPTION],
+    ] as readonly (readonly DeidentifyOption[])[]) {
       const { dataset, report } = deidentify(parseDicom(buildDicom(buildDirectoryBearingDated())), {
         retain,
       });
-      const want = retain.includes(TEMPORAL_OPTION) ? "UNMODIFIED" : "REMOVED";
+      const want = wantedState(retain);
 
       // Non-vacuity: the other rule really ran on this input, at both depths.
       expect(report.group0004RemovalCount).toBe(2);
@@ -531,14 +761,18 @@ describe("(0028,0303) beside the other PS3.15 §E.1.1 rules on this path", () =>
     // Directory Storage its `(0004,xxxx)` elements stay. The temporal
     // declaration is a Data Set statement either way, so it is written here too
     // - if the two rules shared a predicate, this is the row that would go red.
-    for (const retain of [[], [TEMPORAL_OPTION]] as readonly (readonly DeidentifyOption[])[]) {
+    for (const retain of [
+      [],
+      [TEMPORAL_OPTION],
+      [TEMPORAL_MODIFIED_OPTION],
+    ] as readonly (readonly DeidentifyOption[])[]) {
       const { dataset, report } = deidentify(
         parseDicom(
           buildDicom(buildDirectoryBearingDated({ mediaStorageSOPClassUID: SOP_CLASS_DICOMDIR })),
         ),
         { retain },
       );
-      const want = retain.includes(TEMPORAL_OPTION) ? "UNMODIFIED" : "REMOVED";
+      const want = wantedState(retain);
 
       expect(report.group0004RemovalCount).toBe(0);
       expect(dataset.has("00041130")).toBe(true);
@@ -553,11 +787,15 @@ describe("(0028,0303) beside the other PS3.15 §E.1.1 rules on this path", () =>
     // Data Set element rather than a `(0002,xxxx)` one. This runs both in one
     // call and reads the result back off the wire, so "different groups, no
     // interaction" is measured on the bytes a recipient actually gets.
-    for (const retain of [[], [TEMPORAL_OPTION]] as readonly (readonly DeidentifyOption[])[]) {
+    for (const retain of [
+      [],
+      [TEMPORAL_OPTION],
+      [TEMPORAL_MODIFIED_OPTION],
+    ] as readonly (readonly DeidentifyOption[])[]) {
       const { dataset, report } = deidentify(parseDicom(buildDicom(buildDirectoryBearingDated())), {
         retain,
       });
-      const want = retain.includes(TEMPORAL_OPTION) ? "UNMODIFIED" : "REMOVED";
+      const want = wantedState(retain);
 
       // Non-vacuity: the File Meta replacement really ran on this input.
       expect(dataset.fileMeta?.sourceApplicationEntityTitle).toBeUndefined();
@@ -573,16 +811,15 @@ describe("(0028,0303) beside the other PS3.15 §E.1.1 rules on this path", () =>
     }
   });
 
-  it("neither rule moves the value: the temporal option is still the only input to it", () => {
-    // The mutation control for this block. Each of the other eight names, alone,
-    // must leave the Basic Profile state in place on an input that exercises
-    // both of the other rules - a sweep blind to `retain` would pass every row
-    // above and fail this one.
+  it("neither rule moves the value: the temporal options are still the only input to it", () => {
+    // The mutation control for this block. Every other name, alone, must leave
+    // the Basic Profile state in place on an input that exercises both of the
+    // other rules - a sweep blind to `retain` would pass every row above and
+    // fail this one.
     const source = parseDicom(buildDicom(buildDirectoryBearingDated()));
     for (const option of DEIDENTIFY_OPTIONS) {
       const { dataset } = deidentify(source, { retain: [option] });
-      const want = option === TEMPORAL_OPTION ? "UNMODIFIED" : "REMOVED";
-      expect(soleValue(dataset, TEMPORAL), option).toBe(want);
+      expect(soleValue(dataset, TEMPORAL), option).toBe(wantedState([option]));
     }
   });
 });

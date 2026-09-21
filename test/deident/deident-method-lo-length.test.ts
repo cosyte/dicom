@@ -154,6 +154,48 @@ function windows(text: string, size: number): readonly string[] {
   return out;
 }
 
+/** The two PS3.15 §E.3.6 names, which the standard defines as alternatives. */
+const FULL_DATES: DeidentifyOption = "RetainLongitudinalTemporal";
+const MODIFIED_DATES: DeidentifyOption = "RetainLongitudinalTemporalModifiedDates";
+
+/**
+ * The largest set of options one call may carry: every published name except
+ * one of the two mutually exclusive temporal ones.
+ *
+ * It is `DEIDENTIFY_OPTIONS` minus `RetainLongitudinalTemporalModifiedDates`,
+ * which is exactly the nine-name set this file's byte pins were measured on, so
+ * those pins still mean what they meant.
+ */
+const MAX_LEGAL_OPTIONS: readonly DeidentifyOption[] = DEIDENTIFY_OPTIONS.filter(
+  (option) => option !== MODIFIED_DATES,
+);
+
+/**
+ * Every subset of `retain` a call may legally carry.
+ *
+ * The whole power set minus the quarter naming both §E.3.6 Options, which
+ * `deidentify()` refuses. Derived rather than written down: the domain grew when
+ * the second temporal column landed, and a literal would have gone stale
+ * silently while the sweep still looked exhaustive.
+ */
+function legalSubsets(): readonly (readonly DeidentifyOption[])[] {
+  const out: (readonly DeidentifyOption[])[] = [];
+  for (let mask = 0; mask < 1 << DEIDENTIFY_OPTIONS.length; mask++) {
+    const retain = DEIDENTIFY_OPTIONS.filter((_, i) => ((mask >> i) & 1) === 1);
+    if (retain.includes(FULL_DATES) && retain.includes(MODIFIED_DATES)) continue;
+    out.push(retain);
+  }
+  return out;
+}
+
+/**
+ * How many legal subsets there are, derived from the SHAPE of the domain rather
+ * than from the loop that walks it: the eight non-temporal names are free, and
+ * the temporal pair contributes three states (neither, full dates, modified
+ * dates). A sweep that silently stopped walking part of the domain fails this.
+ */
+const LEGAL_SUBSET_COUNT = 3 * (1 << (DEIDENTIFY_OPTIONS.length - 2));
+
 describe("(0012,0063) fits LO's 64-character maximum, and the bound is per Value", () => {
   it("the default is one value inside the maximum, and it is not the 76-character one", () => {
     const field = methodFor([]);
@@ -173,7 +215,7 @@ describe("(0012,0063) fits LO's 64-character maximum, and the bound is per Value
 
   it("the three figures the item names are all conformant now, per Value and not per field", () => {
     const three = methodFor(["RetainUIDs", "RetainSafePrivate", "RetainDeviceIdentity"]);
-    const nine = methodFor(DEIDENTIFY_OPTIONS);
+    const nine = methodFor(MAX_LEGAL_OPTIONS);
 
     // The field-wise figure is UNCHANGED in kind: 111 and 247 bytes, both far
     // over 64. A remedy that had merely shortened the text would fail here,
@@ -186,7 +228,7 @@ describe("(0012,0063) fits LO's 64-character maximum, and the bound is per Value
 
     // One Value per name, which is what makes the field legal: 1 + 3 and 1 + 9.
     expect(valueLengths(three)).toHaveLength(4);
-    expect(valueLengths(nine)).toHaveLength(1 + DEIDENTIFY_OPTIONS.length);
+    expect(valueLengths(nine)).toHaveLength(1 + MAX_LEGAL_OPTIONS.length);
 
     // Base measured 130 and 272 as SINGLE values. Pinned as the thing that must
     // not come back.
@@ -194,16 +236,18 @@ describe("(0012,0063) fits LO's 64-character maximum, and the bound is per Value
     expect(valueLengths(nine)).not.toContain(272);
   });
 
-  it("all 512 option subsets, exhaustively: no Value over the maximum", () => {
+  it("AC-11: every legal option subset, exhaustively: no Value over the maximum", () => {
     // The whole input space, not a sample. `#74` established that this lineage
     // proves fixed points by sweep rather than by example, and the same argument
-    // applies to a bound: 512 subsets is the entire domain of `retain`.
+    // applies to a bound. The domain is every `retain` a call may carry, which
+    // excludes the quarter naming both mutually exclusive §E.3.6 Options.
     let cells = 0;
     let over = 0;
     let longest = 0;
+    let swept = 0;
 
-    for (let mask = 0; mask < 1 << DEIDENTIFY_OPTIONS.length; mask++) {
-      const retain = DEIDENTIFY_OPTIONS.filter((_, i) => ((mask >> i) & 1) === 1);
+    for (const retain of legalSubsets()) {
+      swept++;
       for (const length of valueLengths(methodFor(retain))) {
         cells++;
         if (length > LO_VALUE_MAX_CHARS) over++;
@@ -211,9 +255,33 @@ describe("(0012,0063) fits LO's 64-character maximum, and the bound is per Value
       }
     }
 
-    expect(cells).toBe(2816);
+    // A zero is only a clearance over a domain that was actually walked, so the
+    // domain is asserted beside it, against a count derived from the shape of
+    // the option list rather than from the loop above.
+    expect(swept).toBe(LEGAL_SUBSET_COUNT);
+    expect(cells).toBeGreaterThan(swept);
     expect(over).toBe(0);
     expect(longest).toBe(61);
+  });
+
+  it("AC-11: the modified-dates option contributes its own Value, inside the maximum", () => {
+    // The criterion's own row: a run under the new name and no caller method
+    // text writes the Profile Value plus one naming that Option, and both are
+    // inside `LO`'s per-Value maximum.
+    const field = methodFor([MODIFIED_DATES]);
+    const values = field
+      .toString("latin1")
+      .replace(/[\0 ]+$/u, "")
+      .split(BACKSLASH);
+
+    expect(values).toStrictEqual([
+      "@cosyte/dicom Basic Application Level Confidentiality Profile",
+      MODIFIED_DATES,
+    ]);
+    expect(Math.max(...valueLengths(field))).toBeLessThanOrEqual(LO_VALUE_MAX_CHARS);
+    // Non-vacuity: the name really is the long one, so "inside the maximum" is
+    // a bound rather than a coincidence of a short string.
+    expect(MODIFIED_DATES.length).toBeGreaterThan(FULL_DATES.length);
   });
 
   it("the sweep can actually fail: the same measurement catches an over-long value", () => {
@@ -227,13 +295,15 @@ describe("(0012,0063) fits LO's 64-character maximum, and the bound is per Value
     expect(valueLengths(field).filter((n) => n > LO_VALUE_MAX_CHARS)).toStrictEqual([65]);
   });
 
-  it("every option name is inside the maximum on its own, so no future subset can breach it", () => {
-    // The mutation control for the sweep: a tenth option with a 70-character
-    // name would make the sweep red, and this row says why in one line.
+  it("AC-11: every option name is inside the maximum on its own, so no subset can breach it", () => {
+    // The mutation control for the sweep: an option with a 70-character name
+    // would make the sweep red, and this row says why in one line. The longest
+    // published name is the one this slice added.
     for (const option of DEIDENTIFY_OPTIONS) {
-      expect(option.length).toBeLessThanOrEqual(LO_VALUE_MAX_CHARS);
+      expect(option.length, option).toBeLessThanOrEqual(LO_VALUE_MAX_CHARS);
     }
-    expect(Math.max(...DEIDENTIFY_OPTIONS.map((o) => o.length))).toBe(28);
+    expect(Math.max(...DEIDENTIFY_OPTIONS.map((o) => o.length))).toBe(MODIFIED_DATES.length);
+    expect(MODIFIED_DATES.length).toBe(39);
   });
 
   it("the bytes do not depend on the order the caller listed the options in", () => {
@@ -264,13 +334,13 @@ describe("the multi-valued default is still a fixed point", () => {
     let ds = buildWithPriorMethod();
     const lengths: number[] = [];
     for (let pass = 0; pass < 6; pass++) {
-      ds = parseDicom(serializeDicom(deidentify(ds, { retain: DEIDENTIFY_OPTIONS }).dataset));
+      ds = parseDicom(serializeDicom(deidentify(ds, { retain: MAX_LEGAL_OPTIONS }).dataset));
       lengths.push(rawMethod(ds).length);
     }
     expect(lengths).toStrictEqual([248, 248, 248, 248, 248, 248]);
     // Growth by whole values rather than by bytes would keep a byte count
     // suspicious-looking but a value count is the direct measurement.
-    expect(valueLengths(rawMethod(ds))).toHaveLength(1 + DEIDENTIFY_OPTIONS.length);
+    expect(valueLengths(rawMethod(ds))).toHaveLength(1 + MAX_LEGAL_OPTIONS.length);
   });
 
   it("a second run with MORE options adds only the option values that are missing", () => {
@@ -546,15 +616,14 @@ describe("an over-long Value this run did not compose is written through, and SA
     ).toStrictEqual([WARNING_CODES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH]);
   });
 
-  it("all 512 option subsets: the library's own text never raises it", () => {
+  it("AC-11: every legal option subset: the library's own text never raises it", () => {
     // The union half of the change, proved rather than argued: the code is
     // additive, and on every run where the library composes the whole value it
     // adds nothing. The sweep above already proves no Value is over; this proves
     // the DISCLOSURE agrees with the measurement rather than firing beside it.
     let raised = 0;
     let swept = 0;
-    for (let mask = 0; mask < 1 << DEIDENTIFY_OPTIONS.length; mask++) {
-      const retain = DEIDENTIFY_OPTIONS.filter((_, i) => ((mask >> i) & 1) === 1);
+    for (const retain of legalSubsets()) {
       const codes = deidentify(buildWithPriorMethod(), { retain }).report.warnings.map(
         (w) => w.code,
       );
@@ -562,9 +631,9 @@ describe("an over-long Value this run did not compose is written through, and SA
       if (codes.includes(WARNING_CODES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH)) raised++;
     }
     // A zero is only a clearance over a domain that was actually walked, so the
-    // domain is asserted beside it: a tenth option would make this 1,024 and an
-    // eighth would make it 256, either silently.
-    expect(swept).toBe(512);
+    // domain is asserted beside it, against a count derived from the option
+    // list's shape: dropping a name or the exclusion rule moves it.
+    expect(swept).toBe(LEGAL_SUBSET_COUNT);
     expect(raised).toBe(0);
   });
 

@@ -403,7 +403,13 @@ describe("AC10: no Annex E Option retains a File Meta identity element", () => {
   it.each([
     ["no options", [] as readonly DeidentifyOption[]],
     ["the three the spec names", NAMED],
-    ["every option this library implements", DEIDENTIFY_OPTIONS],
+    // Every option ONE CALL may carry. The two PS3.15 §E.3.6 temporal Options
+    // are mutually exclusive, so `DEIDENTIFY_OPTIONS` whole is not a legal
+    // `retain`; dropping one of them is the largest set that is.
+    [
+      "every option one call may carry",
+      DEIDENTIFY_OPTIONS.filter((o) => o !== "RetainLongitudinalTemporalModifiedDates"),
+    ],
   ])("%s", (_label, retain) => {
     const source = buildIdentityBearingFile({
       elements: [

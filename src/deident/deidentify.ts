@@ -29,10 +29,13 @@
  *   as safe (and the private-creator elements the profile recognizes).
  * - Writes `(0028,0303)` Longitudinal Temporal Information Modified with the
  *   state this run's option set put the object in: `UNMODIFIED` under
- *   `RetainLongitudinalTemporal`, `REMOVED` without it (PS3.15 §E.3.6 and §E.2).
- *   **Replaced, not joined** - it is `VM 1`, so a prior sender's declaration is
- *   discarded rather than appended to. The third state `MODIFIED` is never
- *   emitted; see {@link TEMPORAL_STATE}.
+ *   `RetainLongitudinalTemporal`, `MODIFIED` under
+ *   `RetainLongitudinalTemporalModifiedDates`, `REMOVED` under neither (PS3.15
+ *   §E.3.6 and §E.2). The two temporal Options are mutually exclusive and a call
+ *   naming both is rejected. **Replaced, not joined** - it is `VM 1`, so a prior
+ *   sender's declaration is discarded rather than appended to. `MODIFIED` says
+ *   the modified-dates column was resolved and **not** that this library
+ *   transformed a date, which it never does; see {@link TEMPORAL_STATE}.
  * - Remaps `(0002,0003)` Media Storage SOP Instance UID consistently (unless
  *   `RetainUIDs`), writes `(0012,0062)` Patient Identity Removed = `YES`, **adds**
  *   its method text to `(0012,0063)` De-identification Method rather than
@@ -168,7 +171,7 @@
 
 import { Buffer } from "node:buffer";
 
-import { annexE, type AnnexEAction, type AnnexEActionCode } from "../dictionary/annex-e.js";
+import { annexE, type AnnexEAction } from "../dictionary/annex-e.js";
 import type { Tag, VR } from "../dictionary/types.js";
 import { KNOWN_VRS } from "../parser/endian.js";
 import { Dataset, type DatasetInit } from "../dataset/dataset.js";
@@ -180,6 +183,7 @@ import type { Profile } from "../parser/types.js";
 import type { DicomParseWarning } from "../parser/warnings.js";
 import {
   burnedInAnnotationNotRemoved,
+  datesNotTransformed,
   deidentMethodNotAdded,
   deidentMethodNotLo,
   deidentMethodPriorRetained,
@@ -198,7 +202,13 @@ import {
   COSYTE_IMPLEMENTATION_CLASS_UID,
   COSYTE_IMPLEMENTATION_VERSION_NAME,
 } from "../serialize/file-meta.js";
-import { dummyBytes, remapUidBytes, resolveAction, uidValueMultiplicity } from "./actions.js";
+import {
+  dummyBytes,
+  effectiveCode,
+  remapUidBytes,
+  resolveAction,
+  uidValueMultiplicity,
+} from "./actions.js";
 import { findEmbeddedAttributes } from "./embedded.js";
 import {
   DEIDENTIFY_OPTIONS,
@@ -225,9 +235,23 @@ const TAG_BURNED_IN_ANNOTATION: Tag = "00280301";
 const TAG_LONGITUDINAL_TEMPORAL_INFORMATION_MODIFIED: Tag = "00280303";
 
 /**
+ * The two PS3.15 §E.3.6 Retain Longitudinal Temporal Information Options, in
+ * {@link DEIDENTIFY_OPTIONS} order.
+ *
+ * §E.3.6 defines them as **alternatives** - "With Full Dates" and "With
+ * Modified Dates" - and an object's dates are either kept as they are or kept
+ * as modified values, never both. One list, read by the validator that refuses
+ * a call naming both and by {@link temporalState}, so the two cannot disagree
+ * about which names are temporal.
+ */
+const TEMPORAL_OPTIONS: readonly DeidentifyOption[] = Object.freeze([
+  "RetainLongitudinalTemporal",
+  "RetainLongitudinalTemporalModifiedDates",
+]);
+
+/**
  * The temporal-state Values PS3.15 2026c defines for
- * `(0028,0303) Longitudinal Temporal Information Modified`, and the two of the
- * three this library can honestly write.
+ * `(0028,0303) Longitudinal Temporal Information Modified`, all three of them.
  *
  * - `REMOVED` - §E.2 Basic Application Level Confidentiality Profile: "The
  *   Attribute Longitudinal Temporal Information Modified (0028,0303) shall be
@@ -236,19 +260,27 @@ const TAG_LONGITUDINAL_TEMPORAL_INFORMATION_MODIFIED: Tag = "00280303";
  * - `UNMODIFIED` - §E.3.6 Retain Longitudinal Temporal Information Options, Full
  *   Dates branch: "The Attribute Longitudinal Temporal Information Modified
  *   (0028,0303) shall be added to the Data Set with a Value of "UNMODIFIED"."
+ * - `MODIFIED` - §E.3.6, Modified Dates branch, which resolves Table E.1-1's
+ *   *modified-dates* column.
  *
- * 🛑 **THE THIRD VALUE IS NOT HERE AND MUST NOT BE ADDED WITHOUT THE COLUMN THAT
- * EARNS IT.** §E.3.6's Modified Dates branch requires `MODIFIED`, and it means
- * that the run resolved Table E.1-1's *modified-dates* column and that the dates
- * in the object were aggregated or transformed. {@link DEIDENTIFY_OPTIONS}
- * exposes one temporal name, it carries the full-dates column, and this package
- * performs no date transformation at all - so every value this library could put
- * in that attribute would be a claim it did not perform. A `MODIFIED` this run
- * emitted would be a **false safety declaration**, which is the worse half of
- * every leak this module has been refused for: a recipient acts on it and never
- * re-derives it. It arrives with the second column, not before.
+ * 🩺 **`MODIFIED` SAYS THE COLUMN WAS RESOLVED. IT DOES NOT SAY THIS LIBRARY
+ * TRANSFORMED ANY DATE, BECAUSE IT TRANSFORMS NONE.** §E.3.6 also requires the
+ * dates themselves to be modified and the manner of modification to be
+ * described in a Conformance Statement; both are the caller's, permanently, and
+ * a library is neither a product nor an actor a Conformance Statement can be
+ * scoped to (PS3.2 Annex N). So a `MODIFIED` this run writes over dates nobody
+ * shifted is a caller defect this package cannot detect, and the run says so
+ * rather than leaving it silent: `DICOM_DEIDENT_DATES_NOT_TRANSFORMED` is on
+ * `report.warnings` for every run that activates the modified-dates Option. A
+ * wrong value here is a **false safety declaration** - a recipient acts on it
+ * and never re-derives it - which is why the disclosure is unconditional rather
+ * than tied to whether the object happened to carry a date.
  */
-const TEMPORAL_STATE = { removed: "REMOVED", unmodified: "UNMODIFIED" } as const;
+const TEMPORAL_STATE = {
+  removed: "REMOVED",
+  unmodified: "UNMODIFIED",
+  modified: "MODIFIED",
+} as const;
 
 /**
  * The temporal state this run's option set puts the object in, as the exact
@@ -260,11 +292,15 @@ const TEMPORAL_STATE = { removed: "REMOVED", unmodified: "UNMODIFIED" } as const
  * earned. That is what makes it readable by a recipient who cannot see the
  * source - "there were no dates here" and "the dates were taken out" are the same
  * output, and only this attribute separates them.
+ *
+ * The two temporal Options are mutually exclusive (see {@link validateRetain}),
+ * so the branches below cannot both be taken and the order between them is not
+ * a precedence rule.
  */
 function temporalState(active: ReadonlySet<DeidentifyOption>): string {
-  return active.has("RetainLongitudinalTemporal")
-    ? TEMPORAL_STATE.unmodified
-    : TEMPORAL_STATE.removed;
+  if (active.has("RetainLongitudinalTemporalModifiedDates")) return TEMPORAL_STATE.modified;
+  if (active.has("RetainLongitudinalTemporal")) return TEMPORAL_STATE.unmodified;
+  return TEMPORAL_STATE.removed;
 }
 
 /**
@@ -429,7 +465,23 @@ interface DeidentifyContext {
   };
 }
 
-/** Validate caller-supplied options; throws {@link DeidentifyError} on misconfig. */
+/**
+ * Validate caller-supplied options; throws {@link DeidentifyError} on misconfig.
+ *
+ * Two refusals, one code. An unknown name is an author-time typo. Both
+ * {@link TEMPORAL_OPTIONS} in one call is the misconfiguration PS3.15 §E.3.6
+ * makes possible by defining two alternatives: they select different Table
+ * E.1-1 columns and different `(0028,0303)` Values, so a run honouring both
+ * would have to pick one silently and stamp the object with a declaration the
+ * caller did not choose.
+ *
+ * 🩺 **The message carries option NAMES and nothing else.** Every token in it is
+ * a structural constant of this module - a published option name or the
+ * `String(opt)` of whatever the caller passed, which is their own argument and
+ * never a decoded element value, a tag read off the wire or a source byte
+ * (`phi-safety` P4). `validateRetain` runs before the Data Set is touched and
+ * has no access to one.
+ */
 function validateRetain(
   retain: readonly DeidentifyOption[] | undefined,
 ): ReadonlySet<DeidentifyOption> {
@@ -444,25 +496,14 @@ function validateRetain(
     }
     active.add(opt);
   }
-  return active;
-}
-
-/**
- * The action code in effect for an attribute: the first active Option (in the
- * canonical {@link DEIDENTIFY_OPTIONS} order) that overrides it wins; otherwise
- * the Basic Profile action.
- */
-function effectiveCode(
-  action: AnnexEAction,
-  active: ReadonlySet<DeidentifyOption>,
-): AnnexEActionCode {
-  for (const opt of DEIDENTIFY_OPTIONS) {
-    if (active.has(opt)) {
-      const override = action.optionSet[opt];
-      if (override !== undefined) return override;
-    }
+  if (TEMPORAL_OPTIONS.every((opt) => active.has(opt))) {
+    throw new DeidentifyError(
+      `The PS3.15 E.3.6 Retain Longitudinal Temporal Information Options are mutually exclusive; ` +
+        `${TEMPORAL_OPTIONS.join(" and ")} cannot both be active in one call. Pass at most one.`,
+      "INVALID_OPTIONS",
+    );
   }
-  return action.basicProfile;
+  return active;
 }
 
 /** Build a fresh value-only scalar {@link Element}, preserving structural fields. */
@@ -2032,17 +2073,18 @@ const DEFAULT_METHOD_PROFILE = "@cosyte/dicom Basic Application Level Confidenti
  * row describes a **Value**; `(0012,0063)` is `1-n`, so the bound falls on each
  * value and not on the Value Field. The single-value string this replaced
  * measured **76** characters with no options, **130** with `RetainUIDs +
- * RetainSafePrivate + RetainDeviceIdentity` and **272** with all nine - every
- * one of the 512 option subsets over the maximum, on every file, in a value this
- * library wrote itself. A receiver that enforces the VR rejects it, and the
- * attribute it rejects is the one carrying the de-identification provenance.
+ * RetainSafePrivate + RetainDeviceIdentity` and **272** with every option name
+ * published at that time - every one of those option subsets over the maximum,
+ * on every file, in a value this library wrote itself. A receiver that enforces
+ * the VR rejects it, and the attribute it rejects is the one carrying the
+ * de-identification provenance.
  *
  * Split per option rather than shortened, because shortening only moves the
- * ceiling: nine option names in one value cannot fit 64 characters however they
- * are abbreviated, and `1-n` is what the standard provides for exactly this.
- * Each name is 28 characters at most (`RetainPatientCharacteristics`), so no
- * subset can produce a value over the maximum - proved by sweeping all 512
- * subsets rather than by argument.
+ * ceiling: the published option names in one value cannot fit 64 characters
+ * however they are abbreviated, and `1-n` is what the standard provides for
+ * exactly this. Every name is inside the per-Value maximum on its own, so no
+ * subset can produce a value over it - proved by sweeping the whole legal
+ * domain of `retain` rather than by argument.
  *
  * **The options are emitted in {@link DEIDENTIFY_OPTIONS} order, not in the
  * caller's**, so two runs that activate the same set write the same bytes
@@ -2106,7 +2148,7 @@ const LO_VALUE_MAX_CHARS = 64;
  *
  * 🩺 **THIS IS A DISCLOSURE, NOT A BOUND. NOTHING IS SHORTENED, SPLIT OR
  * TRUNCATED BY IT.** The text {@link defaultMethod} composes is inside the
- * maximum on all 512 option subsets. The two Values this library does not
+ * maximum on every option subset a call may legally carry. The two Values this library does not
  * compose can be over, and both are still written through as given, because
  * splitting or truncating either would invent a de-identification record nobody
  * made: a caller's `deidentificationMethod`, and a value the source file already
@@ -2433,13 +2475,18 @@ function hasUncleanedBurnedIn(ds: Dataset): boolean {
  *
  * The returned Data Set says what this run did to its **dates** as well as to its
  * identity: `(0028,0303) Longitudinal Temporal Information Modified` carries
- * `UNMODIFIED` when `RetainLongitudinalTemporal` was active and `REMOVED` when it
- * was not, replacing any value the source carried at that tag. It is **not** on
+ * `UNMODIFIED` when `RetainLongitudinalTemporal` was active, `MODIFIED` when
+ * `RetainLongitudinalTemporalModifiedDates` was, and `REMOVED` under neither,
+ * replacing any value the source carried at that tag. It is **not** on
  * {@link DeidentifyReport} - like `(0012,0062)`, it is a statement the object
- * makes about itself, and the report's shape is unchanged by it.
+ * makes about itself, and the report's shape is unchanged by it. 🩺 A
+ * `MODIFIED` means the modified-dates column was resolved; **you** perform the
+ * date transformation §E.3.6 describes, and `report.warnings` carries
+ * `DICOM_DEIDENT_DATES_NOT_TRANSFORMED` saying so.
  *
- * @throws {@link DeidentifyError} (`INVALID_OPTIONS`) for an unknown Retain option
- *   or a malformed `uidRoot`.
+ * @throws {@link DeidentifyError} (`INVALID_OPTIONS`) for an unknown Retain option,
+ *   for both PS3.15 §E.3.6 temporal Options in one call, or for a malformed
+ *   `uidRoot`.
  *
  * @example
  * ```ts
@@ -2561,8 +2608,8 @@ export function deidentify(
   // over the maximum, a prior value the source file wrote over it and kept here,
   // and the replacement fallbacks, which write `added`. It is additive - no
   // existing code stops firing because of it - and it never fires on the text
-  // this library composes for itself, which is proved by sweeping all 512 option
-  // subsets rather than argued.
+  // this library composes for itself, which is proved by sweeping every option
+  // subset a call may legally carry rather than argued.
   if (hasValueOverLoMaximum(deidentMethod.value)) {
     warnings.push(
       deidentMethodValueOverLength({ byteOffset: priorMethod?.byteOffset ?? 0, fileMeta: false }),
@@ -2571,6 +2618,17 @@ export function deidentify(
   if (hasUncleanedBurnedIn(ds)) {
     const offset = ds.get(TAG_PIXEL_DATA)?.byteOffset ?? 0;
     warnings.push(burnedInAnnotationNotRemoved({ byteOffset: offset, fileMeta: false }));
+  }
+  // 🩺 THE RESIDUAL BEHIND `(0028,0303) = MODIFIED`, DECLARED RATHER THAN LEFT
+  // SILENT. The run resolved Table E.1-1's modified-dates column; it did not
+  // modify a date, and PS3.15 E.3.6 asks for both. Raised on the OPTION SET
+  // alone, exactly like the declaration it qualifies, so a Data Set that
+  // happened to carry no date does not make the residual smaller: the claim in
+  // the output is the same either way. On `report.warnings` and never on
+  // `Dataset.warnings` - a Tier-2 code for a conformant file would throw for a
+  // `{ strict: true }` caller on exactly that file.
+  if (active.has("RetainLongitudinalTemporalModifiedDates")) {
+    warnings.push(datesNotTransformed({ byteOffset: 0, fileMeta: false }));
   }
 
   const rebuiltFileMeta = rebuildFileMeta(ds.fileMeta, ctx);

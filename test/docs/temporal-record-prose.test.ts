@@ -10,8 +10,8 @@ import { describe, expect, it } from "vitest";
  * **No test can check a semantic claim about English**, and this one does not pretend to - it is the
  * same instrument as `private-removal-prose.test.ts` beside it, pointed at a different obligation.
  * What it checks is the mechanical part: the pages a reader actually consults for the de-identify
- * path name **both** states the object can be in, and the known-limitations material says the third
- * state is not produced here.
+ * path name **all three** states the object can be in, and the known-limitations material says under
+ * which Option `MODIFIED` is produced and that this library transforms no date.
  *
  * ## Why a prose gate and not just the snippet runner
  *
@@ -24,11 +24,19 @@ import { describe, expect, it } from "vitest";
  *
  * ## Why the third state is the load-bearing sentence
  *
- * `REMOVED` and `UNMODIFIED` are checkable by a reader against their own output. `MODIFIED` is not:
- * it is an **absence**, and a consumer who is never told this library cannot produce it will read the
- * `UNMODIFIED` on an object whose dates they shifted themselves as a true statement. That is the one
- * failure of this attribute a recipient acts on and never re-derives, so the sentence that prevents
- * it is asserted rather than left to a reviewer.
+ * `REMOVED` and `UNMODIFIED` are checkable by a reader against their own output. `MODIFIED` is not.
+ * It is produced now, and what it asserts is **narrower than it reads**: PS3.15 §E.3.6 requires both
+ * that the modified-dates column be resolved and that the dates themselves be modified, and this
+ * library does only the first. A consumer who is never told that will read the `MODIFIED` on an
+ * object whose dates nobody shifted as a true statement. That is the one failure of this attribute a
+ * recipient acts on and never re-derives, so the two sentences that prevent it - which Option
+ * produces `MODIFIED`, and that this library performs no date transformation - are asserted rather
+ * than left to a reviewer.
+ *
+ * 🛑 **THIS GATE USED TO ASSERT THE OPPOSITE AND THE PAGES USED TO SAY IT.** It required the phrase
+ * "never produces it" about `MODIFIED` on the README and the limitations page; that claim became
+ * false when the second E.3.6 column landed, and leaving the gate green by leaving the pages alone
+ * would have shipped a false limitation. The assertion moved in the same commit as the behaviour.
  *
  * @module
  */
@@ -71,7 +79,7 @@ const DEIDENT_PAGES = [
 ] as const;
 
 describe("released prose: the temporal declaration the de-identified object carries", () => {
-  it("names the attribute and BOTH states on every page that documents the de-identify path", () => {
+  it("AC-16: names the attribute and ALL THREE states on every page that documents the de-identify path", () => {
     // Non-vacuity: the pages really are found and really are read by this reader.
     expect(prosePages().length).toBeGreaterThan(1);
 
@@ -82,36 +90,56 @@ describe("released prose: the temporal declaration the de-identified object carr
       expect(text, name).toContain("(0028,0303)");
       expect(text, name).toContain("REMOVED");
       expect(text, name).toContain("UNMODIFIED");
+      expect(text, name).toContain("MODIFIED");
     }
   });
 
-  it("says which option produces which state, so the two are not merely both mentioned", () => {
+  it("AC-16: says which option produces which state, so the three are not merely all mentioned", () => {
     // 🛑 "Contains the word UNMODIFIED" is satisfied by a page that only quotes the standard.
-    // A reader needs the mapping from the option set they pass to the value they will read.
+    // A reader needs the mapping from the option set they pass to the value they will read, and
+    // both option names are in the substring of the longer one, so the mapping sentences below are
+    // what separate them.
     for (const name of DEIDENT_PAGES) {
       const page = prosePages().find((p) => p.name === name);
-      expect(plain(page?.text ?? ""), name).toContain("RetainLongitudinalTemporal");
+      const text = plain(page?.text ?? "");
+      expect(text, name).toContain("RetainLongitudinalTemporal");
+      expect(text, name).toContain("RetainLongitudinalTemporalModifiedDates");
     }
     const readme = plain(prosePages().find((p) => p.name === "README.md")?.text ?? "");
     expect(readme).toContain(
       "REMOVED when no Retain Longitudinal Temporal Information Option was active",
     );
+    expect(readme).toContain("MODIFIED when RetainLongitudinalTemporalModifiedDates was");
   });
 
-  it("records in the known-limitations material that MODIFIED is not produced", () => {
-    // The absence a consumer cannot detect from their own output. Both the npm-visible README's
-    // limitations section and the docs site's limitations page carry it, because a reader arriving
-    // from either route has to meet it.
-    const claim = "never produces it";
+  it("AC-16: records in the known-limitations material the condition under which MODIFIED is produced", () => {
+    // 🛑 THIS ROW REPLACES THE "never produces it" ASSERTION. The claim it used to make became
+    // false with the second E.3.6 column, so what is asserted now is the condition: the Option
+    // whose name earns the state. Both the npm-visible README's limitations section and the docs
+    // site's limitations page carry it, because a reader arriving from either route has to meet it.
     for (const name of ["README.md", "docs-content/limitations.md"]) {
       const page = prosePages().find((p) => p.name === name);
       const text = plain(page?.text ?? "");
       expect(text, name).toContain("MODIFIED");
-      expect(text, name).toContain(claim);
+      expect(text, name).toContain("RetainLongitudinalTemporalModifiedDates");
+      expect(text, name).toContain("mutually exclusive");
     }
   });
 
-  it("tells a caller who shifts dates themselves that the output declaration is then wrong", () => {
+  it("AC-16: records that this library performs no date transformation, beside the capability", () => {
+    // The half of §E.3.6 the library does not deliver, stated on the same pages as the Option that
+    // delivers the other half. A `MODIFIED` a reader believes means "the dates were shifted" is the
+    // one failure of this attribute a recipient acts on and never re-derives, so the sentence is
+    // asserted and the stable code that says the same thing at run time is named beside it.
+    for (const name of ["README.md", "docs-content/limitations.md"]) {
+      const page = prosePages().find((p) => p.name === name);
+      const text = plain(page?.text ?? "");
+      expect(text, name).toContain("performs no date transformation");
+      expect(text, name).toContain("DICOM_DEIDENT_DATES_NOT_TRANSFORMED");
+    }
+  });
+
+  it("AC-16: tells a caller who shifts dates themselves that the output declaration is then wrong", () => {
     // The one action this limitation obliges. A limitation a reader cannot act on is a disclaimer.
     for (const name of ["README.md", "docs-content/limitations.md"]) {
       const page = prosePages().find((p) => p.name === name);

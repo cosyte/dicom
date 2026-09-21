@@ -114,6 +114,37 @@ function overlayCommentsRow(xml: string): string {
   return xml.slice(open, close);
 }
 
+/**
+ * Table E.1-1's own `<thead>`, verbatim.
+ *
+ * Located the way the generator locates the table - by `xml:id`, then back to
+ * the `<table>` that carries it - rather than by matching header text, so a
+ * mutation built from it cannot be a mutation of some other table's header.
+ */
+function annexEThead(xml: string): string {
+  const at = xml.indexOf('xml:id="table_E.1-1"');
+  expect(at, "part15.xml must carry table_E.1-1").toBeGreaterThan(-1);
+  const open = xml.lastIndexOf("<table", at);
+  const head = /<thead\b[^>]*>[\s\S]*?<\/thead>/.exec(xml.slice(open));
+  expect(head?.[0], "table_E.1-1 must carry a <thead>").toBeDefined();
+  return head?.[0] ?? "";
+}
+
+/**
+ * The header cells of that `<thead>`, split the way the generator splits them.
+ *
+ * The regex is the generator's own, so a mutation that swaps two entries of this
+ * array moves exactly the label the generator will read at that index.
+ */
+function headerCells(thead: string): readonly string[] {
+  return thead.match(/<th\b[^>]*?(?:\/>|>[\s\S]*?<\/th>)/g) ?? [];
+}
+
+/** Index of `Rtn. Long. Full Dates Opt.` in Table E.1-1, per the generator. */
+const FULL_DATES_COLUMN = 10;
+/** Index of `Rtn. Long. Modif. Dates Opt.`, the column this slice carries. */
+const MODIFIED_DATES_COLUMN = 11;
+
 describe("generate-annex-e", () => {
   // One happy-path invocation, asserted from many angles. The generator reads a
   // 3.5 MB DocBook, so re-spawning it per assertion is real wall-clock spent on
@@ -253,10 +284,124 @@ describe("generate-annex-e", () => {
     GENERATOR_TIMEOUT_MS,
   );
 
-  it("prints how far the two E.3.6 date columns diverge under the collapse", () => {
+  it("prints how far the two E.3.6 date columns diverge", () => {
     expect(happy.stdout).toMatch(
       /E\.3\.6 rows where full-dates and modified-dates columns differ: \d+/,
     );
+  });
+
+  it(
+    "AC-14: refuses when a header label is not at the column index the reader assumes",
+    () => {
+      // 🛑 A CELL COUNT CATCHES AN INSERTED OR DROPPED COLUMN AND NOT A REORDER,
+      // and a reorder is what reads one Option's action code as another's. Every
+      // index in the reader is positional, so the guard is proved by MOVING a
+      // header rather than by a green regen: a stale bound leaves the output
+      // byte-identical, which is why AC-15 alone cannot see this.
+      //
+      // The mutation swaps the two E.3.6 temporal headers, which is the exact
+      // reorder that would hand `RetainLongitudinalTemporalModifiedDates` the
+      // full-dates column's codes - the less protective branch under the more
+      // protective name.
+      withMutatedDocBook(
+        (xml) => {
+          const thead = annexEThead(xml);
+          const cells = headerCells(thead);
+          expect(cells).toHaveLength(15);
+          const full = cells[FULL_DATES_COLUMN] ?? "";
+          const modified = cells[MODIFIED_DATES_COLUMN] ?? "";
+          const swapped = cells
+            .map((cell, i) => {
+              if (i === FULL_DATES_COLUMN) return modified;
+              if (i === MODIFIED_DATES_COLUMN) return full;
+              return cell;
+            })
+            .join("");
+          return xml.replace(thead, `<thead>${swapped}</thead>`);
+        },
+        (r) => {
+          expect(r.code).not.toBe(0);
+          expect(r.stderr).toContain("The table's columns have moved");
+          expect(r.stderr).toContain(String(FULL_DATES_COLUMN));
+        },
+      );
+      // Nothing was emitted from a document whose columns had moved: the
+      // artifact still answers for the pinned edition.
+      expect(readFileSync(ARTIFACT, "utf8")).toBe(artifactBefore);
+    },
+    GENERATOR_TIMEOUT_MS,
+  );
+
+  it(
+    "AC-14: refuses when the MODIFIED-DATES header alone is not where the reader expects it",
+    () => {
+      // The swap above moves two labels at once and reds at the first index it
+      // reaches, so on its own it never proves the guard covers index 11 - the
+      // index this slice started reading. This mutation leaves every other
+      // header alone and renames only that one, so the refusal can come from
+      // nowhere else.
+      withMutatedDocBook(
+        (xml) => {
+          const thead = annexEThead(xml);
+          const cells = headerCells(thead);
+          expect(cells).toHaveLength(15);
+          const renamed = cells
+            .map((cell, i) =>
+              i === MODIFIED_DATES_COLUMN
+                ? "<th><para>Rtn. Long. Aggr. Dates Opt.</para></th>"
+                : cell,
+            )
+            .join("");
+          return xml.replace(thead, `<thead>${renamed}</thead>`);
+        },
+        (r) => {
+          expect(r.code).not.toBe(0);
+          expect(r.stderr).toContain("The table's columns have moved");
+          expect(r.stderr).toContain(String(MODIFIED_DATES_COLUMN));
+          expect(r.stderr).toContain("Rtn. Long. Modif. Dates Opt.");
+        },
+      );
+      expect(readFileSync(ARTIFACT, "utf8")).toBe(artifactBefore);
+    },
+    GENERATOR_TIMEOUT_MS,
+  );
+
+  it(
+    "AC-14: the mutation route can go green (the two rows above are not vacuous)",
+    () => {
+      // The control for both. `withMutatedDocBook` rewrites `<thead>` wholesale,
+      // so a rewrite that changed the markup's SHAPE would red the generator for
+      // a reason unrelated to the column order and the two rows above would
+      // certify nothing. Rebuild the header from its own cells, unreordered, and
+      // the run must still succeed and still emit the same table.
+      //
+      // The comparison is over the TABLE rather than the whole file: every
+      // mutant is committed under its own SHA-256, which the generator prints in
+      // the provenance header, so the header legitimately differs and the rows
+      // must not.
+      const tableOf = (text: string): string => text.slice(text.indexOf("export const ANNEX_E"));
+      withMutatedDocBook(
+        (xml) => {
+          const thead = annexEThead(xml);
+          return xml.replace(thead, `<thead>${headerCells(thead).join("")}</thead>`);
+        },
+        (r) => {
+          expect(r.stderr, r.stderr).toBe("");
+          expect(r.code).toBe(0);
+          const emitted = readFileSync(ARTIFACT, "utf8");
+          expect(tableOf(emitted)).toBe(tableOf(artifactBefore));
+          expect(tableOf(emitted).length).toBeGreaterThan(0);
+        },
+      );
+    },
+    GENERATOR_TIMEOUT_MS,
+  );
+
+  it("AC-1: emits the modified-dates column as a per-attribute action", () => {
+    // The generator's half of AC-1: the column reaches the committed artifact at
+    // all. `test/dictionary/annex-e.test.ts` holds the resolution half.
+    expect(artifactAfter).toContain('"RetainLongitudinalTemporalModifiedDates"');
+    expect(artifactAfter).toBe(artifactBefore);
   });
 
   it(

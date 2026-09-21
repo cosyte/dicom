@@ -9,13 +9,15 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { annexE } from "../../src/dictionary/annex-e.js";
+import { annexE, type AnnexEAction } from "../../src/dictionary/annex-e.js";
 import { ANNEX_E, ANNEX_E_REPEATING } from "../../src/dictionary/generated/annex-e.js";
 import {
   REPEATING_GROUP_RANGES,
   expandRepeatingGroups,
   matchesRepeatingPattern,
 } from "../../src/dictionary/repeating-groups.js";
+import { effectiveCode, resolveAction } from "../../src/deident/actions.js";
+import type { DeidentifyOption } from "../../src/deident/types.js";
 
 describe("annexE (PS3.15 Annex E lookup)", () => {
   it("resolves Patient's Name (00100010) to a Basic-Profile Z action", () => {
@@ -282,5 +284,105 @@ describe("annexE (repeating-group family rows)", () => {
     for (const rule of ANNEX_E_REPEATING) {
       expect(REPEATING_GROUP_RANGES[rule.pattern.slice(0, 2)], rule.pattern).toBeDefined();
     }
+  });
+});
+
+/**
+ * The two PS3.15 §E.3.6 temporal columns, resolved.
+ *
+ * Table E.1-1 gives the two Retain Longitudinal Temporal Information Options
+ * separate columns, and until this slice the generated table carried only the
+ * full-dates one, so the modified-dates branch was unreachable. These rows read
+ * the **generated table at run time** for which attributes the two columns
+ * disagree about: the divergence is a property of the vendored PS3.15 edition
+ * and moves when the pin moves, so a number written into a test here would be
+ * wrong on the next re-pin and would assert the wrong thing in the meantime.
+ *
+ * `effectiveCode` is the production resolver `deidentify()` calls per element -
+ * the unit under test, not a restatement of it.
+ */
+const FULL_DATES: DeidentifyOption = "RetainLongitudinalTemporal";
+const MODIFIED_DATES: DeidentifyOption = "RetainLongitudinalTemporalModifiedDates";
+
+/** One active Option, as `effectiveCode` takes it. */
+function only(option: DeidentifyOption): ReadonlySet<DeidentifyOption> {
+  return new Set([option]);
+}
+
+/** Every concrete Table E.1-1 row, as the generated table publishes it. */
+function everyRow(): readonly AnnexEAction[] {
+  return Object.values(ANNEX_E);
+}
+
+/** The rows whose two published E.3.6 columns differ, derived from the table itself. */
+function divergentRows(): readonly AnnexEAction[] {
+  return everyRow().filter((row) => row.optionSet[FULL_DATES] !== row.optionSet[MODIFIED_DATES]);
+}
+
+describe("PS3.15 E.3.6: the modified-dates column is carried and resolved", () => {
+  it("AC-1: resolves every attribute against the modified-dates column, not the full-dates one", () => {
+    const wrongColumn: string[] = [];
+    for (const row of everyRow()) {
+      const resolved = effectiveCode(row, only(MODIFIED_DATES));
+      const published = row.optionSet[MODIFIED_DATES] ?? row.basicProfile;
+      if (resolved !== published) wrongColumn.push(`${row.tag}: ${resolved} != ${published}`);
+    }
+    expect(wrongColumn).toStrictEqual([]);
+
+    // The discriminating half. On every row where the two columns disagree, the
+    // full-dates code must NOT come back: a resolver that fell through to the
+    // neighbouring column would satisfy the loop above on every row the
+    // modified-dates column is silent about, and fail here on the rest.
+    const divergent = divergentRows();
+    expect(divergent.length).toBeGreaterThan(0);
+    for (const row of divergent) {
+      expect(effectiveCode(row, only(MODIFIED_DATES)), row.tag).not.toBe(row.optionSet[FULL_DATES]);
+      expect(effectiveCode(row, only(MODIFIED_DATES)), row.tag).toBe(row.optionSet[MODIFIED_DATES]);
+    }
+  });
+
+  it("AC-4: differs on every attribute whose two columns differ, agrees on every other", () => {
+    // The differing set is derived from the generated table on this run. Nothing
+    // here counts it, because the count is a fact about the vendored edition.
+    const disagreed: string[] = [];
+    const agreed: string[] = [];
+    for (const row of everyRow()) {
+      const full = effectiveCode(row, only(FULL_DATES));
+      const modified = effectiveCode(row, only(MODIFIED_DATES));
+      const columnsDiffer = row.optionSet[FULL_DATES] !== row.optionSet[MODIFIED_DATES];
+      if (columnsDiffer && full === modified) agreed.push(`${row.tag}: both ${full}`);
+      if (!columnsDiffer && full !== modified) disagreed.push(`${row.tag}: ${full} vs ${modified}`);
+    }
+    expect(agreed).toStrictEqual([]);
+    expect(disagreed).toStrictEqual([]);
+
+    // Non-vacuity: both halves of the claim have rows to be true of, and the
+    // action a run applies differs too rather than only the printed code.
+    const divergent = divergentRows();
+    expect(divergent.length).toBeGreaterThan(0);
+    expect(everyRow().length - divergent.length).toBeGreaterThan(0);
+    for (const row of divergent) {
+      expect(resolveAction(effectiveCode(row, only(FULL_DATES))), row.tag).not.toBe(
+        resolveAction(effectiveCode(row, only(MODIFIED_DATES))),
+      );
+    }
+  });
+
+  it("AC-7: an attribute the modified-dates column is silent about falls to the Basic Profile", () => {
+    // The real-table half of the fail-safe. The constructed row where the
+    // full-dates column publishes a code and the modified-dates column does not
+    // is in `annex-e-precedence.test.ts`; PS3.15 2026c publishes no such row, so
+    // it cannot be built from this table.
+    const silent = everyRow().filter((row) => row.optionSet[MODIFIED_DATES] === undefined);
+    expect(silent.length).toBeGreaterThan(0);
+    for (const row of silent) {
+      expect(effectiveCode(row, only(MODIFIED_DATES)), row.tag).toBe(row.basicProfile);
+    }
+    // ...and never a blanket keep, which is what an action table lagging the
+    // dictionary silently produces.
+    const kept = silent.filter((row) => effectiveCode(row, only(MODIFIED_DATES)) === "K");
+    expect(kept.map((row) => row.tag)).toStrictEqual(
+      silent.filter((row) => row.basicProfile === "K").map((row) => row.tag),
+    );
   });
 });

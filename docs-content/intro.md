@@ -198,7 +198,8 @@ console.log(report.warnings); // e.g. burned-in pixel annotation that this layer
 
 It is a pure function. Your input dataset is never mutated. UIDs are remapped to deterministic `2.25`
 replacements that stay consistent across files, so a de-identified study still hangs together. Opt into
-any of the nine metadata-affecting Annex E Options to keep specific classes of attribute:
+the metadata-affecting Annex E Options to keep specific classes of attribute (the two PS3.15 §E.3.6
+temporal ones are alternatives, so take at most one of them):
 
 ```ts
 // Keep original UIDs and acquisition dates; clean (rather than drop) free-text descriptions.

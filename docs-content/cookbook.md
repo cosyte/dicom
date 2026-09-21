@@ -323,10 +323,19 @@ dataset.study.instanceUid?.startsWith("2.25."); // => true
 dataset.get("00280303")?.vr; // => "CS"
 dataset.get("00280303")?.value; // => { kind: "strings", values: ["REMOVED"] }
 
-// The other state, and the only other one this library writes: section E.3.6's
-// Full Dates branch requires UNMODIFIED, and the real dates are then in the output.
+// Section E.3.6's Full Dates branch requires UNMODIFIED, and the real dates are
+// then in the output.
 const dated = deidentify(ds, { retain: ["RetainLongitudinalTemporal"] }).dataset;
 dated.get("00280303")?.value; // => { kind: "strings", values: ["UNMODIFIED"] }
+
+// And its Modified Dates branch requires MODIFIED. That resolves Table E.1-1's
+// modified-dates column; YOU perform the date transformation section E.3.6 also
+// asks for, and the run says so on its report.
+const shifted = deidentify(ds, {
+  retain: ["RetainLongitudinalTemporalModifiedDates"],
+});
+shifted.dataset.get("00280303")?.value; // => { kind: "strings", values: ["MODIFIED"] }
+shifted.report.warnings.map((w) => w.code); // => ["DICOM_DEIDENT_DATES_NOT_TRANSFORMED"]
 
 // The report lists what was acted on. It is NOT value-free: see the fields
 // named on DeidentifyReport before logging one whole.
@@ -374,23 +383,29 @@ de-identified files it references, removing a non-de-identified DICOMDIR from th
 This is **metadata-level** de-identification. Pixel data is out of scope: when an object carries
 burned-in annotation this layer cannot remove, you get a `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED`
 warning on the report rather than a false sense of safety. Pixel cleaning is deferred to
-`@cosyte/dicom-pixel`. Opt into any of the nine metadata-affecting Annex E Options (e.g. `RetainUIDs`,
+`@cosyte/dicom-pixel`. Opt into the metadata-affecting Annex E Options (e.g. `RetainUIDs`,
 `RetainLongitudinalTemporal`, `CleanDescriptors`) via `deidentify(ds, { retain: [...] })`.
 
-**The de-identified object declares what happened to its dates, in two states and only two.**
+**The de-identified object declares what happened to its dates, in the three states PS3.15 defines.**
 `(0028,0303) Longitudinal Temporal Information Modified` is written on every run: **`REMOVED`** when
 no Retain Longitudinal Temporal Information Option was active, **`UNMODIFIED`** when
-`RetainLongitudinalTemporal` was. PS3.15 2026c §E.2 states the first ("The Attribute Longitudinal
-Temporal Information Modified (0028,0303) shall be added to the Data Set with a Value of `REMOVED`
-if none of the Retain Longitudinal Temporal Information Options is applied") and §E.3.6 the second,
-for its Full Dates branch. That is the whole point of the attribute: without it, a recipient holding
-dates cannot tell real ones from scrubbed ones, and a study with no dates to begin with is
+`RetainLongitudinalTemporal` was, and **`MODIFIED`** when `RetainLongitudinalTemporalModifiedDates`
+was. PS3.15 2026c §E.2 states the first ("The Attribute Longitudinal Temporal Information Modified
+(0028,0303) shall be added to the Data Set with a Value of `REMOVED` if none of the Retain
+Longitudinal Temporal Information Options is applied") and §E.3.6 the other two, for its Full Dates
+and Modified Dates branches. That is the whole point of the attribute: without it, a recipient
+holding dates cannot tell real ones from scrubbed ones, and a study with no dates to begin with is
 indistinguishable from one this run emptied. **It is replaced, not added to** - the attribute is
 `VM 1`, so a `(0028,0303)` the source already carried is discarded rather than joined, which is the
 opposite of what `(0012,0063)` does with a prior method text and is the standard's own asymmetry.
-**The third state, `MODIFIED`, is never written by this library**: see
-[Known limitations](./limitations) for why, and for what to do if you shift dates yourself after the
-call.
+
+**The two §E.3.6 Options are mutually exclusive and the second one's limit rides with it.** A call
+naming both is rejected with a `DeidentifyError`. `RetainLongitudinalTemporalModifiedDates` resolves
+Table E.1-1's modified-dates column and writes `MODIFIED`; **this library performs no date
+transformation**, so the modification §E.3.6 also requires is yours, and every such run carries
+`DICOM_DEIDENT_DATES_NOT_TRANSFORMED` on `report.warnings` saying so. See
+[Known limitations](./limitations) for the whole of that residual, and for what to do if you shift
+dates yourself after the call.
 
 **Before you rely on this on real data, read [Known limitations](./limitations).** Several routes are
 measured, disclosed and open, and the report reading clean is not by itself proof that nothing

@@ -269,16 +269,115 @@ describe("deidentify - Retain / Clean options", () => {
     expect(report.attributes.find((a) => a.tag === "00081030")?.applied).toBe("cleaned");
   });
 
-  it("rejects an unknown retain option", () => {
+  it("AC-12: rejects an unknown retain option, with the same typed error as before", () => {
     // @ts-expect-error - not a valid option
     expect(() => deidentify(buildPhiDataset(), { retain: ["RetainEverything"] })).toThrow(
       DeidentifyError,
     );
+    try {
+      // @ts-expect-error - not a valid option
+      deidentify(buildPhiDataset(), { retain: ["RetainEverything"] });
+      expect.unreachable("an unknown option must be rejected");
+    } catch (e) {
+      expect(e).toBeInstanceOf(DeidentifyError);
+      expect((e as DeidentifyError).code).toBe("INVALID_OPTIONS");
+    }
+  });
+
+  it("AC-12: accepts the modified-dates option name at runtime validation", () => {
+    // The other half of the criterion: the new name is a published option, so it
+    // passes validation and is reported as retained rather than refused.
+    const { report } = deidentify(buildPhiDataset(), {
+      retain: ["RetainLongitudinalTemporalModifiedDates"],
+    });
+    expect(report.retained).toStrictEqual(["RetainLongitudinalTemporalModifiedDates"]);
   });
 
   it("reports the active options it retained", () => {
     const { report } = deidentify(buildPhiDataset(), { retain: ["RetainUIDs"] });
     expect(report.retained).toEqual(["RetainUIDs"]);
+  });
+});
+
+describe("PS3.15 E.3.6: the two Retain Longitudinal Temporal Options are mutually exclusive", () => {
+  /** The two §E.3.6 names, spelled here so the refusal is asserted against literals. */
+  const FULL_DATES = "RetainLongitudinalTemporal" as const;
+  const MODIFIED_DATES = "RetainLongitudinalTemporalModifiedDates" as const;
+
+  it("AC-3: rejects a call carrying both temporal options with the typed error", () => {
+    // 🩺 §E.3.6 defines them as ALTERNATIVES. They select different Table E.1-1
+    // columns and different `(0028,0303)` Values, so honouring both would mean
+    // picking one silently and stamping the object with a declaration the caller
+    // did not choose.
+    expect(() => deidentify(buildPhiDataset(), { retain: [FULL_DATES, MODIFIED_DATES] })).toThrow(
+      DeidentifyError,
+    );
+    try {
+      deidentify(buildPhiDataset(), { retain: [FULL_DATES, MODIFIED_DATES] });
+      expect.unreachable("both temporal options in one call must be rejected");
+    } catch (e) {
+      expect(e).toBeInstanceOf(DeidentifyError);
+      expect((e as DeidentifyError).code).toBe("INVALID_OPTIONS");
+    }
+  });
+
+  it("AC-3: rejects them in either order, and beside any other option", () => {
+    // Order-independence, and the refusal must not be a property of a two-element
+    // array: a caller activating half the profile must hit it too.
+    for (const retain of [
+      [MODIFIED_DATES, FULL_DATES],
+      [FULL_DATES, "RetainUIDs", MODIFIED_DATES],
+      ["CleanDescriptors", MODIFIED_DATES, "RetainSafePrivate", FULL_DATES],
+    ] as const) {
+      expect(
+        () => deidentify(buildPhiDataset(), { retain: [...retain] }),
+        retain.join("+"),
+      ).toThrow(DeidentifyError);
+    }
+  });
+
+  it("AC-3: either one ALONE is accepted (the refusal is the pair, not the names)", () => {
+    // The mutation control. A validator that refused the modified-dates name
+    // outright would pass every row above and fail this one.
+    for (const option of [FULL_DATES, MODIFIED_DATES] as const) {
+      expect(() => deidentify(buildPhiDataset(), { retain: [option] }), option).not.toThrow();
+    }
+  });
+
+  it("AC-13: the rejection carries only option names and structural constants", () => {
+    // 🩺 `phi-safety` P4. The fixture's PHI strings are the needles: none of them
+    // may reach a message a caller logs, and neither may a tag read off the wire
+    // or a source byte. `validateRetain` runs before the Data Set is touched.
+    const messages: string[] = [];
+    for (const retain of [[FULL_DATES, MODIFIED_DATES], ["RetainEverything"]] as const) {
+      try {
+        // @ts-expect-error - "RetainEverything" is deliberately not a valid option
+        deidentify(buildPhiDataset(), { retain: [...retain] });
+        expect.unreachable("the call must be rejected");
+      } catch (e) {
+        expect(e).toBeInstanceOf(DeidentifyError);
+        messages.push((e as DeidentifyError).message);
+      }
+    }
+    expect(messages).toHaveLength(2);
+
+    for (const message of messages) {
+      for (const secret of Object.values(PHI)) {
+        expect(message, secret).not.toContain(secret);
+      }
+      for (const uid of Object.values(UID)) {
+        expect(message, uid).not.toContain(uid);
+      }
+      // No tag read off the wire, in either printed form.
+      expect(message).not.toMatch(/\(?[0-9A-Fa-f]{4},[0-9A-Fa-f]{4}\)?/);
+      expect(message).not.toMatch(/\b[0-9A-Fa-f]{8}\b/);
+    }
+
+    // Non-vacuity: the messages really do name the option surface, so the
+    // absence above is a bound rather than an empty string.
+    expect(messages[0]).toContain(FULL_DATES);
+    expect(messages[0]).toContain(MODIFIED_DATES);
+    expect(messages[1]).toContain("RetainEverything");
   });
 });
 

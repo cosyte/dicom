@@ -88,18 +88,30 @@ DEIDENTIFY_OPTIONS.includes("CleanPixelData"); // => false
 deidentify(ds).dataset.get("00280303")?.value.kind; // => "strings"
 deidentify(ds).dataset.study.date?.raw; // => undefined
 
-// With the Option: the real dates are in the output, and the declaration changes with them.
+// With the full-dates Option: the real dates are in the output, and the
+// declaration changes with them.
 const dated = deidentify(ds, { retain: ["RetainLongitudinalTemporal"] }).dataset;
 dated.get("00280303")?.value; // => { kind: "strings", values: ["UNMODIFIED"] }
 dated.study.date?.raw; // => "19000101"
+
+// With the modified-dates Option: the other E.3.6 column, and the third state.
+const shifted = deidentify(ds, {
+  retain: ["RetainLongitudinalTemporalModifiedDates"],
+});
+shifted.dataset.get("00280303")?.value; // => { kind: "strings", values: ["MODIFIED"] }
+shifted.report.warnings.map((w) => w.code); // => ["DICOM_DEIDENT_DATES_NOT_TRANSFORMED"]
 ```
 
-**`RetainLongitudinalTemporal` carries the less protective of the two PS3.15 §E.3.6 columns.** The
-standard defines both a full-dates and a modified-dates Option; this package exposes one name and it
-is the full-dates branch, so on the attributes where the columns disagree you keep the real value
-where modified-dates would have cleaned it. Date shifting is not performed at this layer. Activate
-the Option only when real dates are genuinely required, and see
-[Known limitations](./limitations) for the third `(0028,0303)` state this library never writes.
+**`RetainLongitudinalTemporal` carries the less protective of the two PS3.15 §E.3.6 columns, and
+`RetainLongitudinalTemporalModifiedDates` carries the other.** The standard defines a full-dates and
+a modified-dates Option and Table E.1-1 gives them separate columns; the first name is the full-dates
+branch, so on the attributes where the columns disagree you keep the real value where modified-dates
+would have cleaned it. They are **mutually exclusive** and a call naming both is rejected with a
+`DeidentifyError`. **Date shifting is not performed at this layer, on either branch**: §E.3.6 also
+requires the dates themselves to be modified and the manner described in a Conformance Statement, and
+both are yours, so every modified-dates run raises `DICOM_DEIDENT_DATES_NOT_TRANSFORMED` on its
+report. Activate the full-dates Option only when real dates are genuinely required, and see
+[Known limitations](./limitations) for the whole of that residual.
 
 ## UID remapping
 
