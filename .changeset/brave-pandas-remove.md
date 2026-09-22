@@ -12,15 +12,18 @@ a fix. It is fixed now: PS3.15 2026c §E.3.10 retains Private Attributes "known 
 to be safe from identity leakage" and sends "all other Private Attributes" to removal or to the
 `(0008,0307)` action this library does not implement, so a value nothing enumerated is removed.
 
-**The over-redaction is the point rather than a corner case, and this is the size of it.** After this
-release exactly three classes of private value reach the output: one the run **walked as Data
-Elements** and put through the Annex E action table (a private `SQ` whose items the parser
+**The over-redaction is the point rather than a corner case, and this is the size of it.** Three
+classes of private value reach the output on something this run enumerated: one the run **walked as
+Data Elements** and put through the Annex E action table (a private `SQ` whose items the parser
 materialized), a **Private Creator `(gggg,00EE)` whose whole decoded value is a member of your
 profile's private dictionary**, and a **zero-length** value. Decoding a value under the VR your
 profile declares for it is not enumeration, and neither is the embedded-attribute scanner's silence,
-so **an ordinary vendor scalar under an ordinary string VR is removed**. If you carried opaque
-vendor values through `RetainSafePrivate`, they are gone; getting them back needs the content test
-that separates a nested Data Set from a legitimate binary blob, which is an open product question.
+so **an ordinary vendor scalar under an ordinary string VR that the file's own declaration does not
+name safe is removed**. If you carried opaque vendor values through `RetainSafePrivate`, they are
+gone unless your senders declare them: getting them back otherwise needs the content test that
+separates a nested Data Set from a legitimate binary blob, which is an open product question. The
+declaration route that keeps the fourth class is the other entry in this release, and what it
+retains rests on the sender's assertion rather than on anything this run examined.
 
 **Three things to act on if you consume the audit surfaces.**
 
@@ -34,9 +37,10 @@ that separates a nested Data Set from a legitimate binary blob, which is an open
    entry there means content is not in your output again. A comparison against the retired outcome
    stops compiling, which is the intended way to find out.
 3. **`DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE` changes meaning**, from "this value was shipped
-   unexamined" to "this attribute was removed unexamined". **The published warning-code SET is
-   unchanged** - no code is added, removed or renamed by this work - so a consumer narrowing on that
-   code name keeps compiling and must re-read what it now means rather than re-type it.
+   unexamined" to "this attribute was removed unexamined". **No published warning code is renamed or
+   retired**, so a consumer narrowing on that code name keeps compiling and must re-read what it now
+   means rather than re-type it. This work adds no code; the code this release does add,
+   `DICOM_DEIDENT_PRIVATE_DECLARATION_NOT_RESOLVED`, belongs to the declaration entry beside it.
 
 The measured matrix in `test/integration/deident-private-reservation.test.ts` flips its twenty
 leaking cells from kept-verbatim to removed, on every combination of profile-declared VR and on-wire

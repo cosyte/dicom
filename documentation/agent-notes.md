@@ -1593,9 +1593,10 @@ is a MATRIX...")` case in `deident-private-reservation.test.ts` asserts the **em
      `scripts/measure-sq-bound-grid.ts` holds **no private-`SQ` cell at all** (`#77` measured 0 of
      83,037 differing for the carve-out itself, for the same reason: the `priv|` family builds an `LO`
      behind a **public** carrier and every family runs `deidentify()` with no options, so
-     `RetainSafePrivate` + a `Profile` - the only route in the package that writes a private value into
-     de-identified output - is never on). This remedy is reachable **only** from inside
-     `keepRetainedPrivate`, which only that route reaches. **Never read that as coverage.** The net is
+     `RetainSafePrivate` is never on, and with it neither of the two routes that write a private
+     value into de-identified output: a caller `Profile`, and the file's own `(0008,0300)`
+     declaration). This remedy is reachable **only** from inside
+     `keepRetainedPrivate`, which only those routes reach. **Never read that as coverage.** The net is
      the unit tests.
 
 ## DICOM-PRIVATE-CREATOR-RESERVATION-LEAK
@@ -1638,9 +1639,10 @@ is a MATRIX...")` case in `deident-private-reservation.test.ts` asserts the **em
   of the two readings. Both ABSORB placements are pinned and both are refused; the EJECT direction is
   pinned as a residual and is **not** refused. Do not restate this as "both directions are closed".
   **▶ THE GRID COULD NOT SEE THIS CLASS AND NOW CAN - THAT IS THE REUSABLE PART.** Every family in
-  `scripts/measure-sq-bound-grid.ts` ran `deidentify()` with **no options**, and `RetainSafePrivate`
-  plus a `Profile` is the only route in the package that writes a private value into de-identified
-  output. Three refuter passes read "0 PHI regressions" off that harness while this was live. The
+  `scripts/measure-sq-bound-grid.ts` ran `deidentify()` with **no options**, and every route that
+  writes a private value into de-identified output is gated on `RetainSafePrivate`: a caller
+  `Profile`, and the file's own `(0008,0300)` declaration beside it.
+  Three refuter passes read "0 PHI regressions" off that harness while this was live. The
   new `priv|` family sweeps creator placement x both length fields x three syntaxes: **58 -> 0**
   cells keep a private value inside an Item on a self-contradicting file, **20 of the 58 were NOT
   leaking anything** (creator and data element both genuine Item content - they pay for the

@@ -362,14 +362,21 @@ that this package reads and writes metadata, where inside the metadata surface d
   other Private Attributes shall be removed **or processed in the element-specific manner recommended
   by Deidentification Action (0008,0307), if present within Private Data Element Characteristics
   Sequence (0008,0300)**"; `(0008,0307)` is not implemented here, so removal is the branch available.
-  Enumeration is one of exactly three things: the run **walked the value as Data Elements** and put
+  Enumeration is one of exactly four things: the run **walked the value as Data Elements** and put
   each through the action table, the whole value **was matched as a member of your profile's private
-  dictionary** (a Private Creator), or the value is **zero-length**. **Decoding a value under the VR
+  dictionary** (a Private Creator), the value is **zero-length**, or the **file itself declared it
+  safe** - a block whose Block Identifying Information Status `(0008,0303)` reads `SAFE`, or an
+  element a `MIXED` block lists in Nonidentifying Private Elements `(0008,0304)`, both inside Private
+  Data Element Characteristics Sequence `(0008,0300)`. 🩺 **That fourth one is the sender's assertion
+  and not this run's finding**, and it needs no profile: the value is retained unexamined because the
+  system that wrote the file said the block carries no identifying information. If you do not trust
+  the sender, do not pass `RetainSafePrivate`. **Decoding a value under the VR
   your profile declares for it is not enumeration**, and neither is the embedded-attribute scanner's
   silence: that scanner reads string carriers only and decodes tiles in the file's own encoding, so a
   nested Data Set written in another transfer syntax passed it untouched on a perfectly scannable
   `LO` carrier - measured. **So this is over-redaction and it is most of the option**: an ordinary
-  vendor scalar under an ordinary string VR is removed. Each removal is recorded per instance (tag
+  vendor scalar under an ordinary string VR that the file's own declaration does not name safe is
+  removed. Each removal is recorded per instance (tag
   plus the Data Set it lived in, `applied: "removed"`, `reason: "unenumerable"`), named in
   `report.removedPrivateTags`, and warned under `DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE`. **The
   record is complete and never capped; only the warnings are bounded**, so past 64 of them the record

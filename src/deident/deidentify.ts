@@ -87,11 +87,14 @@
  *   nested inside it into output stamped `(0012,0062) = YES` on a **fully
  *   conformant** file. 🛑 **The cost is priced at its real size and is not a
  *   corner of the option:** this package enumerates nothing inside a retained
- *   private value beyond the three classes named on
+ *   private value beyond the classes named on
  *   {@link removeUnenumerablePrivate}, so an ordinary vendor scalar under an
- *   ordinary string VR is removed too. Getting those values back needs the
- *   content test that separates a nested Data Set from a legitimate binary blob,
- *   which is an open product question (`DICOM-DEIDENT-OVER-REDACTION`).
+ *   ordinary string VR that the file's own `(0008,0300)` declaration does not
+ *   name safe is removed too. Getting such a value back needs either a
+ *   declaration in the file - the sender's assertion, not an enumeration this
+ *   run performed - or the content test that separates a nested Data Set from a
+ *   legitimate binary blob, which is an open product question
+ *   (`DICOM-DEIDENT-OVER-REDACTION`).
  * - A `SQ` whose `items` the parser did not
  *   materialize is **emptied**, not kept:
  *   its value is by PS3.5 §7.5.1 a stream of Data Sets, and a run that cannot
@@ -1143,19 +1146,21 @@ function emptyUnauditableCarrier(
  *
  * It follows that this fires on ordinary vendor values too, and **that is the
  * size of the change rather than a corner of it**: this package enumerates
- * nothing inside a retained private value that is not one of the three classes
- * below, so an ordinary vendor scalar under an ordinary string VR is now
- * removed. A caller who needs those values back needs a content test that
- * separates a nested Data Set from a legitimate binary blob, which is an open
- * product question (`DICOM-DEIDENT-OVER-REDACTION`) and not a flag on this path.
- * A run without `RetainSafePrivate` plus a `Profile` reaches none of this,
- * because the profile is the only route into it. **The file's own (0008,0300)
- * declaration is the other retention route and it does not arrive here either**:
- * a value that declaration covers is one §E.3.10 says the run knows about, so
- * {@link keepRetainedPrivate} keeps it instead. That is the opposite trade, and
- * it is stated on {@link declaredSafe}: the knowledge is the sender's.
+ * nothing inside a retained private value that is not one of the first three
+ * classes below, so an ordinary vendor scalar under an ordinary string VR that
+ * the file's own declaration does not name safe is now removed. A caller who
+ * needs such a value back out of a file that declares nothing needs a content
+ * test that separates a nested Data Set from a legitimate binary blob, which is
+ * an open product question (`DICOM-DEIDENT-OVER-REDACTION`) and not a flag on
+ * this path. A run without `RetainSafePrivate` plus a `Profile` reaches none of
+ * this, because the profile is the only route into it. **The file's own
+ * (0008,0300) declaration is the other retention route and it does not arrive
+ * here at all**: a value that declaration covers is one §E.3.10 says the run
+ * knows about, so {@link keepRetainedPrivate} keeps it instead, unexamined. That
+ * is the opposite trade, and it is stated on {@link declaredSafe}: the knowledge
+ * is the sender's.
  *
- * ## The three values that DO reach the output, and are not touched here
+ * ## The four values that DO reach the output, and are not touched here
  *
  * - **A value the run walked as Data Elements.** A private `SQ` whose items the
  *   parser materialized is descended by {@link keepRetainedPrivate}, every
@@ -1171,6 +1176,13 @@ function emptyUnauditableCarrier(
  *   the audit a fixed point over an already-de-identified object
  *   (`DICOM-DEIDENT-NOT-A-FIXED-POINT`): a carrier some other rule emptied must
  *   not then be removed and reported on the next run.
+ * - **A value the file's own (0008,0300) declaration names safe**, and it is the
+ *   one of the four that is not an enumeration this run performed. §E.3.10 names
+ *   that declaration first among the ways an Attribute is "known ... to be safe
+ *   from identity leakage", so {@link keepRetainedPrivate} retains the value on
+ *   the **sender's** written assertion, unexamined, and it never reaches this
+ *   function. See {@link declaredSafe} for what that costs and for the one
+ *   mitigation §E.3.10 offers.
  *
  * ## Per INSTANCE, and why the element is deleted rather than never written
  *

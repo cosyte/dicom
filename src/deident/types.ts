@@ -376,10 +376,11 @@ export interface UnauditableSequenceFinding {
  *
  * ## The cost, stated at its real size
  *
- * With `RetainSafePrivate` plus a `Profile`, exactly three classes of private
- * value now reach the output: an instance the run walked as Data Elements, a
- * Private Creator the profile's dictionary vouches for, and a zero-length value.
- * **An ordinary vendor scalar under an ordinary string VR is removed**, because
+ * With `RetainSafePrivate` plus a `Profile`, three classes of private value
+ * reach the output on something this run enumerated: an instance the run walked
+ * as Data Elements, a Private Creator the profile's dictionary vouches for, and
+ * a zero-length value. **An ordinary vendor scalar under an ordinary string VR
+ * that the file's own declaration does not name safe is removed**, because
  * this package enumerates nothing inside a retained private value that is not
  * one of those three. That is over-redaction traded for a closed identity leak:
  * PS3.15 2026c §E.3.10 retains Private Attributes "known by the de-identifier to
@@ -388,6 +389,19 @@ export interface UnauditableSequenceFinding {
  * does not implement - and a value nothing enumerated is not known to be safe
  * however ordinary it looks. Through `0.0.19` such a value was **kept** and
  * disclosed instead; the disclosure said outright that it was not a fix.
+ *
+ * ## 🩺 The fourth class, which this record never names
+ *
+ * A private value reaches the output on one more route, and it is the one that
+ * rests on no enumeration at all: the **file's own** Private Data Element
+ * Characteristics Sequence (0008,0300), which §E.3.10 names first among the ways
+ * an Attribute is known safe and which needs no `Profile`. A value in a block
+ * whose Block Identifying Information Status (0008,0303) reads `SAFE`, or listed
+ * in a `MIXED` block's Nonidentifying Private Elements (0008,0304), is retained
+ * unexamined on the **sender's** written assertion, so it is never removed and
+ * never appears here. That is the opposite trade from the one above, made in the
+ * open: the caller who does not trust the sender leaves `RetainSafePrivate` off,
+ * which is the one mitigation §E.3.10 offers.
  *
  * ## Per INSTANCE, never per tag
  *

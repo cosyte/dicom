@@ -72,8 +72,9 @@ structural fact about DICOM that no reader can resolve from the wire.
   in `report.removedPrivateTags`, and warned under
   `DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE`. **The removal record is complete and never capped**
   at any input size; only the warnings are bounded.
-  🛑 **The cost is over-redaction and it is nearly all of the option: an ordinary vendor scalar under
-  an ordinary string VR is removed.** Decoding a value under the VR your profile declares for it is not
+  🛑 **The cost is over-redaction and it is nearly all of the profile route: an ordinary vendor
+  scalar under an ordinary string VR that the file's own declaration does not name safe is
+  removed.** Decoding a value under the VR your profile declares for it is not
   an enumeration of what the value encodes, and neither is the embedded-attribute scanner's silence:
   that scanner reads string carriers only and decodes tiles in the file's own encoding, so a nested
   Data Set written in another transfer syntax passed it untouched on a perfectly scannable `LO`
@@ -91,9 +92,12 @@ structural fact about DICOM that no reader can resolve from the wire.
   value - its `applied` field was `"emptied" | "kept"` and is `"emptied"` alone now, so an entry
   there means content is **not** in your output, which is what it meant before that second outcome
   joined it - and `DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE` changes meaning
-  from "this value was shipped unexamined" to "this attribute was removed unexamined". The published
-  **warning-code set is unchanged**, so narrowing on that code name keeps compiling: re-read what it
-  now means rather than re-typing it. The removal record
+  from "this value was shipped unexamined" to "this attribute was removed unexamined". **No
+  published warning code is renamed or retired**, so narrowing on that code name keeps compiling:
+  re-read what it now means rather than re-typing it. **`DICOM_DEIDENT_PRIVATE_DECLARATION_NOT_RESOLVED`
+  is added**, raised per Item of `(0008,0300)` that does not resolve to a block of private Data
+  Elements reserved in that Data Set, so a declaration you expected to keep something and that kept
+  nothing is never silent. The removal record
   (`report.unenumerablePrivateRemovals`) is a **new** report surface, and it is the only one that can
   tell you an attribute went for being unenumerable rather than by the action table.
 
