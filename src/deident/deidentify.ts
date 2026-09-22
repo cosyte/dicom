@@ -193,6 +193,7 @@ import {
   fileMetaReplaced,
   group0004Removed,
   privateCarrierNotAuditable,
+  privateDeclarationNotResolved,
   sequenceNotAuditable,
   undefinedVrNotAuditable,
 } from "../parser/warnings.js";
@@ -233,6 +234,23 @@ const TAG_DEIDENTIFICATION_METHOD: Tag = "00120063";
 const TAG_PIXEL_DATA: Tag = "7FE00010";
 const TAG_BURNED_IN_ANNOTATION: Tag = "00280301";
 const TAG_LONGITUDINAL_TEMPORAL_INFORMATION_MODIFIED: Tag = "00280303";
+
+/**
+ * The PS3.3 2026c C.12.1 Table C.12-1 attributes the file's own safe-private
+ * declaration is made of, and the only ones this module reads.
+ *
+ * (0008,0305) Deidentification Action Sequence, (0008,0306) Identifying Private
+ * Elements and (0008,0307) Deidentification Action are deliberately **not**
+ * here: PS3.15 2026c E.3.10's second branch is "removed **or** processed in the
+ * element-specific manner recommended by Deidentification Action (0008,0307)",
+ * and removal is the branch this library takes. Nothing below resolves those
+ * three, and adding one would be a different item.
+ */
+const TAG_PRIVATE_DATA_ELEMENT_CHARACTERISTICS_SEQUENCE: Tag = "00080300";
+const TAG_PRIVATE_GROUP_REFERENCE: Tag = "00080301";
+const TAG_PRIVATE_CREATOR_REFERENCE: Tag = "00080302";
+const TAG_BLOCK_IDENTIFYING_INFORMATION_STATUS: Tag = "00080303";
+const TAG_NONIDENTIFYING_PRIVATE_ELEMENTS: Tag = "00080304";
 
 /**
  * The two PS3.15 §E.3.6 Retain Longitudinal Temporal Information Options, in
@@ -405,6 +423,23 @@ export const MAX_UNAUDITABLE_SEQUENCE_FINDINGS = 64;
  */
 export const MAX_UNDEFINED_VR_FINDINGS = 64;
 
+/**
+ * Cap on how many unresolvable Items of Private Data Element Characteristics
+ * Sequence (0008,0300) one run will **warn** about
+ * (`DICOM_DEIDENT_PRIVATE_DECLARATION_NOT_RESOLVED`).
+ *
+ * Same discipline and same reason as its siblings: the Item count is the
+ * sender's, an Item costs a crafted file a few bytes, and a diagnostic emitted
+ * per Item is multiplied by a number the input chooses. It bounds what is
+ * **said** and nothing else - an Item that does not resolve retains nothing
+ * whether or not it is warned about, because the record it would have
+ * contributed to is never written.
+ *
+ * Counted on its own budget line, so a flood of one diagnostic class cannot
+ * spend another's and silence it.
+ */
+export const MAX_PRIVATE_DECLARATION_WARNINGS = 64;
+
 interface DeidentifyContext {
   readonly active: ReadonlySet<DeidentifyOption>;
   readonly remap: UidRemapper;
@@ -441,6 +476,25 @@ interface DeidentifyContext {
     total: number;
   };
   /**
+   * What the **file itself** declares about its own private blocks, resolved
+   * once from the top-level Private Data Element Characteristics Sequence
+   * (0008,0300) and carried rather than re-derived.
+   *
+   * **On the context, and run-scoped, for the reason `group0004` and `budget`
+   * are.** (0008,0300) is a SOP Common Module attribute of the top-level Data
+   * Set (PS3.3 2026c C.12.1), so it is a fact about the SOP Instance and asking
+   * it again at depth could only produce a different answer for the same file.
+   * The **reservation** it is resolved against is the opposite: PS3.5 2026c
+   * 7.8.1 scopes a block reservation to one Data Set, so the creator an element
+   * is matched under comes from the map of the Data Set that element lives in,
+   * never from an enclosing one. See {@link declaredSafe}.
+   *
+   * Empty whenever `RetainSafePrivate` is not active, and empty on a file that
+   * carries no (0008,0300) - which is what makes both of those runs
+   * byte-identical to a build without this route at all.
+   */
+  readonly declaration: PrivateDeclaration;
+  /**
    * Run-scoped diagnostic budget. **Deliberately mutable**, and deliberately on
    * the context rather than on a `ProcessResult`: `processElements` builds a
    * fresh result per Data Set and merges them upward, so a per-result cap would
@@ -462,6 +516,12 @@ interface DeidentifyContext {
      */
     unenumerableRemovals: number;
     undefinedVrElements: number;
+    /**
+     * The unresolvable-declaration warnings, on their own counter for the same
+     * reason `unenumerableRemovals` has one: one class's amplification must not
+     * buy another class's silence.
+     */
+    privateDeclarationItems: number;
   };
 }
 
@@ -1208,6 +1268,315 @@ function creatorFor(tag: Tag, creators: ReadonlyMap<string, string>): string | u
   return creators.get(`${String(group)}:${String((element >> 8) & 0xff)}`);
 }
 
+/**
+ * The Enumerated Values PS3.3 2026c C.12.1 Table C.12-1 defines for Block
+ * Identifying Information Status (0008,0303), all three of them.
+ *
+ * - `SAFE` - "no Data Elements within the block contain identifying
+ *   information".
+ * - `UNSAFE` - "all Data Elements within the block may contain identifying
+ *   information".
+ * - `MIXED` - "some Data Elements within the block may contain identifying
+ *   information", with the safe ones listed in Nonidentifying Private Elements
+ *   (0008,0304).
+ *
+ * A Value outside this set is not an under-specified declaration to be read
+ * generously: it is an Item that does not resolve, and `UNSAFE` is the only one
+ * of the three whose meaning a reader could guess at. So an unenumerated Value
+ * takes the same route as a missing one - nothing retained, and said out loud.
+ */
+const BLOCK_STATUS = {
+  safe: "SAFE",
+  unsafe: "UNSAFE",
+  mixed: "MIXED",
+} as const;
+
+/**
+ * What one Item of (0008,0300) says about one reserved private block: which of
+ * its Data Elements the **sender** declares non-identifying.
+ *
+ * `allSafe` is the `SAFE` status, and `safeElements` holds the low tag bytes a
+ * `MIXED` status listed. An `UNSAFE` Item resolves to `allSafe: false` with an
+ * empty set, which retains nothing including the block's own Private Creator -
+ * the same shape a contradiction between two Items collapses to. See
+ * {@link intersectBlocks}.
+ */
+interface DeclaredBlock {
+  readonly allSafe: boolean;
+  /** Low tag bytes (`0x00` to `0xFF`) PS3.3 C.12.1 says identify an element within the block. */
+  readonly safeElements: ReadonlySet<number>;
+}
+
+/**
+ * The file's own declaration, keyed by group plus Private Creator **value**.
+ *
+ * Keyed by the creator string rather than by the block number because PS3.3
+ * 2026c C.12.1's own Note requires it: blocks are identified "by their Private
+ * Creator Data Element value rather than their numeric block number, since
+ * instances may be modified and numeric block numbers reassigned". A record
+ * keyed by block number would be a different and wrong lookup on exactly the
+ * files that have been through another tool.
+ */
+type PrivateDeclaration = ReadonlyMap<string, DeclaredBlock>;
+
+/** A run that read no declaration. Every lookup misses, so every route falls through. */
+const NO_PRIVATE_DECLARATION: PrivateDeclaration = new Map<string, DeclaredBlock>();
+
+/** The (group, creator value) coordinates one Item of (0008,0300) describes. */
+function declarationKey(group: number, creator: string): string {
+  return `${String(group)}:${creator}`;
+}
+
+/** Decode a `CS` Enumerated Value, less the padding PS3.5 Table 6.2-1 permits. */
+function decodeEnumerated(el: Element): string {
+  return el.rawBytes.toString("latin1").replace(/[\0 ]+$/, "").trim();
+}
+
+/**
+ * Read a `US` Value Field as the `1-n` list of unsigned shorts it is, in this
+ * element's own byte order. A trailing odd byte is not a Value and is dropped.
+ */
+function readUnsignedShorts(el: Element): readonly number[] {
+  const values: number[] = [];
+  for (let offset = 0; offset + 2 <= el.rawBytes.length; offset += 2) {
+    values.push(
+      el.littleEndian ? el.rawBytes.readUInt16LE(offset) : el.rawBytes.readUInt16BE(offset),
+    );
+  }
+  return values;
+}
+
+/**
+ * The (group, creator value) pairs **this Data Set** reserves a block for, read
+ * from its own `(gggg,00EE)` elements.
+ *
+ * The inverse of {@link creatorsInScope}, which answers "which creator owns this
+ * block number": an Item of (0008,0300) names a creator and a group and never a
+ * block number, so resolving it needs the lookup in this direction. Both read
+ * the same elements through the same {@link decodeCreator}, so the two cannot
+ * disagree about what a creator string is.
+ */
+function reservedBlocks(source: readonly Element[]): ReadonlySet<string> {
+  const reserved = new Set<string>();
+  for (const el of source) {
+    if (!isPrivateTag(el.tag) || !isPrivateCreatorElement(el.tag)) continue;
+    reserved.add(declarationKey(splitTag(el.tag).group, decodeCreator(el)));
+  }
+  return reserved;
+}
+
+/**
+ * Fold two Items that describe the **same** block into the safety both of them
+ * assert: the intersection, never the union.
+ *
+ * A file may declare one block twice and contradict itself, and the standard
+ * says nothing about which Item then wins. Taking the intersection means no Item
+ * can widen what another Item already narrowed, so a `SAFE` Item cannot undo an
+ * `UNSAFE` one whichever order the sender wrote them in. That is the fail-safe
+ * direction and it is the only one that does not depend on Item order.
+ */
+function intersectBlocks(first: DeclaredBlock, second: DeclaredBlock): DeclaredBlock {
+  if (first.allSafe) return second;
+  if (second.allSafe) return first;
+  const both = new Set<number>();
+  for (const element of first.safeElements) {
+    if (second.safeElements.has(element)) both.add(element);
+  }
+  return { allSafe: false, safeElements: both };
+}
+
+/** What reading one Item of (0008,0300) produced. */
+type DeclaredItem =
+  | { readonly resolved: false }
+  | { readonly resolved: true; readonly key: string; readonly block: DeclaredBlock };
+
+const UNRESOLVED_ITEM: DeclaredItem = { resolved: false };
+
+/**
+ * Read one Item of Private Data Element Characteristics Sequence (0008,0300)
+ * into the block it describes, or refuse it.
+ *
+ * Every refusal below is a case AC-class "this Item cannot be resolved into a
+ * block of private Data Elements in this Data Set", and each one retains
+ * nothing:
+ *
+ * - A Type 1 Value absent or empty. PS3.3 2026c C.12.1 makes Private Group
+ *   Reference (0008,0301), Private Creator Reference (0008,0302) and Block
+ *   Identifying Information Status (0008,0303) all Type 1, so an Item missing
+ *   one has not made a declaration at all.
+ * - A group that is not odd. (0008,0301) is "Odd group number within which the
+ *   Private Data Element block is reserved", and there is no private block in an
+ *   even group to describe. This is what stops an Item reaching any Data Element
+ *   outside the private blocks it is defined over.
+ * - A status outside the three Enumerated Values (see {@link BLOCK_STATUS}).
+ * - A `MIXED` status with no usable (0008,0304) list. C.12.1 makes that
+ *   attribute "Required if Block Identifying Information Status (0008,0303)
+ *   equals MIXED" and bounds its Values to `0000H` to `00FFH`; a list that is
+ *   absent, empty, or entirely out of that range identifies no element.
+ * - A creator no block in this Data Set reserves. There is then no block of
+ *   Private Data Elements for the Item to be about.
+ *
+ * It resolves against the reservations of **one** Data Set, the one passed in.
+ */
+function readDeclaredItem(item: Item, reserved: ReadonlySet<string>): DeclaredItem {
+  const groupEl = item.get(TAG_PRIVATE_GROUP_REFERENCE);
+  const creatorEl = item.get(TAG_PRIVATE_CREATOR_REFERENCE);
+  const statusEl = item.get(TAG_BLOCK_IDENTIFYING_INFORMATION_STATUS);
+  if (groupEl === undefined || creatorEl === undefined || statusEl === undefined) {
+    return UNRESOLVED_ITEM;
+  }
+  const group = readUnsignedShorts(groupEl)[0];
+  if (group === undefined || (group & 1) === 0) return UNRESOLVED_ITEM;
+  const creator = decodeCreator(creatorEl);
+  if (creator.length === 0) return UNRESOLVED_ITEM;
+  const key = declarationKey(group, creator);
+  if (!reserved.has(key)) return UNRESOLVED_ITEM;
+
+  const status = decodeEnumerated(statusEl);
+  if (status === BLOCK_STATUS.safe) {
+    return { resolved: true, key, block: { allSafe: true, safeElements: new Set<number>() } };
+  }
+  if (status === BLOCK_STATUS.unsafe) {
+    // Resolved, and it resolves to nothing retained. Not a refusal: the sender
+    // said what it meant and the run is acting on it, so there is nothing to
+    // disclose.
+    return { resolved: true, key, block: { allSafe: false, safeElements: new Set<number>() } };
+  }
+  if (status !== BLOCK_STATUS.mixed) return UNRESOLVED_ITEM;
+
+  const listEl = item.get(TAG_NONIDENTIFYING_PRIVATE_ELEMENTS);
+  if (listEl === undefined) return UNRESOLVED_ITEM;
+  const listed = new Set<number>();
+  for (const value of readUnsignedShorts(listEl)) {
+    // PS3.3 C.12.1: "Elements are identified by the lowest 8-bits of the Date
+    // Element Tag (i.e., with a value from 0000H to 00FFH) within the block".
+    // A Value outside that range identifies no element in the block, so it
+    // carries no safety and is dropped rather than masked into one that does.
+    if (value <= 0xff) listed.add(value);
+  }
+  if (listed.size === 0) return UNRESOLVED_ITEM;
+  return { resolved: true, key, block: { allSafe: false, safeElements: listed } };
+}
+
+/**
+ * Resolve the top-level Private Data Element Characteristics Sequence
+ * (0008,0300) into the run's declaration record, warning once per Item that does
+ * not resolve.
+ *
+ * ## Why the top-level Data Set, and why its reservations
+ *
+ * (0008,0300) is a SOP Common Module attribute (PS3.3 2026c C.12.1), so the
+ * declaration is made once for the SOP Instance rather than per Data Set, and
+ * PS3.15 2026c E.3.10's first bullet reads it as a property of "a block of
+ * Private Data Elements". Its Items are therefore read here, from the top-level
+ * Data Set, and resolved against **that** Data Set's reservations. What is
+ * deliberately not done is resolve a block **number** anywhere: the key is the
+ * creator value, and the block number an element sits in is resolved separately,
+ * inside whichever Data Set that element lives in
+ * ({@link creatorFor}). Carrying a block number across a Data Set boundary is
+ * precisely `DICOM-PRIVATE-CREATOR-RESERVATION-LEAK`.
+ *
+ * ## What it refuses to read
+ *
+ * A declaration the enclosing Data Set does not settle ({@link settledBound}) is
+ * not read at all. An element after the first sequence whose own contents
+ * contradict its declared extent may have been ejected out of that sequence, so
+ * which Data Set it belongs to is not determined by the file - and a declaration
+ * is exactly the kind of statement that must not be taken from a Data Set that
+ * may not have made it. It retains nothing, which is what a run with no
+ * declaration already does, so there is no loss to disclose.
+ */
+function resolvePrivateDeclaration(
+  source: readonly Element[],
+  encoding: BodyEncoding,
+  budget: DeidentifyContext["budget"],
+  warnings: DicomParseWarning[],
+): PrivateDeclaration {
+  const at = source.findIndex((el) => el.tag === TAG_PRIVATE_DATA_ELEMENT_CHARACTERISTICS_SEQUENCE);
+  const declarationEl = at < 0 ? undefined : source[at];
+  if (declarationEl?.items === undefined) return NO_PRIVATE_DECLARATION;
+  const bound = settledBound(source, encoding);
+  if (!isSettled(declarationEl, at, bound)) return NO_PRIVATE_DECLARATION;
+
+  const reserved = reservedBlocks(source.filter((el, index) => isSettled(el, index, bound)));
+  const declaration = new Map<string, DeclaredBlock>();
+  for (const item of declarationEl.items) {
+    const read = readDeclaredItem(item, reserved);
+    if (!read.resolved) {
+      // The ACTION is never capped: an Item that does not resolve contributes
+      // nothing to the record above, whether or not there is budget left to say
+      // so. Only the saying is bounded.
+      if (budget.privateDeclarationItems >= MAX_PRIVATE_DECLARATION_WARNINGS) continue;
+      budget.privateDeclarationItems += 1;
+      warnings.push(
+        privateDeclarationNotResolved({ byteOffset: declarationEl.byteOffset, fileMeta: false }),
+      );
+      continue;
+    }
+    const existing = declaration.get(read.key);
+    declaration.set(
+      read.key,
+      existing === undefined ? read.block : intersectBlocks(existing, read.block),
+    );
+  }
+  return declaration;
+}
+
+/**
+ * `true` when the **file's own declaration** says this private element is safe.
+ *
+ * PS3.15 2026c E.3.10 lists four ways an Attribute may be "known by the
+ * de-identifier to be safe from identity leakage", and the first is the one this
+ * function reads: "its presence in a block of Private Data Elements with a Value
+ * of \"SAFE\" in Block Identifying Information Status (0008,0303) or
+ * individually listed in Nonidentifying Private Elements (gggg,0004) (within
+ * Private Data Element Characteristics Sequence (0008,0300)". Both branches are
+ * here, `SAFE` and the per-element `MIXED` list.
+ *
+ * 🩺 **THE KNOWLEDGE IS THE SENDER'S, NOT THIS LIBRARY'S.** Nothing here
+ * inspects the value; the system that wrote the file asserted that this block,
+ * or this element of it, carries no identifying information, and a caller who
+ * does not trust that sender leaves `RetainSafePrivate` off - which E.3.10 gives
+ * as the one alternative ("When this Option is not specified, all Private
+ * Attributes shall be removed"). That is the whole mitigation the standard
+ * offers and it is stated rather than implied.
+ *
+ * 🛑 **THE CREATOR COMES FROM `creators`, WHICH IS THE MAP OF THE DATA SET THIS
+ * ELEMENT LIVES IN.** The declaration supplies (group, creator value, element
+ * byte); the run supplies which block number that creator holds **here**. PS3.5
+ * 2026c 7.8.1 scopes a reservation to one Data Set and items do not inherit an
+ * enclosing one, so a reading that carried a block number across that boundary
+ * would re-open `DICOM-PRIVATE-CREATOR-RESERVATION-LEAK`. It cannot: no block
+ * number is stored in the record at all.
+ *
+ * A Private Creator `(gggg,00EE)` is safe when the block it reserves retains at
+ * least one element, which is E.3.10's "together with the Private Creator IDs
+ * that are required to fully define the retained Private Attributes". A block
+ * declared `UNSAFE`, or one whose `MIXED` list the intersection emptied, retains
+ * nothing and its creator with it.
+ */
+function declaredSafe(
+  el: Element,
+  ctx: DeidentifyContext,
+  creators: ReadonlyMap<string, string>,
+): boolean {
+  if (ctx.declaration.size === 0) return false;
+  const { group, element } = splitTag(el.tag);
+  if (isPrivateCreatorElement(el.tag)) {
+    const block = ctx.declaration.get(declarationKey(group, decodeCreator(el)));
+    if (block === undefined) return false;
+    return block.allSafe || block.safeElements.size > 0;
+  }
+  const creator = creatorFor(el.tag, creators);
+  if (creator === undefined) return false;
+  const block = ctx.declaration.get(declarationKey(group, creator));
+  if (block === undefined) return false;
+  // PS3.3 C.12.1 identifies a listed element by the lowest 8 bits of its tag
+  // within the block, which is the same byte `resolvePrivateTag`'s canonical key
+  // ends in and never the block byte above it.
+  return block.allSafe || block.safeElements.has(element & 0xff);
+}
+
 /** PS3.5 2026c section 7.5.2's "undefined length" sentinel for a Value Length field. */
 const UNDEFINED_LENGTH = 0xffffffff;
 
@@ -1392,21 +1761,38 @@ function isSettled(el: Element, at: number, bound: SettledBound): boolean {
 }
 
 /**
- * Decide whether to keep a private element under `RetainSafePrivate` + a
- * profile. `creators` is the reservation map of the Data Set this element lives
- * in, never an enclosing one.
+ * Decide whether this private element is **known safe** under
+ * `RetainSafePrivate`. `creators` is the reservation map of the Data Set this
+ * element lives in, never an enclosing one.
+ *
+ * PS3.15 2026c E.3.10 gives four ways that knowledge may be established, and two
+ * of them are code here. They are read in the order below only because a
+ * short-circuit needs an order; neither is a precedence rule, because **the two
+ * are purely additive** and either one alone is sufficient.
+ *
+ *  - **The file's own declaration** ({@link declaredSafe}) - E.3.10's first
+ *    bullet, which needs no {@link Profile} at all. A caller with a file from a
+ *    vendor they hold no profile for gets exactly this.
+ *  - **The caller's profile** - "documentation in the Conformance Statement" and
+ *    "some other means", which is what a `Profile` entry encodes. Unchanged, and
+ *    it keeps working on a block the declaration calls `UNSAFE` or says nothing
+ *    about, because the declaration only ever **adds**.
  *
  * The caller must also have established that this Data Set's boundary is the one
  * the file declares - see `reservationsUsable` on {@link processElements}. This
- * function answers "does the profile vouch for this element in this Data Set",
- * not "is this Data Set well defined".
+ * function answers "is this element known safe in this Data Set", not "is this
+ * Data Set well defined", and it is the **first** of two gates either way: this
+ * one decides the element is retainable and {@link keepRetainedPrivate} then
+ * decides whether its VALUE was known.
  */
 function keepsPrivate(
   el: Element,
   ctx: DeidentifyContext,
   creators: ReadonlyMap<string, string>,
 ): boolean {
-  if (!ctx.active.has("RetainSafePrivate") || ctx.profile === undefined) return false;
+  if (!ctx.active.has("RetainSafePrivate")) return false;
+  if (declaredSafe(el, ctx, creators)) return true;
+  if (ctx.profile === undefined) return false;
   if (isPrivateCreatorElement(el.tag)) {
     return ctx.profile.privateDictionary.has(decodeCreator(el));
   }
@@ -1654,6 +2040,27 @@ function keepRetainedPrivate(
   // value, which encodes no Data Set - and they are retained unchanged.
   if (!keepOrEmpty(el, ctx, contextPath, out)) return;
   if (isPrivateCreatorElement(el.tag) || el.rawBytes.length === 0) return;
+  // 🛑 THE THIRD SURVIVOR, AND IT IS THE ONE THAT NEEDED BOTH GATES TAUGHT. A
+  // value the FILE declares safe is a value this run knows about: E.3.10 names
+  // the declaration first among the ways an Attribute is "known ... to be safe",
+  // and "known" is the exact predicate the rule below tests. Teaching
+  // {@link keepsPrivate} alone would leave an ordinary vendor scalar - which is
+  // neither a Private Creator nor zero-length - removed here as unenumerable,
+  // and the Option would read the declaration and still ship nothing.
+  //
+  // It is knowledge the SENDER supplied rather than knowledge this run derived,
+  // and that is the cost: an opaque value in a block the sender declared `SAFE`
+  // reaches de-identified output unexamined. The caller who does not trust the
+  // sender leaves the Option off, which is the mitigation E.3.10 itself offers.
+  //
+  // Everything ahead of it still acts first and is untouched: an on-wire VR
+  // outside the 34 and a value the embedded scanner reads as a swallowed Data
+  // Element run are both answered by `keepOrEmpty` above, and a carrier the
+  // profile declares `SQ` is emptied before that. A declared-safe private `SQ`
+  // never arrives here at all - it takes the descent at the top of this
+  // function, so the Data Sets below it are handled on their own merits
+  // (`DICOM-PRIVATE-SQ-CARVE-OUT`, and E.3.10's own Sequence paragraph).
+  if (declaredSafe(el, ctx, creators)) return;
   removeUnenumerablePrivate(el, ctx, contextPath, out);
 }
 
@@ -2512,6 +2919,23 @@ export function deidentify(
   // the removal applies to it, which is the fail-safe direction as well as the
   // literal reading.
   const isDicomdir = ds.fileMeta?.mediaStorageSOPClassUID === MEDIA_STORAGE_DIRECTORY_STORAGE_UID;
+  const budget = {
+    unauditableSequences: 0,
+    unenumerableRemovals: 0,
+    undefinedVrElements: 0,
+    privateDeclarationItems: 0,
+  };
+  // 🩺 READ ONCE, AND ONLY WHEN THE OPTION THAT USES IT IS ACTIVE. PS3.15 2026c
+  // E.3.10's last sentence is "When this Option is not specified, all Private
+  // Attributes shall be removed", so a run without `RetainSafePrivate` has no
+  // use for the declaration and does not read it: no record, and no diagnostic
+  // about a file it is not acting on. The budget object is built ahead of the
+  // context so that these warnings are counted on the same run-scoped budget as
+  // every other consumer-controlled diagnostic rather than on one of their own.
+  const declarationWarnings: DicomParseWarning[] = [];
+  const declaration = active.has("RetainSafePrivate")
+    ? resolvePrivateDeclaration(ds.elements(), encoding, budget, declarationWarnings)
+    : NO_PRIVATE_DECLARATION;
   const ctx: DeidentifyContext = {
     active,
     remap,
@@ -2520,7 +2944,8 @@ export function deidentify(
     littleEndian,
     removeGroup0004: !isDicomdir,
     group0004: { findings: [], total: 0 },
-    budget: { unauditableSequences: 0, unenumerableRemovals: 0, undefinedVrElements: 0 },
+    declaration,
+    budget,
   };
 
   // The root starts usable. That is a LIMITATION, not a proof: an Item that
@@ -2580,7 +3005,7 @@ export function deidentify(
     ),
   );
 
-  const warnings: DicomParseWarning[] = [...processed.warnings];
+  const warnings: DicomParseWarning[] = [...declarationWarnings, ...processed.warnings];
   if (deidentMethod.replacedPrior) {
     warnings.push(
       deidentMethodNotAdded({ byteOffset: priorMethod?.byteOffset ?? 0, fileMeta: false }),
