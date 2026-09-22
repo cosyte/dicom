@@ -20,17 +20,18 @@ name: Public-surface gate
 # rule regrows unseen and why a note would not have held. The change that added
 # this workflow rewrote all 530.
 #
-# WHY A SEPARATE WORKFLOW, and not a job in ci.yml:
+# WHAT IS SHARED AND WHAT IS NOT. The job below delegates the plumbing (checkout,
+# pnpm, Node) to the shared gate workflow, which carries no pattern, no
+# allow-list and no file selection of its own: it prepares the tree, runs the
+# command, and lets the command's exit status decide the job. The rule set stays
+# here, because what counts as a project prefix and what counts as a domain
+# designator is a property of the package (here `CP-246` is a DICOM Change
+# Proposal and `MRN-42` is example patient-identifier data, and neither is a work
+# item). So the harness is shared and the checker under `scripts/` is not. That is
+# the same shape `no-emdash.yml` takes, for the same reasons.
 #
-#   The reusable pipeline is not an option. dicom's `ci` job calls
-#   cosyte/.github/.github/workflows/ci.yml@main, which runs a fixed ladder and
-#   no arbitrary repo script; that repository publishes no reusable for this
-#   gate. The correct rule set also differs per repo, because what counts as a
-#   project prefix and what counts as a domain designator is a property of the
-#   package (here `CP-246` is a DICOM Change Proposal and `MRN-42` is example
-#   patient-identifier data, and neither is a work item). So the gate stays
-#   per-repo: this workflow plus this repository's own checker under `scripts/`.
-#   That is the same shape `no-emdash.yml` takes, for the same reasons.
+# WHY A SEPARATE WORKFLOW, and not a job in ci.yml. dicom's `ci` job calls the
+# shared ci pipeline, which runs a fixed ladder and no arbitrary repo script.
 #
 #   Unlike `no-emdash.yml` this gate has NO pull-request-text half and wants no
 #   `edited` trigger. Commit messages and pull request text are surfaces the
@@ -41,6 +42,12 @@ name: Public-surface gate
 # directly, the way `measure:phi-scan-retention` already is. A checkout and one
 # process is the whole job, which is what keeps this cheap enough to run on
 # every push.
+#
+# THE JOB ID IS LOAD-BEARING. A called job's check run is named
+# `<caller job id> / <inner job id>`, so the job id `no-internal-refs` below
+# publishes `no-internal-refs / public-surface`, which is the context a branch
+# ruleset must require. Renaming the job detaches that requirement with no error
+# anywhere, and a required context nothing emits blocks every pull request.
 
 on:
   push:
@@ -52,26 +59,16 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-
 jobs:
+  # The check-run context prefix. See the note above before touching this id.
   no-internal-refs:
-    name: no internal references on a consumer surface
-    runs-on: ubuntu-latest
-    steps:
-      # The checker delimits its scope with `git ls-files` and refuses to report
-      # anything from an empty list, so it needs the repository, not a sparse or
-      # partial view of it. Depth 1 is enough: nothing here reads history.
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      # Pinned to the major this package's `engines.node` requires. The checker
-      # is TypeScript run through Node's own type stripping, which is on by
-      # default from Node 22.18.
-      - name: Setup Node.js 22
-        uses: actions/setup-node@v6
-        with:
-          node-version: "22"
-
-      - name: Check consumer surfaces
-        run: node scripts/check-no-internal-refs.ts
+    # Pinned to the 40 character commit, not to the tag beside it: a tag can be moved
+    # or deleted by anyone who gains write access to the workflow's repository, so a
+    # tag is not an immutable reference and is not a pin. The trailing comment is the
+    # published reference that commit was released as, so the release note stays
+    # findable from here.
+    uses: cosyte/.github/.github/workflows/gate-no-internal-refs.yml@84ecccd771cbc9c1ece003a3f8ff61415360395b # workflows-2026-09-18-84ecccd771cb
+    # No more than the scan needs. A called workflow's GITHUB_TOKEN can only be
+    # downgraded by its caller, and this gate reads the tree and nothing else.
+    permissions:
+      contents: read
