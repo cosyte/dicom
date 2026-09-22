@@ -190,10 +190,14 @@ These are boundaries, not defects; the full list is on [Known limitations](./lim
 - **Conditional Annex E codes collapse to their most protective branch.** There is no IOD Type-1
   analysis here, so where the table's action depends on the object's IOD this run takes the branch
   that removes rather than the one that keeps.
-- **`RetainSafePrivate` keeps only what the run could account for.** It plus a `Profile` is the only
-  route that writes a private value into de-identified output, and everything else private that a
-  profile vouched for is removed and recorded. The cost is over-redaction, and it is nearly all of
-  the Option.
+- **`RetainSafePrivate` keeps only what the run could account for.** Two routes write a private
+  value into de-identified output: a `Profile` you pass, and the **file's own** Private Data Element
+  Characteristics Sequence `(0008,0300)`, which needs no profile at all. Everything else private is
+  removed and recorded. The cost is over-redaction on the profile route, and it is nearly all of
+  that route; on the declaration route the cost runs the other way, because what is kept rests on
+  the **sender's** assertion that the block carries no identifying information rather than on
+  anything this run examined. If you do not trust the sender, leave the Option off: PS3.15 §E.3.10
+  offers no other mitigation.
 - **The byte-for-byte File Meta round trip does not hold for this output.** The group is replaced
   with a description of the de-identifying application (§E.1.1), so the Source AE Title and the
   source's implementation identity go with it. That loss is recorded, and it is not recoverable from

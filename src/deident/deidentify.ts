@@ -24,9 +24,14 @@
  *   in the *serialized* bytes too - not just the object model (the writer
  *   blits `SQ` spans verbatim, so a rebuilt `items` array alone would not survive
  *   serialization). Rebuilt sequences are normalized to defined length.
- * - Removes all private attributes by default; with `RetainSafePrivate` + a
- *   {@link Profile}, keeps the private data elements the profile's overlay names
- *   as safe (and the private-creator elements the profile recognizes).
+ * - Removes all private attributes by default. With `RetainSafePrivate` it keeps
+ *   the ones PS3.15 §E.3.10 lets it know are safe, by two routes that only ever
+ *   add to each other: the private data elements a caller {@link Profile}'s
+ *   overlay names as safe (and the private-creator elements it recognizes), and
+ *   the blocks the **file itself** declares non-identifying in Private Data
+ *   Element Characteristics Sequence `(0008,0300)`, which needs no profile. The
+ *   second one is the sender's assertion rather than this run's finding; see
+ *   {@link declaredSafe}.
  * - Writes `(0028,0303)` Longitudinal Temporal Information Modified with the
  *   state this run's option set put the object in: `UNMODIFIED` under
  *   `RetainLongitudinalTemporal`, `MODIFIED` under
@@ -1144,7 +1149,11 @@ function emptyUnauditableCarrier(
  * separates a nested Data Set from a legitimate binary blob, which is an open
  * product question (`DICOM-DEIDENT-OVER-REDACTION`) and not a flag on this path.
  * A run without `RetainSafePrivate` plus a `Profile` reaches none of this,
- * because it retains no private value at all.
+ * because the profile is the only route into it. **The file's own (0008,0300)
+ * declaration is the other retention route and it does not arrive here either**:
+ * a value that declaration covers is one §E.3.10 says the run knows about, so
+ * {@link keepRetainedPrivate} keeps it instead. That is the opposite trade, and
+ * it is stated on {@link declaredSafe}: the knowledge is the sender's.
  *
  * ## The three values that DO reach the output, and are not touched here
  *
@@ -1329,7 +1338,10 @@ function declarationKey(group: number, creator: string): string {
 
 /** Decode a `CS` Enumerated Value, less the padding PS3.5 Table 6.2-1 permits. */
 function decodeEnumerated(el: Element): string {
-  return el.rawBytes.toString("latin1").replace(/[\0 ]+$/, "").trim();
+  return el.rawBytes
+    .toString("latin1")
+    .replace(/[\0 ]+$/, "")
+    .trim();
 }
 
 /**

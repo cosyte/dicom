@@ -884,7 +884,10 @@ export interface DeidentifyReport {
    * without both nothing private is retained far enough to be judged: the Basic
    * Profile removes every private attribute and names it in
    * {@link DeidentifyReport.removedPrivateTags} instead. A profile lookup that
-   * **misses** is that case too, and never appears here.
+   * **misses** is that case too, and never appears here. **The file's own
+   * (0008,0300) declaration does not populate it either**, and that is not an
+   * omission: a value that declaration covers is one §E.3.10 says the run knows
+   * about, so it is retained rather than reaching this rule at all.
    *
    * See {@link UnenumerablePrivateRemoval} for what counts as enumeration, for
    * the over-redaction this costs, and for why it names an instance rather than
@@ -1027,7 +1030,27 @@ export interface DeidentifyOptions {
   /**
    * A {@link Profile} whose private-dictionary overlay names the
    * known-safe private attributes to keep when `RetainSafePrivate` is active.
-   * Without it, `RetainSafePrivate` keeps nothing (fail-safe).
+   *
+   * **Not the only way an attribute is known safe, and no longer required for
+   * `RetainSafePrivate` to keep anything.** PS3.15 2026c §E.3.10 lists four ways
+   * that knowledge may be established and a profile is two of them
+   * (Conformance Statement documentation, and "some other means"); the first is
+   * the **file's own** Private Data Element Characteristics Sequence
+   * (0008,0300), which `deidentify()` reads when this Option is active whether
+   * or not a profile is passed. So a file from a vendor you hold no profile for
+   * keeps the private attributes **that file declares** non-identifying, and
+   * passing a profile only ever adds to that: a profile retention survives a
+   * block the declaration calls `UNSAFE` or says nothing about.
+   *
+   * 🩺 **What the declaration route retains rests on the SENDER's assertion.**
+   * The system that wrote the file said those blocks carry no identifying
+   * information; nothing here re-derives it, and an opaque value in a block
+   * declared `SAFE` reaches de-identified output unexamined. If you do not trust
+   * the sender, leave `RetainSafePrivate` off - §E.3.10's own alternative, and
+   * the only mitigation the standard offers.
+   *
+   * With neither this nor a declaration in the file, `RetainSafePrivate` keeps
+   * nothing (fail-safe).
    */
   readonly profile?: Profile;
   /**

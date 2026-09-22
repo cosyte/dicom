@@ -52,11 +52,21 @@ any of them.** Each is either a product decision this package has deliberately n
 structural fact about DICOM that no reader can resolve from the wire.
 
 - **`RetainSafePrivate` now keeps only what this run could account for, and everything else private
-  is REMOVED.** It plus a `Profile` is still the only route in the package that writes a private
-  value into de-identified output, and exactly three classes of value take it: one the run **walked
+  is REMOVED.** Two routes in the package write a private value into de-identified output: a
+  `Profile` you pass, and the **file's own** Private Data Element Characteristics Sequence
+  `(0008,0300)`, which needs no profile. Four classes of value take them: one the run **walked
   as Data Elements** and put through the Annex E action table (a private `SQ` whose items the parser
   materialized), a **Private Creator `(gggg,00EE)` whose whole decoded value is a member of your
-  profile's private dictionary**, and a **zero-length** value, which encodes no Data Set. Anything
+  profile's private dictionary**, a **zero-length** value, which encodes no Data Set, and one **the
+  file itself declares non-identifying** - a block whose Block Identifying Information Status
+  `(0008,0303)` reads `SAFE`, or an element a `MIXED` block lists in Nonidentifying Private Elements
+  `(0008,0304)`.
+  🩺 **The fourth class is the sender's word and not this run's finding, and that is the limitation
+  rather than a feature note.** The value is retained unexamined because the system that wrote the
+  file asserted the block is safe; an Item that does not resolve keeps nothing and says so under
+  `DICOM_DEIDENT_PRIVATE_DECLARATION_NOT_RESOLVED`, but a well-formed declaration is taken at its
+  word. PS3.15 §E.3.10 offers exactly one mitigation and it is yours: if you do not trust the
+  sender, do not pass `RetainSafePrivate`, and every private attribute is removed. Anything
   else a profile vouches for is removed, recorded per instance in
   `report.unenumerablePrivateRemovals` with `applied: "removed"` and `reason: "unenumerable"`, named
   in `report.removedPrivateTags`, and warned under
@@ -92,7 +102,10 @@ structural fact about DICOM that no reader can resolve from the wire.
   Patient ID inside it reaches de-identified output with **no warning and no report entry**. That is
   measured and still exactly true for this route, which is every default `deidentify()` run. The only
   carrier that gets a diagnostic is one that is itself a private attribute reached through
-  `RetainSafePrivate` plus a `Profile` (the bullet above), and what such a diagnostic says is "this
+  `RetainSafePrivate` plus a `Profile` (the bullet above). A carrier reached through the file's own
+  `(0008,0300)` declaration gets **none**: the declaration is what makes that value known safe, so
+  the run keeps it rather than judging it, which is the sender-trust cost stated in that bullet.
+  What the profile-route diagnostic says is "this
   value was not enumerated, so the attribute was removed" or "this value was dropped" (emptied, where
   the profile declares it `SQ`), never "a swallow was detected here". Arbitrary
   bytes are exactly what those VRs are for, so no content test can decide it. String carriers **are**

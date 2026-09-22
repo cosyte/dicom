@@ -249,7 +249,13 @@ describe("deidentify: the file's own Private Data Element Characteristics Sequen
 
     // The SET of private tags in the output, asserted whole so nothing rides along.
     expect(out.privateTags).toEqual(
-      new Set([SAFE_CREATOR_TAG, SAFE_PITCH_TAG, SAFE_KVP_TAG, MIXED_CREATOR_TAG, MIXED_LISTED_TAG]),
+      new Set([
+        SAFE_CREATOR_TAG,
+        SAFE_PITCH_TAG,
+        SAFE_KVP_TAG,
+        MIXED_CREATOR_TAG,
+        MIXED_LISTED_TAG,
+      ]),
     );
     for (const tag of [
       MIXED_UNLISTED_TAG,
@@ -310,7 +316,13 @@ describe("deidentify: the file's own Private Data Element Characteristics Sequen
       text.includes("Private Data Element Characteristics Sequence"),
     );
     expect(message).toBeDefined();
-    for (const token of [SAFE_CREATOR, MIXED_CREATOR, UNDECLARED_CREATOR, GHOST_CREATOR, "PROBABLY"]) {
+    for (const token of [
+      SAFE_CREATOR,
+      MIXED_CREATOR,
+      UNDECLARED_CREATOR,
+      GHOST_CREATOR,
+      "PROBABLY",
+    ]) {
       expect(message).not.toContain(token);
     }
   });

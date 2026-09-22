@@ -98,7 +98,7 @@ dicom inherits the canonical toolchain by depending on the published `@cosyte/*`
   [#dicom-explicit-vr-unbounded-item-read](documentation/agent-notes.md#dicom-explicit-vr-unbounded-item-read)
 - **`lostValue` and `changed`/`structural` are the WRONG numbers for a de-identify-boundary remedy.** Quote `cells differing in any PARSE respect`.
   [#dicom-deident-rawbytes-passthrough](documentation/agent-notes.md#dicom-deident-rawbytes-passthrough)
-- **🛑 A grid family that runs `deidentify()` with NO OPTIONS cannot see a private-retention leak.** `RetainSafePrivate` + a `Profile` is the only route that writes a private value into de-identified output.
+- **🛑 A grid family that runs `deidentify()` with NO OPTIONS cannot see a private-retention leak.** `RetainSafePrivate` writes a private value into de-identified output by TWO routes, and a fixture with no `(0008,0300)` sees only one: a caller `Profile`, and **the file's own declaration, which needs no profile and rests on the SENDER's word**.
   [#dicom-private-creator-reservation-leak](documentation/agent-notes.md#dicom-private-creator-reservation-leak)
 - **Do not write a warning-code COUNT into prose.** The locked `WARNING_CODES` snapshot measures it every run.
   [#dicom-explicit-vr-unbounded-item-read](documentation/agent-notes.md#dicom-explicit-vr-unbounded-item-read)
