@@ -84,6 +84,7 @@ export const WARNING_CODES = {
   DICOM_DEIDENT_METHOD_PRIOR_RETAINED: "DICOM_DEIDENT_METHOD_PRIOR_RETAINED", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH: "DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE: "DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE", // emitted by deidentify(), never by the parser
+  DICOM_DEIDENT_PRIVATE_DECLARATION_NOT_RESOLVED: "DICOM_DEIDENT_PRIVATE_DECLARATION_NOT_RESOLVED", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE: "DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE: "DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE", // emitted by deidentify(), never by the parser
   DICOM_PRIVATE_CREATOR_UNKNOWN: "DICOM_PRIVATE_CREATOR_UNKNOWN", // emitted only when a profile is active
@@ -384,6 +385,20 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   // outright and why the published code SET did not move.
   DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE:
     "Element ({tag}) is a Private Attribute a profile vouched for under RetainSafePrivate whose value this run did not enumerate, so any Data Set encoded inside it could not be audited (PS3.15 E.3.10 vouches for the Attribute, not for a Data Set nested in its value; E.1.1). REMOVED rather than retained. The byte count is withheld; see report.unenumerablePrivateRemovals.",
+  // Deliberately short, and one per Item: the Item count is chosen by the
+  // input.
+  //
+  // 🩺 NOT ONE TOKEN OF THE ITEM IS ECHOED, AND EVERY FIELD THAT WOULD BE IS A
+  // DOCUMENT VALUE. The Item's own values are what failed to resolve: a Private
+  // Creator Reference (0008,0302) is an LO the sender wrote, a Private Group
+  // Reference (0008,0301) is a group number read off the wire, and a Block
+  // Identifying Information Status (0008,0303) that reaches this code is by
+  // construction outside the closed set PS3.3 C.12.1 enumerates, so no
+  // membership test can stand behind it. The two tags in the text are constants
+  // of this code rather than substitutions. `position.byteOffset` locates the
+  // (0008,0300) element and is a position this parser counted.
+  DICOM_DEIDENT_PRIVATE_DECLARATION_NOT_RESOLVED:
+    "An Item of Private Data Element Characteristics Sequence (0008,0300) does not resolve to a block of Private Data Elements reserved in this Data Set, so nothing was retained on account of it (PS3.15 E.3.10; PS3.3 C.12.1). Its declared values are withheld: they are the sender's own and are what failed to resolve.",
   // Deliberately short. One of these is raised per un-auditable element, so a
   // long message is multiplied by an element count the input controls; the
   // reasoning belongs in the docs, not in a string repeated thousands of times.
@@ -1689,6 +1704,49 @@ export function embeddedAttributeRemoved(
  */
 export function privateCarrierNotAuditable(position: DicomPosition, tag: Tag): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE, position, { tag });
+}
+
+/**
+ * Build a `DICOM_DEIDENT_PRIVATE_DECLARATION_NOT_RESOLVED` warning. Emitted by
+ * `deidentify()` - never by the parser - once per Item of Private Data Element
+ * Characteristics Sequence (0008,0300) that does not resolve to a block of
+ * Private Data Elements reserved in the Data Set being de-identified.
+ *
+ * @remarks
+ * PS3.15 2026c E.3.10 makes the file's own declaration a way an Attribute may be
+ * "known by the de-identifier to be safe from identity leakage". An Item that
+ * does not resolve establishes no such knowledge, so nothing is retained on its
+ * account and the run says so rather than leaving the caller to infer it from an
+ * attribute that quietly went missing. The Item may be unresolvable because a
+ * Type 1 Value is absent or empty, because Block Identifying Information Status
+ * (0008,0303) carries a Value outside the set PS3.3 2026c C.12.1 enumerates,
+ * because Private Group Reference (0008,0301) is not the odd group a private
+ * block can be reserved in, because a `MIXED` Item carries no usable
+ * Nonidentifying Private Elements (0008,0304) list, or because Private Creator
+ * Reference (0008,0302) names a creator no block in that Data Set reserves.
+ * **The run does not say which**, for the reason below.
+ *
+ * 🩺 **NO TOKEN OF THE ITEM REACHES THIS MESSAGE, AND THAT IS STRUCTURAL RATHER
+ * THAN CAUTIOUS.** Every field that would distinguish the cases is a value the
+ * sender wrote: the creator string is an `LO`, the group is a number off the
+ * wire, and a status that reaches this code is by construction outside the
+ * closed set, so `renderVr`-style membership cannot stand behind it. There is no
+ * string parameter for one to travel through, which is the single property that
+ * separates the `@cosyte/*` parsers that leak from the ones that do not. The two
+ * tags named in the text are constants of this code.
+ *
+ * **Capped per run** on `DeidentifyContext`, like every other
+ * consumer-controlled diagnostic here: an attacker chooses the Item count. The
+ * cap bounds what is said and never what is retained, which is nothing either
+ * way.
+ *
+ * @example
+ * ```ts
+ * const w = privateDeclarationNotResolved({ byteOffset: 220, fileMeta: false });
+ * ```
+ */
+export function privateDeclarationNotResolved(position: DicomPosition): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DEIDENT_PRIVATE_DECLARATION_NOT_RESOLVED, position);
 }
 
 /**

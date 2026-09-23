@@ -28,9 +28,15 @@ import { describe, expect, it } from "vitest";
  * ## Why the phrasing is asserted rather than left to a reviewer
  *
  * The over-redaction this release trades for the closed leak is the fact a reader is most likely to
- * be surprised by in production, and the previous wording of these pages priced it as "opaque
- * vendor values". It is not: an ordinary vendor scalar under an ordinary string VR is removed too.
- * A test is the only thing that keeps that sentence from being softened back out.
+ * be surprised by in production, and an earlier wording of these pages priced it as "opaque vendor
+ * values". It is not: an ordinary vendor scalar under an ordinary string VR goes too, unless the
+ * file's own `(0008,0300)` declaration names it safe.
+ *
+ * **The qualifier is part of the claim and not a softening of it**, which is why the literal below
+ * carries it. The declaration route retains exactly that shape of value with no profile and on the
+ * sender's word alone, so a page asserting the bare sentence describes a package the reader does
+ * not have, and a page dropping the qualified sentence prices the over-redaction back down to
+ * "opaque vendor values". A test is the only thing that keeps either half in place.
  *
  * @module
  */
@@ -80,9 +86,11 @@ describe("released prose: a retained private value this run did not enumerate", 
   });
 
   it("the pages that document RetainSafePrivate price the over-redaction at its real size", () => {
-    // 🛑 NOT "opaque vendor values". The retained class collapses to three, and
-    // the sentence has to say which value a reader will actually miss.
-    const collapse = "ordinary vendor scalar under an ordinary string VR is removed";
+    // 🛑 NOT "opaque vendor values". The sentence has to say which value a
+    // reader will actually miss, and it has to carry the one route that keeps
+    // that value anyway: the file's own declaration, on the sender's word.
+    const collapse =
+      "ordinary vendor scalar under an ordinary string VR that the file's own declaration does not name safe is removed";
     for (const name of [
       "README.md",
       "docs-content/limitations.md",
@@ -110,16 +118,20 @@ describe("released prose: a retained private value this run did not enumerate", 
 
   it("the release note carries all three things a consumer must act on", () => {
     const notes = plain(releaseNotes());
-    // 1. The over-redaction, at the size AC17 states.
-    expect(notes).toContain("ordinary vendor scalar under an ordinary string VR is removed");
+    // 1. The over-redaction, at the size AC17 states, with the one route that
+    //    keeps such a value anyway.
+    expect(notes).toContain(
+      "ordinary vendor scalar under an ordinary string VR that the file's own declaration does not name safe is removed",
+    );
     // 2. The retirement of the findings array's kept outcome.
     expect(notes).toContain("no longer produces its retired kept outcome");
-    // 3. The change of meaning of the warning code, plus the fact that the
-    //    published code SET did not move, which is what keeps a consumer
-    //    compiling.
+    // 3. The change of meaning of the warning code, plus the fact that no
+    //    published code was renamed or retired, which is what keeps a consumer
+    //    compiling. The SET did move: this release ADDS one, so the note may
+    //    not say the set is unchanged.
     expect(notes).toContain("DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE changes meaning");
     expect(notes).toContain("shipped unexamined");
     expect(notes).toContain("removed unexamined");
-    expect(notes).toContain("warning-code SET is unchanged");
+    expect(notes).toContain("No published warning code is renamed or retired");
   });
 });

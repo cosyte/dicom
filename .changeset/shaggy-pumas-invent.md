@@ -5,8 +5,10 @@
 Disclose a retained private value this run kept without enumerating it, instead of stamping
 `Patient Identity Removed = YES` in silence over it.
 
-`RetainSafePrivate` plus a `Profile` is the only route in the package that writes a private value
-into de-identified output. PS3.15 2026c §E.3.10 licenses that retention for a Private _Attribute_
+`RetainSafePrivate` plus a `Profile` is the route this entry is about, and this release adds a
+second one beside it: the file's own Private Data Element Characteristics Sequence `(0008,0300)`,
+covered by the declaration entry. PS3.15 2026c §E.3.10 licenses that retention for a Private
+_Attribute_
 "known by the de-identifier to be safe"; it says nothing about a Data Set the sender nested inside
 that attribute's value, which PS3.5 §7.5.1 makes Data Elements and PS3.15 §E.1.1 still covers
 "whether contained in the top level Data Set or embedded in an Item of a Sequence of Items". Where

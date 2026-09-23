@@ -46,6 +46,16 @@ SYNTHETIC^FIXTURE
 # `DATE:20240115`, which are plausible real birth and study dates. Path scoping is a change to
 # the allow-list FORMAT and is deliberately not made here; the cost is stated instead.
 BOND^JAMES
+# The two removed-side payloads of the safe-private declaration fixtures
+# (`test/deident/private-declaration.test.ts`), written as `SMITH^JANE^A` and
+# `BROWN^ALICE^B` in the source and matched by the text sweep down to their first
+# two components. They are name-bearing on purpose: the criteria they grade are
+# about a private attribute the file's own declaration does NOT cover, and a
+# fixture whose payload carries no name cannot tell a retention defect from a
+# pass. Listed EXACT, never as `SMITH^` or `BROWN^` prefixes, so no other given
+# name under either surname is admitted by them.
+BROWN^ALICE
+SMITH^JANE
 DEEPER^PATIENT
 DEFLATE^TEST
 NESTED^PATIENT
