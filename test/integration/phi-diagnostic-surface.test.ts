@@ -34,8 +34,8 @@
  * normalizes the marker *before* the leaking branch, and it does not: Postel's
  * Law is the documented read-path posture, so no VR character set is validated
  * on parse. `(0008,0005)` terms are tested for **membership** in a closed table,
- * not for shape, and `(0002,0010)` is tested for membership in the four
- * supported syntaxes; a marker misses both and reaches the branch verbatim.
+ * not for shape, and `(0002,0010)` is tested for membership in the supported
+ * syntaxes; a marker misses both and reaches the branch verbatim.
  * `expectCode` on every slot is what turns that from an assumption into a
  * measurement, and {@link markerReachesTheModelVerbatim} pins the one case where
  * the parser does fold case (`(0028,0301)`, upper-cased before comparison) -
@@ -601,17 +601,14 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
   },
   {
     // `expectCode` is `null` here on purpose, and the reason is worth more than
-    // the slot. A fragment carrying the marker raises no warning at all; the
-    // only code this fixture produces is `DICOM_EMPTY_ITEM_IN_SEQUENCE`, and it
-    // comes from the **empty Basic Offset Table** item, not from the fragment
-    // the marker is in. Naming it would satisfy the runner while proving
-    // nothing about the marker's own path, which is the substitution
-    // `expectCode` exists to prevent. It would also test-lock a warning that
-    // looks wrong on its own terms: PS3.5 section A.4 makes an empty Basic
-    // Offset Table the conformant encoding, so flagging it as an empty item is
-    // arguably a defect, and pinning it here would make fixing it harder. Reach
-    // is proven instead by `markerReachesTheModelVerbatim`, which asserts the
-    // fragment bytes arrive on the element.
+    // the slot. A fragment carrying the marker raises no warning at all, and
+    // this fixture raises none: its empty Basic Offset Table is the conformant
+    // encoding PS3.5 2026c section A.4 makes decoders accept, so it no longer
+    // raises `DICOM_EMPTY_ITEM_IN_SEQUENCE` (AC-10). Naming a code would satisfy
+    // the runner while proving nothing about the marker's own path, which is
+    // the substitution `expectCode` exists to prevent. Reach is proven instead
+    // by `markerReachesTheModelVerbatim`, which asserts the fragment bytes
+    // arrive on the element; the slot below is the one code this path emits.
     name: "(7FE0,0010) encapsulated pixel data fragment",
     plant: (m) =>
       buildDicom({
@@ -627,6 +624,27 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
         ],
       }),
     expectCode: null,
+  },
+  {
+    // AC-9: the same fragment under a section A.4 syntax, with the stream ending
+    // on the marker's fragment and no Sequence Delimitation Item after it, so
+    // the code this path emits is raised with the marker as the last bytes read.
+    name: "(7FE0,0010) encapsulated pixel data fragment, no Sequence Delimitation Item (AC-9)",
+    plant: (m) =>
+      buildDicom({
+        transferSyntax: "1.2.840.10008.1.2.4.50",
+        elements: [
+          {
+            tag: "7FE00010",
+            undefinedLength: true,
+            encapsulatedPixelData: true,
+            encapsulatedFragments: [Buffer.alloc(0), val(m)],
+            omitSequenceDelim: true,
+            items: [],
+          },
+        ],
+      }),
+    expectCode: WARNING_CODES.DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED,
   },
   {
     // Cut mid-value of the element carrying the marker, so the failure and the

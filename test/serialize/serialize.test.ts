@@ -18,10 +18,18 @@ import { Buffer } from "node:buffer";
 
 import { describe, expect, it } from "vitest";
 
-import { Dataset, DicomSerializeError, parseDicom, serializeDicom } from "../../src/index.js";
+import {
+  Dataset,
+  DicomSerializeError,
+  deidentify,
+  parseDicom,
+  serializeDicom,
+} from "../../src/index.js";
 import type { Element } from "../../src/index.js";
 import type { Tag, VR } from "../../src/dictionary/types.js";
+import { encapsulatedObject } from "../fixtures/encapsulated/objects.js";
 import { buildDicom, type BuildDicomOptions } from "../helpers/build-dicom.js";
+import { ENCAPSULATION_SET } from "../helpers/ps35-section-a4.js";
 import { COSYTE_IMPLEMENTATION_CLASS_UID } from "../../src/serialize/file-meta.js";
 
 const TS_IMPLICIT_LE = "1.2.840.10008.1.2";
@@ -527,5 +535,28 @@ describe("serializeDicom - error taxonomy", () => {
       elements: new Map(),
     });
     expect(() => serializeDicom(ds)).toThrow(/UNSUPPORTED_TRANSFER_SYNTAX/);
+  });
+});
+
+describe("AC-14: serializeDicom refuses every section A.4 encapsulation syntax", () => {
+  /** The writer's outcome: the bytes it returned, or the error it threw. */
+  function attempt(ds: Dataset): { out: Buffer | undefined; err: unknown } {
+    try {
+      return { out: serializeDicom(ds), err: undefined };
+    } catch (err) {
+      return { out: undefined, err };
+    }
+  }
+
+  it.each(ENCAPSULATION_SET)("AC-14: %s, as parsed and as de-identified", (uid) => {
+    const parsed = parseDicom(encapsulatedObject({ transferSyntax: uid }));
+    const { dataset: deidentified } = deidentify(parsed);
+    expect(deidentified.fileMeta?.transferSyntaxUID).toBe(uid);
+    for (const ds of [parsed, deidentified]) {
+      const { out, err } = attempt(ds);
+      expect(out).toBeUndefined();
+      expect(err).toBeInstanceOf(DicomSerializeError);
+      expect((err as DicomSerializeError).code).toBe("UNSUPPORTED_TRANSFER_SYNTAX");
+    }
   });
 });

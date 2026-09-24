@@ -289,6 +289,55 @@ describe("parseSequence - encapsulated pixel data (D-31)", () => {
     expect(result.items.length).toBe(4);
   });
 
+  it("AC-10: an empty Basic Offset Table raises nothing; a later empty fragment still raises DICOM_EMPTY_ITEM_IN_SEQUENCE", () => {
+    // PS3.5 2026c section A.4: decoders "need to accept both an empty Basic
+    // Offset Table (zero length) and a Basic Offset Table filled with 32 bit
+    // offset values". The first Item is that table; the third is a fragment
+    // with no bytes, which A.4 does not describe.
+    const frag = Buffer.from([0x01, 0x02, 0x03, 0x04]);
+    const buffer = Buffer.concat([
+      buildItemHeader(0, true), // empty BOT, at offset 0
+      buildItemHeader(frag.length, true),
+      frag,
+      buildItemHeader(0, true), // empty fragment, at offset 20
+      buildSeqDelim(true),
+    ]);
+    const opts: ParseSequenceOptions = {
+      explicitLength: undefined,
+      littleEndian: true,
+      innerStrategy: (_buf, start) => ({ elements: new Map(), endOffset: start }),
+      encapsulatedPixelData: true,
+    };
+    const ctx = makeContext(buffer);
+    const result = parseSequence(buffer, 0, ctx, makeEmit(ctx), opts);
+    expect(result.items).toHaveLength(3);
+    const empties = ctx.warnings.filter(
+      (w) => w.code === WARNING_CODES.DICOM_EMPTY_ITEM_IN_SEQUENCE,
+    );
+    expect(empties.map((w) => w.position.byteOffset)).toStrictEqual([20]);
+
+    // With a populated table and no empty fragment, nothing at all.
+    const quiet = Buffer.concat([
+      buildItemHeader(4, true),
+      Buffer.alloc(4),
+      buildItemHeader(frag.length, true),
+      frag,
+      buildSeqDelim(true),
+    ]);
+    const quietCtx = makeContext(quiet);
+    parseSequence(quiet, 0, quietCtx, makeEmit(quietCtx), opts);
+    expect(quietCtx.warnings).toStrictEqual([]);
+
+    // Control: outside encapsulated Pixel Data a first empty Item still warns,
+    // so the exemption is the Basic Offset Table's and nobody else's.
+    const sq = Buffer.concat([buildItemHeader(0, true), buildSeqDelim(true)]);
+    const sqCtx = makeContext(sq);
+    parseSequence(sq, 0, sqCtx, makeEmit(sqCtx), { ...opts, encapsulatedPixelData: false });
+    expect(sqCtx.warnings.map((w) => w.code)).toStrictEqual([
+      WARNING_CODES.DICOM_EMPTY_ITEM_IN_SEQUENCE,
+    ]);
+  });
+
   it("throws INVALID_FILE_META when a fragment declares more bytes than remain", () => {
     // A fragment item header claims 64 bytes of pixel data but only a few
     // follow - the bounds check must reject it (T-02-04-01) rather than
