@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <book xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" label="PS3.6" version="5.0" xml:id="PS3.6">
     <title>PS3.6</title>
-    <subtitle>DICOM PS3.6 2026c - Data Dictionary</subtitle>
+    <subtitle>DICOM PS3.6 2026d - Data Dictionary</subtitle>
     <info>
         <author>
             <orgname>DICOM Standards Committee</orgname>
@@ -50095,12 +50095,12 @@
                             <emphasis role="italic">(0032,1021)</emphasis>
                         </para>
                     </td>
-                    <td align="center" colspan="1" rowspan="1">
+                    <td align="left" colspan="1" rowspan="1">
                         <para xml:id="para_f1ff6051-872e-4916-9512-e5bff8291346">
                             <emphasis role="italic">Scheduled Study Location AE Title</emphasis>
                         </para>
                     </td>
-                    <td align="center" colspan="1" rowspan="1">
+                    <td align="left" colspan="1" rowspan="1">
                         <para xml:id="para_1df4d95b-b394-4def-9715-fe558fbeffdc">
                             <emphasis role="italic">Scheduled​Study​Location​AE​Title</emphasis>
                         </para>
@@ -86021,6 +86021,26 @@
                     </td>
                     <td align="center" colspan="1" rowspan="1">
                         <para xml:id="para_09d823de-58be-4e47-9462-bd3189f4c4c0"/>
+                    </td>
+                </tr>
+                <tr valign="top">
+                    <td align="center" colspan="1" rowspan="1">
+                        <para xml:id="para_9beedb26-3815-436f-bbbd-ecf2c95ca740">(3004,007F)</para>
+                    </td>
+                    <td align="left" colspan="1" rowspan="1">
+                        <para xml:id="para_294706a9-3466-4500-aab2-e94140779a46">Dose Calculation Model Name</para>
+                    </td>
+                    <td align="left" colspan="1" rowspan="1">
+                        <para xml:id="para_3fbb01a5-178f-420c-b4a0-f4401058325f">Dose​Calculation​Mode​lName</para>
+                    </td>
+                    <td align="center" colspan="1" rowspan="1">
+                        <para xml:id="para_dcc684a2-bcc7-41b9-84a5-fd69722709e1">LO</para>
+                    </td>
+                    <td align="center" colspan="1" rowspan="1">
+                        <para xml:id="para_e8be46e9-eedd-438e-abaf-f2d1678f912a">1</para>
+                    </td>
+                    <td align="center" colspan="1" rowspan="1">
+                        <para xml:id="para_29896ead-ede0-4ea5-bde4-f353eb210b9d"/>
                     </td>
                 </tr>
                 <tr valign="top">

@@ -3,8 +3,8 @@
 //
 // Generator: scripts/generate-dictionary.ts
 // Innolitics dicom-standard SHA (pinned, full): 90571bcc4e46b08bc815bd683e6c466308bcff9a
-// Normative source: NEMA DICOM PS3.6 2026c DocBook (Tables 6-1, 7-1, 8-1, 9-1).
-//   vendor/nema/part06/<sha>/part06.xml → ff1dcdfb557d57db96420614fcaf6d739bb76aa74b73eba77f367be9fab0be3e
+// Normative source: NEMA DICOM PS3.6 2026d DocBook (Tables 6-1, 7-1, 8-1, 9-1).
+//   vendor/nema/part06/<sha>/part06.xml → fa9f0f8d67eba692dcf95cfeae0a8f4e071beeb7844215a860bc4b9d5dfaad25
 //   PS3.6 wins per field over the Innolitics mirror on every tag it publishes.
 // Inputs (path → SHA-256):
 //   - vendor/innolitics/<sha>/attributes.json → acc170c9646bf497e7c90dca904472f7eb673c9038c6198a92f82c66a9c74e5c
@@ -1250,6 +1250,7 @@ export const KEYWORDS: { readonly [keyword: string]: string } = {
   "DopplerSampleVolumeYPosition": "0018603B",
   "DopplerSampleVolumeYPositionRetired": "0018603A",
   "DoseCalculationAlgorithmSequence": "30040081",
+  "DoseCalculationModelName": "3004007F",
   "DoseCalculationModelParameterSequence": "30040083",
   "DoseCalculationModelSequence": "30040080",
   "DoseCalibrationConditionsSequence": "300C0120",
