@@ -29,4 +29,20 @@ describe("the documented install specifier", () => {
       installSpecifiers("npm install @cosyte/dicon\n`pnpm add -D @cosyte/dicom@0.0.1`"),
     ).toEqual(["@cosyte/dicon", "@cosyte/dicom"]);
   });
+
+  it("AC-DI6: every install command form a reader may copy is read, inline code included", () => {
+    const forms = [
+      "pnpm i @cosyte/dicon",
+      "pnpm install @cosyte/dicon",
+      "npm add @cosyte/dicon",
+      "deno add npm:@cosyte/dicon",
+      "run `npm install @cosyte/dicon` first",
+      "then run npm install @cosyte/dicon.",
+    ];
+    for (const form of forms) expect(installSpecifiers(form), form).toEqual(["@cosyte/dicon"]);
+    expect(installSpecifiers("pnpm install\npnpm install --frozen-lockfile")).toEqual([]);
+    expect(
+      installSpecifiers("pnpm add file:../dicom\nnpm install git+https://x.test/dicom.git"),
+    ).toEqual([]);
+  });
 });

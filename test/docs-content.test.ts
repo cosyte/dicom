@@ -12,7 +12,7 @@ import {
   runSnippet,
 } from "@cosyte/vitest-config/snippets";
 
-import { base64Object, fences, section } from "./_helpers/first-use.js";
+import { base64Object, compileErrors, fences, section } from "./_helpers/first-use.js";
 import { FIRST_USE_CT_NO_PREAMBLE, FIRST_USE_CT_OBJECT } from "./fixtures/first-use/ct-object.js";
 
 /**
@@ -64,6 +64,14 @@ const QUICKSTART_FIRST = fences(QUICKSTART)[0];
 const QUICKSTART_FIRST_RUNNABLE = extractRunnableSnippets(QUICKSTART)[0];
 const README_FIRST = fences(section(readFileSync(join(root, "README.md"), "utf8"), "## Usage"))[0];
 const STUDY_FILE = '"study.dcm"';
+/**
+ * The snippet harness strips types without checking them, so compiling is checked separately, the
+ * way a reader's new TypeScript project compiles the block, against the source entry point the
+ * bundler compiles into the published types. A program over the source takes seconds to check, so
+ * these cases state their own budget.
+ */
+const SOURCE_PATHS = { "@cosyte/dicom": join(root, "src", "index.ts") };
+const COMPILE_TIMEOUT = 60_000;
 
 let studyDir = "";
 
@@ -90,6 +98,28 @@ describe("the quickstart's first example", () => {
     expect(QUICKSTART_FIRST?.tags).not.toContain("throws");
     expect(QUICKSTART_FIRST_RUNNABLE?.code).toBe(QUICKSTART_FIRST?.body);
   });
+
+  it(
+    "AC-DI1: compiles in a new TypeScript project against the package's types",
+    () => {
+      expect(compileErrors(root, SOURCE_PATHS, QUICKSTART_FIRST?.body ?? "")).toEqual([]);
+    },
+    COMPILE_TIMEOUT,
+  );
+
+  it(
+    "AC-DI1: a block that does not compile is reported, so it turns this suite red",
+    () => {
+      const code = QUICKSTART_FIRST?.body ?? "";
+      const guarded = "ds.patient.name?.alphabetic?.familyName";
+      expect(code.split(guarded).length - 1).toBe(1);
+      const mutated = code.replace(guarded, "ds.patient.name.alphabetic?.familyName");
+      expect(compileErrors(root, SOURCE_PATHS, mutated)).toEqual([
+        expect.stringContaining("TS18048"),
+      ]);
+    },
+    COMPILE_TIMEOUT,
+  );
 
   it("AC-DI1: runs against the built package and every claimed value holds", async () => {
     expect(QUICKSTART_FIRST_RUNNABLE).toBeDefined();
@@ -132,6 +162,28 @@ describe("the README ## Usage example", () => {
     expect(README_FIRST?.lang).toBe("ts");
     expect(README_FIRST?.body).toMatch(/;\s*\/\/ => /);
   });
+
+  it(
+    "AC-DI2: compiles in a new TypeScript project against the package's types",
+    () => {
+      expect(compileErrors(root, SOURCE_PATHS, README_FIRST?.body ?? "")).toEqual([]);
+    },
+    COMPILE_TIMEOUT,
+  );
+
+  it(
+    "AC-DI2: a block that does not compile is reported, so it turns this suite red",
+    () => {
+      const code = README_FIRST?.body ?? "";
+      const claim = "ds.warnings.map((w) => w.code)";
+      expect(code.split(claim).length - 1).toBe(1);
+      const mutated = code.replace(claim, "ds.warnings.map((w) => w.codes)");
+      expect(compileErrors(root, SOURCE_PATHS, mutated)).toEqual([
+        expect.stringMatching(/TS2551|TS2339/),
+      ]);
+    },
+    COMPILE_TIMEOUT,
+  );
 
   it("AC-DI2: runs against the built package reading the fixture, and every claimed value holds", async () => {
     await runSnippet(readmeRunnable(README_FIRST?.body ?? ""), {
