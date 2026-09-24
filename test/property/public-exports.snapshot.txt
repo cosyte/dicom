@@ -16,11 +16,13 @@ AppliedAction
 CODING_SCHEME_OIDS
 CodedConcept
 DEFAULT_UID_ROOT
+DEIDENTIFICATION_METHOD_CODES
 DEIDENTIFY_ERROR_CODES
 DEIDENTIFY_OPTIONS
 Dataset
 DateParts
 DefineProfileOptions
+DeidentificationMethodCode
 DeidentifiedAttribute
 DeidentifyError
 DeidentifyErrorCode

@@ -99,9 +99,11 @@ export type {
 
 export { deidentify, makeUidRemapper, DEFAULT_UID_ROOT } from "./deident/index.js";
 export { DEIDENTIFY_OPTIONS, DEIDENTIFY_ERROR_CODES, DeidentifyError } from "./deident/index.js";
+export { DEIDENTIFICATION_METHOD_CODES } from "./deident/index.js";
 export type {
   UidRemapper,
   AppliedAction,
+  DeidentificationMethodCode,
   DeidentifiedAttribute,
   DeidentifyErrorCode,
   DeidentifyOption,

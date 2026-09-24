@@ -79,6 +79,8 @@ export const WARNING_CODES = {
   DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED: "DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_FILE_META_REPLACED: "DICOM_DEIDENT_FILE_META_REPLACED", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_GROUP_0004_REMOVED: "DICOM_DEIDENT_GROUP_0004_REMOVED", // emitted by deidentify(), never by the parser
+  DICOM_DEIDENT_METHOD_CODES_PRIOR_REPLACED: "DICOM_DEIDENT_METHOD_CODES_PRIOR_REPLACED", // emitted by deidentify(), never by the parser
+  DICOM_DEIDENT_METHOD_CODES_PRIOR_RETAINED: "DICOM_DEIDENT_METHOD_CODES_PRIOR_RETAINED", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_METHOD_NOT_ADDED: "DICOM_DEIDENT_METHOD_NOT_ADDED", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_METHOD_NOT_LO: "DICOM_DEIDENT_METHOD_NOT_LO", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_METHOD_PRIOR_RETAINED: "DICOM_DEIDENT_METHOD_PRIOR_RETAINED", // emitted by deidentify(), never by the parser
@@ -316,6 +318,19 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   // single-byte repertoire too. The message states what was measured.
   DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH:
     "The De-identification Method (0012,0063) this run wrote carries a Value longer than 64 bytes. PS3.5 Table 6.2-1 bounds an LO Value at 64 characters, per Value and not per Value Field, and PS3.5 6.2 specifies that length in characters rather than bytes and excludes Code Extension escape sequences from the count: a Value of 64 bytes or fewer can never carry more than 64 characters, but a longer one is not necessarily over the maximum. This run never shortens, splits or truncates a Value it did not compose: a caller-supplied method, and a value the source file already carried, are both written through as given. A receiver that enforces the VR may reject the attribute that records the de-identification. The value, its length, how many Values are over and which of them came from where are all withheld from this message.",
+  // Once per run, and no value, no count and no VR: the kept Items are the
+  // file's own bytes, and how many there were is a count over input. The tags in
+  // the text are constants of this code. It is the (0012,0064) sibling of
+  // DICOM_DEIDENT_METHOD_PRIOR_RETAINED and deliberately not that code widened:
+  // that one's published meaning names (0012,0063).
+  DICOM_DEIDENT_METHOD_CODES_PRIOR_RETAINED:
+    "One or more Items of a De-identification Method Code Sequence (0012,0064) the source file already carried were kept, in their original order, ahead of the codes this run added, as PS3.15 E.1.1 requires. Neither that attribute nor the Code Value, Coding Scheme Designator and Code Meaning inside its Items has a Table E.1-1 row, so those bytes are in the output as the sender wrote them, under (0012,0062) = YES, and no code in them was checked against CID 7050. If your source may put identifying text there, read (0012,0064) off the de-identified dataset and decide for yourself. The Items' content and their count are withheld from this message.",
+  // Once per run. No value, no length AND NO VR, for the reason
+  // DICOM_DEIDENT_METHOD_NOT_LO states: the VR is two bytes read from the file,
+  // and a fabricated header makes them document content. The text names both
+  // unreadable shapes so that which one fired is not disclosed by the wording.
+  DICOM_DEIDENT_METHOD_CODES_PRIOR_REPLACED:
+    "The De-identification Method Code Sequence (0012,0064) the source file carried was not a Sequence of Items this run could read (it was not encoded as SQ, or its Items were not parsed), so there were no Items to add this run's codes to (PS3.15 E.1.1) and the attribute was replaced with this run's codes alone. The replaced bytes are not in the output; if you need them, read (0012,0064) off the source dataset before de-identifying. Their content and their VR are both withheld from this message.",
   // BOTH of the disagreeing length fields are deliberately absent, and the
   // second one is the eighth instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`: the
   // remaining-bytes count this string used to carry was the enclosing sequence's
@@ -1594,6 +1609,79 @@ export function deidentMethodPriorRetained(position: DicomPosition): DicomParseW
  */
 export function deidentMethodValueOverLength(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH, position);
+}
+
+/**
+ * Build a `DICOM_DEIDENT_METHOD_CODES_PRIOR_RETAINED` warning for a
+ * `(0012,0064)` De-identification Method Code Sequence whose prior Items
+ * `deidentify()` **kept** ahead of the codes it added.
+ *
+ * @remarks
+ * PS3.15 2026c §E.1.1 says the CID 7050 codes for the Profile and Options used
+ * "shall be added to" `(0012,0064)`, so keeping a prior de-identifier's Items is
+ * the conformant act and this code is a **disclosure**, not a defect report.
+ * Neither `(0012,0064)` nor the code attributes inside its Items has a Table
+ * E.1-1 row, so the Code Value, Coding Scheme Designator and Code Meaning bytes
+ * the sender wrote reach output stamped `(0012,0062) = YES` as written, and no
+ * prior code is checked against CID 7050 or any terminology. Silence there would
+ * be an audit that reads as a scrub it did not perform.
+ *
+ * Raised once per run, only when at least one prior Item was kept; a prior
+ * `(0012,0064)` with zero Items raises nothing. **Read it as "Items from the
+ * input file are in `(0012,0064)`"**: de-identifying an object this library
+ * already de-identified raises it too, because nothing on the wire says who
+ * wrote an Item.
+ *
+ * **Not `DICOM_DEIDENT_METHOD_PRIOR_RETAINED` widened.** That code's published
+ * meaning names `(0012,0063)`, and a published code never changes meaning.
+ *
+ * **No value, no count, no VR.** The kept Items are the file's own bytes and
+ * their number is a count over input. The tags in the message are constants of
+ * this code. `position.byteOffset` locates the source element.
+ *
+ * Emitted by `deidentify()` only, so it reaches `report.warnings` and is not
+ * subject to the parser's `{ strict: true }` escalation.
+ *
+ * @example
+ * ```ts
+ * const w = deidentMethodCodesPriorRetained({ byteOffset: 4096, fileMeta: false });
+ * ```
+ */
+export function deidentMethodCodesPriorRetained(position: DicomPosition): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DEIDENT_METHOD_CODES_PRIOR_RETAINED, position);
+}
+
+/**
+ * Build a `DICOM_DEIDENT_METHOD_CODES_PRIOR_REPLACED` warning for a
+ * `(0012,0064)` the source file carried that was **not a Sequence of Items the
+ * parse produced** - encoded under a VR other than `SQ`, or an `SQ` whose items
+ * are undefined - and that `deidentify()` therefore replaced with this run's
+ * codes alone.
+ *
+ * @remarks
+ * Appending needs Items to append after; bytes that are not Items cannot be
+ * added to, and inventing Items out of them would be worse than saying so. The
+ * same posture as `DICOM_DEIDENT_METHOD_NOT_LO` for `(0012,0063)`, and a separate
+ * code because the attribute and the published meaning differ.
+ *
+ * **A prior value that is empty or padding only raises nothing**, because nothing
+ * was lost.
+ *
+ * **No value, no length and NO VR.** The VR is two bytes read out of the file and
+ * a fabricated header makes them document content. The message names both
+ * unreadable shapes, so its wording does not say which one fired.
+ * `position.byteOffset` locates the source element.
+ *
+ * Emitted by `deidentify()` only, so it reaches `report.warnings` and is not
+ * subject to the parser's `{ strict: true }` escalation.
+ *
+ * @example
+ * ```ts
+ * const w = deidentMethodCodesPriorReplaced({ byteOffset: 4096, fileMeta: false });
+ * ```
+ */
+export function deidentMethodCodesPriorReplaced(position: DicomPosition): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DEIDENT_METHOD_CODES_PRIOR_REPLACED, position);
 }
 
 /**

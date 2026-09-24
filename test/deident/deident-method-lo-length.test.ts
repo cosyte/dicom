@@ -520,11 +520,15 @@ describe("an over-long Value this run did not compose is written through, and SA
     expect(valueLengths(rawMethod(ds))).toStrictEqual([76, 61]);
     // Disclosed as a retention AND as a length, on every pass. A code raised only
     // on the first pass would leave every re-de-identification silent again,
-    // which is the exact shape this row exists to catch.
+    // which is the exact shape this row exists to catch. From the second pass
+    // the input also carries the (0012,0064) Items the pass before it wrote, and
+    // their retention is disclosed by its own code (S0356-dicom-13 AC-7), after
+    // the two (0012,0063) codes, which are unchanged.
     expect(codesPerPass).toStrictEqual(
-      Array.from({ length: 4 }, () => [
+      Array.from({ length: 4 }, (_, pass) => [
         WARNING_CODES.DICOM_DEIDENT_METHOD_PRIOR_RETAINED,
         WARNING_CODES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH,
+        ...(pass === 0 ? [] : [WARNING_CODES.DICOM_DEIDENT_METHOD_CODES_PRIOR_RETAINED]),
       ]),
     );
   });

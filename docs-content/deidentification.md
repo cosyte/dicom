@@ -113,6 +113,95 @@ both are yours, so every modified-dates run raises `DICOM_DEIDENT_DATES_NOT_TRAN
 report. Activate the full-dates Option only when real dates are genuinely required, and see
 [Known limitations](./limitations) for the whole of that residual.
 
+## What the object records about the method
+
+PS3.15 2026c §E.1.1 asks a de-identifier to record how it ran, in codes from CID 7050
+"De-identification Method" "corresponding to the Profile and Options used", which "shall be added to
+De-identification Method Code Sequence (0012,0064), and/or a text string describing the method used
+shall be inserted in or added to De-identification Method (0012,0063)". `deidentify()` writes both,
+on every run. The text in `(0012,0063)` was already there; `(0012,0064)` is the machine-readable
+half, so you can switch on a code instead of parsing English, and tell the two §E.3.6 branches
+apart by `113106` and `113107` rather than only by the `(0028,0303)` value.
+
+`(0012,0064)` is a top-level `SQ` with an Item for each code from PS3.16 2026d CID 7050 (context
+group version `20170914`, UID `1.2.840.10008.6.1.925`): `113100` for the Profile first, then an Item
+for each active Option in `DEIDENTIFY_OPTIONS` order, whatever order `retain` names them in. Each
+Item carries exactly Code Value `(0008,0100)`, Coding Scheme Designator `(0008,0102)` = `DCM` and
+Code Meaning `(0008,0104)`, and nothing else.
+
+```ts runnable
+import { Dataset, deidentify, DEIDENTIFICATION_METHOD_CODES } from "@cosyte/dicom";
+
+// An empty Data Set keeps this short: the codes follow the options, not the content.
+const empty = new Dataset({ warnings: [], elements: new Map() });
+const { dataset } = deidentify(empty, { retain: ["RetainUIDs", "CleanDescriptors"] });
+
+// The Profile, then each active Option in DEIDENTIFY_OPTIONS order.
+const codeValues = (dataset.get("00120064")?.items ?? []).map((item) => {
+  const value = item.get("00080100")?.value;
+  return value?.kind === "strings" ? value.values[0] : undefined;
+});
+codeValues; // => ["113100", "113105", "113110"]
+
+// The same rows, as data you can compare against.
+DEIDENTIFICATION_METHOD_CODES.options.RetainUIDs.codeValue; // => "113110"
+DEIDENTIFICATION_METHOD_CODES.profile.codeMeaning; // => "Basic Application Confidentiality Profile"
+
+// Running it again adds nothing, and says it kept what was already there.
+const again = deidentify(dataset, { retain: ["RetainUIDs", "CleanDescriptors"] });
+again.dataset.get("00120064")?.items?.length; // => 3
+again.report.warnings.map((w) => w.code); // => ["DICOM_DEIDENT_METHOD_PRIOR_RETAINED", "DICOM_DEIDENT_METHOD_CODES_PRIOR_RETAINED"]
+```
+
+| Code Value | Code Meaning                                                   | Written when                              |
+| ---------- | -------------------------------------------------------------- | ----------------------------------------- |
+| `113100`   | Basic Application Confidentiality Profile                      | every run                                 |
+| `113101`   | Clean Pixel Data Option                                        | never                                     |
+| `113102`   | Clean Recognizable Visual Features Option                      | never                                     |
+| `113103`   | Clean Graphics Option                                          | `CleanGraphics`                           |
+| `113104`   | Clean Structured Content Option                                | `CleanStructuredContent`                  |
+| `113105`   | Clean Descriptors Option                                       | `CleanDescriptors`                        |
+| `113106`   | Retain Longitudinal Temporal Information Full Dates Option     | `RetainLongitudinalTemporal`              |
+| `113107`   | Retain Longitudinal Temporal Information Modified Dates Option | `RetainLongitudinalTemporalModifiedDates` |
+| `113108`   | Retain Patient Characteristics Option                          | `RetainPatientCharacteristics`            |
+| `113109`   | Retain Device Identity Option                                  | `RetainDeviceIdentity`                    |
+| `113110`   | Retain UIDs Option                                             | `RetainUIDs`                              |
+| `113111`   | Retain Safe Private Option                                     | `RetainSafePrivate`                       |
+| `113112`   | Retain Institution Identity Option                             | `RetainInstitutionIdentity`               |
+
+**Added to, never replaced.** When the source already carries a top-level `(0012,0064)`, every
+Item in it is kept, in its original order and byte for byte, and this run's Items follow. A code a
+prior Item already records under the same Coding Scheme Designator and Code Value is not added
+again (Code Meaning is not part of the match, and trailing padding is ignored), so de-identifying
+an output again with the same options is a fixed point, and a run that adds one further Option
+appends that Option's Item and nothing else.
+
+The limits of what these codes say, stated here rather than on a later page:
+
+- **`113101` and `113102` are never written.** They name the two pixel-level Options, and this
+  layer does not touch pixels.
+- **`113107` says the modified-dates column was resolved, not that any date was shifted.** It is
+  the same limit `(0028,0303) = MODIFIED` carries: this library transforms no date, and every run
+  that writes `113107` still carries `DICOM_DEIDENT_DATES_NOT_TRANSFORMED` on `report.warnings`.
+- **An Option's code means the Option was active for the run.** It is written whether or not the
+  object carried an attribute that Option acts on, and your `deidentificationMethod` text never
+  changes the codes: they follow the options that ran.
+- **Prior Items are carried, not inspected.** Neither `(0012,0064)` nor the code attributes in its
+  Items has a Table E.1-1 row, so what a sender wrote there reaches your output under
+  `(0012,0062) = YES`, and no prior code is checked against CID 7050 or any terminology. Every run
+  that keeps a prior Item says so with `DICOM_DEIDENT_METHOD_CODES_PRIOR_RETAINED`.
+- **A prior that is not a Sequence of Items is replaced.** A `(0012,0064)` encoded under a VR other
+  than `SQ`, or an `SQ` whose items were not parsed, cannot be added to, so this run's Items stand
+  alone and `DICOM_DEIDENT_METHOD_CODES_PRIOR_REPLACED` says so (a padding-only prior raises
+  nothing, because nothing was lost).
+- **Top level only.** A copy nested inside a Sequence Item is neither written nor read, the same
+  reach `(0012,0062)` and `(0012,0063)` have.
+
+| Export                          | What it is                                                                                                                                         |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DEIDENTIFICATION_METHOD_CODES` | The CID 7050 rows as frozen data, with the context group UID and version, the Profile's code and the code each `DeidentifyOption` writes.          |
+| `DeidentificationMethodCode`    | One row: `codeValue`, `codingSchemeDesignator` (`DCM`) and `codeMeaning`, spelled exactly as CID 7050 spells them.                                 |
+
 ## UID remapping
 
 Action `U` replaces a UID with an internally-consistent one. The replacement is a pure function of

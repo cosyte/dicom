@@ -1011,9 +1011,11 @@ export interface DeidentifyReport {
    *
    * **Not a list of what survived.** Attributes Table E.1-1 does not list are
    * kept without appearing anywhere in this field - `(0012,0063)`
-   * De-identification Method is the one whose retention is disclosed, and it is
-   * disclosed as `DICOM_DEIDENT_METHOD_PRIOR_RETAINED` on
-   * {@link DeidentifyReport.warnings}, because it is not an option set.
+   * De-identification Method and the prior Items of `(0012,0064)`
+   * De-identification Method Code Sequence are the ones whose retention is
+   * disclosed, as `DICOM_DEIDENT_METHOD_PRIOR_RETAINED` and
+   * `DICOM_DEIDENT_METHOD_CODES_PRIOR_RETAINED` on
+   * {@link DeidentifyReport.warnings}, because neither is an option set.
    */
   readonly retained: readonly DeidentifyOption[];
 }
@@ -1070,6 +1072,10 @@ export interface DeidentifyOptions {
   /**
    * Text **added to** `(0012,0063)` De-identification Method. Default names the
    * Basic Profile and the active options.
+   *
+   * **It never changes `(0012,0064)`.** The CID 7050 codes the run writes there
+   * follow the options that ran, and free text cannot alter what ran; see
+   * `DEIDENTIFICATION_METHOD_CODES`.
    *
    * **The default is multi-valued, one Value per name, and that is a conformance
    * fix rather than a style choice.** PS3.5 2026c Table 6.2-1 caps an `LO` at
