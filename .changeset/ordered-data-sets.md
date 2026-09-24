@@ -17,11 +17,20 @@ Number", and §7.5.1 says the same of the Data Set inside every Item.
   `(0012,0063)`.
 - **What does not change.** Items keep their order (§7.5). Only whole elements move, so no value
   byte changes and every Item and Sequence length stays valid. The Sequence is walked from its own
-  bytes, never re-encoded from the parsed `items`, so nothing its bytes did not carry is written.
-  The input `Dataset` is not modified, and `Dataset.elements()` still returns parse order.
+  bytes, never re-encoded from the parsed `items`, so nothing its bytes did not carry is written,
+  and it is re-ordered only where those `items` match its bytes, so the output reads back as the
+  source did. The input `Dataset` is not modified, and `Dataset.elements()` still returns parse
+  order.
 - **What is still not ordered.** A tag repeated inside an Item is kept twice, in source order, so
-  that output is still not §7.1-clean. A Sequence whose Item stream cannot be walked to exactly its
-  end, one nested past the bound, and any `UN`-carried Sequence are written as read, unordered. An
-  element the parser relocated because a length field lied is ordered where the parser placed it.
+  that output still breaks the "at most once" of PS3.5 2026c §7.1. A Sequence whose Item stream
+  cannot be walked to exactly its end, one nested past the bound, one whose parsed `items` do not
+  match its bytes (a Sequence the parser did not descend, `DICOM_SQ_NOT_DESCENDED`, for one), and any
+  `UN`-carried Sequence are written as read, unordered. An element the parser relocated because a
+  length field lied is ordered where the parser placed it.
+- **What is written last, whatever its tag.** An element whose own bytes do not show where a reader
+  ends it: an undefined-length `UN` the parser could not read as a Sequence, or a Sequence, `UN` or
+  Pixel Data value missing its Sequence Delimitation Item. A reader takes whatever follows such a
+  value into it, so it stays after the ascending rest of its Data Set, at the root and inside an
+  Item.
 - **A source that was already in order** is written back with the same bytes after the File Meta
   group, as before.

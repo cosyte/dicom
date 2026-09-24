@@ -2115,8 +2115,10 @@ is a MATRIX...")` case in `deident-private-reservation.test.ts` asserts the **em
   group-length omission, byte-for-byte encapsulated-pixel-data passthrough, and every Data Set it can
   walk (root and Sequence Items, up to `NESTING_DEPTH_LIMIT`) emitted in ascending tag order from the
   element's own bytes; plus the `DicomSerializeError` taxonomy. Known limitations: only the typed
-  `FileMeta` fields round-trip; a tag repeated in an Item, an unwalkable or over-bound Sequence and a
-  `UN`-carried Sequence are written as read (`docs-content/serialization.md`).
+  `FileMeta` fields round-trip; a tag repeated in an Item, an unwalkable or over-bound Sequence, one
+  whose parsed `items` do not match its bytes and a `UN`-carried Sequence are written as read, and an
+  element whose bytes do not show where a reader ends it is written last in its Data Set
+  (`docs-content/serialization.md`).
 - **Phase 4 complete.** Safety-critical domain helpers: `ds.patient` / `ds.study` / `ds.series` /
   `ds.image` typed fail-safe views over the §4 attributes, Enhanced multi-frame functional-group
   resolution (`image.frame(i)`, Per-Frame-else-Shared), coded triplets (`readCode`), and the
