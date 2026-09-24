@@ -64,8 +64,10 @@
  *    next read. An element is closed when its length is defined (and it is not
  *    an Explicit VR `SQ`, whose items a reader follows past a lying length), a
  *    Sequence the walk descended to its end, an encapsulated Pixel Data value
- *    whose fragments end on its Sequence Delimitation Item, or a CP-246 `UN`
- *    whose Item stream does. Every other element keeps its source order after
+ *    whose fragments end on its Sequence Delimitation Item, or a Sequence the
+ *    reader descended and the walk does not order (a CP-246 `UN`, or a private
+ *    `SQ` a `Profile` resolved under Implicit VR LE) whose Item stream, walked
+ *    against the model, does. Every other element keeps its source order after
  *    the ascending rest; that is what an undefined-length `UN` the reader could
  *    not read as a Sequence gets. The same rule holds at the root.
  *  - **Only on-wire `SQ` is ordered inside.** A value whose on-wire VR is not
@@ -76,7 +78,10 @@
  *    `Profile`; a private element is never one.
  *  - **Bounded by `NESTING_DEPTH_LIMIT`, in one pass.** Sequences nested deeper
  *    than the library's bound are emitted as read, their extent taken from the
- *    model, so no input depth reaches the call stack. No byte is walked twice at
+ *    model, so no input depth reaches the call stack. Seeing where a reader ends
+ *    one would take the walk past the bound, so such a Sequence is not shown to
+ *    close and goes after the ascending rest of its Item, unless it is a
+ *    defined-length Sequence under Implicit VR LE. No byte is walked twice at
  *    one level: a failed walk returns rather than retrying another way.
  *
  * @module
@@ -288,17 +293,21 @@ function fragmentsClose(buf: Buffer, start: number, littleEndian: boolean): bool
  * `true` when an undefined-length value the walk does not order still ends on
  * its own Sequence Delimitation Item exactly at the end of its span, so a
  * reader stops there wherever it is placed: encapsulated Pixel Data, or a
- * CP-246 `UN` whose Item stream (Implicit VR LE, as the parser reads it) agrees
- * with the model's reading of it. `depth` is the level its Items sit at. Anything
- * else, a `UN` the reader could not read as a Sequence first of all, is not
- * shown to close.
+ * Sequence the reader descended whose Item stream agrees with the model's
+ * reading of it. That Sequence is a CP-246 `UN`, whose Items are Implicit VR LE
+ * as the parser reads them, or an `SQ` the walk does not order, such as a
+ * private one a `Profile` resolved under Implicit VR LE, whose Items are in the
+ * syntax it was read in. `depth` is the level its Items sit at. Anything else, a
+ * `UN` the reader could not read as a Sequence first of all, is not shown to
+ * close.
  */
 function closesItself(el: Element, syntax: WireSyntax, depth: number): boolean {
   const raw = el.rawBytes;
   const valueStart = syntax.explicitVr ? 12 : MARKER_LENGTH;
-  if (el.cp246Promoted === true) {
+  if (el.cp246Promoted === true || el.vr === "SQ") {
     if (depth > NESTING_DEPTH_LIMIT) return false;
-    const walked = walkItems(raw, valueStart, undefined, raw.length, IMPLICIT_LE, depth, el.items);
+    const itemSyntax = el.cp246Promoted === true ? IMPLICIT_LE : syntax;
+    const walked = walkItems(raw, valueStart, undefined, raw.length, itemSyntax, depth, el.items);
     return walked?.end === raw.length;
   }
   return el.tag === PIXEL_DATA && fragmentsClose(raw, valueStart, syntax.littleEndian);

@@ -25,12 +25,17 @@
  * kept (both copies, in source order), so such output still breaks PS3.5 2026c
  * §7.1's "at most once". A Sequence that cannot be walked, one nested past
  * `NESTING_DEPTH_LIMIT`, one whose parsed `items` do not match its bytes, and
- * any `UN`-carried Sequence are emitted as read, unordered. An element whose
- * own bytes do not show where a reader ends it (an undefined-length `UN` the
- * parser could not read as a Sequence, a value missing its Sequence
- * Delimitation Item) is written after the ascending rest of its Data Set, since
- * a reader would take whatever followed it into its value. An element the
- * parser relocated because a length lied is ordered where it was placed.
+ * any `UN`-carried Sequence (under Implicit VR LE that includes a private
+ * Sequence inside an Item, even one a `Profile` resolved to `SQ`, since a
+ * default read resolves its tag to `UN`) are emitted as read, unordered. An
+ * element whose own bytes do not show where a reader ends it (an
+ * undefined-length `UN` the parser could not read as a Sequence, a value
+ * missing its Sequence Delimitation Item) is written after the ascending rest of
+ * its Data Set, since a reader would take whatever followed it into its value.
+ * So is a Sequence nested past the bound, other than a defined-length one under
+ * Implicit VR LE, since seeing where a reader ends it would take the walk past
+ * the bound. An element the parser relocated because a length lied is ordered
+ * where it was placed.
  *
  * @module
  */
@@ -109,13 +114,18 @@ function encodeBody(ds: Dataset, encoding: BodyEncoding): Buffer {
  * still breaks PS3.5 2026c §7.1's "at most once"; a Sequence whose Item stream
  * cannot be walked to exactly its end, one nested past the bound, one whose
  * `items` do not match its bytes (a Sequence the parser did not descend, for
- * one), and any `UN`-carried Sequence are written as read, unordered; an
+ * one), and any `UN`-carried Sequence (under Implicit VR LE that includes a
+ * private Sequence inside an Item, even one a `Profile` resolved to `SQ`, since
+ * a default read resolves its tag to `UN`) are written as read, unordered; an
  * element whose own bytes do not show where a reader ends it (an
  * undefined-length `UN` the parser could not read as a Sequence, or a value
  * missing its Sequence Delimitation Item) is written after the ascending rest
- * of its Data Set, because a reader takes what follows it into its value; and
- * an element the parser relocated because a length lied is ordered where it
- * was placed, since ordering cannot recover an order the source destroyed.
+ * of its Data Set, because a reader takes what follows it into its value, and
+ * so is a Sequence nested past the bound (other than a defined-length one under
+ * Implicit VR LE), whose end the writer would have to walk past the bound to
+ * see; and an element the parser relocated because a length lied is ordered
+ * where it was placed, since ordering cannot recover an order the source
+ * destroyed.
  *
  * **Input contract.** The writer is designed for a {@link Dataset} produced by
  * `parseDicom`: it relies on the parser's `Element.rawBytes` representation

@@ -40,14 +40,18 @@ publishes.
     container, an undefined-length Item with no Item Delimitation Item, bytes that are not an Item
     stream), one nested past the bound, one whose parsed `items` do not match its bytes (a Sequence
     the parser did not descend, `DICOM_SQ_NOT_DESCENDED`, for one), and any `UN`-carried Sequence
-    are written as read, unordered; and an element the parser relocated because a length field lied
-    is ordered where the parser placed it, since ordering cannot recover an order the source
-    destroyed.
+    (under Implicit VR LE that includes a private Sequence inside an Item, even one a `Profile`
+    resolved to `SQ`, since a default read resolves its tag to `UN`) are written as read, unordered;
+    and an element the parser relocated because a length field lied is ordered where the parser
+    placed it, since ordering cannot recover an order the source destroyed.
   - **Written last, even when its tag sorts earlier:** an element whose own bytes do not show where a
     reader ends it, such as an undefined-length `UN` the parser could not read as a Sequence, or a
     Sequence, `UN` or Pixel Data value missing its Sequence Delimitation Item. A reader takes whatever
     follows such a value into it, so it keeps its place after the ascending rest of its Data Set, at
-    the root and inside an Item, rather than losing the elements after it on the next read.
+    the root and inside an Item, rather than losing the elements after it on the next read. A
+    Sequence nested past the bound goes after the ascending rest of its Item too, unless it is a
+    defined-length Sequence under Implicit VR LE: seeing where a reader ends any other would take the
+    walk past the bound.
 - **Byte-for-byte passthrough of what it must not touch.** Encapsulated Pixel Data fragments and
   `UN` values are re-emitted as read; the writer never re-encodes pixels.
 - **A fixed point.** Serializing an already-serialized object returns the same bytes.

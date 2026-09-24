@@ -25,7 +25,15 @@ import { inflateRawSync } from "node:zlib";
 
 import { describe, expect, it } from "vitest";
 
-import { Dataset, Element, Item, deidentify, parseDicom, serializeDicom } from "../../src/index.js";
+import {
+  Dataset,
+  Element,
+  Item,
+  defineProfile,
+  deidentify,
+  parseDicom,
+  serializeDicom,
+} from "../../src/index.js";
 import type { Tag, VR } from "../../src/dictionary/types.js";
 import { NESTING_DEPTH_LIMIT } from "../../src/parser/sequence.js";
 import {
@@ -377,7 +385,58 @@ function chain(level: number, maxLevel: number, phase: 0 | 1): BuildDicomSqEleme
   };
 }
 
+/**
+ * Under Implicit VR LE a caller `Profile` resolves `(0009,1001)` in the block
+ * `ACME` reserves to `SQ`, so the reader descends it as a Sequence rather than
+ * as a CP-246 `UN`. The writer does not order inside it (a default read
+ * resolves the tag to `UN`), but its bytes end on its own Sequence Delimitation
+ * Item, so it moves with the other elements of its Item.
+ */
+const ACME_SQ_PROFILE = defineProfile({
+  name: "cosyte-test-acme-sq",
+  privateTags: {
+    ACME: { "0009XX01": { vr: "SQ", keyword: "AcmeSequence", name: "Acme Sequence" } },
+  },
+});
+const PRIVATE_SQ: Tag = "00091001";
+
+/** A root `(0040,A730)` whose one Item holds that private Sequence, in the order asked for. */
+function profileSqFile(ascending: boolean): Buffer {
+  const w = wireOf(TS_IMPLICIT_LE);
+  const inner = wireItem(w, wireEl(w, "00080100", "SH", pad("IN")));
+  const privateSq = wireSq(w, PRIVATE_SQ, inner, true);
+  const creator = wireEl(w, "00090010", "LO", pad("ACME"));
+  const code = wireEl(w, "00080100", "SH", pad("CODE"));
+  const label = wireEl(w, "0040A040", "CS", pad("TEXT"));
+  const body = ascending ? [code, creator, privateSq, label] : [label, creator, privateSq, code];
+  return buildDicom({
+    transferSyntax: TS_IMPLICIT_LE,
+    elements: [],
+    trailingBytes: wireSq(w, CONTENT_SEQ, wireItem(w, Buffer.concat(body))),
+  });
+}
+
 describe("AC-2: every Item's Data Set is emitted ascending, at every depth up to the bound", () => {
+  it("AC-2: an Item holding a private Sequence a Profile resolved is ordered around it, under Implicit VR LE", () => {
+    const src = parseDicom(profileSqFile(false), { profile: ACME_SQ_PROFILE });
+    const inner = must(src.get(CONTENT_SEQ)?.items?.[0]?.get(PRIVATE_SQ), "private Sequence");
+    // What the parse produced: a Sequence the reader descended, not a CP-246 `UN`.
+    expect(inner.vr).toBe("SQ");
+    expect(inner.cp246Promoted).not.toBe(true);
+    expect(inner.items?.length).toBe(1);
+
+    const out = serializeDicom(src);
+    for (const back of [parseDicom(out), parseDicom(out, { profile: ACME_SQ_PROFILE })]) {
+      expect(tagsOf(back.get(CONTENT_SEQ)?.items?.[0])).toEqual([
+        "00080100",
+        "00090010",
+        PRIVATE_SQ,
+        "0040A040",
+      ]);
+    }
+    expectSameContent(src, parseDicom(out), "root");
+  });
+
   const cases = ALL_TS.flatMap((ts): [string, 0 | 1][] => [
     [ts, 0],
     [ts, 1],
@@ -755,6 +814,16 @@ describe("AC-5: an already-ascending source is re-emitted byte-identical after F
       ],
     });
     const out = serializeDicom(parseDicom(buf));
+    expect(bodyOf(out, TS_IMPLICIT_LE).equals(bodyOf(buf, TS_IMPLICIT_LE))).toBe(true);
+  });
+
+  it("AC-5: Implicit VR LE with a private Sequence a Profile resolved inside an Item", () => {
+    const buf = profileSqFile(true);
+    const src = parseDicom(buf, { profile: ACME_SQ_PROFILE });
+    const inner = must(src.get(CONTENT_SEQ)?.items?.[0]?.get(PRIVATE_SQ), "private Sequence");
+    expect(inner.cp246Promoted).not.toBe(true);
+    expect(inner.items?.length).toBe(1);
+    const out = serializeDicom(src);
     expect(bodyOf(out, TS_IMPLICIT_LE).equals(bodyOf(buf, TS_IMPLICIT_LE))).toBe(true);
   });
 });
