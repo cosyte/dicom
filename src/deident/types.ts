@@ -186,7 +186,7 @@ export interface DeidentifiedAttribute {
  * beside a genuine `(0010,0020)` reported `hidden: ["4D535449", "00100020"]`,
  * and `4D535449` is `"SMIT"` in wire order.
  *
- * **An entry is now one of the 652 literal rows of PS3.15 Table E.1-1 that this
+ * **An entry is now one of the 653 literal rows of PS3.15 Table E.1-1 that this
  * run's options left actionable.** That is a **membership** bound rather than a
  * shape one - the posture this package already takes for a VR and for a Private
  * Creator - so what survives names a published table entry rather than a

@@ -21,12 +21,13 @@ Every recipe names the PS3 clause for the attributes it reads, and the rule for 
 name is deliberately narrow.
 
 - **Attribute identity** (tag, name, keyword, VR, VM) is cited to **PS3.6 2026c**, the Registry of
-  DICOM Data Elements. That document is **vendored in this repository and pinned by SHA-256**
-  (`vendor/nema/part06/`), the same copy the shipped data dictionary is generated from, and a test
-  re-reads it to confirm that every `(gggg,eeee) Name` pair written on this site is the registry's
-  own.
+  DICOM Data Elements. The edition **vendored in this repository and pinned by SHA-256**
+  (`vendor/nema/part06/`) is **2026d**, which carries every row cited here unchanged and is the copy
+  the shipped data dictionary is generated from, and a test re-reads it to confirm that every
+  `(gggg,eeee) Name` pair written on this site is the registry's own.
 - **Encoding rules** are cited to **PS3.5 2026c** and **de-identification rules to PS3.15 2026c**,
-  both vendored and pinned the same way (`vendor/nema/part05/`, `vendor/nema/part15/`). Two checks of
+  vendored and pinned the same way (`vendor/nema/part05/` at 2026c, `vendor/nema/part15/` at
+  2026d, whose clauses cited here are unchanged). Two checks of
   different strength run over those, and **what each one covers is worth stating exactly, because a
   citation gate that is described as total is a claim of its own**. A clause written in the form
   `PS3.N §X`, `PS3.N section X` or `PS3.N Annex X`, with the label next to its part, is resolved in
@@ -281,7 +282,7 @@ if (img.isEnhancedMultiFrame) {
 **The problem:** you need to strip identifying metadata before an object leaves your control, and you
 need a record of what was done, without mutating the original.
 
-`deidentify(ds)` applies the PS3.15 2026c Annex E **Basic Application Level Confidentiality Profile**
+`deidentify(ds)` applies the PS3.15 2026d Annex E **Basic Application Level Confidentiality Profile**
 (§E.2), replacing, emptying or removing every attribute Table E.1-1 lists as identifying, and returns
 a fresh `Dataset` plus a `DeidentifyReport`. It is a **pure function**: your input dataset is never
 mutated.
@@ -414,7 +415,7 @@ dates yourself after the call.
 measured, disclosed and open, and the report reading clean is not by itself proof that nothing
 survived.
 
-The attribute-action table behind all of this is generated from **NEMA's PS3.15 2026c DocBook**, the
+The attribute-action table behind all of this is generated from **NEMA's PS3.15 2026d DocBook**, the
 normative publication of the standard, rather than from a third-party mirror of it. That matters
 because an attribute the table does not list is an attribute `deidentify()` keeps, silently: the
 current edition's patient attributes, including the `(0010,00xx)` preferred-name and pronoun block,

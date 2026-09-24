@@ -125,7 +125,7 @@ dicom inherits the canonical toolchain by depending on the published `@cosyte/*`
   [#repeating-group-masks-on-the-de-identify-path](documentation/agent-notes.md#repeating-group-masks-on-the-de-identify-path)
 - **`NESTING_DEPTH_LIMIT` (64) is THIS LIBRARY'S bound, not PS3.5's**, so never blame the sender's encoding for a conformant file that exceeds it, and **the limit must propagate untouched** through any descent path.
   [#dicom-deident-rawbytes-passthrough](documentation/agent-notes.md#dicom-deident-rawbytes-passthrough) · [#dicom-explicit-vr-unbounded-item-read](documentation/agent-notes.md#dicom-explicit-vr-unbounded-item-read)
-- **Say the EDITION when you cite.** §6.2 describes a _future_ VR; the pins are **PS3.5 / PS3.6 / PS3.15 2026c** under `vendor/nema/`, re-hashed as a precondition.
+- **Say the EDITION when you cite.** §6.2 describes a _future_ VR; the pins are **PS3.5 2026c** and **PS3.6 / PS3.15 2026d** under `vendor/nema/`, re-hashed as a precondition.
   [#dicom-carrier-leaf-leaks](documentation/agent-notes.md#dicom-carrier-leaf-leaks) · [#the-ps36-element-registry-generator](documentation/agent-notes.md#the-ps36-element-registry-generator)
 
 ### PHI and de-identification
