@@ -39,6 +39,8 @@ const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
 const TS_EXPLICIT_BE = "1.2.840.10008.1.2.2";
 const TS_DEFLATED_LE = "1.2.840.10008.1.2.1.99";
 const ALL_TS = [TS_IMPLICIT_LE, TS_EXPLICIT_LE, TS_EXPLICIT_BE, TS_DEFLATED_LE] as const;
+/** The syntaxes `build-dicom`'s `trailingBytes` reach unchanged (it does not deflate them). */
+const RAW_TS = [TS_IMPLICIT_LE, TS_EXPLICIT_LE, TS_EXPLICIT_BE] as const;
 /** The syntaxes that can carry a VR on the wire (so a `UN` or an encapsulated value). */
 const EXPLICIT_TS = [TS_EXPLICIT_LE, TS_EXPLICIT_BE] as const;
 
@@ -234,6 +236,40 @@ function sqElement(
     littleEndian: w.le,
     ...(items !== undefined ? { items } : {}),
   });
+}
+
+/** A hand-built element: its on-wire bytes, and the element a reader builds from them. */
+interface Built {
+  readonly wire: Buffer;
+  readonly el: Element;
+}
+
+function leaf(w: Wire, tag: Tag, vr: VR, value: Buffer, declared = value.length): Built {
+  return { wire: wireEl(w, tag, vr, value, declared), el: scalar(tag, vr, value, w.le) };
+}
+
+function itemOf(members: readonly Built[], index = 0): Item {
+  return new Item({
+    index,
+    warnings: [],
+    elements: new Map(members.map((m) => [m.el.tag, m.el] as const)),
+  });
+}
+
+/** An Item on the wire: `members` in the order given, defined length unless asked. */
+function itemWire(w: Wire, members: readonly Built[], undefinedLength = false): Buffer {
+  return wireItem(w, Buffer.concat(members.map((m) => m.wire)), undefinedLength);
+}
+
+/** A defined-length Sequence over `streamParts`, with one model Item per entry of `models`. */
+function seqOf(
+  ts: string,
+  tag: Tag,
+  streamParts: readonly Buffer[],
+  models: readonly Item[],
+): Built {
+  const wire = wireSq(wireOf(ts), tag, Buffer.concat(streamParts));
+  return { wire, el: sqElement(ts, tag, wire, false, models) };
 }
 
 function handDataset(ts: string, elements: readonly Element[]): Dataset {
@@ -499,6 +535,164 @@ describe("AC-4: an out-of-order source is emitted ascending with nothing dropped
     expectSameContent(src, back, "root");
     expect(() => parseDicom(out, { strict: true })).not.toThrow();
   });
+
+  // Under Implicit VR LE the reader holds a defined-length Sequence as an opaque
+  // value when anything inside it fails (`DICOM_SQ_NOT_DESCENDED`). Re-ordering
+  // inside it would change that value's bytes on the next read.
+  it("AC-4: a Sequence the reader held as a value keeps its value bytes, under Implicit VR LE", () => {
+    const w = wireOf(TS_IMPLICIT_LE);
+    // (0042,0011) is OB in PS3.6, so at undefined length the reader refuses the
+    // descent, even though the bytes after it read as an Item stream.
+    const body = Buffer.concat([
+      wireEl(w, "0040A040", "CS", pad("TEXT")),
+      tagBytes("00420011", true),
+      u32(UNDEFINED_LENGTH, true),
+      wireItem(w, wireEl(w, "00080100", "SH", pad("INNER-CODE"))),
+      marker(w, 0xe0dd, 0),
+      wireEl(w, "00080100", "SH", pad("CODE")),
+    ]);
+    const src = parseDicom(
+      buildDicom({
+        transferSyntax: TS_IMPLICIT_LE,
+        elements: [],
+        trailingBytes: wireSq(w, CONTENT_SEQ, wireItem(w, body)),
+      }),
+    );
+    const before = must(src.get(CONTENT_SEQ), "source Sequence");
+    expect(before.items).toBeUndefined();
+    expect(src.warnings.map((x) => x.code)).toContain("DICOM_SQ_NOT_DESCENDED");
+    const after = must(parseDicom(serializeDicom(src)).get(CONTENT_SEQ), "read back");
+    expect(after.rawBytes.equals(before.rawBytes)).toBe(true);
+  });
+
+  it("AC-4: a level the reader rolled back at the bound keeps its value bytes, and the levels above it are ordered, under Implicit VR LE", () => {
+    const w = wireOf(TS_IMPLICIT_LE);
+    const level = (nested: Buffer): Buffer =>
+      wireSq(
+        w,
+        CONTENT_SEQ,
+        wireItem(
+          w,
+          Buffer.concat([
+            wireEl(w, "0040A040", "CS", pad("TEXT")),
+            nested,
+            wireEl(w, "00080100", "SH", pad("CODE")),
+          ]),
+        ),
+      );
+    // An empty undefined-length Sequence at level 65: the reader's depth check
+    // refuses it, and rolls back the defined-length level 64 that holds it.
+    let span = level(wireSq(w, CONTENT_SEQ, Buffer.alloc(0), true));
+    for (let k = NESTING_DEPTH_LIMIT - 1; k >= 1; k--) span = level(span);
+    const src = parseDicom(
+      buildDicom({ transferSyntax: TS_IMPLICIT_LE, elements: [], trailingBytes: span }),
+    );
+    const level64 = (ds: Dataset): Element => {
+      let cur: Dataset | undefined = ds;
+      for (let k = 1; k < NESTING_DEPTH_LIMIT; k++) cur = cur?.get(CONTENT_SEQ)?.items?.[0];
+      return must(cur?.get(CONTENT_SEQ), "level 64");
+    };
+    expect(level64(src).items).toBeUndefined();
+    expect(dataSetsOf(src).filter((d) => d.depth > 0 && isAscending(d.tags))).toEqual([]);
+
+    const back = parseDicom(serializeDicom(src));
+    expect(level64(back).rawBytes.equals(level64(src).rawBytes)).toBe(true);
+    const sets = dataSetsOf(back);
+    expect(Math.max(...sets.map((d) => d.depth))).toBe(NESTING_DEPTH_LIMIT - 1);
+    expect(sets.filter((d) => !isAscending(d.tags))).toEqual([]);
+  });
+
+  // A `UN` of undefined length that is not an Item stream is read to the end of
+  // its Data Set, so anything moved after it would be read into its value.
+  it.each(EXPLICIT_TS)(
+    "AC-4: a UN the reader could not read as a Sequence stays last in its Item, under %s",
+    (ts) => {
+      const w = wireOf(ts);
+      const opaque = Buffer.concat([
+        undefinedLengthHeader(w, PRIVATE_TAG),
+        outOfOrderBody({ le: true, explicit: true }, "OPAQUE"),
+      ]);
+      const item = wireItem(
+        w,
+        Buffer.concat([
+          wireEl(w, "0040A040", "CS", pad("TEXT")),
+          wireEl(w, "00080100", "SH", pad("CODE")),
+          opaque,
+        ]),
+      );
+      const src = parseDicom(
+        buildDicom({
+          transferSyntax: ts,
+          elements: [],
+          trailingBytes: wireSq(w, CONTENT_SEQ, item),
+        }),
+      );
+      const firstItem = (ds: Dataset): Item => must(ds.get(CONTENT_SEQ)?.items?.[0], "Item");
+      expect(firstItem(src).get(PRIVATE_TAG)?.vr).toBe("UN");
+      const back = parseDicom(serializeDicom(src));
+      expect(tagsOf(firstItem(back))).toEqual(["00080100", "0040A040", PRIVATE_TAG]);
+      expectSameContent(src, back, "root");
+    },
+  );
+
+  /** Each value runs to the end of the Data Set: no Sequence Delimitation Item closes it. */
+  const unclosed: [string, readonly string[], (w: Wire) => Buffer][] = [
+    [
+      "an undefined-length Sequence",
+      RAW_TS,
+      (w) =>
+        Buffer.concat([
+          sqHeader(w, CONTENT_SEQ, UNDEFINED_LENGTH),
+          wireItem(w, outOfOrderBody(w, "OPEN")),
+        ]),
+    ],
+    [
+      "a CP-246 UN",
+      RAW_TS,
+      (w) => {
+        const lw: Wire = { le: true, explicit: false };
+        return Buffer.concat([
+          undefinedLengthHeader(w, PRIVATE_TAG),
+          wireItem(lw, outOfOrderBody(lw, "OPEN")),
+        ]);
+      },
+    ],
+    [
+      "encapsulated Pixel Data",
+      EXPLICIT_TS,
+      (w) =>
+        Buffer.concat([
+          tagBytes("7FE00010", w.le),
+          Buffer.from("OB", "ascii"),
+          Buffer.alloc(2),
+          u32(UNDEFINED_LENGTH, w.le),
+          marker(w, 0xe000, 0),
+          wireItem(w, pad("FRAGMENT")),
+        ]),
+    ],
+  ];
+  const unclosedCases = unclosed.flatMap(([what, syntaxes, span]) =>
+    syntaxes.map((ts) => [what, ts, span] as const),
+  );
+
+  it.each(unclosedCases)(
+    "AC-4: %s with no Sequence Delimitation Item stays last at the root, under %s",
+    (_what, ts, span) => {
+      const w = wireOf(ts);
+      const trailing = span(w);
+      // (FFFC,FFFC) sorts after every tag above, and the source puts it first.
+      const src = parseDicom(
+        buildDicom({
+          transferSyntax: ts,
+          elements: [{ tag: "FFFCFFFC", vr: "OB", value: Buffer.alloc(4) }],
+          trailingBytes: trailing,
+        }),
+      );
+      const out = serializeDicom(src);
+      expect(bodyOf(out, ts).subarray(-trailing.length).equals(trailing)).toBe(true);
+      expectSameContent(src, parseDicom(out), "root");
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -607,6 +801,32 @@ describe("AC-6: a tag an Item carries twice is kept twice", () => {
       expect(survivor(parseDicom(out))).toBe(must(survivor(src), "source survivor"));
     },
   );
+
+  // The reader keeps the last copy only, so nothing records where it ended an
+  // earlier undefined-length copy: that Item is emitted as read.
+  it.each(RAW_TS)(
+    "AC-6: a repeated undefined-length Sequence keeps both copies, as read, under %s",
+    (ts) => {
+      const w = wireOf(ts);
+      const copy = wireSq(w, CONTENT_SEQ, wireItem(w, outOfOrderBody(w, "SAME")), true);
+      const span = wireSq(
+        w,
+        CONTENT_SEQ,
+        wireItem(
+          w,
+          Buffer.concat([
+            wireEl(w, "0040A040", "CS", pad("TEXT")),
+            copy,
+            wireEl(w, "00080100", "SH", pad("CODE")),
+            copy,
+          ]),
+        ),
+      );
+      const src = parseDicom(buildDicom({ transferSyntax: ts, elements: [], trailingBytes: span }));
+      expect(src.get(CONTENT_SEQ)?.items?.[0]?.get(CONTENT_SEQ)?.items?.length).toBe(1);
+      expect(bodyOf(serializeDicom(src), ts).equals(span)).toBe(true);
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -615,12 +835,14 @@ describe("AC-6: a tag an Item carries twice is kept twice", () => {
 
 describe("AC-7: a Sequence whose Item stream cannot be walked to its end is emitted unchanged", () => {
   /**
-   * Serialize a Data Set holding the one `SQ` over `span` and return the emitted
-   * body. The first Item of every stream below is well formed and out of order,
-   * so an emit that re-ordered any part of the Sequence would differ from it.
+   * Serialize a Data Set holding the one `SQ` and return the emitted body. Each
+   * `SQ` below carries a model Item for every Item on the wire, holding that
+   * Item's tags and values, so only the bytes themselves stop the walk. The
+   * first Item is well formed and out of order, so an emit that re-ordered any
+   * part of the Sequence would differ from the source.
    */
-  function emitOnly(ts: string, span: Buffer): Buffer {
-    const ds = handDataset(ts, [sqElement(ts, CONTENT_SEQ, span, false)]);
+  function emitOnly(ts: string, sq: Built): Buffer {
+    const ds = handDataset(ts, [sq.el]);
     let out: Buffer | undefined;
     expect(() => {
       out = serializeDicom(ds);
@@ -628,43 +850,74 @@ describe("AC-7: a Sequence whose Item stream cannot be walked to its end is emit
     return bodyOf(must(out, "output"), ts);
   }
 
+  /** The two out-of-order leaves of {@link outOfOrderBody}, as members. */
+  function outOfOrderMembers(w: Wire, code: string, textDeclared?: number): Built[] {
+    return [
+      leaf(w, "0040A040", "CS", pad("TEXT"), textDeclared),
+      leaf(w, "00080100", "SH", pad(code)),
+    ];
+  }
+
   it.each(ALL_TS)(
     "AC-7: an element or Item whose declared length runs past its container, under %s",
     (ts) => {
       const w = wireOf(ts);
-      const good = wireItem(w, outOfOrderBody(w, "GOOD"));
+      const good = outOfOrderMembers(w, "GOOD");
       // An element that declares 40 bytes where its Item has 4 left.
-      const elementPast = wireItem(
-        w,
-        Buffer.concat([
-          wireEl(w, "00080100", "SH", pad("CODE")),
-          wireEl(w, "0040A040", "CS", pad("TEXT"), 40),
-        ]),
-      );
-      const span1 = wireSq(w, CONTENT_SEQ, Buffer.concat([good, elementPast]));
-      expect(emitOnly(ts, span1).equals(span1)).toBe(true);
+      const pastMembers = [
+        leaf(w, "00080100", "SH", pad("CODE")),
+        leaf(w, "0040A040", "CS", pad("TEXT"), 40),
+      ];
+      const models = [itemOf(good, 0), itemOf(pastMembers, 1)];
+      const sq1 = seqOf(ts, CONTENT_SEQ, [itemWire(w, good), itemWire(w, pastMembers)], models);
+      expect(emitOnly(ts, sq1).equals(sq1.wire)).toBe(true);
 
       // An Item that declares 16 bytes more than its Sequence has left.
-      const body = outOfOrderBody(w, "LONG");
+      const longMembers = outOfOrderMembers(w, "LONG");
+      const body = Buffer.concat(longMembers.map((m) => m.wire));
       const itemPast = Buffer.concat([marker(w, 0xe000, body.length + 16), body]);
-      const span2 = wireSq(w, CONTENT_SEQ, Buffer.concat([good, itemPast]));
-      expect(emitOnly(ts, span2).equals(span2)).toBe(true);
+      const sq2 = seqOf(
+        ts,
+        CONTENT_SEQ,
+        [itemWire(w, good), itemPast],
+        [itemOf(good, 0), itemOf(longMembers, 1)],
+      );
+      expect(emitOnly(ts, sq2).equals(sq2.wire)).toBe(true);
 
       // The same over-run one level down: the nested Sequence's bytes are unchanged,
       // and so is the Sequence enclosing it.
-      const nested = wireSq(w, CONTENT_SEQ, Buffer.concat([good, elementPast]));
-      const outer = wireItem(
-        w,
-        Buffer.concat([
-          wireEl(w, "0040A040", "CS", pad("TEXT")),
-          nested,
-          wireEl(w, "00080100", "SH", pad("OUTER")),
-        ]),
+      const nested = seqOf(ts, CONTENT_SEQ, [itemWire(w, good), itemWire(w, pastMembers)], models);
+      const outerMembers = [
+        leaf(w, "0040A040", "CS", pad("TEXT")),
+        nested,
+        leaf(w, "00080100", "SH", pad("OUTER")),
+      ];
+      const sq3 = seqOf(
+        ts,
+        CONTENT_SEQ,
+        [itemWire(w, good), itemWire(w, outerMembers)],
+        [itemOf(good, 0), itemOf(outerMembers, 1)],
       );
-      const span3 = wireSq(w, CONTENT_SEQ, Buffer.concat([good, outer]));
-      const emitted3 = emitOnly(ts, span3);
-      expect(emitted3.includes(nested)).toBe(true);
-      expect(emitted3.equals(span3)).toBe(true);
+      const emitted3 = emitOnly(ts, sq3);
+      expect(emitted3.includes(nested.wire)).toBe(true);
+      expect(emitted3.equals(sq3.wire)).toBe(true);
+
+      // A nested Sequence that itself declares 16 bytes more than its Item has left.
+      const goodNested = seqOf(ts, CONTENT_SEQ, [itemWire(w, good)], [itemOf(good, 0)]);
+      const lengthAt = w.explicit ? 8 : 4;
+      const overDeclared = Buffer.from(goodNested.wire);
+      const declared = goodNested.wire.length - (lengthAt + 4) + 16;
+      if (w.le) overDeclared.writeUInt32LE(declared, lengthAt);
+      else overDeclared.writeUInt32BE(declared, lengthAt);
+      const sqPast = { wire: overDeclared, el: goodNested.el };
+      const pastOuter = [leaf(w, "0040A040", "CS", pad("TEXT")), sqPast];
+      const sq4 = seqOf(
+        ts,
+        CONTENT_SEQ,
+        [itemWire(w, good), itemWire(w, pastOuter)],
+        [itemOf(good, 0), itemOf(pastOuter, 1)],
+      );
+      expect(emitOnly(ts, sq4).equals(sq4.wire)).toBe(true);
     },
   );
 
@@ -672,22 +925,43 @@ describe("AC-7: a Sequence whose Item stream cannot be walked to its end is emit
     "AC-7: an undefined-length Item with no Item Delimitation Item, under %s",
     (ts) => {
       const w = wireOf(ts);
-      const good = wireItem(w, outOfOrderBody(w, "GOOD"));
+      const good = outOfOrderMembers(w, "GOOD");
+      const open = outOfOrderMembers(w, "OPEN");
       const unterminated = Buffer.concat([
         marker(w, 0xe000, UNDEFINED_LENGTH),
-        outOfOrderBody(w, "OPEN"),
+        ...open.map((m) => m.wire),
       ]);
-      const span = wireSq(w, CONTENT_SEQ, Buffer.concat([good, unterminated]));
-      expect(emitOnly(ts, span).equals(span)).toBe(true);
+      const sq = seqOf(
+        ts,
+        CONTENT_SEQ,
+        [itemWire(w, good), unterminated],
+        [itemOf(good, 0), itemOf(open, 1)],
+      );
+      expect(emitOnly(ts, sq).equals(sq.wire)).toBe(true);
     },
   );
 
   it.each(ALL_TS)("AC-7: bytes that are not an Item stream, under %s", (ts) => {
     const w = wireOf(ts);
-    const good = wireItem(w, outOfOrderBody(w, "GOOD"));
-    const notAnItem = wireEl(w, "00080100", "SH", pad("NOT-AN-ITEM"));
-    const span = wireSq(w, CONTENT_SEQ, Buffer.concat([good, notAnItem]));
-    expect(emitOnly(ts, span).equals(span)).toBe(true);
+    const good = outOfOrderMembers(w, "GOOD");
+    const notAnItem = leaf(w, "00080100", "SH", pad("NOT-AN-ITEM"));
+    const sq = seqOf(
+      ts,
+      CONTENT_SEQ,
+      [itemWire(w, good), notAnItem.wire],
+      [itemOf(good, 0), itemOf([notAnItem], 1)],
+    );
+    expect(emitOnly(ts, sq).equals(sq.wire)).toBe(true);
+
+    // A Sequence Delimitation Item where an Item's next element belongs.
+    const stray = Buffer.concat([...good.map((m) => m.wire), marker(w, 0xe0dd, 0)]);
+    const sqStray = seqOf(
+      ts,
+      CONTENT_SEQ,
+      [itemWire(w, good), wireItem(w, stray)],
+      [itemOf(good, 0), itemOf(good, 1)],
+    );
+    expect(emitOnly(ts, sqStray).equals(sqStray.wire)).toBe(true);
   });
 });
 
@@ -789,8 +1063,10 @@ describe("AC-8: a value whose on-wire VR is not SQ is emitted unchanged", () => 
     },
   );
 
+  // The reader takes such a value to the end of the Data Set, so it stays last
+  // even though its tag sorts first: ahead of (0010,0020) it would swallow it.
   it.each(EXPLICIT_TS)(
-    "AC-8: an undefined-length UN that is not an Item stream, under %s",
+    "AC-8, AC-4: an undefined-length UN that is not an Item stream is emitted unchanged and last, under %s",
     (ts) => {
       const w = wireOf(ts);
       const opaque = Buffer.concat([
@@ -806,7 +1082,10 @@ describe("AC-8: a value whose on-wire VR is not SQ is emitted unchanged", () => 
       );
       expect(src.get(PRIVATE_TAG)?.vr).toBe("UN");
       const out = serializeDicom(src);
-      expect(bodyOf(out, ts).subarray(0, opaque.length).equals(opaque)).toBe(true);
+      expect(bodyOf(out, ts).subarray(-opaque.length).equals(opaque)).toBe(true);
+      const back = parseDicom(out);
+      expect(tagsOf(back)).toEqual(["00100020", PRIVATE_TAG]);
+      expectSameContent(src, back, "root");
     },
   );
 });
@@ -830,13 +1109,40 @@ describe("AC-9: nothing the parsed items carry beyond rawBytes is emitted", () =
         ["0040A040", scalar("0040A040", "CS", pad("TEXT"), le)],
       ]),
     });
-    // The bytes are out of order, so the re-ordering walk runs over this Item.
+    // The bytes are out of order and carry every other element the model holds.
     const cleanItem = wireItem(w, outOfOrderBody(w, "CODE"));
     const leaky = sqElement(ts, CONTENT_SEQ, wireSq(w, CONTENT_SEQ, cleanItem), false, [leakyItem]);
     const out = serializeDicom(handDataset(ts, [leaky]));
     const body = bodyOf(out, ts);
     expect(body.includes(Buffer.from(CANARY, "latin1"))).toBe(false);
-    expect(tagsOf(parseDicom(out).get(CONTENT_SEQ)?.items?.[0])).toEqual(["00080100", "0040A040"]);
+    // The model disagrees with the bytes, so the Item is emitted as its bytes read.
+    expect(tagsOf(parseDicom(out).get(CONTENT_SEQ)?.items?.[0])).toEqual(["0040A040", "00080100"]);
+
+    // The same, where the bytes carry Patient's Name with another value.
+    const otherName = wireItem(
+      w,
+      Buffer.concat([outOfOrderBody(w, "CODE"), wireEl(w, "00100010", "PN", pad("DOE^JANE"))]),
+    );
+    const renamedSpan = wireSq(w, CONTENT_SEQ, otherName);
+    const renamed = sqElement(ts, CONTENT_SEQ, renamedSpan, false, [leakyItem]);
+    const renamedBody = bodyOf(serializeDicom(handDataset(ts, [renamed])), ts);
+    expect(renamedBody.includes(Buffer.from(CANARY, "latin1"))).toBe(false);
+    expect(renamedBody.equals(renamedSpan)).toBe(true);
+
+    // The same, where the model holds a whole Item the bytes do not.
+    const extraItem = new Item({
+      index: 1,
+      warnings: [],
+      elements: new Map([["00100010", scalar("00100010", "PN", canary, le)]]),
+    });
+    const cleanSpan = wireSq(w, CONTENT_SEQ, cleanItem);
+    const extra = sqElement(ts, CONTENT_SEQ, cleanSpan, false, [
+      itemOf([leaf(w, "0040A040", "CS", pad("TEXT")), leaf(w, "00080100", "SH", pad("CODE"))]),
+      extraItem,
+    ]);
+    const extraBody = bodyOf(serializeDicom(handDataset(ts, [extra])), ts);
+    expect(extraBody.includes(Buffer.from(CANARY, "latin1"))).toBe(false);
+    expect(extraBody.equals(cleanSpan)).toBe(true);
 
     // Control: the same value carried IN rawBytes is found, so the search can fail.
     const carriedItem = wireItem(
@@ -884,6 +1190,45 @@ function deepSequence(levels: number, undefinedLength: boolean): { span: Buffer;
   return { span: Buffer.concat(parts), unit };
 }
 
+/**
+ * The model a reader would give {@link deepSequence} down to the first level
+ * past the bound: levels 1 to `NESTING_DEPTH_LIMIT` carry their Item (the two
+ * leaves and the next level), and the level below them is held as its span.
+ * Each level's `rawBytes` is its whole on-wire span, as Explicit VR LE has it.
+ */
+function deepModel(span: Buffer, unit: number, undefinedLength: boolean): Element {
+  const leaves = [
+    scalar("0040A040", "CS", pad("TEXT"), true),
+    scalar("00080100", "SH", pad("C1"), true),
+  ];
+  let next: Element | undefined;
+  for (let k = NESTING_DEPTH_LIMIT + 1; k >= 1; k--) {
+    const start = (k - 1) * unit;
+    const end = undefinedLength ? span.length - (k - 1) * 16 : span.length;
+    const items =
+      next === undefined
+        ? undefined
+        : [
+            new Item({
+              index: 0,
+              warnings: [],
+              elements: new Map([...leaves, next].map((el) => [el.tag, el] as const)),
+            }),
+          ];
+    next = new Element({
+      tag: CONTENT_SEQ,
+      vr: "SQ",
+      vm: items?.length ?? 0,
+      length: undefinedLength ? UNDEFINED_LENGTH : end - start - 12,
+      rawBytes: span.subarray(start, end),
+      byteOffset: start,
+      littleEndian: true,
+      ...(items !== undefined ? { items } : {}),
+    });
+  }
+  return must(next, "level 1");
+}
+
 describe("AC-10: Sequence bytes nested past NESTING_DEPTH_LIMIT", () => {
   const LEVELS = 10_000;
 
@@ -892,7 +1237,7 @@ describe("AC-10: Sequence bytes nested past NESTING_DEPTH_LIMIT", () => {
     ["undefined", true],
   ] as const)("AC-10: a %s-length Sequence 10,000 levels deep", (_form, undefinedLength) => {
     const { span, unit } = deepSequence(LEVELS, undefinedLength);
-    const el = sqElement(TS_EXPLICIT_LE, CONTENT_SEQ, span, undefinedLength);
+    const el = deepModel(span, unit, undefinedLength);
     let out: Buffer | undefined;
     expect(() => {
       out = serializeDicom(handDataset(TS_EXPLICIT_LE, [el]));
@@ -980,6 +1325,8 @@ describe("AC-11: the input Dataset is left unchanged", () => {
 describe("AC-12: deidentify() output is emitted ascending at every depth", () => {
   it.each(ALL_TS)("AC-12: root, kept Sequences and inserted elements, under %s", (ts) => {
     // (0008,1115) and (0008,1199) are not in Table E.1-1, so both are kept and walked.
+    // The kept Item also carries an odd-length value and a group length, which
+    // deidentify() keeps in its model and writes padded and left out.
     const src = parseDicom(
       buildDicom({
         transferSyntax: ts,
@@ -991,7 +1338,9 @@ describe("AC-12: deidentify() output is emitted ascending at every depth", () =>
             items: [
               {
                 elements: [
+                  { tag: "00080000", vr: "UL", value: Buffer.from([0x0c, 0x00, 0x00, 0x00]) },
                   text("0040A040", "CS", "TEXT"),
+                  { tag: "00080102", vr: "SH", value: Buffer.from("DCM", "latin1") },
                   {
                     tag: "00081199",
                     items: [
