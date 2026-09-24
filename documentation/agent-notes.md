@@ -2112,8 +2112,11 @@ is a MATRIX...")` case in `deident-private-reservation.test.ts` asserts the **em
   `serializeDicom(ds)` writes a `Dataset` back to a Part 10 `Buffer` (preamble + `DICM`, File Meta
   always Explicit VR LE with computed group length, dataset body in the source transfer syntax (no
   transcode) across all four v1 syntaxes), with even-length padding, short/long-form headers, retired
-  group-length omission, and byte-for-byte SQ / encapsulated-pixel-data passthrough; plus the
-  `DicomSerializeError` taxonomy. Known limitation: only the typed `FileMeta` fields round-trip.
+  group-length omission, byte-for-byte encapsulated-pixel-data passthrough, and every Data Set it can
+  walk (root and Sequence Items, up to `NESTING_DEPTH_LIMIT`) emitted in ascending tag order from the
+  element's own bytes; plus the `DicomSerializeError` taxonomy. Known limitations: only the typed
+  `FileMeta` fields round-trip; a tag repeated in an Item, an unwalkable or over-bound Sequence and a
+  `UN`-carried Sequence are written as read (`docs-content/serialization.md`).
 - **Phase 4 complete.** Safety-critical domain helpers: `ds.patient` / `ds.study` / `ds.series` /
   `ds.image` typed fail-safe views over the §4 attributes, Enhanced multi-frame functional-group
   resolution (`image.frame(i)`, Per-Frame-else-Shared), coded triplets (`readCode`), and the
