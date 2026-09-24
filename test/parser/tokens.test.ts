@@ -89,7 +89,8 @@ describe("renderTag is a MEMBERSHIP test against PS3.6, not a shape test", () =>
     // their hand, which is what separates them from a shape test over 2^32.
     const literal = Object.keys(TAGS).filter((k) => /^[0-9A-F]{8}$/u.test(k));
     const masked = Object.keys(TAGS).filter((k) => !/^[0-9A-F]{8}$/u.test(k));
-    expect(literal.length).toBe(5221);
+    // PS3.6 2026d: 2026c's 5221 literal rows plus (3004,007F) (AC-12).
+    expect(literal.length).toBe(5222);
     expect(masked.length).toBe(88);
     // Every masked key is flagged, and no literal key is: the two populations do
     // not overlap, so "literal row" and "not a repeating-group family" are the

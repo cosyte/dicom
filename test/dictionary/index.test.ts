@@ -211,6 +211,16 @@ describe("PS3.6 normative overlay (DICOM-UPSTREAM-EDITION-LAG)", () => {
     expect(Dictionary.byKeyword("AnalogFilterType")).toBeUndefined();
   });
 
+  it("AC-4: resolves (3004,007F) Dose Calculation Model Name, which PS3.6 2026d added", () => {
+    const e = Dictionary.lookup("3004007F");
+    expect(e).toBeDefined();
+    expect(e?.keyword).toBe("DoseCalculationModelName");
+    expect(e?.vr).toEqual(["LO"]);
+    expect(e?.vm).toBe("1");
+    expect(e?.retired).toBe(false);
+    expect(Dictionary.byKeyword("DoseCalculationModelName")).toBe(e);
+  });
+
   it("does not treat the DICONDE / DICOS column markers as retirement", () => {
     // Table 6-1's sixth column carries "RET (edition)" for retirement but also
     // "DICOS" and "DICONDE", which name the dictionary a row belongs to and say
