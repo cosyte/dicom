@@ -26,8 +26,21 @@ publishes.
 - **Even-length Value Fields.** PS3.5 2026c §7.1.1 defines a Value Field as "an even number of bytes
   containing the Value(s) of the Data Element", so odd values are padded with the pad byte their VR
   specifies. An odd length that arrived tolerated goes out even.
-- **Byte-for-byte passthrough of what it must not touch.** Sequence items and encapsulated Pixel Data
-  fragments are re-emitted as read; the writer never re-encodes pixels.
+- **Every Data Set in ascending tag order.** PS3.5 2026c §7.1 says the Data Elements in a Data Set
+  "shall be ordered by increasing Data Element Tag Number", and §7.5.1 says the same inside every
+  Item. The writer emits the root that way, and the Data Set of every Item of every Sequence it can
+  walk on the wire, at every depth up to `NESTING_DEPTH_LIMIT`, whatever order the source file, your
+  code or `deidentify()` left it in. Items stay in their order (§7.5), only whole elements move, so
+  no value byte changes, and nothing is written that the Sequence's own bytes did not carry.
+  - **Not ordered, and said here rather than found later:** a tag repeated inside an Item is kept
+    twice, in source order, so that output is still not §7.1-clean; a Sequence whose Item stream
+    cannot be walked to exactly its end (a length that runs past its container, an undefined-length
+    Item with no Item Delimitation Item, bytes that are not an Item stream), one nested past the
+    bound, and any `UN`-carried Sequence are written as read, unordered; and an element the parser
+    relocated because a length field lied is ordered where the parser placed it, since ordering
+    cannot recover an order the source destroyed.
+- **Byte-for-byte passthrough of what it must not touch.** Encapsulated Pixel Data fragments and
+  `UN` values are re-emitted as read; the writer never re-encodes pixels.
 - **A fixed point.** Serializing an already-serialized object returns the same bytes.
 
 ```ts runnable

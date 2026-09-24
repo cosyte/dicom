@@ -243,6 +243,10 @@ on the wire.
   nothing is guessed for the one it replaced; `DICOM_DUPLICATE_TAG_IN_DATA_SET` reports the loss. The
   File Meta group loses a repeat the **opposite** way round, first-match wins, reported by
   `DICOM_DUPLICATE_FILE_META_ELEMENT`. Neither can fire on a conformant file.
+- **The writer orders what it can walk, and only that.** A tag repeated inside an Item is written
+  twice, a Sequence that cannot be walked or is nested past `NESTING_DEPTH_LIMIT` and any
+  `UN`-carried Sequence are written as read, and an element a lying length relocated stays where it
+  was placed. See [Serialization](./serialization#what-the-writer-guarantees).
 - **`Element.byteOffset` inside a sequence item disagrees with itself and always has**: `0` inside a
   defined-length item (its own frame), file-absolute inside an undefined-length one. The same is true
   of a warning's `position.byteOffset`. There is no frame-of-reference contract on either, and
