@@ -875,13 +875,13 @@ const DEID_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
         transferSyntax: TS_EXPLICIT_LE,
         elements: [
           {
-            tag: "00120064" as Tag,
+            tag: "00120064",
             items: [
               {
                 elements: [
-                  { tag: "00080100" as Tag, vr: "SH" as VR, value: val("99001") },
-                  { tag: "00080102" as Tag, vr: "SH" as VR, value: val("99SYN") },
-                  { tag: "00080104" as Tag, vr: "LO" as VR, value: val(m) },
+                  { tag: "00080100", vr: "SH" as VR, value: val("99001") },
+                  { tag: "00080102", vr: "SH" as VR, value: val("99SYN") },
+                  { tag: "00080104", vr: "LO" as VR, value: val(m) },
                 ],
               },
             ],
