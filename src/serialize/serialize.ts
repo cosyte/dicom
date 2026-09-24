@@ -15,9 +15,17 @@
  *
  * Conservative behaviour (PS3.5): scalar values are padded to even length on
  * write (§6.2); retired `(gggg,0000)` group-length elements are omitted from
- * the dataset (§7.2); short/long-form headers are chosen by VR (§7.1.2);
- * sequence and encapsulated-pixel-data spans pass through byte-for-byte
- * (§7.5 / §A.4).
+ * the dataset (§7.2); short/long-form headers are chosen by VR (§7.1.2); the
+ * Data Elements of the root Data Set, and of every Sequence Item the writer can
+ * walk, are emitted in ascending tag order (PS3.5 2026c §7.1 / §7.5.1, see
+ * `./order.ts`), with Items kept in their order and no value byte changed;
+ * encapsulated-pixel-data spans pass through byte-for-byte (§A.4).
+ *
+ * The ordering has limits, stated with it: a tag repeated inside an Item is
+ * kept (both copies, in source order), so such output is still not §7.1-clean;
+ * a Sequence that cannot be walked, one nested past `NESTING_DEPTH_LIMIT`, and
+ * any `UN`-carried Sequence are emitted as read, unordered; and an element the
+ * parser relocated because a length lied is ordered where it was placed.
  *
  * @module
  */
@@ -30,6 +38,7 @@ import { splitTag } from "../dataset/tag.js";
 import { type BodyEncoding, encodeDatasetElement } from "./element.js";
 import { DicomSerializeError, SERIALIZE_ERROR_CODES } from "./errors.js";
 import { encodeFileMeta } from "./file-meta.js";
+import { compareTags, orderedSequenceBytes } from "./order.js";
 
 const TS_IMPLICIT_LE = "1.2.840.10008.1.2";
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
@@ -52,16 +61,21 @@ function part10Preamble(): Buffer {
 
 /**
  * Encode the dataset body (every element except retired group lengths) under
- * `encoding`, in the dataset's parse (insertion) order.
+ * `encoding`, in ascending tag order (PS3.5 2026c §7.1), whatever order the
+ * `Dataset` holds them in. Each `SQ` has the Data Sets of the Items it can walk
+ * ordered the same way (see {@link orderedSequenceBytes}). The input `Dataset`
+ * is read, never changed: the sort runs on a copy.
  */
 function encodeBody(ds: Dataset, encoding: BodyEncoding): Buffer {
+  // PS3.5 §7.2: omit retired (gggg,0000) group-length elements on write.
+  // (File Meta group lengths are handled separately and never appear in the
+  // dataset element map.)
+  const kept = ds.elements().filter((el) => splitTag(el.tag).element !== 0x0000);
+  // Stable, so two model elements with one tag keep their relative order.
+  const ordered = [...kept].sort(compareTags);
   const parts: Buffer[] = [];
-  for (const el of ds.elements()) {
-    // PS3.5 §7.2: omit retired (gggg,0000) group-length elements on write.
-    // (File Meta group lengths are handled separately and never appear in the
-    // dataset element map.)
-    if (splitTag(el.tag).element === 0x0000) continue;
-    parts.push(encodeDatasetElement(el, encoding));
+  for (const el of ordered) {
+    parts.push(encodeDatasetElement(el, encoding, orderedSequenceBytes(el, encoding)));
   }
   return Buffer.concat(parts);
 }
@@ -70,9 +84,21 @@ function encodeBody(ds: Dataset, encoding: BodyEncoding): Buffer {
  * Serialize a {@link Dataset} to a spec-clean DICOM Part 10 `Buffer`.
  *
  * The dataset's transfer syntax is preserved (no transcoding): pixel-data
- * fragments and nested sequences are written back byte-for-byte, while scalar
- * values are re-emitted with correct even-length padding and File Meta group
- * length. Pure function - the input `Dataset` is never mutated.
+ * fragments are written back byte-for-byte, nested sequences carry the same
+ * bytes with each Item's Data Elements in ascending tag order, and scalar values
+ * are re-emitted with correct even-length padding and File Meta group length.
+ * Pure function - the input `Dataset` is never mutated.
+ *
+ * **Element order.** Every Data Set is written in ascending tag order (PS3.5
+ * 2026c §7.1, §7.5.1): the root, and the Data Set of every Item in every
+ * Sequence the writer can walk on the wire, at every depth up to
+ * `NESTING_DEPTH_LIMIT`. Items stay in their order (§7.5) and no value changes;
+ * only whole element spans move. Limits: a tag repeated inside an Item is kept
+ * twice, in source order, so that output is still not §7.1-clean; a Sequence
+ * whose Item stream cannot be walked to exactly its end, one nested past the
+ * bound, and any `UN`-carried Sequence are written as read, unordered; and an
+ * element the parser relocated because a length lied is ordered where it was
+ * placed, since ordering cannot recover an order the source destroyed.
  *
  * **Input contract.** The writer is designed for a {@link Dataset} produced by
  * `parseDicom`: it relies on the parser's `Element.rawBytes` representation
@@ -87,8 +113,8 @@ function encodeBody(ds: Dataset, encoding: BodyEncoding): Buffer {
  * elements preserved on `extraElements`), not a byte-exact copy of the original
  * file: the 128-byte preamble is normalized to zeros, the File Meta group is
  * rebuilt in ascending tag order (modeled fields + `extraElements` - see
- * {@link encodeFileMeta}), odd-length values are padded even, and retired
- * `(gggg,0000)` group lengths are dropped.
+ * {@link encodeFileMeta}), the Data Sets are ordered as above, odd-length values
+ * are padded even, and retired `(gggg,0000)` group lengths are dropped.
  *
  * @throws {@link DicomSerializeError} with code `MISSING_TRANSFER_SYNTAX` when
  *   the dataset has no File Meta Transfer Syntax UID, or

@@ -8,10 +8,12 @@
  *    *undefined-length* Implicit-VR `SQ`, encapsulated Pixel Data
  *    (`(7FE0,0010) OB` undefined length), CP-246-promoted `UN→SQ`, and the `UN`
  *    undefined-length fallback. For all of these the parser stored `rawBytes` as
- *    the *complete on-wire span* (header + value), so the writer blits them
- *    **verbatim** - this is the byte-for-byte pixel-fragment and nested-sequence
- *    passthrough the spec requires (PS3.5 §A.4 / §7.5). Because the writer never
- *    transcodes, the stored span is already in the output transfer syntax.
+ *    the *complete on-wire span* (header + value), so this encoder emits them as
+ *    given: pixel fragments and `UN` spans byte-for-byte (PS3.5 §A.4). Because
+ *    the writer never transcodes, the stored span is already in the output
+ *    transfer syntax. For an `SQ`, `serializeDicom` passes in the span with the
+ *    Data Elements of every Item it can walk re-ordered ascending (see
+ *    `./order.ts`): the same bytes, permuted, and nothing the span did not carry.
  *
  *    The one SQ that is *not* full-span is a **defined-length SQ under Implicit
  *    VR LE**: that strategy only takes its full-span SQ branch for undefined
@@ -112,17 +114,25 @@ export function isFullSpanElement(el: Element, encoding: BodyEncoding): boolean 
  * {@link LONG_FORM_VRS}: +2-byte VR+2 reserved zero bytes+4-byte length) plus
  * the value padded to even length.
  *
+ * `rawBytes` stands in for `el.rawBytes` when given, in the same representation
+ * (full span or value only), which is how the writer emits an `SQ` whose Items
+ * it re-ordered without building a second {@link Element}.
+ *
  * @internal
  */
-export function encodeDatasetElement(el: Element, encoding: BodyEncoding): Buffer {
+export function encodeDatasetElement(
+  el: Element,
+  encoding: BodyEncoding,
+  rawBytes: Buffer = el.rawBytes,
+): Buffer {
   if (isFullSpanElement(el, encoding)) {
     // Verbatim passthrough - already in the output transfer syntax (no
     // transcode). Copy so the result never aliases the parsed dataset.
-    return Buffer.from(el.rawBytes);
+    return Buffer.from(rawBytes);
   }
 
   const { group, element } = splitTag(el.tag);
-  const value = padValue(el.rawBytes, el.vr);
+  const value = padValue(rawBytes, el.vr);
 
   if (encoding === "implicit") {
     return Buffer.concat([
