@@ -26,8 +26,34 @@ publishes.
 - **Even-length Value Fields.** PS3.5 2026c §7.1.1 defines a Value Field as "an even number of bytes
   containing the Value(s) of the Data Element", so odd values are padded with the pad byte their VR
   specifies. An odd length that arrived tolerated goes out even.
-- **Byte-for-byte passthrough of what it must not touch.** Sequence items and encapsulated Pixel Data
-  fragments are re-emitted as read; the writer never re-encodes pixels.
+- **Every Data Set in ascending tag order.** PS3.5 2026c §7.1 says the Data Elements in a Data Set
+  "shall be ordered by increasing Data Element Tag Number", and §7.5.1 says the same inside every
+  Item. The writer emits the root that way, and the Data Set of every Item of every Sequence it can
+  walk on the wire, at every depth up to `NESTING_DEPTH_LIMIT`, whatever order the source file, your
+  code or `deidentify()` left it in. Items stay in their order (§7.5), only whole elements move, so
+  no value byte changes, and nothing is written that the Sequence's own bytes did not carry. A
+  Sequence is re-ordered only where its parsed `items` match its bytes, so the output reads back as
+  the source did.
+  - **Not ordered, and said here rather than found later:** a tag repeated inside an Item is kept
+    twice, in source order, so that output still breaks the "at most once" of PS3.5 2026c §7.1; a
+    Sequence whose Item stream cannot be walked to exactly its end (a length that runs past its
+    container, an undefined-length Item with no Item Delimitation Item, bytes that are not an Item
+    stream), one nested past the bound, one whose parsed `items` do not match its bytes (a Sequence
+    the parser did not descend, `DICOM_SQ_NOT_DESCENDED`, for one), and any `UN`-carried Sequence
+    (under Implicit VR LE that includes a private Sequence inside an Item, even one a `Profile`
+    resolved to `SQ`, since a default read resolves its tag to `UN`) are written as read, unordered;
+    and an element the parser relocated because a length field lied is ordered where the parser
+    placed it, since ordering cannot recover an order the source destroyed.
+  - **Written last, even when its tag sorts earlier:** an element whose own bytes do not show where a
+    reader ends it, such as an undefined-length `UN` the parser could not read as a Sequence, or a
+    Sequence, `UN` or Pixel Data value missing its Sequence Delimitation Item. A reader takes whatever
+    follows such a value into it, so it keeps its place after the ascending rest of its Data Set, at
+    the root and inside an Item, rather than losing the elements after it on the next read. A
+    Sequence nested past the bound goes after the ascending rest of its Item too, unless it is a
+    defined-length Sequence under Implicit VR LE: seeing where a reader ends any other would take the
+    walk past the bound.
+- **Byte-for-byte passthrough of what it must not touch.** Encapsulated Pixel Data fragments and
+  `UN` values are re-emitted as read; the writer never re-encodes pixels.
 - **A fixed point.** Serializing an already-serialized object returns the same bytes.
 
 ```ts runnable

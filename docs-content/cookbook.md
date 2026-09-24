@@ -530,8 +530,15 @@ storage or forwarding, with a guarantee that nothing was silently lost.
 always Explicit VR LE with a recomputed group length, and the dataset body **in the source transfer
 syntax, no transcode**. It obeys the conservative half of Postel's Law: every Value Field padded to
 an even length (PS3.5 2026c §7.1.1 defines the Value Field as "An even number of bytes containing the
-Value(s) of the Data Element"), correct headers, byte-for-byte sequence and encapsulated-pixel-data
-passthrough. Serializing an already-serialized object is a fixed point.
+Value(s) of the Data Element"), correct headers, byte-for-byte encapsulated-pixel-data passthrough,
+and every Data Set it can walk (the root and each Sequence Item, at every depth up to
+`NESTING_DEPTH_LIMIT`) written in ascending tag order with Items kept in order and no value changed.
+A tag repeated inside an Item, a Sequence that cannot be walked, is nested past the bound or whose
+parsed `items` do not match its bytes, and any `UN`-carried Sequence are written as read, unordered;
+an element whose own bytes do not show where a reader ends it (an undefined-length `UN` the parser
+could not read as a Sequence, for one) is written after the ascending rest of its Data Set; see
+[Serialization](./serialization#what-the-writer-guarantees). Serializing an already-serialized
+object is a fixed point.
 
 ```ts runnable
 import { parseDicom, serializeDicom } from "@cosyte/dicom";

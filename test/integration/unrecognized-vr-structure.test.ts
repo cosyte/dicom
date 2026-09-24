@@ -336,7 +336,15 @@ describe("the writer applies the same section 6.2 rule as the reader", () => {
     expect(reread.get(CARRIER_TAG)?.vr).toBe(FUTURE_VR);
     expect(reread.get(CARRIER_TAG)?.length).toBe(4);
     expect(reread.get(CARRIER_TAG)?.rawBytes.toString("latin1")).toBe("ABCD");
-    expect(reread.elements().map((e) => e.tag)).toEqual(ds.elements().map((e) => e.tag));
+    // The same tags survive. The fixture writes (0009,0001) between (0010,0010)
+    // and (0010,0020); the writer emits ascending (S0361-dicom-5 AC-1), and
+    // 8-hex uppercase tags sort lexicographically in numeric order.
+    expect(reread.elements().map((e) => e.tag)).toEqual(
+      ds
+        .elements()
+        .map((e) => e.tag)
+        .sort(),
+    );
     // The header form is asserted on the bytes, not inferred from the re-read:
     // tag + "ZZ" + two zero reserved bytes + a 32-bit VL.
     const at = written.indexOf(Buffer.concat([u16(0x0009, true), u16(0x0001, true)]));
