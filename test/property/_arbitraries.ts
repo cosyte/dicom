@@ -410,8 +410,10 @@ function fatalInput(): fc.Arbitrary<Buffer> {
   const missingTsUid = fc.constant(
     buildDicom({ transferSyntax: TS_EXPLICIT_LE, elements: [], skipTransferSyntaxUID: true }),
   );
+  // AC-11: JPIP Referenced stays refused; the section A.4 syntaxes (JPEG
+  // Baseline among them) parse now, so none of them is a fatal input.
   const unsupportedTs = fc.constant(
-    buildDicom({ transferSyntax: "1.2.840.10008.1.2.4.50", elements: [] }),
+    buildDicom({ transferSyntax: "1.2.840.10008.1.2.4.94", elements: [] }),
   );
   return fc.oneof(empty, notDicom, missingTsUid, unsupportedTs);
 }

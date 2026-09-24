@@ -212,13 +212,13 @@ export interface ParseFrame {
  * **`snippet` is cut in the frame `offsetFrame` names, on every fatal but one.**
  * The exception is `UNSUPPORTED_TRANSFER_SYNTAX`, whose snippet slot carries
  * PS3.6's own NAME for the unsupported UID when the registry publishes one
- * (`"RLE Lossless"`), and 16 raw bytes only when it does not. That is
+ * (`"JPIP Referenced"`), and 16 raw bytes only when it does not. That is
  * deliberate and predates the frame; it is named here because a universal about
- * `snippet` written without it is false on the code a compressed object reaches
- * first. Everywhere else the two agree, so a consumer that only wants the bytes
- * at the offset already has them. **The frame is what a consumer needs before
- * indexing anything of its OWN by `byteOffset`**, which is the case no field on
- * this class used to cover.
+ * `snippet` written without it is false on the code an object under a refused
+ * Transfer Syntax reaches first. Everywhere else the two agree, so a consumer
+ * that only wants the bytes at the offset already has them. **The frame is what
+ * a consumer needs before indexing anything of its OWN by `byteOffset`**, which
+ * is the case no field on this class used to cover.
  *
  * @example
  * ```ts

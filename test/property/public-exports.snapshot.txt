@@ -59,6 +59,7 @@ ParseOptions
 PatientView
 PersonName
 PersonNameGroup
+PixelDataFragments
 PrivateTagDefinition
 Profile
 ProfileDefinitionError
@@ -94,6 +95,7 @@ parseSpecificCharacterSet
 parseTime
 profiles
 readCode
+readPixelDataFragments
 resolveDecoderLabel
 serializeDicom
 toDate

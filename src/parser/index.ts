@@ -47,8 +47,19 @@ import type { DicomParseWarning } from "./warnings.js";
  *     a recognizable `(0002,0000)` File Meta Group Length at offset 0.
  *   - `INVALID_FILE_META` - File Meta is truncated or `(0002,0010)`
  *     Transfer Syntax UID is missing.
- *   - `UNSUPPORTED_TRANSFER_SYNTAX` - Transfer Syntax UID is not one of the
- *     four v1 UIDs (`1.2.840.10008.1.2`, `…1.2.1`, `…1.2.2`, `…1.2.1.99`).
+ *   - `UNSUPPORTED_TRANSFER_SYNTAX` - Transfer Syntax UID is none of the
+ *     supported ones: the four native syntaxes (`1.2.840.10008.1.2`,
+ *     `…1.2.1`, `…1.2.2`, `…1.2.1.99`) and every encapsulated Pixel Data
+ *     syntax PS3.5 2026c section A.4 names (JPEG, JPEG-LS, JPEG 2000, HTJ2K,
+ *     RLE, MPEG, HEVC, JPEG XL, Deflated Image Frame, Encapsulated
+ *     Uncompressed). The JPIP Referenced and SMPTE ST 2110 syntaxes and every
+ *     retired UID stay refused.
+ *
+ * An object under a section A.4 syntax is read under Explicit VR Little Endian
+ * rules, as A.4 requires: its metadata is fully readable, and its Pixel Data
+ * fragments are handed back as opaque, undecoded bytes by
+ * {@link readPixelDataFragments}. **No pixel is ever decoded**, and
+ * `serializeDicom` refuses to write these syntaxes.
  *
  * Pass `{ strict: true }` to escalate every Tier-2 warning to a thrown
  * `DicomParseError` carrying the warning code.
@@ -125,9 +136,9 @@ export function parseDicom(
   if (strategy === undefined) {
     // The UID itself is NEVER interpolated, and since the fatal registry it is
     // not even reachable from here: `unsupportedTransferSyntax` takes the UID
-    // and renders the PS3.6 registry's own name for it, so `JPEG Baseline
-    // (Process 1)` still reads usefully and a UID PS3.6 does not publish reads
-    // as nothing at all. The closed-set lookup that used to live at this call
+    // and renders the PS3.6 registry's own name for it, so `JPIP Referenced`
+    // still reads usefully and a UID PS3.6 does not publish reads as nothing
+    // at all. The closed-set lookup that used to live at this call
     // site now lives in the factory, where a future call site cannot skip it.
     throw unsupportedTransferSyntax(ctx.frame, fileMetaEnd, tsUid);
   }

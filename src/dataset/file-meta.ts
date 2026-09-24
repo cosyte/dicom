@@ -58,7 +58,7 @@ export interface FileMetaRawElement {
  * over `(0002,xxxx)` elements parsed during the File Meta pre-pass.
  *
  * Only `transferSyntaxUID` is required because it is the dispatch input
- * for the four v1 transfer-syntax parsers; everything else is optional
+ * for the transfer-syntax parsers; everything else is optional
  * because real-world clinical files routinely omit one or more
  * Type-1 elements. `validate()` adds opinion-bearing checks
  * for those missing elements.

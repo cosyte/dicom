@@ -23,7 +23,12 @@ import {
   type ParseFrame,
 } from "../../src/parser/errors.js";
 import {
+  ENCAPSULATED_TRANSFER_SYNTAX_EDITION,
+  ENCAPSULATED_TRANSFER_SYNTAX_UIDS,
+} from "../../src/dictionary/generated/encapsulated-transfer-syntaxes.js";
+import {
   FATAL_MESSAGES,
+  NATIVE_TRANSFER_SYNTAXES,
   SUPPORTED_TRANSFER_SYNTAXES,
   ZLIB_CODES,
   elementLengthExceedsBuffer,
@@ -172,11 +177,20 @@ describe("the Tier-3 fatal registry", () => {
     }
   });
 
-  it("SUPPORTED_TRANSFER_SYNTAXES still lists exactly the dispatch table", () => {
+  it("AC-11: SUPPORTED_TRANSFER_SYNTAXES still describes exactly the dispatch table", () => {
     // `fatals.ts` cannot import `transfer-syntax.ts` - the per-TS parsers import
-    // `fatals.ts`, so the edge would close a cycle. The literal is therefore a
-    // copy, and this is what keeps a copy honest.
-    expect(SUPPORTED_TRANSFER_SYNTAXES).toBe(Object.keys(TRANSFER_SYNTAX_PARSERS).join(", "));
+    // `fatals.ts`, so the edge would close a cycle. The native list is therefore
+    // a copy, and this is what keeps a copy honest: the table is exactly those
+    // four plus the generated section A.4 list, the message names the four, and
+    // summarises the rest by the section and edition that list was read from.
+    const units = (xs: Iterable<string>): string[] =>
+      [...xs].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+    expect(units(Object.keys(TRANSFER_SYNTAX_PARSERS))).toStrictEqual(
+      units(new Set([...NATIVE_TRANSFER_SYNTAXES, ...ENCAPSULATED_TRANSFER_SYNTAX_UIDS])),
+    );
+    expect(SUPPORTED_TRANSFER_SYNTAXES).toBe(
+      `${NATIVE_TRANSFER_SYNTAXES.join(", ")}, and every encapsulated Pixel Data Transfer Syntax PS3.5 ${ENCAPSULATED_TRANSFER_SYNTAX_EDITION} section A.4 names`,
+    );
   });
 
   it("ZLIB_CODES is exactly the name direction of Node's own zlib.codes", () => {

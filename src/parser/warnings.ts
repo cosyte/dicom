@@ -52,6 +52,7 @@ export const WARNING_CODES = {
   DICOM_MISSING_PREAMBLE: "DICOM_MISSING_PREAMBLE",
   DICOM_NONZERO_RESERVED_BYTES: "DICOM_NONZERO_RESERVED_BYTES",
   DICOM_ODD_LENGTH_VALUE_PADDED: "DICOM_ODD_LENGTH_VALUE_PADDED",
+  DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED: "DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED",
   DICOM_PIXEL_DATA_LENGTH_MISMATCH: "DICOM_PIXEL_DATA_LENGTH_MISMATCH",
   DICOM_PRIVATE_TAG_NO_CREATOR: "DICOM_PRIVATE_TAG_NO_CREATOR",
   DICOM_SQ_NOT_DESCENDED: "DICOM_SQ_NOT_DESCENDED",
@@ -345,6 +346,13 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   // description attributes, not a number it read. The tag is a constant.
   DICOM_PIXEL_DATA_LENGTH_MISMATCH:
     "(7FE0,0010) PixelData declared length does not match the computed {n2} bytes. The declared length is withheld; the byte offset identifies the element.",
+  // No slot at all. The fragments are the sender's encoded pixels, their lengths
+  // are 32-bit wire reads, and how many were read is a count over input, so none
+  // of the three has a place here. The tags are constants of this code, and the
+  // byte offset is the Pixel Data element's own header, which this parser
+  // counted. See `pixelDataFragmentsNotDelimited`.
+  DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED:
+    "Encapsulated Pixel Data (7FE0,0010) reaches the end of the bytes being read without the Sequence Delimitation Item (FFFE,E0DD) PS3.5 2026c A.4 requires after its last fragment, so the fragments read from it may not be all the sender wrote. No fragment byte, length or count is reproduced here; the byte offset locates the Pixel Data element.",
   DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR:
     "A private element under Implicit VR LE has no VR override; falling back to UN. Its tag is withheld; the byte offset identifies the element.",
   DICOM_PRIVATE_CREATOR_UNKNOWN:
@@ -1009,6 +1017,38 @@ export function itemCrossesSequenceEnd(position: DicomPosition, tag: Tag): Dicom
  */
 export function emptyItemInSequence(position: DicomPosition, tag: Tag): DicomParseWarning {
   return build(WARNING_CODES.DICOM_EMPTY_ITEM_IN_SEQUENCE, position, { tag });
+}
+
+/**
+ * Build a `DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED` warning. Emitted when the
+ * Item stream of encapsulated Pixel Data `(7FE0,0010)` ends with the bytes being
+ * read, after its last whole Item (or before any Item at all), and no Sequence
+ * Delimitation Item `(FFFE,E0DD)` was found.
+ *
+ * @remarks
+ * PS3.5 2026c section A.4 ends every encapsulated Pixel Data stream with that
+ * Item, so this code cannot fire on a conformant file, and it is safe under the
+ * `{ strict: true }` escalation every Tier-2 code takes. The reading is kept
+ * (Postel): the Data Set's metadata is intact, and every whole fragment that was
+ * read is on the element. What the caller is told is that the fragment list may
+ * be short, because nothing in the stream says where the sender meant it to end.
+ * A fragment that is itself cut short is not this code: it is the Tier-3
+ * `INVALID_FILE_META` for a fragment declaring more bytes than remain.
+ *
+ * **The factory takes a position and nothing else.** The fragments are the
+ * sender's encoded pixels, their lengths are 32-bit wire reads and the number of
+ * fragments read is a count over input, so none of them has a parameter to
+ * travel through. `position.byteOffset` is the byte offset of the Pixel Data
+ * element's own header, counted by this parser, in the frame that element was
+ * read in.
+ *
+ * @example
+ * ```ts
+ * const w = pixelDataFragmentsNotDelimited({ byteOffset: 312 });
+ * ```
+ */
+export function pixelDataFragmentsNotDelimited(position: DicomPosition): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED, position);
 }
 
 /**
