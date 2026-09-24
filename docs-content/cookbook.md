@@ -104,9 +104,12 @@ ds.warnings.length; // => 0
 ```
 
 Over a real folder, wrap the parse per file. A quirky object is tolerated rather than rejected and
-absent fields come back `undefined`, but **a folder walk still needs a `try`/`catch`**, because the
-Tier-3 conditions throw and a real archive meets every one of them: `UNSUPPORTED_TRANSFER_SYNTAX`
-for a pixel-compressed object, which this parser does not read; `INVALID_FILE_META` for a truncated
+absent fields come back `undefined`, and a JPEG, JPEG 2000, RLE or other PS3.5 2026c section A.4
+compressed object indexes like any other, its pixels never decoded (see
+[section 7](#7-read-raw-pixel-data-without-decoding-it)). But **a folder walk still needs a
+`try`/`catch`**, because the Tier-3 conditions throw and a real archive meets every one of them:
+`UNSUPPORTED_TRANSFER_SYNTAX` for an object under a syntax this parser refuses (JPIP Referenced,
+SMPTE ST 2110, or a retired UID); `INVALID_FILE_META` for a truncated
 or partly-copied file; `NOT_DICOM_PART_10` for whatever non-DICOM file wandered into the folder; and
 `EMPTY_INPUT` for a zero-byte one. Each throws the one class, so catch `DicomParseError` per file
 and skip.
@@ -604,9 +607,47 @@ ds.warnings.length; // => 0
 ```
 
 The bytes are never windowed, rescaled, or color-transformed here. That is
-[out of scope](./limitations). For encapsulated (compressed) transfer syntaxes the value exposes the
-raw fragments, still undecoded, and note that this release refuses a pixel-compressed transfer syntax
-outright rather than reading it structurally: see [Known limitations](./limitations).
+[out of scope](./limitations).
+
+**Encapsulated (compressed) objects.** Every transfer syntax PS3.5 2026c section A.4 names (JPEG,
+JPEG-LS, JPEG 2000, HTJ2K, RLE, MPEG, HEVC, JPEG XL, Deflated Image Frame and Encapsulated
+Uncompressed) parses: section A.4 makes the whole Data Set Explicit VR Little Endian with only Pixel
+Data encapsulated, so the metadata reads exactly as it would under Explicit VR LE. The Pixel Data
+element's `value` is still the whole on-wire span as `binary`. `readPixelDataFragments(ds)` returns a
+`PixelDataFragments` with the Basic Offset Table and every fragment as raw bytes, in file order, with
+no Item header in any of them, and `undefined` when Pixel Data is absent or native.
+
+```ts runnable
+import { parseDicom, readPixelDataFragments } from "@cosyte/dicom";
+
+// Synthetic 2x2, 8-bit object under JPEG Baseline (Process 1), with an empty Basic Offset
+// Table and two fragments of fill bytes. The fragments are not a JPEG codestream, and nothing
+// here needs them to be: they are never decoded.
+const buf = Buffer.from(
+  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABESUNNAgAAAFVMBAAeAAAAAgAQAFVJFgAxLjIuODQwLjEwMDA4LjEuMi40LjUwKAAQAFVTAgACACgAEQBVUwIAAgAoAAABVVMCAAgA4H8QAE9CAAD//////v8A4AAAAAD+/wDgCAAAAAECAwQFBgcI/v8A4AQAAAAJCgsM/v/d4AAAAAA=",
+  "base64",
+);
+
+const ds = parseDicom(buf);
+ds.fileMeta?.transferSyntaxUID; // => "1.2.840.10008.1.2.4.50"
+ds.image.rows; // => 2
+
+const pixels = readPixelDataFragments(ds);
+pixels?.basicOffsetTable?.length; // => 0
+pixels?.fragments.length; // => 2
+pixels?.fragments[0]?.toString("hex"); // => "0102030405060708"
+
+ds.warnings.length; // => 0
+```
+
+**The limits sit beside that capability.** No pixel is decompressed, no frame is assembled from
+fragments, and neither the Basic Offset Table nor an Extended Offset Table `(7FE0,0001)` is
+interpreted. **`serializeDicom` refuses every section A.4 syntax** with `UNSUPPORTED_TRANSFER_SYNTAX`,
+a de-identified object included, so this package reads a compressed object and does not write one.
+A fragment stream that ends before its Sequence Delimitation Item still parses, and
+`DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED` on `ds.warnings` says the fragment list may be short. The
+JPIP Referenced and SMPTE ST 2110 syntaxes and every retired UID stay the fatal
+`UNSUPPORTED_TRANSFER_SYNTAX`. See [Known limitations](./limitations).
 
 ---
 
