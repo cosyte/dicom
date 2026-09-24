@@ -199,6 +199,22 @@ export interface BuildDicomSqElement {
    * containing Implicit-VR-LE-encoded SQ bytes.
    */
   readonly explicitVr?: VR;
+  /**
+   * **Malformed-fixture knob**, encapsulated Pixel Data only. Omits the
+   * `(FFFE,E0DD)` Sequence Delimitation Item that ends the fragment stream, so
+   * a fixture that places this element last ends right after its last whole
+   * fragment. PS3.5 2026c section A.4 requires that Item, so the file is not
+   * conformant.
+   */
+  readonly omitSequenceDelim?: boolean;
+  /**
+   * **Malformed-fixture knob**, encapsulated Pixel Data only. Added to the
+   * length written into the Item header of `encapsulatedFragments[index]`
+   * (index `0` is the Basic Offset Table), leaving that fragment's bytes
+   * untouched. A positive delta on the last Item over-declares past the end of
+   * the input.
+   */
+  readonly fragmentDeclaredLengthDelta?: { readonly index: number; readonly delta: number };
 }
 
 /** Discriminate SqElement vs primitive. */
@@ -326,8 +342,9 @@ export function buildDicom(opts: BuildDicomOptions): Buffer {
     );
     parts.push(deflateRawSync(explicitLeBytes));
   } else {
+    const bodySyntax = dataSetEncoding(opts.transferSyntax);
     for (const el of opts.elements) {
-      parts.push(encodeAnyElement(el, opts.transferSyntax));
+      parts.push(encodeAnyElement(el, bodySyntax));
     }
   }
 
@@ -341,6 +358,21 @@ export function buildDicom(opts: BuildDicomOptions): Buffer {
 // ---------------------------------------------------------------------------
 // Encoders
 // ---------------------------------------------------------------------------
+
+/**
+ * The encoding a Data Set written under `transferSyntax` takes on the wire.
+ * Implicit VR LE and Explicit VR BE write themselves. Every other UID is written
+ * as Explicit VR Little Endian: that is the whole Data Set rule PS3.5 2026c
+ * section A.4 gives each encapsulation syntax, and for a UID the parser refuses
+ * it only has to be well-formed enough to reach `(0002,0010)`. Deflated is
+ * handled by the caller before this is reached.
+ */
+function dataSetEncoding(transferSyntax: string): string {
+  if (transferSyntax === "1.2.840.10008.1.2" || transferSyntax === "1.2.840.10008.1.2.2") {
+    return transferSyntax;
+  }
+  return "1.2.840.10008.1.2.1";
+}
 
 function buildExplicitLeElement(tag: Tag, vr: VR, value: Buffer, delta = 0): Buffer {
   const { group, element } = splitTag(tag);
@@ -515,11 +547,16 @@ function encodeSqElement(sq: BuildDicomSqElement, ts: string): Buffer {
   if (sq.encapsulatedPixelData === true) {
     const fragments = sq.encapsulatedFragments ?? [];
     const itemBufs: Buffer[] = [];
-    for (const frag of fragments) {
-      itemBufs.push(buildItemHeader(frag.length, littleEndian));
+    fragments.forEach((frag, index) => {
+      const delta =
+        sq.fragmentDeclaredLengthDelta?.index === index ? sq.fragmentDeclaredLengthDelta.delta : 0;
+      itemBufs.push(buildItemHeader(frag.length + delta, littleEndian));
       itemBufs.push(frag);
-    }
-    const body = Buffer.concat([...itemBufs, buildSeqDelim(littleEndian)]);
+    });
+    const body = Buffer.concat([
+      ...itemBufs,
+      ...(sq.omitSequenceDelim === true ? [] : [buildSeqDelim(littleEndian)]),
+    ]);
     const overrideVr: VR = sq.explicitVr ?? "OB";
     return encodeSqHeader(sq.tag, overrideVr, ts, body, /* undefinedLength */ true);
   }

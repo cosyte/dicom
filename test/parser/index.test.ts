@@ -90,11 +90,12 @@ describe("parseDicom - PARSE-05 + D-15 NOT_DICOM_PART_10", () => {
 });
 
 describe("parseDicom - FM-04 + D-20 UNSUPPORTED_TRANSFER_SYNTAX", () => {
-  it("dispatch table miss for JPEG Baseline → throws UNSUPPORTED_TRANSFER_SYNTAX with the UID in message and human-readable name in snippet", () => {
+  it("AC-11: dispatch table miss for JPIP Referenced → throws UNSUPPORTED_TRANSFER_SYNTAX with the registry name, never the UID, in message and snippet", () => {
     const buf = buildDicom({
-      transferSyntax: "1.2.840.10008.1.2.4.50", // JPEG Baseline (Process 1) - out of v1 scope
+      // JPIP Referenced: PS3.5 section A.6, Pixel Data is a reference rather
+      // than fragments, so it stays outside the supported set.
+      transferSyntax: "1.2.840.10008.1.2.4.94",
       elements: [],
-      // The dataset encoder for JPEG would throw, so omit dataset elements.
     });
     try {
       parseDicom(buf);
@@ -107,12 +108,12 @@ describe("parseDicom - FM-04 + D-20 UNSUPPORTED_TRANSFER_SYNTAX", () => {
       // names it only from the closed set the parser controls: the dictionary's
       // own label for the UID. This test previously asserted the opposite and
       // pinned the echo in place.
-      expect(err.message).not.toContain("1.2.840.10008.1.2.4.50");
-      expect(err.message).toContain("JPEG Baseline");
+      expect(err.message).not.toContain("1.2.840.10008.1.2.4.94");
+      expect(err.message).toContain("JPIP Referenced");
       expect(err.message).toContain("(0002,0010)");
-      // Human-readable name comes from Dictionary.uid (D-20). The known v1 dictionary
-      // labels this UID "JPEG Baseline (Process 1)" or similar - non-empty when known.
-      expect(err.snippet.length).toBeGreaterThan(0);
+      // Human-readable name comes from Dictionary.uid (D-20): PS3.6 labels this
+      // UID "JPIP Referenced".
+      expect(err.snippet).toBe("JPIP Referenced");
     }
   });
 

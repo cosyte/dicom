@@ -4,7 +4,8 @@
  * The public surface, grouped by what it does:
  *  - `VERSION` - package version constant.
  *  - `Dictionary` namespace - Part 6 + UID + Annex E lookups.
- *  - the parser entry, the `Dataset` model, and the warning / error registries.
+ *  - the parser entry, the `Dataset` model, encapsulated Pixel Data fragments as
+ *    raw bytes, and the warning / error registries.
  *  - VR value decoding, the safety-critical domain helpers, the spec-clean
  *    serializer, the source/vendor profile system, and de-identification.
  */
@@ -22,6 +23,9 @@ export { Element } from "./dataset/element.js";
 export { Sequence } from "./dataset/sequence.js";
 export { Item } from "./dataset/item.js";
 export type { FileMeta, FileMetaRawElement } from "./dataset/file-meta.js";
+
+// Encapsulated Pixel Data as raw, undecoded bytes (PS3.5 section A.4).
+export { readPixelDataFragments, type PixelDataFragments } from "./dataset/pixel-data.js";
 
 export { WARNING_CODES, type WarningCode, type DicomParseWarning } from "./parser/warnings.js";
 

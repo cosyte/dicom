@@ -7,7 +7,9 @@
  *     ByteCursor as every other read, which is what closes the BE-FFFE bug.
  *   - An encoding-context stack (`Root | SqItem | EncapsulatedPixelData`) is
  *     maintained. An empty item (`(FFFE,E000) length=0`) is tolerated: emit
- *     `DICOM_EMPTY_ITEM_IN_SEQUENCE` and continue.
+ *     `DICOM_EMPTY_ITEM_IN_SEQUENCE` and continue. The one exception is the
+ *     FIRST Item of encapsulated Pixel Data, the Basic Offset Table, whose
+ *     empty form is conformant (PS3.5 2026c section A.4) and raises nothing.
  *   - An undefined-length SQ in Explicit VR is legal but emits
  *     `DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR` (caller responsibility - the
  *     warning fires from the per-TS strategy, NOT from inside parseSequence
@@ -23,9 +25,11 @@
  *     Implicit VR LE the alternative is a Tier-3 fatal on the whole object,
  *     which PS3.5 section 7.5.1 does not license for a readable Data Set.
  *   - Encapsulated pixel data (`(7FE0,0010) VR=OB length=0xFFFFFFFF`):
- *     each FFFE,E000 item is a fragment (the parser records the structure as
- *     empty Items; the domain helpers surface fragments + Basic Offset Table
- *     via `ds.pixelData`).
+ *     each FFFE,E000 item is a fragment. The parser records the structure as
+ *     empty Items and never reads a fragment's content; the Basic Offset Table
+ *     and the fragments are handed to a caller as raw bytes by
+ *     `readPixelDataFragments` in `../dataset/pixel-data.ts`, which walks the
+ *     element's own `rawBytes`.
  *
  * Threat model:
  *   - Buffer over-read on truncated input. All `cursor.slice(N)`
@@ -145,6 +149,12 @@ export interface ParseSequenceResult {
   readonly items: readonly Item[];
   /** Offset just past the last byte consumed (after SeqDelim, or at +explicitLength). */
   readonly endOffset: number;
+  /**
+   * `true` when the stream ended on its `(FFFE,E0DD)` Sequence Delimitation
+   * Item, `false` when it ran out (the declared length, or the end of the bytes
+   * being read). Only the encapsulated Pixel Data branch reads it.
+   */
+  readonly delimited: boolean;
 }
 
 /**
@@ -245,7 +255,7 @@ export function parseSequence(
 
       if (itemTag === SEQ_DELIM_TAG) {
         // SeqDelim - skip the 4-byte length field (already consumed) and exit.
-        return { items, endOffset: cursor.position };
+        return { items, endOffset: cursor.position, delimited: true };
       }
       if (itemTag !== ITEM_TAG) {
         throw unexpectedTagInsideSequence(ctx.frame, itemHeaderStart);
@@ -253,7 +263,17 @@ export function parseSequence(
 
       // (FFFE,E000) Item header consumed. itemLength holds the value-area length.
       if (itemLength === 0) {
-        emit(emptyItemInSequence({ byteOffset: itemHeaderStart }, itemTag));
+        // The first Item of encapsulated Pixel Data is the Basic Offset Table,
+        // and PS3.5 2026c section A.4 makes its empty form conformant:
+        // "Decoders of encapsulated Pixel Data ... need to accept both an empty
+        // Basic Offset Table (zero length) and a Basic Offset Table filled with
+        // 32 bit offset values." So it raises nothing. Every later empty Item is
+        // a fragment with no bytes, which A.4 does not describe, and still
+        // raises `DICOM_EMPTY_ITEM_IN_SEQUENCE`.
+        const emptyBasicOffsetTable = opts.encapsulatedPixelData === true && itemIndex === 0;
+        if (!emptyBasicOffsetTable) {
+          emit(emptyItemInSequence({ byteOffset: itemHeaderStart }, itemTag));
+        }
         items.push(
           new Item({
             warnings: [],
@@ -266,10 +286,12 @@ export function parseSequence(
       }
 
       if (opts.encapsulatedPixelData === true) {
-        // Pixel-data fragment: consume `itemLength` bytes verbatim. The
-        // domain helpers surface the bytes; the parser records each fragment
-        // as a structural (empty) Item and advances the cursor past its raw
-        // bytes.
+        // Pixel-data fragment: consume `itemLength` bytes verbatim, without
+        // reading them - PS3.5 2026c section A.4 says a decoder "may not scan
+        // for a Sequence Delimitation Item", so bytes that look like one inside
+        // a fragment are fragment bytes. The parser records each fragment as a
+        // structural (empty) Item and advances the cursor past its raw bytes;
+        // `readPixelDataFragments` hands the bytes to a caller.
         if (cursor.position + itemLength > buffer.length) {
           throw encapsulatedFragmentExceedsBuffer(ctx.frame, itemHeaderStart);
         }
@@ -375,7 +397,7 @@ export function parseSequence(
       itemIndex += 1;
     }
 
-    return { items, endOffset: cursor.position };
+    return { items, endOffset: cursor.position, delimited: false };
   } finally {
     ctx.nestingDepth -= 1;
     ctx.encodingContextStack.pop();

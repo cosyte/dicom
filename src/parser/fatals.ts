@@ -105,6 +105,7 @@
  * @module
  */
 
+import { ENCAPSULATED_TRANSFER_SYNTAX_EDITION } from "../dictionary/generated/encapsulated-transfer-syntaxes.js";
 import { uid as dictionaryUid } from "../dictionary/index.js";
 import type { VR } from "../dictionary/types.js";
 import {
@@ -119,14 +120,26 @@ import {
 import { WITHHELD, renderVr } from "./tokens.js";
 
 /**
- * The four Transfer Syntax UIDs `TRANSFER_SYNTAX_PARSERS` registers, rendered
- * for the one message that lists them. A literal rather than a derivation so
- * this module does not import the dispatch table it is thrown out of; the
- * `fatals.test.ts` "supported list matches the dispatch table" case is what
- * keeps the two in step.
+ * The four native Transfer Syntax UIDs `TRANSFER_SYNTAX_PARSERS` registers,
+ * each with its own reader. A literal rather than a derivation so this module
+ * does not import the dispatch table it is thrown out of; the `fatals.test.ts`
+ * "supported list matches the dispatch table" case is what keeps the two in
+ * step, together with the generated section A.4 list the table adds to them.
  */
-const SUPPORTED_TRANSFER_SYNTAXES =
-  "1.2.840.10008.1.2, 1.2.840.10008.1.2.1, 1.2.840.10008.1.2.2, 1.2.840.10008.1.2.1.99";
+const NATIVE_TRANSFER_SYNTAXES: readonly string[] = Object.freeze([
+  "1.2.840.10008.1.2",
+  "1.2.840.10008.1.2.1",
+  "1.2.840.10008.1.2.2",
+  "1.2.840.10008.1.2.1.99",
+]);
+
+/**
+ * The supported list, rendered for the one message that carries it. It names
+ * the native UIDs and SUMMARISES the section A.4 syntaxes rather than
+ * enumerating them, so the message stays short and names no UID a caller could
+ * mistake for the refused one: the refused UID is never printed at all.
+ */
+const SUPPORTED_TRANSFER_SYNTAXES = `${NATIVE_TRANSFER_SYNTAXES.join(", ")}, and every encapsulated Pixel Data Transfer Syntax PS3.5 ${ENCAPSULATED_TRANSFER_SYNTAX_EDITION} section A.4 names`;
 
 /**
  * `zlib.codes`, as a closed set of names.
@@ -343,11 +356,11 @@ interface FatalTokens {
  * Render the Transfer Syntax token.
  *
  * The `(0002,0010)` value is a `UI` a sender authored, and this token's only
- * message fires precisely when it is **not** one of the four this build
- * supports, so the UID itself is never printed. What is printed comes from a
- * closed set the parser controls: PS3.6's own name for the UID when the
- * generated registry publishes one, so `JPEG Baseline (Process 1)` still reads
- * usefully, and a fixed phrase when it does not.
+ * message fires precisely when it is **not** one this build supports, so the
+ * UID itself is never printed. What is printed comes from a closed set the
+ * parser controls: PS3.6's own name for the UID when the generated registry
+ * publishes one, so `JPIP Referenced` still reads usefully, and a fixed phrase
+ * when it does not.
  */
 function renderTransferSyntax(ts: string | undefined): string {
   if (ts === undefined) return "The Transfer Syntax UID";
@@ -475,8 +488,9 @@ export function notDicomPart10(frame: ParseFrame, offset: number): DicomParseErr
 }
 
 /**
- * `UNSUPPORTED_TRANSFER_SYNTAX` for a `(0002,0010)` value outside the four this
- * build registers.
+ * `UNSUPPORTED_TRANSFER_SYNTAX` for a `(0002,0010)` value outside the set this
+ * build registers: the four native syntaxes and the PS3.5 2026c section A.4
+ * encapsulation syntaxes.
  *
  * @remarks
  * The UID is a parameter and is **not** printed: `renderTransferSyntax` replaces
@@ -488,7 +502,7 @@ export function notDicomPart10(frame: ParseFrame, offset: number): DicomParseErr
  *
  * @example
  * ```ts
- * throw unsupportedTransferSyntax(ctx.frame, fileMetaEnd, "1.2.840.10008.1.2.4.50");
+ * throw unsupportedTransferSyntax(ctx.frame, fileMetaEnd, "1.2.840.10008.1.2.4.94");
  * ```
  */
 export function unsupportedTransferSyntax(
@@ -843,4 +857,4 @@ export function inflateFailed(
  *
  * @internal
  */
-export { FATAL_MESSAGES, ZLIB_CODES, SUPPORTED_TRANSFER_SYNTAXES };
+export { FATAL_MESSAGES, ZLIB_CODES, NATIVE_TRANSFER_SYNTAXES, SUPPORTED_TRANSFER_SYNTAXES };

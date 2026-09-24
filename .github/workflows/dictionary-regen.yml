@@ -13,6 +13,7 @@ on:
       - "scripts/generate-dictionary.ts"
       - "scripts/generate-annex-e.ts"
       - "scripts/generate-repeating-groups.ts"
+      - "scripts/generate-encapsulated-transfer-syntaxes.ts"
       - "scripts/_annex-e-discovery.md"
       - "src/dictionary/generated/**"
       # `gen:all` and the generators' entry points live in package.json. Without
@@ -28,6 +29,7 @@ on:
       - "scripts/generate-dictionary.ts"
       - "scripts/generate-annex-e.ts"
       - "scripts/generate-repeating-groups.ts"
+      - "scripts/generate-encapsulated-transfer-syntaxes.ts"
       - "scripts/_annex-e-discovery.md"
       - "src/dictionary/generated/**"
       - "package.json"
@@ -97,7 +99,7 @@ jobs:
           fi
           echo "Clean OK: only the hand-written README.md remains."
 
-      - name: Regenerate repeating groups + dictionary + Annex E
+      - name: Regenerate repeating groups + dictionary + Annex E + A.4 transfer syntaxes
         run: pnpm gen:all
 
       - name: Verify byte-identical regen

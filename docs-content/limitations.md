@@ -27,8 +27,8 @@ These are non-goals, not gaps. Each is a companion package or another tool's job
 
 | Not in v1                                                                                                                                                                                           | Where it goes         |
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
-| **Pixel decode or decompression** of any compressed transfer syntax (JPEG, JPEG-LS, JPEG2000, RLE, HTJ2K), rendering, windowing, or any measurement computed from pixels                            | `@cosyte/dicom-pixel` |
-| **Reading a pixel-compressed object at all.** A transfer syntax outside the four supported ones is the fatal `UNSUPPORTED_TRANSFER_SYNTAX`, so such an object does not parse, not even structurally | `@cosyte/dicom-pixel` |
+| **Pixel decode or decompression** in any transfer syntax, frame assembly from fragments, offset-table interpretation, rendering, windowing, or any measurement computed from pixels                 | `@cosyte/dicom-pixel` |
+| **Writing an encapsulated object.** `serializeDicom` refuses every PS3.5 2026c section A.4 syntax, de-identified or not: a compressed object is read, never written                                 | a later release       |
 | **Burned-in annotation removal / Clean Pixel Data.** A de-identified output from this package is **metadata-de-identified only**, and it warns rather than claiming otherwise                       | `@cosyte/dicom-pixel` |
 | **Networking.** No DIMSE: no C-STORE, C-FIND, C-MOVE, MWL or MPPS                                                                                                                                   | `@cosyte/dicom-net`   |
 | **Web services.** No DICOMweb: no QIDO, WADO or STOW                                                                                                                                                | `@cosyte/dicomweb`    |
@@ -38,10 +38,27 @@ These are non-goals, not gaps. Each is a companion package or another tool's job
 | **Patient matching.** Patient ID is surfaced with its issuer; the library never decides that two identifiers are the same person                                                                    | out of scope          |
 | **DICOMDIR modelling.** A Media Storage Directory Storage object parses as an ordinary Data Set; there is no directory-record model and no File-set view, so `deidentify()` cannot rebuild one      | out of scope for v1   |
 
-Supported transfer syntaxes, and exactly these four: Implicit VR LE `1.2.840.10008.1.2`, Explicit VR
-LE `...1.2.1`, Deflated Explicit VR LE `...1.2.1.99`, Explicit VR BE `...1.2.2` (retired,
-legacy-only). Deflated is the one compressed syntax in the set, and it deflates the whole dataset
-stream rather than the pixels.
+Supported transfer syntaxes: the four native ones, Implicit VR LE `1.2.840.10008.1.2`, Explicit VR
+LE `...1.2.1`, Deflated Explicit VR LE `...1.2.1.99` and Explicit VR BE `...1.2.2` (retired,
+legacy-only), plus **every encapsulation syntax PS3.5 2026c section A.4 names**: JPEG Baseline,
+Extended, Lossless and Lossless First-Order Prediction; RLE Lossless; JPEG-LS Lossless and
+Near-Lossless; JPEG 2000 and HTJ2K; MPEG2; MPEG-4 AVC/H.264; HEVC/H.265 Main and Main 10; JPEG XL;
+Deflated Image Frame Compression; and Encapsulated Uncompressed Explicit VR LE. `Dictionary.uid()`
+names each UID. An encapsulated object is read under Explicit VR LE rules, as section A.4 requires,
+so its metadata parses in full and `readPixelDataFragments` hands back its Basic Offset Table and
+fragments as raw bytes. **Its pixels are never decoded**, and **`serializeDicom` refuses every one of
+those syntaxes**, a de-identified object included, so this package reads a compressed object and
+does not write one. Every other registered UID stays the fatal `UNSUPPORTED_TRANSFER_SYNTAX`, named
+by its PS3.6 registry name: the JPIP Referenced syntaxes (their Pixel Data is a reference, not
+fragments), the SMPTE ST 2110 syntaxes, and every retired UID, the retired JPEG processes included.
+Deflated Explicit VR LE deflates the whole dataset stream rather than the pixels, and it is inflated
+on parse.
+
+Two limits sit with that capability. A fragment stream that ends before its Sequence Delimitation
+Item still parses, with `DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED` saying the fragment list may be
+short. And two misuses of an encapsulation syntax that PS3.5 2026c section A.4 forbids parse
+**without** a code: an object with no top-level Pixel Data, and one whose top-level Pixel Data is
+native, for which `readPixelDataFragments` returns `undefined`, as it does under Explicit VR LE.
 
 ---
 

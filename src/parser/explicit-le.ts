@@ -18,7 +18,11 @@
  *     `cp246Promoted: true`. On failure → keep `VR=UN` + raw bytes
  *     (best-effort empty when undefined-length).
  *   - `(7FE0,0010) VR=OB length=0xFFFFFFFF` is encapsulated pixel
- *     data; SQ-style fragment iteration; element keeps `vr=OB`.
+ *     data; SQ-style fragment iteration; element keeps `vr=OB`, and a stream
+ *     with no Sequence Delimitation Item emits
+ *     `DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED`. This is also the reader for
+ *     every PS3.5 2026c section A.4 encapsulation Transfer Syntax, whose Data
+ *     Set A.4 makes Explicit VR Little Endian.
  *
  * Threat model:
  *   - Every cursor read is wrapped; a RangeError becomes a typed throw.
@@ -64,6 +68,7 @@ import type { ParseContext } from "./types.js";
 import {
   groupLengthInDataset,
   oddLengthValuePadded,
+  pixelDataFragmentsNotDelimited,
   undefinedLengthInExplicitVR,
   vrMismatch,
   type DicomParseWarning,
@@ -218,6 +223,12 @@ export function _parseExplicit(
         encapsulatedPixelData: true,
       };
       const result = parseSequence(buffer, valueStart, ctx, emit, seqOpts);
+      if (!result.delimited) {
+        // The stream ran out after its last whole Item with no (FFFE,E0DD), so
+        // the fragment list may be short. Declared, never fatal: the metadata
+        // is intact (PS3.5 2026c section A.4 requires the delimiter).
+        emit(pixelDataFragmentsNotDelimited(position));
+      }
       cursor.position = result.endOffset;
       const rawBytes = ctx.copyValues
         ? copyValueBytes(buffer.subarray(headerStart, cursor.position))
@@ -226,7 +237,10 @@ export function _parseExplicit(
         elements,
         new Element({
           tag,
-          vr: "OB", // NOT promoted; the domain helpers surface fragments.
+          // NOT promoted: the value stays `binary` over the whole on-wire span.
+          // `readPixelDataFragments` walks that span for the Basic Offset Table
+          // and the fragments.
+          vr: "OB",
           vm: result.items.length,
           length: UNDEFINED_LENGTH,
           rawBytes,

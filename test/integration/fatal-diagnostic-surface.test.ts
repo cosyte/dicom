@@ -1538,7 +1538,7 @@ describe("PHI: a byteOffset names the frame it is counted in", () => {
     expect(digitRuns(wouldPublish).map(Number)).toContain(ITEM_SLICE_STARTS_AT);
   });
 
-  it("the snippet agrees with the frame on every fatal BUT UNSUPPORTED_TRANSFER_SYNTAX", () => {
+  it("AC-11: the snippet agrees with the frame on every fatal BUT UNSUPPORTED_TRANSFER_SYNTAX", () => {
     // 🛑 A UNIVERSAL ABOUT `snippet` WRITTEN WITHOUT THIS EXCEPTION IS FALSE,
     // AND A GRADED PASS CAUGHT ONE IN THIS SLICE'S OWN CLASS JSDOC. The claim
     // "the snippet is already cut in the frame `offsetFrame` names, so a
@@ -1552,24 +1552,28 @@ describe("PHI: a byteOffset names the frame it is counted in", () => {
       transferSyntax: TS_EXPLICIT_LE,
       elements: [{ tag: "00100010", vr: "PN" as VR, value: val(NAME) }],
     });
-    // Patch `(0002,0010)` in place to an unsupported UID PS3.6 DOES name.
-    const at = raw.indexOf(Buffer.from(TS_EXPLICIT_LE, "latin1"));
-    expect(at).toBeGreaterThan(0);
-    const patched = Buffer.from(raw);
-    Buffer.from("1.2.840.10008.1.2.5", "latin1").copy(patched, at);
+    // The same Data Set under an unsupported UID PS3.6 DOES name, written by the
+    // builder rather than patched in place: no registered UID the parser refuses
+    // is as long as `TS_EXPLICIT_LE`, so an equal-length substitution has none
+    // to substitute. JPIP Referenced (PS3.5 section A.6) is one it refuses.
+    const unsupported = buildDicom({
+      transferSyntax: "1.2.840.10008.1.2.4.94",
+      elements: [{ tag: "00100010", vr: "PN" as VR, value: val(NAME) }],
+    });
+    expect(unsupported.includes(Buffer.from(NAME, "latin1"))).toBe(true);
 
-    const err = fatalFrom(patched);
+    const err = fatalFrom(unsupported);
     expect(err.code).toBe(FATAL_CODES.UNSUPPORTED_TRANSFER_SYNTAX);
     expect(err.offsetFrame).toBe(OFFSET_FRAMES.INPUT);
     // The exception itself: the slot holds a registry constant, not a cut.
-    expect(err.snippet).toBe("RLE Lossless");
-    const frameCut = [...patched.subarray(err.byteOffset, err.byteOffset + 16)]
+    expect(err.snippet).toBe("JPIP Referenced");
+    const frameCut = [...unsupported.subarray(err.byteOffset, err.byteOffset + 16)]
       .map((b) => b.toString(16).padStart(2, "0"))
       .join(" ");
     expect(err.snippet).not.toBe(frameCut);
     // ...and the UID itself is still never echoed, which is the older bound this
     // row must not be read as loosening.
-    expect(err.message).not.toContain("1.2.840.10008.1.2.5");
+    expect(err.message).not.toContain("1.2.840.10008.1.2.4.94");
 
     // Non-vacuity, and it is what makes the row above a scope rather than a
     // hole: on a fatal that does cut bytes, the snippet and the frame agree

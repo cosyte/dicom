@@ -12,8 +12,10 @@
  *     dispatch input that decides every byte of the encoding, so there is no
  *     safe default to fall back to.
  *   - `UNSUPPORTED_TRANSFER_SYNTAX` - the Transfer Syntax UID is not one of
- *     the four v1 syntaxes the writer (and parser) support. The writer never
- *     transcodes, so it cannot emit a syntax it does not understand.
+ *     the four v1 syntaxes the writer supports. The parser also reads the
+ *     PS3.5 section A.4 encapsulation syntaxes, and the writer refuses every one
+ *     of them. The writer never transcodes, so it cannot emit a syntax it does
+ *     not understand.
  *
  * The message is built only from the Transfer Syntax UID and structural
  * facts (never a decoded attribute value), so it is always safe to log.
