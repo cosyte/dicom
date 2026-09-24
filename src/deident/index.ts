@@ -19,6 +19,7 @@
 
 export { deidentify } from "./deidentify.js";
 export { DEFAULT_UID_ROOT, makeUidRemapper, type UidRemapper } from "./uid.js";
+export { DEIDENTIFICATION_METHOD_CODES, type DeidentificationMethodCode } from "./method-codes.js";
 export {
   DEIDENTIFY_OPTIONS,
   DEIDENTIFY_ERROR_CODES,

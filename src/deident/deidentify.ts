@@ -45,7 +45,11 @@
  *   `RetainUIDs`), writes `(0012,0062)` Patient Identity Removed = `YES`, **adds**
  *   its method text to `(0012,0063)` De-identification Method rather than
  *   replacing what the file already recorded there (PS3.15 E.1.1 - see
- *   `addDeidentificationMethod`), and warns
+ *   `addDeidentificationMethod`), **adds** the PS3.16 CID 7050 codes for the
+ *   Profile and each active Option to `(0012,0064)` De-identification Method Code
+ *   Sequence, after any Items the file already carried there and without
+ *   repeating one it already records (see `addDeidentificationMethodCodes`), and
+ *   warns
  *   (`DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED`) when Pixel Data is present and not
  *   marked free of burned-in annotation - this metadata-only pass cannot clean
  *   pixels (deferred to `@cosyte/dicom-pixel`).
@@ -192,6 +196,8 @@ import type { DicomParseWarning } from "../parser/warnings.js";
 import {
   burnedInAnnotationNotRemoved,
   datesNotTransformed,
+  deidentMethodCodesPriorReplaced,
+  deidentMethodCodesPriorRetained,
   deidentMethodNotAdded,
   deidentMethodNotLo,
   deidentMethodPriorRetained,
@@ -206,7 +212,12 @@ import {
   undefinedVrNotAuditable,
 } from "../parser/warnings.js";
 import { resolvePrivateTag } from "../profiles/lookup.js";
-import { type BodyEncoding, encodeDatasetElement } from "../serialize/element.js";
+import {
+  type BodyEncoding,
+  encodeDatasetElement,
+  isFullSpanElement,
+  padValue,
+} from "../serialize/element.js";
 import {
   COSYTE_IMPLEMENTATION_CLASS_UID,
   COSYTE_IMPLEMENTATION_VERSION_NAME,
@@ -219,6 +230,7 @@ import {
   uidValueMultiplicity,
 } from "./actions.js";
 import { findEmbeddedAttributes } from "./embedded.js";
+import { DEIDENTIFICATION_METHOD_CODES, type DeidentificationMethodCode } from "./method-codes.js";
 import {
   DEIDENTIFY_OPTIONS,
   DeidentifyError,
@@ -239,6 +251,11 @@ import { makeUidRemapper, type UidRemapper } from "./uid.js";
 
 const TAG_PATIENT_IDENTITY_REMOVED: Tag = "00120062";
 const TAG_DEIDENTIFICATION_METHOD: Tag = "00120063";
+const TAG_DEIDENTIFICATION_METHOD_CODE_SEQUENCE: Tag = "00120064";
+/** The three Basic Coded Entry Attributes (PS3.3 2026d Table 8.8-1a) each `(0012,0064)` Item carries. */
+const TAG_CODE_VALUE: Tag = "00080100";
+const TAG_CODING_SCHEME_DESIGNATOR: Tag = "00080102";
+const TAG_CODE_MEANING: Tag = "00080104";
 const TAG_PIXEL_DATA: Tag = "7FE00010";
 const TAG_BURNED_IN_ANNOTATION: Tag = "00280301";
 const TAG_LONGITUDINAL_TEMPORAL_INFORMATION_MODIFIED: Tag = "00280303";
@@ -647,19 +664,7 @@ function encodeSequenceValue(items: readonly Item[], encoding: BodyEncoding): Bu
  */
 function rebuildSequence(orig: Element, items: readonly Item[], encoding: BodyEncoding): Element {
   const value = encodeSequenceValue(items, encoding);
-  let rawBytes: Buffer;
-  if (encoding === "implicit") {
-    rawBytes = value;
-  } else {
-    const littleEndian = encoding === "explicitLE";
-    const { group, element } = splitTag(orig.tag);
-    const header = Buffer.alloc(12);
-    le16(header, group, 0, littleEndian);
-    le16(header, element, 2, littleEndian);
-    header.write("SQ", 4, "ascii");
-    le32(header, value.length, 8, littleEndian);
-    rawBytes = Buffer.concat([header, value]);
-  }
+  const rawBytes = sequenceRawBytes(orig.tag, value, encoding);
   const init: ElementInit = {
     tag: orig.tag,
     vr: "SQ",
@@ -675,6 +680,38 @@ function rebuildSequence(orig: Element, items: readonly Item[], encoding: BodyEn
       : {}),
   };
   return new Element(init);
+}
+
+/**
+ * The `rawBytes` the writer expects for a defined-length `SQ` whose encoded item
+ * stream is `value`: value-only under Implicit VR LE, the full on-wire span
+ * (12-byte long-form header, then the value) under Explicit VR.
+ */
+function sequenceRawBytes(tag: Tag, value: Buffer, encoding: BodyEncoding): Buffer {
+  if (encoding === "implicit") return value;
+  const littleEndian = encoding === "explicitLE";
+  const { group, element } = splitTag(tag);
+  const header = Buffer.alloc(12);
+  le16(header, group, 0, littleEndian);
+  le16(header, element, 2, littleEndian);
+  header.write("SQ", 4, "ascii");
+  le32(header, value.length, 8, littleEndian);
+  return Buffer.concat([header, value]);
+}
+
+/** Build a brand-new defined-length `SQ` {@link Element} for an inserted de-identification tag. */
+function insertedSequence(tag: Tag, items: readonly Item[], encoding: BodyEncoding): Element {
+  const value = encodeSequenceValue(items, encoding);
+  return new Element({
+    tag,
+    vr: "SQ",
+    vm: items.length,
+    length: value.length,
+    rawBytes: sequenceRawBytes(tag, value, encoding),
+    byteOffset: 0,
+    littleEndian: encoding !== "explicitBE",
+    items,
+  });
 }
 
 /** Decode a private-creator element's value (an `LO` vendor schema id - not PHI). */
@@ -2881,6 +2918,151 @@ function splitValues(value: Buffer): readonly Buffer[] {
   return out;
 }
 
+/**
+ * The CID 7050 codes this run records, in the order it writes them: the Profile
+ * first, then one per active Option in {@link DEIDENTIFY_OPTIONS} order and never
+ * in the caller's `retain` order - the byte-stability rule {@link defaultMethod}
+ * applies to `(0012,0063)`, so two runs activating the same set write the same
+ * bytes.
+ *
+ * **The option set is the whole predicate.** An Option "ran" when it was active
+ * for the run, the same predicate `(0028,0303)` is written on, so a Data Set
+ * carrying no attribute an Option acts on still gets that Option's code. The
+ * caller's `deidentificationMethod` text is not an input: the codes describe what
+ * ran, which free text cannot alter. `113101` and `113102` are unreachable by
+ * construction, because neither pixel-level Option is a {@link DeidentifyOption}.
+ */
+function methodCodesForRun(
+  active: ReadonlySet<DeidentifyOption>,
+): readonly DeidentificationMethodCode[] {
+  const options = DEIDENTIFY_OPTIONS.filter((option) => active.has(option));
+  return [
+    DEIDENTIFICATION_METHOD_CODES.profile,
+    ...options.map((option) => DEIDENTIFICATION_METHOD_CODES.options[option]),
+  ];
+}
+
+/**
+ * One `(0012,0064)` Item for `code`: Code Value `(0008,0100)` `SH`, Coding Scheme
+ * Designator `(0008,0102)` `SH` and Code Meaning `(0008,0104)` `LO`, and no other
+ * attribute (PS3.3 2026d Table 8.8-1a; Coding Scheme Version is required only
+ * where the designator is not sufficient, and `DCM` is).
+ *
+ * Each value is SPACE-padded to even length here rather than by the writer, so
+ * the bytes this run holds in memory are the bytes the next parse reads back and
+ * a re-run compares like with like.
+ */
+function methodCodeItem(
+  code: DeidentificationMethodCode,
+  index: number,
+  littleEndian: boolean,
+): Item {
+  const text = (tag: Tag, vr: VR, value: string): [Tag, Element] => [
+    tag,
+    insertedScalar(tag, vr, padValue(Buffer.from(value, "latin1"), vr), littleEndian),
+  ];
+  return new Item({
+    index,
+    warnings: [],
+    elements: new Map<Tag, Element>([
+      text(TAG_CODE_VALUE, "SH", code.codeValue),
+      text(TAG_CODING_SCHEME_DESIGNATOR, "SH", code.codingSchemeDesignator),
+      text(TAG_CODE_MEANING, "LO", code.codeMeaning),
+    ]),
+  });
+}
+
+/**
+ * True when a prior `(0012,0064)` Item already records `code`: the same Coding
+ * Scheme Designator and Code Value, trailing pad ignored on both sides by the
+ * same {@link trimTrailingPad} the `(0012,0063)` comparison uses.
+ *
+ * Code Meaning is not part of the key: PS3.3 §8 identifies a coded entry by its
+ * value and designator, and a meaning is display text. An Item missing either
+ * key attribute records no code this run could match, so it matches nothing.
+ */
+function carriesCode(item: Item, code: DeidentificationMethodCode): boolean {
+  const designator = item.get(TAG_CODING_SCHEME_DESIGNATOR);
+  const value = item.get(TAG_CODE_VALUE);
+  if (designator === undefined || value === undefined) return false;
+  return (
+    trimTrailingPad(designator.rawBytes).equals(
+      Buffer.from(code.codingSchemeDesignator, "latin1"),
+    ) && trimTrailingPad(value.rawBytes).equals(Buffer.from(code.codeValue, "latin1"))
+  );
+}
+
+/**
+ * True when `el`'s **value** carries any byte other than the `0x20` / `0x00` pad,
+ * so replacing it loses something. A defined-length full-span element (an `SQ`
+ * under Explicit VR) carries its own header in `rawBytes`, which is not its
+ * value, so it is measured over its last `length` bytes.
+ */
+function holdsNonPadding(el: Element, encoding: BodyEncoding): boolean {
+  const headed =
+    isFullSpanElement(el, encoding) &&
+    el.length !== UNDEFINED_LENGTH &&
+    el.length <= el.rawBytes.length;
+  const value = headed ? el.rawBytes.subarray(el.rawBytes.length - el.length) : el.rawBytes;
+  return trimTrailingPad(value).length > 0;
+}
+
+/**
+ * Build `(0012,0064)` De-identification Method Code Sequence: this run's CID 7050
+ * codes **added to** the Items the source already carried, never replacing them.
+ * PS3.15 2026c §E.1.1: "one or more codes from CID 7050 ... corresponding to the
+ * Profile and Options used shall be added to De-identification Method Code
+ * Sequence (0012,0064)".
+ *
+ *  - **No prior** - this run's Items only.
+ *  - **A prior `SQ` whose Items the parse produced** - every prior Item kept, in
+ *    its original order, then each of this run's codes no prior Item already
+ *    carries (see {@link carriesCode}). Without that de-duplication every re-run
+ *    would add a second `113100`; with it, re-running on this library's own
+ *    output is a fixed point and a run adding one Option appends exactly that
+ *    Option's Item. `retainedPrior` when at least one prior Item was kept, so a
+ *    prior with zero Items raises nothing.
+ *  - **A prior that is not such a Sequence** - a VR other than `SQ`, or an `SQ`
+ *    whose `items` are undefined - is replaced by this run's Items: bytes that
+ *    are not Items cannot be appended to, and inventing Items out of them would
+ *    be worse than saying so. `replacedPrior` when its value held any byte other
+ *    than padding.
+ *
+ * **Readability is decided on the SOURCE element**, because that is what the
+ * parse produced; `processElements` has already emptied an un-auditable `SQ`
+ * (with its own `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE`) by the time this runs.
+ * **The Items kept are the PROCESSED ones**: `(0012,0064)` has no Table E.1-1
+ * row, so `processElements` walked it like any unlisted `SQ`, and an attribute
+ * the table does list that a sender nested in one of its Items has already been
+ * acted on. The code attributes have no row either, so their bytes arrive
+ * exactly as the source wrote them, un-inspected - which is what `retainedPrior`
+ * discloses.
+ */
+function addDeidentificationMethodCodes(
+  source: Element | undefined,
+  processed: Element | undefined,
+  active: ReadonlySet<DeidentifyOption>,
+  encoding: BodyEncoding,
+): { readonly element: Element; readonly retainedPrior: boolean; readonly replacedPrior: boolean } {
+  // `undefined` means "no Items to add to": no prior at all, or one that is not
+  // a Sequence the parse produced.
+  const prior = source?.vr === "SQ" && source.items !== undefined ? processed?.items : undefined;
+  const kept = prior ?? [];
+  const added = methodCodesForRun(active).filter(
+    (code) => !kept.some((item) => carriesCode(item, code)),
+  );
+  const littleEndian = encoding !== "explicitBE";
+  const items = [
+    ...kept,
+    ...added.map((code, i) => methodCodeItem(code, kept.length + i, littleEndian)),
+  ];
+  return {
+    element: insertedSequence(TAG_DEIDENTIFICATION_METHOD_CODE_SEQUENCE, items, encoding),
+    retainedPrior: kept.length > 0,
+    replacedPrior: source !== undefined && prior === undefined && holdsNonPadding(source, encoding),
+  };
+}
+
 /** True when Pixel Data is present and not affirmatively marked free of burned-in text. */
 function hasUncleanedBurnedIn(ds: Dataset): boolean {
   if (!ds.has(TAG_PIXEL_DATA)) return false;
@@ -3000,6 +3182,19 @@ export function deidentify(
     TAG_DEIDENTIFICATION_METHOD,
     insertedScalar(TAG_DEIDENTIFICATION_METHOD, "LO", deidentMethod.value, littleEndian),
   );
+  // The coded half of the same §E.1.1 sentence: CID 7050 codes for the Profile
+  // and the Options this run activated, ADDED TO whatever Items the source's
+  // top-level (0012,0064) carried. Beside the text above, never instead of it,
+  // and driven by the option set alone - `options.deidentificationMethod` does
+  // not reach it. See `addDeidentificationMethodCodes`.
+  const priorCodes = ds.get(TAG_DEIDENTIFICATION_METHOD_CODE_SEQUENCE);
+  const methodCodes = addDeidentificationMethodCodes(
+    priorCodes,
+    elements.get(TAG_DEIDENTIFICATION_METHOD_CODE_SEQUENCE),
+    active,
+    encoding,
+  );
+  elements.set(TAG_DEIDENTIFICATION_METHOD_CODE_SEQUENCE, methodCodes.element);
   // 🩺 THE TEMPORAL DECLARATION, AND IT REPLACES RATHER THAN JOINS. PS3.15
   // 2026c §E.2 and §E.3.6 both say the attribute "shall be added to the Data Set
   // with a Value of" one named state - the same verb §E.1.1 uses for
@@ -3062,6 +3257,20 @@ export function deidentify(
   if (hasValueOverLoMaximum(deidentMethod.value)) {
     warnings.push(
       deidentMethodValueOverLength({ byteOffset: priorMethod?.byteOffset ?? 0, fileMeta: false }),
+    );
+  }
+  // 🩺 The (0012,0064) pair, each the sibling of a (0012,0063) code above and
+  // neither that code widened. Kept prior Items are sender bytes no Table E.1-1
+  // rule inspected, in output stamped YES; a replaced unreadable prior is a
+  // record this run could not add to. Both said, neither quoted.
+  if (methodCodes.retainedPrior) {
+    warnings.push(
+      deidentMethodCodesPriorRetained({ byteOffset: priorCodes?.byteOffset ?? 0, fileMeta: false }),
+    );
+  }
+  if (methodCodes.replacedPrior) {
+    warnings.push(
+      deidentMethodCodesPriorReplaced({ byteOffset: priorCodes?.byteOffset ?? 0, fileMeta: false }),
     );
   }
   if (hasUncleanedBurnedIn(ds)) {
