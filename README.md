@@ -57,18 +57,23 @@ pnpm add @cosyte/dicom
 
 Useful output after install and parse. No DICOM spec knowledge required.
 
-```ts
+```ts runnable
 import { readFile } from "node:fs/promises";
 import { parseDicom } from "@cosyte/dicom";
 
+// Here study.dcm is a synthetic CT object saved without its 128-byte preamble.
 const ds = parseDicom(await readFile("study.dcm"));
 
-ds.patient.id; // "MRN-42": NOT globally unique on its own, pair it with ds.patient.issuerOfId
-ds.study.instanceUid; // "1.2.840.…": the global study anchor
-ds.series.modality; // "CT"
-ds.image.rows; // 512
-ds.image.rescaleSlope; // number | undefined: undefined means "absent", never 1
-ds.warnings.map((w) => w.code); // ["DICOM_MISSING_PREAMBLE"]: what the parser tolerated
+// NOT globally unique on its own: pair it with ds.patient.issuerOfId.
+ds.patient.id; // => "MRN-42"
+// The global study anchor.
+ds.study.instanceUid; // => "1.2.826.0.1.3680043.8.498.1.1"
+ds.series.modality; // => "CT"
+ds.image.rows; // => 512
+// number | undefined: undefined means "absent", never a substituted 1.
+ds.image.rescaleSlope; // => 1
+// What the parser tolerated, as stable codes.
+ds.warnings.map((w) => w.code); // => ["DICOM_MISSING_PREAMBLE"]
 ```
 
 The structural route, and emitting bytes back out:
