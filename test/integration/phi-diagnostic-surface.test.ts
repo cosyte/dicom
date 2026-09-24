@@ -864,6 +864,45 @@ const DEID_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
       }),
     expectCode: WARNING_CODES.DICOM_DEIDENT_METHOD_NOT_LO,
   },
+  {
+    // S0356-dicom-13 AC-7. The (0012,0064) sibling of the (0012,0063) slot
+    // above: a prior Item's Code Meaning is a sender byte no Table E.1-1 rule
+    // inspects, so it is KEPT into de-identified output, and this slot stops the
+    // disclosure of that retention from quoting what it discloses.
+    name: "deidentify: (0012,0064) DeidentificationMethodCodeSequence prior Item Code Meaning [LO], kept",
+    plant: (m) =>
+      buildDicom({
+        transferSyntax: TS_EXPLICIT_LE,
+        elements: [
+          {
+            tag: "00120064" as Tag,
+            items: [
+              {
+                elements: [
+                  { tag: "00080100" as Tag, vr: "SH" as VR, value: val("99001") },
+                  { tag: "00080102" as Tag, vr: "SH" as VR, value: val("99SYN") },
+                  { tag: "00080104" as Tag, vr: "LO" as VR, value: val(m) },
+                ],
+              },
+            ],
+          },
+          FILLER,
+        ],
+      }),
+    expectCode: WARNING_CODES.DICOM_DEIDENT_METHOD_CODES_PRIOR_RETAINED,
+  },
+  {
+    // S0356-dicom-13 AC-8. A (0012,0064) under a VR other than SQ is not Items
+    // this run can add to, so it is REPLACED; the marker leaves the output and
+    // the only thing left that could quote it is the disclosure of its removal.
+    name: "deidentify: (0012,0064) DeidentificationMethodCodeSequence under a non-SQ VR, replaced",
+    plant: (m) =>
+      buildDicom({
+        transferSyntax: TS_EXPLICIT_LE,
+        elements: [{ tag: "00120064", vr: "LO" as VR, value: val(m) }, FILLER],
+      }),
+    expectCode: WARNING_CODES.DICOM_DEIDENT_METHOD_CODES_PRIOR_REPLACED,
+  },
   // The three slots below name no code, and unlike the File Meta four they
   // cannot: the attributes they plant into are deleted by Annex E, so there is
   // nothing left to warn about. That also means they cannot go red here, and
