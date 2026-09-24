@@ -88,6 +88,12 @@ DATE:70011001
 DATE:70011002
 DATE:70011003
 
+# NOT A DATE EITHER. `20170914` is the Context Group Version of PS3.16 CID 7050
+# "De-identification Method", quoted wherever `(0012,0064)` De-identification Method Code
+# Sequence is documented or graded. PS3.16 versions a context group by the date it changed, so the
+# identifier has the `YYYYMMDD` shape and the compact-date pass matches it.
+DATE:20170914
+
 # --- Notes ---
 # To add a new synthetic identifier: append a line above and commit.
 # To bypass for one fixture without listing it here: run `pnpm phi-scan -- --allow-fixture <path>`
