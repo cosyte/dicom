@@ -2,11 +2,13 @@
 "@cosyte/dicom": patch
 ---
 
-`parseDicom()` now reads objects under every Transfer Syntax PS3.5 2026c section A.4 names for
-encapsulated Pixel Data: JPEG Baseline, Extended, Lossless and Lossless First-Order Prediction; RLE
-Lossless; JPEG-LS Lossless and Near-Lossless; JPEG 2000 and HTJ2K; MPEG2; MPEG-4 AVC/H.264;
-HEVC/H.265 Main and Main 10; JPEG XL; Deflated Image Frame Compression; and Encapsulated
-Uncompressed Explicit VR LE. Such an object used to throw `UNSUPPORTED_TRANSFER_SYNTAX` and lose its
+`parseDicom()` now reads objects under every encapsulated Pixel Data Transfer Syntax that PS3.5
+2026c section A.4 names.
+
+Those are JPEG Baseline, Extended, Lossless and Lossless First-Order Prediction; RLE Lossless;
+JPEG-LS Lossless and Near-Lossless; JPEG 2000 and HTJ2K; MPEG2; MPEG-4 AVC/H.264; HEVC/H.265 Main
+and Main 10; JPEG XL; Deflated Image Frame Compression; and Encapsulated Uncompressed Explicit VR
+LE. Such an object used to throw `UNSUPPORTED_TRANSFER_SYNTAX` and lose its
 metadata with it. Section A.4 makes the whole Data Set Explicit VR Little Endian with only Pixel Data
 `(7FE0,0010)` encapsulated, so it is read by the Explicit VR LE reader and its patient, study, series
 and image views read exactly as the same Data Set does under Explicit VR LE. The list is read out of
