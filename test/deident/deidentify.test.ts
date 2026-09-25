@@ -911,15 +911,21 @@ describe("deidentify - repeating-group family rows (PS3.15 Table E.1-1 masks)", 
     expect(serializeDicom(dataset).includes(Buffer.from(CURVE_LABEL.trim(), "latin1"))).toBe(false);
   });
 
-  it("does not remove even groups above the PS3.5 bound", () => {
+  it("does not act on even groups above the PS3.5 bound under the Table E.1-1 mask", () => {
     // The opposite failure, and the reason `xx` is not read as a hex wildcard:
-    // over-matching is silent data loss on a call the caller believes is
-    // conservative. (6020,4000) is not an attribute PS3.15 marks.
+    // over-matching removes data under a Table E.1-1 row PS3.15 never wrote.
+    // (6020,4000) is not an attribute PS3.15 marks, so no audit line names it.
+    //
+    // S0367-dicom-15 AC-10 moved the rest of this test's expectation: (6020,4000)
+    // is not an attribute PS3.6 registers either (the `60xx4000` row is bounded
+    // by the same PS3.5 7.6 groups), so it is now REMOVED - by the
+    // unregistered-element rule, on its own record, not by the mask.
     const { dataset, report } = deidentify(
       buildPhiDataset([{ tag: "60204000", vr: "LT", value: pad("NOT AN OVERLAY PLANE") }]),
     );
-    expect(dataset.has("60204000")).toBe(true);
     expect(report.attributes.some((a) => a.tag === "60204000")).toBe(false);
+    expect(dataset.has("60204000")).toBe(false);
+    expect(report.unregisteredElementRemovalCount).toBe(1);
   });
 
   it("leaves overlay plane geometry alone - only the marked rows are acted on", () => {

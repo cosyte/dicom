@@ -37,4 +37,5 @@ export {
   type UnauditableSequenceFinding,
   type UndefinedVrFinding,
   type UnenumerablePrivateRemoval,
+  type UnregisteredElementRemoval,
 } from "./types.js";

@@ -720,6 +720,85 @@ export interface Group0004Removal {
 }
 
 /**
+ * One non-private Data Element **removed** because this build's PS3.6 2026d
+ * registry does not carry its tag and PS3.15 2026d Table E.1-1 does not list it.
+ *
+ * ## The rule
+ *
+ * A Table E.1-1 miss used to mean "keep": an attribute the table does not list
+ * went into de-identified output verbatim with a report that said nothing about
+ * it. That is right for an attribute PS3.6 registers, which the Profile has
+ * judged, and wrong for one it does not: the notes to PS3.15 2026d Table E.1-1
+ * name "new Standard Attributes" among the places identifying information may
+ * be, and say removing only the known risks "may fail when the Standard is
+ * extended, or when a vendor adds unanticipated Standard Attributes". So an
+ * even-group tag with **no registry row and no Table E.1-1 row** is removed, at
+ * every depth `deidentify()` walks, whatever its VR (`UN`, an on-wire VR outside
+ * the 34 PS3.5 section 6.2 defines, and `SQ` included; a Sequence goes whole and
+ * nothing inside it is walked or recorded).
+ *
+ * "Registered" means a literal PS3.6 row, or a masked row the tag matches, with
+ * the `50xx` / `60xx` groups bounded by PS3.5 2026c section 7.6 (even groups
+ * `5000`-`501E` and `6000`-`601E`). Private tags, group `0004`, group `0002`,
+ * group lengths `(gggg,0000)` and every tag Table E.1-1 lists are not decided by
+ * this rule.
+ *
+ * ## What it costs
+ *
+ * **A conformant attribute from a PS3.6 edition newer than this build's pin is
+ * removed too**, because nothing separates it from an invented one. That is
+ * over-redaction and it is deliberate; a caller who needs such an attribute back
+ * has no switch for it in this release.
+ *
+ * ## What it carries, and what it deliberately does not
+ *
+ * **No tag and no VR.** The trigger is "no registry row carries this tag", and
+ * four bytes an under-declared length upstream made the reader take as a header
+ * satisfy it by construction: the fixture in
+ * `test/integration/deident-undefined-vr.test.ts` fabricates `(4854,4F53)`,
+ * `"THSO"` in wire order, four letters of a surname. Publishing the tag would
+ * republish them, so the element is identified by `byteOffset`, a position this
+ * parser counted, exactly as {@link UndefinedVrFinding} does.
+ *
+ * `contextPath` names the Sequences this run **descended** to reach the
+ * element, never the removed element itself, and carries the caveat every
+ * finding's `contextPath` carries: see {@link DeidentifiedAttribute.contextPath}.
+ *
+ * ## Capped record, complete count
+ *
+ * Bounded per run at `MAX_UNREGISTERED_ELEMENT_FINDINGS`, on its own counter so
+ * a flood of one diagnostic class cannot spend another's budget. The removal
+ * itself is not bounded, and
+ * {@link DeidentifyReport.unregisteredElementRemovalCount} is complete at any
+ * input size.
+ *
+ * @example
+ * ```ts
+ * import { deidentify, parseDicom, type UnregisteredElementRemoval } from "@cosyte/dicom";
+ * const { report } = deidentify(parseDicom(buf));
+ * report.unregisteredElementRemovals.forEach((r: UnregisteredElementRemoval) => {
+ *   console.warn(`removed at offset ${String(r.byteOffset)}`, r.contextPath ?? "root");
+ * });
+ * ```
+ */
+export interface UnregisteredElementRemoval {
+  /**
+   * Byte offset of the removed element's header, as the parser recorded it on
+   * `Element.byteOffset`. **This is how the element is identified, and there is
+   * deliberately no `tag` field**: see the note above.
+   */
+  readonly byteOffset: number;
+  /**
+   * Tag/index chain when the element was inside a sequence item; omitted at the
+   * root. **Built by the same descent as
+   * {@link DeidentifiedAttribute.contextPath} and carrying the same caveat:
+   * each segment's tag is read off the wire.** Read that field's note before
+   * logging this one.
+   */
+  readonly contextPath?: readonly string[];
+}
+
+/**
  * The audit trail returned alongside the de-identified dataset.
  *
  * Most fields are composed from static tables: Part 6 keywords, Annex E action
@@ -999,6 +1078,31 @@ export interface DeidentifyReport {
    */
   readonly group0004RemovalCount: number;
   /**
+   * Non-private Data Elements **removed** at every depth this run reached
+   * because this build's PS3.6 2026d registry does not carry their tag and Table
+   * E.1-1 does not list it. See {@link UnregisteredElementRemoval} for the rule,
+   * for what it costs on a newer-edition file, and for why an entry names a byte
+   * offset and no tag.
+   *
+   * Empty on a run that removed none. A separate record from
+   * {@link DeidentifyReport.attributes}, {@link DeidentifyReport.removedPrivateTags},
+   * {@link DeidentifyReport.group0004Removals} and
+   * {@link DeidentifyReport.undefinedVrElements}: an element removed here is on
+   * none of those.
+   *
+   * **Capped; the count beside it is not.** See
+   * {@link DeidentifyReport.unregisteredElementRemovalCount}.
+   */
+  readonly unregisteredElementRemovals: readonly UnregisteredElementRemoval[];
+  /**
+   * How many elements this run removed under the rule
+   * {@link DeidentifyReport.unregisteredElementRemovals} records, **complete at
+   * any input size**, for the reason
+   * {@link DeidentifyReport.fileMetaElementsDroppedCount} states. `0` on a run
+   * that removed none.
+   */
+  readonly unregisteredElementRemovalCount: number;
+  /**
    * Source UID → replacement UID, for cross-file consistency. The **keys are
    * document values**, not composed identifiers: this is the one field of the
    * report that carries PHI.
@@ -1009,8 +1113,8 @@ export interface DeidentifyReport {
   /**
    * The Retain/Clean options that were active for this run.
    *
-   * **Not a list of what survived.** Attributes Table E.1-1 does not list are
-   * kept without appearing anywhere in this field - `(0012,0063)`
+   * **Not a list of what survived.** Registered attributes Table E.1-1 does not
+   * list are kept without appearing anywhere in this field - `(0012,0063)`
    * De-identification Method and the prior Items of `(0012,0064)`
    * De-identification Method Code Sequence are the ones whose retention is
    * disclosed, as `DICOM_DEIDENT_METHOD_PRIOR_RETAINED` and

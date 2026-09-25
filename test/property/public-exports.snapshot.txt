@@ -75,6 +75,7 @@ UidRemapper
 UnauditableSequenceFinding
 UndefinedVrFinding
 UnenumerablePrivateRemoval
+UnregisteredElementRemoval
 VALUE_ERROR_CODES
 VERSION
 ValueErrorCode

@@ -24,6 +24,12 @@
  *   in the *serialized* bytes too - not just the object model (the writer
  *   blits `SQ` spans verbatim, so a rebuilt `items` array alone would not survive
  *   serialization). Rebuilt sequences are normalized to defined length.
+ * - Removes every non-private attribute Table E.1-1 does not list **and this
+ *   build's PS3.6 2026d registry does not carry** - a Standard Attribute from a
+ *   later edition, or one the sender invented - at every depth and whatever its
+ *   VR, recording it on `report.unregisteredElementRemovals` by byte offset and
+ *   never by tag. A registered attribute Table E.1-1 does not list is kept as it
+ *   always was. See {@link isUnregisteredStandardTag}.
  * - Removes all private attributes by default. With `RetainSafePrivate` it keeps
  *   the ones PS3.15 §E.3.10 lets it know are safe, by two routes that only ever
  *   add to each other: the private data elements a caller {@link Profile}'s
@@ -60,6 +66,10 @@
  *   dummy is instead removed/emptied.
  * - `C` (clean) is a conservative blank, not a meaning-preserving structured
  *   replacement (which needs domain context the metadata layer lacks).
+ * - **A conformant attribute from a PS3.6 edition newer than this build's pin is
+ *   removed**, because it has no registry row here and nothing separates it from
+ *   an invented one. Over-redaction, deliberate, with no caller switch in this
+ *   release (`DICOM-DEIDENT-OVER-REDACTION`).
  * - The temporal declaration is written at the **top level only**, which is where
  *   §E.2 and §E.3.6 put it and where a recipient reads it. `(0028,0303)` has no
  *   row in Table E.1-1, so a copy the sender nested inside a Sequence Item is
@@ -184,6 +194,7 @@
 import { Buffer } from "node:buffer";
 
 import { annexE, type AnnexEAction } from "../dictionary/annex-e.js";
+import { isRegisteredTag } from "../dictionary/registered.js";
 import type { Tag, VR } from "../dictionary/types.js";
 import { KNOWN_VRS } from "../parser/endian.js";
 import { Dataset, type DatasetInit } from "../dataset/dataset.js";
@@ -210,6 +221,7 @@ import {
   privateDeclarationNotResolved,
   sequenceNotAuditable,
   undefinedVrNotAuditable,
+  unregisteredElementRemoved,
 } from "../parser/warnings.js";
 import { resolvePrivateTag } from "../profiles/lookup.js";
 import {
@@ -246,6 +258,7 @@ import {
   type UnauditableSequenceFinding,
   type UndefinedVrFinding,
   type UnenumerablePrivateRemoval,
+  type UnregisteredElementRemoval,
 } from "./types.js";
 import { makeUidRemapper, type UidRemapper } from "./uid.js";
 
@@ -360,6 +373,12 @@ function temporalState(active: ReadonlySet<DeidentifyOption>): string {
  */
 const GROUP_0004_PREFIX = "0004";
 
+/** The element number every group length `(gggg,0000)` carries (PS3.5 2026c 7.2). */
+const GROUP_LENGTH_ELEMENT = 0x0000;
+
+/** The File Meta Information group number, which {@link rebuildFileMeta} answers. */
+const FILE_META_GROUP = 0x0002;
+
 /**
  * `1.2.840.10008.1.3.10` Media Storage Directory Storage - the SOP Class a
  * DICOMDIR declares in `(0002,0002)`, and the single value that selects §E.1.1's
@@ -401,6 +420,21 @@ export const MAX_FILE_META_DROP_FINDINGS = 64;
  * input size. An array exactly this long means "at least this many".
  */
 export const MAX_GROUP_0004_FINDINGS = 64;
+
+/**
+ * Cap on how many unregistered-element removals one run will *list* on
+ * {@link DeidentifyReport.unregisteredElementRemovals}.
+ *
+ * Same shape and same reason as {@link MAX_GROUP_0004_FINDINGS}: an element with
+ * no PS3.6 row costs an input a few bytes, so the finding count is chosen by the
+ * sender. It bounds the **record**, never the action - every such element is
+ * removed whether or not it is listed - and
+ * {@link DeidentifyReport.unregisteredElementRemovalCount} carries the complete
+ * total. An array exactly this long means "at least this many". Counted on its
+ * own budget line, so a flood of one diagnostic class cannot spend another's
+ * and silence it.
+ */
+export const MAX_UNREGISTERED_ELEMENT_FINDINGS = 64;
 
 /** Map a transfer syntax UID to the on-wire element encoding (mirrors the writer). */
 const BODY_ENCODING: Readonly<Record<string, BodyEncoding>> = {
@@ -497,6 +531,18 @@ interface DeidentifyContext {
    */
   readonly group0004: {
     readonly findings: Group0004Removal[];
+    /** Complete at any input size; the array beside it saturates, this does not. */
+    total: number;
+  };
+  /**
+   * The unregistered-element removals this run made: the capped record and the
+   * uncapped total, in traversal order. On the context, not on `ProcessResult`,
+   * for the reason `group0004` is, which makes the cap, the total and the order
+   * run-scoped by construction. Deliberately mutable. See
+   * {@link removeUnregisteredElement}.
+   */
+  readonly unregistered: {
+    readonly findings: UnregisteredElementRemoval[];
     /** Complete at any input size; the array beside it saturates, this does not. */
     total: number;
   };
@@ -1049,6 +1095,94 @@ function recordGroup0004Removal(
   ctx.group0004.findings.push({
     tag,
     applied: "removed",
+    ...(contextPath.length > 0 ? { contextPath: [...contextPath] } : {}),
+  });
+}
+
+/**
+ * `true` when a non-private tag Table E.1-1 has just missed is one this build's
+ * PS3.6 2026d registry does not carry, so {@link processElements} removes it
+ * rather than keeping it.
+ *
+ * ## Why a Table E.1-1 miss is not enough to keep an element
+ *
+ * The Basic Profile is a remove-the-known-risk design: Table E.1-1 lists the
+ * attributes it judged, and everything else is retained. The notes to that
+ * table in PS3.15 2026d say where that fails: identifying information "may be
+ * contained in Private Attributes, new Standard Attributes, Retired Standard
+ * Attributes and additional Standard Attributes not present in Standard
+ * Composite IODs", and "The former approach may fail when the Standard is
+ * extended, or when a vendor adds unanticipated Standard Attributes or Private
+ * Attributes". A registered attribute Table E.1-1 does not list is one the
+ * Profile has considered and left alone, so it is kept exactly as before. One
+ * with **no registry row** is one nobody considered - an edition newer than this
+ * build, or a tag the sender invented - so the fail-safe answer is to remove it.
+ *
+ * ## What it deliberately does not decide
+ *
+ * - **A private tag.** The private branch in {@link processElements} runs first
+ *   and is unchanged; PS3.6 registers no private tag, so asking would remove
+ *   them all.
+ * - **Group `0004`**, which PS3.15 2026d E.1.1 answers with its own rule ahead of
+ *   this one, and whose DICOMDIR carve-out keeps its elements unchanged.
+ * - **Group `0002`**, the File Meta group, which {@link rebuildFileMeta} answers;
+ *   a copy the body carries keeps the handling it had.
+ * - **A group length `(gggg,0000)`.** PS3.6 registers one only for group `0002`,
+ *   so asking would record a removal on every legacy file that carries one, for
+ *   an element the writer drops on emission anyway.
+ * - **A Table E.1-1 listed tag**, which never reaches this: with PS3.6 and PS3.15
+ *   pinned to one edition every listed tag is registered, and a listed action is
+ *   the standard's own instruction.
+ *
+ * ## It keys on the TAG, never on the VR
+ *
+ * An unregistered element carried as `UN`, read as `UN` under Implicit VR LE,
+ * or carrying an on-wire VR outside the 34 PS3.5 section 6.2 defines is removed
+ * all the same, and a registered element carried as `UN` is kept. That is why
+ * this test runs **before** the `SQ`, undefined-VR and keep-or-empty handling
+ * of the unlisted branch: removal is the stronger outcome, and it leaves no
+ * fabricated tag bytes in the output where emptying would keep the header.
+ * "`UN` is untouched by the undefined-VR rule" is not moved by this - that rule
+ * still keys on the VR and still ignores `UN`; this one ignores the VR.
+ *
+ * The membership test itself, and why the `50xx` / `60xx` masks are bounded by
+ * PS3.5 section 7.6 while the other masked rows are read as printed, is on
+ * `isRegisteredTag`.
+ */
+function isUnregisteredStandardTag(tag: Tag): boolean {
+  const { group, element } = splitTag(tag);
+  if (element === GROUP_LENGTH_ELEMENT) return false;
+  if (group === FILE_META_GROUP || isGroup0004(tag)) return false;
+  return !isRegisteredTag(tag);
+}
+
+/**
+ * Remove an element {@link isUnregisteredStandardTag} selected, and record the
+ * removal: always on the run's total, and on the capped finding array while
+ * there is budget for it.
+ *
+ * **The removal is the `continue` in {@link processElements}**, which never
+ * writes the element into the Data Set being built; this function only writes
+ * the audit, so an exhausted cap silences the record and never the rule. A
+ * Sequence is removed whole: its items are neither walked nor recorded, and no
+ * un-auditable-sequence finding is raised for it, because nothing of it reaches
+ * the output to be audited.
+ *
+ * **NO TAG AND NO VR on the record, and no per-element warning.** The trigger is
+ * "no registry row carries this tag", which is what four bytes read out of some
+ * element's value look like, so the tag may itself be document content. The
+ * element is named by `byteOffset`, a position the parser counted, and the one
+ * warning per run is raised by {@link deidentify} after the walk.
+ */
+function removeUnregisteredElement(
+  el: Element,
+  ctx: DeidentifyContext,
+  contextPath: readonly string[],
+): void {
+  ctx.unregistered.total++;
+  if (ctx.unregistered.findings.length >= MAX_UNREGISTERED_ELEMENT_FINDINGS) return;
+  ctx.unregistered.findings.push({
+    byteOffset: el.byteOffset,
     ...(contextPath.length > 0 ? { contextPath: [...contextPath] } : {}),
   });
 }
@@ -2237,10 +2371,19 @@ function processElements(
 
     const action = annexE(el.tag);
     if (action === undefined) {
-      // Not in Table E.1-1: unaffected (keep). Still recurse into sequences so
-      // nested attributes that *are* listed get de-identified - and refuse to
-      // keep one whose items were never materialized, because "not listed" is a
-      // statement about this tag, not about the Data Sets inside its value.
+      // Not in Table E.1-1 AND not in the PS3.6 registry: nobody judged this
+      // attribute, so it is REMOVED, whatever its VR and whether or not it is a
+      // Sequence. Asked before anything below reads the VR - see
+      // `isUnregisteredStandardTag` for the order and for what it leaves alone.
+      if (isUnregisteredStandardTag(el.tag)) {
+        removeUnregisteredElement(el, ctx, contextPath);
+        continue;
+      }
+      // Registered and not in Table E.1-1: unaffected (keep). Still recurse into
+      // sequences so nested attributes that *are* listed get de-identified - and
+      // refuse to keep one whose items were never materialized, because "not
+      // listed" is a statement about this tag, not about the Data Sets inside
+      // its value.
       if (el.vr === "SQ") {
         if (isUnauditableSequence(el)) emptyUnauditableSequence(el, ctx, contextPath, out);
         else
@@ -3150,6 +3293,7 @@ export function deidentify(
     littleEndian,
     removeGroup0004: !isDicomdir,
     group0004: { findings: [], total: 0 },
+    unregistered: { findings: [], total: 0 },
     declaration,
     budget,
   };
@@ -3299,6 +3443,11 @@ export function deidentify(
   if (ctx.group0004.total > 0) {
     warnings.push(group0004Removed({ byteOffset: 0, fileMeta: false }));
   }
+  // Once per run, on the uncapped total, so the warning is there exactly when a
+  // removal happened - past the findings cap too - and never otherwise.
+  if (ctx.unregistered.total > 0) {
+    warnings.push(unregisteredElementRemoved({ byteOffset: 0, fileMeta: false }));
+  }
   // 🩺 Raised whenever the carve-out FIRED, not only when the object carried
   // group-0004 elements. Its subject is the two clauses of §E.1.1's DICOMDIR
   // bullet this run did not discharge - de-identifying the directory records,
@@ -3328,6 +3477,8 @@ export function deidentify(
     fileMetaElementsDroppedCount: rebuiltFileMeta.droppedCount,
     group0004Removals: ctx.group0004.findings,
     group0004RemovalCount: ctx.group0004.total,
+    unregisteredElementRemovals: ctx.unregistered.findings,
+    unregisteredElementRemovalCount: ctx.unregistered.total,
     uidMap: remap.cache,
     warnings,
     retained: [...active],
