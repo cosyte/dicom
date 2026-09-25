@@ -282,12 +282,13 @@ describe("AC-8: a stream not ended by its delimiter, or holding a non-Item, is r
       dataset: spanned(pixelHeader(), BOT, FRAGMENT, marker(0xe00d), SEQUENCE_DELIMITATION),
     },
     {
+      // Framed like a 4-byte Item, so only the tag says it is not one.
       name: "a Data Element tag before the delimiter",
       dataset: spanned(
         pixelHeader(),
         BOT,
         FRAGMENT,
-        Buffer.from([0x08, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00]),
+        Buffer.from([0x08, 0x00, 0x10, 0x00, 0x04, 0x00, 0x00, 0x00, 0x5a, 0x5a, 0x5a, 0x5a]),
         SEQUENCE_DELIMITATION,
       ),
     },
@@ -316,8 +317,18 @@ describe("AC-8: a stream not ended by its delimiter, or holding a non-Item, is r
       dataset: spanned(pixelHeader(), BOT, SEQUENCE_DELIMITATION),
     },
     {
-      name: "a span whose header is not an undefined-length (7FE0,0010)",
-      dataset: spanned(pixelHeader("OB", [0, 0], 24), BOT, FRAGMENT),
+      name: "a span whose header declares a defined Value Length",
+      dataset: spanned(pixelHeader("OB", [0, 0], 40), BOT, FRAGMENT, SEQUENCE_DELIMITATION),
+    },
+    {
+      name: "a span whose header is not tagged (7FE0,0010)",
+      dataset: spanned(
+        Buffer.from([0xe0, 0x7f, 0x08, 0x00]),
+        pixelHeader().subarray(4),
+        BOT,
+        FRAGMENT,
+        SEQUENCE_DELIMITATION,
+      ),
     },
     { name: "a span shorter than an element header", dataset: spanned(Buffer.from([0xe0, 0x7f])) },
   ];
