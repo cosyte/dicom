@@ -58,12 +58,23 @@ pnpm add @cosyte/dicom
 Useful output after install and parse. No DICOM spec knowledge required.
 
 ```ts runnable
-import { readFile } from "node:fs/promises";
 import { parseDicom } from "@cosyte/dicom";
 
-// Here study.dcm is a synthetic CT object saved without its 128-byte preamble.
-const ds = parseDicom(await readFile("study.dcm"));
+// A synthetic CT object, saved without its 128-byte preamble: an invented patient and example-root
+// UIDs, no real PHI. In your integration these are the bytes of the file you read.
+const buf = Buffer.from(
+  "AgAAAFVMBAAcAAAAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xAAgAFgBVSRoAMS4yLjg0MC4xMDAwOC41LjEuNC4xLjEuMgAIABgAVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMTExAAgAIABEQQgAMTkwMDAxMDEIAGAAQ1MCAENUEAAQAFBOCABEb2VeSmFuZRAAIABMTwYATVJOLTQyEAAhAExPDABTQU1QTEUtSE9TUCAgAA0AVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMS4xACAADgBVSR4AMS4yLjgyNi4wLjEuMzY4MDA0My44LjQ5OC4xLjIAIAARAElTAgAyICgAEABVUwIAAAIoABEAVVMCAAACKAAAAVVTAgAQACgAAwFVUwIAAQAoAFIQRFMGAC0xMDI0ICgAUxBEUwIAMSAoADAARFMIADAuNVwwLjUg",
+  "base64",
+);
+const ds = parseDicom(buf);
 
+console.log("patient", ds.patient.id, "issuer", ds.patient.issuerOfId);
+console.log("study", ds.study.instanceUid);
+console.log("series", ds.series.modality, "image", ds.image.rows, "x", ds.image.columns);
+console.log("rescale slope", ds.image.rescaleSlope, "intercept", ds.image.rescaleIntercept);
+console.log("tolerated", ds.warnings.length, ds.warnings[0]?.code);
+
+// The values printed above, which the test suite asserts on every run.
 // NOT globally unique on its own: pair it with ds.patient.issuerOfId.
 ds.patient.id; // => "MRN-42"
 // The global study anchor.
@@ -74,6 +85,16 @@ ds.image.rows; // => 512
 ds.image.rescaleSlope; // => 1
 // What the parser tolerated, as stable codes.
 ds.warnings.map((w) => w.code); // => ["DICOM_MISSING_PREAMBLE"]
+```
+
+It prints:
+
+```text
+patient MRN-42 issuer SAMPLE-HOSP
+study 1.2.826.0.1.3680043.8.498.1.1
+series CT image 512 x 512
+rescale slope 1 intercept -1024
+tolerated 1 DICOM_MISSING_PREAMBLE
 ```
 
 The structural route, and emitting bytes back out:
