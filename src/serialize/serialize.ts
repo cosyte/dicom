@@ -24,7 +24,9 @@
  * `./order.ts`), with Items kept in their order and no value byte changed;
  * encapsulated-pixel-data fragments pass through byte-for-byte (§A.4), and
  * under a section A.4 syntax a top-level Pixel Data that is not a fragment
- * stream section A.4 allows is refused, never repaired.
+ * stream section A.4 allows is refused, never repaired. A DICOMDIR's Directory
+ * Record offsets are recomputed against the bytes written, and one that cannot
+ * be tied to a record is refused (see `./directory.ts`).
  *
  * The ordering has limits, stated with it. A tag repeated inside an Item is
  * kept (both copies, in source order), so such output still breaks PS3.5 2026c
@@ -49,13 +51,20 @@ import { Buffer } from "node:buffer";
 import { deflateRawSync } from "node:zlib";
 
 import type { Dataset } from "../dataset/dataset.js";
+import { DIRECTORY_TAGS, isDicomdir } from "../dataset/directory.js";
+import type { Element } from "../dataset/element.js";
 import { splitTag } from "../dataset/tag.js";
 import { ENCAPSULATED_TRANSFER_SYNTAX_UIDS } from "../dictionary/generated/encapsulated-transfer-syntaxes.js";
+import type { Tag } from "../dictionary/types.js";
+import { PLACED_TAGS, rewriteDirectoryOffsets, type PlacedElement } from "./directory.js";
 import { type BodyEncoding, encodeDatasetElement } from "./element.js";
 import { encapsulatedPixelData, PIXEL_DATA } from "./encapsulated.js";
 import { DicomSerializeError, SERIALIZE_ERROR_CODES } from "./errors.js";
 import { encodeFileMeta } from "./file-meta.js";
-import { emissionOf, tagNumber } from "./order.js";
+import { type ElementEmission, emissionOf, tagNumber } from "./order.js";
+
+/** Directory Record Sequence `(0004,1220)`. */
+const RECORD_SEQUENCE: Tag = DIRECTORY_TAGS.RECORD_SEQUENCE;
 
 const TS_IMPLICIT_LE = "1.2.840.10008.1.2";
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
@@ -96,26 +105,54 @@ function part10Preamble(): Buffer {
  * section A.4 syntax writes (see {@link encapsulatedPixelData}); it ends on its
  * own Sequence Delimitation Item, so it is placed by its tag like any other.
  */
-function encodeBody(ds: Dataset, encoding: BodyEncoding, pixelData?: Buffer): Buffer {
+function encodeBody(
+  ds: Dataset,
+  encoding: BodyEncoding,
+  pixelData?: Buffer,
+  placed?: Map<Tag, PlacedElement>,
+): Buffer {
   // PS3.5 §7.2: omit retired (gggg,0000) group-length elements on write.
   // (File Meta group lengths are handled separately and never appear in the
   // dataset element map.)
   const kept = ds.elements().filter((el) => splitTag(el.tag).element !== 0x0000);
-  const closed: { readonly tag: number; readonly bytes: Buffer }[] = [];
-  const open: Buffer[] = [];
+  interface Encoded {
+    readonly tag: number;
+    readonly bytes: Buffer;
+    readonly el: Element;
+    readonly placements?: ElementEmission["placements"];
+  }
+  const closed: Encoded[] = [];
+  const open: Encoded[] = [];
   for (const el of kept) {
     if (pixelData !== undefined && el.tag === PIXEL_DATA) {
-      closed.push({ tag: tagNumber(el.tag), bytes: pixelData });
+      closed.push({ tag: tagNumber(el.tag), bytes: pixelData, el });
       continue;
     }
-    const emission = emissionOf(el, encoding);
+    // Only a DICOMDIR's Directory Record Sequence is asked where its Items land.
+    const emission = emissionOf(el, encoding, placed !== undefined && el.tag === RECORD_SEQUENCE);
     const bytes = encodeDatasetElement(el, encoding, emission.rawBytes);
-    if (emission.closed) closed.push({ tag: tagNumber(el.tag), bytes });
-    else open.push(bytes);
+    const entry = { tag: tagNumber(el.tag), bytes, el, placements: emission.placements };
+    if (emission.closed) closed.push(entry);
+    else open.push(entry);
   }
   // Stable, so two model elements with one tag keep their relative order.
   closed.sort((a, b) => a.tag - b.tag);
-  return Buffer.concat([...closed.map((entry) => entry.bytes), ...open]);
+  const ordered = [...closed, ...open];
+  if (placed !== undefined) {
+    let start = 0;
+    for (const entry of ordered) {
+      if (PLACED_TAGS.has(entry.el.tag)) {
+        placed.set(entry.el.tag, {
+          el: entry.el,
+          start,
+          bytes: entry.bytes,
+          placements: entry.placements,
+        });
+      }
+      start += entry.bytes.length;
+    }
+  }
+  return Buffer.concat(ordered.map((entry) => entry.bytes));
 }
 
 /**
@@ -165,6 +202,17 @@ function encodeBody(ds: Dataset, encoding: BodyEncoding, pixelData?: Buffer): Bu
  * and Float or Double Float Pixel Data. Pixel Data nested in a Sequence Item is
  * written as read.
  *
+ * **DICOMDIR offsets.** For a `Dataset` whose File Meta Media Storage SOP Class
+ * UID is `1.2.840.10008.1.3.10`, `(0004,1200)`, `(0004,1202)` and each Directory
+ * Record's `(0004,1400)` and `(0004,1420)` are written as the byte offset, from
+ * the first preamble byte of the output, of the Directory Record each named when
+ * the file was read (PS3.3 2026d Table F.3-3), whatever moved it: the rebuilt
+ * File Meta group, the ascending order above, or `deidentify()`. A record is the
+ * Item of the Directory Record Sequence `(0004,1220)` whose `Item.fileOffset`
+ * the offset equals; nothing is found by scanning for an Item tag. A zero offset
+ * is written as zero. Limits: the retired MRDR offset `(0004,1504)` is written as
+ * read, and nothing checks record keys or `(0004,1202)` against the root chain.
+ *
  * **Input contract.** The writer is designed for a {@link Dataset} produced by
  * `parseDicom`: it relies on the parser's `Element.rawBytes` representation
  * (value-only for scalars and Implicit-LE defined-length `SQ`; full on-wire span
@@ -184,9 +232,13 @@ function encodeBody(ds: Dataset, encoding: BodyEncoding, pixelData?: Buffer): Bu
  * @throws {@link DicomSerializeError} with code `MISSING_TRANSFER_SYNTAX` when
  *   the dataset has no File Meta Transfer Syntax UID,
  *   `UNSUPPORTED_TRANSFER_SYNTAX` when that UID is neither one of the four
- *   native syntaxes nor a section A.4 one, or `INVALID_ENCAPSULATED_PIXEL_DATA`
+ *   native syntaxes nor a section A.4 one, `INVALID_ENCAPSULATED_PIXEL_DATA`
  *   when it is a section A.4 one and the top-level Pixel Data is not a fragment
- *   stream section A.4 allows. Nothing is returned on a throw.
+ *   stream section A.4 allows, `DIRECTORY_OFFSET_UNRESOLVED` when a DICOMDIR
+ *   carries an offset that is not zero and names no Directory Record the
+ *   `Dataset` holds, or is not one 32-bit unsigned integer (never written stale
+ *   or as zero), or `DIRECTORY_OFFSET_DEFLATED` when a DICOMDIR under Deflated
+ *   Explicit VR LE carries a non-zero offset. Nothing is returned on a throw.
  *
  * @example
  * ```ts
@@ -222,8 +274,15 @@ export function serializeDicom(ds: Dataset): Buffer {
 
   const preamble = part10Preamble();
   const fileMeta = encodeFileMeta(ds.fileMeta);
-  const body = encodeBody(ds, encoding, pixelData);
-  const datasetBytes = tsUid === TS_DEFLATED_LE ? deflateRawSync(body) : body;
-
-  return Buffer.concat([preamble, fileMeta, datasetBytes]);
+  const deflated = tsUid === TS_DEFLATED_LE;
+  if (!isDicomdir(ds.fileMeta)) {
+    const body = encodeBody(ds, encoding, pixelData);
+    return Buffer.concat([preamble, fileMeta, deflated ? deflateRawSync(body) : body]);
+  }
+  // A DICOMDIR: every offset is rewritten to where its record lands in these
+  // bytes, or the whole write is refused before anything is returned.
+  const placed = new Map<Tag, PlacedElement>();
+  const body = encodeBody(ds, encoding, pixelData, placed);
+  rewriteDirectoryOffsets(ds, body, placed, encoding, preamble.length + fileMeta.length, deflated);
+  return Buffer.concat([preamble, fileMeta, deflated ? deflateRawSync(body) : body]);
 }

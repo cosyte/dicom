@@ -331,8 +331,12 @@ These are boundaries, not defects; the full list is on [Known limitations](./lim
   source's implementation identity go with it. That loss is recorded, and it is not recoverable from
   the output. If you need the source group verbatim, read it off the parsed dataset before the call,
   and see [Serialization](./serialization) for the round trip that does hold.
-- **A de-identified DICOMDIR is not File-set conformant.** The run says so rather than implying
-  otherwise; build a de-identified File-set from the de-identified files, not from this output.
+- **A de-identified DICOMDIR is not File-set conformant.** Its Directory Records are de-identified as
+  Data Sets and `serializeDicom` rewrites their offsets to where they land, but the run creates no
+  DICOMDIR from the de-identified files and removes no non-de-identified DICOMDIR from the File-set,
+  and `DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED` names exactly those two clauses. Referenced
+  File IDs `(0004,1500)` are kept verbatim. Build a de-identified File-set from the de-identified
+  files, not from this output; see [Known limitations](./limitations).
 
 ## Where to go next
 

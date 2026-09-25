@@ -23,6 +23,8 @@ export { Element } from "./dataset/element.js";
 export { Sequence } from "./dataset/sequence.js";
 export { Item } from "./dataset/item.js";
 export type { FileMeta, FileMetaRawElement } from "./dataset/file-meta.js";
+// The DICOMDIR Directory Record tree, read by `Dataset.directory`.
+export type { DicomDirectory, DirectoryRecord } from "./dataset/directory.js";
 
 // Encapsulated Pixel Data as raw, undecoded bytes (PS3.5 section A.4).
 export { readPixelDataFragments, type PixelDataFragments } from "./dataset/pixel-data.js";

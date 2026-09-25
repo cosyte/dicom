@@ -41,6 +41,10 @@ import type { DicomPosition } from "./types.js";
  */
 export const WARNING_CODES = {
   // === The parser actively emits these (alphabetical within prefix) ===
+  DICOM_DIRECTORY_OFFSET_DEFLATED: "DICOM_DIRECTORY_OFFSET_DEFLATED",
+  DICOM_DIRECTORY_OFFSET_MALFORMED: "DICOM_DIRECTORY_OFFSET_MALFORMED",
+  DICOM_DIRECTORY_OFFSET_UNRESOLVED: "DICOM_DIRECTORY_OFFSET_UNRESOLVED",
+  DICOM_DIRECTORY_RECORD_REVISITED: "DICOM_DIRECTORY_RECORD_REVISITED",
   DICOM_DUPLICATE_FILE_META_ELEMENT: "DICOM_DUPLICATE_FILE_META_ELEMENT",
   DICOM_DUPLICATE_TAG_IN_DATA_SET: "DICOM_DUPLICATE_TAG_IN_DATA_SET",
   DICOM_EMPTY_ITEM_IN_SEQUENCE: "DICOM_EMPTY_ITEM_IN_SEQUENCE",
@@ -389,7 +393,22 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   // the code (it is the one value that reaches it), so it is written out; nothing
   // else about the file is.
   DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED:
-    "This object declares Media Storage SOP Class UID 1.2.840.10008.1.3.10 (Media Storage Directory Storage), so PS3.15 E.1.1's carve-out applies and its (0004,xxxx) Data Elements were NOT removed. The rest of that bullet was NOT discharged by this run: this library does not model DICOMDIR, so the directory records were not de-identified, the File-set was not rebuilt from the de-identified DICOM Files it references, and no non-de-identified DICOMDIR File was removed from any File-set. Do not treat this output as a de-identified, File-set-conformant DICOMDIR.",
+    "This object declares Media Storage SOP Class UID 1.2.840.10008.1.3.10 (Media Storage Directory Storage), so PS3.15 E.1.1's carve-out applies and its (0004,xxxx) Data Elements were NOT removed. Two File-set clauses of that bullet were NOT discharged by this run: no DICOMDIR was created from the de-identified DICOM Files it references, and no non-de-identified DICOMDIR File was removed from the File-set. This library has no view of a File-set, so both are yours to do. Do not treat this output as a File-set-conformant DICOMDIR.",
+  // No slot. The four codes below fire on a DICOMDIR's offset attributes, whose
+  // values are raw 32-bit wire reads, and on records whose keys are the
+  // sender's own, so neither an offset, a record index nor a key has a place
+  // here. `position.byteOffset` locates the attribute (a root one at its
+  // element header, a record's at that record's Item tag) and
+  // `position.contextPath` names which attribute of which record; both are
+  // structure this parser counted.
+  DICOM_DIRECTORY_OFFSET_UNRESOLVED:
+    "A DICOMDIR offset attribute names no Item of the Directory Record Sequence (0004,1220): it is not the file offset of any Directory Record's (FFFE,E000) Item tag (PS3.3 F.3.2.2), so no record was resolved from it and the tree does not follow it. serializeDicom refuses to write it. The offset's value is withheld; the byte offset and context path locate the attribute.",
+  DICOM_DIRECTORY_OFFSET_MALFORMED:
+    "A DICOMDIR offset attribute's Value Length is not 4, so its value is not one 32-bit unsigned integer (UL, VM 1) and no record was resolved from it. serializeDicom refuses to write it. The value and its length are withheld; the byte offset and context path locate the attribute.",
+  DICOM_DIRECTORY_RECORD_REVISITED:
+    "Following a DICOMDIR offset attribute would reach a Directory Record already reached in this walk, so that record is in the tree once and the walk did not follow the offset again. The offset's value is withheld; the byte offset and context path locate the attribute.",
+  DICOM_DIRECTORY_OFFSET_DEFLATED:
+    "This DICOMDIR is encoded in Deflated Explicit VR Little Endian and carries a non-zero Directory Record offset. A byte position inside a deflated stream names no Item a reader can seek to, so no record was resolved from any offset; PS3.10 8.6 requires a DICOMDIR File to use Explicit VR Little Endian. serializeDicom refuses to write it. The byte offset is where the deflated stream begins.",
   DICOM_DEIDENT_EMBEDDED_ATTRIBUTE_REMOVED:
     "Element ({tag}) {vr} was kept by the action table, but its value ends with {n} whole Data Element(s) - an over-declared Value Length swallowed what followed it. Emptied rather than kept, because the action table cannot see an attribute encoded inside a value. report.embeddedAttributes names the ones this run acts on that also have a literal Table E.1-1 row, which may be none of them.",
   // Deliberately short, for the reason the two codes below it are short: one is
@@ -1430,14 +1449,17 @@ export function group0004Removed(position: DicomPosition): DicomParseWarning {
  *
  * @remarks
  * **The carve-out is one clause of a bullet with three, and this code exists so
- * the run says which two it did not discharge.** §E.1.1 continues: a required
- * DICOMDIR "shall either be created from the de-identified DICOM Files it
- * references, or an existing DICOMDIR File shall be de-identifed according to
- * this Profile", and "any existing non-de-identified DICOMDIR File shall be
- * removed from the File-set". This library does not model DICOMDIR, so it did
- * neither, and it has no view of a File-set to remove anything from. Retaining
- * `(0004,xxxx)` while staying silent would let a caller read a compliant
- * DICOMDIR out of a report that only means "the removal rule was skipped" - the
+ * the run says which two it did not discharge: the two about the File-set.**
+ * §E.1.1 continues: a required DICOMDIR "shall either be created from the
+ * de-identified DICOM Files it references, or an existing DICOMDIR File shall be
+ * de-identifed according to this Profile", and "any existing non-de-identified
+ * DICOMDIR File shall be removed from the File-set". This run de-identifies the
+ * existing DICOMDIR's records like any other Data Set, and `serializeDicom`
+ * rewrites their offsets to where they land; it creates no DICOMDIR from the
+ * de-identified files and removes nothing from a File-set, because it has no view
+ * of one. The message names exactly those two clauses. Retaining `(0004,xxxx)`
+ * while staying silent would let a caller read a File-set-conformant DICOMDIR
+ * out of a report that only means "the removal rule was skipped" - the
  * emptied-audit failure this package keeps opening items for.
  *
  * Once per run, no tag, no count. The SOP Class UID in the message is a constant
@@ -1450,6 +1472,92 @@ export function group0004Removed(position: DicomPosition): DicomParseWarning {
  */
 export function dicomdirFileSetNotDischarged(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED, position);
+}
+
+/**
+ * Build a `DICOM_DIRECTORY_OFFSET_UNRESOLVED` warning. Emitted by `parseDicom`
+ * for each DICOMDIR offset attribute (`(0004,1200)`, `(0004,1202)`,
+ * `(0004,1400)`, `(0004,1420)`) whose non-zero value is not the file offset of
+ * an Item of the Directory Record Sequence: inside a record's Data Set, on an
+ * Item of a Sequence nested in a record, on the Sequence's own header, or past
+ * the end of the file. PS3.3 2026d Table F.3-3 defines each as the offset "of
+ * the first byte (of the Item Data Element)" of a Directory Record, so a
+ * conformant file never raises it.
+ *
+ * @remarks
+ * No slot: the offset is a raw 32-bit wire read. `position.byteOffset` is the
+ * root attribute's element header, or the carrying record's Item tag, in the
+ * `"input"` frame; `position.contextPath` is `["00041220", index, tag]` for a
+ * record's attribute.
+ *
+ * @example
+ * ```ts
+ * const w = directoryOffsetUnresolved({ byteOffset: 480, contextPath: ["00041220", "2", "00041400"] });
+ * ```
+ */
+export function directoryOffsetUnresolved(position: DicomPosition): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DIRECTORY_OFFSET_UNRESOLVED, position);
+}
+
+/**
+ * Build a `DICOM_DIRECTORY_OFFSET_MALFORMED` warning. Emitted by `parseDicom`
+ * for each DICOMDIR offset attribute whose Value Length is not 4: PS3.3 2026d
+ * Table F.3-3 makes each one `UL`, VM 1, so an empty value, two bytes or two
+ * values name no record.
+ *
+ * @remarks
+ * No slot: the value and its length are both wire reads. Positions as
+ * {@link directoryOffsetUnresolved}.
+ *
+ * @example
+ * ```ts
+ * const w = directoryOffsetMalformed({ byteOffset: 480, contextPath: ["00041220", "2", "00041400"] });
+ * ```
+ */
+export function directoryOffsetMalformed(position: DicomPosition): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DIRECTORY_OFFSET_MALFORMED, position);
+}
+
+/**
+ * Build a `DICOM_DIRECTORY_RECORD_REVISITED` warning. Emitted by `parseDicom`
+ * when following a `(0004,1400)` or `(0004,1420)` (or `(0004,1200)`) would reach
+ * a Directory Record the walk already reached: a record that names itself as its
+ * successor, a lower-level offset naming an ancestor, or two offsets naming one
+ * record. The record stays in the tree once, the offset is not followed, and the
+ * parse finishes.
+ *
+ * @remarks
+ * No slot. Positions as {@link directoryOffsetUnresolved}, naming the attribute
+ * whose offset was not followed.
+ *
+ * @example
+ * ```ts
+ * const w = directoryRecordRevisited({ byteOffset: 480, contextPath: ["00041220", "2", "00041400"] });
+ * ```
+ */
+export function directoryRecordRevisited(position: DicomPosition): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DIRECTORY_RECORD_REVISITED, position);
+}
+
+/**
+ * Build a `DICOM_DIRECTORY_OFFSET_DEFLATED` warning. Emitted by `parseDicom`
+ * once per DICOMDIR encoded in Deflated Explicit VR Little Endian that carries a
+ * non-zero offset: a position inside a deflated stream is not a byte a reader
+ * can seek to, so no offset resolves. PS3.10 2026d section 8.6 says "The
+ * DICOMDIR File shall use the Explicit VR Little Endian Transfer Syntax", so a
+ * conformant DICOMDIR never raises it.
+ *
+ * @remarks
+ * No slot. `position.byteOffset` is where the deflated stream begins in the
+ * input, since no byte inside it has a position there.
+ *
+ * @example
+ * ```ts
+ * const w = directoryOffsetDeflated({ byteOffset: 190 });
+ * ```
+ */
+export function directoryOffsetDeflated(position: DicomPosition): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DIRECTORY_OFFSET_DEFLATED, position);
 }
 
 /**

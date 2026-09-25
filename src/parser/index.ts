@@ -12,7 +12,9 @@
  *      unsupported UIDs throw `UNSUPPORTED_TRANSFER_SYNTAX` carrying the
  *      `Dictionary.uid(uid)?.name` in `err.snippet`.
  *   6. The chosen strategy returns a `ReadonlyMap<Tag, Element>`.
- *   7. The result is assembled into a structural {@link Dataset}.
+ *   7. For a DICOMDIR, every Directory Record offset is resolved against the
+ *      Items' file offsets and each one that names no record is warned.
+ *   8. The result is assembled into a structural {@link Dataset}.
  *
  * A source/vendor `Profile` is wired in through `ParseOptions.profile`:
  * its `escalations` / `suppressions` reshape Tier-2 emission at the
@@ -25,6 +27,7 @@
 import { Buffer } from "node:buffer";
 
 import { Dataset } from "../dataset/dataset.js";
+import { emitDirectoryFindings } from "./directory.js";
 import { makeEmitter } from "./emit.js";
 import { OFFSET_FRAMES } from "./errors.js";
 import { emptyInput, emptyInputAfterNormalization, unsupportedTransferSyntax } from "./fatals.js";
@@ -33,6 +36,9 @@ import { parsePart10Header } from "./part10-header.js";
 import { TRANSFER_SYNTAX_PARSERS } from "./transfer-syntax.js";
 import type { OnWarningCallback, ParseContext, ParseOptions } from "./types.js";
 import type { DicomParseWarning } from "./warnings.js";
+
+/** File Preamble (128 bytes) plus the `DICM` prefix (4 bytes), PS3.10 section 7.1. */
+const PREAMBLE_AND_PREFIX_LENGTH = 132;
 
 /**
  * Parse a DICOM Part 10 buffer into a structural {@link Dataset}.
@@ -125,7 +131,11 @@ export function parseDicom(
   const emit = makeEmitter(ctx);
 
   // Step 1: Detect Part 10 framing (preamble + DICM, with the stripPreamble tri-state).
-  const { datasetStart } = parsePart10Header(buffer, ctx, emit);
+  const { datasetStart, hadPreamble } = parsePart10Header(buffer, ctx, emit);
+  // The root frame's file position. PS3.3 2026d Table F.3-3 counts a DICOMDIR's
+  // offsets from the first byte of the File Preamble, so an input with no
+  // preamble still counts the 132 bytes it lacks: its byte 0 is file offset 132.
+  ctx.frame = { ...ctx.frame, origin: hadPreamble ? 0 : PREAMBLE_AND_PREFIX_LENGTH };
 
   // Step 2: Parse File Meta (always Explicit VR LE).
   const { fileMeta, fileMetaEnd } = parseFileMeta(buffer, datasetStart, ctx, emit);
@@ -145,6 +155,14 @@ export function parseDicom(
 
   // Step 4: Parse the dataset with the chosen strategy.
   const { elements } = strategy(buffer, fileMetaEnd, ctx, emit);
+
+  // Step 5: a DICOMDIR's Directory Record offsets, resolved once here so every
+  // one that names no record reaches `ds.warnings` and `onWarning`.
+  emitDirectoryFindings(
+    { fileMeta, get: (tag) => elements.get(tag) },
+    { origin: hadPreamble ? 0 : PREAMBLE_AND_PREFIX_LENGTH, fileMetaEnd },
+    emit,
+  );
 
   return new Dataset({ fileMeta, warnings: ctx.warnings, elements });
 }

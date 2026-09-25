@@ -16,6 +16,7 @@
 
 import type { Tag } from "../dictionary/types.js";
 import type { DicomParseWarning } from "../parser/warnings.js";
+import { analyzeDirectory, type DicomDirectory } from "./directory.js";
 import type { Element } from "./element.js";
 import type { FileMeta } from "./file-meta.js";
 import { buildImage } from "./helpers/image.js";
@@ -73,6 +74,8 @@ export class Dataset {
   private _study?: StudyView;
   private _series?: SeriesView;
   private _image?: ImageView;
+  /** Boxed so a memoised "not a DICOMDIR" is told apart from "not read yet". */
+  private _directory?: { readonly value: DicomDirectory | undefined };
 
   /**
    * Construct a new structural `Dataset`. The warnings array is frozen at
@@ -211,5 +214,41 @@ export class Dataset {
    */
   public get image(): ImageView {
     return (this._image ??= buildImage(this));
+  }
+
+  /**
+   * The DICOMDIR Directory Record tree, or `undefined` when this Dataset is not
+   * a DICOMDIR (its File Meta Media Storage SOP Class UID is not
+   * `1.2.840.10008.1.3.10`). Read from the four offset attributes (PS3.3 2026d
+   * Table F.3-3): `root` is the record `(0004,1200)` names and each
+   * `(0004,1400)` successor, and each record's `lowerLevel` is the record its
+   * `(0004,1420)` names and each successor. An offset resolves only when it is
+   * exactly the file offset of an Item of the Directory Record Sequence
+   * `(0004,1220)`; one that is not names no record, and `parseDicom` warns
+   * (`DICOM_DIRECTORY_OFFSET_UNRESOLVED`, `DICOM_DIRECTORY_OFFSET_MALFORMED`,
+   * `DICOM_DIRECTORY_RECORD_REVISITED`, `DICOM_DIRECTORY_OFFSET_DEFLATED`).
+   * Memoised on first read.
+   *
+   * Limits: record keys are not checked against PS3.3 F.5, the File-set
+   * Consistency Flag and `(0004,1202)`'s agreement with the end of the root
+   * chain are not checked, and under Deflated Explicit VR LE no offset resolves,
+   * so every record is listed in `records` and none is linked.
+   *
+   * @example
+   * ```ts
+   * import { parseDicom } from "@cosyte/dicom";
+   * const dir = parseDicom(buf).directory;
+   * for (const patient of dir?.root ?? []) {
+   *   for (const study of patient.lowerLevel) {
+   *     for (const series of study.lowerLevel) {
+   *       for (const image of series.lowerLevel) console.log(image.referencedFileId);
+   *     }
+   *   }
+   * }
+   * ```
+   */
+  public get directory(): DicomDirectory | undefined {
+    this._directory ??= { value: analyzeDirectory(this)?.directory };
+    return this._directory.value;
   }
 }

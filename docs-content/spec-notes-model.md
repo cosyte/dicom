@@ -54,6 +54,39 @@ Dictionary.byKeyword("PatientName")?.tag; // => "00100010"
 Dictionary.lookup("00080060")?.keyword; // => "Modality"
 ```
 
+## A DICOMDIR's Directory Record tree
+
+When an object's File Meta `(0002,0002)` is `1.2.840.10008.1.3.10` (Media Storage Directory
+Storage), `ds.directory` is a `DicomDirectory`; for anything else it is `undefined`. Its `records`
+are every Item of the Directory Record Sequence `(0004,1220)` in order, each a `DirectoryRecord` with
+its `index`, its `(0004,1430)` `type`, its `(0004,1500)` `referencedFileId` components (verbatim), its
+`item` for the record keys, and its `lowerLevel` records. `root` is the record `(0004,1200)` names
+and each `(0004,1400)` successor; a record's `lowerLevel` is the record its `(0004,1420)` names and
+each successor. Each record is in the tree at most once.
+
+```ts
+import { parseDicom } from "@cosyte/dicom";
+
+const dir = parseDicom(buf).directory;
+for (const patient of dir?.root ?? []) {
+  for (const study of patient.lowerLevel) {
+    for (const series of study.lowerLevel) {
+      for (const image of series.lowerLevel) {
+        console.log(patient.type, image.referencedFileId?.join("/"));
+      }
+    }
+  }
+}
+```
+
+An offset names a record only when it is exactly where that record's `(FFFE,E000)` Item tag sits in
+the file, counted from the first byte of the File Preamble, which is `Item.fileOffset` and how
+PS3.3's Basic Directory IOD defines these offsets (PS3.3 is not vendored here, so no clause is
+claimed for it). A file read without a preamble still counts the 132 bytes it lacks. Anything else, an
+offset inside a record, on an Item of a Sequence nested in a record, on the Sequence's header or past
+the end, names nothing and raises `DICOM_DIRECTORY_OFFSET_UNRESOLVED`. The limits, what the writer
+refuses, and what de-identification leaves undone are on [Known limitations](./limitations).
+
 ## The generated data dictionary
 
 The `Dictionary` namespace is generated at build time from the official DICOM Part 6 source and

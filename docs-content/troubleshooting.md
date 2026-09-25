@@ -251,6 +251,12 @@ that this package reads and writes metadata, where inside the metadata surface d
   not allow, a stream read with `DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED` included. A compressed
   pixel stream is never decompressed: the writer passes its fragments through byte-for-byte, and
   `readPixelDataFragments` hands them back as raw bytes.
+- **A DICOMDIR's offsets are rewritten, or the write is refused.** `serializeDicom` writes each
+  Directory Record offset as the byte offset of the record it named when read, and refuses with
+  `DIRECTORY_OFFSET_UNRESOLVED` an offset it cannot tie to a record (one that raised
+  `DICOM_DIRECTORY_OFFSET_UNRESOLVED` or `DICOM_DIRECTORY_OFFSET_MALFORMED` on the parse, for one)
+  and with `DIRECTORY_OFFSET_DEFLATED` a Deflated DICOMDIR carrying a non-zero offset. See
+  [Known limitations](./limitations).
 - **Only typed `FileMeta` fields round-trip.** `serializeDicom` recomputes a spec-clean File Meta
   group; File Meta elements outside the typed model are not preserved verbatim through the model.
 - **De-identification is metadata-only and fail-safe toward removal.** Conditional Annex E codes
