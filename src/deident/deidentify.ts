@@ -470,7 +470,16 @@ const REFUSED_TRANSFER_SYNTAX_MESSAGE =
  */
 function isRefusedTransferSyntax(transferSyntaxUID: string | undefined): boolean {
   if (transferSyntaxUID === undefined) return false;
-  return REFUSED_TRANSFER_SYNTAXES.has(transferSyntaxUID.replace(/[\0 ]+$/u, ""));
+  // A backwards scan rather than an anchored regex: a pad class ending in `$`
+  // retries from every start in a long run of pads, which is quadratic on a
+  // caller-supplied string, and this is linear.
+  let end = transferSyntaxUID.length;
+  while (end > 0) {
+    const last = transferSyntaxUID.charCodeAt(end - 1);
+    if (last !== 0x00 && last !== 0x20) break;
+    end -= 1;
+  }
+  return REFUSED_TRANSFER_SYNTAXES.has(transferSyntaxUID.slice(0, end));
 }
 
 /** Map a transfer syntax UID to the on-wire element encoding (mirrors the writer). */
