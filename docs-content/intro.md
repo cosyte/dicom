@@ -95,7 +95,10 @@ if (name?.kind === "personName") name.values[0]?.alphabetic.givenName; // "Jane"
 Decode is **fail-safe**: it never throws and never coerces a malformed value to a
 plausible-but-wrong one (a bad `DS`/`IS` token becomes `null`, never `NaN`→0). Per-value deviations
 surface on the returned value's own `warnings`. String VRs honor the `(0008,0005)` Specific
-Character Set (UTF-8, ISO-8859, ISO-2022), threaded through nested sequence items.
+Character Set, threaded through nested sequence items: UTF-8 and ISO-8859 under one Value, and the
+code extensions of ISO 2022 (Japanese, Korean and Chinese names among them) under more than one,
+where a value the decode had to tolerate carries a warning. A single-valued set gets no code-extension
+handling; the limits are in [Typed values](./spec-notes-values#character-sets).
 
 ## Safety-critical views
 

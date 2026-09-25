@@ -186,6 +186,37 @@ function cp246Fixture(marker: string): Buffer {
   ]);
 }
 
+/**
+ * The given-name bytes of the three ISO 2022 slots, all synthetic. Each carries
+ * JIS X 0208 `3B 33 45 44`, the ideographic family name of PS3.5 2026d Example
+ * H.3-1, behind a different fault: an escape sequence the `(0008,0005)` does not
+ * declare, an escape sequence neither PS3.3 table carries (`ESC $ ( Q`, JIS X
+ * 0213), and no switch back to ISO-IR 6 before the value ends.
+ */
+const ISO_2022_UNDECLARED_TAIL = Buffer.from([
+  0x1b, 0x24, 0x42, 0x3b, 0x33, 0x45, 0x44, 0x1b, 0x28, 0x42,
+]);
+const ISO_2022_UNDECODABLE_TAIL = Buffer.from([0x1b, 0x24, 0x28, 0x51, 0x3b, 0x33, 0x45, 0x44]);
+const ISO_2022_NOT_RESET_TAIL = Buffer.from([0x1b, 0x24, 0x42, 0x3b, 0x33, 0x45, 0x44]);
+
+/**
+ * A `(0010,0010)` Patient's Name under a multi-valued `(0008,0005)`: the planted
+ * marker is the family name, in ISO-IR 6, and `tail` is the given name.
+ */
+function iso2022NameFixture(charset: string, familyName: string, tail: Buffer): Buffer {
+  return buildDicom({
+    transferSyntax: TS_EXPLICIT_LE,
+    elements: [
+      { tag: "00080005", vr: "CS" as VR, value: val(charset) },
+      {
+        tag: "00100010",
+        vr: "PN" as VR,
+        value: even(Buffer.concat([Buffer.from(`${familyName}^`, "latin1"), tail])),
+      },
+    ],
+  });
+}
+
 // ---------------------------------------------------------------------------
 // The model selectors. Both are required by the runner, and both are the place
 // a wrong answer turns the whole suite green over nothing.
@@ -197,8 +228,9 @@ function cp246Fixture(marker: string): Buffer {
  * `Dataset.warnings` is the structural-parse array. The second is easy to miss:
  * VR decode is lazy and post-parse, so a decode-time deviation cannot be folded
  * into the frozen `Dataset.warnings` and rides on `Element.value.warnings`
- * instead (`src/dataset/vr/types.ts`). The seven VR-decode-time codes live only
- * there, and the registry's size is deliberately not written here: it was wrong
+ * instead (`src/dataset/vr/types.ts`). The VR-decode-time codes, the ISO 2022
+ * charset codes among them, live only there, and the registry's size is
+ * deliberately not written here: it was wrong
  * in this sentence ("twenty-six" against twenty-nine) before this slice made it
  * thirty, and the locked snapshot in `test/property/` measures it every run.
  * Reading `.value` here is what forces the lazy decode, so a selector
@@ -402,6 +434,24 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
         ],
       }),
     expectCode: WARNING_CODES.DICOM_BOM_IN_TEXT_VR,
+  },
+  // AC-8: one slot per ISO 2022 code-extension code. The marker IS the patient's
+  // family name, decoded into `Element.value` ahead of the bytes that raise the
+  // code, so a factory that interpolated the value would carry it.
+  {
+    name: "(0010,0010) PatientName [PN], ISO 2022 escape for a set (0008,0005) does not declare",
+    plant: (m) => iso2022NameFixture("\\ISO 2022 IR 149", m, ISO_2022_UNDECLARED_TAIL),
+    expectCode: WARNING_CODES.DICOM_CHARSET_ESCAPE_UNDECLARED,
+  },
+  {
+    name: "(0010,0010) PatientName [PN], ISO 2022 escape sequence in neither PS3.3 table",
+    plant: (m) => iso2022NameFixture("\\ISO 2022 IR 87", m, ISO_2022_UNDECODABLE_TAIL),
+    expectCode: WARNING_CODES.DICOM_CHARSET_BYTES_UNDECODABLE,
+  },
+  {
+    name: "(0010,0010) PatientName [PN], ISO 2022 G0 not switched back at the end of the value",
+    plant: (m) => iso2022NameFixture("\\ISO 2022 IR 87", m, ISO_2022_NOT_RESET_TAIL),
+    expectCode: WARNING_CODES.DICOM_CHARSET_EXTENSION_NOT_RESET,
   },
   {
     name: "(0010,0020) PatientID [LO], NUL-padded where SPACE is expected",
@@ -1122,6 +1172,94 @@ describe("PHI: the probes reach what they claim to", () => {
         ).toBe(true);
       }
     }
+  });
+
+  const ISO_2022_CODES: readonly string[] = [
+    WARNING_CODES.DICOM_CHARSET_ESCAPE_UNDECLARED,
+    WARNING_CODES.DICOM_CHARSET_BYTES_UNDECODABLE,
+    WARNING_CODES.DICOM_CHARSET_EXTENSION_NOT_RESET,
+  ];
+  const ISO_2022_SLOTS = PARSE_SLOTS.filter(
+    (slot) => slot.expectCode !== null && ISO_2022_CODES.includes(slot.expectCode),
+  );
+
+  it("AC-8: the table has one slot per ISO 2022 code", () => {
+    expect(ISO_2022_SLOTS.map((slot) => slot.expectCode)).toStrictEqual(ISO_2022_CODES);
+  });
+
+  it.each(ISO_2022_SLOTS.map((slot) => [slot.name, slot] as const))(
+    "AC-8 mutation control: %s goes red when its warning interpolates the value",
+    (_name, slot) => {
+      // The mutation a careless factory would make: append the decoded value to
+      // the message of the code this slot raises. A slot that stayed green under
+      // it would prove nothing about the real factory.
+      expect(() => {
+        assertNoDiagnosticPhiLeak({
+          slots: [slot],
+          parse,
+          parseStrict: null,
+          getDiagnostics: (parsed) =>
+            allDiagnostics(parsed).map((diagnostic) => {
+              const w = diagnostic as { readonly code: string; readonly message: string };
+              if (w.code !== slot.expectCode) return diagnostic;
+              const value = parsed.dataset.get("00100010")?.value;
+              return { ...w, message: `${w.message} ${JSON.stringify(value)}` };
+            }),
+          getModelIdentifiers: modelIdentifiers,
+        });
+      }).toThrow(/leaked into/u);
+    },
+  );
+
+  it("AC-8: each ISO 2022 code rides on the value once, however often it fires, as its bare registry message", () => {
+    // Five repetitions of a segment that raises all three codes: an escape
+    // sequence neither table carries, then an undeclared ESC $ B whose name
+    // component ends at a lone ^ without switching back.
+    const segment = Buffer.from([
+      0x1b, 0x24, 0x28, 0x51, 0x30, 0x21, 0x1b, 0x24, 0x42, 0x3b, 0x33, 0x45, 0x44, 0x5e,
+    ]);
+    const ds = parseDicom(
+      buildDicom({
+        transferSyntax: TS_EXPLICIT_LE,
+        elements: [
+          { tag: "00080005", vr: "CS" as VR, value: val("\\ISO 2022 IR 149") },
+          {
+            tag: "00100010",
+            vr: "PN" as VR,
+            value: even(
+              Buffer.concat([
+                Buffer.from(`${PHI_MARKER_UNIT}^`, "latin1"),
+                ...Array.from({ length: 5 }, () => segment),
+              ]),
+            ),
+          },
+        ],
+      }),
+    );
+    const value = ds.get("00100010")?.value;
+    const warnings = value !== undefined && "warnings" in value ? (value.warnings ?? []) : [];
+    expect(warnings.map((w) => w.code).sort()).toStrictEqual([...ISO_2022_CODES].sort());
+    for (const w of warnings) {
+      expect(w.message).toBe(
+        WARNING_MESSAGES[w.code].replace("{tag}", "00100010").replace("{vr}", "PN"),
+      );
+    }
+    // Decode is lazy: none of the three reaches the frozen parse-time array, and
+    // `{ strict: true }` has nothing of theirs to escalate.
+    expect(ds.warnings.some((w) => ISO_2022_CODES.includes(w.code))).toBe(false);
+    expect(
+      () =>
+        parseDicom(
+          buildDicom({
+            transferSyntax: TS_EXPLICIT_LE,
+            elements: [
+              { tag: "00080005", vr: "CS" as VR, value: val("\\ISO 2022 IR 149") },
+              { tag: "00100010", vr: "PN" as VR, value: even(segment) },
+            ],
+          }),
+          { strict: true },
+        ).get("00100010")?.value,
+    ).not.toThrow();
   });
 
   it("the sweep can actually fail: a deliberately leaking parser is caught", () => {
