@@ -70,6 +70,13 @@ XOE^JANE
 # comment claimed both were.
 Yamada^Tarou
 Yam^Tar
+# The alphabetic groups of PS3.5 2026d's Korean and Chinese Person Name examples, I.2-1
+# (`Hong^Gildong=<ideographic>=<phonetic>`) and K.2-1 (`Zhang^XiaoDong=<ideographic>=`),
+# carried byte for byte by the code-extension decode tests. Listed EXACT, as the text sweep
+# matches them, never as `Hong^` or `Zhang^` prefixes, so no other given name under either
+# surname is admitted.
+Hong^Gildong
+Zhang^XiaoDong
 
 # --- Allow-listed dates (8-char YYYYMMDD, ignored by 120-year check) ---
 DATE:19000101
