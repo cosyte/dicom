@@ -71,6 +71,9 @@ export const WARNING_CODES = {
 
   // === Charset-decode codes (declared here; the text decoders fire them) ===
   DICOM_CHARSET_AMBIGUOUS_SEPARATOR: "DICOM_CHARSET_AMBIGUOUS_SEPARATOR",
+  DICOM_CHARSET_BYTES_UNDECODABLE: "DICOM_CHARSET_BYTES_UNDECODABLE",
+  DICOM_CHARSET_ESCAPE_UNDECLARED: "DICOM_CHARSET_ESCAPE_UNDECLARED",
+  DICOM_CHARSET_EXTENSION_NOT_RESET: "DICOM_CHARSET_EXTENSION_NOT_RESET",
   DICOM_UNSUPPORTED_CHARSET: "DICOM_UNSUPPORTED_CHARSET",
 
   // === Declared here, emitted elsewhere or not yet emitted at all ===
@@ -485,6 +488,15 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
     "(0008,0005) Specific Character Set value {n} names a defined term this build does not support; decoding text as UTF-8 best-effort. The term is not reproduced here - read the element if you need it.",
   DICOM_CHARSET_AMBIGUOUS_SEPARATOR:
     "(0008,0005) Specific Character Set value {n} is ambiguous under the active code extensions; decoding text as UTF-8 best-effort.",
+  // The three ISO 2022 code-extension codes take a tag and a VR and nothing
+  // else. The escape sequence, the set it names and the characters around it
+  // are all value bytes, so none of them has a slot here.
+  DICOM_CHARSET_ESCAPE_UNDECLARED:
+    "Element ({tag}) {vr} value switches character set with an ISO 2022 escape sequence for a set that (0008,0005) Specific Character Set does not declare; decoded in the set the escape sequence names.",
+  DICOM_CHARSET_BYTES_UNDECODABLE:
+    "Element ({tag}) {vr} value holds bytes no designated character set decodes (an unrecognized escape sequence, a byte with no set designated for it, or a code its set does not define); they read as U+FFFD in the decoded value. Raw bytes preserved.",
+  DICOM_CHARSET_EXTENSION_NOT_RESET:
+    "Element ({tag}) {vr} value ends a line, a value or a name component without switching back to the (0008,0005) Value 1 character set (PS3.5 6.1.2.5.3); decoded as written, and what follows decodes from Value 1.",
 });
 
 /**
@@ -2180,4 +2192,78 @@ export function dtNonstandardOffset(position: DicomPosition, tag: Tag): DicomPar
  */
 export function unsupportedCharset(position: DicomPosition, valueIndex: number): DicomParseWarning {
   return build(WARNING_CODES.DICOM_UNSUPPORTED_CHARSET, position, { n: valueIndex });
+}
+
+/**
+ * Build a `DICOM_CHARSET_ESCAPE_UNDECLARED` warning. Attached at most once to a
+ * decoded text value, under a multi-valued `(0008,0005)`, whose bytes carry a
+ * PS3.3 Table C.12-3 or C.12-4 escape sequence for a set no Value of
+ * `(0008,0005)` declares. The bytes that sequence governs are decoded in the set
+ * it names, because the escape sequence names that set unambiguously; the
+ * warning marks the value so a caller can tell it from a conformant one.
+ *
+ * Takes a position, the tag and the VR only. The escape sequence, the set it
+ * names and every character of the value are value bytes, and there is no
+ * parameter for one to travel through.
+ *
+ * @example
+ * ```ts
+ * const w = charsetEscapeUndeclared({ byteOffset: 320 }, "00100010", "PN");
+ * ```
+ */
+export function charsetEscapeUndeclared(
+  position: DicomPosition,
+  tag: Tag,
+  vr: VR,
+): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_CHARSET_ESCAPE_UNDECLARED, position, { tag, vr });
+}
+
+/**
+ * Build a `DICOM_CHARSET_BYTES_UNDECODABLE` warning. Attached at most once to a
+ * decoded text value, under a multi-valued `(0008,0005)`, where some bytes read
+ * as U+FFFD: an ESC that starts no PS3.3 Table C.12-3 or C.12-4 sequence (and the
+ * bytes after it up to the next recognized sequence, CR, LF, FF or the end of
+ * the value), a GR byte while G1 holds no set, a byte or pair the designated set
+ * does not define, or bytes in a set this build has no decoder for. Those bytes
+ * are never read under another set; `Element.rawBytes` keeps them unchanged.
+ *
+ * Takes a position, the tag and the VR only, so no byte of the value can reach
+ * the message.
+ *
+ * @example
+ * ```ts
+ * const w = charsetBytesUndecodable({ byteOffset: 320 }, "00100010", "PN");
+ * ```
+ */
+export function charsetBytesUndecodable(
+  position: DicomPosition,
+  tag: Tag,
+  vr: VR,
+): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_CHARSET_BYTES_UNDECODABLE, position, { tag, vr });
+}
+
+/**
+ * Build a `DICOM_CHARSET_EXTENSION_NOT_RESET` warning. Attached at most once to
+ * a decoded text value, under a multi-valued `(0008,0005)`, where a line, a
+ * value or a `PN` name component ends while G0 still holds a set other than
+ * Value 1's (PS3.5 6.1.2.5.3 requires the Value 1 set to be active there). The
+ * characters decoded up to that point are kept, and what follows decodes from
+ * the Value 1 designations.
+ *
+ * Takes a position, the tag and the VR only, so no byte of the value can reach
+ * the message.
+ *
+ * @example
+ * ```ts
+ * const w = charsetExtensionNotReset({ byteOffset: 320 }, "00100010", "PN");
+ * ```
+ */
+export function charsetExtensionNotReset(
+  position: DicomPosition,
+  tag: Tag,
+  vr: VR,
+): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_CHARSET_EXTENSION_NOT_RESET, position, { tag, vr });
 }

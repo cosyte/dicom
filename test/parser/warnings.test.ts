@@ -5,6 +5,9 @@ import { describe, it, expect } from "vitest";
 import {
   WARNING_CODES,
   WARNING_MESSAGES,
+  charsetBytesUndecodable,
+  charsetEscapeUndeclared,
+  charsetExtensionNotReset,
   emptyItemInSequence,
   fileMetaGroupLengthMismatch,
   fileMetaGroupLengthMissing,
@@ -79,6 +82,10 @@ describe("WARNING_CODES (D-08)", () => {
       // Phase 4 - charset-decode
       "DICOM_CHARSET_AMBIGUOUS_SEPARATOR",
       "DICOM_UNSUPPORTED_CHARSET",
+      // ISO 2022 code-extension decode (AC-5, AC-6, AC-7): value-level codes
+      "DICOM_CHARSET_BYTES_UNDECODABLE",
+      "DICOM_CHARSET_ESCAPE_UNDECLARED",
+      "DICOM_CHARSET_EXTENSION_NOT_RESET",
       // Phase 6 / Phase 7 - reserved
       "DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED",
       "DICOM_PRIVATE_CREATOR_UNKNOWN",
@@ -354,4 +361,24 @@ describe("warning factories (D-12 - one named factory per active-emit code)", ()
     const w = implicitVRForPrivateTagWithoutVR(pos);
     expect(w.code).toBe(WARNING_CODES.DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR);
   });
+
+  it.each([
+    ["charsetEscapeUndeclared", charsetEscapeUndeclared, "DICOM_CHARSET_ESCAPE_UNDECLARED"],
+    ["charsetBytesUndecodable", charsetBytesUndecodable, "DICOM_CHARSET_BYTES_UNDECODABLE"],
+    ["charsetExtensionNotReset", charsetExtensionNotReset, "DICOM_CHARSET_EXTENSION_NOT_RESET"],
+  ] as const)(
+    "AC-8: %s takes a position, a tag and a VR, and its template has no slot for a value",
+    (_name, factory, code) => {
+      // The bound is the signature: three parameters, none of them a string read
+      // out of the value, and a registry template whose only tokens are {tag}
+      // and {vr}.
+      expect(factory.length).toBe(3);
+      const w = factory(pos, "00100010", "PN");
+      expect(w.code).toBe(WARNING_CODES[code]);
+      expect(w.message).toBe(
+        WARNING_MESSAGES[code].replace("{tag}", "00100010").replace("{vr}", "PN"),
+      );
+      expect(WARNING_MESSAGES[code].match(/\{[a-z0-9]+\}/gu)).toStrictEqual(["{tag}", "{vr}"]);
+    },
+  );
 });
