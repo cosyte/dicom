@@ -1,6 +1,7 @@
 /**
  * `parseDicom` under every PS3.5 2026c section A.4 encapsulation Transfer Syntax, and under every
- * registered Transfer Syntax that stays refused.
+ * registered Transfer Syntax that stays refused (the JPIP Referenced syntaxes are read, in
+ * `jpip-referenced.test.ts`).
  *
  * The expected sets are read out of the vendored PS3.5 and the generated PS3.6 registry by
  * `test/helpers/ps35-section-a4.ts`, never typed here, and every row runs over the WHOLE set, not a
@@ -29,7 +30,7 @@ import {
   encapsulatedObject,
   explicitLeTwin,
 } from "../fixtures/encapsulated/objects.js";
-import { ENCAPSULATION_SET, UNSUPPORTED_SET } from "../helpers/ps35-section-a4.js";
+import { ENCAPSULATION_SET, JPIP_SET, UNSUPPORTED_SET } from "../helpers/ps35-section-a4.js";
 
 /** The AC-1 metadata, read through the domain views. */
 function metadata(ds: Dataset): Record<string, unknown> {
@@ -92,13 +93,18 @@ describe("AC-2: a conformant encapsulated fixture raises nothing, strict or prof
   });
 });
 
-describe("AC-11: every registered Transfer Syntax outside the supported set is refused by name, never by UID", () => {
-  it("AC-11: the refused set is every registered UID neither native nor in section A.4", () => {
-    expect(UNSUPPORTED_SET).toHaveLength(24);
-    expect(UNSUPPORTED_SET).toContain("1.2.840.10008.1.2.4.94");
+describe("AC-12: every registered Transfer Syntax outside the supported set is refused by name, never by UID", () => {
+  it("AC-12: the refused set is every registered UID neither native, nor in section A.4, nor JPIP Referenced", () => {
+    // Pinned to its size at `755e408` so an extraction that silently shrank the
+    // supported sets cannot pass; the set itself is derived, never typed.
+    expect(UNSUPPORTED_SET).toHaveLength(20);
+    for (const uid of JPIP_SET) {
+      expect(UNSUPPORTED_SET).not.toContain(uid);
+    }
+    expect(UNSUPPORTED_SET).toContain("1.2.840.10008.1.2.7.1");
   });
 
-  it.each(UNSUPPORTED_SET)("AC-11: %s", (uid) => {
+  it.each(UNSUPPORTED_SET)("AC-12: %s", (uid) => {
     const name = Dictionary.uid(uid)?.name ?? "";
     expect(name.length).toBeGreaterThan(0);
 
@@ -120,14 +126,16 @@ describe("AC-11: every registered Transfer Syntax outside the supported set is r
     }
   });
 
-  it("AC-11: JPIP Referenced is named as PS3.6 names it", () => {
+  it("AC-12: SMPTE ST 2110-20 Uncompressed Progressive Active Video is named as PS3.6 names it", () => {
+    const name = "SMPTE ST 2110-20 Uncompressed Progressive Active Video";
     try {
-      parseDicom(encapsulatedObject({ transferSyntax: "1.2.840.10008.1.2.4.94" }));
+      parseDicom(encapsulatedObject({ transferSyntax: "1.2.840.10008.1.2.7.1" }));
       expect.fail("expected UNSUPPORTED_TRANSFER_SYNTAX");
     } catch (err) {
       if (!(err instanceof DicomParseError)) throw err;
-      expect(err.snippet).toBe("JPIP Referenced");
-      expect(err.message).toContain("JPIP Referenced");
+      expect(err.code).toBe(FATAL_CODES.UNSUPPORTED_TRANSFER_SYNTAX);
+      expect(err.snippet).toBe(name);
+      expect(err.message).toContain(name);
     }
   });
 });

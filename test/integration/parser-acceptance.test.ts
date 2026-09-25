@@ -288,9 +288,9 @@ describe("ROADMAP Phase 2 §SC3: 4 fatal codes throw with byteOffset + snippet (
     expect((thrown as DicomParseError).code).toBe(FATAL_CODES.INVALID_FILE_META);
   });
 
-  it("AC-11: UNSUPPORTED_TRANSFER_SYNTAX - JPIP Referenced (1.2.840.10008.1.2.4.94)", () => {
+  it("AC-12: UNSUPPORTED_TRANSFER_SYNTAX - SMPTE ST 2110-20 Uncompressed Progressive Active Video (1.2.840.10008.1.2.7.1)", () => {
     const buf = buildDicom({
-      transferSyntax: "1.2.840.10008.1.2.4.94",
+      transferSyntax: "1.2.840.10008.1.2.7.1",
       elements: [],
     });
     let thrown: unknown;
@@ -303,7 +303,7 @@ describe("ROADMAP Phase 2 §SC3: 4 fatal codes throw with byteOffset + snippet (
     const e = thrown as DicomParseError;
     expect(e.code).toBe(FATAL_CODES.UNSUPPORTED_TRANSFER_SYNTAX);
     // D-20: human-readable TS name from Dictionary.uid lands in `snippet`.
-    const expectedName = Dictionary.uid("1.2.840.10008.1.2.4.94")?.name ?? "";
+    const expectedName = Dictionary.uid("1.2.840.10008.1.2.7.1")?.name ?? "";
     if (expectedName.length > 0) {
       expect(e.snippet).toBe(expectedName);
     }

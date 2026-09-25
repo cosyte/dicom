@@ -27,9 +27,9 @@ import {
 } from "../../src/index.js";
 import type { Element } from "../../src/index.js";
 import type { Tag, VR } from "../../src/dictionary/types.js";
-import { encapsulatedObject } from "../fixtures/encapsulated/objects.js";
+import { encapsulatedObject, jpipObject } from "../fixtures/encapsulated/objects.js";
 import { buildDicom, type BuildDicomOptions } from "../helpers/build-dicom.js";
-import { ENCAPSULATION_SET } from "../helpers/ps35-section-a4.js";
+import { ENCAPSULATION_SET, JPIP_SET } from "../helpers/ps35-section-a4.js";
 import { COSYTE_IMPLEMENTATION_CLASS_UID } from "../../src/serialize/file-meta.js";
 
 const TS_IMPLICIT_LE = "1.2.840.10008.1.2";
@@ -528,15 +528,25 @@ describe("serializeDicom - error taxonomy", () => {
     }
   });
 
-  // JPIP Referenced: outside both the native and the section A.4 sets.
-  it("AC-12, AC-14: throws UNSUPPORTED_TRANSFER_SYNTAX for a UID outside the native and section A.4 sets", () => {
-    const ds = new Dataset({
-      fileMeta: { transferSyntaxUID: "1.2.840.10008.1.2.4.94" },
-      warnings: [],
-      elements: new Map(),
-    });
-    expect(() => serializeDicom(ds)).toThrow(/UNSUPPORTED_TRANSFER_SYNTAX/);
-  });
+  // The JPIP Referenced syntaxes are read, never written: outside both the
+  // native and the section A.4 sets the writer accepts.
+  it.each(JPIP_SET)(
+    "AC-13: throws UNSUPPORTED_TRANSFER_SYNTAX and returns no bytes for a Dataset parsed under JPIP %s",
+    (uid) => {
+      const ds = parseDicom(jpipObject({ transferSyntax: uid }));
+      expect(ds.fileMeta?.transferSyntaxUID).toBe(uid);
+      let out: Buffer | undefined;
+      let thrown: unknown;
+      try {
+        out = serializeDicom(ds);
+      } catch (err) {
+        thrown = err;
+      }
+      expect(out).toBeUndefined();
+      expect(thrown).toBeInstanceOf(DicomSerializeError);
+      expect((thrown as DicomSerializeError).code).toBe("UNSUPPORTED_TRANSFER_SYNTAX");
+    },
+  );
 });
 
 describe("AC-1, AC-14: serializeDicom writes every section A.4 encapsulation syntax", () => {
