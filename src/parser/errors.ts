@@ -184,6 +184,47 @@ export interface ParseFrame {
   readonly buffer: Buffer;
   /** The name of the coordinate system those offsets are counted in. */
   readonly name: OffsetFrame;
+  /**
+   * Where this frame's byte 0 sits in the Part 10 file, counted from the first
+   * byte of the File Preamble: the frame DICOMDIR offsets are counted in (PS3.3
+   * 2026d Table F.3-3: the offset "includes the File Preamble and the DICM
+   * Prefix"). Omitted where no such position exists, which is the inflated Data
+   * Set of a Deflated object and every frame composed inside it.
+   *
+   * **Read by one thing and published by none.** `parseSequence` adds it to an
+   * Item's header offset to give `Item.fileOffset`, the record identity a
+   * DICOMDIR's offsets resolve against. No diagnostic carries it, so the
+   * {@link OFFSET_FRAMES} note (a frame origin is not published on a message)
+   * holds unchanged.
+   */
+  readonly origin?: number;
+}
+
+/**
+ * Compose the {@link ParseFrame} of a slice cut from `enclosing.buffer` at
+ * `start`: the bytes, the `"value-slice"` name and, when the enclosing frame has
+ * one, the origin moved by `start`. The one place a slice frame is composed, so
+ * the three move together. **Every caller is a frame composition site**, so the
+ * `OFFSET_FRAMES` census grep reaches them through this helper only: follow it
+ * with `grep -rn valueSliceFrame src/`.
+ *
+ * @internal
+ */
+export function valueSliceFrame(enclosing: ParseFrame, slice: Buffer, start: number): ParseFrame {
+  return enclosing.origin === undefined
+    ? { buffer: slice, name: OFFSET_FRAMES.VALUE_SLICE }
+    : { buffer: slice, name: OFFSET_FRAMES.VALUE_SLICE, origin: enclosing.origin + start };
+}
+
+/**
+ * The file offset of the byte at `offset` in `frame`, counted from the first
+ * byte of the File Preamble, or `undefined` when the frame has no file position
+ * (see {@link ParseFrame.origin}).
+ *
+ * @internal
+ */
+export function fileOffsetIn(frame: ParseFrame, offset: number): number | undefined {
+  return frame.origin === undefined ? undefined : frame.origin + offset;
 }
 
 /**

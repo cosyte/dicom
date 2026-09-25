@@ -26,6 +26,21 @@
  *     such a stream rather than repairing it: appending a delimiter to a stream
  *     the reader flagged as possibly short would write a well-formed file that
  *     may be missing frames.
+ *   - `DIRECTORY_OFFSET_UNRESOLVED` - the `Dataset` is a DICOMDIR (File Meta
+ *     Media Storage SOP Class UID `1.2.840.10008.1.3.10`) and one of its offset
+ *     attributes, `(0004,1200)`, `(0004,1202)`, or a Directory Record's
+ *     `(0004,1400)` or `(0004,1420)`, cannot be tied to a Directory Record the
+ *     `Dataset` holds: a non-zero value that is not the `Item.fileOffset` of an
+ *     Item of its Directory Record Sequence `(0004,1220)`, or a value that is
+ *     not one 32-bit unsigned integer. The writer recomputes every offset it
+ *     can tie; one it cannot is refused, never written stale (it would name the
+ *     wrong bytes) and never written as zero (zero means "no record" and would
+ *     silently prune the tree).
+ *   - `DIRECTORY_OFFSET_DEFLATED` - the DICOMDIR is to be written in Deflated
+ *     Explicit VR Little Endian and carries a non-zero offset (or one that is
+ *     not one 32-bit unsigned integer). A position inside a deflated stream
+ *     names no Item a reader can seek to, so no offset can be written for it.
+ *     A Deflated DICOMDIR whose offsets are all zero is written.
  *
  * The message is built only from structural constants (never a decoded
  * attribute value, a Transfer Syntax UID, or a length or byte read from the
@@ -48,6 +63,8 @@ export const SERIALIZE_ERROR_CODES = {
   MISSING_TRANSFER_SYNTAX: "MISSING_TRANSFER_SYNTAX",
   UNSUPPORTED_TRANSFER_SYNTAX: "UNSUPPORTED_TRANSFER_SYNTAX",
   INVALID_ENCAPSULATED_PIXEL_DATA: "INVALID_ENCAPSULATED_PIXEL_DATA",
+  DIRECTORY_OFFSET_UNRESOLVED: "DIRECTORY_OFFSET_UNRESOLVED",
+  DIRECTORY_OFFSET_DEFLATED: "DIRECTORY_OFFSET_DEFLATED",
 } as const;
 
 /**
@@ -65,6 +82,10 @@ export const SERIALIZE_ERROR_CODES = {
  *       return "Transfer Syntax UID is neither native nor a section A.4 one";
  *     case "INVALID_ENCAPSULATED_PIXEL_DATA":
  *       return "top-level Pixel Data is not a section A.4 fragment stream";
+ *     case "DIRECTORY_OFFSET_UNRESOLVED":
+ *       return "a DICOMDIR offset names no Directory Record the dataset holds";
+ *     case "DIRECTORY_OFFSET_DEFLATED":
+ *       return "a Deflated DICOMDIR carries a non-zero Directory Record offset";
  *   }
  * }
  * ```
@@ -90,6 +111,9 @@ export type SerializeErrorCode = (typeof SERIALIZE_ERROR_CODES)[keyof typeof SER
  *   }
  *   if (err instanceof DicomSerializeError && err.code === "INVALID_ENCAPSULATED_PIXEL_DATA") {
  *     // a section A.4 object whose top-level Pixel Data is not a fragment stream
+ *   }
+ *   if (err instanceof DicomSerializeError && err.code === "DIRECTORY_OFFSET_UNRESOLVED") {
+ *     // a DICOMDIR offset the writer cannot tie to a Directory Record
  *   }
  * }
  * ```

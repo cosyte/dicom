@@ -632,6 +632,24 @@ function encodeSqHeader(
   return Buffer.concat([groupBuf, elementBuf, vrBuf, reserved, lengthBuf, body]);
 }
 
+/**
+ * The bytes {@link buildDicom} writes for one Data Set element under `ts` (not
+ * Deflated: pass Explicit VR LE for a Deflated layout). Exported so a builder
+ * that must know where an element lands (the DICOMDIR builder, whose offsets
+ * name byte positions) measures the same encoder that writes the file.
+ */
+export function encodeBuiltElement(
+  el: BuildDicomElement | BuildDicomSqElement,
+  ts: string,
+): Buffer {
+  return encodeAnyElement(el, dataSetEncoding(ts));
+}
+
+/** The bytes {@link buildDicom} writes for one Sequence Item under `ts`; see {@link encodeBuiltElement}. */
+export function encodeBuiltItem(item: BuildDicomSqItem, ts: string): Buffer {
+  return encodeSqItem(item, dataSetEncoding(ts));
+}
+
 /** Top-level encoder dispatch - picks per-TS strategy and SQ vs primitive. */
 function encodeAnyElement(el: BuildDicomElement | BuildDicomSqElement, ts: string): Buffer {
   if (isSqElement(el)) return encodeSqElement(el, ts);

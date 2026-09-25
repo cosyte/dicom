@@ -139,20 +139,51 @@ interface Walked {
   readonly end: number;
 }
 
-/** A span as an Item emits it: where it started, and the Tag Number it sorts by. */
+/**
+ * A span as an Item emits it: where it started and its value started, and the
+ * Tag Number it sorts by.
+ */
 interface Emitted extends Walked {
   readonly tag: number;
   readonly start: number;
+  readonly valueStart: number;
 }
 
 /** One Data Element span inside an Item. */
 interface ElementSpan extends Emitted {
-  readonly valueStart: number;
   readonly undefinedLength: boolean;
   /** `true` when the walk descended this span's Items. */
   readonly descended: boolean;
   /** The model's element for this span's tag: the last one the reader read. */
   readonly model: Element;
+}
+
+/**
+ * Where one Data Element of a placed Item's own Data Set lands, counted in the
+ * element's emitted `rawBytes`: its first byte, its value's first byte, and the
+ * byte just past it.
+ *
+ * @internal
+ */
+export interface PlacedSpan {
+  readonly tag: number;
+  readonly start: number;
+  readonly valueStart: number;
+  readonly end: number;
+}
+
+/**
+ * Where one Item of a root Sequence lands, counted in the element's emitted
+ * `rawBytes`: its `(FFFE,E000)` Item tag, and each Data Element of its own Data
+ * Set in the order they are written. Items keep their order and every Item is
+ * written at its own length, so an Item starts where it started in `rawBytes`;
+ * only the elements inside it move.
+ *
+ * @internal
+ */
+export interface ItemPlacement {
+  readonly itemStart: number;
+  readonly elements: readonly PlacedSpan[];
 }
 
 /** How the writer emits one root Data Element. */
@@ -168,6 +199,13 @@ export interface ElementEmission {
    * it is written after the ascending rest rather than moved among them.
    */
   readonly closed: boolean;
+  /**
+   * One {@link ItemPlacement} per Item, when {@link emissionOf} was asked to place
+   * them and walked the Sequence to its end; `undefined` otherwise, which means
+   * the Sequence is written as read and where its Items' elements land is not
+   * known.
+   */
+  readonly placements?: readonly ItemPlacement[];
 }
 
 function readUint16(buf: Buffer, offset: number, littleEndian: boolean): number {
@@ -400,6 +438,7 @@ function walkDataSet(
   syntax: WireSyntax,
   depth: number,
   model: Item,
+  placed?: PlacedSpan[],
 ): Walked | undefined {
   const stop = definedEnd ?? limit;
   const spans: ElementSpan[] = [];
@@ -434,7 +473,12 @@ function walkDataSet(
       // An earlier copy of a repeated tag: another element follows it, so the
       // reader ended it on its own length.
       if (span.undefinedLength) return undefined;
-      closed.push({ tag: span.tag, start: span.start, ...verbatim(buf, span.start, span.end) });
+      closed.push({
+        tag: span.tag,
+        start: span.start,
+        valueStart: span.valueStart,
+        ...verbatim(buf, span.start, span.end),
+      });
     } else if (!agrees(buf, span, syntax.encoding)) {
       return undefined;
     } else if (
@@ -450,6 +494,21 @@ function walkDataSet(
   // Array.prototype.sort is stable (ES2019), so a repeated tag keeps its copies
   // in source relative order.
   const ordered = [...closed.sort((a, b) => a.tag - b.tag), ...open];
+  if (placed !== undefined) {
+    // Each span is written whole and at its own length, so where it lands is
+    // the Item body's start plus the spans written before it.
+    let at = start;
+    for (const span of ordered) {
+      const length = span.end - span.start;
+      placed.push({
+        tag: span.tag,
+        start: at,
+        valueStart: at + (span.valueStart - span.start),
+        end: at + length,
+      });
+      at += length;
+    }
+  }
   const moved = ordered.some((span, i) => span.start !== spans[i]?.start);
   if (!moved && !ordered.some((span) => span.changed)) return verbatim(buf, start, p);
   const parts: Buffer[] = [];
@@ -464,6 +523,7 @@ function walkDataSet(
  * end a defined-length Sequence declares, and the stream must reach it exactly;
  * `undefined` means it runs to its Sequence Delimitation Item, which must come
  * before `limit`. The reader must have read as many Items as the wire carries.
+ * `placements`, when given, collects where each Item and its elements land.
  */
 function walkItems(
   buf: Buffer,
@@ -473,6 +533,7 @@ function walkItems(
   syntax: WireSyntax,
   depth: number,
   items: readonly Item[] | undefined,
+  placements?: ItemPlacement[],
 ): Walked | undefined {
   if (items === undefined) return undefined;
   const stop = definedEnd ?? limit;
@@ -493,13 +554,16 @@ function walkItems(
     if (tag !== ITEM || model === undefined) return undefined;
     const length = readUint32(buf, p + 4, le);
     const bodyStart = p + MARKER_LENGTH;
+    const placed: PlacedSpan[] = [];
+    const collect = placements !== undefined ? placed : undefined;
     let item: Walked | undefined;
     if (length === UNDEFINED_LENGTH) {
-      item = walkDataSet(buf, bodyStart, undefined, stop, syntax, depth, model);
+      item = walkDataSet(buf, bodyStart, undefined, stop, syntax, depth, model, collect);
     } else if (bodyStart + length <= stop) {
-      item = walkDataSet(buf, bodyStart, bodyStart + length, stop, syntax, depth, model);
+      item = walkDataSet(buf, bodyStart, bodyStart + length, stop, syntax, depth, model, collect);
     }
     if (item === undefined) return undefined;
+    placements?.push({ itemStart: p, elements: placed });
     parts.push(buf.subarray(p, bodyStart));
     appendAll(parts, item.parts);
     changed ||= item.changed;
@@ -514,9 +578,14 @@ function walkItems(
 /**
  * Walk a root `SQ` element's Item stream against its model Items, or
  * `undefined` when it cannot be walked to exactly the end of its `rawBytes` or
- * the reader did not descend it.
+ * the reader did not descend it. `placements`, when given, collects where each
+ * of its Items and their elements land.
  */
-function walkSequence(el: Element, syntax: WireSyntax): Walked | undefined {
+function walkSequence(
+  el: Element,
+  syntax: WireSyntax,
+  placements?: ItemPlacement[],
+): Walked | undefined {
   const raw = el.rawBytes;
   let valueStart = 0;
   let definedEnd: number | undefined = raw.length;
@@ -527,7 +596,16 @@ function walkSequence(el: Element, syntax: WireSyntax): Walked | undefined {
     valueStart = header.headerLength;
     definedEnd = header.length === UNDEFINED_LENGTH ? undefined : valueStart + header.length;
   }
-  const walked = walkItems(raw, valueStart, definedEnd, raw.length, syntax, 1, el.items);
+  const walked = walkItems(
+    raw,
+    valueStart,
+    definedEnd,
+    raw.length,
+    syntax,
+    1,
+    el.items,
+    placements,
+  );
   if (walked?.end !== raw.length) return undefined;
   if (!walked.changed) return walked;
   return { parts: [raw.subarray(0, valueStart), ...walked.parts], changed: true, end: raw.length };
@@ -542,15 +620,24 @@ function walkSequence(el: Element, syntax: WireSyntax): Walked | undefined {
  * reconstructs for an Implicit VR LE defined-length `SQ` (whose `rawBytes` are
  * value-only) declares the same length it did.
  *
+ * With `place`, an `SQ` the walk reaches to its end also reports where each of
+ * its Items and their elements land ({@link ElementEmission.placements}), which
+ * is how `serializeDicom` finds a DICOMDIR's Directory Records in its output.
+ *
  * @internal
  */
-export function emissionOf(el: Element, encoding: BodyEncoding): ElementEmission {
+export function emissionOf(el: Element, encoding: BodyEncoding, place = false): ElementEmission {
   const syntax = SYNTAX[encoding];
   const valueOnly = !isFullSpanElement(el, encoding);
   if (el.vr !== "SQ" || el.cp246Promoted === true) {
     return { rawBytes: undefined, closed: valueOnly || closesItself(el, syntax, 1) };
   }
-  const walked = walkSequence(el, syntax);
+  const placements: ItemPlacement[] | undefined = place ? [] : undefined;
+  const walked = walkSequence(el, syntax, placements);
   if (walked === undefined) return { rawBytes: undefined, closed: valueOnly };
-  return { rawBytes: walked.changed ? Buffer.concat(walked.parts) : undefined, closed: true };
+  return {
+    rawBytes: walked.changed ? Buffer.concat(walked.parts) : undefined,
+    closed: true,
+    ...(placements !== undefined ? { placements } : {}),
+  };
 }

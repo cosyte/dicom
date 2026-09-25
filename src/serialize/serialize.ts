@@ -49,13 +49,20 @@ import { Buffer } from "node:buffer";
 import { deflateRawSync } from "node:zlib";
 
 import type { Dataset } from "../dataset/dataset.js";
+import { DIRECTORY_TAGS, isDicomdir } from "../dataset/directory.js";
+import type { Element } from "../dataset/element.js";
 import { splitTag } from "../dataset/tag.js";
 import { ENCAPSULATED_TRANSFER_SYNTAX_UIDS } from "../dictionary/generated/encapsulated-transfer-syntaxes.js";
+import type { Tag } from "../dictionary/types.js";
+import { PLACED_TAGS, rewriteDirectoryOffsets, type PlacedElement } from "./directory.js";
 import { type BodyEncoding, encodeDatasetElement } from "./element.js";
 import { encapsulatedPixelData, PIXEL_DATA } from "./encapsulated.js";
 import { DicomSerializeError, SERIALIZE_ERROR_CODES } from "./errors.js";
 import { encodeFileMeta } from "./file-meta.js";
-import { emissionOf, tagNumber } from "./order.js";
+import { type ElementEmission, emissionOf, tagNumber } from "./order.js";
+
+/** Directory Record Sequence `(0004,1220)`. */
+const RECORD_SEQUENCE: Tag = DIRECTORY_TAGS.RECORD_SEQUENCE;
 
 const TS_IMPLICIT_LE = "1.2.840.10008.1.2";
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
@@ -96,26 +103,54 @@ function part10Preamble(): Buffer {
  * section A.4 syntax writes (see {@link encapsulatedPixelData}); it ends on its
  * own Sequence Delimitation Item, so it is placed by its tag like any other.
  */
-function encodeBody(ds: Dataset, encoding: BodyEncoding, pixelData?: Buffer): Buffer {
+function encodeBody(
+  ds: Dataset,
+  encoding: BodyEncoding,
+  pixelData?: Buffer,
+  placed?: Map<Tag, PlacedElement>,
+): Buffer {
   // PS3.5 §7.2: omit retired (gggg,0000) group-length elements on write.
   // (File Meta group lengths are handled separately and never appear in the
   // dataset element map.)
   const kept = ds.elements().filter((el) => splitTag(el.tag).element !== 0x0000);
-  const closed: { readonly tag: number; readonly bytes: Buffer }[] = [];
-  const open: Buffer[] = [];
+  interface Encoded {
+    readonly tag: number;
+    readonly bytes: Buffer;
+    readonly el: Element;
+    readonly placements?: ElementEmission["placements"];
+  }
+  const closed: Encoded[] = [];
+  const open: Encoded[] = [];
   for (const el of kept) {
     if (pixelData !== undefined && el.tag === PIXEL_DATA) {
-      closed.push({ tag: tagNumber(el.tag), bytes: pixelData });
+      closed.push({ tag: tagNumber(el.tag), bytes: pixelData, el });
       continue;
     }
-    const emission = emissionOf(el, encoding);
+    // Only a DICOMDIR's Directory Record Sequence is asked where its Items land.
+    const emission = emissionOf(el, encoding, placed !== undefined && el.tag === RECORD_SEQUENCE);
     const bytes = encodeDatasetElement(el, encoding, emission.rawBytes);
-    if (emission.closed) closed.push({ tag: tagNumber(el.tag), bytes });
-    else open.push(bytes);
+    const entry = { tag: tagNumber(el.tag), bytes, el, placements: emission.placements };
+    if (emission.closed) closed.push(entry);
+    else open.push(entry);
   }
   // Stable, so two model elements with one tag keep their relative order.
   closed.sort((a, b) => a.tag - b.tag);
-  return Buffer.concat([...closed.map((entry) => entry.bytes), ...open]);
+  const ordered = [...closed, ...open];
+  if (placed !== undefined) {
+    let start = 0;
+    for (const entry of ordered) {
+      if (PLACED_TAGS.has(entry.el.tag)) {
+        placed.set(entry.el.tag, {
+          el: entry.el,
+          start,
+          bytes: entry.bytes,
+          placements: entry.placements,
+        });
+      }
+      start += entry.bytes.length;
+    }
+  }
+  return Buffer.concat(ordered.map((entry) => entry.bytes));
 }
 
 /**
@@ -222,8 +257,15 @@ export function serializeDicom(ds: Dataset): Buffer {
 
   const preamble = part10Preamble();
   const fileMeta = encodeFileMeta(ds.fileMeta);
-  const body = encodeBody(ds, encoding, pixelData);
-  const datasetBytes = tsUid === TS_DEFLATED_LE ? deflateRawSync(body) : body;
-
-  return Buffer.concat([preamble, fileMeta, datasetBytes]);
+  const deflated = tsUid === TS_DEFLATED_LE;
+  if (!isDicomdir(ds.fileMeta)) {
+    const body = encodeBody(ds, encoding, pixelData);
+    return Buffer.concat([preamble, fileMeta, deflated ? deflateRawSync(body) : body]);
+  }
+  // A DICOMDIR: every offset is rewritten to where its record lands in these
+  // bytes, or the whole write is refused before anything is returned.
+  const placed = new Map<Tag, PlacedElement>();
+  const body = encodeBody(ds, encoding, pixelData, placed);
+  rewriteDirectoryOffsets(ds, body, placed, encoding, preamble.length + fileMeta.length, deflated);
+  return Buffer.concat([preamble, fileMeta, deflated ? deflateRawSync(body) : body]);
 }

@@ -2487,7 +2487,17 @@ function descendSequence(
     out.unenumerablePrivateRemovals.push(...inner.unenumerablePrivateRemovals);
     out.undefinedVrElements.push(...inner.undefinedVrElements);
     out.warnings.push(...inner.warnings);
-    newItems.push(new Item({ index, warnings: [], elements: inner.elements }));
+    // The source Item's file offset is carried as the rebuilt Item's identity.
+    // For a DICOMDIR it is the whole of what `serializeDicom` ties each
+    // Directory Record offset to, since the rebuilt Items sit at new positions.
+    newItems.push(
+      new Item({
+        index,
+        warnings: [],
+        elements: inner.elements,
+        ...(item.fileOffset !== undefined ? { fileOffset: item.fileOffset } : {}),
+      }),
+    );
   });
   return rebuildSequence(el, newItems, ctx.encoding);
 }
@@ -3451,11 +3461,13 @@ export function deidentify(
     warnings.push(unregisteredElementRemoved({ byteOffset: 0, fileMeta: false }));
   }
   // 🩺 Raised whenever the carve-out FIRED, not only when the object carried
-  // group-0004 elements. Its subject is the two clauses of §E.1.1's DICOMDIR
-  // bullet this run did not discharge - de-identifying the directory records,
-  // and the File-set the object belongs to - and neither becomes discharged by
-  // the object happening to carry no `(0004,xxxx)` element. A caller must not be
-  // able to read "this is a conformant de-identified DICOMDIR" out of silence.
+  // group-0004 elements. Its subject is the two File-set clauses of §E.1.1's
+  // DICOMDIR bullet this run did not discharge - a DICOMDIR created from the
+  // de-identified files, and the non-de-identified DICOMDIR removed from the
+  // File-set - and neither becomes discharged by the object happening to carry
+  // no `(0004,xxxx)` element. The records themselves are de-identified by this
+  // run like any other Data Set. A caller must not be able to read "this is a
+  // File-set-conformant DICOMDIR" out of silence.
   if (isDicomdir) {
     warnings.push(dicomdirFileSetNotDischarged({ byteOffset: 0, fileMeta: true }));
   }

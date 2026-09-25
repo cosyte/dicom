@@ -72,7 +72,7 @@ import { Item } from "../dataset/item.js";
 import { joinTag } from "../dataset/tag.js";
 import type { Tag } from "../dictionary/types.js";
 import { ByteCursor } from "./byte-cursor.js";
-import { DicomParseError, OFFSET_FRAMES } from "./errors.js";
+import { DicomParseError, fileOffsetIn, valueSliceFrame } from "./errors.js";
 import {
   encapsulatedFragmentExceedsBuffer,
   itemLengthExceedsBuffer,
@@ -252,6 +252,11 @@ export function parseSequence(
         throw err;
       }
       const itemTag = joinTag(group, element);
+      // Where this Item's tag sits in the file, when the frame has a file
+      // position (see `ParseFrame.origin`). Taken here, before any frame swap
+      // below, because `itemHeaderStart` counts in the enclosing frame.
+      const fileOffset = fileOffsetIn(ctx.frame, itemHeaderStart);
+      const itemPosition = fileOffset !== undefined ? { fileOffset } : {};
 
       if (itemTag === SEQ_DELIM_TAG) {
         // SeqDelim - skip the 4-byte length field (already consumed) and exit.
@@ -279,6 +284,7 @@ export function parseSequence(
             warnings: [],
             elements: new Map(),
             index: itemIndex,
+            ...itemPosition,
           }),
         );
         itemIndex += 1;
@@ -296,7 +302,9 @@ export function parseSequence(
           throw encapsulatedFragmentExceedsBuffer(ctx.frame, itemHeaderStart);
         }
         cursor.position += itemLength;
-        items.push(new Item({ warnings: [], elements: new Map(), index: itemIndex }));
+        items.push(
+          new Item({ warnings: [], elements: new Map(), index: itemIndex, ...itemPosition }),
+        );
         itemIndex += 1;
         continue;
       }
@@ -312,7 +320,14 @@ export function parseSequence(
         const inner = opts.innerStrategy(buffer, cursor.position, ctx, emit, {
           stopOnItemDelim: true,
         });
-        items.push(new Item({ warnings: [], elements: inner.elements, index: itemIndex }));
+        items.push(
+          new Item({
+            warnings: [],
+            elements: inner.elements,
+            index: itemIndex,
+            ...itemPosition,
+          }),
+        );
         cursor.position = inner.endOffset;
       } else {
         // Defined-length item - slice and parse exactly `itemLength` bytes.
@@ -386,12 +401,19 @@ export function parseSequence(
         const enclosingFrame = ctx.frame;
         let inner;
         try {
-          ctx.frame = { buffer: itemSlice, name: OFFSET_FRAMES.VALUE_SLICE };
+          ctx.frame = valueSliceFrame(enclosingFrame, itemSlice, cursor.position);
           inner = opts.innerStrategy(itemSlice, 0, ctx, emit);
         } finally {
           ctx.frame = enclosingFrame;
         }
-        items.push(new Item({ warnings: [], elements: inner.elements, index: itemIndex }));
+        items.push(
+          new Item({
+            warnings: [],
+            elements: inner.elements,
+            index: itemIndex,
+            ...itemPosition,
+          }),
+        );
         cursor.position += itemLength;
       }
       itemIndex += 1;
@@ -500,7 +522,7 @@ export function tryParseDefinedLengthSQ(
     const enclosingFrame = ctx.frame;
     let result;
     try {
-      ctx.frame = { buffer: slice, name: OFFSET_FRAMES.VALUE_SLICE };
+      ctx.frame = valueSliceFrame(enclosingFrame, slice, valueStart);
       result = parseSequence(slice, 0, ctx, emit, {
         explicitLength: valueLength,
         littleEndian: true,
@@ -580,7 +602,7 @@ export function tryParseUnAsSQ(
     const enclosingFrame = ctx.frame;
     let result;
     try {
-      ctx.frame = { buffer: slice, name: OFFSET_FRAMES.VALUE_SLICE };
+      ctx.frame = valueSliceFrame(enclosingFrame, slice, valueStart);
       result = parseSequence(slice, 0, ctx, emit, opts);
     } finally {
       ctx.frame = enclosingFrame;
