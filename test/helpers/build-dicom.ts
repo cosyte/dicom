@@ -264,7 +264,28 @@ export interface BuildDicomOptions {
   readonly fileMetaExtraElements?: readonly BuildDicomElement[];
   /** Trailing junk appended to the buffer after all dataset elements. */
   readonly trailingBytes?: Buffer;
+  /**
+   * **Malformed-fixture knob.** Written after File Meta **instead of** the encoded
+   * `elements`, byte for byte, with no deflate step whatever the Transfer Syntax.
+   * Use it to put a Data Set stream the encoder would never produce (a truncated
+   * or corrupted deflate stream, a zlib-wrapped one, one that inflates past a
+   * cap) behind a well-formed File Meta group. `elements` is ignored when it is
+   * set.
+   */
+  readonly dataSetBytes?: Buffer;
 }
+
+/**
+ * The Transfer Syntaxes whose whole Data Set is an Explicit VR Little Endian
+ * encoding raw-deflated per RFC 1951: Deflated Explicit VR LE (PS3.5 2026c
+ * section A.5) and the two JPIP Referenced Deflate syntaxes (sections A.7 and
+ * A.12). File Meta stays uncompressed for all three.
+ */
+const DEFLATED_DATA_SET_SYNTAXES: ReadonlySet<string> = new Set([
+  "1.2.840.10008.1.2.1.99",
+  "1.2.840.10008.1.2.4.95",
+  "1.2.840.10008.1.2.4.205",
+]);
 
 /**
  * Build a Part 10 buffer. Internal - do NOT export from `src/index.ts`.
@@ -335,8 +356,11 @@ export function buildDicom(opts: BuildDicomOptions): Buffer {
   // `parseDeflatedLE` - encode as Explicit VR LE first, then deflate
   // the concatenation via `zlib.deflateRawSync` (RFC 1951 raw deflate,
   // matching `inflateRawSync` on the parser side per CONTEXT D-26 /
-  // PITFALLS §1.4). File Meta is NOT deflated (FM-01).
-  if (opts.transferSyntax === "1.2.840.10008.1.2.1.99") {
+  // PITFALLS §1.4). File Meta is NOT deflated (FM-01). The JPIP Referenced
+  // Deflate syntaxes deflate the same Explicit VR LE Data Set the same way.
+  if (opts.dataSetBytes !== undefined) {
+    parts.push(opts.dataSetBytes);
+  } else if (DEFLATED_DATA_SET_SYNTAXES.has(opts.transferSyntax)) {
     const explicitLeBytes = Buffer.concat(
       opts.elements.map((el) => encodeAnyElement(el, "1.2.840.10008.1.2.1")),
     );

@@ -59,10 +59,7 @@ export type ParserStrategy = (
 ) => { elements: ReadonlyMap<Tag, Element>; endOffset?: number };
 
 /** One `[uid, strategy]` entry per UID in `uids`. */
-function entriesFor(
-  uids: readonly string[],
-  strategy: ParserStrategy,
-): [string, ParserStrategy][] {
+function entriesFor(uids: readonly string[], strategy: ParserStrategy): [string, ParserStrategy][] {
   return uids.map((uid): [string, ParserStrategy] => [uid, strategy]);
 }
 
