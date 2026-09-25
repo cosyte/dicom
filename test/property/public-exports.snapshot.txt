@@ -32,6 +32,7 @@ DeidentifyReport
 DeidentifyResult
 DicomDate
 DicomDateTime
+DicomDirectory
 DicomParseError
 DicomParseWarning
 DicomPosition
@@ -40,6 +41,7 @@ DicomTime
 DicomValue
 DicomValueError
 Dictionary
+DirectoryRecord
 Element
 EmbeddedAttributeFinding
 FATAL_CODES

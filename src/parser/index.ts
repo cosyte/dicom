@@ -12,7 +12,9 @@
  *      unsupported UIDs throw `UNSUPPORTED_TRANSFER_SYNTAX` carrying the
  *      `Dictionary.uid(uid)?.name` in `err.snippet`.
  *   6. The chosen strategy returns a `ReadonlyMap<Tag, Element>`.
- *   7. The result is assembled into a structural {@link Dataset}.
+ *   7. For a DICOMDIR, every Directory Record offset is resolved against the
+ *      Items' file offsets and each one that names no record is warned.
+ *   8. The result is assembled into a structural {@link Dataset}.
  *
  * A source/vendor `Profile` is wired in through `ParseOptions.profile`:
  * its `escalations` / `suppressions` reshape Tier-2 emission at the

@@ -94,7 +94,7 @@ is asked to emit a buffer it cannot make spec-clean.
 
 | Export                                                     | What it is                                                                                                                                   |
 | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SERIALIZE_ERROR_CODES`                                    | The frozen registry of the writer's codes: `MISSING_TRANSFER_SYNTAX`, `UNSUPPORTED_TRANSFER_SYNTAX`, `INVALID_ENCAPSULATED_PIXEL_DATA`.      |
+| `SERIALIZE_ERROR_CODES`                                    | The frozen registry of the writer's codes: `MISSING_TRANSFER_SYNTAX`, `UNSUPPORTED_TRANSFER_SYNTAX`, `INVALID_ENCAPSULATED_PIXEL_DATA`, `DIRECTORY_OFFSET_UNRESOLVED`, `DIRECTORY_OFFSET_DEFLATED`. |
 | `SerializeErrorCode`                                       | The discriminant type over that registry, so a `switch` on a caught code is exhaustive.                                                      |
 | `DicomSerializeError`                                      | The thrown class. Narrow with `err instanceof DicomSerializeError`, then on `err.code`.                                                       |
 
@@ -114,6 +114,24 @@ write a well-formed file missing frames); anything other than an Item of defined
 delimiter; an Item of odd length; a fragment Item of length zero after the Basic Offset Table; or no
 Basic Offset Table Item or no fragment Item. Pixel Data inside a Sequence Item, such as an Icon Image
 Sequence, is written as read and not checked.
+
+`DIRECTORY_OFFSET_UNRESOLVED` and `DIRECTORY_OFFSET_DEFLATED` are the DICOMDIR codes. For a `Dataset`
+whose `(0002,0002)` is `1.2.840.10008.1.3.10`, the writer writes `(0004,1200)`, `(0004,1202)` and each
+Directory Record's `(0004,1400)` and `(0004,1420)` as the byte offset, counted from the first byte of
+the preamble it writes, of the record each named when the file was read (PS3.3 2026d Table F.3-3).
+That is how a record stays named after the File Meta group is rebuilt, a record's elements are put in
+ascending order, or `deidentify()` re-encodes every record at a new length. A record's identity is
+`Item.fileOffset`, where the parser found its Item tag, which `deidentify()` carries to the Item it
+rebuilds; an offset is tied to the Directory Record Sequence Item whose `fileOffset` it equals and to
+nothing found by scanning for an Item tag. `DIRECTORY_OFFSET_UNRESOLVED` means an offset cannot be
+tied: a non-zero value naming no Item of the Directory Record Sequence the `Dataset` holds (one
+`parseDicom` warned about, one left after the Sequence was removed or emptied, one on a hand-built
+`Dataset` with no records) or a value that is not one 32-bit unsigned integer. It is refused rather
+than written stale, which would name the wrong bytes, or written as zero, which would silently prune
+the tree. `DIRECTORY_OFFSET_DEFLATED` means the DICOMDIR is written under Deflated Explicit VR LE with
+a non-zero offset, which names no Item a reader of a deflated stream can seek to; one whose offsets
+are all zero is written. The limits of the record model are on
+[Known limitations](./limitations).
 
 A `DicomSerializeError` message is built from the code and fixed structural text and nothing else:
 no Transfer Syntax UID, length or byte from the `Dataset` reaches it, so unlike a `DicomParseError`

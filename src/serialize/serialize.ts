@@ -24,7 +24,9 @@
  * `./order.ts`), with Items kept in their order and no value byte changed;
  * encapsulated-pixel-data fragments pass through byte-for-byte (§A.4), and
  * under a section A.4 syntax a top-level Pixel Data that is not a fragment
- * stream section A.4 allows is refused, never repaired.
+ * stream section A.4 allows is refused, never repaired. A DICOMDIR's Directory
+ * Record offsets are recomputed against the bytes written, and one that cannot
+ * be tied to a record is refused (see `./directory.ts`).
  *
  * The ordering has limits, stated with it. A tag repeated inside an Item is
  * kept (both copies, in source order), so such output still breaks PS3.5 2026c
@@ -200,6 +202,17 @@ function encodeBody(
  * and Float or Double Float Pixel Data. Pixel Data nested in a Sequence Item is
  * written as read.
  *
+ * **DICOMDIR offsets.** For a `Dataset` whose File Meta Media Storage SOP Class
+ * UID is `1.2.840.10008.1.3.10`, `(0004,1200)`, `(0004,1202)` and each Directory
+ * Record's `(0004,1400)` and `(0004,1420)` are written as the byte offset, from
+ * the first preamble byte of the output, of the Directory Record each named when
+ * the file was read (PS3.3 2026d Table F.3-3), whatever moved it: the rebuilt
+ * File Meta group, the ascending order above, or `deidentify()`. A record is the
+ * Item of the Directory Record Sequence `(0004,1220)` whose `Item.fileOffset`
+ * the offset equals; nothing is found by scanning for an Item tag. A zero offset
+ * is written as zero. Limits: the retired MRDR offset `(0004,1504)` is written as
+ * read, and nothing checks record keys or `(0004,1202)` against the root chain.
+ *
  * **Input contract.** The writer is designed for a {@link Dataset} produced by
  * `parseDicom`: it relies on the parser's `Element.rawBytes` representation
  * (value-only for scalars and Implicit-LE defined-length `SQ`; full on-wire span
@@ -219,9 +232,13 @@ function encodeBody(
  * @throws {@link DicomSerializeError} with code `MISSING_TRANSFER_SYNTAX` when
  *   the dataset has no File Meta Transfer Syntax UID,
  *   `UNSUPPORTED_TRANSFER_SYNTAX` when that UID is neither one of the four
- *   native syntaxes nor a section A.4 one, or `INVALID_ENCAPSULATED_PIXEL_DATA`
+ *   native syntaxes nor a section A.4 one, `INVALID_ENCAPSULATED_PIXEL_DATA`
  *   when it is a section A.4 one and the top-level Pixel Data is not a fragment
- *   stream section A.4 allows. Nothing is returned on a throw.
+ *   stream section A.4 allows, `DIRECTORY_OFFSET_UNRESOLVED` when a DICOMDIR
+ *   carries an offset that is not zero and names no Directory Record the
+ *   `Dataset` holds, or is not one 32-bit unsigned integer (never written stale
+ *   or as zero), or `DIRECTORY_OFFSET_DEFLATED` when a DICOMDIR under Deflated
+ *   Explicit VR LE carries a non-zero offset. Nothing is returned on a throw.
  *
  * @example
  * ```ts

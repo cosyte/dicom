@@ -36,7 +36,7 @@ These are non-goals, not gaps. Each is a companion package or another tool's job
 | **Terminology resolution.** Coded values are surfaced with their designator and canonical source but are never validated, looked up, or cross-mapped; `SRT` is not normalized to `SCT`              | `@cosyte/terminology` |
 | **Typed SR and RT models.** SR content trees and RT objects are navigable as raw structure, with no clinical model over them. Deliberately flagged and deferred rather than half-built              | out of scope for v1   |
 | **Patient matching.** Patient ID is surfaced with its issuer; the library never decides that two identifiers are the same person                                                                    | out of scope          |
-| **DICOMDIR modelling.** A Media Storage Directory Storage object parses as an ordinary Data Set; there is no directory-record model and no File-set view, so `deidentify()` cannot rebuild one      | out of scope for v1   |
+| **A File-set view.** A DICOMDIR's Directory Record tree is read and its offsets rewritten on write (below), but no DICOMDIR is built from files and nothing is removed from a File-set               | out of scope for v1   |
 
 Supported transfer syntaxes: the four native ones, Implicit VR LE `1.2.840.10008.1.2`, Explicit VR
 LE `...1.2.1`, Deflated Explicit VR LE `...1.2.1.99` and Explicit VR BE `...1.2.2` (retired,
@@ -77,6 +77,41 @@ Item of length zero after the Basic Offset Table (an empty Basic Offset Table is
 with no Basic Offset Table Item or no fragment Item after it. Its message
 is a fixed string. Pixel Data inside a Sequence Item, such as an Icon Image Sequence, is written as
 read and not checked.
+
+**DICOMDIR: the record tree is read, and its offsets are rewritten on write.** For an object whose
+`(0002,0002)` is `1.2.840.10008.1.3.10` (Media Storage Directory Storage), `ds.directory` is a
+`DicomDirectory`: every Item of the Directory Record Sequence `(0004,1220)` as a `DirectoryRecord`
+with its `(0004,1430)` type, its Referenced File ID `(0004,1500)` components and the records its
+`(0004,1420)` offset names as lower-level, and the root entity `(0004,1200)` names. An offset
+resolves only when it is exactly where a record's `(FFFE,E000)` Item tag sits in the file, counted
+from the first byte of the File Preamble (PS3.3 2026d Table F.3-3); one that is not, a Value Length
+other than 4, and a record reached twice each raise a warning
+(`DICOM_DIRECTORY_OFFSET_UNRESOLVED`, `DICOM_DIRECTORY_OFFSET_MALFORMED`,
+`DICOM_DIRECTORY_RECORD_REVISITED`) and resolve nothing. `serializeDicom` writes `(0004,1200)`,
+`(0004,1202)`, `(0004,1400)` and `(0004,1420)` as the byte offsets of the records they named when
+the file was read, including after `deidentify()` has moved every record. The limits sit with it:
+
+- **Referenced File IDs are kept verbatim**: never de-identified, rewritten or re-pointed, by the
+  reader, `deidentify()` or the writer. A path that carries identifying text carries it into the
+  output.
+- **The two File-set clauses of PS3.15 §E.1.1 are not discharged.** No DICOMDIR is created from the
+  de-identified files, and the non-de-identified DICOMDIR is not removed from its File-set;
+  `deidentify()` raises `DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED` on every DICOMDIR run.
+- **A DICOMDIR carrying an offset that names no record is refused on write**, with
+  `DicomSerializeError` code `DIRECTORY_OFFSET_UNRESOLVED` and no bytes returned: an offset that did
+  not resolve on read, a value that is not one 32-bit unsigned integer, and a non-zero offset on a
+  `Dataset` whose Directory Record Sequence was removed or emptied, or was never there. It is never
+  written stale (it would name the wrong bytes) and never written as zero (that prunes the tree).
+- **A Deflated DICOMDIR with records is refused on write**, with `DIRECTORY_OFFSET_DEFLATED`: a
+  position inside a deflated stream names no Item a reader can seek to, so any non-zero offset is
+  refused, and `parseDicom` resolves no offset of such a file and warns
+  `DICOM_DIRECTORY_OFFSET_DEFLATED` (PS3.10 2026d section 8.6 requires Explicit VR Little Endian of a
+  DICOMDIR File). One whose offsets are all zero is written.
+- **Not checked:** record keys against PS3.3 F.5, `(0004,1202)` against the end of the root chain,
+  the File-set Consistency Flag, and Private Record UIDs. The retired MRDR offset `(0004,1504)` is
+  written as read and not rewritten. An Implicit VR LE or Explicit VR BE DICOMDIR is read and
+  written without a warning, although PS3.10 section 8.6 makes Explicit VR LE the only conformant
+  syntax.
 
 ---
 
@@ -223,16 +258,19 @@ structural fact about DICOM that no reader can resolve from the wire.
   [Attributes neither table carries](./deidentification#attributes-neither-table-carries).
 
 - **A de-identified DICOMDIR is NOT File-set conformant, and the run says so rather than implying
-  otherwise.** PS3.15 §E.1.1's group-0004 bullet has three clauses. This package discharges the
-  first - `(0004,xxxx)` removed from everything that is not a DICOMDIR - and honours the carve-out
-  for an object whose `(0002,0002)` is `1.2.840.10008.1.3.10`, keeping its `(0004,xxxx)` elements.
-  The other two clauses need a DICOMDIR model and a File-set view this library does not have: the
-  directory records are not de-identified as directory records, no File-set is rebuilt from the
-  de-identified files it references, and no existing non-de-identified DICOMDIR is removed from any
-  File-set. Every such run raises `DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED`, **including one
-  where the object carried no `(0004,xxxx)` element at all**, because what was not discharged has
-  nothing to do with what the object happened to carry. Build a de-identified File-set from the
-  de-identified files, not from this output.
+  otherwise.** PS3.15 §E.1.1's group-0004 bullet removes `(0004,xxxx)` from everything that is not a
+  DICOMDIR, and this package does that; for an object whose `(0002,0002)` is `1.2.840.10008.1.3.10`
+  it honours the carve-out and keeps them. Its Directory Records are de-identified as Data Sets, like
+  any other Sequence Item, so a PATIENT record's Patient's Name and Patient ID are handled by Table
+  E.1-1, and `serializeDicom` rewrites each record offset to where its record lands. The two
+  File-set clauses are **not** discharged: no DICOMDIR is created from the de-identified files it
+  references, and no non-de-identified DICOMDIR is removed from the File-set, because this library
+  has no view of a File-set. Every such run raises `DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED`,
+  **including one where the object carried no `(0004,xxxx)` element at all**, because what was not
+  discharged has nothing to do with what the object happened to carry. **Referenced File IDs
+  `(0004,1500)` are kept verbatim**, so a File-set whose paths carry identifying text keeps it; the
+  record keys are only what Table E.1-1 names. Build a de-identified File-set from the de-identified
+  files, not from this output.
 
 - **`(0028,0303) = MODIFIED` is written, and this library performs no date transformation.**
   `deidentify()` writes `(0028,0303) Longitudinal Temporal Information Modified` on every run, in the

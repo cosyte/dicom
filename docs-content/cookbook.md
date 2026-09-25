@@ -378,11 +378,13 @@ File other than a DICOMDIR File". `report.group0004Removals` names them (capped,
 for the nested ones) and `report.group0004RemovalCount` is the complete total.
 
 **The DICOMDIR carve-out is honoured and is not silent.** If `(0002,0002)` is
-`1.2.840.10008.1.3.10` (Media Storage Directory Storage) the `(0004,xxxx)` elements stay, and the run
-raises `DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED`: this library does not model DICOMDIR, so the
-rest of that bullet - de-identifying the directory records, rebuilding the File-set from the
-de-identified files it references, removing a non-de-identified DICOMDIR from the File-set - was
-**not** done. Do not treat such output as a conformant de-identified DICOMDIR.
+`1.2.840.10008.1.3.10` (Media Storage Directory Storage) the `(0004,xxxx)` elements stay, the
+Directory Records are de-identified as Data Sets, and `serializeDicom` rewrites each record offset to
+where its record lands in the written bytes. The run raises
+`DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED` for the two File-set clauses of that bullet it does
+**not** discharge: creating a DICOMDIR from the de-identified files it references, and removing the
+non-de-identified DICOMDIR from the File-set. Referenced File IDs are kept verbatim. Do not treat such
+output as a File-set-conformant DICOMDIR.
 
 This is **metadata-level** de-identification. Pixel data is out of scope: when an object carries
 burned-in annotation this layer cannot remove, you get a `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED`
