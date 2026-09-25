@@ -1349,7 +1349,7 @@ describe("PHI: report contextPath and the fabricated Sequence header", () => {
     expect(dataset.get("00120062")?.rawBytes.toString("latin1")).toBe("YES");
   });
 
-  it("the mutation control: serialized WITHOUT de-identification, both are in the bytes", () => {
+  it("S0367-dicom-15 AC-12 mutation control: serialized WITHOUT de-identification, both are in the bytes", () => {
     // Proves the byte searches above can go red: the same serializer and the same
     // search, on the parsed object the rule never touched, and on the control
     // surname, whose fabricated tag tracks the payload.
@@ -1389,8 +1389,9 @@ describe("PHI: report contextPath and the fabricated Sequence header", () => {
   it("and the fabricated tag never reaches attributes[].tag, which IS bound", () => {
     // `attributes[].tag` is only populated for a tag Annex E carries a row for -
     // membership in a closed table - so the fabricated header is absent from it.
-    // S0367-dicom-15 moved the second half: the nested `(0010,0020)` is no longer
-    // audited, because the Sequence carrying it is removed whole and not walked.
+    // S0367-dicom-15 AC-12 moved the second half: the nested `(0010,0020)` is no
+    // longer audited, because the Sequence carrying it is removed whole and not
+    // walked ("none for anything inside it").
     const { report } = deidentify(parseDicom(fabricatedSequenceInsideAValue(CONTEXT_NAME)));
 
     expect(report.attributes.map((a) => a.tag)).not.toContain("53484E4F");
