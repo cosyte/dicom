@@ -63,7 +63,7 @@ const DEL = 0x7f;
 const BACKSLASH = 0x5c;
 const CARET = 0x5e;
 const EQUALS = 0x3d;
-const REPLACEMENT = "�";
+const REPLACEMENT = String.fromCharCode(0xfffd);
 
 /** Value 1 terms that take no code extensions (PS3.5 2026d section 6.1.2.4). */
 const NO_CODE_EXTENSION_VALUE_1: ReadonlySet<string> = new Set(["ISO_IR 192", "GB18030", "GBK"]);
@@ -249,7 +249,12 @@ function singleByteCharacter(ir: number, byte: number): string | undefined {
 const pairCaches = new Map<number, Map<number, string | undefined>>();
 
 /** The character a byte pair encodes in 94x94 set `ir`, or `undefined`. */
-function pairCharacter(set: DoubleByteSet, ir: number, first: number, second: number): string | undefined {
+function pairCharacter(
+  set: DoubleByteSet,
+  ir: number,
+  first: number,
+  second: number,
+): string | undefined {
   const row = (first & 0x7f) - 0x20;
   const cell = (second & 0x7f) - 0x20;
   if (!set.assigned(row, cell)) return undefined;
