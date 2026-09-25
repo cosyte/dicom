@@ -253,7 +253,8 @@ export function fileOffsetIn(frame: ParseFrame, offset: number): number | undefi
  * **`snippet` is cut in the frame `offsetFrame` names, on every fatal but one.**
  * The exception is `UNSUPPORTED_TRANSFER_SYNTAX`, whose snippet slot carries
  * PS3.6's own NAME for the unsupported UID when the registry publishes one
- * (`"JPIP Referenced"`), and 16 raw bytes only when it does not. That is
+ * (`"SMPTE ST 2110-20 Uncompressed Progressive Active Video"`), and 16 raw
+ * bytes only when it does not. That is
  * deliberate and predates the frame; it is named here because a universal about
  * `snippet` written without it is false on the code an object under a refused
  * Transfer Syntax reaches first. Everywhere else the two agree, so a consumer

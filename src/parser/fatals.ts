@@ -124,7 +124,8 @@ import { WITHHELD, renderVr } from "./tokens.js";
  * each with its own reader. A literal rather than a derivation so this module
  * does not import the dispatch table it is thrown out of; the `fatals.test.ts`
  * "supported list matches the dispatch table" case is what keeps the two in
- * step, together with the generated section A.4 list the table adds to them.
+ * step, together with the generated section A.4 list and the JPIP Referenced
+ * list (`./jpip-referenced.ts`) the table adds to them.
  */
 const NATIVE_TRANSFER_SYNTAXES: readonly string[] = Object.freeze([
   "1.2.840.10008.1.2",
@@ -135,11 +136,13 @@ const NATIVE_TRANSFER_SYNTAXES: readonly string[] = Object.freeze([
 
 /**
  * The supported list, rendered for the one message that carries it. It names
- * the native UIDs and SUMMARISES the section A.4 syntaxes rather than
- * enumerating them, so the message stays short and names no UID a caller could
- * mistake for the refused one: the refused UID is never printed at all.
+ * the native UIDs and SUMMARISES the section A.4 syntaxes and the four JPIP
+ * Referenced syntaxes rather than enumerating them, so the message stays short
+ * and names no UID a caller could mistake for the refused one: the refused UID
+ * is never printed at all. The JPIP sections are cited in the edition the A.4
+ * list was read from, which is the one vendored PS3.5 both come from.
  */
-const SUPPORTED_TRANSFER_SYNTAXES = `${NATIVE_TRANSFER_SYNTAXES.join(", ")}, and every encapsulated Pixel Data Transfer Syntax PS3.5 ${ENCAPSULATED_TRANSFER_SYNTAX_EDITION} section A.4 names`;
+const SUPPORTED_TRANSFER_SYNTAXES = `${NATIVE_TRANSFER_SYNTAXES.join(", ")}, every encapsulated Pixel Data Transfer Syntax PS3.5 ${ENCAPSULATED_TRANSFER_SYNTAX_EDITION} section A.4 names, and the four JPIP Referenced Transfer Syntaxes of its sections A.6, A.7, A.11 and A.12`;
 
 /**
  * `zlib.codes`, as a closed set of names.
@@ -359,8 +362,8 @@ interface FatalTokens {
  * message fires precisely when it is **not** one this build supports, so the
  * UID itself is never printed. What is printed comes from a closed set the
  * parser controls: PS3.6's own name for the UID when the generated registry
- * publishes one, so `JPIP Referenced` still reads usefully, and a fixed phrase
- * when it does not.
+ * publishes one, so `SMPTE ST 2110-20 Uncompressed Progressive Active Video`
+ * still reads usefully, and a fixed phrase when it does not.
  */
 function renderTransferSyntax(ts: string | undefined): string {
   if (ts === undefined) return "The Transfer Syntax UID";
@@ -489,8 +492,9 @@ export function notDicomPart10(frame: ParseFrame, offset: number): DicomParseErr
 
 /**
  * `UNSUPPORTED_TRANSFER_SYNTAX` for a `(0002,0010)` value outside the set this
- * build registers: the four native syntaxes and the PS3.5 2026c section A.4
- * encapsulation syntaxes.
+ * build registers: the four native syntaxes, the PS3.5 2026c section A.4
+ * encapsulation syntaxes, and the four JPIP Referenced syntaxes of sections
+ * A.6, A.7, A.11 and A.12.
  *
  * @remarks
  * The UID is a parameter and is **not** printed: `renderTransferSyntax` replaces
@@ -502,7 +506,7 @@ export function notDicomPart10(frame: ParseFrame, offset: number): DicomParseErr
  *
  * @example
  * ```ts
- * throw unsupportedTransferSyntax(ctx.frame, fileMetaEnd, "1.2.840.10008.1.2.4.94");
+ * throw unsupportedTransferSyntax(ctx.frame, fileMetaEnd, "1.2.840.10008.1.2.7.1");
  * ```
  */
 export function unsupportedTransferSyntax(

@@ -101,8 +101,9 @@ is asked to emit a buffer it cannot make spec-clean.
 `MISSING_TRANSFER_SYNTAX` means the `Dataset` carries no `fileMeta`, or its `transferSyntaxUID` is
 empty. The Transfer Syntax UID is the dispatch input that decides every byte of the encoding, so
 there is no safe default to fall back to and none is invented. `UNSUPPORTED_TRANSFER_SYNTAX` means
-the UID is outside the set this package reads and writes; the writer never transcodes, so it cannot
-emit a syntax it does not understand.
+the UID is outside the set this package writes, the four native syntaxes and the section A.4 ones;
+the writer never transcodes, so it cannot emit a syntax it does not understand. That includes the
+four JPIP Referenced syntaxes, which `parseDicom` reads for metadata and this writer refuses.
 
 `INVALID_ENCAPSULATED_PIXEL_DATA` means the UID is a PS3.5 2026c section A.4 one and the top-level
 Data Set is not one that syntax may carry, so the writer returns nothing rather than repairing it:

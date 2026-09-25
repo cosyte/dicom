@@ -27,9 +27,12 @@ import { DicomParseError, FATAL_CODES, OFFSET_FRAMES } from "../../src/parser/er
 import type { ParseContext } from "../../src/parser/types.js";
 import { buildDicom } from "../helpers/build-dicom.js";
 import {
+  JPIP_SECTION_IDS,
   NATIVE_TRANSFER_SYNTAXES,
+  jpipTransferSyntaxes,
   registeredTransferSyntaxes,
   sectionA4TransferSyntaxes,
+  sectionById,
 } from "../helpers/ps35-section-a4.js";
 
 /** `true` when `parseDicom` gets past Transfer Syntax dispatch for `uid`. */
@@ -61,13 +64,16 @@ function makeCtx(buffer: Buffer): ParseContext {
   };
 }
 
-describe("AC-12: the accepted set is the four native syntaxes plus PS3.5 2026c section A.4", () => {
-  // The expectation is read out of the vendored part05.xml (one section located
-  // by `xml:id="sect_A.4"`, exactly one match required), never typed here, and
-  // the helper that reads it shares no code with the generator it grades.
+describe("AC-11: the accepted set is the native four, PS3.5 2026c section A.4 and the four JPIP Referenced syntaxes", () => {
+  // Both expectations are read out of the vendored part05.xml, never typed here:
+  // section A.4 by `xml:id="sect_A.4"`, and the JPIP set as the one UID each of
+  // sections A.6, A.7, A.11 and A.12 names, each located by its `xml:id` with
+  // exactly one match required. The helper shares no code with the generator or
+  // with `src/parser/jpip-referenced.ts`, the two lists it grades.
   const a4 = sectionA4TransferSyntaxes();
+  const jpip = jpipTransferSyntaxes();
 
-  it("AC-12: section A.4 names only non-retired TransferSyntax rows of the generated PS3.6 registry", () => {
+  it("AC-11: section A.4 names only non-retired TransferSyntax rows of the generated PS3.6 registry", () => {
     // The extraction is pinned to a size so a regex that silently matched fewer
     // UIDs cannot pass as a smaller, still self-consistent set.
     expect(a4).toHaveLength(35);
@@ -78,23 +84,51 @@ describe("AC-12: the accepted set is the four native syntaxes plus PS3.5 2026c s
     }
   });
 
-  it("AC-12: parseDicom accepts exactly the native four and the section A.4 set, among every registered Transfer Syntax", () => {
-    const expected = sortUnits(new Set([...NATIVE_TRANSFER_SYNTAXES, ...a4]));
+  it("AC-11: sections A.6, A.7, A.11 and A.12 each name one UID, four non-retired TransferSyntax rows in all", () => {
+    // Pinned to four for the same reason; each section is located exactly once.
+    for (const id of JPIP_SECTION_IDS) {
+      expect(sectionById(id).length, id).toBeGreaterThan(0);
+    }
+    expect(jpip).toHaveLength(4);
+    for (const uid of jpip) {
+      const row = UIDS[uid];
+      expect(row?.type, uid).toBe("TransferSyntax");
+      expect(row?.retired, uid).toBe(false);
+      expect(a4, uid).not.toContain(uid);
+    }
+  });
+
+  it("AC-11: a section located zero times or twice is refused, never first-matched", () => {
+    const one = '<section xml:id="sect_A.6"><para>"1.2.840.10008.1.2.4.94"</para></section>';
+    expect(sectionById("sect_A.6", one)).toBe(one);
+    expect(() => sectionById("sect_A.6", "<section></section>")).toThrow(/exactly one/u);
+    expect(() => sectionById("sect_A.6", `${one}${one}`)).toThrow(/exactly one/u);
+  });
+
+  it("AC-11: parseDicom accepts exactly the native four, the section A.4 set and the JPIP set, among every registered Transfer Syntax", () => {
+    const expected = sortUnits(new Set([...NATIVE_TRANSFER_SYNTAXES, ...a4, ...jpip]));
     const accepted = sortUnits(registeredTransferSyntaxes().filter((uid) => accepts(uid)));
     expect(accepted).toStrictEqual(expected);
   });
 
-  it("AC-12: the dispatch table registers exactly that set and nothing unregistered", () => {
+  it("AC-11: the dispatch table registers exactly that set and nothing unregistered", () => {
     // The behavioural sweep above only visits registered UIDs; this row catches
     // a UID added to the table that PS3.6 does not register at all.
-    const expected = sortUnits(new Set([...NATIVE_TRANSFER_SYNTAXES, ...a4]));
+    const expected = sortUnits(new Set([...NATIVE_TRANSFER_SYNTAXES, ...a4, ...jpip]));
     expect(sortUnits(Object.keys(TRANSFER_SYNTAX_PARSERS))).toStrictEqual(expected);
   });
 
-  it("AC-12: every section A.4 UID dispatches to the Explicit VR Little Endian reader", () => {
+  it("AC-11: every section A.4 UID dispatches to the Explicit VR Little Endian reader", () => {
     for (const uid of a4) {
       expect(TRANSFER_SYNTAX_PARSERS[uid], uid).toBe(parseExplicitLE);
     }
+  });
+
+  it("AC-11, AC-8: sections A.6 and A.11 go to the Explicit VR LE reader, A.7 and A.12 to the capped Deflated reader", () => {
+    expect(TRANSFER_SYNTAX_PARSERS["1.2.840.10008.1.2.4.94"]).toBe(parseExplicitLE);
+    expect(TRANSFER_SYNTAX_PARSERS["1.2.840.10008.1.2.4.204"]).toBe(parseExplicitLE);
+    expect(TRANSFER_SYNTAX_PARSERS["1.2.840.10008.1.2.4.95"]).toBe(parseDeflatedLE);
+    expect(TRANSFER_SYNTAX_PARSERS["1.2.840.10008.1.2.4.205"]).toBe(parseDeflatedLE);
   });
 });
 
@@ -108,12 +142,6 @@ describe("TRANSFER_SYNTAX_PARSERS dispatch table", () => {
 
   it("is frozen", () => {
     expect(Object.isFrozen(TRANSFER_SYNTAX_PARSERS)).toBe(true);
-  });
-
-  it("AC-11: does not register JPIP Referenced, SMPTE ST 2110 or a retired JPEG process (T-02-02-04)", () => {
-    expect(TRANSFER_SYNTAX_PARSERS["1.2.840.10008.1.2.4.94"]).toBeUndefined();
-    expect(TRANSFER_SYNTAX_PARSERS["1.2.840.10008.1.2.7.1"]).toBeUndefined();
-    expect(TRANSFER_SYNTAX_PARSERS["1.2.840.10008.1.2.4.52"]).toBeUndefined();
   });
 
   describe("each strategy is callable end-to-end (all four real after plan 02-05)", () => {

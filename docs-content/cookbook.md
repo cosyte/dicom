@@ -107,10 +107,11 @@ ds.warnings.length; // => 0
 Over a real folder, wrap the parse per file. A quirky object is tolerated rather than rejected and
 absent fields come back `undefined`, and a JPEG, JPEG 2000, RLE or other PS3.5 2026c section A.4
 compressed object indexes like any other, its pixels never decoded (see
-[section 7](#7-read-raw-pixel-data-without-decoding-it)). But **a folder walk still needs a
+[section 7](#7-read-raw-pixel-data-without-decoding-it)), as does a JPIP Referenced object, whose
+Pixel Data Provider URL is read and never fetched. But **a folder walk still needs a
 `try`/`catch`**, because the Tier-3 conditions throw and a real archive meets every one of them:
-`UNSUPPORTED_TRANSFER_SYNTAX` for an object under a syntax this parser refuses (JPIP Referenced,
-SMPTE ST 2110, or a retired UID); `INVALID_FILE_META` for a truncated
+`UNSUPPORTED_TRANSFER_SYNTAX` for an object under a syntax this parser refuses (SMPTE ST 2110, or a
+retired UID); `INVALID_FILE_META` for a truncated
 or partly-copied file; `NOT_DICOM_PART_10` for whatever non-DICOM file wandered into the folder; and
 `EMPTY_INPUT` for a zero-byte one. Each throws the one class, so catch `DicomParseError` per file
 and skip.
@@ -653,8 +654,19 @@ object included, with the Basic Offset Table and fragment Items byte for byte, a
 allow: absent, native, beside Float or Double Float Pixel Data, a stream not ended by its Sequence
 Delimitation Item, or an odd or empty Item. A fragment stream that ends before its Sequence
 Delimitation Item still parses, and `DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED` on `ds.warnings` says
-the fragment list may be short, which is why the writer will not write it. The JPIP Referenced and SMPTE ST 2110 syntaxes and every retired UID stay the fatal
-`UNSUPPORTED_TRANSFER_SYNTAX`. See [Known limitations](./limitations).
+the fragment list may be short, which is why the writer will not write it.
+
+**JPIP Referenced objects carry a URL, not fragments.** Under the four JPIP Referenced syntaxes
+(PS3.5 2026c sections A.6, A.7, A.11 and A.12) the metadata parses as it would under Explicit VR LE,
+the two Deflate ones inflated first. A conformant one has no Pixel Data to read, so
+`readPixelDataFragments` returns `undefined`; its pixels are referenced by Pixel Data Provider URL
+`(0028,7FE0)`, which
+`ds.get("00287FE0")?.value` returns as `{ kind: "text", value }` exactly as the file carries it. It
+is **never fetched**; retrieving it is your call and your network. Such an object is read-only
+here: `serializeDicom` refuses it with `UNSUPPORTED_TRANSFER_SYNTAX`, and `deidentify()` refuses it
+with a `DeidentifyError` whose code is `UNSUPPORTED_TRANSFER_SYNTAX`, because the URL has no PS3.15
+Table E.1-1 action and would otherwise be kept. The SMPTE ST 2110 syntaxes and every retired UID
+stay the fatal `UNSUPPORTED_TRANSFER_SYNTAX`. See [Known limitations](./limitations).
 
 ---
 

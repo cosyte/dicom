@@ -90,11 +90,12 @@ describe("parseDicom - PARSE-05 + D-15 NOT_DICOM_PART_10", () => {
 });
 
 describe("parseDicom - FM-04 + D-20 UNSUPPORTED_TRANSFER_SYNTAX", () => {
-  it("AC-11: dispatch table miss for JPIP Referenced → throws UNSUPPORTED_TRANSFER_SYNTAX with the registry name, never the UID, in message and snippet", () => {
+  it("AC-12: dispatch table miss for SMPTE ST 2110-20 → throws UNSUPPORTED_TRANSFER_SYNTAX with the registry name, never the UID, in message and snippet", () => {
+    const name = "SMPTE ST 2110-20 Uncompressed Progressive Active Video";
     const buf = buildDicom({
-      // JPIP Referenced: PS3.5 section A.6, Pixel Data is a reference rather
-      // than fragments, so it stays outside the supported set.
-      transferSyntax: "1.2.840.10008.1.2.4.94",
+      // SMPTE ST 2110-20: PS3.5 section A.8, a DICOM-RTV Metadata Flow syntax
+      // that stays outside the supported set.
+      transferSyntax: "1.2.840.10008.1.2.7.1",
       elements: [],
     });
     try {
@@ -108,12 +109,11 @@ describe("parseDicom - FM-04 + D-20 UNSUPPORTED_TRANSFER_SYNTAX", () => {
       // names it only from the closed set the parser controls: the dictionary's
       // own label for the UID. This test previously asserted the opposite and
       // pinned the echo in place.
-      expect(err.message).not.toContain("1.2.840.10008.1.2.4.94");
-      expect(err.message).toContain("JPIP Referenced");
+      expect(err.message).not.toContain("1.2.840.10008.1.2.7.1");
+      expect(err.message).toContain(name);
       expect(err.message).toContain("(0002,0010)");
-      // Human-readable name comes from Dictionary.uid (D-20): PS3.6 labels this
-      // UID "JPIP Referenced".
-      expect(err.snippet).toBe("JPIP Referenced");
+      // Human-readable name comes from Dictionary.uid (D-20): PS3.6's own label.
+      expect(err.snippet).toBe(name);
     }
   });
 

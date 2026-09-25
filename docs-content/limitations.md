@@ -52,13 +52,37 @@ VR LE, and the top-level Pixel Data as `OB` of undefined length, its Basic Offse
 Items copied byte for byte and in order, then a Sequence Delimitation Item. Nothing is transcoded,
 re-framed or re-encoded, and no offset table is rebuilt. The writer's limit sits with it: a
 top-level Data Set section A.4 does not allow is refused with `INVALID_ENCAPSULATED_PIXEL_DATA`,
-never repaired (see below). Every other registered UID stays the fatal
-`UNSUPPORTED_TRANSFER_SYNTAX`, named by its PS3.6 registry name: the JPIP Referenced syntaxes (their
-Pixel Data is a reference, not fragments), the SMPTE ST 2110 syntaxes, and every retired UID, the
-retired JPEG processes included; `serializeDicom` refuses the same UIDs with its own
-`UNSUPPORTED_TRANSFER_SYNTAX`.
+never repaired (see below). The four JPIP Referenced syntaxes are read too, for metadata only (next
+paragraph). Every other registered UID stays the fatal `UNSUPPORTED_TRANSFER_SYNTAX`, named by its
+PS3.6 registry name: the SMPTE ST 2110 syntaxes and every retired UID, the retired JPEG processes
+included; `serializeDicom` refuses the same UIDs with its own `UNSUPPORTED_TRANSFER_SYNTAX`.
 Deflated Explicit VR LE deflates the whole dataset stream rather than the pixels, and it is inflated
 on parse.
+
+**The four JPIP Referenced syntaxes are read for metadata, and only read.** JPIP Referenced
+`...1.2.4.94` and JPIP HTJ2K Referenced `...1.2.4.204` (PS3.5 2026c sections A.6 and A.11) are read
+under Explicit VR LE rules, as those sections require. JPIP Referenced Deflate `...1.2.4.95` and JPIP
+HTJ2K Referenced Deflate `...1.2.4.205` (sections A.7 and A.12) are that same Data Set compressed per
+RFC 1951, so they are inflated first, under the decompression cap and the inflate fatals Deflated
+Explicit VR LE has. Such an object carries no Pixel Data: it references its pixels through Pixel
+Data Provider URL `(0028,7FE0)`, which `ds.get("00287FE0")` returns as the `UR` element the file
+carries, its decoded `value` the URL text with only its trailing padding removed. **The URL is never
+fetched, resolved or validated**, and nothing in this package opens a connection to the host it
+names. The limits sit with that capability:
+
+- **`serializeDicom` refuses all four** with `UNSUPPORTED_TRANSFER_SYNTAX` and returns no bytes. A
+  JPIP object is read, never written.
+- **`deidentify()` refuses all four**: it throws a `DeidentifyError` carrying the
+  `UNSUPPORTED_TRANSFER_SYNTAX` code, whatever options you pass, and returns no dataset and no report.
+  `(0028,7FE0)` has no PS3.15 Table E.1-1 row, so a de-identified copy would keep the URL by
+  omission, and whether that URL can carry identity is an open question this package has not ruled
+  on. The refusal keys on the File Meta Transfer Syntax alone: a non-JPIP object that carries
+  `(0028,7FE0)` is de-identified like any other and keeps it (see
+  [De-identification](./deidentification#scope-limits-on-this-pages-subject)).
+- **Three misuses section A.6 forbids parse without a code**, as the section A.4 ones above do: an
+  object with no `(0028,7FE0)` (then `ds.get("00287FE0")` is `undefined`, never an empty string or
+  a placeholder), one that carries a top-level Pixel Data anyway, and one whose Photometric
+  Interpretation is outside the four Values section A.6 allows. No IOD or module validation is done.
 
 Three limits sit with that capability. A fragment stream that ends before its Sequence Delimitation
 Item still parses, with `DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED` saying the fragment list may be
