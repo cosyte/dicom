@@ -645,11 +645,13 @@ ds.warnings.length; // => 0
 
 **The limits sit beside that capability.** No pixel is decompressed, no frame is assembled from
 fragments, and neither the Basic Offset Table nor an Extended Offset Table `(7FE0,0001)` is
-interpreted. **`serializeDicom` refuses every section A.4 syntax** with `UNSUPPORTED_TRANSFER_SYNTAX`,
-a de-identified object included, so this package reads a compressed object and does not write one.
-A fragment stream that ends before its Sequence Delimitation Item still parses, and
-`DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED` on `ds.warnings` says the fragment list may be short. The
-JPIP Referenced and SMPTE ST 2110 syntaxes and every retired UID stay the fatal
+interpreted. `serializeDicom` writes each section A.4 syntax back under its own UID, a de-identified
+object included, with the Basic Offset Table and fragment Items byte for byte, and **refuses with
+`INVALID_ENCAPSULATED_PIXEL_DATA`**, never repairing, a top-level Pixel Data section A.4 does not
+allow: absent, native, beside Float or Double Float Pixel Data, a stream not ended by its Sequence
+Delimitation Item, or an odd or empty Item. A fragment stream that ends before its Sequence
+Delimitation Item still parses, and `DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED` on `ds.warnings` says
+the fragment list may be short, which is why the writer will not write it. The JPIP Referenced and SMPTE ST 2110 syntaxes and every retired UID stay the fatal
 `UNSUPPORTED_TRANSFER_SYNTAX`. See [Known limitations](./limitations).
 
 ---

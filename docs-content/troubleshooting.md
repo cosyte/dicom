@@ -243,13 +243,14 @@ that this package reads and writes metadata, where inside the metadata surface d
 
 ### Boundaries within the metadata surface
 
-- **Four native transfer syntaxes read and written, the section A.4 ones read only.** Implicit VR LE,
+- **Four native transfer syntaxes and the section A.4 ones read and written.** Implicit VR LE,
   Explicit VR LE, Explicit VR BE, and Deflated Explicit VR LE are read and written. Every
   encapsulation syntax PS3.5 2026c section A.4 names (JPEG, JPEG-LS, JPEG 2000, HTJ2K, RLE and the
-  rest) is read, under Explicit VR LE rules, and `serializeDicom` refuses to write any of them. A
-  compressed pixel stream is never decompressed: the writer passes its fragments through
-  byte-for-byte inside the four native syntaxes, and `readPixelDataFragments` hands them back as raw
-  bytes.
+  rest) is read and written under Explicit VR LE rules; the writer refuses with
+  `INVALID_ENCAPSULATED_PIXEL_DATA`, rather than repairing, a top-level Pixel Data section A.4 does
+  not allow, a stream read with `DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED` included. A compressed
+  pixel stream is never decompressed: the writer passes its fragments through byte-for-byte, and
+  `readPixelDataFragments` hands them back as raw bytes.
 - **Only typed `FileMeta` fields round-trip.** `serializeDicom` recomputes a spec-clean File Meta
   group; File Meta elements outside the typed model are not preserved verbatim through the model.
 - **De-identification is metadata-only and fail-safe toward removal.** Conditional Annex E codes

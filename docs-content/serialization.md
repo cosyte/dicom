@@ -22,7 +22,11 @@ publishes.
 - **A recomputed File Meta group.** Always Explicit VR LE, with `(0002,0000)` File Meta Information
   Group Length recomputed from what is actually written rather than copied from the source.
 - **The dataset body in the source transfer syntax.** The Transfer Syntax UID on the object decides
-  every byte of the encoding, and the writer does not transcode.
+  every byte of the encoding, and the writer does not transcode. Under every encapsulation syntax
+  PS3.5 2026c section A.4 names (JPEG, JPEG-LS, JPEG 2000, HTJ2K, RLE and the rest), the Data Set is
+  Explicit VR LE and the top-level Pixel Data is `OB` of undefined length: the source's Basic Offset
+  Table and fragment Items byte for byte and in order, then a zero-length Sequence Delimitation Item.
+  A top-level Pixel Data section A.4 does not allow is refused, not repaired (below).
 - **Even-length Value Fields.** PS3.5 2026c §7.1.1 defines a Value Field as "an even number of bytes
   containing the Value(s) of the Data Element", so odd values are padded with the pad byte their VR
   specifies. An odd length that arrived tolerated goes out even.
@@ -90,7 +94,7 @@ is asked to emit a buffer it cannot make spec-clean.
 
 | Export                                                     | What it is                                                                                                                                   |
 | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SERIALIZE_ERROR_CODES`                                    | The frozen registry of codes the writer may throw. `MISSING_TRANSFER_SYNTAX` and `UNSUPPORTED_TRANSFER_SYNTAX`.                              |
+| `SERIALIZE_ERROR_CODES`                                    | The frozen registry of the writer's codes: `MISSING_TRANSFER_SYNTAX`, `UNSUPPORTED_TRANSFER_SYNTAX`, `INVALID_ENCAPSULATED_PIXEL_DATA`.      |
 | `SerializeErrorCode`                                       | The discriminant type over that registry, so a `switch` on a caught code is exhaustive.                                                      |
 | `DicomSerializeError`                                      | The thrown class. Narrow with `err instanceof DicomSerializeError`, then on `err.code`.                                                       |
 
@@ -100,8 +104,20 @@ there is no safe default to fall back to and none is invented. `UNSUPPORTED_TRAN
 the UID is outside the set this package reads and writes; the writer never transcodes, so it cannot
 emit a syntax it does not understand.
 
-A `DicomSerializeError` message is built from the code and the offending Transfer Syntax UID and
-nothing else, so unlike a `DicomParseError` (which carries a raw `snippet`) it holds no source bytes.
+`INVALID_ENCAPSULATED_PIXEL_DATA` means the UID is a PS3.5 2026c section A.4 one and the top-level
+Data Set is not one that syntax may carry, so the writer returns nothing rather than repairing it:
+no top-level Pixel Data `(7FE0,0010)`; Float or Double Float Pixel Data `(7FE0,0008)` /
+`(7FE0,0009)` present; Pixel Data with a defined Value Length (Native Format); a fragment stream not
+ended by its Sequence Delimitation Item, including one `parseDicom` read with
+`DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED` (appending a delimiter to a stream that may be short would
+write a well-formed file missing frames); anything other than an Item of defined length before that
+delimiter; an Item of odd length; a fragment Item of length zero after the Basic Offset Table; or no
+Basic Offset Table Item or no fragment Item. Pixel Data inside a Sequence Item, such as an Icon Image
+Sequence, is written as read and not checked.
+
+A `DicomSerializeError` message is built from the code and fixed structural text and nothing else:
+no Transfer Syntax UID, length or byte from the `Dataset` reaches it, so unlike a `DicomParseError`
+(which carries a raw `snippet`) it holds no source bytes.
 
 ## What the writer will not do
 

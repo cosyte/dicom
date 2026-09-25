@@ -11,14 +11,25 @@
  *     `fileMeta.transferSyntaxUID` is empty. The Transfer Syntax UID is the
  *     dispatch input that decides every byte of the encoding, so there is no
  *     safe default to fall back to.
- *   - `UNSUPPORTED_TRANSFER_SYNTAX` - the Transfer Syntax UID is not one of
- *     the four v1 syntaxes the writer supports. The parser also reads the
- *     PS3.5 section A.4 encapsulation syntaxes, and the writer refuses every one
- *     of them. The writer never transcodes, so it cannot emit a syntax it does
- *     not understand.
+ *   - `UNSUPPORTED_TRANSFER_SYNTAX` - the Transfer Syntax UID is neither one of
+ *     the four native syntaxes nor one PS3.5 2026c section A.4 names for
+ *     encapsulated Pixel Data (the JPIP Referenced and SMPTE ST 2110 syntaxes
+ *     and every retired UID stay here). The writer never transcodes, so it
+ *     cannot emit a syntax it does not understand.
+ *   - `INVALID_ENCAPSULATED_PIXEL_DATA` - the Transfer Syntax UID is a section
+ *     A.4 one, but the top-level Data Set is not one that syntax may carry: no
+ *     top-level Pixel Data `(7FE0,0010)`, Float or Double Float Pixel Data
+ *     `(7FE0,0008)` / `(7FE0,0009)` present, Pixel Data with a defined Value
+ *     Length (Native Format), or a fragment stream that is not a Basic Offset
+ *     Table Item and one or more fragment Items of even, defined, non-zero
+ *     Item Length, ended by a Sequence Delimitation Item. The writer refuses
+ *     such a stream rather than repairing it: appending a delimiter to a stream
+ *     the reader flagged as possibly short would write a well-formed file that
+ *     may be missing frames.
  *
- * The message is built only from the Transfer Syntax UID and structural
- * facts (never a decoded attribute value), so it is always safe to log.
+ * The message is built only from structural constants (never a decoded
+ * attribute value, a Transfer Syntax UID, or a length or byte read from the
+ * input), so it is always safe to log.
  *
  * @module
  */
@@ -36,6 +47,7 @@
 export const SERIALIZE_ERROR_CODES = {
   MISSING_TRANSFER_SYNTAX: "MISSING_TRANSFER_SYNTAX",
   UNSUPPORTED_TRANSFER_SYNTAX: "UNSUPPORTED_TRANSFER_SYNTAX",
+  INVALID_ENCAPSULATED_PIXEL_DATA: "INVALID_ENCAPSULATED_PIXEL_DATA",
 } as const;
 
 /**
@@ -50,7 +62,9 @@ export const SERIALIZE_ERROR_CODES = {
  *     case "MISSING_TRANSFER_SYNTAX":
  *       return "dataset has no Transfer Syntax UID to serialize under";
  *     case "UNSUPPORTED_TRANSFER_SYNTAX":
- *       return "Transfer Syntax UID is outside the v1 set";
+ *       return "Transfer Syntax UID is neither native nor a section A.4 one";
+ *     case "INVALID_ENCAPSULATED_PIXEL_DATA":
+ *       return "top-level Pixel Data is not a section A.4 fragment stream";
  *   }
  * }
  * ```
@@ -61,7 +75,8 @@ export type SerializeErrorCode = (typeof SERIALIZE_ERROR_CODES)[keyof typeof SER
  * Thrown by `serializeDicom` when a `Dataset`
  * cannot be emitted as spec-clean Part 10. Never carries a decoded value, so
  * it is safe to log without leaking PHI: the `message` is built only from the
- * code and the offending Transfer Syntax UID.
+ * code and structural constants, never from the Transfer Syntax UID, a length
+ * or a byte the `Dataset` holds.
  *
  * @example
  * ```ts
@@ -72,6 +87,9 @@ export type SerializeErrorCode = (typeof SERIALIZE_ERROR_CODES)[keyof typeof SER
  * } catch (err) {
  *   if (err instanceof DicomSerializeError && err.code === "MISSING_TRANSFER_SYNTAX") {
  *     // dataset is missing the File Meta Transfer Syntax UID
+ *   }
+ *   if (err instanceof DicomSerializeError && err.code === "INVALID_ENCAPSULATED_PIXEL_DATA") {
+ *     // a section A.4 object whose top-level Pixel Data is not a fragment stream
  *   }
  * }
  * ```

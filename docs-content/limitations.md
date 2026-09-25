@@ -28,7 +28,7 @@ These are non-goals, not gaps. Each is a companion package or another tool's job
 | Not in v1                                                                                                                                                                                           | Where it goes         |
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
 | **Pixel decode or decompression** in any transfer syntax, frame assembly from fragments, offset-table interpretation, rendering, windowing, or any measurement computed from pixels                 | `@cosyte/dicom-pixel` |
-| **Writing an encapsulated object.** `serializeDicom` refuses every PS3.5 2026c section A.4 syntax, de-identified or not: a compressed object is read, never written                                 | a later release       |
+| **Repairing a fragment stream on write.** `serializeDicom` writes each PS3.5 2026c section A.4 syntax and refuses a malformed top-level Pixel Data with `INVALID_ENCAPSULATED_PIXEL_DATA`           | out of scope          |
 | **Burned-in annotation removal / Clean Pixel Data.** A de-identified output from this package is **metadata-de-identified only**, and it warns rather than claiming otherwise                       | `@cosyte/dicom-pixel` |
 | **Networking.** No DIMSE: no C-STORE, C-FIND, C-MOVE, MWL or MPPS                                                                                                                                   | `@cosyte/dicom-net`   |
 | **Web services.** No DICOMweb: no QIDO, WADO or STOW                                                                                                                                                | `@cosyte/dicomweb`    |
@@ -46,19 +46,37 @@ Near-Lossless; JPEG 2000 and HTJ2K; MPEG2; MPEG-4 AVC/H.264; HEVC/H.265 Main and
 Deflated Image Frame Compression; and Encapsulated Uncompressed Explicit VR LE. `Dictionary.uid()`
 names each UID. An encapsulated object is read under Explicit VR LE rules, as section A.4 requires,
 so its metadata parses in full and `readPixelDataFragments` hands back its Basic Offset Table and
-fragments as raw bytes. **Its pixels are never decoded**, and **`serializeDicom` refuses every one of
-those syntaxes**, a de-identified object included, so this package reads a compressed object and
-does not write one. Every other registered UID stays the fatal `UNSUPPORTED_TRANSFER_SYNTAX`, named
-by its PS3.6 registry name: the JPIP Referenced syntaxes (their Pixel Data is a reference, not
-fragments), the SMPTE ST 2110 syntaxes, and every retired UID, the retired JPEG processes included.
+fragments as raw bytes. **Its pixels are never decoded.** `serializeDicom` writes each of those
+syntaxes back under the object's own UID, a de-identified object included: the Data Set as Explicit
+VR LE, and the top-level Pixel Data as `OB` of undefined length, its Basic Offset Table and fragment
+Items copied byte for byte and in order, then a Sequence Delimitation Item. Nothing is transcoded,
+re-framed or re-encoded, and no offset table is rebuilt. The writer's limit sits with it: a
+top-level Data Set section A.4 does not allow is refused with `INVALID_ENCAPSULATED_PIXEL_DATA`,
+never repaired (see below). Every other registered UID stays the fatal
+`UNSUPPORTED_TRANSFER_SYNTAX`, named by its PS3.6 registry name: the JPIP Referenced syntaxes (their
+Pixel Data is a reference, not fragments), the SMPTE ST 2110 syntaxes, and every retired UID, the
+retired JPEG processes included; `serializeDicom` refuses the same UIDs with its own
+`UNSUPPORTED_TRANSFER_SYNTAX`.
 Deflated Explicit VR LE deflates the whole dataset stream rather than the pixels, and it is inflated
 on parse.
 
-Two limits sit with that capability. A fragment stream that ends before its Sequence Delimitation
+Three limits sit with that capability. A fragment stream that ends before its Sequence Delimitation
 Item still parses, with `DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED` saying the fragment list may be
-short. And two misuses of an encapsulation syntax that PS3.5 2026c section A.4 forbids parse
+short. Two misuses of an encapsulation syntax that PS3.5 2026c section A.4 forbids parse
 **without** a code: an object with no top-level Pixel Data, and one whose top-level Pixel Data is
 native, for which `readPixelDataFragments` returns `undefined`, as it does under Explicit VR LE.
+And **the writer is stricter than the reader**: `serializeDicom` throws a `DicomSerializeError`
+with code `INVALID_ENCAPSULATED_PIXEL_DATA`, and returns no bytes, for every top-level Data Set
+under a section A.4 syntax that the section does not allow, rather than repairing it. That is no
+top-level Pixel Data, native top-level Pixel Data, Float or Double Float Pixel Data
+`(7FE0,0008)` / `(7FE0,0009)`, a fragment stream not ended by its Sequence Delimitation Item (so an
+object read with `DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED` is read and not written, since a
+delimiter appended to a stream that may be short would be a well-formed file missing frames),
+anything other than an Item of defined length in the stream, an Item of odd length, a fragment
+Item of length zero after the Basic Offset Table (an empty Basic Offset Table is fine), and a stream
+with no Basic Offset Table Item or no fragment Item after it. Its message
+is a fixed string. Pixel Data inside a Sequence Item, such as an Icon Image Sequence, is written as
+read and not checked.
 
 ---
 

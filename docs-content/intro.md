@@ -14,8 +14,10 @@ and stable warning codes for the deviations real scanners produce.
 It is **metadata-first by design**. Pixel data is exposed as a raw `Buffer`, and under the
 encapsulated (compressed) transfer syntaxes of PS3.5 2026c section A.4 - JPEG, JPEG-LS, JPEG 2000,
 HTJ2K, RLE and the rest - the object parses and `readPixelDataFragments` returns its Basic Offset
-Table and fragments as raw bytes, but in every syntax pixel data is **not decoded**, and
-`serializeDicom` does not write those syntaxes. Pixel decoding, along with DIMSE networking and DICOMweb, is left to future
+Table and fragments as raw bytes, but in every syntax pixel data is **not decoded**. `serializeDicom`
+writes those syntaxes back with the fragments untouched, and refuses with
+`INVALID_ENCAPSULATED_PIXEL_DATA` a fragment stream section A.4 does not allow rather than repairing
+it. Pixel decoding, along with DIMSE networking and DICOMweb, is left to future
 companion packages.
 
 :::caution Read this before you point it at real data

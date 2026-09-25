@@ -528,9 +528,10 @@ describe("serializeDicom - error taxonomy", () => {
     }
   });
 
-  it("throws UNSUPPORTED_TRANSFER_SYNTAX for a non-v1 transfer syntax", () => {
+  // JPIP Referenced: outside both the native and the section A.4 sets.
+  it("AC-12, AC-14: throws UNSUPPORTED_TRANSFER_SYNTAX for a UID outside the native and section A.4 sets", () => {
     const ds = new Dataset({
-      fileMeta: { transferSyntaxUID: "1.2.840.10008.1.2.4.50" },
+      fileMeta: { transferSyntaxUID: "1.2.840.10008.1.2.4.94" },
       warnings: [],
       elements: new Map(),
     });
@@ -538,7 +539,7 @@ describe("serializeDicom - error taxonomy", () => {
   });
 });
 
-describe("AC-14: serializeDicom refuses every section A.4 encapsulation syntax", () => {
+describe("AC-1, AC-14: serializeDicom writes every section A.4 encapsulation syntax", () => {
   /** The writer's outcome: the bytes it returned, or the error it threw. */
   function attempt(ds: Dataset): { out: Buffer | undefined; err: unknown } {
     try {
@@ -548,15 +549,15 @@ describe("AC-14: serializeDicom refuses every section A.4 encapsulation syntax",
     }
   }
 
-  it.each(ENCAPSULATION_SET)("AC-14: %s, as parsed and as de-identified", (uid) => {
+  it.each(ENCAPSULATION_SET)("AC-1, AC-14: %s, as parsed and as de-identified", (uid) => {
     const parsed = parseDicom(encapsulatedObject({ transferSyntax: uid }));
     const { dataset: deidentified } = deidentify(parsed);
     expect(deidentified.fileMeta?.transferSyntaxUID).toBe(uid);
     for (const ds of [parsed, deidentified]) {
       const { out, err } = attempt(ds);
-      expect(out).toBeUndefined();
-      expect(err).toBeInstanceOf(DicomSerializeError);
-      expect((err as DicomSerializeError).code).toBe("UNSUPPORTED_TRANSFER_SYNTAX");
+      expect(err).toBeUndefined();
+      expect(out).toBeInstanceOf(Buffer);
+      expect(parseDicom(out as Buffer).fileMeta?.transferSyntaxUID).toBe(uid);
     }
   });
 });
