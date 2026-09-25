@@ -3,8 +3,8 @@
 //
 // Generator: scripts/generate-dictionary.ts
 // Innolitics dicom-standard SHA (pinned, full): 90571bcc4e46b08bc815bd683e6c466308bcff9a
-// Normative source: NEMA DICOM PS3.6 2026c DocBook (Annex A, Tables A-1 and A-2).
-//   vendor/nema/part06/<sha>/part06.xml → ff1dcdfb557d57db96420614fcaf6d739bb76aa74b73eba77f367be9fab0be3e
+// Normative source: NEMA DICOM PS3.6 2026d DocBook (Annex A, Tables A-1 and A-2).
+//   vendor/nema/part06/<sha>/part06.xml → fa9f0f8d67eba692dcf95cfeae0a8f4e071beeb7844215a860bc4b9d5dfaad25
 //   PS3.6 wins per field over the Innolitics mirror on every UID it publishes.
 // Inputs (path → SHA-256):
 //   - vendor/innolitics/<sha>/sops.json → 1c1afd83b984a10113905a272b78c85f73e28668358225f0f30f9da16332d4ee

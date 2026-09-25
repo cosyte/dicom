@@ -122,7 +122,7 @@ registry is even-group and a `Profile`'s private dictionary is keyed by a creato
 stays in the object under its tag and `position.byteOffset` locates the header.
 `report.embeddedAttributes[].hidden` is bound too, by membership rather than by signature: an entry is
 a tag the run's own resolved Annex E action fired on that has a **literal row** in PS3.15 Table
-E.1-1 - 652 of them. **A repeating-group mask hit is excluded, and that is the load-bearing half**:
+E.1-1 - 653 of them. **A repeating-group mask hit is excluded, and that is the load-bearing half**:
 `(50xx,xxxx)` Curve Data leaves the whole 16-bit element number free, so a mask match proves a rule
 exists without making the membership finite - a draft that stopped at "an even group" was measured
 admitting `500C5241`, four payload bytes recoverable with one typed read. `hidden` can be empty on a

@@ -272,7 +272,7 @@ Thrown by `serializeDicom` for `MISSING_TRANSFER_SYNTAX` (the dataset names no t
 
 ## Compatibility
 
-The standard this reads is **DICOM PS3 2026c**: PS3.5, PS3.6 and PS3.15 are vendored under `vendor/nema/`, SHA-256 pinned, and the shipped data dictionary and de-identification action table are regenerated from them byte-identically in CI. The four native transfer syntaxes and every PS3.5 2026c section A.4 encapsulation syntax are supported, and every other one is refused rather than half-read; the vendor deviations this parser tolerates, and the ones it deliberately does not, are named below rather than left to silence.
+The standard this reads is vendored under `vendor/nema/` and SHA-256 pinned, one edition per part: **PS3.6 and PS3.15 2026d**, and **PS3.5 2026c**. The shipped data dictionary and de-identification action table are regenerated from them byte-identically in CI. The four native transfer syntaxes and every PS3.5 2026c section A.4 encapsulation syntax are supported, and every other one is refused rather than half-read; the vendor deviations this parser tolerates, and the ones it deliberately does not, are named below rather than left to silence.
 
 ### Supported transfer syntaxes
 
@@ -372,7 +372,7 @@ A quirky object is tolerated rather than rejected and absent fields come back `u
 
 ### Build routing keys
 
-Routing and reconciliation hang off a small set of identifiers. Surface them correctly: a Patient ID without its issuer is ambiguous across systems. The two attributes are `(0010,0020)` Patient ID and `(0010,0021)` Issuer of Patient ID in the PS3.6 2026c registry, which is vendored and SHA-pinned here; the module that requires them to be read together is in PS3.3, which is **not** vendored here, so no clause number is claimed for it.
+Routing and reconciliation hang off a small set of identifiers. Surface them correctly: a Patient ID without its issuer is ambiguous across systems. The two attributes are `(0010,0020)` Patient ID and `(0010,0021)` Issuer of Patient ID in the PS3.6 2026d registry, which is vendored and SHA-pinned here; the module that requires them to be read together is in PS3.3, which is **not** vendored here, so no clause number is claimed for it.
 
 ```ts
 // Hierarchy keys for filing into Study → Series → Instance:
@@ -489,7 +489,7 @@ deidentify(parseDicom(buf), {
 
 This is **metadata-level** de-identification. Pixel cleaning is out of scope: when a file carries burned-in annotation this layer cannot remove, you get a `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED` warning rather than a false sense of safety (pixel cleaning is deferred to `@cosyte/dicom-pixel`).
 
-The action table comes from NEMA's PS3.15 2026c DocBook, the normative publication of the standard, rather than from a third-party mirror of it, so the current edition's patient attributes are removed rather than quietly kept. That includes the three rows the standard states as a repeating-group mask rather than a single tag: `(50xx,xxxx)` Curve Data, `(60xx,3000)` Overlay Data and `(60xx,4000)` Overlay Comments are matched in every overlay or curve group the standard defines, removed, and named in the report with the mask that matched them. Overlay comments in particular are a common carrier for text typed onto a study, so a clean report on a file that still held them was worse than no report.
+The action table comes from NEMA's PS3.15 2026d DocBook, the normative publication of the standard, rather than from a third-party mirror of it, so the current edition's patient attributes are removed rather than quietly kept. That includes the three rows the standard states as a repeating-group mask rather than a single tag: `(50xx,xxxx)` Curve Data, `(60xx,3000)` Overlay Data and `(60xx,4000)` Overlay Comments are matched in every overlay or curve group the standard defines, removed, and named in the report with the mask that matched them. Overlay comments in particular are a common carrier for text typed onto a study, so a clean report on a file that still held them was worse than no report.
 
 The groups a mask covers are the sixteen even ones PS3.5 bounds it to (`6000`-`601E`, `5000`-`501E`), not any four hex digits. Reading `xx` as a wildcard would strip attributes the standard never marked, which is data loss on a call you asked to be conservative. That bound is read out of PS3.5 itself, pinned by SHA-256 the same way the action table is, rather than copied into the source by hand: the current edition states the overlay range, and the curve range comes from the 2004 edition its own note delegates to, with the two required to agree where they overlap.
 

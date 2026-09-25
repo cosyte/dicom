@@ -165,11 +165,11 @@ all.
 ## PS3.6, Part 6: Data Dictionary
 
 - **Source:** `https://dicom.nema.org/medical/dicom/current/source/docbook/part06/part06.xml`
-- **Edition:** PS3.6 **2026c** (read from the document's own
-  `<subtitle>DICOM PS3.6 2026c - Data Dictionary</subtitle>`, not asserted here)
-- **Retrieved:** 2026-07-28
-- **SHA-256:** `ff1dcdfb557d57db96420614fcaf6d739bb76aa74b73eba77f367be9fab0be3e` (`part06/SHA.txt`)
-- **Committed at:** `part06/ff1dcdfb.../part06.xml`, 9,665,786 bytes, verbatim
+- **Edition:** PS3.6 **2026d** (read from the document's own
+  `<subtitle>DICOM PS3.6 2026d - Data Dictionary</subtitle>`, not asserted here)
+- **Retrieved:** 2026-09-24
+- **SHA-256:** `fa9f0f8d67eba692dcf95cfeae0a8f4e071beeb7844215a860bc4b9d5dfaad25` (`part06/SHA.txt`)
+- **Committed at:** `part06/fa9f0f8d.../part06.xml`, 9,666,976 bytes, verbatim
 - **Copyright:** NEMA. Vendored unmodified as a build input, in the same way the standard's tables
   are quoted by every DICOM toolkit; the generated dictionary is the derived work.
 
@@ -177,7 +177,7 @@ all.
 
 The four registry tables, and only those: **Table 6-1** (Registry of DICOM Data Elements),
 **Table 7-1** (File Meta Elements), **Table 8-1** (Directory Structuring Elements), **Table 9-1**
-(Dynamic RTP Payload Elements). 5,309 rows in 2026c.
+(Dynamic RTP Payload Elements). 5,310 rows in 2026d.
 
 For a tag that appears in both PS3.6 and the Innolitics mirror, PS3.6 wins **per field** on
 everything it publishes: name, keyword, VR, VM, and retirement. A tag PS3.6 carries and the mirror
@@ -215,7 +215,7 @@ The two deviations, both preserved and both asserted:
 
    **That suffix is an observation of Table A-1, not a rule PS3.6 states for UIDs, and the
    distinction earned a check. PS3.6 publishes THREE retirement signals.** The governing clause is
-   **PS3.6 2026c section 5, "Conventions"**:
+   **PS3.6 2026d section 5, "Conventions"**:
 
    > "RET" is used to indicate that the corresponding Data Element, SOP Class, or Transfer Syntax
    > has been retired. Retired items are shown italicized. For retired items, the edition of the
@@ -268,8 +268,8 @@ curl -fsSL https://dicom.nema.org/medical/dicom/current/source/docbook/part06/pa
 # different                           -> NEMA published a new edition; re-pin (below)
 ```
 
-Once 2026c is superseded, the archived edition URL becomes the stable one and must reproduce the pin
-byte for byte: `https://dicom.nema.org/medical/dicom/2026c/source/docbook/part06/part06.xml`.
+Once 2026d is superseded, the archived edition URL becomes the stable one and must reproduce the pin
+byte for byte: `https://dicom.nema.org/medical/dicom/2026d/source/docbook/part06/part06.xml`.
 `current/` is a moving target by design, so it is the right URL for "has it moved" and the wrong one
 for "is this still the same document".
 
@@ -323,25 +323,25 @@ the same names. Inserting a space would be hand-editing a generated table to tas
 ## PS3.15, Part 15: Annex E de-identification action table
 
 - **Source:** `https://dicom.nema.org/medical/dicom/current/source/docbook/part15/part15.xml`
-- **Edition:** PS3.15 **2026c** (read from the document's own
-  `<subtitle>DICOM PS3.15 2026c - Security and System Management Profiles</subtitle>`, not asserted
+- **Edition:** PS3.15 **2026d** (read from the document's own
+  `<subtitle>DICOM PS3.15 2026d - Security and System Management Profiles</subtitle>`, not asserted
   here)
-- **Retrieved:** 2026-07-28
-- **SHA-256:** `77d60b856faf4223ab40a398c53130fc0ee9490d0d811ee3536e6d25c02ac717` (`part15/SHA.txt`)
-- **Committed at:** `part15/77d60b85.../part15.xml`, 3,553,659 bytes, verbatim
+- **Retrieved:** 2026-09-24
+- **SHA-256:** `1eb2a9724822476b3f1f3de23d15ae655a4c7f6e9d32bf16f2d9ef76d7d8437c` (`part15/SHA.txt`)
+- **Committed at:** `part15/1eb2a972.../part15.xml`, 3,555,642 bytes, verbatim
 - **Copyright:** NEMA. Vendored unmodified as a build input; the generated action table is the
   derived work.
 
 ### What it is authoritative for
 
-**Table E.1-1** (Application Level Confidentiality Profile Attributes), and only that table. 656
-rows in 2026c, of which 652 name a single tag.
+**Table E.1-1** (Application Level Confidentiality Profile Attributes), and only that table. 657
+rows in 2026d, of which 653 name a single tag.
 
 This is the table `deidentify()` acts on, so the failure mode of a stale copy is not a wrong label:
 it is a patient identifier that survives a call whose entire contract is that it does not, with a
-clean return and an audit report that says nothing. The mirror snapshot this overlay replaced was
-missing 35 concrete attributes, **32 of them marked X** (remove) by the current standard and the
-other three `X/D`, `D` and `U`, including
+clean return and an audit report that says nothing. The mirror snapshot this overlay replaced is
+missing 36 concrete attributes against 2026d, **33 of them marked X** (remove) by the current
+standard and the other three `X/D`, `D` and `U`, including
 `(0010,0012)` Name to Use, a patient's preferred name.
 
 For a tag that appears in both PS3.15 and the Innolitics mirror, PS3.15 wins **per field** on
@@ -360,7 +360,7 @@ Deliberately **not** represented:
   gap. All four are counted and printed on every run rather than dropped in silence.
 - **The second E.3.6 sub-option.** PS3.15 has two longitudinal-temporal options, full dates and
   modified dates; `AnnexEOption` carries one, which takes the full-dates column. The two columns
-  diverge on 169 rows in 2026c, and that count prints on every run. See
+  diverge on 169 rows in 2026d, and that count prints on every run. See
   `scripts/_annex-e-discovery.md`.
 
 ### Verifying the pin
@@ -374,8 +374,8 @@ curl -fsSL https://dicom.nema.org/medical/dicom/current/source/docbook/part15/pa
 # different                           -> NEMA published a new edition; re-pin (below)
 ```
 
-Once 2026c is superseded, the archived edition URL becomes the stable one and must reproduce the pin
-byte for byte: `https://dicom.nema.org/medical/dicom/2026c/source/docbook/part15/part15.xml`.
+Once 2026d is superseded, the archived edition URL becomes the stable one and must reproduce the pin
+byte for byte: `https://dicom.nema.org/medical/dicom/2026d/source/docbook/part15/part15.xml`.
 
 There is deliberately **no automated staleness check** here either, for exactly the reasons given
 above for PS3.6. The generator recomputes the SHA-256 of the file it reads and refuses to generate on

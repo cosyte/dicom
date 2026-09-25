@@ -186,7 +186,7 @@ structural fact about DICOM that no reader can resolve from the wire.
   of tag no closed table this library holds can vouch for; the element is still in the object and
   `position.byteOffset` still locates it.
   `report.embeddedAttributes[].hidden` now lists only tags this run acted on that have a **literal
-  row** in PS3.15 Table E.1-1 - 652 of them - rather than any four bytes a run tiled over. **A
+  row** in PS3.15 Table E.1-1 - 653 of them - rather than any four bytes a run tiled over. **A
   repeating-group mask hit is excluded and that exclusion is the whole bound**: `(50xx,xxxx)` Curve
   Data leaves the entire 16-bit element number free, so a mask match proves a rule exists without
   making the membership finite, and a draft that stopped at "an even group" was measured admitting

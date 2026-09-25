@@ -11,7 +11,7 @@
  *
  * **A cited constant, not a vendored PS3.16 plus a generator.** The context group
  * is thirteen rows and its version, `20170914`, is unchanged between the PS3.15
- * 2026c edition this package vendors and the PS3.16 2026d page these rows are
+ * 2026d edition this package vendors and the PS3.16 2026d page these rows are
  * quoted from (Type Extensible, UID `1.2.840.10008.6.1.925`, every row
  * designator `DCM`). The "Option" suffix is part of each Code Meaning.
  *

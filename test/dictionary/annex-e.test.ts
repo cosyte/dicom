@@ -148,12 +148,13 @@ describe("PS3.15 normative overlay (DICOM-ANNEX-E-DEID-LAG)", () => {
     expect(annexE("00321033")?.optionSet.CleanDescriptors).toBe("C");
   });
 
-  it("carries every concrete row of PS3.15 2026c Table E.1-1", () => {
-    // 652 concrete tags. The four family rows Table E.1-1 states as a mask
-    // ((50xx,xxxx), (60xx,3000), (60xx,4000), and the odd-group private row)
-    // cannot be keys in an exact-tag map; the generator counts and prints them
-    // on every run rather than dropping them in silence.
-    expect(Object.keys(ANNEX_E).length).toBe(652);
+  it("AC-12: carries every concrete row of PS3.15 2026d Table E.1-1", () => {
+    // 653 concrete tags: 2026c's 652 plus (3004,007F) Dose Calculation Model
+    // Name. The four family rows Table E.1-1 states as a mask ((50xx,xxxx),
+    // (60xx,3000), (60xx,4000), and the odd-group private row) cannot be keys in
+    // an exact-tag map; the generator counts and prints them on every run rather
+    // than dropping them in silence.
+    expect(Object.keys(ANNEX_E).length).toBe(653);
   });
 
   it("did not drop anything the previous table carried", () => {

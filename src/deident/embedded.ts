@@ -341,7 +341,7 @@ function hasByteOutsideRepertoire(region: Buffer, carrierVr: VR): boolean {
  *  - **Every repeating-group mask hit**, and this is the one an even-group test
  *    misses. `annexE()` falls through to `matchRepeatingRule`, and
  *    `(50xx,xxxx)` Curve Data leaves the **whole 16-bit element number free** -
- *    16 groups x 65,536 elements, against 652 literal rows. Measured on this
+ *    16 groups x 65,536 elements, against 653 literal rows. Measured on this
  *    module's own fixture with only the four fabricated bytes changed:
  *    `"\fPAR"` composes `500C5241`, which an even-group filter admits and which
  *    returns all four bytes with one typed read. A **graded pass found this**,
@@ -350,7 +350,7 @@ function hasByteOutsideRepertoire(region: Buffer, carrierVr: VR): boolean {
  *    does not make the membership finite.**
  *
  * Requiring `annexE()` to resolve **without** a `repeatingGroup` is the finite
- * test: 652 rows, published, and a fabricated window that spells one discloses a
+ * test: 653 rows, published, and a fabricated window that spells one discloses a
  * table entry rather than a document byte - the trade `renderVr` makes with the
  * 34 VRs, which is only honest against a set of that size. It subsumes the
  * odd-group case, since no literal row is odd-group (`ANNEX_E` is asserted
@@ -386,7 +386,7 @@ export interface EmbeddedRun {
    * `renderVr` and `Element.privateCreator` already take in this package - and
    * it has **two** conjuncts, each of which was measured necessary. A tag
    * reaches this array only if `isActionable` fired on it **and**
-   * {@link isTableBound} holds, so a surviving entry is one of the **652 literal
+   * {@link isTableBound} holds, so a surviving entry is one of the **653 literal
    * rows** of PS3.15 Table E.1-1 that this run's options left actionable. A
    * fabricated window still reaches this array if it happens to spell one of
    * those, which is the same trade `renderVr` makes with the 34 VRs: it

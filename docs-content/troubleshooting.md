@@ -204,7 +204,7 @@ it off the message left these fields its only publisher, which is a smaller surf
 one - a bound here would empty the field on every well-formed file, where it is the audit number the
 field exists to carry. `embeddedAttributes[].hidden` **used to join them and
 no longer does**: an entry is now a tag this run's own resolved Annex E action fired on that has a
-**literal row** in PS3.15 Table E.1-1, of which there are 652 - not any four bytes the scanner tiled
+**literal row** in PS3.15 Table E.1-1, of which there are 653 - not any four bytes the scanner tiled
 over. **A repeating-group mask hit is excluded on purpose**, because `(50xx,xxxx)` Curve Data leaves
 the whole element number free and a mask match proves a rule exists without making the membership
 finite. Two consequences to read with it - the list can be **empty on a real finding** (a run whose

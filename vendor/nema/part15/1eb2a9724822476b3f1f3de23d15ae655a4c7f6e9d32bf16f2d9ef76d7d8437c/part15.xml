@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <book xmlns="http://docbook.org/ns/docbook" xmlns:xhtml="http://www.w3.org/1999/xhtml" xmlns:xl="http://www.w3.org/1999/xlink" label="PS3.15" version="5.0" xml:id="PS3.15">
   <title>PS3.15</title>
-  <subtitle>DICOM PS3.15 2026c - Security and System Management Profiles</subtitle>
+  <subtitle>DICOM PS3.15 2026d - Security and System Management Profiles</subtitle>
   <info>
     <author>
       <orgname>DICOM Standards Committee</orgname>
@@ -11654,7 +11654,7 @@ start = message
                 <para xml:id="para_748cef4a-594e-4f27-a88e-14fe0854fe65">TLS_DHE_RSA_WITH_AES_256_CCM</para>
             </listitem>
             <listitem>
-                <para xml:id="para_37b35aad-0cd7-4f3b-a208-a04a9f6d614e">TLS_DHE_RSA_WITH_AES_256_GCM_CCM_8</para>
+                <para xml:id="para_37b35aad-0cd7-4f3b-a208-a04a9f6d614e">TLS_DHE_RSA_WITH_AES_256_CCM_8</para>
             </listitem>
             <listitem>
                 <para xml:id="para_690dc78e-1c97-440f-8649-a374ebe287ac">TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256</para>
@@ -12635,7 +12635,7 @@ start = message
                         </tr>
                         <tr valign="top">
                             <td align="left" colspan="1" rowspan="1">
-                                <para xml:id="para_8498afbf-e026-4116-97bd-85689b0fc096">Acquisition Field Of View Label</para>
+                                <para xml:id="para_8498afbf-e026-4116-97bd-85689b0fc096">Acquisition Field of View Label</para>
                             </td>
                             <td align="center" colspan="1" rowspan="1">
                                 <para xml:id="para_9782965a-b755-482d-a2da-b48dd30581de">(0018,11BB)</para>
@@ -16107,6 +16107,35 @@ start = message
                             <td align="center" colspan="1" rowspan="1"/>
                             <td align="center" colspan="1" rowspan="1"/>
                             <td align="center" colspan="1" rowspan="1"/>
+                            <td align="center" colspan="1" rowspan="1"/>
+                            <td align="center" colspan="1" rowspan="1"/>
+                        </tr>
+                        <tr valign="top">
+                            <td align="left" colspan="1" rowspan="1">
+                                <para xml:id="para_e105539d-375f-4801-b2e3-10aca4802b33">Dose Calculation Model Name</para>
+                            </td>
+                            <td align="center" colspan="1" rowspan="1">
+                                <para xml:id="para_01b4adb4-42f6-4eb1-b406-ebad5c28c0bc">(3004,007F)</para>
+                            </td>
+                            <td align="center" colspan="1" rowspan="1">
+                                <para xml:id="para_743fb036-a449-4d17-a947-5b0bffddc7c9">N</para>
+                            </td>
+                            <td align="center" colspan="1" rowspan="1">
+                                <para xml:id="para_5ce86e55-5ea8-41b5-9b45-489c10efb4cb">Y</para>
+                            </td>
+                            <td align="center" colspan="1" rowspan="1">
+                                <para xml:id="para_ec23988b-9080-4119-8406-85fa2e7851ad">X</para>
+                            </td>
+                            <td align="center" colspan="1" rowspan="1"/>
+                            <td align="center" colspan="1" rowspan="1"/>
+                            <td align="center" colspan="1" rowspan="1"/>
+                            <td align="center" colspan="1" rowspan="1"/>
+                            <td align="center" colspan="1" rowspan="1"/>
+                            <td align="center" colspan="1" rowspan="1"/>
+                            <td align="center" colspan="1" rowspan="1"/>
+                            <td align="center" colspan="1" rowspan="1">
+                                <para xml:id="para_02b8b80b-16a7-49a4-b257-6b64c4388406">C</para>
+                            </td>
                             <td align="center" colspan="1" rowspan="1"/>
                             <td align="center" colspan="1" rowspan="1"/>
                         </tr>

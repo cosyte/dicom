@@ -61,7 +61,7 @@ committed, so lookups are in-memory and deterministic: no runtime network or fil
 UID (e.g. a transfer syntax) to its human-readable name. Unknown input returns `undefined`. The
 dictionary never throws.
 
-The element registry, 5,309 tags, comes from **NEMA's PS3.6 2026c DocBook**, the normative
+The element registry, 5,310 tags, comes from **NEMA's PS3.6 2026d DocBook**, the normative
 publication of the standard, rather than from a third-party mirror of it. That is what the `name`,
 `keyword`, `vr`, `vm`, and `retired` fields on an entry are: the values PS3.6 prints for that tag, in
 the edition named above. `retired` in particular is worth reading rather than ignoring, in both

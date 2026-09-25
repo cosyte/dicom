@@ -3,8 +3,8 @@
 //
 // Generator: scripts/generate-dictionary.ts
 // Innolitics dicom-standard SHA (pinned, full): 90571bcc4e46b08bc815bd683e6c466308bcff9a
-// Normative source: NEMA DICOM PS3.6 2026c DocBook (Tables 6-1, 7-1, 8-1, 9-1).
-//   vendor/nema/part06/<sha>/part06.xml → ff1dcdfb557d57db96420614fcaf6d739bb76aa74b73eba77f367be9fab0be3e
+// Normative source: NEMA DICOM PS3.6 2026d DocBook (Tables 6-1, 7-1, 8-1, 9-1).
+//   vendor/nema/part06/<sha>/part06.xml → fa9f0f8d67eba692dcf95cfeae0a8f4e071beeb7844215a860bc4b9d5dfaad25
 //   PS3.6 wins per field over the Innolitics mirror on every tag it publishes.
 // Inputs (path → SHA-256):
 //   - vendor/innolitics/<sha>/attributes.json → acc170c9646bf497e7c90dca904472f7eb673c9038c6198a92f82c66a9c74e5c
@@ -4121,6 +4121,7 @@ export const TAGS: { readonly [tag: string]: DictionaryEntry } = {
   "30040070": { tag: "30040070", keyword: "DVHMinimumDose", name: "DVH Minimum Dose", vr: ["DS"] as const, vm: "1", retired: false },
   "30040072": { tag: "30040072", keyword: "DVHMaximumDose", name: "DVH Maximum Dose", vr: ["DS"] as const, vm: "1", retired: false },
   "30040074": { tag: "30040074", keyword: "DVHMeanDose", name: "DVH Mean Dose", vr: ["DS"] as const, vm: "1", retired: false },
+  "3004007F": { tag: "3004007F", keyword: "DoseCalculationModelName", name: "Dose Calculation Model Name", vr: ["LO"] as const, vm: "1", retired: false },
   "30040080": { tag: "30040080", keyword: "DoseCalculationModelSequence", name: "Dose Calculation Model Sequence", vr: ["SQ"] as const, vm: "1", retired: false },
   "30040081": { tag: "30040081", keyword: "DoseCalculationAlgorithmSequence", name: "Dose Calculation Algorithm Sequence", vr: ["SQ"] as const, vm: "1", retired: false },
   "30040082": { tag: "30040082", keyword: "CommissioningStatus", name: "Commissioning Status", vr: ["CS"] as const, vm: "1", retired: false },
