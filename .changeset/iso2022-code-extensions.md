@@ -4,7 +4,7 @@
 
 `PN`, `LO`, `SH`, `UC`, `ST`, `LT` and `UT` values now decode ISO 2022 code extensions when
 `(0008,0005)` Specific Character Set has more than one Value (and Value 1 is not `ISO_IR 192`,
-`GB18030` or `GBK`). Every escape sequence of PS3.3 Tables C.12-3 and C.12-4 switches G0 or G1, so a
+`GB18030` or `GBK`). Every escape sequence in PS3.3's code-extension tables switches G0 or G1, so a
 Japanese, Korean or Chinese Person Name comes back as the characters its sender encoded rather than
 with escape bytes inside it or JIS bytes read as ASCII. PS3.5 2026d's worked examples H.3-2, I.2-1
 and K.2-1 used to come back wrong with no warning; all four examples now decode to the names the

@@ -194,17 +194,18 @@ sequence decodes the same way a top-level one does. An unsupported charset term 
 **With one Value there are no code extensions.** A single-valued `(0008,0005)` (`ISO_IR 192`
 UTF-8, the ISO-8859 family, `ISO_IR 13`, `ISO_IR 166`, `GB18030`, `GBK`) decodes each value with
 one decoder, as PS3.5 section 6.1.2.3 prescribes for a single Value. A multi-byte term sent alone,
-such as `ISO 2022 IR 149`, is not conformant (PS3.3 Table C.12-4 makes those terms Value 2 to n),
-and it gets the same single-decoder treatment: no Value 1 reset and none of the warnings below.
+such as `ISO 2022 IR 149`, is not conformant (PS3.3 makes its multi-byte code-extension terms
+Value 2 to n), and it gets the same single-decoder treatment: no Value 1 reset and none of the
+warnings below.
 
 **With more than one Value, the code extensions of ISO 2022 are decoded** (PS3.5 2026d section
-6.1.2.5),
-unless Value 1 is `ISO_IR 192`, `GB18030` or `GBK`, which take none (section 6.1.2.4):
+6.1.2.5), unless Value 1 is `ISO_IR 192`, `GB18030` or `GBK`, which take none (section 6.1.2.4):
 
-- Every escape sequence of PS3.3 Tables C.12-3 and C.12-4 switches the set it names into G0 or G1:
-  ISO-IR 6, ISO-IR 14 and the two-byte JIS X 0208 (ISO-IR 87) and JIS X 0212 (ISO-IR 159) into G0;
-  the ISO-8859 sets, TIS 620 (ISO-IR 166), JIS X 0201 katakana (ISO-IR 13) and the two-byte
-  KS X 1001 (ISO-IR 149) and GB 2312 (ISO-IR 58) into G1. No escape byte reaches the string.
+- Every escape sequence in PS3.3's code-extension tables, single-byte and multi-byte, switches the
+  set it names into G0 or G1: ISO-IR 6, ISO-IR 14 and the two-byte JIS X 0208 (ISO-IR 87) and
+  JIS X 0212 (ISO-IR 159) into G0; the ISO-8859 sets, TIS 620 (ISO-IR 166), JIS X 0201 katakana
+  (ISO-IR 13) and the two-byte KS X 1001 (ISO-IR 149) and GB 2312 (ISO-IR 58) into G1. No escape
+  byte reaches the string.
 - Value 1 sets the starting designations (an empty Value 1 is ISO-IR 6 with nothing in G1), and they
   come back at every reset point: the start of the value; after a CR, LF or FF; after the `\` value
   delimiter of `PN`, `LO`, `SH` and `UC`; and after the `^` and `=` delimiters of `PN`. In `ST`, `LT`

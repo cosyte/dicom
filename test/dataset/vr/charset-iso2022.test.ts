@@ -335,6 +335,15 @@ describe("AC-4: in a 94x94 G0 set, 5C, 5E and 3D inside a character are not deli
     expect(stringsOf(value)).toStrictEqual([iso2022jp(bytes)]);
     expect(iso2022jp(bytes)).not.toContain("\\");
   });
+
+  it("AC-4: a SPACE between two-byte characters is SPACE, and the GL pair after it is still one character", () => {
+    // 0x20 is in no 94-character set, so it reads as SPACE whatever G0 holds
+    // (Node's iso-2022-jp decoder refuses it there, so it is no oracle here).
+    // 3B 33 and 45 44 are Example H.3-1's two ideographs.
+    const value = parsed("\\ISO 2022 IR 87", "LT", hex("1B 24 42 3B 33 20 45 44 1B 28 42")).value;
+    expect(textOf(value)).toBe("山 田");
+    expect(codes(value)).toStrictEqual([]);
+  });
 });
 
 describe("AC-5: an escape for a set (0008,0005) does not declare is decoded and flagged", () => {
@@ -428,6 +437,8 @@ describe("AC-6: bytes no designated set decodes are U+FFFD, never another set's 
     ["ISO-IR 13 E0 (outside the katakana)", "\\ISO 2022 IR 13", "1B 29 49 E0", undefined],
     // 0x80 is a C1 control, which no set in either table covers.
     ["a C1 byte", "ISO 2022 IR 100\\ISO 2022 IR 87", "80", undefined],
+    // One GR byte of a two-byte set with no second GR byte after it.
+    ["a lone ISO-IR 149 byte", "\\ISO 2022 IR 149", "1B 24 29 43 C8", undefined],
   ] as const)(
     "AC-6: a code the designated set does not define is U+FFFD: %s",
     (_name, charset, bytes, supersetLabel) => {
