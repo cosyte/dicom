@@ -18,8 +18,9 @@ code), a length, and a value. `@cosyte/dicom` keys elements by the 8-character u
 (e.g. `"00100010"` for Patient's Name). The parser supports the four native transfer syntaxes,
 Implicit VR LE, Explicit VR LE, Explicit VR BE, and Deflated Explicit VR LE, plus every encapsulation
 syntax PS3.5 2026c section A.4 names (JPEG, JPEG-LS, JPEG 2000, HTJ2K, RLE and the rest), whose Data
-Set section A.4 makes Explicit VR LE: those are read, their pixels are never decoded, and
-`serializeDicom` does not write them. In Implicit VR the on-wire VR is
+Set section A.4 makes Explicit VR LE: those are read and written, their pixels are never decoded,
+and `serializeDicom` refuses with `INVALID_ENCAPSULATED_PIXEL_DATA` a top-level Pixel Data section
+A.4 does not allow. In Implicit VR the on-wire VR is
 absent and is resolved from the dictionary; in Explicit VR the on-wire VR is honored and a
 disagreement with the dictionary is flagged (`DICOM_VR_MISMATCH`), never silently overridden.
 
