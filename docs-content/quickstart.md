@@ -1,10 +1,10 @@
 ---
 id: quickstart
-title: Quickstart
-sidebar_label: Quickstart
+title: Read your first DICOM object
+sidebar_label: Your first object
 ---
 
-# Quickstart
+# Read your first DICOM object
 
 This page gives you a first useful result: read a DICOM Part 10 object and pull out **who the
 patient is**, **what the study/series is**, and the **image geometry** you need before touching a

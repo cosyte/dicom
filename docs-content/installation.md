@@ -1,10 +1,10 @@
 ---
 id: installation
-title: Installation
-sidebar_label: Installation
+title: Install and verify
+sidebar_label: Install and verify
 ---
 
-# Installation
+# Install and verify
 
 `@cosyte/dicom` is a metadata-first DICOM Part 10 parser for Node.js/TypeScript. It ships dual
 **ESM + CJS** builds with per-condition type declarations, so it works from either module system

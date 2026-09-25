@@ -1,7 +1,7 @@
 ---
 id: troubleshooting
 title: "Troubleshooting: symptoms and causes"
-sidebar_label: Troubleshooting
+sidebar_label: Symptoms and causes
 ---
 
 # Troubleshooting: symptoms and causes
