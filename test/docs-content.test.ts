@@ -1,8 +1,8 @@
 import { Buffer } from "node:buffer";
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -53,17 +53,19 @@ docSnippetSuite({
  * sweep above. The quickstart's first block must be the one the sweep executes, and the Part 10
  * object it prints as base64 must be byte-identical to the fixture `test/fixtures/first-use` builds,
  * which `pnpm phi-scan` reads with the rest of `test/`. The README's first `## Usage` block is read
- * out of README.md and run here against the built package; the one edit made to it is pointing its
- * `readFile("study.dcm")` at a temporary copy of that fixture's preamble-less variant, and that
- * rewrite is counted. A changed value in either example turns this file red. Temp modules live in
- * their own directory inside the root, as the harness requires, and every temp path is removed.
+ * out of README.md and run here against the built package as it stands: the object it parses is
+ * inline base64 too, and it must be byte-identical to that fixture's preamble-less variant, so the
+ * tolerated deviation the README shows is one the object really carries. The block also prints its
+ * key results, and its stdout must equal the `text` block the README shows beside it. A changed
+ * value in either example turns this file red. Temp modules live in their own directory inside the
+ * root, as the harness requires, and every temp path is removed.
  */
 const FIRST_USE_TMP = join(root, ".cosyte-first-use-snippets");
 const QUICKSTART = readFileSync(join(root, "docs-content", "quickstart.md"), "utf8");
 const QUICKSTART_FIRST = fences(QUICKSTART)[0];
 const QUICKSTART_FIRST_RUNNABLE = extractRunnableSnippets(QUICKSTART)[0];
-const README_FIRST = fences(section(readFileSync(join(root, "README.md"), "utf8"), "## Usage"))[0];
-const STUDY_FILE = '"study.dcm"';
+const README_USAGE = fences(section(readFileSync(join(root, "README.md"), "utf8"), "## Usage"));
+const README_FIRST = README_USAGE[0];
 /**
  * The snippet harness strips types without checking them, so compiling is checked separately, the
  * way a reader's new TypeScript project compiles the block, against the source entry point the
@@ -73,22 +75,31 @@ const STUDY_FILE = '"study.dcm"';
 const SOURCE_PATHS = { "@cosyte/dicom": join(root, "src", "index.ts") };
 const COMPILE_TIMEOUT = 60_000;
 
-let studyDir = "";
-
-beforeAll(() => {
-  studyDir = mkdtempSync(join(tmpdir(), "dicom-first-use-"));
-  writeFileSync(join(studyDir, "study.dcm"), FIRST_USE_CT_NO_PREAMBLE);
-});
-
 afterAll(() => {
   rmSync(FIRST_USE_TMP, { recursive: true, force: true });
-  rmSync(studyDir, { recursive: true, force: true });
 });
 
-/** The README block with its one input file pointed at the fixture copy; the rewrite is counted. */
-function readmeRunnable(code: string): string {
-  expect(code.split(STUDY_FILE).length - 1, "the example reads study.dcm exactly once").toBe(1);
-  return code.replace(STUDY_FILE, JSON.stringify(join(studyDir, "study.dcm")));
+/**
+ * Run a block as a program, the way a reader runs it: the one `@cosyte/dicom` specifier is
+ * rewritten to the built entry point, and that rewrite is counted.
+ */
+function runAsProgram(
+  code: string,
+  name: string,
+): { status: number | null; stdout: string; stderr: string } {
+  const specifier = '"@cosyte/dicom"';
+  expect(code.split(specifier).length - 1, "the block imports @cosyte/dicom exactly once").toBe(1);
+  mkdirSync(FIRST_USE_TMP, { recursive: true });
+  const file = join(FIRST_USE_TMP, name);
+  writeFileSync(file, code.replace(specifier, JSON.stringify(pathToFileURL(ENTRY).href)), "utf8");
+  const tsx = join(root, "node_modules", ".bin", "tsx");
+  const run = spawnSync(tsx, [file], {
+    cwd: root,
+    encoding: "utf8",
+    shell: false,
+    timeout: 60_000,
+  });
+  return { status: run.status, stdout: run.stdout, stderr: run.stderr };
 }
 
 describe("the quickstart's first example", () => {
@@ -185,12 +196,39 @@ describe("the README ## Usage example", () => {
     COMPILE_TIMEOUT,
   );
 
-  it("AC-DI2: runs against the built package reading the fixture, and every claimed value holds", async () => {
-    await runSnippet(readmeRunnable(README_FIRST?.body ?? ""), {
-      resolve: resolveEntry,
-      tmpDir: FIRST_USE_TMP,
-    });
+  it("AC-DI2: runs against the built package, and every claimed value holds", async () => {
+    await runSnippet(README_FIRST?.body ?? "", { resolve: resolveEntry, tmpDir: FIRST_USE_TMP });
   });
+
+  it("AC-DI4: the Part 10 object it parses is byte-identical to the preamble-less fixture", () => {
+    expect(base64Object(README_FIRST?.body ?? "")?.equals(FIRST_USE_CT_NO_PREAMBLE)).toBe(true);
+  });
+
+  it("is followed by the text block holding its output", () => {
+    expect(README_USAGE.map((block) => block.lang).slice(0, 2)).toEqual(["ts", "text"]);
+  });
+
+  it("runs as a program and prints the text block byte for byte", () => {
+    const run = runAsProgram(README_FIRST?.body ?? "", "readme-usage-stdout.mts");
+    expect(run.stderr).toBe("");
+    expect(run.status).toBe(0);
+    expect(run.stdout).toBe(`${README_USAGE[1]?.body ?? ""}\n`);
+  }, 60_000);
+
+  it("CONTROL: a changed input value changes what it prints and is no longer the fixture", () => {
+    const code = README_FIRST?.body ?? "";
+    const bytes = base64Object(code) ?? Buffer.alloc(0);
+    const at = bytes.indexOf("MRN-42");
+    expect(at).toBeGreaterThan(-1);
+    const changed = Buffer.from(bytes);
+    changed.write("MRN-43", at, "ascii");
+    const mutated = code.replace(bytes.toString("base64"), changed.toString("base64"));
+    expect(base64Object(mutated)?.equals(FIRST_USE_CT_NO_PREAMBLE)).toBe(false);
+    const run = runAsProgram(mutated, "readme-usage-control.mts");
+    expect(run.status).toBe(0);
+    expect(run.stdout).not.toBe(`${README_USAGE[1]?.body ?? ""}\n`);
+    expect(run.stdout).toContain("patient MRN-43");
+  }, 60_000);
 
   it("AC-DI3: a changed claimed value turns the run red", async () => {
     const code = README_FIRST?.body ?? "";
@@ -200,7 +238,7 @@ describe("the README ## Usage example", () => {
       'ds.series.modality; // => "MR"',
     );
     await expect(
-      runSnippet(readmeRunnable(mutated), { resolve: resolveEntry, tmpDir: FIRST_USE_TMP }),
+      runSnippet(mutated, { resolve: resolveEntry, tmpDir: FIRST_USE_TMP }),
     ).rejects.toThrow();
   });
 });
