@@ -12,6 +12,11 @@
  *   - **Charset**: `LO SH UC LT ST UT PN` decode through `(0008,0005)`;
  *     the remaining string VRs are the Default Repertoire (ASCII, decoded
  *     Latin-1-lenient with `DICOM_NON_ASCII_IN_ASCII_VR` on stray bytes).
+ *     A multi-valued `(0008,0005)` decodes with ISO 2022 code extensions
+ *     (`./iso2022`), resetting to Value 1 at the VR's own delimiters, and
+ *     flags `DICOM_CHARSET_ESCAPE_UNDECLARED`,
+ *     `DICOM_CHARSET_BYTES_UNDECODABLE` and
+ *     `DICOM_CHARSET_EXTENSION_NOT_RESET` at most once each per value.
  *   - **Numeric strings** `DS`/`IS` → `number | null` (never `NaN`→0).
  *   - **Temporal** `DA`/`TM`/`DT` → tolerant typed values (warn + preserve).
  *   - **Bulk** `OB OD OF OL OV OW UN` → raw `binary` (not interpreted in v1).
@@ -31,6 +36,9 @@ import type { VR } from "../../dictionary/types.js";
 import type { DicomPosition } from "../../parser/types.js";
 import {
   bomInTextVR,
+  charsetBytesUndecodable,
+  charsetEscapeUndeclared,
+  charsetExtensionNotReset,
   daLegacyFormat,
   dtNonstandardOffset,
   isNonintegerValue,
@@ -42,6 +50,7 @@ import {
 import type { Element } from "../element.js";
 import { decodeText } from "./charset.js";
 import { parseDate, parseDateTime, parseTime } from "./datetime.js";
+import { decodeWithCodeExtensions, usesCodeExtensions, type DelimiterClass } from "./iso2022.js";
 import { decodeAttributeTags, decodeBigInts, decodeNumbers } from "./numeric.js";
 import { parsePersonName } from "./person-name.js";
 import type { DicomValue } from "./types.js";
@@ -92,7 +101,18 @@ function decodeAsciiString(
   return bytes.toString("latin1");
 }
 
-/** Decode a charset-dependent string VR, stripping + flagging a leading UTF-8 BOM. */
+/** The delimiters that reset ISO 2022 designations in each charset-dependent VR. */
+function delimiterClass(vr: VR): DelimiterClass {
+  if (vr === "PN") return "personName";
+  if (vr === "LO" || vr === "SH" || vr === "UC") return "multiValued";
+  return "text";
+}
+
+/**
+ * Decode a charset-dependent string VR, stripping + flagging a leading UTF-8 BOM.
+ * Under a multi-valued `(0008,0005)` the ISO 2022 decode's three conditions
+ * become at most one warning each on this value.
+ */
 function decodeCharsetString(
   bytes: Buffer,
   tag: string,
@@ -106,7 +126,12 @@ function decodeCharsetString(
     warnings.push(bomInTextVR(position, tag, vr));
     b = b.subarray(3);
   }
-  return decodeText(b, charset);
+  if (!usesCodeExtensions(charset)) return decodeText(b, charset);
+  const decoded = decodeWithCodeExtensions(b, charset, delimiterClass(vr));
+  if (decoded.escapeUndeclared) warnings.push(charsetEscapeUndeclared(position, tag, vr));
+  if (decoded.bytesUndecodable) warnings.push(charsetBytesUndecodable(position, tag, vr));
+  if (decoded.extensionNotReset) warnings.push(charsetExtensionNotReset(position, tag, vr));
+  return decoded.text;
 }
 
 /**
