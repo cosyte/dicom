@@ -1275,14 +1275,27 @@ export interface DeidentifyResult<TDataset> {
 /**
  * Stable codes for {@link DeidentifyError}.
  *
+ * - `INVALID_OPTIONS`: an author-time misconfiguration of the call itself (an
+ *   unknown Retain option, both PS3.15 §E.3.6 temporal Options at once, a
+ *   malformed `uidRoot`).
+ * - `UNSUPPORTED_TRANSFER_SYNTAX`: the Dataset's File Meta Transfer Syntax UID
+ *   is one this de-identifier refuses to act on, whatever the options. Today
+ *   that is exactly the four JPIP Referenced syntaxes of PS3.5 2026c sections
+ *   A.6, A.7, A.11 and A.12: such an object references its pixels through
+ *   Pixel Data Provider URL `(0028,7FE0)`, which has no PS3.15 Table E.1-1 row,
+ *   so a de-identified copy would keep the URL by omission. Nothing is
+ *   de-identified and no dataset or report is returned.
+ *
  * @example
  * ```ts
  * import { DEIDENTIFY_ERROR_CODES } from "@cosyte/dicom";
  * DEIDENTIFY_ERROR_CODES.INVALID_OPTIONS; // "INVALID_OPTIONS"
+ * DEIDENTIFY_ERROR_CODES.UNSUPPORTED_TRANSFER_SYNTAX; // "UNSUPPORTED_TRANSFER_SYNTAX"
  * ```
  */
 export const DEIDENTIFY_ERROR_CODES = Object.freeze({
   INVALID_OPTIONS: "INVALID_OPTIONS",
+  UNSUPPORTED_TRANSFER_SYNTAX: "UNSUPPORTED_TRANSFER_SYNTAX",
 } as const);
 
 /**
@@ -1299,11 +1312,16 @@ export type DeidentifyErrorCode =
   (typeof DEIDENTIFY_ERROR_CODES)[keyof typeof DEIDENTIFY_ERROR_CODES];
 
 /**
- * Thrown for an author-time misconfiguration of {@link deidentify} (an unknown
- * Retain option, a malformed UID root). Distinct from the parser's fatal codes,
- * the value layer's `DicomValueError`, and the serializer's `DicomSerializeError`.
- * The message carries only structural facts (option names, the UID root) - never
- * a decoded value.
+ * Thrown by {@link deidentify} when it will not de-identify, for one of two
+ * reasons a caller tells apart by `code` (see {@link DEIDENTIFY_ERROR_CODES}):
+ * an author-time misconfiguration of the call (`INVALID_OPTIONS`: an unknown
+ * Retain option, a malformed UID root), or a Dataset under a Transfer Syntax this
+ * de-identifier refuses (`UNSUPPORTED_TRANSFER_SYNTAX`: the four JPIP Referenced
+ * syntaxes). Distinct from the parser's fatal codes, the value layer's
+ * `DicomValueError`, and the serializer's `DicomSerializeError`. The message
+ * carries only structural facts (option names, the UID root) or a fixed string -
+ * never a decoded value, and for `UNSUPPORTED_TRANSFER_SYNTAX` nothing read from
+ * the Dataset at all.
  *
  * @example
  * ```ts

@@ -40,6 +40,7 @@ import {
   undefinedLengthOnNonSqExplicit,
   unsupportedTransferSyntax,
 } from "../../src/parser/fatals.js";
+import { JPIP_REFERENCED_UIDS } from "../../src/parser/jpip-referenced.js";
 import { TRANSFER_SYNTAX_PARSERS } from "../../src/parser/transfer-syntax.js";
 import type { VR } from "../../src/dictionary/types.js";
 import {
@@ -181,15 +182,22 @@ describe("the Tier-3 fatal registry", () => {
     // `fatals.ts` cannot import `transfer-syntax.ts` - the per-TS parsers import
     // `fatals.ts`, so the edge would close a cycle. The native list is therefore
     // a copy, and this is what keeps a copy honest: the table is exactly those
-    // four plus the generated section A.4 list, the message names the four, and
-    // summarises the rest by the section and edition that list was read from.
+    // four plus the generated section A.4 list and the four JPIP Referenced
+    // UIDs, the message names the four native ones, and summarises the rest by
+    // the sections and edition they were read from.
     const units = (xs: Iterable<string>): string[] =>
       [...xs].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
     expect(units(Object.keys(TRANSFER_SYNTAX_PARSERS))).toStrictEqual(
-      units(new Set([...NATIVE_TRANSFER_SYNTAXES, ...ENCAPSULATED_TRANSFER_SYNTAX_UIDS])),
+      units(
+        new Set([
+          ...NATIVE_TRANSFER_SYNTAXES,
+          ...ENCAPSULATED_TRANSFER_SYNTAX_UIDS,
+          ...JPIP_REFERENCED_UIDS,
+        ]),
+      ),
     );
     expect(SUPPORTED_TRANSFER_SYNTAXES).toBe(
-      `${NATIVE_TRANSFER_SYNTAXES.join(", ")}, and every encapsulated Pixel Data Transfer Syntax PS3.5 ${ENCAPSULATED_TRANSFER_SYNTAX_EDITION} section A.4 names`,
+      `${NATIVE_TRANSFER_SYNTAXES.join(", ")}, every encapsulated Pixel Data Transfer Syntax PS3.5 ${ENCAPSULATED_TRANSFER_SYNTAX_EDITION} section A.4 names, and the four JPIP Referenced Transfer Syntaxes of its sections A.6, A.7, A.11 and A.12`,
     );
   });
 

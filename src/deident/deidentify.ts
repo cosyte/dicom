@@ -202,6 +202,7 @@ import { Element, type ElementInit } from "../dataset/element.js";
 import type { FileMeta } from "../dataset/file-meta.js";
 import { Item } from "../dataset/item.js";
 import { isPrivateTag, splitTag } from "../dataset/tag.js";
+import { JPIP_REFERENCED_UIDS } from "../parser/jpip-referenced.js";
 import type { Profile } from "../parser/types.js";
 import type { DicomParseWarning } from "../parser/warnings.js";
 import {
@@ -244,6 +245,7 @@ import {
 import { findEmbeddedAttributes } from "./embedded.js";
 import { DEIDENTIFICATION_METHOD_CODES, type DeidentificationMethodCode } from "./method-codes.js";
 import {
+  DEIDENTIFY_ERROR_CODES,
   DEIDENTIFY_OPTIONS,
   DeidentifyError,
   type AppliedAction,
@@ -435,6 +437,41 @@ export const MAX_GROUP_0004_FINDINGS = 64;
  * and silence it.
  */
 export const MAX_UNREGISTERED_ELEMENT_FINDINGS = 64;
+
+/**
+ * The Transfer Syntaxes `deidentify` refuses outright: the four JPIP Referenced
+ * syntaxes of PS3.5 2026c sections A.6, A.7, A.11 and A.12.
+ *
+ * 🩺 **This refusal is the whole defence, not a courtesy.** Such an object
+ * references its pixels through Pixel Data Provider URL `(0028,7FE0)`, a `UR`
+ * PS3.6 registers and PS3.15 Table E.1-1 has no row for, so the per-element pass
+ * would keep it as the source wrote it: a de-identified object would leave with
+ * the URL intact, and whether that URL can carry identity is an open product
+ * question this library has not ruled on. It keys on the File Meta Transfer
+ * Syntax alone; a non-JPIP object that carries `(0028,7FE0)` anyway is
+ * de-identified as any other registered attribute with no Table E.1-1 row is.
+ */
+const REFUSED_TRANSFER_SYNTAXES: ReadonlySet<string> = new Set(JPIP_REFERENCED_UIDS);
+
+/**
+ * The refusal's message: a fixed string, so no value read from the Dataset, the
+ * provider URL and the Transfer Syntax UID included, can travel through it.
+ */
+const REFUSED_TRANSFER_SYNTAX_MESSAGE =
+  "deidentify does not de-identify an object under a JPIP Referenced Transfer Syntax " +
+  "(PS3.5 2026c sections A.6, A.7, A.11 and A.12): its Pixel Data Provider URL (0028,7FE0) " +
+  "has no PS3.15 Table E.1-1 action and would be kept by omission. Nothing was de-identified.";
+
+/**
+ * True when `transferSyntaxUID`, read as the parser reads a `UI` (trailing NUL
+ * and space padding removed), is one {@link REFUSED_TRANSFER_SYNTAXES} holds. A
+ * `Dataset` a caller builds by hand can carry the padded form the parser would
+ * have trimmed, and the refusal must not be the one reader that misses it.
+ */
+function isRefusedTransferSyntax(transferSyntaxUID: string | undefined): boolean {
+  if (transferSyntaxUID === undefined) return false;
+  return REFUSED_TRANSFER_SYNTAXES.has(transferSyntaxUID.replace(/[\0 ]+$/u, ""));
+}
 
 /** Map a transfer syntax UID to the on-wire element encoding (mirrors the writer). */
 const BODY_ENCODING: Readonly<Record<string, BodyEncoding>> = {
@@ -3252,6 +3289,19 @@ function hasUncleanedBurnedIn(ds: Dataset): boolean {
  * date transformation §E.3.6 describes, and `report.warnings` carries
  * `DICOM_DEIDENT_DATES_NOT_TRANSFORMED` saying so.
  *
+ * **A JPIP Referenced object is refused, not de-identified.** When
+ * `ds.fileMeta.transferSyntaxUID` is one of the four JPIP Referenced syntaxes
+ * (PS3.5 2026c sections A.6, A.7, A.11 and A.12), the call throws before it
+ * reads the options or the Data Set, because that object's Pixel Data Provider
+ * URL `(0028,7FE0)` has no PS3.15 Table E.1-1 action and would otherwise be kept
+ * by omission. The refusal keys on the File Meta alone: a non-JPIP object that
+ * carries `(0028,7FE0)` is de-identified like any other, and keeps it.
+ *
+ * @throws {@link DeidentifyError} (`UNSUPPORTED_TRANSFER_SYNTAX`) for a `Dataset`
+ *   whose File Meta Transfer Syntax UID is one of the four JPIP Referenced
+ *   syntaxes, whatever the options; its message is a fixed string. Checked
+ *   first, so it is the code such a call gets even when its options are
+ *   invalid too.
  * @throws {@link DeidentifyError} (`INVALID_OPTIONS`) for an unknown Retain option,
  *   for both PS3.15 §E.3.6 temporal Options in one call, or for a malformed
  *   `uidRoot`.
@@ -3268,6 +3318,14 @@ export function deidentify(
   ds: Dataset,
   options: DeidentifyOptions = {},
 ): DeidentifyResult<Dataset> {
+  // First, before the options or a single element is read: the refusal must be
+  // the same for every call on such an object, and nothing is built to return.
+  if (isRefusedTransferSyntax(ds.fileMeta?.transferSyntaxUID)) {
+    throw new DeidentifyError(
+      REFUSED_TRANSFER_SYNTAX_MESSAGE,
+      DEIDENTIFY_ERROR_CODES.UNSUPPORTED_TRANSFER_SYNTAX,
+    );
+  }
   const active = validateRetain(options.retain);
   const remap = makeUidRemapper(options.uidRoot, options.uidMap);
   const tsUid = ds.fileMeta?.transferSyntaxUID ?? "";

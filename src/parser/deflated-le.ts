@@ -1,6 +1,10 @@
 /**
  * Deflated Explicit VR Little Endian dataset parser
- * (`1.2.840.10008.1.2.1.99`).
+ * (`1.2.840.10008.1.2.1.99`), and the reader for the two JPIP Referenced
+ * Deflate syntaxes (`1.2.840.10008.1.2.4.95`, PS3.5 2026c section A.7, and
+ * `1.2.840.10008.1.2.4.205`, section A.12), whose Data Set is the same thing: an
+ * Explicit VR Little Endian encoding compressed per RFC 1951. Every rule and
+ * threat mitigation below binds all three UIDs alike.
  *
  * Three rules govern it:
  *   - It uses Node's `zlib.inflateRawSync` (RFC 1951 raw deflate).
