@@ -17,8 +17,10 @@ HTJ2K, RLE and the rest - the object parses and `readPixelDataFragments` returns
 Table and fragments as raw bytes, but in every syntax pixel data is **not decoded**. `serializeDicom`
 writes those syntaxes back with the fragments untouched, and refuses with
 `INVALID_ENCAPSULATED_PIXEL_DATA` a fragment stream section A.4 does not allow rather than repairing
-it. Pixel decoding, along with DIMSE networking and DICOMweb, is left to future
-companion packages.
+it. An object under one of the four JPIP Referenced syntaxes (sections A.6, A.7, A.11 and A.12)
+parses for its metadata too, and its Pixel Data Provider URL is returned as written and **never
+fetched**; that object is read-only here, refused by both `serializeDicom` and `deidentify`. Pixel
+decoding, along with DIMSE networking and DICOMweb, is left to future companion packages.
 
 :::caution Read this before you point it at real data
 

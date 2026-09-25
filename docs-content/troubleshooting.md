@@ -36,7 +36,7 @@ parseDicom(Buffer.from("plainly not a DICOM object, just ASCII bytes", "ascii"))
 | ----------------------------- | ---------------------------------------------------------------------- |
 | `NOT_DICOM_PART_10`           | No preamble/`DICM` and no recoverable File Meta: not a Part 10 object. |
 | `INVALID_FILE_META`           | The File Meta group is present but structurally unreadable.            |
-| `UNSUPPORTED_TRANSFER_SYNTAX` | Not a native syntax or a PS3.5 2026c A.4 one (JPIP, SMPTE, retired).   |
+| `UNSUPPORTED_TRANSFER_SYNTAX` | Not a native, PS3.5 2026c A.4 or JPIP Referenced one (SMPTE, retired). |
 | `EMPTY_INPUT`                 | Zero-length input.                                                     |
 
 Narrow on the caught error via `err instanceof DicomParseError` and `err.code === FATAL_CODES.*` (see
@@ -251,6 +251,12 @@ that this package reads and writes metadata, where inside the metadata surface d
   not allow, a stream read with `DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED` included. A compressed
   pixel stream is never decompressed: the writer passes its fragments through byte-for-byte, and
   `readPixelDataFragments` hands them back as raw bytes.
+- **The four JPIP Referenced syntaxes are read, never written or de-identified.** PS3.5 2026c
+  sections A.6 and A.11 are read under Explicit VR LE rules, and sections A.7 and A.12 are inflated
+  first; the Pixel Data Provider URL `(0028,7FE0)` comes back as the `UR` element the file carries
+  and is never fetched. `serializeDicom` refuses all four with `UNSUPPORTED_TRANSFER_SYNTAX`, and
+  `deidentify()` refuses them too, throwing a `DeidentifyError` that carries the
+  `UNSUPPORTED_TRANSFER_SYNTAX` code. See [Known limitations](./limitations).
 - **A DICOMDIR's offsets are rewritten, or the write is refused.** `serializeDicom` writes each
   Directory Record offset as the byte offset of the record it named when read, and refuses with
   `DIRECTORY_OFFSET_UNRESOLVED` an offset it cannot tie to a record (one that raised

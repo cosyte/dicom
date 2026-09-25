@@ -293,9 +293,9 @@ not perform is the worse half of every residual on the limitations page.
 
 | Export                   | What it is                                                                                                                             |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `DEIDENTIFY_ERROR_CODES` | The frozen registry of codes this layer throws. Author-time misconfiguration only.                                                      |
+| `DEIDENTIFY_ERROR_CODES` | The frozen registry of codes this layer throws: `INVALID_OPTIONS` for an author-time misconfiguration of the call, and `UNSUPPORTED_TRANSFER_SYNTAX` for a `Dataset` under one of the four JPIP Referenced syntaxes, which is refused whatever the options (see Scope limits below). |
 | `DeidentifyErrorCode`    | The discriminant type over that registry.                                                                                              |
-| `DeidentifyError`        | The thrown class, distinct from `DicomParseError`, `DicomValueError` and `DicomSerializeError`. Its message carries only option names and the UID root, never a decoded value. |
+| `DeidentifyError`        | The thrown class, distinct from `DicomParseError`, `DicomValueError` and `DicomSerializeError`. Its message carries only option names and the UID root, or a fixed string for `UNSUPPORTED_TRANSFER_SYNTAX`, never a decoded value. |
 
 ```ts runnable throws
 import { makeUidRemapper } from "@cosyte/dicom";
@@ -311,6 +311,14 @@ These are boundaries, not defects; the full list is on [Known limitations](./lim
 
 - **Metadata only.** Burned-in annotation is warned, never removed. Pixel scrubbing is
   `@cosyte/dicom-pixel`.
+- **A JPIP Referenced object is refused, not de-identified.** When `ds.fileMeta.transferSyntaxUID`
+  is one of the four JPIP Referenced syntaxes (PS3.5 2026c sections A.6, A.7, A.11 and A.12),
+  `deidentify()` throws a `DeidentifyError` with code `UNSUPPORTED_TRANSFER_SYNTAX` before it reads
+  your options or the Data Set, and returns no dataset or report. Such an object's Pixel Data
+  Provider URL `(0028,7FE0)` has no Table E.1-1 row, so a de-identified copy would keep it by
+  omission. **The refusal keys on the File Meta Transfer Syntax alone**: a non-JPIP object that
+  carries `(0028,7FE0)` anyway is de-identified like any other object, and that URL is kept, as
+  every registered attribute Table E.1-1 does not list is kept.
 - **A standard attribute newer than this build is removed, conformant or not.** An attribute with
   no row in this build's PS3.6 registry and none in Table E.1-1 is removed and recorded without its
   tag (see [Attributes neither table carries](#attributes-neither-table-carries)), so an object from

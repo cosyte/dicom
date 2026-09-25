@@ -20,7 +20,11 @@ Implicit VR LE, Explicit VR LE, Explicit VR BE, and Deflated Explicit VR LE, plu
 syntax PS3.5 2026c section A.4 names (JPEG, JPEG-LS, JPEG 2000, HTJ2K, RLE and the rest), whose Data
 Set section A.4 makes Explicit VR LE: those are read and written, their pixels are never decoded,
 and `serializeDicom` refuses with `INVALID_ENCAPSULATED_PIXEL_DATA` a top-level Pixel Data section
-A.4 does not allow. In Implicit VR the on-wire VR is
+A.4 does not allow. It also reads the four JPIP Referenced syntaxes of sections A.6, A.7, A.11 and
+A.12, whose Data Set is Explicit VR LE (deflated for A.7 and A.12, and inflated on parse) and whose
+pixels are referenced by the Pixel Data Provider URL `(0028,7FE0)`, returned as written and never
+fetched; those are read only, and `serializeDicom` and `deidentify` both refuse them. In Implicit
+VR the on-wire VR is
 absent and is resolved from the dictionary; in Explicit VR the on-wire VR is honored and a
 disagreement with the dictionary is flagged (`DICOM_VR_MISMATCH`), never silently overridden.
 
