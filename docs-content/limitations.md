@@ -195,6 +195,15 @@ structural fact about DICOM that no reader can resolve from the wire.
   unchanged: narrowing it would empty the field on every well-formed file, which is what it exists to
   record.
 
+- **A standard attribute from a PS3.6 edition newer than this build is REMOVED, conformant or not.**
+  `deidentify()` removes a non-private attribute that neither this build's PS3.6 2026d registry nor
+  Table E.1-1 carries, because nothing on the wire separates a later edition's attribute from one a
+  sender invented. The cost is content on a conformant newer-edition object, with no switch to keep
+  it in this release; the removal is recorded by byte offset and never by tag. **It narrows the older
+  gap and does not close it**: an attribute PS3.6 registers and the pinned Table E.1-1 does not list
+  is still kept as the source wrote it. Detail:
+  [Attributes neither table carries](./deidentification#attributes-neither-table-carries).
+
 - **A de-identified DICOMDIR is NOT File-set conformant, and the run says so rather than implying
   otherwise.** PS3.15 §E.1.1's group-0004 bullet has three clauses. This package discharges the
   first - `(0004,xxxx)` removed from everything that is not a DICOMDIR - and honours the carve-out
@@ -232,8 +241,8 @@ structural fact about DICOM that no reader can resolve from the wire.
   overwrite the attribute, and describe the manner of modification in your Conformance Statement,
   which §E.3.6 requires of anyone claiming that Option. **The declaration is the top-level Data Set's
   own**, which is where §E.2 and §E.3.6 put it: `(0028,0303)` has no row in Table E.1-1, so a copy
-  the sender nested inside a Sequence Item is retained by omission like every other unlisted
-  attribute and still says whatever that sender wrote. Read the Data Set's own `(0028,0303)`, never a
+  the sender nested inside a Sequence Item is retained by omission like every other registered
+  attribute the table does not list, and still says whatever that sender wrote. Read the Data Set's own `(0028,0303)`, never a
   nested one.
 
 - **A `DeidentifyReport` is not safe to log whole.** The value-bearing fields are named on the

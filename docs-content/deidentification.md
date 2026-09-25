@@ -236,6 +236,40 @@ Pass your own `uidMap` through `DeidentifyOptions` if you would rather share one
 across a whole archive; the mapping is consistent either way, and a shared map only makes repeats
 cheaper.
 
+## Attributes neither table carries
+
+Table E.1-1 lists the attributes the Basic Profile judged, and an attribute it does not list is kept.
+That is right for an attribute the PS3.6 2026d data dictionary registers, which the Profile has
+considered, and it is how every unlisted attribute was handled before this rule. It is not right for
+an attribute **nobody** considered: the notes to PS3.15 2026d Table E.1-1 name "new Standard
+Attributes" among the places identifying information may be, and say that removing only the known
+risks "may fail when the Standard is extended, or when a vendor adds unanticipated Standard
+Attributes".
+
+So `deidentify()` **removes a non-private attribute that neither this build's PS3.6 2026d registry
+nor Table E.1-1 carries**, at the top level and inside every Sequence Item it walks, whatever its VR
+(`UN`, a VR outside the set PS3.5 §6.2 defines, and `SQ` included; a Sequence goes whole and nothing
+inside it is walked). "Registered" means a literal PS3.6 row, or a masked row the tag matches: the
+`(50xx,....)` and `(60xx,....)` families only across the even groups PS3.5 §7.6 bounds them to, so
+`(6002,0010)` Overlay Rows is kept and `(6020,0010)` is removed, and every other masked row, such as
+`(0028,04x0)`, as PS3.6 prints it. Private attributes, `(0004,xxxx)`, `(0002,xxxx)`, group lengths
+`(gggg,0000)` and every tag Table E.1-1 lists keep the handling the rest of this page describes.
+
+Each removal is recorded on `report.unregisteredElementRemovals` by its **byte offset**, and by the
+Sequences the run descended to reach it, **never by tag or VR**: a tag no registry row carries is
+exactly what four bytes read out of the middle of some element's value look like, so the tag may
+itself be document content. The list is capped per run and
+`report.unregisteredElementRemovalCount` carries the complete total, and
+`DICOM_DEIDENT_UNREGISTERED_ELEMENT_REMOVED` is raised once per run that removed anything, with no
+tag, VR or count in its message.
+
+**The limit, stated beside the capability: a conformant attribute from a PS3.6 edition newer than
+this build is removed as well**, because nothing on the wire separates it from one a sender invented.
+That is over-redaction, it is deliberate, and there is no option in this release to keep such an
+attribute. It also narrows the older gap rather than closing it: an attribute PS3.6 registers and the
+pinned Table E.1-1 does not list is still kept exactly as the source wrote it, which is the Profile's
+own design.
+
 ## The report, and what it is not safe to log
 
 `DeidentifyReport` is an audit trail, not a redacted surface. **Several of its fields carry source
@@ -253,6 +287,7 @@ not perform is the worse half of every residual on the limitations page.
 | `UnenumerablePrivateRemoval`  | A private attribute a `Profile` vouched for under `RetainSafePrivate` whose value this run did not enumerate, so §E.3.10's "known to be safe" was never established and it was **removed**, not emptied. |
 | `FileMetaDroppedElement`      | A non-modeled `(0002,xxxx)` element the source carried that is not in the output, with the VR and byte length that went with it. A deliberate fidelity loss, recorded because what was dropped is the audit value. |
 | `Group0004Removal`            | A `(0004,xxxx)` element removed under §E.1.1's unconditional group-0004 rule. No Option brings one back; the DICOMDIR carve-out is the one object it does not apply to.                          |
+| `UnregisteredElementRemoval`  | A non-private element removed because neither this build's PS3.6 registry nor Table E.1-1 carries its tag. It names a byte offset and deliberately no tag or VR, and a newer edition's conformant attribute lands here too. |
 
 ## Errors
 
@@ -276,6 +311,10 @@ These are boundaries, not defects; the full list is on [Known limitations](./lim
 
 - **Metadata only.** Burned-in annotation is warned, never removed. Pixel scrubbing is
   `@cosyte/dicom-pixel`.
+- **A standard attribute newer than this build is removed, conformant or not.** An attribute with
+  no row in this build's PS3.6 registry and none in Table E.1-1 is removed and recorded without its
+  tag (see [Attributes neither table carries](#attributes-neither-table-carries)), so an object from
+  a later edition loses its new attributes. There is no switch to keep them in this release.
 - **Conditional Annex E codes collapse to their most protective branch.** There is no IOD Type-1
   analysis here, so where the table's action depends on the object's IOD this run takes the branch
   that removes rather than the one that keeps.

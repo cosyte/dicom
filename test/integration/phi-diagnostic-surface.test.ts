@@ -795,6 +795,11 @@ function deidIdentifiers(parsed: DeidSurface): readonly string[] {
   for (const found of parsed.report.embeddedAttributes) {
     out.push(found.tag, found.vr, ...found.hidden, ...(found.contextPath ?? []));
   }
+  // The unregistered-element record carries a byte offset and, when nested, a
+  // context path; the path is the only string on it, so it is what is swept.
+  for (const removed of parsed.report.unregisteredElementRemovals) {
+    out.push(...(removed.contextPath ?? []));
+  }
   return out;
 }
 
@@ -920,6 +925,18 @@ const DEID_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
         elements: [{ tag: "00120064", vr: "LO" as VR, value: val(m) }, FILLER],
       }),
     expectCode: WARNING_CODES.DICOM_DEIDENT_METHOD_CODES_PRIOR_REPLACED,
+  },
+  {
+    // S0367-dicom-15 T5. `(4854,4F53)` has no PS3.6 2026d row and no Table E.1-1
+    // row, so it is REMOVED; the marker leaves the output and the only thing
+    // left that could quote it is the disclosure of its removal.
+    name: "deidentify: (4854,4F53) unregistered standard element [LO], removed",
+    plant: (m) =>
+      buildDicom({
+        transferSyntax: TS_EXPLICIT_LE,
+        elements: [FILLER, { tag: "48544F53", vr: "LO" as VR, value: val(m) }],
+      }),
+    expectCode: WARNING_CODES.DICOM_DEIDENT_UNREGISTERED_ELEMENT_REMOVED,
   },
   // The three slots below name no code, and unlike the File Meta four they
   // cannot: the attributes they plant into are deleted by Annex E, so there is
@@ -1267,76 +1284,87 @@ function firstContextSegment(raw: Buffer): string | undefined {
   return report.attributes.find((a) => a.contextPath !== undefined)?.contextPath?.[0];
 }
 
-describe("PHI: report contextPath is not structural, and this is the measurement", () => {
-  it("publishes four bytes of the payload as a contextPath segment", () => {
-    const segment = firstContextSegment(fabricatedSequenceInsideAValue(CONTEXT_NAME));
-
-    expect(segment).toBe("53484E4F[0]");
+/**
+ * ## ▶ WHAT THIS BLOCK MEASURES SINCE S0367-dicom-15, AND WHAT IT USED TO
+ *
+ * Through that item it measured the fabricated `(5348,4E4F)` header being
+ * DESCENDED: `contextPath: ["53484E4F[0]"]` on the report with no diagnostic at
+ * all, and `"HSON"` re-emitted into output stamped `(0012,0062) = YES`. That tag
+ * has no PS3.6 2026d row and no Table E.1-1 row, so the unregistered-element
+ * rule now removes the fabricated Sequence whole, before anything reads its VR
+ * (AC-12), and the rows below assert that instead. **It is a statement about
+ * this fixture's shape and not a bound on the field**: a Sequence this run does
+ * descend still contributes whatever tag the wire gave it, which is what
+ * `DeidentifiedAttribute.contextPath` discloses.
+ */
+describe("PHI: report contextPath and the fabricated Sequence header", () => {
+  it("S0367-dicom-15 AC-12: the fixture still fabricates (5348,4E4F) out of the surname, with items", () => {
+    // The precondition every row below rests on: the PARSE still produces the
+    // shape, so a clean de-identified result is the rule's doing, not the fixture's.
+    const ds = parseDicom(fabricatedSequenceInsideAValue(CONTEXT_NAME));
+    expect(ds.get("53484E4F")?.vr).toBe("SQ");
+    expect(ds.get("53484E4F")?.items?.[0]?.has("00100020")).toBe(true);
     // Not "a tag that happens to look odd": these are the document's own bytes,
     // recovered by writing the two halves back the way the parser read them.
     expect(tagToWireBytes("53484E4F")).toBe("HSON");
     expect(CONTEXT_NAME).toContain("HSON");
+    expect(ds.warnings).toEqual([]);
   });
 
-  it("raises no diagnostic of any kind alongside it", () => {
-    // Why the field matters at all: there is no warning and no finding to
-    // correlate it with, so "the report's structural fields are safe to log" was
-    // the only guidance a consumer had, and it was wrong.
+  it("S0367-dicom-15 AC-12: removes it whole, so no contextPath segment names it", () => {
     const ds = parseDicom(fabricatedSequenceInsideAValue(CONTEXT_NAME));
     const { report } = deidentify(ds);
 
-    expect(ds.warnings).toEqual([]);
+    expect(firstContextSegment(fabricatedSequenceInsideAValue(CONTEXT_NAME))).toBeUndefined();
+    expect(report.unregisteredElementRemovals).toEqual([
+      { byteOffset: ds.get("53484E4F")?.byteOffset },
+    ]);
+    // One diagnostic, the once-per-run disclosure, and nothing for its contents.
+    expect(report.warnings.map((w) => w.code)).toEqual([
+      WARNING_CODES.DICOM_DEIDENT_UNREGISTERED_ELEMENT_REMOVED,
+    ]);
     expect(report.undefinedVrElements).toEqual([]);
     expect(report.embeddedAttributes).toEqual([]);
     expect(report.unauditableSequences).toEqual([]);
     expect(report.removedPrivateTags).toEqual([]);
-    expect(report.warnings).toEqual([]);
   });
 
-  it("🛑 but it is NOT the only place those bytes surface: the de-identified OBJECT re-emits the whole header", () => {
-    // **A graded pass refuted the sentence this test replaces.** The first draft
-    // of this slice claimed in six artifacts that `contextPath` was "the only
-    // trace of that header anywhere in the output". It is not, and the miss
-    // mattered: a consumer who redacts `contextPath` on that advice still
-    // forwards a "de-identified" object carrying four bytes of the surname,
-    // stamped `Patient Identity Removed = YES`.
-    //
-    // The fabricated `(5348,4E4F)` survives into the output Data Set, so the
-    // spec-clean serializer writes its header back out in full. That re-emission
-    // is the already-disclosed under-declare carrier class
-    // (`DICOM-CARRIER-LEAF-LEAKS`), NOT this field's doing - the point of the row
-    // is that neither one is a bound on the other, and the diagnostic advice
-    // must not be read as covering the object.
+  it("S0367-dicom-15 AC-6: and no rendering of the fabricated tag is on the report", () => {
+    const { report } = deidentify(parseDicom(fabricatedSequenceInsideAValue(CONTEXT_NAME)));
+    const rendered = JSON.stringify(report, (_key, value: unknown) =>
+      value instanceof Map ? [...(value as Map<unknown, unknown>).entries()] : value,
+    );
+    for (const form of ["53484E4F", "53484e4f", "(5348,4E4F)", "(5348,4e4f)", "HSON"]) {
+      expect(rendered, form).not.toContain(form);
+    }
+  });
+
+  it("S0367-dicom-15 AC-12: the de-identified OBJECT no longer re-emits the header, or the name inside it", () => {
     const { dataset } = deidentify(parseDicom(fabricatedSequenceInsideAValue(CONTEXT_NAME)));
     const out = serializeDicom(dataset);
 
-    expect([...dataset.elements()].map((el) => el.tag)).toContain("53484E4F");
-    expect(out.includes(Buffer.from("HSON", "latin1"))).toBe(true);
-    expect(dataset.get("00120062")?.rawBytes.toString("latin1")).toBe("YES");
-    // The nested `(0010,0020)` IS emptied, which is why the report reads clean.
-    expect(out.includes(Buffer.from("MRN-1", "latin1"))).toBe(false);
-  });
-
-  it("and the re-emitted bytes track the payload too", () => {
-    // The mutation control for the row above, so it cannot pass on a constant.
-    const { dataset } = deidentify(
-      parseDicom(fabricatedSequenceInsideAValue(CONTEXT_NAME_CONTROL)),
-    );
-    const out = serializeDicom(dataset);
-
-    expect(out.includes(Buffer.from("DSON", "latin1"))).toBe(true);
+    expect([...dataset.elements()].map((el) => el.tag)).not.toContain("53484E4F");
     expect(out.includes(Buffer.from("HSON", "latin1"))).toBe(false);
+    expect(out.includes(Buffer.from("MRN-1", "latin1"))).toBe(false);
+    expect(dataset.get("00120062")?.rawBytes.toString("latin1")).toBe("YES");
   });
 
-  it("tracks the payload: change the surname and the published bytes change with it", () => {
-    // The non-vacuity control. Without it the assertion above proves only that
-    // some constant string came back.
-    const segment = firstContextSegment(fabricatedSequenceInsideAValue(CONTEXT_NAME_CONTROL));
-
-    expect(segment).toBe("53444E4F[0]");
+  it("S0367-dicom-15 AC-12 mutation control: serialized WITHOUT de-identification, both are in the bytes", () => {
+    // Proves the byte searches above can go red: the same serializer and the same
+    // search, on the parsed object the rule never touched, and on the control
+    // surname, whose fabricated tag tracks the payload.
+    for (const [name, wire] of [
+      [CONTEXT_NAME, "HSON"],
+      [CONTEXT_NAME_CONTROL, "DSON"],
+    ] as const) {
+      const out = serializeDicom(parseDicom(fabricatedSequenceInsideAValue(name)));
+      expect(out.includes(Buffer.from(wire, "latin1")), name).toBe(true);
+      expect(out.includes(Buffer.from("MRN-1", "latin1")), name).toBe(true);
+    }
     expect(tagToWireBytes("53444E4F")).toBe("DSON");
-    expect(CONTEXT_NAME_CONTROL).toContain("DSON");
-    expect(segment).not.toBe(firstContextSegment(fabricatedSequenceInsideAValue(CONTEXT_NAME)));
+    expect(parseDicom(fabricatedSequenceInsideAValue(CONTEXT_NAME_CONTROL)).has("53444E4F")).toBe(
+      true,
+    );
   });
 
   it("but on a conformant file the segment is the tag the sender wrote", () => {
@@ -1359,13 +1387,14 @@ describe("PHI: report contextPath is not structural, and this is the measurement
   });
 
   it("and the fabricated tag never reaches attributes[].tag, which IS bound", () => {
-    // The distinction the corrected docs turn on. `attributes[].tag` is only
-    // populated for a tag Annex E carries a row for - membership in a closed
-    // table - so the fabricated header is absent from it. `contextPath` has no
-    // such bound and that is the whole finding.
+    // `attributes[].tag` is only populated for a tag Annex E carries a row for -
+    // membership in a closed table - so the fabricated header is absent from it.
+    // S0367-dicom-15 AC-12 moved the second half: the nested `(0010,0020)` is no
+    // longer audited, because the Sequence carrying it is removed whole and not
+    // walked ("none for anything inside it").
     const { report } = deidentify(parseDicom(fabricatedSequenceInsideAValue(CONTEXT_NAME)));
 
     expect(report.attributes.map((a) => a.tag)).not.toContain("53484E4F");
-    expect(report.attributes.map((a) => a.tag)).toContain("00100020");
+    expect(report.attributes.map((a) => a.tag)).not.toContain("00100020");
   });
 });

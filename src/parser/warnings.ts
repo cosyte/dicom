@@ -90,6 +90,7 @@ export const WARNING_CODES = {
   DICOM_DEIDENT_PRIVATE_DECLARATION_NOT_RESOLVED: "DICOM_DEIDENT_PRIVATE_DECLARATION_NOT_RESOLVED", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE: "DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE", // emitted by deidentify(), never by the parser
   DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE: "DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE", // emitted by deidentify(), never by the parser
+  DICOM_DEIDENT_UNREGISTERED_ELEMENT_REMOVED: "DICOM_DEIDENT_UNREGISTERED_ELEMENT_REMOVED", // emitted by deidentify(), never by the parser
   DICOM_PRIVATE_CREATOR_UNKNOWN: "DICOM_PRIVATE_CREATOR_UNKNOWN", // emitted only when a profile is active
 } as const;
 
@@ -456,6 +457,17 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   // counted rather than anything the document said.
   DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE:
     "An element at byte offset {n2} carries an on-wire VR that is not one of the 34 PS3.5 6.2 defines, so its value bytes are not a Value Field this library decoded; emptied (PS3.15 E.1.1). Its tag, VR and byte count are withheld: an earlier under-declared length can make them fragments of some element's value. See report.undefinedVrElements.",
+  // 🩺 Once per run, and NO TAG, NO VR, NO COUNT AND NO CONTEXT PATH, for the
+  // reason DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE withholds them: the trigger is
+  // "no PS3.6 row carries this tag", which is exactly what four bytes read out of
+  // some element's value look like, so the tag may BE document content. There is
+  // no membership table for a renderer to fall back on here either, because the
+  // condition is the absence of one. The records are on
+  // report.unregisteredElementRemovals (capped, byte offsets only) and the true
+  // total is on report.unregisteredElementRemovalCount. It fires on a CONFORMANT
+  // newer-edition file too, which is the over-redaction the message states.
+  DICOM_DEIDENT_UNREGISTERED_ELEMENT_REMOVED:
+    "Non-private Data Elements whose tags this build's PS3.6 2026d registry does not carry, and which Table E.1-1 does not list, were removed at every depth: a Standard Attribute newer than this build, or one its sender invented, can carry identifying information no Table E.1-1 row names (PS3.15 E.1.1). A conformant attribute from a later edition is removed too. Their tags, VRs and count are withheld from this message; see report.unregisteredElementRemovals and report.unregisteredElementRemovalCount.",
   DICOM_BOM_IN_TEXT_VR: "Element ({tag}) {vr} value begins with a UTF-8 BOM; stripped on decode.",
   DICOM_TRAILING_NULL_IN_TEXT_VR:
     "Element ({tag}) {vr} value has a trailing NULL pad where SPACE is expected; trimmed.",
@@ -2001,6 +2013,48 @@ export function undefinedVrNotAuditable(position: DicomPosition): DicomParseWarn
   return build(WARNING_CODES.DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE, position, {
     n2: position.byteOffset,
   });
+}
+
+/**
+ * Build a `DICOM_DEIDENT_UNREGISTERED_ELEMENT_REMOVED` warning. Emitted by
+ * `deidentify()` - never by the parser - once per run, when at least one
+ * non-private Data Element was removed because this build's PS3.6 2026d
+ * registry does not carry its tag and PS3.15 2026d Table E.1-1 does not list
+ * it.
+ *
+ * @remarks
+ * **Position only, and the signature is the bound.** The condition that raises
+ * this code is "no registry row carries this tag", and four bytes an
+ * under-declared length upstream made the reader take as a header satisfy it by
+ * construction: measured on the fixture in
+ * `test/integration/deident-undefined-vr.test.ts`, the tag `(4854,4F53)` is
+ * `"THSO"`, four letters of a surname, and it has no row. So there is no tag, no
+ * VR and no context path to pass, the same bound
+ * {@link undefinedVrNotAuditable} carries, and no count either, because the
+ * total is on the report beside the records. `renderTag` would withhold such a
+ * tag as well, but a slot that relies on a table is a slot a future call site
+ * can still be handed.
+ *
+ * **Once per run**, for the reason {@link fileMetaReplaced} states: a
+ * per-element warning is multiplied by an element count the input picks. The
+ * elements are on `report.unregisteredElementRemovals` (capped, byte offsets
+ * only) and their true number is on `report.unregisteredElementRemovalCount`
+ * (not capped).
+ *
+ * It fires on a **conformant** object from a later edition, whose new Standard
+ * Attributes this build has no row for, and that is not a defect: the notes to
+ * PS3.15 2026d Table E.1-1 name "new Standard Attributes" among the places
+ * identifying information may be, so the fail-safe is to remove them and say so.
+ * `deidentify()` emits it on `report.warnings` only, never on `Dataset.warnings`,
+ * so no `{ strict: true }` parse is affected.
+ *
+ * @example
+ * ```ts
+ * const w = unregisteredElementRemoved({ byteOffset: 0, fileMeta: false });
+ * ```
+ */
+export function unregisteredElementRemoved(position: DicomPosition): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_DEIDENT_UNREGISTERED_ELEMENT_REMOVED, position);
 }
 
 // ---------------------------------------------------------------------------

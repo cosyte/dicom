@@ -417,7 +417,9 @@ survived.
 
 The attribute-action table behind all of this is generated from **NEMA's PS3.15 2026d DocBook**, the
 normative publication of the standard, rather than from a third-party mirror of it. That matters
-because an attribute the table does not list is an attribute `deidentify()` keeps, silently: the
+because an attribute the table does not list is an attribute `deidentify()` keeps, silently,
+whenever the PS3.6 registry carries its tag (one the registry does not carry either is removed; see
+[Attributes neither table carries](./deidentification#attributes-neither-table-carries)): the
 current edition's patient attributes, including the `(0010,00xx)` preferred-name and pronoun block,
 the `(0010,004x)` gender-identity and sex-parameters attributes, and `EthnicGroupCodeSequence` /
 `EthnicGroups`, are all removed because the table is the edition's, not a snapshot of it. Four rows

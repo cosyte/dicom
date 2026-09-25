@@ -2393,8 +2393,8 @@ is a MATRIX...")` case in `deident-private-reservation.test.ts` asserts the **em
   other three are `(0040,B020)` `X/D`, `(0070,0006)` `D`, `(300A,0054)` `U`), among them
   `(0010,0011)`-`(0010,0016)` (the preferred-name and pronoun block, including `(0010,0012)` a
   patient's **preferred name**), `(0010,0041)`-`(0010,0047)` (gender identity, sex parameters for
-  clinical use), and `(0010,2161)`/`(0010,2162)`. Because `annexE()` returns `undefined` for a tag it
-  does not carry and `deidentify()` reads `undefined` as "not listed, keep", **every one of them
+  clinical use), and `(0010,2161)`/`(0010,2162)`. Because `annexE()` returned `undefined` for a tag it
+  did not carry and `deidentify()` read `undefined` as "not listed, keep", **every one of them
   survived `deidentify()` verbatim and the report said nothing** - shipped that way at `0.0.3`.
   `deid`'s `/dicom` adapter delegates here, so it had the same hole. **The lesson: a de-identifier's
   action table lagging the dictionary is a silent PHI leak, not a currency nit. They advance together
@@ -2406,6 +2406,32 @@ is a MATRIX...")` case in `deident-private-reservation.test.ts` asserts the **em
   unaccounted `<tr>`, or under 600 rows. **No staleness clock, and there must not be one** - same
   reasoning as PS3.6. The mirror-only count prints every run too, so the "retires rather than
   deletes" assumption stays observable.
+- **An `annexE()` miss is no longer "keep" on its own (S0367-dicom-15), and that NARROWS the lag
+  leak above without closing it.** `deidentify()` keeps a Table E.1-1-unlisted non-private element
+  only when the pinned PS3.6 2026d registry carries its tag - a literal row, or a masked row with the
+  `50xx`/`60xx` groups bounded by PS3.5 §7.6 through `src/dictionary/repeating-groups.ts` (the
+  de-identify bound, never the parser's `matchRepeatingGroup`) and every other mask read as printed
+  (`src/dictionary/registered.ts`). One with **no registry row** is REMOVED at every depth and
+  whatever its VR (`UN`, a VR outside the 34, a whole `SQ` whose items are then never walked), ahead
+  of the `SQ`, undefined-VR and keep-or-empty handling, because nothing separates a later edition's
+  attribute from an invented one and PS3.15 2026d's notes to Table E.1-1 name "new Standard
+  Attributes" as a leak path. It is recorded by **byte offset and never by tag or VR** on
+  `report.unregisteredElementRemovals` (capped, own budget) beside the uncapped
+  `report.unregisteredElementRemovalCount`, with `DICOM_DEIDENT_UNREGISTERED_ELEMENT_REMOVED` once per
+  run from a position-only factory: "no registry row" is exactly what four bytes of a value look
+  like, so the tag may be document content. Group lengths `(gggg,0000)`, group `0002` and group `0004`
+  keep their handling, and the embedded-attribute scanner is **not** widened (that over-redaction is
+  `DICOM-DEIDENT-OVER-REDACTION`'s call). **What it does not close:** a tag PS3.6 registers whose
+  Table E.1-1 row the pinned PS3.15 lacks is still kept verbatim, which is why the two pins still
+  advance together. **What it costs:** a conformant attribute from an edition newer than the pin is
+  removed as well, with no caller switch. **What it moved:** the fabricated `(4854,4F53)` in
+  `test/integration/deident-undefined-vr.test.ts` and the fabricated `(5348,4E4F)` Sequence of the
+  `contextPath` block in `test/integration/phi-diagnostic-surface.test.ts` are both unregistered, so
+  both are removed rather than emptied or descended; the undefined-VR rule keeps its registered-tag
+  population, and `contextPath` is unchanged on every Sequence a run does descend. No registered tag's
+  four wire bytes are all printable ASCII - measured over every literal row, and every masked row
+  fixes a byte outside that range - which is why that fixture cannot simply be re-spelled onto a
+  descended shape.
 - **The E.3.6 collapse is CLOSED, and the earlier "splitting the option is a public-surface change
   deliberately not made" is RETRACTED rather than reworded.** PS3.15 §E.3.6 is two mutually exclusive
   Options and Table E.1-1 gives them separate columns; the generator read index 11

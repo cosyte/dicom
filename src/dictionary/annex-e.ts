@@ -144,8 +144,10 @@ export interface AnnexERepeatingRule {
 /**
  * Look up the PS3.15 Annex E action for a DICOM tag.
  *
- * Returns `undefined` for tags not listed in Annex E Table E.1-1; those attributes
- * are unaffected by anonymization (effectively `K` - keep).
+ * Returns `undefined` for tags not listed in Annex E Table E.1-1. **`undefined`
+ * is not "keep"**: `deidentify()` keeps such an attribute only when this build's
+ * PS3.6 registry carries its tag, and removes a non-private one the registry does
+ * not carry (see `isRegisteredTag` in `./registered.ts`).
  * `deidentify()` consumes this; library users invoke `deidentify()` directly,
  * not `annexE()`.
  *

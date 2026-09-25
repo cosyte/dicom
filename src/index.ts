@@ -120,4 +120,5 @@ export type {
   UnauditableSequenceFinding,
   UndefinedVrFinding,
   UnenumerablePrivateRemoval,
+  UnregisteredElementRemoval,
 } from "./deident/index.js";

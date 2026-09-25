@@ -219,7 +219,11 @@ are named here so nobody logs them in the meantime. **But redacting `contextPath
 and not an object fix** - on that same file the de-identified object still carries the fabricated
 `(5348,4E4F)`, so the serializer writes `HSON` back out under a `Patient Identity Removed = YES`
 stamp. That re-emission is the under-declared-carrier class in the row above, not this field; neither
-one bounds the other. What is left over - keywords, action codes, applied outcomes, repeating-group
+one bounds the other. **That fixture no longer reproduces either half**: `(5348,4E4F)` has no row in
+this build's PS3.6 registry, so `deidentify()` now removes the fabricated Sequence whole instead of
+descending it (see [Attributes neither table carries](./deidentification#attributes-neither-table-carries)).
+That is a fact about that shape and not a bound on the field: a Sequence the run does descend still
+contributes whatever tag the wire gave it. What is left over - keywords, action codes, applied outcomes, repeating-group
 masks, and the attribute tags, which are bound to tags Annex E carries a row for - is composed from
 static tables and carries nothing.
 

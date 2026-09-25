@@ -50,12 +50,26 @@
  * `UN` element in every file.
  *
  * Every behavioural expectation was run red against `35adc2d`.
+ *
+ * ## ▶ RE-POINTED BY S0367-dicom-15, AND WHY THE UNDEFINED-VR RULE KEEPS A POPULATION
+ *
+ * The fabricated `(4854,4F53)` has no PS3.6 2026d row and no Table E.1-1 row, so
+ * the unregistered-element rule now answers it first: it is **removed**, not
+ * emptied, and recorded on `report.unregisteredElementRemovals` only (AC-4). The
+ * cases that asserted the emptying and the undefined-VR record on that fixture
+ * assert AC-4 now. The undefined-VR rule is unchanged and still answers a
+ * **registered** tag Table E.1-1 does not list that carries a VR outside the 34
+ * (AC-14), which is the population the cap test below and the AC-14 control run
+ * on.
  */
 
 import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
 import { MAX_UNDEFINED_VR_FINDINGS, deidentify } from "../../src/deident/deidentify.js";
+import { annexE } from "../../src/dictionary/annex-e.js";
+import { TAGS } from "../../src/dictionary/generated/tags.js";
+import { isRegisteredTag } from "../../src/dictionary/registered.js";
 import type { Tag, VR } from "../../src/dictionary/types.js";
 import { defineProfile } from "../../src/index.js";
 import { parseDicom } from "../../src/parser/index.js";
@@ -195,20 +209,30 @@ describe("DICOM-CARRIER-LEAF-LEAKS: an on-wire VR that is not a VR", () => {
     expect(deidBytes(underDeclare(LO_CARRIER, "LO"))).not.toContain(PATIENT_ID);
   });
 
-  it("empties the fabricated element rather than removing it", () => {
+  it("AC-4: removes the fabricated element rather than emptying it, header and all", () => {
+    // S0367-dicom-15. `(4854,4F53)` is unregistered, so removal - the stronger
+    // outcome - takes precedence over the emptying below, and leaves no
+    // fabricated tag bytes in the output where emptying kept the header.
+    expect(isRegisteredTag(FABRICATED_TAG)).toBe(false);
+    expect(annexE(FABRICATED_TAG)).toBeUndefined();
     const { dataset } = deidentify(parseDicom(underDeclare(LO_CARRIER, "LO")));
-    expect(dataset.has(FABRICATED_TAG)).toBe(true);
-    expect(dataset.get(FABRICATED_TAG)?.rawBytes).toHaveLength(0);
+    expect(dataset.has(FABRICATED_TAG)).toBe(false);
+    const out = serializeDicom(dataset);
+    expect(parseDicom(out).has(FABRICATED_TAG)).toBe(false);
+    expect(out.includes(Buffer.from("THSO", "latin1"))).toBe(false);
   });
 
-  it("reports the byte offset and the bytes dropped, and NO tag", () => {
+  it("AC-4: records it on the unregistered-removal record only, by byte offset, and NOT as an undefined VR", () => {
     const ds = parseDicom(underDeclare(LO_CARRIER, "LO"));
     const offset = ds.get(FABRICATED_TAG)?.byteOffset;
     expect(offset).toBeGreaterThan(0);
     const { report } = deidentify(ds);
-    expect(report.undefinedVrElements).toEqual([
-      { byteOffset: offset, byteLength: TRAILING_ELEMENT_BYTES },
-    ]);
+    expect(report.unregisteredElementRemovals).toEqual([{ byteOffset: offset }]);
+    expect(report.unregisteredElementRemovalCount).toBe(1);
+    expect(report.undefinedVrElements).toEqual([]);
+    expect(report.warnings.map((w) => w.code)).not.toContain(
+      WARNING_CODES.DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE,
+    );
   });
 
   // -------------------------------------------------------------------------
@@ -232,37 +256,57 @@ describe("DICOM-CARRIER-LEAF-LEAKS: an on-wire VR that is not a VR", () => {
     expect(SURNAME).toContain(group + element);
   });
 
-  it("puts no part of the surname in report.undefinedVrElements", () => {
+  it("AC-4: puts no part of the surname in report.unregisteredElementRemovals", () => {
     const { report } = deidentify(parseDicom(underDeclare(ST_CARRIER, "ST")));
-    expect(report.undefinedVrElements).toHaveLength(1);
+    expect(report.unregisteredElementRemovals).toHaveLength(1);
+    expect(report.undefinedVrElements).toEqual([]);
     // Whatever fields the finding grows, none may render as those bytes.
-    const rendered = JSON.stringify(report.undefinedVrElements);
+    const rendered = JSON.stringify(report.unregisteredElementRemovals);
     expect(rendered).not.toContain(FABRICATED_TAG);
     expect(rendered).not.toContain("THSO");
   });
 
-  it("warns with a message that names no tag, no VR and no value", () => {
+  it("AC-4: warns once, with a message that names no tag, no VR and no value", () => {
     const raw = underDeclare(ST_CARRIER, "ST");
     const { report } = deidentify(parseDicom(raw));
-    const w = report.warnings.find(
-      (x) => x.code === WARNING_CODES.DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE,
+    const raised = report.warnings.filter(
+      (x) => x.code === WARNING_CODES.DICOM_DEIDENT_UNREGISTERED_ELEMENT_REMOVED,
     );
-    expect(w).toBeDefined();
-    // Every other warning in this package names its element by tag. This one may
-    // not: the tag is four bytes of the surname, and `renderTag` validates a
-    // tag's SHAPE so it cannot refuse one - the withholding has to happen at the
-    // call site, which is what this pins.
+    expect(raised).toHaveLength(1);
+    const w = raised[0];
+    // The tag is four bytes of the surname and has no registry row, so nothing
+    // may render it; the withholding is the factory's signature, not a table.
     expect(w?.message).not.toContain(FABRICATED_TAG);
     expect(w?.message).not.toContain("THSO");
     expect(w?.message).not.toContain(PATIENT_ID);
     // THIS fixture's fabricated VR bytes, read off the parse rather than
-    // asserted from memory - `renderVr` checks a closed set, so an unrecognized
-    // VR renders as withheld, and pinning the wrong pair proves nothing.
+    // asserted from memory, and pinning the wrong pair proves nothing.
     const fabricatedVr = parseDicom(raw).get(FABRICATED_TAG)?.vr;
     expect(fabricatedVr).toBe("ZZ");
     expect(w?.message).not.toContain(fabricatedVr);
-    // Still locatable: the byte offset is a position the parser counted.
-    expect(w?.message).toContain(String(w?.position.byteOffset));
+  });
+
+  it("AC-14: still empties a REGISTERED unlisted tag with a VR outside the 34, on the undefined-VR record", () => {
+    // The control that keeps the undefined-VR rule a live population. `(2000,0050)`
+    // Film Session Label has a PS3.6 row and no Table E.1-1 row, so the
+    // unregistered-element rule does not take it and the pin's handling stands.
+    expect(isRegisteredTag(LO_CARRIER)).toBe(true);
+    expect(annexE(LO_CARRIER)).toBeUndefined();
+    const raw = buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      elements: [
+        { tag: "00100010", vr: "PN" as VR, value: ascii(ROOT_NAME) },
+        { tag: LO_CARRIER, vr: "ZZ" as VR, value: ascii(PATIENT_ID) },
+      ],
+    });
+    const parsed = parseDicom(raw);
+    const offset = parsed.get(LO_CARRIER)?.byteOffset;
+    const { dataset, report } = deidentify(parsed);
+    expect(dataset.get(LO_CARRIER)?.rawBytes).toHaveLength(0);
+    expect(report.undefinedVrElements).toEqual([{ byteOffset: offset, byteLength: 10 }]);
+    expect(report.unregisteredElementRemovals).toEqual([]);
+    expect(report.unregisteredElementRemovalCount).toBe(0);
+    expect(serializeDicom(dataset).toString("latin1")).not.toContain(PATIENT_ID);
   });
 
   // -------------------------------------------------------------------------
@@ -416,25 +460,30 @@ describe("DICOM-CARRIER-LEAF-LEAKS: an on-wire VR that is not a VR", () => {
   // -------------------------------------------------------------------------
 
   /**
-   * `n` elements whose on-wire VR is `"ZZ"`, each an 8-byte short-form header
-   * with a zero-length value, plus one that carries the identifier.
+   * `n` elements whose on-wire VR is `"ZZ"`, each a header with a zero-length
+   * value, plus one that carries the identifier.
    *
    * This is the cheapest amplification the format allows and it is worse than
    * the sibling rule's: an un-auditable `SQ` needs a value, but an undefined-VR
    * element needs nothing at all past its header. `#54`'s first draft was
    * measured at 58,255 findings from a 1 MiB input for exactly this reason.
+   *
+   * The tags are REGISTERED and absent from Table E.1-1 (AC-14's population),
+   * read off the generated PS3.6 registry in ascending order. The group-`4000`
+   * tags this used to synthesize are mostly unregistered, so since S0367-dicom-15
+   * they would be removed by the unregistered-element rule and never reach the
+   * cap under test here.
    */
   function manyUndefinedVr(n: number): Buffer {
     const elements: { tag: Tag; vr: VR; value: Buffer }[] = [
       { tag: "00100010", vr: "PN", value: ascii(ROOT_NAME) },
     ];
-    for (let i = 0; i < n; i++) {
-      // Even group, ascending, never `(0000,0000)` and never private.
-      const group = 0x4000 + ((i >> 8) & 0xff) * 2;
-      const element = i & 0xff;
-      const tag = `${group.toString(16).padStart(4, "0")}${element
-        .toString(16)
-        .padStart(4, "0")}`.toUpperCase();
+    const registeredUnlisted = Object.keys(TAGS)
+      .filter((tag) => /^0018[0-9A-F]{4}$/u.test(tag) && !tag.endsWith("0000"))
+      .filter((tag) => annexE(tag) === undefined)
+      .sort();
+    expect(registeredUnlisted.length).toBeGreaterThanOrEqual(n);
+    for (const tag of registeredUnlisted.slice(0, n)) {
       elements.push({ tag, vr: "ZZ" as VR, value: Buffer.alloc(0) });
     }
     elements.push({ tag: PATIENT_ID_TAG, vr: "ZZ" as VR, value: ascii(PATIENT_ID) });
@@ -455,6 +504,8 @@ describe("DICOM-CARRIER-LEAF-LEAKS: an on-wire VR that is not a VR", () => {
     expect(ds.elements().filter((el) => (el.vr as string) === "ZZ")).toHaveLength(many + 1);
 
     const { dataset, report } = deidentify(ds);
+    // None of them is the unregistered-element rule's (AC-14's population).
+    expect(report.unregisteredElementRemovalCount).toBe(0);
     expect(report.undefinedVrElements).toHaveLength(MAX_UNDEFINED_VR_FINDINGS);
     expect(
       report.warnings.filter(
