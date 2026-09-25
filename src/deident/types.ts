@@ -146,8 +146,16 @@ export interface DeidentifiedAttribute {
    * `(0012,0062) Patient Identity Removed = YES`. That re-emission belongs to
    * the disclosed under-declare carrier class, not to this field, and neither is
    * a bound on the other: **redacting `contextPath` from a log does not make the
-   * object safe to share.** Pinned in
-   * `test/integration/phi-diagnostic-surface.test.ts`.
+   * object safe to share.**
+   *
+   * **That fixture no longer reproduces either half.** `(5348,4E4F)` has no row
+   * in this build's PS3.6 registry and none in Table E.1-1, so `deidentify()` now
+   * removes the fabricated Sequence whole before it reads the VR, and neither
+   * this field nor the object carries `"HSON"` (see
+   * {@link UnregisteredElementRemoval}); that is what
+   * `test/integration/phi-diagnostic-surface.test.ts` pins now. It is a fact
+   * about that shape and **not a bound on this field**: a Sequence the run does
+   * descend still contributes whatever tag the wire gave it.
    *
    * It is published anyway, on the same footing as
    * {@link DeidentifyReport.removedPrivateTags}: **where** an attribute sat is

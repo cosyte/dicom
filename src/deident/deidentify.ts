@@ -2472,8 +2472,10 @@ function descendSequence(
     // that claim false where it used to stand in this comment**: the same file
     // shape with an odd resync group puts `"ISON"` into `removedPrivateTags`.
     // See the list on `DeidentifyReport`. Documented on
-    // `DeidentifiedAttribute.contextPath`, measured in
-    // `test/integration/phi-diagnostic-surface.test.ts`. The field is published
+    // `DeidentifiedAttribute.contextPath`. The measured `(5348,4E4F)` shape no
+    // longer reaches this line - it has no PS3.6 row, so `processElements`
+    // removes it before descending - but every Sequence that does reach it is
+    // still named by its wire tag. The field is published
     // anyway - withholding it would destroy the audit on every well-formed file
     // to bound a malformed one - so do not "fix" this by dropping the tag.
     const childPath = [...contextPath, `${el.tag}[${String(index)}]`];
