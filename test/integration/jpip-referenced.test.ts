@@ -327,7 +327,9 @@ describe("AC-8: the decompression cap binds the path parseDicom dispatches the D
     "AC-8: %s past DEFAULT_MAX_INFLATED_BYTES is INVALID_FILE_META at that cap",
     (uid) => {
       const { result, thrown } = attempt(() => parseDicom(jpipObjectWithDataSetBytes(uid, bomb)));
-      expect(result).toBeUndefined();
+      // A boolean, not the Dataset: a returned one holds the whole inflated stream, and handing it
+      // to the matcher's diff would exhaust the heap before the failure could be reported.
+      expect(result === undefined, "parseDicom returned a Dataset past the cap").toBe(true);
       expect(thrown).toBeInstanceOf(DicomParseError);
       const err = thrown as DicomParseError;
       expect(err.code).toBe(FATAL_CODES.INVALID_FILE_META);
