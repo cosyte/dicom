@@ -118,7 +118,8 @@ Sequence, is written as read and not checked.
 `DIRECTORY_OFFSET_UNRESOLVED` and `DIRECTORY_OFFSET_DEFLATED` are the DICOMDIR codes. For a `Dataset`
 whose `(0002,0002)` is `1.2.840.10008.1.3.10`, the writer writes `(0004,1200)`, `(0004,1202)` and each
 Directory Record's `(0004,1400)` and `(0004,1420)` as the byte offset, counted from the first byte of
-the preamble it writes, of the record each named when the file was read (PS3.3 2026d Table F.3-3).
+the preamble it writes, of the record each named when the file was read, as PS3.3's Basic Directory
+IOD defines them (PS3.3 is not vendored here, so no clause is claimed for it).
 That is how a record stays named after the File Meta group is rebuilt, a record's elements are put in
 ascending order, or `deidentify()` re-encodes every record at a new length. A record's identity is
 `Item.fileOffset`, where the parser found its Item tag, which `deidentify()` carries to the Item it

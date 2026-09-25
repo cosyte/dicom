@@ -15,7 +15,7 @@ patient's record into another's images.
   and its lower-level records, plus the root entity `(0004,1200)` names. `undefined` for anything
   else. Read under Implicit VR LE, Explicit VR LE and Explicit VR BE.
 - **New `Item.fileOffset`**: where the parser found an Item's `(FFFE,E000)` tag, counted from the
-  first byte of the File Preamble, as PS3.3 2026d Table F.3-3 counts DICOMDIR offsets (a file read
+  first byte of the File Preamble, as PS3.3's Basic Directory IOD counts DICOMDIR offsets (a file read
   without a preamble still counts the 132 bytes it lacks). `deidentify()` carries it to the Item it
   rebuilds; it is the identity the writer ties each offset to. An offset names a record only when it
   equals a Directory Record Sequence Item's `fileOffset`, never an Item tag found by scanning.
@@ -25,7 +25,8 @@ patient's record into another's images.
   `DICOM_DIRECTORY_OFFSET_MALFORMED` (a Value Length other than 4),
   `DICOM_DIRECTORY_RECORD_REVISITED` (an offset that would reach a record already reached; it is in
   the tree once and the parse finishes) and `DICOM_DIRECTORY_OFFSET_DEFLATED` (a Deflated DICOMDIR
-  with a non-zero offset, which PS3.10 2026d section 8.6 does not allow; no offset resolves). No
+  with a non-zero offset, which PS3.10 does not allow, since it requires a DICOMDIR File to use
+  Explicit VR Little Endian; no offset resolves). No
   offset value, record index or record key reaches a message. `{ strict: true }` escalates them.
 - **New `SERIALIZE_ERROR_CODES` members `DIRECTORY_OFFSET_UNRESOLVED` and
   `DIRECTORY_OFFSET_DEFLATED`.** The writer refuses, and returns no bytes for, a DICOMDIR carrying an

@@ -84,7 +84,8 @@ read and not checked.
 with its `(0004,1430)` type, its Referenced File ID `(0004,1500)` components and the records its
 `(0004,1420)` offset names as lower-level, and the root entity `(0004,1200)` names. An offset
 resolves only when it is exactly where a record's `(FFFE,E000)` Item tag sits in the file, counted
-from the first byte of the File Preamble (PS3.3 2026d Table F.3-3); one that is not, a Value Length
+from the first byte of the File Preamble, which is how PS3.3's Basic Directory IOD defines these
+offsets (PS3.3 is not vendored here, so no clause is claimed for it); one that is not, a Value Length
 other than 4, and a record reached twice each raise a warning
 (`DICOM_DIRECTORY_OFFSET_UNRESOLVED`, `DICOM_DIRECTORY_OFFSET_MALFORMED`,
 `DICOM_DIRECTORY_RECORD_REVISITED`) and resolve nothing. `serializeDicom` writes `(0004,1200)`,
@@ -105,13 +106,13 @@ the file was read, including after `deidentify()` has moved every record. The li
 - **A Deflated DICOMDIR with records is refused on write**, with `DIRECTORY_OFFSET_DEFLATED`: a
   position inside a deflated stream names no Item a reader can seek to, so any non-zero offset is
   refused, and `parseDicom` resolves no offset of such a file and warns
-  `DICOM_DIRECTORY_OFFSET_DEFLATED` (PS3.10 2026d section 8.6 requires Explicit VR Little Endian of a
-  DICOMDIR File). One whose offsets are all zero is written.
-- **Not checked:** record keys against PS3.3 F.5, `(0004,1202)` against the end of the root chain,
-  the File-set Consistency Flag, and Private Record UIDs. The retired MRDR offset `(0004,1504)` is
-  written as read and not rewritten. An Implicit VR LE or Explicit VR BE DICOMDIR is read and
-  written without a warning, although PS3.10 section 8.6 makes Explicit VR LE the only conformant
-  syntax.
+  `DICOM_DIRECTORY_OFFSET_DEFLATED`, because PS3.10 requires a DICOMDIR File to use Explicit VR
+  Little Endian. One whose offsets are all zero is written.
+- **Not checked:** record keys against PS3.3's Directory Record definitions, `(0004,1202)` against
+  the end of the root chain, the File-set Consistency Flag, and Private Record UIDs. The retired MRDR
+  offset `(0004,1504)` is written as read and not rewritten. An Implicit VR LE or Explicit VR BE
+  DICOMDIR is read and written without a warning, although PS3.10 makes Explicit VR LE the only
+  conformant syntax for a DICOMDIR File.
 
 ---
 

@@ -214,6 +214,35 @@ describe("[AC-7] an offset the writer cannot tie to a Directory Record is refuse
     );
   });
 
+  it("[AC-7] a Dataset whose Directory Record Sequence Items do not match its bytes", () => {
+    // The writer places records by walking the Sequence against its Items; one
+    // Item short, the walk cannot say where any record lands, so no offset can
+    // be tied to a written record.
+    const built = buildDicomdir({ transferSyntax: TS_EXPLICIT_LE, ...twoPatientRecords() });
+    const ds = parseDicom(built.bytes);
+    const sequence = ds.get("00041220");
+    if (sequence === undefined) throw new Error("fixture has no Directory Record Sequence");
+    const short = new Element({
+      tag: sequence.tag,
+      vr: sequence.vr,
+      vm: sequence.vm,
+      length: sequence.length,
+      rawBytes: sequence.rawBytes,
+      byteOffset: sequence.byteOffset,
+      littleEndian: sequence.littleEndian,
+      items: (sequence.items ?? []).slice(0, 9),
+    });
+    const elements = new Map<Tag, Element>(
+      ds.elements().map((el) => [el.tag, el.tag === "00041220" ? short : el]),
+    );
+    const mismatched = new Dataset({ fileMeta: fileMetaOf(ds), warnings: [], elements });
+    expectRefused(
+      () => serializeDicom(mismatched),
+      SERIALIZE_ERROR_CODES.DIRECTORY_OFFSET_UNRESOLVED,
+      built.recordOffsets,
+    );
+  });
+
   it("[AC-7] a hand-built Dataset declaring the DICOMDIR SOP Class with a non-zero offset and no records", () => {
     const value = Buffer.alloc(4);
     value.writeUInt32LE(4242, 0);

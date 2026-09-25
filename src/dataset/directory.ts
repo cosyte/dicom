@@ -89,10 +89,12 @@ export interface DirectoryRecord {
    */
   readonly type: string | undefined;
   /**
-   * The Referenced File ID `(0004,1500)`: its components in order, as the file
-   * wrote them (a path relative to the File-set root, one component per value).
-   * Kept verbatim: never de-identified, rewritten or joined. `undefined` when
-   * the record carries none.
+   * The Referenced File ID `(0004,1500)`: its components in order (a path
+   * relative to the File-set root, one component per value), as the file wrote
+   * them less only the padding PS3.5 makes insignificant in `CS` (the trailing
+   * pad, and each value's leading and trailing spaces). Kept verbatim: never
+   * de-identified, rewritten or joined, and the element's own bytes on `item`
+   * are untouched. `undefined` when the record carries none.
    */
   readonly referencedFileId: readonly string[] | undefined;
   /**
@@ -225,8 +227,8 @@ export interface DirectoryRecords {
  * @internal
  */
 export function directoryRecords(source: DirectorySource): DirectoryRecords {
-  const sequence = source.get(DIRECTORY_TAGS.RECORD_SEQUENCE);
-  const items = sequence?.vr === "SQ" ? (sequence.items ?? []) : [];
+  // Only a Sequence the parser descended has `items`.
+  const items = source.get(DIRECTORY_TAGS.RECORD_SEQUENCE)?.items ?? [];
   const byFileOffset = new Map<number, number>();
   const shared = new Set<number>();
   items.forEach((item, index) => {
@@ -239,21 +241,17 @@ export function directoryRecords(source: DirectorySource): DirectoryRecords {
   return { items, byFileOffset };
 }
 
-/** The Directory Record Type, or `undefined` when absent or not text. */
-function recordType(item: Item): string | undefined {
-  const value = item.get(DIRECTORY_TAGS.RECORD_TYPE)?.value;
-  if (value?.kind === "strings") return value.values[0];
-  if (value?.kind === "text") return value.value;
-  return undefined;
-}
-
-/** The Referenced File ID components, or `undefined` when absent or not text. */
-function referencedFileId(item: Item): readonly string[] | undefined {
-  const value = item.get(DIRECTORY_TAGS.REFERENCED_FILE_ID)?.value;
-  if (value?.kind === "strings") return Object.freeze([...value.values]);
-  if (value?.kind === "text") return Object.freeze(value.value.split("\\"));
-  if (value?.kind === "empty") return Object.freeze([]);
-  return undefined;
+/**
+ * A `CS` attribute's values, or `undefined` when the record does not carry it:
+ * the Value Field split at each backslash, less the trailing pad and each
+ * value's leading and trailing spaces, which PS3.5 makes insignificant in `CS`.
+ * Read from the bytes whatever VR the wire declared, so a record keeps its type
+ * and file ID under a mis-declared VR, and nothing else is changed.
+ */
+function csValues(el: Element | undefined): readonly string[] | undefined {
+  if (el === undefined) return undefined;
+  const text = el.rawBytes.toString("latin1").replace(/[\0 ]+$/u, "");
+  return Object.freeze(text === "" ? [] : text.split("\\").map((v) => v.replace(/^ +| +$/gu, "")));
 }
 
 /**
@@ -323,8 +321,8 @@ export function analyzeDirectory(
     children.push(lowerLevel);
     return Object.freeze({
       index,
-      type: recordType(item),
-      referencedFileId: referencedFileId(item),
+      type: csValues(item.get(DIRECTORY_TAGS.RECORD_TYPE))?.[0],
+      referencedFileId: csValues(item.get(DIRECTORY_TAGS.REFERENCED_FILE_ID)),
       lowerLevel,
       item,
     });

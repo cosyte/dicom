@@ -80,8 +80,9 @@ for (const patient of dir?.root ?? []) {
 ```
 
 An offset names a record only when it is exactly where that record's `(FFFE,E000)` Item tag sits in
-the file, counted from the first byte of the File Preamble, which is `Item.fileOffset` (PS3.3 2026d
-Table F.3-3; a file read without a preamble still counts the 132 bytes it lacks). Anything else, an
+the file, counted from the first byte of the File Preamble, which is `Item.fileOffset` and how
+PS3.3's Basic Directory IOD defines these offsets (PS3.3 is not vendored here, so no clause is
+claimed for it). A file read without a preamble still counts the 132 bytes it lacks. Anything else, an
 offset inside a record, on an Item of a Sequence nested in a record, on the Sequence's header or past
 the end, names nothing and raises `DICOM_DIRECTORY_OFFSET_UNRESOLVED`. The limits, what the writer
 refuses, and what de-identification leaves undone are on [Known limitations](./limitations).
