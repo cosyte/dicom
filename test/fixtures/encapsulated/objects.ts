@@ -54,8 +54,12 @@ export interface EncapsulatedObjectOptions {
   readonly fragmentDeclaredLengthDelta?: { readonly index: number; readonly delta: number };
   /** Bytes appended after the last element, inside the Pixel Data Item stream when it is open. */
   readonly trailingBytes?: Buffer;
-  /** Replace the encapsulated `(7FE0,0010)` with these elements (or none) instead. */
-  readonly pixelDataElements?: readonly BuildDicomElement[];
+  /**
+   * Replace the encapsulated `(7FE0,0010)` with these elements (or none) instead. Pass
+   * {@link pixelData}'s element among them to keep the fragment stream beside another element,
+   * such as an Icon Image Sequence or Float Pixel Data.
+   */
+  readonly pixelDataElements?: readonly (BuildDicomElement | BuildDicomSqElement)[];
 }
 
 /** The identity, geometry and modality elements, in ascending tag order. */
@@ -91,7 +95,7 @@ function identityElements(burnedInAnnotation?: "YES" | "NO"): BuildDicomElement[
 }
 
 /** The top-level encapsulated `(7FE0,0010)` element for {@link encapsulatedObject}. */
-function pixelData(opts: EncapsulatedObjectOptions): BuildDicomSqElement {
+export function pixelData(opts: EncapsulatedObjectOptions): BuildDicomSqElement {
   return {
     tag: "7FE00010",
     undefinedLength: true,
