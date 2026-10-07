@@ -1,14 +1,14 @@
 ---
 id: serialization
-title: Serializing spec-clean Part 10
+title: Serializing Part 10
 sidebar_label: Serialization
 ---
 
-# Serializing spec-clean Part 10
+# Serializing Part 10
 
 `serializeDicom(ds)` writes a `Dataset` back to a Part 10 `Buffer`. It is the conservative half of
-Postel's Law: the parser accepts what real scanners emit, and the writer emits only what the standard
-describes. Whatever quirks came in, what goes out is spec-clean.
+Postel's Law: the parser accepts what real scanners emit, and the writer applies the guarantees
+below.
 
 Every DICOM object on this page is **synthetic** (an invented patient, obviously-fake UIDs) and
 encoded as a base64 buffer, so an example needs no file on disk. Never paste a real object into a
@@ -89,8 +89,8 @@ serializeDicom(parseDicom(out)).equals(out); // => true
 ## When it throws, and what the error carries
 
 The writer has its own error taxonomy, separate from the parser's `FATAL_CODES` (which are locked to
-read-side structural corruption) and from the value layer's `DicomValueError`. It throws only when it
-is asked to emit a buffer it cannot make spec-clean.
+read-side structural corruption) and from the value layer's `DicomValueError`. It throws only with
+a code listed below.
 
 | Export                                                     | What it is                                                                                                                                   |
 | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |

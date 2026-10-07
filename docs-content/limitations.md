@@ -400,7 +400,7 @@ than substituting a plausible value. `undefined` means the object did not carry 
 | What a diagnostic carries and what it does not                              | [Tolerance](./spec-notes-tolerance)                                  |
 | Keeping PHI out of logs                                                     | [Keeping PHI out of logs](./troubleshooting#keeping-phi-out-of-logs) |
 | The safety-critical views and their fail-safe rules                         | [Safety](./spec-notes-safety)                                        |
-| Writing spec-clean bytes back out, and what the writer will not do          | [Serialization](./serialization)                                     |
+| Writing bytes back out, and what the writer will not do                     | [Serialization](./serialization)                                     |
 | The de-identification surface and the scope limits on it                    | [De-identification](./deidentification)                              |
 | Working recipes, each citing the PS3 clause it reads                        | [Cookbook](./cookbook)                                               |
 

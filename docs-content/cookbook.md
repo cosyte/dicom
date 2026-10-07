@@ -712,7 +712,7 @@ ds.warnings.every((w) => typeof w.code === "string"); // => true
 ```
 
 **Escalate when you want strictness.** A [source profile](./spec-notes-profiles) can promote chosen
-warning codes to a thrown `DicomParseError` (a spec-conformance gate for a trusted sender) or
+warning codes to a thrown `DicomParseError` (a stricter gate for a trusted sender) or
 suppress benign, high-volume codes for a known-quirky source. Note that `{ strict: true }` turns
 every Tier-2 warning into a `DicomParseError`, which carries the raw `snippet` the warning does not,
 so a PHI review of the lenient path does not transfer to the strict one.
