@@ -90,7 +90,7 @@ serializeDicom(parseDicom(out)).equals(out); // => true
 
 The writer has its own error taxonomy, separate from the parser's `FATAL_CODES` (which are locked to
 read-side structural corruption) and from the value layer's `DicomValueError`. It throws only with
-one of the codes below.
+a code listed below.
 
 | Export                                                     | What it is                                                                                                                                   |
 | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
