@@ -3949,7 +3949,7 @@ the regen-gate repair below.
 
 - **Em-dash brand gate in CI (`EMDASH-CONFORMANCE`).** The founder directive of 2026-07-24
   (`knowledgebase/06-brand/voice-and-tone.md`, "No em dashes. Ever.") bans `U+2014` outright across
-  every cosyte surface and names commit messages explicitly, and the meta-repo's
+  every Cosyte surface and names commit messages explicitly, and the meta-repo's
   `documentation/conventions.md` has stated for weeks that the rule is CI-gated. It now actually is,
   here: `scripts/check-no-emdash.sh` (`pnpm check:no-emdash`) plus a dedicated
   `.github/workflows/no-emdash.yml` job that scans **both** halves the rule covers, the tracked files
@@ -4011,7 +4011,7 @@ the regen-gate repair below.
   synthetic, base64-encoded Part 10 objects (invented patient, fake UIDs); no real PHI, no `.dcm`
   file on disk.
 - **Trademark notice (`TRADEMARKS.md`).** This package names third-party systems to describe what it
-  interoperates with; the notice records that cosyte is not affiliated with, endorsed by, or
+  interoperates with; the notice records that Cosyte is not affiliated with, endorsed by, or
   sponsored by any of them, that every reference is descriptive, and that the built-in profiles are
   authored from public sources only. Added to `files` so it ships inside the published tarball, not
   just on GitHub. Documentation only: no runtime or API change.
@@ -4156,7 +4156,7 @@ the regen-gate repair below.
 - **Spec-clean Part 10 serializer (Phase 5).** New `serializeDicom(ds)` writes a `Dataset` back to a
   DICOM Part 10 `Buffer`, the conservative half of Postel's Law. Emits the 128-byte zero preamble +
   `DICM`, a File Meta group (always Explicit VR LE) with a computed `(0002,0000)` group length and
-  conservative Type-1 defaults (File Meta Version `0x0001`, cosyte Implementation Class UID under the
+  conservative Type-1 defaults (File Meta Version `0x0001`, Cosyte Implementation Class UID under the
   `2.25` UUID arc), then the dataset body in the dataset's own transfer syntax (**no transcode**)
   across all four v1 syntaxes (Implicit VR LE, Explicit VR LE/BE, Deflated Explicit VR LE). Scalar
   values are padded to even length per PS3.5 §6.2 (`0x00` for `UI`/byte-stream VRs, `0x20` for text),
@@ -4225,7 +4225,7 @@ the regen-gate repair below.
 
 ### Changed
 
-- Migrated onto the shared cosyte engineering standard (Phase E): tooling now flows from the
+- Migrated onto the shared Cosyte engineering standard (Phase E): tooling now flows from the
   published `@cosyte/*` config packages (`@cosyte/tsup-config`, `@cosyte/vitest-config`,
   ESLint 10 via `@cosyte/eslint-config`) instead of repo-local copies; devDependencies pinned to
   the canonical exact versions; `attw` build/publish gate added; the per-directory coverage gate is
