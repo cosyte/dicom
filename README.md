@@ -584,7 +584,7 @@ A contribution has to clear the same gates CI runs: `pnpm lint`, `pnpm typecheck
 
 ## Trademarks
 
-GE, Siemens, and Philips are trademarks of their respective owners. cosyte is not affiliated with, endorsed by, or
+GE, Siemens, and Philips are trademarks of their respective owners. Cosyte is not affiliated with, endorsed by, or
 sponsored by any of them. The names identify the vendors whose private dictionaries the built-in profiles resolve. See [TRADEMARKS.md](./TRADEMARKS.md).
 
 ## License

@@ -219,7 +219,7 @@ Mirrors `@cosyte/hl7`'s tooling and engineering bar, with two deliberate diverge
 
 ## Standing disciplines (every change)
 
-These three bind every change in this repo (mirrored from the cosyte meta-repo's `documentation/conventions.md`):
+These three bind every change in this repo (mirrored from the Cosyte meta-repo's `documentation/conventions.md`):
 
 1. **Documentation follows code.** A public-surface / stack / status change isn't done until its docs are: this package's own docs (`docs-content/` + JSDoc), and (in the meta-repo) its `documentation/repos/<repo>.md` and the `ecosystem-map.md` status table.
 2. **Version + changelog every meaningful change.** Add a Changeset (`pnpm changeset`, `patch` during pre-alpha); stay on `0.0.x` until first alpha. **🛑 `CHANGELOG.md` IS GENERATED, the changeset summary IS the entry. Never hand-edit it, never reintroduce `[Unreleased]`, keep nothing but the H1 above the first heading, compare version headings WHOLE (`## 0.0.1` is a substring of `## 0.0.10`), never open a summary line at column 0 with an ATX heading, and the Prettier pass stays ON (no `"prettier"` key), DERIVED here and never resynced from a sibling.**
