@@ -145,8 +145,8 @@ if (img.isEnhancedMultiFrame) {
 The parser is **lenient by default**: the quirks real scanners emit (odd-length values, missing
 padding, off-spec VRs) become warnings carrying a stable code and the byte offset where they
 occurred, not failures. Only an unrecoverable structural condition throws, and `FATAL_CODES` is the
-whole set of them. When you re-serialize, the writer always emits spec-clean Part 10: correct File
-Meta group length, even-length values, proper padding (Postel's Law). See
+whole set of them. When you re-serialize, the writer emits a correct File Meta group length,
+even-length values and proper padding (Postel's Law). See
 [Serialization](./serialization) for what the writer will and will not do.
 
 ## Source profiles
@@ -168,8 +168,8 @@ the lenient default:
 - **Private-dictionary overlay**: resolves the Implicit VR of vendor private data elements by the
   file's _live_ private-creator string (e.g. `"SIEMENS CSA HEADER"`), never a hard-coded block number.
   A creator the profile does not know degrades to `UN` plus a `DICOM_PRIVATE_CREATOR_UNKNOWN` warning.
-- **Escalations**: Tier-2 warning codes promoted to a thrown `DicomParseError` (a stricter posture
-  for known-unsafe deviations).
+- **Escalations**: Tier-2 warning codes promoted to a thrown `DicomParseError` (a stricter
+  posture).
 - **Suppressions**: benign, high-volume warning codes silenced for a known-quirky source.
 
 Five built-ins ship under the `profiles` namespace: `ge`, `siemens`, `philips` (vendor overlays) and

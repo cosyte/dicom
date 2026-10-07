@@ -9,8 +9,8 @@ sidebar_label: Tolerance & warnings
 Real scanners and archives emit objects that deviate from the letter of the standard in documented,
 recoverable ways: odd-length values with no padding, a missing preamble, an off-spec VR, a
 group-length that disagrees with reality. `@cosyte/dicom` follows **Postel's Law**: the parser is
-liberal (it recovers and records a stable-coded warning), and the serializer is conservative (it
-always emits spec-clean Part 10). A recoverable quirk is **never** a silent change and never a throw.
+liberal (it recovers and records a stable-coded warning), and the serializer is conservative. A
+recoverable quirk is **never** a silent change and never a throw.
 
 ## Two tiers plus a small fatal set
 

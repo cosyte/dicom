@@ -50,7 +50,7 @@ default:
   parses under the lenient default and throws under `strict`.
 
 - **Escalations**: chosen Tier-2 warning codes promoted to a thrown `DicomParseError`, a stricter
-  posture for known-unsafe deviations from a trusted sender.
+  posture for a trusted sender.
 - **Suppressions**: benign, high-volume warning codes silenced for a known-quirky source.
 
 ## The five built-ins
