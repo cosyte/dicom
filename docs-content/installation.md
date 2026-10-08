@@ -12,9 +12,10 @@ without configuration, and it takes **zero runtime dependencies**: the byte-leve
 work is done in-house (the package budget allows up to three ADR-justified deps; none are currently
 taken).
 
-> **Status:** pre-alpha, public, and published on npm on the `0.0.x`-until-first-alpha ladder. The
-> install command below is live; expect the surface to keep moving until first alpha. For the
-> current version, read `npm view @cosyte/dicom version` rather than a number written in a doc.
+> **Status:** `0.1`, public, and published on npm. The install command below is live. The exported
+> functions, the shapes they return and the warning codes are the surface we keep stable; below 1.0
+> a breaking change moves the minor version, and the changelog says how to migrate. For the current
+> version, read `npm view @cosyte/dicom version` rather than a number written in a doc.
 
 ## Prerequisites
 
