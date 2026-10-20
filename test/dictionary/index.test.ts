@@ -264,7 +264,7 @@ describe("PS3.6 normative overlay (DICOM-UPSTREAM-EDITION-LAG)", () => {
   });
 });
 
-describe("Dictionary entries are immutable (CLAUDE.md immutability guardrail)", () => {
+describe("Dictionary entries are immutable (immutability guardrail)", () => {
   it("returned DictionaryEntry is frozen", () => {
     const e = Dictionary.lookup("00100010");
     expect(e).toBeDefined();

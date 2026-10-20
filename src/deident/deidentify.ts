@@ -166,8 +166,8 @@
  *   {@link keepRetainedPrivate} into the ordinary `SQ` branches instead of being
  *   kept verbatim, so its items **are** walked and this rule **is** consulted
  *   inside them. Read that as "the retention decision no longer decides the fate
- *   of the Data Sets below it", never as "the class is closed" - the residual
- *   list in `CLAUDE.md` is the census. That costs content
+ *   of the Data Sets below it", never as "the class is closed" - the open
+ *   residuals in `docs-content/limitations.md` are the census. That costs content
  *   on a malformed file and nothing at all on a conformant one; without it a
  *   private value the sender wrote **outside** the sequence was retained on the
  *   Item's reservation and written into output stamped `PatientIdentityRemoved =

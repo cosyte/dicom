@@ -428,7 +428,7 @@ describe("generate-repeating-groups", () => {
       // leaves that test green. Verified: with the `actual !== sha` block removed,
       // every other test in this file still passes. Here SHA.txt is untouched and
       // the file opens fine, so only the re-hash can catch the swap. "Re-hashed
-      // before use" is claimed in the changeset, CHANGELOG, CLAUDE.md,
+      // before use" is claimed in the changeset, CHANGELOG,
       // vendor/nema/README.md and the generated header; this is the test that
       // makes the claim falsifiable.
       for (const [root, filename, shaFile] of [
