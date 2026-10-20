@@ -6,7 +6,7 @@ import { describe, expect, test } from "vitest";
 /**
  * The `@example` coverage gate.
  *
- * `CLAUDE.md` has required "JSDoc (with `@example`) on every public export" since Phase 1, and the
+ * This package has required "JSDoc (with `@example`) on every public export" since Phase 1, and the
  * roadmap finalizes that rule in Phase 8. Until now it was a convention, which means it held exactly
  * as long as whoever added the next export remembered it. This test makes it a gate.
  *

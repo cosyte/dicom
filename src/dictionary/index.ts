@@ -41,8 +41,8 @@ const TAG_HEX_RE = /^[0-9A-F]{8}$/;
 // Freeze the generated maps and every nested entry on first module load.
 // The generated files emit declarative `as const` literals (no Object.freeze)
 // so that re-running the generator stays byte-identical; the runtime freeze
-// happens here, exactly once. This is the immutability guardrail required by
-// CLAUDE.md and verified by the unit tests in `src/dictionary/index.test.ts`.
+// happens here, exactly once. This is the immutability guardrail, verified by
+// the unit tests in `test/dictionary/index.test.ts`.
 function deepFreezeEntries<T extends object>(map: {
   readonly [k: string]: T;
 }): {

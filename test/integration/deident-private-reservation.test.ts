@@ -56,7 +56,7 @@
  * vouched-for private `SQ` was kept verbatim and never walked) is closed too, by
  * `DICOM-PRIVATE-SQ-CARVE-OUT`, and its residual at the bottom of this file was
  * rewritten the same way. Read the headline as "these three routes are closed",
- * never as "the class is closed" - `CLAUDE.md`'s residual list is the census,
+ * never as "the class is closed" - `docs-content/limitations.md` is the census,
  * and the undefined-length `UN` whose CP-246 descent was refused is still on it.
  *
  * The eject remedy is a **positional** cut inside each Data Set, at every depth:
