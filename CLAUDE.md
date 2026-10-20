@@ -23,7 +23,7 @@ First put the pnpm that `packageManager` pins on PATH (`corepack enable pnpm --i
 
 After the build, the `examples` job in `ci.yml` runs the scripts `typecheck:examples`, `lint:examples`, `examples` and `phi-scan:examples`.
 A change to a path `.github/workflows/dictionary-regen.yml` watches (`vendor/`, the generators in `scripts/`, `src/dictionary/generated/`, `package.json`) also runs it: `pnpm gen:clean`, `pnpm gen:all`, then `git diff --exit-code src/dictionary/generated/` must print nothing.
-CI also loads `dist/` as ESM and as CJS, runs actionlint (CI installs it), and checks the manifest and installs the packed tarball into a clean directory; none of these has a script here.
+CI also loads `dist/` as ESM and as CJS (`pnpm smoke` does the same here), runs actionlint (CI installs it), and checks the manifest and installs the packed tarball into a clean directory, which has no script here.
 Required on `main`: `ci / verify (22, ubuntu-latest)`, `ci / verify (24, ubuntu-latest)`, `ci / actionlint` and `no-emdash / tracked-files`.
 A change that reaches the published package adds a changeset (`pnpm changeset`).
 
