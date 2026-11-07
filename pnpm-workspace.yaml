@@ -10,3 +10,17 @@ minimumReleaseAgeExclude:
   # reason: first-party @cosyte package, exempt from the floor by operator decision
   - "@cosyte/*"
 trustPolicy: no-downgrade
+trustPolicyExclude:
+  # reason: measured 2026-11-07 on pnpm 10.34.5. A from-scratch resolution reds with
+  # ERR_PNPM_TRUST_DOWNGRADE on undici-types, reached through @types/node and pinned at exactly
+  # this version by pnpm-lock.yaml: earlier releases carried a provenance attestation and this one
+  # carries none, which is a publisher that stopped attaching provenance rather than a takeover. It
+  # is a types-only tarball with no runtime code and no install scripts. Dependabot's security
+  # update for vite failed on this same refusal. hl7, fhir and terminology exempt it too.
+  - "undici-types@6.21.0"
+  # reason: measured 2026-11-07 on pnpm 10.34.5, the same shape as the entry above and found by the
+  # same from-scratch resolution once undici-types was exempt. chokidar is reached through tsup and
+  # pinned at exactly this version by pnpm-lock.yaml; earlier releases carry a provenance
+  # attestation and 4.0.3 carries none. pnpm's own documentation uses this package and version as
+  # its worked example of a trustPolicyExclude entry (https://pnpm.io/settings/dependency-resolution).
+  - "chokidar@4.0.3"
