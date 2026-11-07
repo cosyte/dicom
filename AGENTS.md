@@ -34,15 +34,15 @@ From the repo root, in this order, before you push. CI runs steps 1 to 9 on Node
 11. `pnpm check:no-internal-refs`
 
 After the build, CI's `examples` job runs `pnpm typecheck:examples`, `pnpm lint:examples`,
-`pnpm examples` and `pnpm phi-scan:examples`. A change under `vendor/`, to the generators in
-`scripts/`, to `src/dictionary/generated/` or to `package.json` also runs the regen check:
+`pnpm examples`, and `pnpm phi-scan:examples`. A change under `vendor/`, to the generators in
+`scripts/`, to `src/dictionary/generated/`, or to `package.json` also runs the regen check:
 `pnpm gen:clean`, `pnpm gen:all`, then `git diff --exit-code src/dictionary/generated/` must print
 nothing.
 
 ## Data
 
 Synthetic data only: real patient data never enters this repository, in a fixture, a test, an
-example, an issue or a log.
+example, an issue, or a log.
 
 ## Contributing
 
