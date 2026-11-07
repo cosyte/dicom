@@ -2,6 +2,8 @@
 id: deidentification
 title: Metadata de-identification
 sidebar_label: De-identification
+sidebar_position: 15
+description: How deidentify() applies the PS3.15 Annex E profile to header metadata, what its options do, and what its report records.
 ---
 
 # Metadata de-identification
@@ -253,7 +255,7 @@ inside it is walked). "Registered" means a literal PS3.6 row, or a masked row th
 `(50xx,....)` and `(60xx,....)` families only across the even groups PS3.5 §7.6 bounds them to, so
 `(6002,0010)` Overlay Rows is kept and `(6020,0010)` is removed, and every other masked row, such as
 `(0028,04x0)`, as PS3.6 prints it. Private attributes, `(0004,xxxx)`, `(0002,xxxx)`, group lengths
-`(gggg,0000)` and every tag Table E.1-1 lists keep the handling the rest of this page describes.
+`(gggg,0000)`, and every tag Table E.1-1 lists keep the handling the rest of this page describes.
 
 Each removal is recorded on `report.unregisteredElementRemovals` by its **byte offset**, and by the
 Sequences the run descended to reach it, **never by tag or VR**: a tag no registry row carries is
@@ -350,6 +352,6 @@ These are boundaries, not defects; the full list is on [Known limitations](./lim
 
 - A worked recipe, including what the File Meta group stops naming:
   [Cookbook](./cookbook#4-de-identify-before-sharing).
-- What a diagnostic may and may not carry: [Tolerance & warnings](./spec-notes-tolerance).
+- What a diagnostic may and may not carry: [Tolerance and warnings](./spec-notes-tolerance).
 - Vouching for known-safe private attributes: [Source profiles](./spec-notes-profiles).
 - The measured, still-open residuals: [Known limitations](./limitations).

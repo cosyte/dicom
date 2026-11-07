@@ -2,6 +2,8 @@
 id: limitations
 title: Known limitations
 sidebar_label: Known limitations
+sidebar_position: 17
+description: The do-not-over-trust list of what the package does not do, the PHI residuals it discloses, and what it never defaults.
 ---
 
 # Known limitations: the "do not over-trust" list
@@ -39,9 +41,9 @@ These are non-goals, not gaps. Each is a companion package or another tool's job
 | **A File-set view.** A DICOMDIR's Directory Record tree is read and its offsets rewritten on write (below), but no DICOMDIR is built from files and nothing is removed from a File-set               | out of scope for v1   |
 
 Supported transfer syntaxes: the four native ones, Implicit VR LE `1.2.840.10008.1.2`, Explicit VR
-LE `...1.2.1`, Deflated Explicit VR LE `...1.2.1.99` and Explicit VR BE `...1.2.2` (retired,
+LE `...1.2.1`, Deflated Explicit VR LE `...1.2.1.99`, and Explicit VR BE `...1.2.2` (retired,
 legacy-only), plus **every encapsulation syntax PS3.5 2026c section A.4 names**: JPEG Baseline,
-Extended, Lossless and Lossless First-Order Prediction; RLE Lossless; JPEG-LS Lossless and
+Extended, Lossless, and Lossless First-Order Prediction; RLE Lossless; JPEG-LS Lossless and
 Near-Lossless; JPEG 2000 and HTJ2K; MPEG2; MPEG-4 AVC/H.264; HEVC/H.265 Main and Main 10; JPEG XL;
 Deflated Image Frame Compression; and Encapsulated Uncompressed Explicit VR LE. `Dictionary.uid()`
 names each UID. An encapsulated object is read under Explicit VR LE rules, as section A.4 requires,
@@ -113,11 +115,11 @@ offsets (PS3.3 is not vendored here, so no clause is claimed for it); one that i
 other than 4, and a record reached twice each raise a warning
 (`DICOM_DIRECTORY_OFFSET_UNRESOLVED`, `DICOM_DIRECTORY_OFFSET_MALFORMED`,
 `DICOM_DIRECTORY_RECORD_REVISITED`) and resolve nothing. `serializeDicom` writes `(0004,1200)`,
-`(0004,1202)`, `(0004,1400)` and `(0004,1420)` as the byte offsets of the records they named when
+`(0004,1202)`, `(0004,1400)`, and `(0004,1420)` as the byte offsets of the records they named when
 the file was read, including after `deidentify()` has moved every record. The limits sit with it:
 
-- **Referenced File IDs are kept verbatim**: never de-identified, rewritten or re-pointed, by the
-  reader, `deidentify()` or the writer. A path that carries identifying text carries it into the
+- **Referenced File IDs are kept verbatim**: never de-identified, rewritten, or re-pointed, by the
+  reader, `deidentify()`, or the writer. A path that carries identifying text carries it into the
   output.
 - **The two File-set clauses of PS3.15 §E.1.1 are not discharged.** No DICOMDIR is created from the
   de-identified files, and the non-de-identified DICOMDIR is not removed from its File-set;
@@ -153,7 +155,7 @@ structural fact about DICOM that no reader can resolve from the wire.
   as Data Elements** and put through the Annex E action table (a private `SQ` whose items the parser
   materialized), a **Private Creator `(gggg,00EE)` whose whole decoded value is a member of your
   profile's private dictionary**, a **zero-length** value, which encodes no Data Set, and one **the
-  file itself declares non-identifying** - a block whose Block Identifying Information Status
+  file itself declares non-identifying**: a block whose Block Identifying Information Status
   `(0008,0303)` reads `SAFE`, or an element a `MIXED` block lists in Nonidentifying Private Elements
   `(0008,0304)`.
   🩺 **The fourth class is the sender's word and not this run's finding, and that is the limitation
@@ -173,20 +175,20 @@ structural fact about DICOM that no reader can resolve from the wire.
   an enumeration of what the value encodes, and neither is the embedded-attribute scanner's silence:
   that scanner reads string carriers only and decodes tiles in the file's own encoding, so a nested
   Data Set written in another transfer syntax passed it untouched on a perfectly scannable `LO`
-  carrier - measured, and the reason the predicate is what the run DID with the value rather than the
+  carrier: measured, and the reason the predicate is what the run DID with the value rather than the
   VR or the scanner's reach. If you need those values back, that needs a content test separating a
   nested Data Set from a legitimate binary blob, which is an open product question and not a flag.
   Earlier releases **kept** this class verbatim under `(0012,0062) = YES` and merely disclosed it,
   which was a disclosure and not a fix. The surface it shipped through is **pinned as a measured
   matrix** in `test/integration/deident-private-reservation.test.ts` rather than described in prose,
   because the prose has been wrong twice. Detail:
-  [Known limitations in the README](https://github.com/cosyte/dicom#known-limitations--non-goals).
+  [Scope and non-goals](./non-goals).
 
 - **Two audit-contract changes came with that, and a consumer switching on either has to act.**
   `report.unauditableSequences` no longer produces its retired `kept` outcome for a retained private
-  value - its `applied` field was `"emptied" | "kept"` and is `"emptied"` alone now, so an entry
+  value (its `applied` field was `"emptied" | "kept"` and is `"emptied"` alone now, so an entry
   there means content is **not** in your output, which is what it meant before that second outcome
-  joined it - and `DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE` changes meaning
+  joined it), and `DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE` changes meaning
   from "this value was shipped unexamined" to "this attribute was removed unexamined". **No
   published warning code is renamed or retired**, so narrowing on that code name keeps compiling:
   re-read what it now means rather than re-typing it. **`DICOM_DEIDENT_PRIVATE_DECLARATION_NOT_RESOLVED`
@@ -197,7 +199,7 @@ structural fact about DICOM that no reader can resolve from the wire.
   tell you an attribute went for being unenumerable rather than by the action table.
 
 - **An over-declared Value Length into a binary carrier still leaks.** A length that swallows the
-  following element into an `OB`, `OW`, `US` or `UN` value is not detected, and a `(0010,0020)`
+  following element into an `OB`, `OW`, `US`, or `UN` value is not detected, and a `(0010,0020)`
   Patient ID inside it reaches de-identified output with **no warning and no report entry**. That is
   measured and still exactly true for this route, which is every default `deidentify()` run. The only
   carrier that gets a diagnostic is one that is itself a private attribute reached through
@@ -241,30 +243,30 @@ structural fact about DICOM that no reader can resolve from the wire.
   inside the sequence, and that count is the sequence's own declared Value Length less the bytes of
   that sequence already consumed.
   **The exceptions are named in ONE place that is not a record of a past change, and are
-  deliberately not restated here** - the `WARNING_MESSAGES` docblock in `src/parser/warnings.ts`. No count of the copies is quoted, here or
+  deliberately not restated here**: the `WARNING_MESSAGES` docblock in `src/parser/warnings.ts`. No count of the copies is quoted, here or
   there: this package deletes a count it has corrected twice rather than incrementing it.
   **What that closed, measured on an `ST` carrying `"MR BRAIN SMITHSON "` whose Value Length
   under-declares:** under Explicit VR LE the reader desynchronizes onto a fabricated header whose
   declared length is odd, and in an earlier release `DICOM_ODD_LENGTH_VALUE_PADDED` rendered **four
-  bytes of the name as the tag and four more as the decimal length** - eight payload bytes in one message.
+  bytes of the name as the tag and four more as the decimal length**: eight payload bytes in one message.
   `DICOM_NONZERO_RESERVED_BYTES` printed two more as decimals on six other deltas. Both are closed.
-  **What it costs, stated rather than minimised:** a message about a **private** element, a **Group
+  **What it costs, stated rather than minimized:** a message about a **private** element, a **Group
   Length** `(gggg,0000)` or a **repeating-group member** such as `(6000,3000)` Overlay Data no longer
   names its tag on any file, well-formed or not. The element is still in the Data Set under that tag,
   and `position.byteOffset` locates the header.
   **The channel still matters as much as the field.** The fixtures that produce a desynchronized read
   mostly die before a `Dataset` exists, so what carries their messages is `onWarning` and the
-  `{ strict: true }` `DicomParseError` rather than a surviving `ds.warnings` - a fact about those
+  `{ strict: true }` `DicomParseError` rather than a surviving `ds.warnings`: a fact about those
   fixtures and not a promise about the parser. Treat both channels the same way.
   Full treatment: [Keeping PHI out of logs](./troubleshooting#keeping-phi-out-of-logs).
 
 - **Two carriers this list once named as open are now bound, and neither bound is an all-clear.**
-  `DICOM_PRIVATE_TAG_NO_CREATOR`, `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR` and
+  `DICOM_PRIVATE_TAG_NO_CREATOR`, `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR`, and
   `DICOM_PRIVATE_CREATOR_UNKNOWN` take no tag at all any more, because an odd group is the one class
   of tag no closed table this library holds can vouch for; the element is still in the object and
   `position.byteOffset` still locates it.
   `report.embeddedAttributes[].hidden` now lists only tags this run acted on that have a **literal
-  row** in PS3.15 Table E.1-1 - 653 of them - rather than any four bytes a run tiled over. **A
+  row** in PS3.15 Table E.1-1 (653 of them), rather than any four bytes a run tiled over. **A
   repeating-group mask hit is excluded and that exclusion is the whole bound**: `(50xx,xxxx)` Curve
   Data leaves the entire 16-bit element number free, so a mask match proves a rule exists without
   making the membership finite, and a draft that stopped at "an even group" was measured admitting
@@ -285,7 +287,7 @@ structural fact about DICOM that no reader can resolve from the wire.
 - **A de-identified DICOMDIR is NOT File-set conformant, and the run says so rather than implying
   otherwise.** PS3.15 §E.1.1's group-0004 bullet removes `(0004,xxxx)` from everything that is not a
   DICOMDIR, and this package does that; for an object whose `(0002,0002)` is `1.2.840.10008.1.3.10`
-  it honours the carve-out and keeps them. Its Directory Records are de-identified as Data Sets, like
+  it honors the carve-out and keeps them. Its Directory Records are de-identified as Data Sets, like
   any other Sequence Item, so a PATIENT record's Patient's Name and Patient ID are handled by Table
   E.1-1, and `serializeDicom` rewrites each record offset to where its record lands. The two
   File-set clauses are **not** discharged: no DICOMDIR is created from the de-identified files it
@@ -333,7 +335,7 @@ structural fact about DICOM that no reader can resolve from the wire.
   shape is unchanged by it.
 
 - **A `DicomParseError` is not safe to log whole.** It carries `snippet`, up to 16 raw source bytes as
-  hex, and the library does not redact them. Log `err.code`, `err.byteOffset`, `err.offsetFrame` and
+  hex, and the library does not redact them. Log `err.code`, `err.byteOffset`, `err.offsetFrame`, and
   `err.message`. `{ strict: true }` turns **every** Tier-2 warning into one of these, so a PHI review
   of the lenient path does not transfer to the strict one.
 
@@ -359,7 +361,7 @@ on the wire.
 - **`Element.byteOffset` inside a sequence item disagrees with itself and always has**: `0` inside a
   defined-length item (its own frame), file-absolute inside an undefined-length one. The same is true
   of a warning's `position.byteOffset`. There is no frame-of-reference contract on either, and
-  **neither is covered by `DicomParseError.offsetFrame`** - that names the frame for a thrown fatal
+  **neither is covered by `DicomParseError.offsetFrame`**: that names the frame for a thrown fatal
   and for the `{ strict: true }` escalation of a warning, and for nothing on the lenient path.
   Measure it rather than assuming one.
 - **A failed CP-246 `UN` descent emits nothing.** The honest test for a consumer is

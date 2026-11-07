@@ -2,6 +2,8 @@
 id: spec-notes-safety
 title: Safety-critical views
 sidebar_label: Safety-critical views
+sidebar_position: 9
+description: The four typed views over the safety-critical attributes (patient, study, series, and image) and why an absent value stays absent.
 ---
 
 # Safety-critical views: patient, study, series, image
@@ -100,7 +102,7 @@ missing from **both** the per-frame and shared groups. And the message carries o
 
 ## The exported shapes
 
-The four views and the types under them are exported, so you can hold, pass and narrow one without
+The four views and the types under them are exported, so you can hold, pass, and narrow one without
 re-deriving its shape. Every field on every one of them is optional in the same deliberate way: a
 value that was not in the object is typed-absent, never substituted.
 

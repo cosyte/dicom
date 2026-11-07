@@ -2,6 +2,8 @@
 id: serialization
 title: Serializing Part 10
 sidebar_label: Serialization
+sidebar_position: 14
+description: What serializeDicom guarantees when it writes a dataset back to Part 10 bytes, when it refuses, and what it never does.
 ---
 
 # Serializing Part 10
@@ -23,7 +25,7 @@ publishes.
   Group Length recomputed from what is actually written rather than copied from the source.
 - **The dataset body in the source transfer syntax.** The Transfer Syntax UID on the object decides
   every byte of the encoding, and the writer does not transcode. Under every encapsulation syntax
-  PS3.5 2026c section A.4 names (JPEG, JPEG-LS, JPEG 2000, HTJ2K, RLE and the rest), the Data Set is
+  PS3.5 2026c section A.4 names (JPEG, JPEG-LS, JPEG 2000, HTJ2K, RLE, and the rest), the Data Set is
   Explicit VR LE and the top-level Pixel Data is `OB` of undefined length: the source's Basic Offset
   Table and fragment Items byte for byte and in order, then a zero-length Sequence Delimitation Item.
   A top-level Pixel Data section A.4 does not allow is refused, not repaired (below).
@@ -50,7 +52,7 @@ publishes.
     placed it, since ordering cannot recover an order the source destroyed.
   - **Written last, even when its tag sorts earlier:** an element whose own bytes do not show where a
     reader ends it, such as an undefined-length `UN` the parser could not read as a Sequence, or a
-    Sequence, `UN` or Pixel Data value missing its Sequence Delimitation Item. A reader takes whatever
+    Sequence, `UN`, or Pixel Data value missing its Sequence Delimitation Item. A reader takes whatever
     follows such a value into it, so it keeps its place after the ascending rest of its Data Set, at
     the root and inside an Item, rather than losing the elements after it on the next read. A
     Sequence nested past the bound goes after the ascending rest of its Item too, unless it is a
@@ -117,7 +119,7 @@ Basic Offset Table Item or no fragment Item. Pixel Data inside a Sequence Item, 
 Sequence, is written as read and not checked.
 
 `DIRECTORY_OFFSET_UNRESOLVED` and `DIRECTORY_OFFSET_DEFLATED` are the DICOMDIR codes. For a `Dataset`
-whose `(0002,0002)` is `1.2.840.10008.1.3.10`, the writer writes `(0004,1200)`, `(0004,1202)` and each
+whose `(0002,0002)` is `1.2.840.10008.1.3.10`, the writer writes `(0004,1200)`, `(0004,1202)`, and each
 Directory Record's `(0004,1400)` and `(0004,1420)` as the byte offset, counted from the first byte of
 the preamble it writes, of the record each named when the file was read, as PS3.3's Basic Directory
 IOD defines them (PS3.3 is not vendored here, so no clause is claimed for it).
@@ -165,5 +167,5 @@ These are boundaries, not defects. The full list of package non-goals is on
 ## Where to go next
 
 - A worked recipe with a fuller object: [Cookbook](./cookbook#6-re-serialize-a-parsed-object-to-spec-clean-bytes).
-- What the parser tolerated on the way in: [Tolerance & warnings](./spec-notes-tolerance).
+- What the parser tolerated on the way in: [Tolerance and warnings](./spec-notes-tolerance).
 - Stripping identifying metadata before you share the bytes: [De-identification](./deidentification).

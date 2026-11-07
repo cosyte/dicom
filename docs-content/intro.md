@@ -2,6 +2,8 @@
 id: intro
 title: Getting started
 sidebar_label: Getting started
+sidebar_position: 1
+description: What @cosyte/dicom is, with a first tour of reading a file, typed values, the safety-critical views, source profiles, and de-identification.
 ---
 
 # @cosyte/dicom
@@ -12,8 +14,8 @@ Node.js: a lenient reader, an immutable dataset with dot-path access, a generate
 and stable warning codes for the deviations real scanners produce.
 
 It is **metadata-first by design**. Pixel data is exposed as a raw `Buffer`, and under the
-encapsulated (compressed) transfer syntaxes of PS3.5 2026c section A.4 - JPEG, JPEG-LS, JPEG 2000,
-HTJ2K, RLE and the rest - the object parses and `readPixelDataFragments` returns its Basic Offset
+encapsulated (compressed) transfer syntaxes of PS3.5 2026c section A.4 (JPEG, JPEG-LS, JPEG 2000,
+HTJ2K, RLE, and the rest), the object parses and `readPixelDataFragments` returns its Basic Offset
 Table and fragments as raw bytes, but in every syntax pixel data is **not decoded**. `serializeDicom`
 writes those syntaxes back with the fragments untouched, and refuses with
 `INVALID_ENCAPSULATED_PIXEL_DATA` a fragment stream section A.4 does not allow rather than repairing

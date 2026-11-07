@@ -1,10 +1,12 @@
 ---
 id: spec-notes-tolerance
-title: Tolerance & the warning model
-sidebar_label: Tolerance & warnings
+title: Tolerance and the warning model
+sidebar_label: Tolerance and warnings
+sidebar_position: 6
+description: The two warning tiers, the small fatal set, what a diagnostic carries and leaves out, and how to make a parse stricter.
 ---
 
-# Tolerance & the warning model
+# Tolerance and the warning model
 
 Real scanners and archives emit objects that deviate from the letter of the standard in documented,
 recoverable ways: odd-length values with no padding, a missing preamble, an off-spec VR, a
@@ -23,7 +25,7 @@ recoverable quirk is **never** a silent change and never a throw.
   `test/property/__snapshots__/` measures it on every run.
 - **Unrecoverable structural corruption → a throw.** A Tier-3 condition throws a typed
   `DicomParseError`, and the whole set is `NOT_DICOM_PART_10`, `INVALID_FILE_META`,
-  `UNSUPPORTED_TRANSFER_SYNTAX` and `EMPTY_INPUT`. **No count is written here either**, for the same
+  `UNSUPPORTED_TRANSFER_SYNTAX`, and `EMPTY_INPUT`. **No count is written here either**, for the same
   reason as above: `FATAL_CODES` is the registry and enumerating it is the honest form. Everything
   short of "these bytes are not a readable Part 10 object" is a warning.
 
@@ -79,12 +81,12 @@ be interpolated even by a future call site that tries. A token that fails its ch
 - **`{tag}` is a MEMBERSHIP test.** `renderTag` renders a tag only when PS3.6's element registry
   carries a **literal row** for it. A repeating-group family row is not membership: `(50xx,xxxx)`
   Curve Data leaves the whole 16-bit element number free, so a family test admits 16 x 65,536 tags
-  whose free bits are raw document bytes - `"\fPAR"` composes `500C5241` and returns all four
+  whose free bits are raw document bytes: `"\fPAR"` composes `500C5241` and returns all four
   payload bytes with one typed read.
 - **`{vr}` is a membership test** against the 34 VRs PS3.5 2026c §6.2 defines.
 - **A raw number a header carries has neither a shape nor a membership to test, so where it is
   bound at all the bound is the absence of the slot.** There is no `renderLength` and there must not
-  be one. `DICOM_ODD_LENGTH_VALUE_PADDED`, `DICOM_NONZERO_RESERVED_BYTES` and
+  be one. `DICOM_ODD_LENGTH_VALUE_PADDED`, `DICOM_NONZERO_RESERVED_BYTES`, and
   `DICOM_PIXEL_DATA_LENGTH_MISMATCH` cannot be handed one. **And a raw number SHIFTED by a constant the
   reader can compute is that raw number**, because an addition puts it back, so a bound on a
   rendering's magnitude bounds nothing about its content: `DICOM_ITEM_CROSSES_SEQUENCE_END` printed
@@ -92,18 +94,18 @@ be interpolated even by a future call site that tries. A token that fails its ch
   the bytes of that sequence already consumed. It cannot be handed either number now.
 
 **The exceptions are named in ONE place that is not a record of a past change, and are deliberately
-not restated here** - the `WARNING_MESSAGES` docblock in `src/parser/warnings.ts`. No count of the copies is quoted, here or
+not restated here**: the `WARNING_MESSAGES` docblock in `src/parser/warnings.ts`. No count of the copies is quoted, here or
 there: this package deletes a count it has corrected twice rather than incrementing it.
 
 **What the membership rule closed.** In an earlier release `renderTag` validated a tag's _shape_, and a
 shape test admits all 2^32 tags. Measured: a `(0008,4000)` `ST` carrying `"MR BRAIN SMITHSON "` whose
 Value Length under-declares by 12 desynchronizes the **Explicit VR LE** reader onto a fabricated
 header whose declared length is odd, and `DICOM_ODD_LENGTH_VALUE_PADDED` rendered four bytes of the
-payload as its tag - `4E495320`, `"IN S"` in wire order - **and four more as its decimal length**,
+payload as its tag (`4E495320`, `"IN S"` in wire order) **and four more as its decimal length**,
 eight consecutive payload bytes in one message. On six other under-declare deltas
 `DICOM_NONZERO_RESERVED_BYTES` printed two more bytes of the same name as two decimals.
 
-**What it costs, stated rather than minimised.** A tag PS3.6 does not name one at a time stops
+**What it costs, stated rather than minimized.** A tag PS3.6 does not name one at a time stops
 appearing in every message: **private** tags, **Group Length** `(gggg,0000)` tags, and
 **repeating-group members** such as `(6000,3000)` Overlay Data. The element is still in the Data Set
 under that tag, and `position.byteOffset` locates the header.
@@ -115,16 +117,16 @@ measured fixture put one on a surviving `ds.warnings` is a fact about those fixt
 promise about the parser.
 
 **Two carriers this page named until recently are now bound, by a signature and not by a branch.**
-`DICOM_PRIVATE_TAG_NO_CREATOR`, `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR` and
+`DICOM_PRIVATE_TAG_NO_CREATOR`, `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR`, and
 `DICOM_PRIVATE_CREATOR_UNKNOWN` take no tag parameter at all: all three fire only on an **odd** group,
-and an odd group is the one class of tag no closed table this library holds can vouch for - PS3.6's
+and an odd group is the one class of tag no closed table this library holds can vouch for: PS3.6's
 registry is even-group and a `Profile`'s private dictionary is keyed by a creator string. The element
 stays in the object under its tag and `position.byteOffset` locates the header.
 `report.embeddedAttributes[].hidden` is bound too, by membership rather than by signature: an entry is
 a tag the run's own resolved Annex E action fired on that has a **literal row** in PS3.15 Table
-E.1-1 - 653 of them. **A repeating-group mask hit is excluded, and that is the load-bearing half**:
+E.1-1: 653 of them. **A repeating-group mask hit is excluded, and that is the load-bearing half**:
 `(50xx,xxxx)` Curve Data leaves the whole 16-bit element number free, so a mask match proves a rule
-exists without making the membership finite - a draft that stopped at "an even group" was measured
+exists without making the membership finite: a draft that stopped at "an even group" was measured
 admitting `500C5241`, four payload bytes recoverable with one typed read. `hidden` can be empty on a
 real finding, and it is still uncapped.
 
@@ -142,7 +144,7 @@ Meta group throws `INVALID_FILE_META` for a `(0002,0000)` group length that does
 fabricated anywhere. Both readings are covered by the same bound because the withheld numbers are four bytes a sender wrote in either of them. What
 makes the desynchronized reading the sharp one is that those four bytes are then somebody's name:
 measured on a synthetic `"MR BRAIN SMITHSON "`, one such message printed
-`Element 41524E49 declared length=1330858068`, which is `"RAIN"` followed by `"THSO"` - eight
+`Element 41524E49 declared length=1330858068`, which is `"RAIN"` followed by `"THSO"`: eight
 consecutive bytes of the payload in two fields, each recoverable with a single typed read.
 
 The bound is the same one the Tier-2 registry uses, and it is structural rather than a discipline:
@@ -159,7 +161,7 @@ for an element and for a `(0002,0000)` group length reaching past the end, each 
 Sequence Item from a **slice**, so inside one the buffer is that Item and the subtraction publishes
 the Item's own 32-bit declared length, less an offset the same message prints. That is a raw wire
 field a sender wrote, which is the class this registry refuses everywhere else. Measured with a
-declared Item Length of `21320`: the message read `21312`, `21288` or `21272` depending on where
+declared Item Length of `21320`: the message read `21312`, `21288`, or `21272` depending on where
 inside the Item the offending element sat. **A raw number
 shifted by an amount the reader can compute is that raw number, and here the amount is variable**, so
 the slot is gone from both signatures rather than filtered. The cost is stated where it falls:
@@ -170,7 +172,7 @@ function happens to be called from is not a bound.
 **A `DicomParseError` is still different from a warning, and this is the one to read carefully.** It
 carries a `snippet`: up to 16 bytes of the source rendered as hex, attached so a structural failure
 is debuggable. Those are raw input bytes. On a real clinical file they can be part of a patient name
-or an identifier, and the library does not redact them. Log `err.code`, `err.byteOffset` and
+or an identifier, and the library does not redact them. Log `err.code`, `err.byteOffset`, and
 `err.message`; treat `err.snippet` as PHI and redact it at your own boundary if your compliance
 posture requires it. (The one exception is deliberate: for `UNSUPPORTED_TRANSFER_SYNTAX` the snippet
 slot carries the dictionary's _name_ for the UID when PS3.6 publishes one, which is a constant, not
@@ -190,7 +192,7 @@ them more certainly the element's own content, not less.
 **And the offset itself now says which frame it is counted in, which the snippet fix did not do.**
 `err.byteOffset` was left as the sole locator on the two messages that lost their remaining-bytes
 count, and a number alone does not say where its zero is: the same defect in the same file reports
-`0`, `24` or `40` depending on where inside the Sequence Item the offending element sits.
+`0`, `24`, or `40` depending on where inside the Sequence Item the offending element sits.
 `err.offsetFrame` names the coordinate system, from a closed three-entry set the parser chooses
 (`"input"`, `"inflated-dataset"`, `"value-slice"`), and the `Error.message` suffix carries it too, so
 it now reads `(offset=N frame=F)`. **Only `"input"` means the number indexes the buffer you passed
@@ -201,7 +203,7 @@ reproducing, in its own code, exactly the defect the snippet fix closed in this 
 of declared lengths that reached it, so publishing it would hand back by subtraction the wire field
 these same messages withhold. **Two residuals stay open and neither is closed here**:
 `DicomParseWarning.position` carries no frame beyond its `deflated` flag, and `Element.byteOffset`
-carries none at all - it reads `0` inside a defined-length Item and file-absolute inside an
+carries none at all: it reads `0` inside a defined-length Item and file-absolute inside an
 undefined-length one, and has since the parser was written.
 
 ### The model fields that are bounded, and the ones that are values
@@ -209,7 +211,7 @@ undefined-length one, and has since the parser was written.
 A downstream package that reads this model and builds its own diagnostics from it needs to know which
 strings are identifiers this parser composed and which are bytes the sender wrote. These are
 identifiers, with the bound each one actually has. Some rows are a length rather than a membership
-test, and they say so. **And `contextPath` has no bound at all** - it was listed here as
+test, and they say so. **And `contextPath` has no bound at all**: it was listed here as
 structural until it was measured, and it now has its own row saying what it really is. It is not the
 only entry read off the wire (`removedPrivateTags` and `UnauditableSequenceFinding.tag` are too, and
 are disclosed as such in [Troubleshooting](./troubleshooting)); it is the one that was described as
@@ -226,7 +228,7 @@ though it were not:
 | `DeidentifiedAttribute.tag` / `.keyword` / `.action` / `.applied` / `.repeatingGroup`          | Composed from the Part 6 and Annex E tables. `tag` is bound to a tag those tables carry a row for, which is membership in a closed table; an attribute Annex E has no row for is not audited here at all.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `DeidentifyReport.removedPrivateTags` / `.retained`                                            | Tags, and the option names you passed in.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `contextPath`, on `DeidentifiedAttribute` and on all three findings that carry one             | **Unbounded, and this row is the correction.** A segment is `TAG[index]`; the tag half is whatever tag the descent walked, read off the wire, with neither a shape test nor a closed table behind it. On a file whose under-declared Value Length desynchronized the reader onto four bytes inside somebody's value, those four bytes are published here. Measured: a `LO` carrier holding `MRS BRAIN SMITHSON` yielded `contextPath: ["53484E4F[0]"]`, which is `HSON` in wire order, with no warning and every finding array empty; that tag has no PS3.6 row, so `deidentify()` now removes that fabricated Sequence whole, and the field is unchanged on every Sequence a run does descend. Treat it as PHI when the source is untrusted.                                                                                                                                                                                                                                                                                                             |
-| `EmbeddedAttributeFinding.tag` / `.vr` / `.hidden`                                             | Composed. `hidden` holds tags this parser built from four bytes each, and the bytes were sitting inside a value - so they are re-composed as `Tag` here, never echoed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `EmbeddedAttributeFinding.tag` / `.vr` / `.hidden`                                             | Composed. `hidden` holds tags this parser built from four bytes each, and the bytes were sitting inside a value, so they are re-composed as `Tag` here, never echoed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `UnauditableSequenceFinding.tag` / `.applied` / `.byteLength`, `UndefinedVrFinding.byteLength` | Composed, plus an input-derived number, and **the number is the part this row exists to correct**. `byteLength` is `Element.rawBytes.length`, which EQUALS the declared Value Length read off the element header, so where that header was fabricated by an under-declared length upstream it is four document bytes wearing a decimal: `"SO\0\0"` publishes `20307`, two letters of a surname, put back with one `readUInt32LE`. The bytes are never echoed; the number they decode to is. `DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE` and `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` rendered the same number in an earlier release and do not any more, which leaves these fields its only publisher. **`applied` is one of two literals this package writes (`"emptied"` / `"kept"`), so it is composed; read it before the other two, because it is what says whether the value is still in your output.** |
 
 Everything else on the model is a **value**, and carries whatever the file carried:

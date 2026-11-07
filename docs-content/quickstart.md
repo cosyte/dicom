@@ -2,6 +2,8 @@
 id: quickstart
 title: Read your first DICOM object
 sidebar_label: Your first object
+sidebar_position: 3
+description: Read your first DICOM object and get who the patient is, which study and series it belongs to, and the image geometry.
 ---
 
 # Read your first DICOM object
@@ -112,15 +114,17 @@ parseDicom(Buffer.from("this is not a DICOM file, just some ASCII text here", "a
 
 ## Next
 
-- [Core Concepts](./spec-notes-model): the Part 10 object model, the tolerance tiers and warning
-  codes, the typed value layer, the safety-critical views, and the source-profile system.
-- [Cookbook](./cookbook): recipes: re-serialize spec-clean bytes, de-identify before sharing, read
-  raw pixel data, and triage warnings.
+- [Core concepts](./spec-notes-model): the Part 10 object model, the ways to read elements, the
+  tolerance tiers and warning codes, the error types, the typed value layer, the safety-critical
+  views, the source-profile system, and the supported transfer syntaxes.
+- [Recipes](./recipes) and the [cookbook](./cookbook): re-serialize spec-clean bytes, de-identify
+  before sharing, read raw pixel data, and triage warnings.
 - [Troubleshooting](./troubleshooting): symptom to cause, the fatal codes, and what a diagnostic may
   and may not carry.
 - [Known limitations](./limitations): the "do not over-trust" list. What is out of scope (no pixel
   decode, no DIMSE, no DICOMweb), which PHI residuals are measured and still open, and what is never
-  defaulted. Read it before you point this package at real data.
+  defaulted. Read it, and [Scope and non-goals](./non-goals), before you point this
+  package at real data.
 - [Serialization](./serialization) and [De-identification](./deidentification): writing spec-clean
   bytes back out, and stripping identifying metadata before you share an object.
 

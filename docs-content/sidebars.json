@@ -13,25 +13,28 @@
     },
     {
       "type": "category",
-      "label": "Core Concepts",
+      "label": "Core concepts",
       "collapsed": false,
       "items": [
         "spec-notes-model",
+        "access-patterns",
         "spec-notes-tolerance",
+        "error-handling",
         "spec-notes-values",
         "spec-notes-safety",
-        "spec-notes-profiles"
+        "spec-notes-profiles",
+        "compatibility"
       ]
     },
     {
       "type": "category",
       "label": "Guides",
-      "items": ["cookbook", "serialization", "deidentification"]
+      "items": ["recipes", "cookbook", "serialization", "deidentification"]
     },
     {
       "type": "category",
       "label": "Troubleshooting",
-      "items": ["troubleshooting", "limitations"]
+      "items": ["troubleshooting", "limitations", "non-goals"]
     }
   ]
 }
