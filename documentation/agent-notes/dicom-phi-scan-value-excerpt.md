@@ -2,7 +2,7 @@
 
 `DICOM-RESIDUALS`, one of the six residuals the item still carried. Written here rather than in
 `documentation/agent-notes.md` because that file is **over** its 250,000-byte budget on `main` and
-the hook refuses growth (ADR 0023). **Nothing dropped, no ceiling raised, no trap deleted.**
+the hook refuses growth (an umbrella doc-budget rule, since retired). **Nothing dropped, no ceiling raised, no trap deleted.**
 
 **`CLAUDE.md` CARRIES NO LINE FOR THIS, AND THAT IS A GAP RATHER THAN A JUDGEMENT THAT THE TRAP IS
 SMALL.** Measured on this base: the file is 39,544 bytes against a 39,550-byte ratchet, so there

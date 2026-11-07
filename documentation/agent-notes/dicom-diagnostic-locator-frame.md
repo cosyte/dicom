@@ -2,7 +2,7 @@
 
 `DICOM-DIAGNOSTIC-PHI-RESIDUALS`, tenth instance, taken from `#93`'s pass-3 ranking. Written here
 rather than in `documentation/agent-notes.md` because that file is **over** its 250,000-byte budget
-on `main` and the hook refuses growth (ADR 0023). **Nothing dropped.** The precedent is `#97`, `#98`,
+on `main` and the hook refuses growth (an umbrella doc-budget rule, since retired). **Nothing dropped.** The precedent is `#97`, `#98`,
 `#99` and `#102`, which relocated the same way.
 
 **`CLAUDE.md` CARRIES NO LINE FOR THIS, AND THAT IS A GAP RATHER THAN A JUDGEMENT THAT THE TRAP IS

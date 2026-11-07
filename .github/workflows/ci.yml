@@ -37,10 +37,11 @@ jobs:
   # `@cosyte/dicom` by name, which resolves through package.json `exports` to the BUILT dist/, so
   # the build runs first. Each example asserts its own output, so `pnpm examples` goes red when one
   # drifts from the package. The PHI scan's default roots (test/, README.md, docs-content/) do not
-  # reach examples/, so the example files are named to it here. Actions are pinned to the commits
-  # the tags dictionary-regen.yml uses resolve to.
+  # reach examples/, so the example files are named to it here. Actions are pinned by commit SHA,
+  # the same pins dictionary-regen.yml uses.
   examples:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10

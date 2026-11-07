@@ -2,7 +2,7 @@
 
 `DICOM-SCANTARGET-PREAMBLELESS`, filed `PRE-EXISTING` and the last open item from the finished
 roadmap. Written here rather than in `documentation/agent-notes.md` because that file is **over** its
-250,000-byte budget on `main` and the hook refuses growth (ADR 0023). **Nothing dropped.**
+250,000-byte budget on `main` and the hook refuses growth (an umbrella doc-budget rule, since retired). **Nothing dropped.**
 
 **Provenance:** the spec claims are read from the SHA-pinned vendored copy at
 `vendor/nema/part05/`, **PS3.5 2026c** (§7.1 tag ordering, §7.5.2 undefined-length Sequences). Every

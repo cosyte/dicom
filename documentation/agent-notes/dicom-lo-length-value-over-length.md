@@ -3,7 +3,7 @@
 `DICOM-LO-LENGTH-AND-SILENT-REPLACE`, third and last open half. The first two closed in `#74`
 (`f8f2c0d`) and `#75` (`6d05366`, 3 passes, NOT REFUTED, 512/512 subsets, 2,816 cells, 0 over).
 Written here rather than in `documentation/agent-notes.md` because that file is **over** its
-250,000-byte budget on `main` and the hook refuses growth (ADR 0023). **Nothing dropped.** The
+250,000-byte budget on `main` and the hook refuses growth (an umbrella doc-budget rule, since retired). **Nothing dropped.** The
 precedent is `#97` and `#98`, which relocated the same way.
 
 **Provenance.** The spec claims are read from the SHA-pinned vendored copy under `vendor/nema/`,

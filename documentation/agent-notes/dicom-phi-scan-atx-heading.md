@@ -4,7 +4,7 @@
 > headroom is **39,544 - 39,544 = 0 bytes**, so the file cannot take one more byte. **That is
 > HEADROOM, not file size, and the shorthand has been misread twice.** Derive it, never restate it:
 > `git show origin/main:CLAUDE.md | wc -c` against `REPO_CLAUDE` in the meta-repo's
-> `.claude/hooks/doc-budget.mjs`. The **"a few bytes" reading is stale in the only direction that
+> `.claude/hooks/doc-budget.mjs` (since retired, with the budget). The **"a few bytes" reading is stale in the only direction that
 > matters** - the ratchet was lowered on a shrink, and the answer today is zero.
 > `documentation/agent-notes.md` is **over its 250,000 ceiling** on `main`, so this record is here
 > instead (budgeted at `REPO_DOC_MAX`). **No trap deleted, no ceiling raised.** What points at it,
