@@ -27,7 +27,7 @@ name: Public-surface gate
 # here, because what counts as a project prefix and what counts as a domain
 # designator is a property of the package (here `CP-246` is a DICOM Change
 # Proposal and `MRN-42` is example patient-identifier data, and neither is a work
-# item). So the harness is shared and the checker under `scripts/` is not. That is
+# item). So the plumbing is shared and the checker under `scripts/` is not. That is
 # the same shape `no-emdash.yml` takes, for the same reasons.
 #
 # WHY A SEPARATE WORKFLOW, and not a job in ci.yml. dicom's `ci` job calls the

@@ -4,7 +4,7 @@ _`DICOM-PHI-SCAN-EXIT-FLUSH`, 2026-08-09. Base **`21d42f5`**. Filed because `ci 
 ubuntu-latest)` - a REQUIRED check - was red on `main` itself._
 
 Written here rather than in `documentation/agent-notes.md` because that file is **over** its
-250,000-byte budget on `main` and the hook refuses growth (ADR 0023). **Nothing dropped.**
+250,000-byte budget on `main` and the hook refuses growth (an umbrella doc-budget rule, since retired). **Nothing dropped.**
 
 **`CLAUDE.md` carries no line for this.** Its ratchet is 39,550 bytes and it measures 39,544 on
 `main`: six bytes, which is not a line. Relocation is the remedy, never deleting an existing trap to

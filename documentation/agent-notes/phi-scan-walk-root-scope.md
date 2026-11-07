@@ -2,7 +2,7 @@
 
 `PHI-SCAN-WALK-ROOT-SCOPE`, the org-wide class filed against every `@cosyte/*` repo. Written here
 rather than in `documentation/agent-notes.md` because that file is **over** its 250,000-byte budget
-on `main` and the hook refuses growth (ADR 0023). **Nothing dropped.**
+on `main` and the hook refuses growth (an umbrella doc-budget rule, since retired). **Nothing dropped.**
 
 **`CLAUDE.md` CARRIES NO LINE FOR THIS, DELIBERATELY, AND THAT IS A GAP RATHER THAN A JUDGEMENT THAT
 THE TRAP IS SMALL.** Its ratchet is 39,550 bytes and it measured 39,544 on `main`: six bytes, which

@@ -3,10 +3,9 @@
 **This file is the long form. `CLAUDE.md` is the index.**
 
 Every section below was moved here **verbatim** from `CLAUDE.md` on 2026-08-04, when
-`<submodule>/CLAUDE.md` was first budgeted at write time (`CLAUDE-MD-AUDIT`; the meta-repo's
-`documentation/decisions/0023-doc-budgets.md`, amendment of the same date). **Do not quote a byte
-figure for that budget** - a uniform cap was built and reversed the same day in favour of a per-repo
-ratchet, and the ratchet is meant to keep falling. **Nothing was deleted.**
+`<submodule>/CLAUDE.md` was first budgeted at write time (`CLAUDE-MD-AUDIT`), so that `CLAUDE.md`
+stays a short card. The umbrella has since retired that budget and the hook that enforced it.
+**Nothing was deleted.**
 `CLAUDE.md` keeps the cursor, the rules, and every trap as a one-line imperative; each of those
 imperatives points at the section here that carries its measurements, its citations, and the refuter
 passes that produced it.

@@ -4,11 +4,11 @@
 a sliced string from `raw.slice(0, 194)`, which retains its parent. So `HitValue.text` is bounded
 logically while the hit may still retain the whole payload in memory."_ Written here rather than in
 `documentation/agent-notes.md` because that file is over its 250,000-byte budget on `main` and the
-hook refuses growth (ADR 0023). **Nothing dropped.**
+hook refuses growth (an umbrella doc-budget rule, since retired). **Nothing dropped.**
 
 **`CLAUDE.md` CARRIES NO LINE FOR THIS, AND THAT IS A GAP RATHER THAN A JUDGEMENT THAT THE TRAP IS
 SMALL.** Derive the headroom, never restate it: `git show origin/main:CLAUDE.md | wc -c` against this
-repo's entry in the meta-repo's `.claude/hooks/doc-budget.mjs`. It is a handful of bytes, which is
+repo's entry in the meta-repo's `.claude/hooks/doc-budget.mjs` (since retired, with the budget). It is a handful of bytes, which is
 not a line. So the rule lives where a worker touching this code reads it: the JSDoc on
 `excerptValue`, the block in `test/scripts/phi-scan.test.ts` under
 `"phi-scan: a hit does NOT retain the payload its excerpt was cut from"`, and this file.
