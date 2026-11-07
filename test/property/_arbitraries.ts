@@ -439,7 +439,7 @@ export function recoverableInput(): fc.Arbitrary<Buffer> {
 // ---------------------------------------------------------------------------
 
 /**
- * Arbitrary random byte buffers, 0–512 bytes. The most hostile input: no
+ * Arbitrary random byte buffers, 0 to 512 bytes. The most hostile input: no
  * structure at all. The parser must throw only a sanctioned `DicomParseError`,
  * never a `RangeError`/`TypeError`, never hang, never OOM.
  */

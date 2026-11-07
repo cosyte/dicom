@@ -54,7 +54,7 @@ assert.strictEqual(ts.type, "TransferSyntax", "TS type mismatch");
 assert.strictEqual(Dictionary.lookup("ZZZ_NOT_REAL"), undefined);
 assert.strictEqual(Dictionary.uid("not-a-uid"), undefined);
 
-// Phase 1–7 entrypoints are callable functions on the published surface.
+// Phase 1 to 7 entrypoints are callable functions on the published surface.
 for (const fn of [parseDicom, serializeDicom, deidentify, defineProfile, makeUidRemapper]) {
   assert.strictEqual(typeof fn, "function", "expected a callable export");
 }
@@ -87,7 +87,7 @@ const dErr = new DeidentifyError("smoke", "INVALID_OPTIONS");
 assert.ok(dErr instanceof Error, "DeidentifyError not an Error");
 assert.strictEqual(dErr.code, "INVALID_OPTIONS", "DeidentifyError.code mismatch");
 
-// Stable code registries (Phases 1–5) present on the published surface.
+// Stable code registries (Phases 1 to 5) present on the published surface.
 assert.strictEqual(WARNING_CODES.DICOM_MISSING_PREAMBLE, "DICOM_MISSING_PREAMBLE", "warning code mismatch");
 assert.strictEqual(FATAL_CODES.NOT_DICOM_PART_10, "NOT_DICOM_PART_10", "fatal code mismatch");
 assert.strictEqual(
