@@ -4,6 +4,8 @@ Our DICOM Part 10 parser and utility library for Node.js and TypeScript, publish
 It reads vendor-quirky files leniently with coded warnings, writes spec-clean Part 10, and de-identifies header metadata per PS3.15 Annex E.
 Pixel data stays raw bytes; DIMSE and DICOMweb are out of scope.
 
+@AGENTS.md
+
 ## Gate
 
 From the repo root, in this order. `.github/workflows/ci.yml` runs this ladder on Node 22 and 24 through the shared Cosyte `ci.yml`.
