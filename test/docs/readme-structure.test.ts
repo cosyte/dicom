@@ -50,8 +50,7 @@ const README = join(REPO_ROOT, "README.md");
 const ENTRY = join(REPO_ROOT, "src", "index.ts");
 
 /** The centrally generated banner alt string. NEVER hand-edit: it is owned by the `assets` repo. */
-const BANNER_ALT =
-  "Cosyte: a plus mark set in two overlapping rounded squares, one solid and one outlined, beside the Cosyte wordmark";
+const BANNER_ALT = "The Cosyte logo on its own white ground: the icon beside the word Cosyte.";
 
 const TILE_BASE = "https://cosyte.com/tile/";
 const DARK_TILE = `${TILE_BASE}cosyte-lockup-tile-on-dark-1200x300.png`;
@@ -64,6 +63,9 @@ const REQUIRED_H2 = [
   "Install",
   "Usage",
   "PHI and safety",
+  "Documentation",
+  "Support",
+  "Security",
   "Contributing",
   "License",
 ] as const;
@@ -332,7 +334,9 @@ function structureProblems(md: string, description: string): string[] {
   const statusIndex = all.findIndex((h) => h.level === 2 && h.text === "Status");
   if (statusIndex !== -1) {
     const body = bodyOf(md, all, statusIndex);
-    if (!body.includes("0.1.0")) problems.push('section "Status": does not name the version 0.1.0');
+    if (!body.includes("The 0.1 line")) {
+      problems.push('section "Status": does not name the release line, "The 0.1 line"');
+    }
     if (!body.includes("The public API is settled and safe to depend on")) {
       problems.push(
         'section "Status": does not state that the public API is settled, in the words',
@@ -350,8 +354,10 @@ function structureProblems(md: string, description: string): string[] {
     if (!/^pnpm add @cosyte\/dicom$/m.test(body)) {
       problems.push('section "Install": no copy-pasteable `pnpm add @cosyte/dicom` command');
     }
-    if (!body.includes(">=22")) {
-      problems.push('section "Install": does not state the Node engine floor of >=22');
+    if (!body.includes("Node.js 22 or later, tested on 22 and 24")) {
+      problems.push(
+        'section "Install": does not state the Node support line, "Node.js 22 or later, tested on 22 and 24"',
+      );
     }
     if (!/dual ESM and CJS/.test(body)) {
       problems.push('section "Install": does not state the module format as dual ESM and CJS');
@@ -459,24 +465,38 @@ describe("README structure", () => {
     expect(imported.filter((name) => !exported.has(name))).toStrictEqual([]);
   });
 
-  it("still carries the technical claims the restructure relocated rather than removed", () => {
-    // The restructure moved eight sections; a later edit that quietly drops one of them would leave
-    // the required skeleton intact and pass every check above. These are the headings that content
-    // lives under, so their absence is the detectable half of a deletion.
-    const present = new Set(headings(readme()).map((h) => h.text));
-    for (const heading of [
-      "Known limitations & non-goals",
-      "Real-World Tolerance",
-      "Error Handling",
-      "Profiles",
-      "Cookbook",
-      "Access patterns",
-      "Roadmap",
-      "Trademarks",
-      "Supported transfer syntaxes",
-    ]) {
-      expect(present, heading).toContain(heading);
+  it("still carries the technical claims the slimming relocated rather than removed", () => {
+    // npm cuts a README at 65,536 characters, so the reference sections moved to the docs pages.
+    // A later edit that quietly drops one of them would leave the required skeleton intact and pass
+    // every check above. These are the headings that content lives under, each on the page it moved
+    // to, so their absence is the detectable half of a deletion.
+    const relocated: readonly (readonly [string, string])[] = [
+      ["non-goals.md", "Scope and non-goals"],
+      ["non-goals.md", "Roadmap"],
+      ["compatibility.md", "Supported transfer syntaxes"],
+      ["compatibility.md", "Real-world tolerance"],
+      ["compatibility.md", "Profiles"],
+      ["error-handling.md", "Error handling"],
+      ["recipes.md", "Recipes"],
+      ["access-patterns.md", "Access patterns"],
+    ];
+    for (const [page, heading] of relocated) {
+      const md = readFileSync(join(REPO_ROOT, "docs-content", page), "utf8");
+      const present = new Set(headings(md).map((h) => h.text));
+      expect(present, `${page}: ${heading}`).toContain(heading);
     }
+    // The README still links each page and names the trademarks file.
+    const md = readme();
+    for (const [page] of relocated) {
+      expect(md, page).toContain(`https://docs.cosyte.com/dicom/${page.replace(/\.md$/u, "")}`);
+    }
+    expect(md).toContain("TRADEMARKS.md");
+  });
+
+  it("stays under the length npm shows in full, with room to spare", () => {
+    // npm truncates a README at 65,536 characters, which is how the License section once stopped
+    // reaching the package page. The house ceiling is 60,000 characters.
+    expect(readme().length).toBeLessThan(60_000);
   });
 
   // --- the mutation controls: each checker has to be able to go red, and to name what is wrong ---
@@ -522,7 +542,7 @@ describe("README structure", () => {
   });
 
   it("names the section at fault when License is no longer the last H2", () => {
-    const broken = `${readme()}\n## Appendix\n\nSomething after the licence.\n`;
+    const broken = `${readme()}\n## Appendix\n\nSomething after the license.\n`;
     expect(structureProblems(broken, packageDescription())).toContain(
       'section "License": must be the last H2, found "Appendix"',
     );
@@ -577,8 +597,8 @@ describe("README structure", () => {
   });
 
   it("names the H2 a table of contents forgets to list", () => {
-    const broken = readme().replace("- [Cookbook](#cookbook)\n", "");
-    expect(tocProblems(broken)).toContain("table of contents: does not list the H2 #cookbook");
+    const broken = readme().replace("- [Documentation](#documentation)\n", "");
+    expect(tocProblems(broken)).toContain("table of contents: does not list the H2 #documentation");
   });
 
   it("the slug function reproduces GitHub's anchors, double hyphen included", () => {

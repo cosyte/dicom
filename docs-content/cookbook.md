@@ -2,6 +2,8 @@
 id: cookbook
 title: Cookbook
 sidebar_label: Cookbook
+sidebar_position: 13
+description: Task-oriented recipes with runnable examples for indexing studies, routing keys, pixel metadata, de-identification, FHIR and HL7 v2 bridges, and more.
 ---
 
 # Cookbook
@@ -30,7 +32,7 @@ name is deliberately narrow.
   2026d, whose clauses cited here are unchanged). Two checks of
   different strength run over those, and **what each one covers is worth stating exactly, because a
   citation gate that is described as total is a claim of its own**. A clause written in the form
-  `PS3.N §X`, `PS3.N section X` or `PS3.N Annex X`, with the label next to its part, is resolved in
+  `PS3.N §X`, `PS3.N section X`, or `PS3.N Annex X`, with the label next to its part, is resolved in
   the pinned document by collecting all candidate sections carrying that label and requiring exactly
   one. **A label the text writes away from its part is not covered**: a second label in a list
   (`§7.5.1, §7.8.1`) and a bare `section X` whose part was named a sentence earlier are both read by
@@ -105,7 +107,7 @@ ds.warnings.length; // => 0
 ```
 
 Over a real folder, wrap the parse per file. A quirky object is tolerated rather than rejected and
-absent fields come back `undefined`, and a JPEG, JPEG 2000, RLE or other PS3.5 2026c section A.4
+absent fields come back `undefined`, and a JPEG, JPEG 2000, RLE, or other PS3.5 2026c section A.4
 compressed object indexes like any other, its pixels never decoded (see
 [section 7](#7-read-raw-pixel-data-without-decoding-it)), as does a JPIP Referenced object, whose
 Pixel Data Provider URL is read and never fetched. But **a folder walk still needs a
@@ -131,9 +133,9 @@ async function indexFile(path: string) {
 }
 ```
 
-Log `err.code`, `err.byteOffset` and `err.offsetFrame`. Do **not** log `err.snippet`: it is up to 16
+Log `err.code`, `err.byteOffset`, and `err.offsetFrame`. Do **not** log `err.snippet`: it is up to 16
 raw source bytes and the library does not redact it. **`err.byteOffset` indexes the buffer you passed
-in only when `err.offsetFrame` is `"input"`** - inside a Sequence Item it counts from that Item, so
+in only when `err.offsetFrame` is `"input"`**: inside a Sequence Item it counts from that Item, so
 cutting your own copy of the file at it returns a different element. See
 [Keeping PHI out of logs](./troubleshooting#keeping-phi-out-of-logs).
 
@@ -284,17 +286,17 @@ if (img.isEnhancedMultiFrame) {
 need a record of what was done, without mutating the original.
 
 `deidentify(ds)` applies the PS3.15 2026d Annex E **Basic Application Level Confidentiality Profile**
-(§E.2), replacing, emptying or removing every attribute Table E.1-1 lists as identifying, and returns
+(§E.2), replacing, emptying, or removing every attribute Table E.1-1 lists as identifying, and returns
 a fresh `Dataset` plus a `DeidentifyReport`. It is a **pure function**: your input dataset is never
 mutated.
 
 Several report fields are **not** value-free and are named on the type: `uidMap`, whose keys are the
-source UIDs the file carried, and `removedPrivateTags`, `unauditableSequences[].tag` and
+source UIDs the file carried, and `removedPrivateTags`, `unauditableSequences[].tag`, and
 `contextPath`, whose entries are four source bytes each, and
 `unauditableSequences[].byteLength` / `undefinedVrElements[].byteLength`, each the declared Value
 Length off an element header that may itself have been fabricated. `embeddedAttributes[].hidden` **left that
 list**: an entry is now a tag this run acted on that PS3.15 Table E.1-1 gives a literal row, with
-repeating-group mask hits excluded - which also means it can be empty on a real finding. **Read the
+repeating-group mask hits excluded, which also means it can be empty on a real finding. **Read the
 list on the type rather than a count quoted anywhere**, this one included: the number has been
 corrected twice.
 
@@ -378,7 +380,7 @@ Titles, Presentation Addresses, implementation information, and private informat
 File other than a DICOMDIR File". `report.group0004Removals` names them (capped, with a context path
 for the nested ones) and `report.group0004RemovalCount` is the complete total.
 
-**The DICOMDIR carve-out is honoured and is not silent.** If `(0002,0002)` is
+**The DICOMDIR carve-out is honored and is not silent.** If `(0002,0002)` is
 `1.2.840.10008.1.3.10` (Media Storage Directory Storage) the `(0004,xxxx)` elements stay, the
 Directory Records are de-identified as Data Sets, and `serializeDicom` rewrites each record offset to
 where its record lands in the written bytes. The run raises
@@ -402,7 +404,7 @@ was. PS3.15 2026c §E.2 states the first ("The Attribute Longitudinal Temporal I
 Longitudinal Temporal Information Options is applied") and §E.3.6 the other two, for its Full Dates
 and Modified Dates branches. That is the whole point of the attribute: without it, a recipient
 holding dates cannot tell real ones from scrubbed ones, and a study with no dates to begin with is
-indistinguishable from one this run emptied. **It is replaced, not added to** - the attribute is
+indistinguishable from one this run emptied. **It is replaced, not added to**: the attribute is
 `VM 1`, so a `(0028,0303)` the source already carried is discarded rather than joined, which is the
 opposite of what `(0012,0063)` does with a prior method text and is the standard's own asymmetry.
 
@@ -415,7 +417,7 @@ transformation**, so the modification §E.3.6 also requires is yours, and every 
 dates yourself after the call.
 
 **Before you rely on this on real data, read [Known limitations](./limitations).** Several routes are
-measured, disclosed and open, and the report reading clean is not by itself proof that nothing
+measured, disclosed, and open, and the report reading clean is not by itself proof that nothing
 survived.
 
 The attribute-action table behind all of this is generated from **NEMA's PS3.15 2026d DocBook**, the
@@ -431,7 +433,7 @@ of Table E.1-1 name a family rather than a single tag (`(50xx,xxxx)` Curve Data,
 acted on: private attributes are removed through their own path, and the three repeating-group rows
 are matched by mask across the sixteen even groups the standard bounds them to, removed, and
 reported with the mask that matched. **That bound is stated across two editions, and citing only the
-current one would be wrong**: PS3.5 2026c §7.6 gives the overlay range (`6000`-`601E`) and, in the
+current one would be wrong**: PS3.5 2026c §7.6 gives the overlay range (`6000` to `601E`) and, in the
 same clause, retires curve encoding and delegates the curve range to PS3.5-2004 by URL. Both
 editions are vendored and SHA-pinned here, and the generator proves the delegation link rather than
 assuming it.
@@ -616,7 +618,7 @@ The bytes are never windowed, rescaled, or color-transformed here. That is
 [out of scope](./limitations).
 
 **Encapsulated (compressed) objects.** Every transfer syntax PS3.5 2026c section A.4 names (JPEG,
-JPEG-LS, JPEG 2000, HTJ2K, RLE, MPEG, HEVC, JPEG XL, Deflated Image Frame and Encapsulated
+JPEG-LS, JPEG 2000, HTJ2K, RLE, MPEG, HEVC, JPEG XL, Deflated Image Frame, and Encapsulated
 Uncompressed) parses: section A.4 makes the whole Data Set Explicit VR Little Endian with only Pixel
 Data encapsulated, so the metadata reads exactly as it would under Explicit VR LE. The Pixel Data
 element's `value` is still the whole on-wire span as `binary`. `readPixelDataFragments(ds)` returns a
@@ -686,7 +688,7 @@ the 34 VRs PS3.5 defines; and a raw number a header carries is bound out of the 
 where it is bound at all, so `DICOM_ODD_LENGTH_VALUE_PADDED` no longer prints the odd length and
 `DICOM_NONZERO_RESERVED_BYTES` no longer prints its two reserved bytes. **Where a `deidentify()`
 code still prints a length that is the header's own, that is `PRE-EXISTING` and disclosed rather than
-closed** - see the troubleshooting page. The cost is that a message about a private, Group Length or
+closed**: see the troubleshooting page. The cost is that a message about a private, Group Length, or
 repeating-group element no longer names its tag. A thrown `DicomParseError`'s `message` comes from
 its own frozen registry, whose factories have no tag slot at all, but the error still carries a
 16-byte hex `snippet` of the source. All of it is measured and covered in

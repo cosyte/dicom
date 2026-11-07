@@ -72,7 +72,7 @@ function releaseNotes(): string {
 
 /** The pages a reader consults for the de-identify path, and which this obligation binds. */
 const DEIDENT_PAGES = [
-  "README.md",
+  "docs-content/recipes.md",
   "docs-content/cookbook.md",
   "docs-content/limitations.md",
   "docs-content/troubleshooting.md",
@@ -105,19 +105,22 @@ describe("released prose: the temporal declaration the de-identified object carr
       expect(text, name).toContain("RetainLongitudinalTemporal");
       expect(text, name).toContain("RetainLongitudinalTemporalModifiedDates");
     }
-    const readme = plain(prosePages().find((p) => p.name === "README.md")?.text ?? "");
-    expect(readme).toContain(
+    const recipes = plain(
+      prosePages().find((p) => p.name === "docs-content/recipes.md")?.text ?? "",
+    );
+    expect(recipes).toContain(
       "REMOVED when no Retain Longitudinal Temporal Information Option was active",
     );
-    expect(readme).toContain("MODIFIED when RetainLongitudinalTemporalModifiedDates was");
+    expect(recipes).toContain("MODIFIED when RetainLongitudinalTemporalModifiedDates was");
   });
 
   it("AC-16: records in the known-limitations material the condition under which MODIFIED is produced", () => {
     // 🛑 THIS ROW REPLACES THE "never produces it" ASSERTION. The claim it used to make became
     // false with the second E.3.6 column, so what is asserted now is the condition: the Option
-    // whose name earns the state. Both the npm-visible README's limitations section and the docs
-    // site's limitations page carry it, because a reader arriving from either route has to meet it.
-    for (const name of ["README.md", "docs-content/limitations.md"]) {
+    // whose name earns the state. Both limitations pages on the docs site carry it (the one moved out
+    // of the README and the "do not over-trust" list), because a reader arriving from either route
+    // has to meet it.
+    for (const name of ["docs-content/non-goals.md", "docs-content/limitations.md"]) {
       const page = prosePages().find((p) => p.name === name);
       const text = plain(page?.text ?? "");
       expect(text, name).toContain("MODIFIED");
@@ -131,7 +134,7 @@ describe("released prose: the temporal declaration the de-identified object carr
     // delivers the other half. A `MODIFIED` a reader believes means "the dates were shifted" is the
     // one failure of this attribute a recipient acts on and never re-derives, so the sentence is
     // asserted and the stable code that says the same thing at run time is named beside it.
-    for (const name of ["README.md", "docs-content/limitations.md"]) {
+    for (const name of ["docs-content/non-goals.md", "docs-content/limitations.md"]) {
       const page = prosePages().find((p) => p.name === name);
       const text = plain(page?.text ?? "");
       expect(text, name).toContain("performs no date transformation");
@@ -141,7 +144,7 @@ describe("released prose: the temporal declaration the de-identified object carr
 
   it("AC-16: tells a caller who shifts dates themselves that the output declaration is then wrong", () => {
     // The one action this limitation obliges. A limitation a reader cannot act on is a disclaimer.
-    for (const name of ["README.md", "docs-content/limitations.md"]) {
+    for (const name of ["docs-content/non-goals.md", "docs-content/limitations.md"]) {
       const page = prosePages().find((p) => p.name === name);
       expect(plain(page?.text ?? ""), name).toContain("If you shift dates yourself after the call");
     }
@@ -151,8 +154,10 @@ describe("released prose: the temporal declaration the de-identified object carr
     // The behavioural difference from `(0012,0063)`, which a reader of these pages has just been
     // told is added to. Getting the two backwards costs a prior sender's declaration or produces a
     // multi-valued `VM 1` attribute, so the pages have to separate them.
-    const readme = plain(prosePages().find((p) => p.name === "README.md")?.text ?? "");
-    expect(readme).toContain("It is REPLACED, not added to");
+    const recipes = plain(
+      prosePages().find((p) => p.name === "docs-content/recipes.md")?.text ?? "",
+    );
+    expect(recipes).toContain("It is REPLACED, not added to");
   });
 
   it("the release note names the attribute and both of its values", () => {
@@ -168,9 +173,9 @@ describe("released prose: the temporal declaration the de-identified object carr
   it("the reader can go red (the needles are not matched by everything)", () => {
     // The mutation control. A `plain`/`toContain` gate that matched anything would certify every
     // assertion above without reading a page.
-    const readme = prosePages().find((p) => p.name === "README.md");
-    expect(readme).toBeDefined();
-    expect(plain(readme?.text ?? "")).not.toContain("(0028,0304)");
+    const recipes = prosePages().find((p) => p.name === "docs-content/recipes.md");
+    expect(recipes).toBeDefined();
+    expect(plain(recipes?.text ?? "")).not.toContain("(0028,0304)");
     expect(plain("a **REMOVED** b")).toContain("REMOVED");
     expect(plain("a *REM*OVED b")).toContain("REMOVED");
   });

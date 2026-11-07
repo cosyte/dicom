@@ -1,10 +1,12 @@
 ---
 id: spec-notes-profiles
-title: Source & vendor profiles
+title: Source and vendor profiles
 sidebar_label: Source profiles
+sidebar_position: 10
+description: What a source or vendor profile bundles, the five built-in profiles, and how to define your own.
 ---
 
-# Source & vendor profiles
+# Source and vendor profiles
 
 Real objects come from real vendors, and vendors deviate in documented, predictable ways: private
 data elements with implicit VRs, benign quirks emitted at high volume, deviations you want to treat
@@ -44,7 +46,7 @@ default:
   private element whose block was never claimed in its own Data Set reads `UN` plus
   `DICOM_PRIVATE_TAG_NO_CREATOR`, with `Element.privateCreator` left `undefined`: the bytes are
   still on `Element.rawBytes`, and the profile's typed decode is withheld rather than borrowed from
-  a neighbouring Data Set. If you write private data into sequence items, declare the creator in
+  a neighboring Data Set. If you write private data into sequence items, declare the creator in
   each item that uses it. Under `{ strict: true }` that warning is promoted to a thrown
   `DicomParseError` like any other Tier-2 code, so a file whose items borrow an enclosing block
   parses under the lenient default and throws under `strict`.
@@ -95,7 +97,7 @@ never turn a right answer into a wrong one.
 | `PrivateTagDefinition`   | One private element's declaration: its `vr`, `keyword` and human-readable `name`.                                                                                 |
 | `ProfileDefinitionError` | Thrown by `defineProfile` for an invalid definition (an unknown warning code to escalate, a malformed private-tag key). An author-time error, never a file error.  |
 
-**A profile's declared VR is a second authority, and it is not a licence over what a value nests.**
+**A profile's declared VR is a second authority, and it is not a license over what a value nests.**
 PS3.15 §E.3.10 lets a de-identifier retain a private *Attribute* it knows to be safe; it does not let
 one vouch for a Data Set a sender nested inside that attribute's value. See
 [De-identification](./deidentification) for what `RetainSafePrivate` plus a profile does and does not

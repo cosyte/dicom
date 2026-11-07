@@ -48,8 +48,17 @@ const SIDEBARS_FILE = join(DOCS_DIR, "sidebars.json");
 const EXEMPTIONS_FILE = join(root, "docs-content-exemptions.json");
 const PACKAGE_FILE = join(root, "package.json");
 
-/** Frontmatter keys every page carries, and the only ones any page carries. */
-const REQUIRED_FRONTMATTER_KEYS = ["id", "title", "sidebar_label"] as const;
+/**
+ * Frontmatter keys every page carries, and the only ones any page carries. `description` is the
+ * one-sentence summary the docs site shows in search results and link previews.
+ */
+const REQUIRED_FRONTMATTER_KEYS = [
+  "id",
+  "title",
+  "sidebar_label",
+  "sidebar_position",
+  "description",
+] as const;
 
 /**
  * The per-page order declaration. `sidebars.json` fixes the order explicitly, so
@@ -537,6 +546,7 @@ export function findNodeFloors(text: string): readonly string[] {
   const patterns: readonly RegExp[] = [
     /Node(?:\.js)?\s*(?:>=|&gt;=)\s*(\d+)/gu,
     /Node(?:\.js)?\s+(\d+)\+/gu,
+    /Node(?:\.js)?\s+(\d+)\s+or\s+later/gu,
   ];
   const floors: string[] = [];
   for (const pattern of patterns) {
@@ -710,6 +720,12 @@ describe("docs-content: page frontmatter", () => {
     if (declared.length === 0) return;
     expect(declared.length).toBe(pages.length);
     expect(findDuplicates(declared.map((d) => d.order))).toEqual([]);
+    // A second source of order may exist only if it agrees with the first: sorted by position,
+    // the pages read in exactly the order sidebars.json declares them.
+    const byPosition = [...declared]
+      .sort((a, b) => Number(a.order) - Number(b.order))
+      .map((d) => d.file.replace(PAGE_EXTENSION, ""));
+    expect(byPosition).toEqual([...declaredIds]);
   });
 
   it("presents no two sidebar entries under the same name", () => {
@@ -919,5 +935,7 @@ describe("docs-content: numerals that go stale in silence", () => {
   it("reports both values when a stated floor disagrees with the package", () => {
     expect(declaredNodeFloor('{"engines":{"node":">=22.0.0"}}')).toBe("22");
     expect(findNodeFloors("Node.js >= 20. The suite targets Node 20+.")).toEqual(["20", "20"]);
+    // The house support line names the floor once; the tested lines after it are not floors.
+    expect(findNodeFloors("Node.js 22 or later, tested on 22 and 24.")).toEqual(["22"]);
   });
 });

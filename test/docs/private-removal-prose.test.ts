@@ -92,7 +92,7 @@ describe("released prose: a retained private value this run did not enumerate", 
     const collapse =
       "ordinary vendor scalar under an ordinary string VR that the file's own declaration does not name safe is removed";
     for (const name of [
-      "README.md",
+      "docs-content/non-goals.md",
       "docs-content/limitations.md",
       "docs-content/troubleshooting.md",
     ]) {
@@ -106,7 +106,7 @@ describe("released prose: a retained private value this run did not enumerate", 
     // The guarantee AC7 gives runs through a surface that did not exist before
     // this release, so a consumer who is never told it exists cannot exercise it.
     for (const name of [
-      "README.md",
+      "docs-content/non-goals.md",
       "docs-content/limitations.md",
       "docs-content/troubleshooting.md",
     ]) {

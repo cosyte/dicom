@@ -2,6 +2,8 @@
 id: installation
 title: Install and verify
 sidebar_label: Install and verify
+sidebar_position: 2
+description: Install @cosyte/dicom, check it from ESM or CommonJS, and keep PHI out of your setup.
 ---
 
 # Install and verify
@@ -13,13 +15,13 @@ work is done in-house (the package budget allows up to three ADR-justified deps;
 taken).
 
 > **Status:** `0.1`, public, and published on npm. The install command below is live. The exported
-> functions, the shapes they return and the warning codes are the surface we keep stable; below 1.0
+> functions, the shapes they return, and the warning codes are the surface we keep stable; below 1.0
 > a breaking change moves the minor version, and the changelog says how to migrate. For the current
 > version, read `npm view @cosyte/dicom version` rather than a number written in a doc.
 
 ## Prerequisites
 
-- **Node.js >= 22.** The whole `@cosyte/*` suite targets ES2023 / Node 22+.
+- **Node.js 22 or later, tested on 22 and 24.** The whole `@cosyte/*` suite targets ES2023 and Node.js 22 or later.
 - A package manager: `pnpm`, `npm`, or `yarn`.
 - **No runtime dependencies, no native build, no post-install script.** The data dictionary is
   generated from the official DICOM Part 6 source at build time and committed, so at runtime there is

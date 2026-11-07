@@ -2,6 +2,8 @@
 id: spec-notes-model
 title: The object model
 sidebar_label: The object model
+sidebar_position: 4
+description: How a Part 10 object is framed (preamble, File Meta, and the dataset) and how the package models each part.
 ---
 
 # The object model: Part 10 framing, File Meta, dataset
@@ -17,7 +19,7 @@ Every element is a `(group,element)` **tag**, a **VR** (Value Representation: th
 code), a length, and a value. `@cosyte/dicom` keys elements by the 8-character uppercase hex tag
 (e.g. `"00100010"` for Patient's Name). The parser supports the four native transfer syntaxes,
 Implicit VR LE, Explicit VR LE, Explicit VR BE, and Deflated Explicit VR LE, plus every encapsulation
-syntax PS3.5 2026c section A.4 names (JPEG, JPEG-LS, JPEG 2000, HTJ2K, RLE and the rest), whose Data
+syntax PS3.5 2026c section A.4 names (JPEG, JPEG-LS, JPEG 2000, HTJ2K, RLE, and the rest), whose Data
 Set section A.4 makes Explicit VR LE: those are read and written, their pixels are never decoded,
 and `serializeDicom` refuses with `INVALID_ENCAPSULATED_PIXEL_DATA` a top-level Pixel Data section
 A.4 does not allow. It also reads the four JPIP Referenced syntaxes of sections A.6, A.7, A.11 and
@@ -128,7 +130,7 @@ Dictionary.lookup("30040010")?.retired; // => true
 
 UID names come from the same edition, out of **PS3.6 Annex A**: Table A-1 (UID Values) and Table A-2
 (Well-known Frames of Reference). That is every UID the registry publishes, transfer syntaxes, SOP
-and Meta SOP Classes, well-known SOP Instances, coding schemes and the rest, current and retired
+and Meta SOP Classes, well-known SOP Instances, coding schemes, and the rest, current and retired
 alike, rather than a hand-picked subset. Two things are deliberately not PS3.6's spelling, and both
 are conveniences rather than corrections:
 

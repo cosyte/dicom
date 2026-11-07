@@ -2,6 +2,8 @@
 id: intro
 title: Getting started
 sidebar_label: Getting started
+sidebar_position: 1
+description: What @cosyte/dicom is, with a first tour of reading a file, typed values, the safety-critical views, source profiles, and de-identification.
 ---
 
 # @cosyte/dicom
@@ -12,8 +14,8 @@ Node.js: a lenient reader, an immutable dataset with dot-path access, a generate
 and stable warning codes for the deviations real scanners produce.
 
 It is **metadata-first by design**. Pixel data is exposed as a raw `Buffer`, and under the
-encapsulated (compressed) transfer syntaxes of PS3.5 2026c section A.4 - JPEG, JPEG-LS, JPEG 2000,
-HTJ2K, RLE and the rest - the object parses and `readPixelDataFragments` returns its Basic Offset
+encapsulated (compressed) transfer syntaxes of PS3.5 2026c section A.4 (JPEG, JPEG-LS, JPEG 2000,
+HTJ2K, RLE, and the rest), the object parses and `readPixelDataFragments` returns its Basic Offset
 Table and fragments as raw bytes, but in every syntax pixel data is **not decoded**. `serializeDicom`
 writes those syntaxes back with the fragments untouched, and refuses with
 `INVALID_ENCAPSULATED_PIXEL_DATA` a fragment stream section A.4 does not allow rather than repairing
@@ -100,7 +102,7 @@ Decode is **fail-safe**: it never throws and never coerces a malformed value to 
 plausible-but-wrong one (a bad `DS`/`IS` token becomes `null`, never `NaN`→0). Per-value deviations
 surface on the returned value's own `warnings`. String VRs honor the `(0008,0005)` Specific
 Character Set, threaded through nested sequence items: UTF-8 and ISO-8859 under one Value, and the
-code extensions of ISO 2022 (Japanese, Korean and Chinese names among them) under more than one,
+code extensions of ISO 2022 (Japanese, Korean, and Chinese names among them) under more than one,
 where a value the decode had to tolerate carries a warning. A single-valued set gets no code-extension
 handling; the limits are in [Typed values](./spec-notes-values#character-sets).
 

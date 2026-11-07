@@ -876,7 +876,7 @@ describe("component bounds: a point no calendar has converts to nothing", () => 
   });
 });
 
-describe("the README's cross-package aliasing example is worked, not decorative", () => {
+describe("the access-patterns page's cross-package aliasing example is worked, not decorative", () => {
   // The three names are identical in every `@cosyte/*` parser, so the README
   // owes a file that imports two of them. That example is the only place in the
   // package where another parser's call shape is written down, and it is
@@ -893,9 +893,11 @@ describe("the README's cross-package aliasing example is worked, not decorative"
   // The assertion is over the README text rather than over both packages,
   // because importing `@cosyte/hl7` to check it would add the dependency this
   // package refuses to take.
-  const README = join(import.meta.dirname, "..", "README.md");
+  // It moved from the README to the docs site's access-patterns page when the README was slimmed
+  // under npm's 65,536-character cut.
+  const README = join(import.meta.dirname, "..", "docs-content", "access-patterns.md");
 
-  /** Every fenced ```ts block in the README, in document order. */
+  /** Every fenced ```ts block on the page, in document order. */
   function fences(markdown: string): string[] {
     const out: string[] = [];
     let open = false;

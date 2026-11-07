@@ -1,10 +1,12 @@
 ---
 id: spec-notes-values
-title: Typed values & VR decode
+title: Typed values and VR decode
 sidebar_label: Typed values
+sidebar_position: 8
+description: How an element's bytes decode into a typed value for each of the 34 VRs, including character sets and bulk data.
 ---
 
-# Typed values & VR decode
+# Typed values and VR decode
 
 `ds.get(tag)` returns an `Element`: the raw bytes and the VR. Its **`.value`** getter lazily decodes
 those bytes into a typed, discriminated `DicomValue` and caches the result. Every one of the 34 VRs
@@ -83,8 +85,8 @@ The pieces the `.value` getter uses are exported, for the cases where you hold b
 
 ### Converting a date, a time or a datetime
 
-`DicomDate`, `DicomTime` and `DicomDateTime` are three shapes, and the code that consumes them
-usually wants one. `toObject`, `toISO` and `toDate` take any of the three and project it onto a
+`DicomDate`, `DicomTime`, and `DicomDateTime` are three shapes, and the code that consumes them
+usually wants one. `toObject`, `toISO`, and `toDate` take any of the three and project it onto a
 single surface. Every `@cosyte/*` parser that decodes a date exports the same three names with the
 same meanings, so a caller that learns them here can read a timestamp out of any of them.
 
@@ -104,7 +106,7 @@ recovers exactly what the sender wrote. There is no `precision` key because the 
 no `raw` or `valid` key because parse bookkeeping is not a calendar component.
 
 **The names are singular.** `DicomTime` and `DicomDateTime` spell the time fields `hours`,
-`minutes` and `seconds`; `DateParts` spells them `hour`, `minute` and `second`, and `month` is 1 to
+`minutes`, and `seconds`; `DateParts` spells them `hour`, `minute`, and `second`, and `month` is 1 to
 12 rather than the JS `Date` 0 to 11. That is the shape `Temporal.PlainDateTime.from` and luxon's
 `DateTime.fromObject` accept: delete `offsetMinutes` and either constructor takes the rest with no
 key rename and no value adjustment.
@@ -118,12 +120,12 @@ instant at all because it states no year.
 **A component outside its range is refused, never rolled over.** The decoders bound each component
 on its own, so a `DA` of `18700230` decodes with `valid: true` and `day: 30`. The conversion surface
 reads the components together: a month outside 1 to 12, a day the month does not really have (full
-4/100/400 leap rule), an hour, minute or second out of range, or a component that is not a whole
+4/100/400 leap rule), an hour, minute, or second out of range, or a component that is not a whole
 number, and the whole value converts to `undefined`. Rendering it would produce `"1870-02-30"`,
 which every ISO-8601 reader silently moves to 2 March, and converting it would produce a date of
 birth off by a day. `second: 60` is refused with them: `TM` and `DT` permit it for a leap second and
 the decoders keep it, but there is no ISO string for it a reader does not move, and no instant to
-build. The refusal is in the projection alone, so `parseDate`, `parseTime` and `parseDateTime` still
+build. The refusal is in the projection alone, so `parseDate`, `parseTime`, and `parseDateTime` still
 report exactly what the sender wrote.
 
 ```ts runnable
@@ -186,7 +188,7 @@ hand you a confident wrong one.
 
 ## Character sets
 
-`PN`, `LO`, `SH`, `UC`, `ST`, `LT` and `UT` values honor the object's `(0008,0005)` Specific
+`PN`, `LO`, `SH`, `UC`, `ST`, `LT`, and `UT` values honor the object's `(0008,0005)` Specific
 Character Set. The active charset is threaded through nested sequence items, so a value inside a
 sequence decodes the same way a top-level one does. An unsupported charset term raises
 `DICOM_UNSUPPORTED_CHARSET`.
@@ -199,20 +201,20 @@ Value 2 to n), and it gets the same single-decoder treatment: no Value 1 reset a
 warnings below.
 
 **With more than one Value, the code extensions of ISO 2022 are decoded** (PS3.5 2026d section
-6.1.2.5), unless Value 1 is `ISO_IR 192`, `GB18030` or `GBK`, which take none (section 6.1.2.4):
+6.1.2.5), unless Value 1 is `ISO_IR 192`, `GB18030`, or `GBK`, which take none (section 6.1.2.4):
 
 - Every escape sequence in PS3.3's code-extension tables, single-byte and multi-byte, switches the
-  set it names into G0 or G1: ISO-IR 6, ISO-IR 14 and the two-byte JIS X 0208 (ISO-IR 87) and
+  set it names into G0 or G1: ISO-IR 6, ISO-IR 14, and the two-byte JIS X 0208 (ISO-IR 87) and
   JIS X 0212 (ISO-IR 159) into G0; the ISO-8859 sets, TIS 620 (ISO-IR 166), JIS X 0201 katakana
   (ISO-IR 13) and the two-byte KS X 1001 (ISO-IR 149) and GB 2312 (ISO-IR 58) into G1. No escape
   byte reaches the string.
 - Value 1 sets the starting designations (an empty Value 1 is ISO-IR 6 with nothing in G1), and they
-  come back at every reset point: the start of the value; after a CR, LF or FF; after the `\` value
-  delimiter of `PN`, `LO`, `SH` and `UC`; and after the `^` and `=` delimiters of `PN`. In `ST`, `LT`
+  come back at every reset point: the start of the value; after a CR, LF, or FF; after the `\` value
+  delimiter of `PN`, `LO`, `SH`, and `UC`; and after the `^` and `=` delimiters of `PN`. In `ST`, `LT`,
   and `UT` a `\` is literal.
 - A delimiter counts only as a single byte, never as half of a two-byte character, so a JIS X 0208
-  character whose second byte is `0x5C`, `0x5E` or `0x3D` stays one character.
-- `decodeText(bytes, terms)` applies the same decode with the text reset points (CR, LF and FF) and
+  character whose second byte is `0x5C`, `0x5E`, or `0x3D` stays one character.
+- `decodeText(bytes, terms)` applies the same decode with the text reset points (CR, LF, and FF) and
   returns the string alone.
 
 PS3.5's own worked Person Names (Examples H.3-1, H.3-2, I.2-1 and K.2-1) decode to the names the
