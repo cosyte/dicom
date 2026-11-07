@@ -52,7 +52,7 @@ fragments as raw bytes. **Its pixels are never decoded.** `serializeDicom` write
 syntaxes back under the object's own UID, a de-identified object included: the Data Set as Explicit
 VR LE, and the top-level Pixel Data as `OB` of undefined length, its Basic Offset Table and fragment
 Items copied byte for byte and in order, then a Sequence Delimitation Item. Nothing is transcoded,
-re-framed or re-encoded, and no offset table is rebuilt. The writer's limit sits with it: a
+re-framed, or re-encoded, and no offset table is rebuilt. The writer's limit sits with it: a
 top-level Data Set section A.4 does not allow is refused with `INVALID_ENCAPSULATED_PIXEL_DATA`,
 never repaired (see below). The four JPIP Referenced syntaxes are read too, for metadata only (next
 paragraph). Every other registered UID stays the fatal `UNSUPPORTED_TRANSFER_SYNTAX`, named by its
@@ -69,7 +69,7 @@ RFC 1951, so they are inflated first, under the decompression cap and the inflat
 Explicit VR LE has. Such an object carries no Pixel Data: it references its pixels through Pixel
 Data Provider URL `(0028,7FE0)`, which `ds.get("00287FE0")` returns as the `UR` element the file
 carries, its decoded `value` the URL text with only its trailing padding removed. **The URL is never
-fetched, resolved or validated**, and nothing in this package opens a connection to the host it
+fetched, resolved, or validated**, and nothing in this package opens a connection to the host it
 names. The limits sit with that capability:
 
 - **`serializeDicom` refuses all four** with `UNSUPPORTED_TRANSFER_SYNTAX` and returns no bytes. A
@@ -251,7 +251,7 @@ structural fact about DICOM that no reader can resolve from the wire.
   bytes of the name as the tag and four more as the decimal length**: eight payload bytes in one message.
   `DICOM_NONZERO_RESERVED_BYTES` printed two more as decimals on six other deltas. Both are closed.
   **What it costs, stated rather than minimized:** a message about a **private** element, a **Group
-  Length** `(gggg,0000)` or a **repeating-group member** such as `(6000,3000)` Overlay Data no longer
+  Length** `(gggg,0000)`, or a **repeating-group member** such as `(6000,3000)` Overlay Data no longer
   names its tag on any file, well-formed or not. The element is still in the Data Set under that tag,
   and `position.byteOffset` locates the header.
   **The channel still matters as much as the field.** The fixtures that produce a desynchronized read

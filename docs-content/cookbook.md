@@ -286,7 +286,7 @@ if (img.isEnhancedMultiFrame) {
 need a record of what was done, without mutating the original.
 
 `deidentify(ds)` applies the PS3.15 2026d Annex E **Basic Application Level Confidentiality Profile**
-(§E.2), replacing, emptying or removing every attribute Table E.1-1 lists as identifying, and returns
+(§E.2), replacing, emptying, or removing every attribute Table E.1-1 lists as identifying, and returns
 a fresh `Dataset` plus a `DeidentifyReport`. It is a **pure function**: your input dataset is never
 mutated.
 
@@ -417,7 +417,7 @@ transformation**, so the modification §E.3.6 also requires is yours, and every 
 dates yourself after the call.
 
 **Before you rely on this on real data, read [Known limitations](./limitations).** Several routes are
-measured, disclosed and open, and the report reading clean is not by itself proof that nothing
+measured, disclosed, and open, and the report reading clean is not by itself proof that nothing
 survived.
 
 The attribute-action table behind all of this is generated from **NEMA's PS3.15 2026d DocBook**, the
@@ -688,7 +688,7 @@ the 34 VRs PS3.5 defines; and a raw number a header carries is bound out of the 
 where it is bound at all, so `DICOM_ODD_LENGTH_VALUE_PADDED` no longer prints the odd length and
 `DICOM_NONZERO_RESERVED_BYTES` no longer prints its two reserved bytes. **Where a `deidentify()`
 code still prints a length that is the header's own, that is `PRE-EXISTING` and disclosed rather than
-closed**: see the troubleshooting page. The cost is that a message about a private, Group Length or
+closed**: see the troubleshooting page. The cost is that a message about a private, Group Length, or
 repeating-group element no longer names its tag. A thrown `DicomParseError`'s `message` comes from
 its own frozen registry, whose factories have no tag slot at all, but the error still carries a
 16-byte hex `snippet` of the source. All of it is measured and covered in

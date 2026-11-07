@@ -151,7 +151,7 @@ The bound is the same one the Tier-2 registry uses, and it is structural rather 
 **the factory signatures take no tag and no wire-length parameter at all**, so there is no slot for
 one to travel through. `position.byteOffset` identifies the element instead. What a fatal message can
 still carry is named one entry at a time: a VR checked against the closed 34-VR set, a library
-constant or the caller's own cap, PS3.6's registry name for an unsupported Transfer Syntax UID, and a
+constant, or the caller's own cap, PS3.6's registry name for an unsupported Transfer Syntax UID, and a
 zlib error code checked against zlib's own nine-name table.
 
 **And a count of the bytes left in the buffer is not on that list any more, which is a change to two

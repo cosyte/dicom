@@ -36,7 +36,7 @@ Most software that touches medical imaging needs a handful of header fields and 
 
 ## Status
 
-**The 0.1 line. The public API is settled and safe to depend on.** The parser entry, the four safety-critical views, the structural tag accessors, the lazy typed value decode across all 34 VRs, the spec-clean serializer, the source/vendor profile system and metadata-level `deidentify()` are all shipped, and their signatures are what the next release still carries. Zero runtime dependencies today.
+**The 0.1 line. The public API is settled and safe to depend on.** The parser entry, the four safety-critical views, the structural tag accessors, the lazy typed value decode across all 34 VRs, the spec-clean serializer, the source/vendor profile system, and metadata-level `deidentify()` are all shipped, and their signatures are what the next release still carries. Zero runtime dependencies today.
 
 **What is still moving, or is not covered at all.** Pixel data is not decoded in any transfer syntax, and that is out of scope for this package: a compressed object under a PS3.5 2026c section A.4 syntax parses, its fragments come back as raw bytes, and `serializeDicom` writes them back untouched, refusing with `INVALID_ENCAPSULATED_PIXEL_DATA` a fragment stream section A.4 does not allow rather than repairing it; DIMSE and DICOMweb are non-goals here; and the de-identifier's open PHI residuals are measured and disclosed rather than closed. Read the [known limitations](https://docs.cosyte.com/dicom/limitations) and [scope and non-goals](https://docs.cosyte.com/dicom/non-goals) before you point this at real data. Misreading a patient identifier, an image's signedness, or a rescale slope can cause real clinical harm.
 

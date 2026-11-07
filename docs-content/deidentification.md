@@ -9,7 +9,7 @@ description: How deidentify() applies the PS3.15 Annex E profile to header metad
 # Metadata de-identification
 
 `deidentify(ds)` applies the PS3.15 2026d Annex E **Basic Application Level Confidentiality Profile**
-(§E.2) to a parsed object: it replaces, empties or removes every attribute Table E.1-1 lists as
+(§E.2) to a parsed object: it replaces, empties, or removes every attribute Table E.1-1 lists as
 identifying, and returns a fresh `Dataset` plus a `DeidentifyReport` of what it did. It is a **pure
 function**; your input dataset is never mutated.
 

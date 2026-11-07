@@ -15,7 +15,7 @@ work is done in-house (the package budget allows up to three ADR-justified deps;
 taken).
 
 > **Status:** `0.1`, public, and published on npm. The install command below is live. The exported
-> functions, the shapes they return and the warning codes are the surface we keep stable; below 1.0
+> functions, the shapes they return, and the warning codes are the surface we keep stable; below 1.0
 > a breaking change moves the minor version, and the changelog says how to migrate. For the current
 > version, read `npm view @cosyte/dicom version` rather than a number written in a doc.
 

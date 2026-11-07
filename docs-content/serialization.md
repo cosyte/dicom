@@ -138,7 +138,7 @@ are all zero is written. The limits of the record model are on
 [Known limitations](./limitations).
 
 A `DicomSerializeError` message is built from the code and fixed structural text and nothing else:
-no Transfer Syntax UID, length or byte from the `Dataset` reaches it, so unlike a `DicomParseError`
+no Transfer Syntax UID, length, or byte from the `Dataset` reaches it, so unlike a `DicomParseError`
 (which carries a raw `snippet`) it holds no source bytes.
 
 ## What the writer will not do

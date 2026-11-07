@@ -213,7 +213,7 @@ no longer does**: an entry is now a tag this run's own resolved Annex E action f
 over. **A repeating-group mask hit is excluded on purpose**, because `(50xx,xxxx)` Curve Data leaves
 the whole element number free and a mask match proves a rule exists without making the membership
 finite. Two consequences to read with it: the list can be **empty on a real finding** (a run whose
-only actionable members are private attributes, Curve Data or Overlay elements names none of them,
+only actionable members are private attributes, Curve Data, or Overlay elements names none of them,
 and the carrier was still emptied), and it is **still uncapped**. And `contextPath` does still join them, **on every finding
 that carries one**: a segment is `TAG[index]` and the tag half is read off the wire with nothing behind it, so a
 fabricated `SQ` header the reader was desynchronized onto is named there. Measured on a synthetic
@@ -312,7 +312,7 @@ that this package reads and writes metadata, where inside the metadata surface d
   every non-`SQ` VR.
   **The de-identify rule is unchanged and still fires**, because reading the header is not the same
   as knowing what the value means: Table E.1-1 acts per attribute, and nothing can say whether a VR
-  from a later edition holds a name, a date or an opaque blob. So `deidentify()` empties the element,
+  from a later edition holds a name, a date, or an opaque blob. So `deidentify()` empties the element,
   `report.undefinedVrElements` records it, and `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` is raised.
   The record is capped at 64 entries; the emptying is not. **On a conformant future-VR file that is
   a real cost** (a legitimate value is destroyed because this release cannot classify it), and it
@@ -459,7 +459,7 @@ that this package reads and writes metadata, where inside the metadata surface d
   because nothing on the wire distinguishes that case. A file whose length fields agree is
   unaffected, whatever they say.
 - **Repeating-group rows are matched by mask, within the range the standard bounds them to.**
-  `(50xx,xxxx)` Curve Data, `(60xx,3000)` Overlay Data and `(60xx,4000)` Overlay Comments are stated
+  `(50xx,xxxx)` Curve Data, `(60xx,3000)` Overlay Data, and `(60xx,4000)` Overlay Comments are stated
   by the standard as a group mask rather than a single tag. `deidentify()` matches them in the
   sixteen even groups PS3.5 defines (`6000` to `601E` for overlays, `5000` to `501E` for curves), removes
   them, and records them in the report with a `repeatingGroup` field naming the mask that matched.

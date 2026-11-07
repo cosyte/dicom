@@ -120,7 +120,7 @@ instant at all because it states no year.
 **A component outside its range is refused, never rolled over.** The decoders bound each component
 on its own, so a `DA` of `18700230` decodes with `valid: true` and `day: 30`. The conversion surface
 reads the components together: a month outside 1 to 12, a day the month does not really have (full
-4/100/400 leap rule), an hour, minute or second out of range, or a component that is not a whole
+4/100/400 leap rule), an hour, minute, or second out of range, or a component that is not a whole
 number, and the whole value converts to `undefined`. Rendering it would produce `"1870-02-30"`,
 which every ISO-8601 reader silently moves to 2 March, and converting it would produce a date of
 birth off by a day. `second: 60` is refused with them: `TM` and `DT` permit it for a leap second and
@@ -204,17 +204,17 @@ warnings below.
 6.1.2.5), unless Value 1 is `ISO_IR 192`, `GB18030`, or `GBK`, which take none (section 6.1.2.4):
 
 - Every escape sequence in PS3.3's code-extension tables, single-byte and multi-byte, switches the
-  set it names into G0 or G1: ISO-IR 6, ISO-IR 14 and the two-byte JIS X 0208 (ISO-IR 87) and
+  set it names into G0 or G1: ISO-IR 6, ISO-IR 14, and the two-byte JIS X 0208 (ISO-IR 87) and
   JIS X 0212 (ISO-IR 159) into G0; the ISO-8859 sets, TIS 620 (ISO-IR 166), JIS X 0201 katakana
   (ISO-IR 13) and the two-byte KS X 1001 (ISO-IR 149) and GB 2312 (ISO-IR 58) into G1. No escape
   byte reaches the string.
 - Value 1 sets the starting designations (an empty Value 1 is ISO-IR 6 with nothing in G1), and they
-  come back at every reset point: the start of the value; after a CR, LF or FF; after the `\` value
+  come back at every reset point: the start of the value; after a CR, LF, or FF; after the `\` value
   delimiter of `PN`, `LO`, `SH`, and `UC`; and after the `^` and `=` delimiters of `PN`. In `ST`, `LT`,
   and `UT` a `\` is literal.
 - A delimiter counts only as a single byte, never as half of a two-byte character, so a JIS X 0208
   character whose second byte is `0x5C`, `0x5E`, or `0x3D` stays one character.
-- `decodeText(bytes, terms)` applies the same decode with the text reset points (CR, LF and FF) and
+- `decodeText(bytes, terms)` applies the same decode with the text reset points (CR, LF, and FF) and
   returns the string alone.
 
 PS3.5's own worked Person Names (Examples H.3-1, H.3-2, I.2-1 and K.2-1) decode to the names the
