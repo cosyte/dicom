@@ -58,7 +58,7 @@ export const FATAL_CODES = {
  *     case "NOT_DICOM_PART_10":
  *       return "input is not a DICOM Part 10 file";
  *     case "INVALID_FILE_META":
- *       return "File Meta group is missing or malformed";
+ *       return "File Meta group or Data Set is cut short or unreadable";
  *     case "UNSUPPORTED_TRANSFER_SYNTAX":
  *       return "Transfer Syntax UID is not supported by v1";
  *   }

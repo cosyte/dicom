@@ -131,14 +131,15 @@ real finding, and it is still uncapped.
 **A Tier-3 fatal's `message` is bounded the same way, and it was not always.** Every message
 `parseDicom` throws now comes from a second frozen registry, keyed by the structural reason for the
 refusal rather than by the fatal code (`FATAL_CODES` is locked, and several of its members are raised
-for more than one reason). Until this release several of those messages were assembled at the throw
-site out of template literals and printed the element's tag, its declared length, or both. That reads as
+for more than one reason). Those keys are internal: `err.code` carries the fatal code, the message
+text says which reason, and the key itself appears nowhere on the error. Until this release several
+of those messages were assembled at the throw site out of template literals and printed the element's tag, its declared length, or both. That reads as
 harmless and is not. **The reason is NOT that such a fatal fires only when a length field is lying.**
 It fires on an honestly truncated file too, where every declared length is correct and the transport
-simply lost bytes: a spec-clean object cut short by two bytes raises
-`ELEMENT_LENGTH_EXCEEDS_BUFFER`, and a file cut short inside its File Meta group raises
-`FILE_META_GROUP_LENGTH_OVERRUNS`, both with nothing fabricated anywhere. Both readings are covered by
-the same bound because the withheld numbers are four bytes a sender wrote in either of them. What
+simply lost bytes: a spec-clean object cut short by two bytes throws `INVALID_FILE_META` for an
+element whose Value Length reaches past the end of the input, and a file cut short inside its File
+Meta group throws `INVALID_FILE_META` for a `(0002,0000)` group length that does, both with nothing
+fabricated anywhere. Both readings are covered by the same bound because the withheld numbers are four bytes a sender wrote in either of them. What
 makes the desynchronized reading the sharp one is that those four bytes are then somebody's name:
 measured on a synthetic `"MR BRAIN SMITHSON "`, one such message printed
 `Element 41524E49 declared length=1330858068`, which is `"RAIN"` followed by `"THSO"` - eight
@@ -152,9 +153,9 @@ constant or the caller's own cap, PS3.6's registry name for an unsupported Trans
 zlib error code checked against zlib's own nine-name table.
 
 **And a count of the bytes left in the buffer is not on that list any more, which is a change to two
-message texts in this release.** In an earlier release `ELEMENT_LENGTH_EXCEEDS_BUFFER` and
-`FILE_META_GROUP_LENGTH_OVERRUNS` each printed `buffer.length - cursor.position`, defended as bounded
-by bytes actually present. That bounds the number's magnitude. The parser reads a defined-length
+message texts in this release.** In an earlier release those same two `INVALID_FILE_META` messages,
+for an element and for a `(0002,0000)` group length reaching past the end, each printed
+`buffer.length - cursor.position`, defended as bounded by bytes actually present. That bounds the number's magnitude. The parser reads a defined-length
 Sequence Item from a **slice**, so inside one the buffer is that Item and the subtraction publishes
 the Item's own 32-bit declared length, less an offset the same message prints. That is a raw wire
 field a sender wrote, which is the class this registry refuses everywhere else. Measured with a
@@ -162,8 +163,8 @@ declared Item Length of `21320`: the message read `21312`, `21288` or `21272` de
 inside the Item the offending element sat. **A raw number
 shifted by an amount the reader can compute is that raw number, and here the amount is variable**, so
 the slot is gone from both signatures rather than filtered. The cost is stated where it falls:
-`FILE_META_GROUP_LENGTH_OVERRUNS` is raised at the root, where that count was the caller's own input
-size and leaked nothing, and it loses the number anyway, because a bound that holds only where a
+the `(0002,0000)` group-length message is raised at the root, where that count was the caller's own
+input size and leaked nothing, and it loses the number anyway, because a bound that holds only where a
 function happens to be called from is not a bound.
 
 **A `DicomParseError` is still different from a warning, and this is the one to read carefully.** It

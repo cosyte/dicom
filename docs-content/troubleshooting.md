@@ -35,7 +35,7 @@ parseDicom(Buffer.from("plainly not a DICOM object, just ASCII bytes", "ascii"))
 | Fatal code (throws)           | Meaning                                                                |
 | ----------------------------- | ---------------------------------------------------------------------- |
 | `NOT_DICOM_PART_10`           | No preamble/`DICM` and no recoverable File Meta: not a Part 10 object. |
-| `INVALID_FILE_META`           | The File Meta group is present but structurally unreadable.            |
+| `INVALID_FILE_META`           | The File Meta group or the Data Set is cut short or unreadable.        |
 | `UNSUPPORTED_TRANSFER_SYNTAX` | Not a native, PS3.5 2026c A.4 or JPIP Referenced one (SMPTE, retired). |
 | `EMPTY_INPUT`                 | Zero-length input.                                                     |
 
@@ -149,14 +149,17 @@ Two things that array does **not** cover:
   registry, and the factories that build one **take no tag and no wire-length parameter**, so neither
   can be interpolated: on the desynchronized reading those are four bytes out of somebody's value.
   **They are withheld on the other reading too, and the reason is not that the fatal fires only when
-  a length field is lying.** It does not: a spec-clean object cut short by two bytes raises
-  `ELEMENT_LENGTH_EXCEEDS_BUFFER` with every declared length in the file honest, and a file cut short
-  inside its File Meta group raises `FILE_META_GROUP_LENGTH_OVERRUNS` with `(0002,0000)` untouched.
-  The number is four bytes a sender wrote in either case, which is bound enough.
+  a length field is lying.** It does not: a spec-clean object cut short by two bytes throws
+  `INVALID_FILE_META` for an element whose Value Length reaches past the end of the input, with every
+  declared length in the file honest, and a file cut short inside its File Meta group throws
+  `INVALID_FILE_META` for a `(0002,0000)` group length that does, with `(0002,0000)` untouched. The
+  number is four bytes a sender wrote in either case, which is bound enough.
   `err.byteOffset` locates the element instead. A VR still reads, when it names one of the 34;
   anything else renders `<withheld>`.
 - **⚠ Two of those messages lost their remaining-bytes count, so a string match on them stops
-  matching.** `ELEMENT_LENGTH_EXCEEDS_BUFFER` and `FILE_META_GROUP_LENGTH_OVERRUNS` printed how many
+  matching.** Both are `INVALID_FILE_META` messages: the one that begins "An element declares a Value
+  Length reaching past the end of the bytes being read" and the one that begins "(0002,0000)
+  FileMetaInformationGroupLength declares more bytes than remain in the input". They printed how many
   bytes remained in the buffer; they do not now, and the factories take no parameter for it. A
   defined-length Sequence Item is parsed from a **slice**, so inside one that count is the Item's own
   declared length less an offset the message publishes, and an addition puts it back. `err.code` is
