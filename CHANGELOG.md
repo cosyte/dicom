@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+### Patch Changes
+
+- 71149ed: The `deidentify()` JSDoc now names `docs-content/limitations.md` as the list of open de-identification residuals, instead of a contributor file the package does not ship.
+
 ## 0.1.0
 
 ### Minor Changes
