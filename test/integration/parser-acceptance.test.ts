@@ -1,5 +1,5 @@
 /**
- * Phase 2 capstone - ROADMAP §"Phase 2" Success Criteria #1–#5 verified
+ * Phase 2 capstone - ROADMAP §"Phase 2" Success Criteria #1 to #5 verified
  * end-to-end.
  *
  * Each `describe` block targets one of the five success criteria. Tests
@@ -8,7 +8,7 @@
  * fixtures from `test/helpers/build-dicom.ts` (D-38 - Phase 2 ships zero
  * curated `.dcm` files).
  *
- * Each block maps to a Phase 2 success criterion (#1–#5).
+ * Each block maps to a Phase 2 success criterion (#1 to #5).
  *
  * @module
  */

@@ -30,6 +30,15 @@
 # nothing in `.gitattributes`; adding a declaration is deferred to the cross-repo
 # "what is a text file" rule and is deliberately not done here.
 #
+# WIDENED 2026-11-07 TO THE EN DASH (U+2013). The brand rule bans em and en dashes
+# alike, and the operator chose to sweep both out of every repo and widen every
+# gate. Every arm below that matches U+2014 now has a U+2013 twin, the self-test
+# proves both characters match, and the messages name both. A range is written
+# with "to" ("2 to 3"), never with either dash. The one scope change that came with
+# it: `CHANGELOG.md` is scanned above its archive divider only (see the section next to
+# the vendored-document exclusion), because the frozen archive below the divider is
+# pinned by digest and carries an en dash in its published text.
+#
 # The fix is never to re-encode the character: rewrite the sentence with a
 # period, a colon, a comma, or parentheses.
 #
@@ -137,16 +146,24 @@ export LC_ALL=C.UTF-8
 
 # Matches U+2014 as the literal character and as its encodings: %E2%80%94 (URL),
 # the JS backslash-u escape, and the &mdash; / &#8212; / &#x2014; HTML entities.
+# Matches U+2013 the same way: %E2%80%93, its backslash-u escape, and the
+# &ndash; / &#8211; / &#x2013; HTML entities.
 # See residual (ii) above for exactly which near-misses this does NOT catch.
-PATTERN='\x{2014}|%E2%80%94|\\u2014|&mdash;|&#8212;|&#x2014;'
+PATTERN='\x{2014}|%E2%80%94|\\u2014|&mdash;|&#8212;|&#x2014;|\x{2013}|%E2%80%93|\\u2013|&ndash;|&#8211;|&#x2013;'
 
 # SELF-TEST: prove the scanner can still see what it is meant to catch before any
-# clean result is believed. `printf` emits U+2014 as its UTF-8 bytes, so this file
-# still never contains the literal character.
+# clean result is believed. `printf` emits U+2014 and U+2013 as their UTF-8 bytes,
+# so this file still never contains either literal character.
 if ! printf 'a\xe2\x80\x94b\n' | grep -qP "$PATTERN"; then
   echo "ERROR: check-no-emdash - the scanner cannot match a known em dash." >&2
   echo "       grep -P is unavailable or not in UTF-8 mode (LC_ALL=${LC_ALL})." >&2
   echo "       Refusing to report a clean tree on a scanner that cannot see." >&2
+  exit 1
+fi
+if ! printf 'a\xe2\x80\x93b\n' | grep -qP "$PATTERN"; then
+  echo "ERROR: check-no-emdash - the scanner cannot match a known en dash." >&2
+  echo "       The pattern has lost its U+2013 arm, or grep -P is not in UTF-8 mode" >&2
+  echo "       (LC_ALL=${LC_ALL}). Refusing to report a clean tree on a scanner that cannot see." >&2
   exit 1
 fi
 
@@ -154,9 +171,9 @@ fail_with_hits() {
   local what="$1" hits="$2"
   echo "$hits" >&2
   echo "" >&2
-  echo "ERROR: check-no-emdash - em dash (U+2014, or an encoded form) found in ${what}." >&2
-  echo "       cosyte never uses em dashes (founder directive; 06-brand/voice-and-tone.md)." >&2
-  echo "       Rewrite with a period, colon, comma, or parentheses." >&2
+  echo "ERROR: check-no-emdash - em or en dash (U+2014 or U+2013, or an encoded form) found in ${what}." >&2
+  echo "       Cosyte never uses em or en dashes (founder directive; 06-brand/voice-and-tone.md)." >&2
+  echo "       Rewrite with a period, colon, comma, or parentheses, and write a range with \"to\"." >&2
   exit 1
 }
 
@@ -168,7 +185,8 @@ fail_with_hits() {
 ERRLOG=$(mktemp)
 FILELIST=$(mktemp)
 SCANLIST=$(mktemp)
-trap 'rm -f "$ERRLOG" "$FILELIST" "$SCANLIST"' EXIT
+CHANGELOG_ABOVE=$(mktemp)
+trap 'rm -f "$ERRLOG" "$FILELIST" "$SCANLIST" "$CHANGELOG_ABOVE"' EXIT
 
 refuse_if_incomplete() {
   [ -s "$ERRLOG" ] || return 0
@@ -182,16 +200,16 @@ refuse_if_incomplete() {
   if grep -qi 'binary file' "$ERRLOG"; then
     echo "ERROR: check-no-emdash - the input named above MATCHED the banned pattern, but grep" >&2
     echo "       classifies it as binary (it holds a NUL byte or invalid UTF-8), so the hit" >&2
-    echo "       is reported without a line number. Treat it as a real em dash." >&2
-    echo "       cosyte never uses em dashes (founder directive; 06-brand/voice-and-tone.md)." >&2
-    echo "       Rewrite with a period, colon, comma, or parentheses." >&2
+    echo "       is reported without a line number. Treat it as a real em or en dash." >&2
+    echo "       Cosyte never uses em or en dashes (founder directive; 06-brand/voice-and-tone.md)." >&2
+    echo "       Rewrite with a period, colon, comma, or parentheses, and write a range with \"to\"." >&2
     # Only when grep actually named that file. In --stdin mode grep says
     # "(standard input): binary file matches", and pointing a PR-body failure at a
     # source file nobody touched is the same kind of misdirection this branch exists
     # to remove.
     if grep -q 'charset\.ts' "$ERRLOG"; then
       echo "       The NUL in src/dataset/vr/charset.ts is functional (it is DICOM's own" >&2
-      echo "       padding) and must NOT be removed to silence this. Remove the em dash." >&2
+      echo "       padding) and must NOT be removed to silence this. Remove the dash." >&2
     fi
   fi
   if grep -qiv 'binary file' "$ERRLOG"; then
@@ -207,7 +225,7 @@ if [ "${1:-}" = "--stdin" ]; then
   HITS=$(grep -nP -e "$PATTERN" - 2>>"$ERRLOG" || true)
   refuse_if_incomplete
   [ -n "$HITS" ] && fail_with_hits "$LABEL" "$HITS"
-  echo "check-no-emdash: OK (no em dashes in ${LABEL})"
+  echo "check-no-emdash: OK (no em or en dashes in ${LABEL})"
   exit 0
 fi
 
@@ -274,8 +292,8 @@ cd "$(git rev-parse --show-toplevel)"
 #   load-bearing flag choice in the file for THIS repo. Fail closed, not open.
 #
 #   KNOWN LIMIT, stated because dicom is a parser repo where it is plausible. The pattern
-#   matches U+2014 as UTF-8 and as the five textual encodings listed with it. It does NOT
-#   match an em dash encoded in some other charset, and DICOM `(0008,0005)` Specific
+#   matches U+2014 and U+2013 as UTF-8 and as the five textual encodings listed with each.
+#   It does NOT match either dash encoded in some other charset, and DICOM `(0008,0005)` Specific
 #   Character Set fixtures in ISO-IR 100 / CP1252 or a JIS / GB18030 charset are exactly
 #   the kind of grounded test data this repo exists to carry. Measured, not assumed: such
 #   a file scans clean and this gate stays GREEN. There is none today (all 178 tracked
@@ -367,9 +385,61 @@ fi
 #
 # Measured after the addition: exactly 5 files match, the four NEMA normative documents plus
 # `spec.txt`, and `part05.xml` and `spec.txt` are the two that actually contain the character.
+#
+# Measured again when the pattern was widened to the en dash (2026-11-07): `spec.txt` also
+# carries five en dashes, all in the CommonMark spec's own Unicode ranges (`U+0021` to `2F`
+# and the like), and no other pinned document carries one. They stay verbatim under the same
+# exclusion, which did not change.
 VENDOR_PINNED_DOC='^vendor/(nema|commonmark)/[^/]+/[0-9a-f]{64}/'
 
+# ---- the one region rule: CHANGELOG.md below its archive divider ----
+#
+# `CHANGELOG.md` is generated from changesets, and everything released before that was
+# true sits under the `## Released before this file was generated` divider as a frozen
+# archive. `test/scripts/changelog-generation.test.ts` pins that archive byte for byte
+# (`FROZEN_ARCHIVE_SHA256`, `FROZEN_ARCHIVE_BYTES`), and it has shipped inside published
+# tarballs. It carries one en dash, in a released entry. Rewriting it fails that test and
+# rewrites history a consumer already received, so the same principle as the vendored
+# documents applies: on bytes that are pinned, the pin wins and the scan yields.
+#
+# THE NARROWING IS THE FROZEN ARCHIVE AND NOTHING ELSE. Everything ABOVE the divider is
+# scanned, under the file's own name so a hit carries the file's own line number, and
+# `.changeset/`, the source every future line above the divider is generated from, is
+# scanned in full like any other tracked file. The divider is located in the tracked file
+# itself on every run. A missing divider, a divider on line 1, or an untracked
+# `CHANGELOG.md` REFUSES rather than falling back to scanning all of the file or none of it.
+# The same rule, for the same reason, is in the deid copy of this gate.
+CHANGELOG_FILE='CHANGELOG.md'
+ARCHIVE_HEADING='## Released before this file was generated'
+
+if ! grep -qzxF "$CHANGELOG_FILE" < "$FILELIST"; then
+  echo "ERROR: check-no-emdash - '${CHANGELOG_FILE}' is not tracked, but this script carries a" >&2
+  echo "       region rule for it. Refusing to report from a scan whose stated scope no longer" >&2
+  echo "       describes this tree." >&2
+  exit 1
+fi
+
+DIVIDER=''
+if DIVIDER_LINE=$(grep -a -n -x -F -m1 -e "$ARCHIVE_HEADING" -- "./${CHANGELOG_FILE}"); then
+  DIVIDER="${DIVIDER_LINE%%:*}"
+fi
+if [ -z "$DIVIDER" ]; then
+  echo "ERROR: check-no-emdash - the archive divider is missing from '${CHANGELOG_FILE}'." >&2
+  echo "       This gate scans everything above it and leaves the frozen archive below it to the" >&2
+  echo "       digest in test/scripts/changelog-generation.test.ts. Without the divider there is no" >&2
+  echo "       boundary to apply, and guessing one would either red on published bytes or skip" >&2
+  echo "       live text. Refusing." >&2
+  exit 1
+fi
+if [ "$DIVIDER" -le 1 ]; then
+  echo "ERROR: check-no-emdash - the archive divider is on line ${DIVIDER} of '${CHANGELOG_FILE}'," >&2
+  echo "       leaving nothing above it. Refusing to report green from a region scan that read nothing." >&2
+  exit 1
+fi
+head -n "$((DIVIDER - 1))" "./${CHANGELOG_FILE}" > "$CHANGELOG_ABOVE"
+
 grep -zvxF 'scripts/check-no-emdash.sh' < "$FILELIST" |
+  grep -zvxF "$CHANGELOG_FILE" |
   grep -zvP "$VENDOR_PINNED_DOC" > "$SCANLIST" || true
 
 # Fail closed if the exclusion ate the whole list. Without this, a mistyped pattern that
@@ -389,9 +459,22 @@ HITS=$(sed -z 's|^|./|' < "$SCANLIST" |
 
 refuse_if_incomplete
 
+# The region above the divider, read on stdin and labelled with the file's own name, so a
+# hit reads `./CHANGELOG.md:LINE:text` like every other hit and a binary-match diagnostic
+# names the real file rather than a temp path. Its lines are the file's first lines, so the
+# line numbers are the file's line numbers.
+CHANGELOG_HITS=$(grep -H --label="./${CHANGELOG_FILE}" -nP -e "$PATTERN" - < "$CHANGELOG_ABOVE" 2>>"$ERRLOG" || true)
+
+refuse_if_incomplete
+
+if [ -n "$CHANGELOG_HITS" ]; then
+  HITS=$(printf '%s\n%s' "$HITS" "$CHANGELOG_HITS" | sed '/^$/d')
+fi
+
 [ -n "$HITS" ] && fail_with_hits "the tracked files listed above" "$HITS"
 
 # Print what was skipped rather than asserting it in a comment, so an exclusion that
 # quietly grows shows up in the run that grows it.
-echo "check-no-emdash: OK (no em dashes in ${SCAN_N} of ${TRACKED_N} tracked files;" \
-     "$(( TRACKED_N - SCAN_N )) skipped: this script + pinned vendor documents)"
+echo "check-no-emdash: OK (no em or en dashes in ${SCAN_N} of ${TRACKED_N} tracked files," \
+     "plus ${CHANGELOG_FILE} above its archive divider at line ${DIVIDER};" \
+     "$(( TRACKED_N - SCAN_N - 1 )) skipped: this script + pinned vendor documents)"
