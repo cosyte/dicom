@@ -10,4 +10,4 @@
  *   import { VERSION } from "@cosyte/dicom";
  *   console.log(`@cosyte/dicom v${VERSION}`);
  */
-export const VERSION: string = "0.1.1";
+export const VERSION: string = "0.1.2";
