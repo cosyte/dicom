@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.8
+
+### Patch Changes
+
+- f216da9: Doc comments and the docs no longer cite our internal tracking names for past fixes, and every PS3.5 section they cite names its part on the same line. No code or behavior changes.
+
 ## 0.1.7
 
 ### Patch Changes
