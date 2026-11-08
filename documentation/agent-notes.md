@@ -1,14 +1,13 @@
 # Agent notes: the narrative behind `CLAUDE.md`
 
-**This file is the long form. `CLAUDE.md` is the index.**
+**This file is the long form. `CLAUDE.md` is the card.**
 
 Every section below was moved here **verbatim** from `CLAUDE.md` on 2026-08-04, when
 `<submodule>/CLAUDE.md` was first budgeted at write time (`CLAUDE-MD-AUDIT`), so that `CLAUDE.md`
 stays a short card. The umbrella has since retired that budget and the hook that enforced it.
 **Nothing was deleted.**
-`CLAUDE.md` keeps the cursor, the rules, and every trap as a one-line imperative; each of those
-imperatives points at the section here that carries its measurements, its citations, and the refuter
-passes that produced it.
+`CLAUDE.md` keeps the rules as one-line imperatives, and points at the section here that carries a
+rule's measurements, citations, and refuter passes as `documentation/agent-notes.md#<anchor>`.
 
 **Read the section before you re-open the thing its rule guards.** These are clinical-safety
 lessons in a parser: every one of them cost a defect, a refused pass, or both. The compressed line in
@@ -18,6 +17,49 @@ thing in the same area.
 Section order matches the order these entries had in `CLAUDE.md`'s Status list: most recent first,
 then the shipped-phase history, then the generator/authority notes, then the older parser incidents,
 then the two gates.
+
+After those come seventeen records that were separate files under `documentation/agent-notes/`
+until 2026-11-07, written there while this file was over a size limit the umbrella has since
+retired. They are folded in unchanged apart from their heading levels and the pointers between
+them. Each keeps its old file name as an explicit anchor, so
+`documentation/agent-notes.md#dicom-phi-scan-report-cap` is the record that was
+`dicom-phi-scan-report-cap.md`. Their opening notes about `CLAUDE.md` headroom describe that
+retired limit; the card spec (`documentation/claude-card.md` in cosyte/config) sets the card's
+limits now.
+
+---
+
+## The card's rules in full
+
+`CLAUDE.md` keeps each rule as one short line. Below is every rule as the card carried it until
+2026-11-07, when the card was cut to the spec in cosyte/config (`documentation/claude-card.md`).
+Each still binds, and the pull request it names holds the failure behind it (`gh pr view <n>`).
+
+- Diagnostics take no string from the file: messages come by code from the frozen registries in `src/parser/warnings.ts` and `src/parser/fatals.ts`, and factories take a position and structural constants. (#48, #80)
+- A diagnostic names an element only through `renderTag` or `renderVr`, which check membership in a closed table; never render a raw tag, length or byte from the wire, `position.byteOffset` locates it. (#55, #88, #90, #92, #93)
+- Cap every diagnostic a file can multiply once per run, on `DeidentifyContext`, not on `ProcessResult`: #53 shipped one unbounded. (#54)
+- Keep the Annex E table current with the dictionary, and move the PS3.6 and PS3.15 pins under `vendor/nema/` together: `deidentify()` keeps a registered tag the table lacks, which once kept 35 identifying attributes behind a clean report. (#38, #146)
+- PS3.15's repeating-group rows are masks over the even groups `5000`-`501E` and `6000`-`601E`, not exact tags: matched by exact tag, `(6000,4000)` Overlay Comments survived with a clean report. (#39, #40)
+- Private block reservations are scoped per Data Set at every depth, on parse and on de-identify: an Item starts with an empty creator map and inherits the charset, not the reservations. (#48, #49)
+- A retention decision never decides the Data Sets nested in the retained value: walk a vouched-for private `SQ`, never keep it verbatim. (#77)
+- A report never reads as a scrub the run did not perform: a private value the run did not walk is removed and reported, not kept under `PatientIdentityRemoved = YES`. (#119, #121)
+- An over-declaring element and a well-formed one are byte-identical, so the remedy is at the de-identify boundary or a warning, never a parser bound; a moved element can replace one with the same tag in the Data Set's `Map`. (#51, #70)
+- Hand a descent the slice cut at its declared end, never the whole buffer, or the same bytes are read twice (#50); descend in one pass, as a try-then-fallback cost 2^depth. (#51)
+- A PHI test needs a name-bearing payload and a mutation control that turns it red; a benign payload cannot fail. (#55)
+- Quote a "red on base" test count only with its sha, re-run after every test you add or strengthen, with `src/` replaced rather than overlaid. (#71)
+- Locate a spec section by its normative sentence: collect every heading match, keep those holding the sentence, require exactly one. First match reads the table of contents. (#40)
+- Cite the clause that holds the sentence: PS3.5 §7.5.2 for an `SQ`'s own length and §7.5.1 for an Item's, PS3.15 §E.1.1 not §E.1, and §E.3.10 whole, both branches; `test/docs/spec-citations.test.ts` checks the docs. (#50, #54, #66)
+- Run attw only as `pnpm attw` or `pnpm typecheck:exports` (both run `scripts/attw.mjs`): the bare CLI exits 0 when the declarations are missing. (#59)
+- `CHANGELOG.md` is generated from changesets: never hand-edit it or add an `[Unreleased]` heading, under which ten versions shipped calling released work unreleased. (#82)
+- A changeset's opening sentence fits in 200 characters: the release gate refuses a longer one after the version commit, and nothing publishes. (#42, #57)
+- `packageManager` is the only pnpm pin in CI: a `version:` input to `pnpm/action-setup` failed every regen run for weeks. (#34)
+
+The card's gate also said, and it still holds: `pnpm test:coverage` enforces per-directory floors
+set in `vitest.config.ts`; `.github/workflows/no-emdash.yml` also scans the PR title, body, and
+commit messages; CI also loads `dist/` as ESM and as CJS (`pnpm smoke` does the same here), runs
+actionlint, checks the manifest, and installs the packed tarball into a clean directory, which has
+no script here; and a change that reaches the published package adds a changeset
+(`pnpm changeset`).
 
 ---
 
@@ -3002,3 +3044,3664 @@ READING differs` is **not** new here: `#66` added it, and a draft of this entry 
   `@cosyte/eslint-config` rule blocks are scoped to `**/*.ts`, so a seeded unused variable and a
   missing semicolon in `scripts/attw.mjs` produce **zero** ESLint findings. Widening the glob would
   add a gate-shaped thing that gates nothing. `format:check` does cover it and is real.
+
+---
+
+<a id="dicom-diagnostic-locator-frame"></a>
+
+## dicom - the locator had no frame, and the universal defending it was false (2026-08-08)
+
+`DICOM-DIAGNOSTIC-PHI-RESIDUALS`, tenth instance, taken from `#93`'s pass-3 ranking. Written here
+rather than in `documentation/agent-notes.md` because that file is **over** its 250,000-byte budget
+on `main` and the hook refuses growth (an umbrella size rule, since retired). **Nothing dropped.** The precedent is `#97`, `#98`,
+`#99` and `#102`, which relocated the same way.
+
+**`CLAUDE.md` CARRIES NO LINE FOR THIS, AND THAT IS A GAP RATHER THAN A JUDGEMENT THAT THE TRAP IS
+SMALL.** Its ratchet is 39,550 bytes and it measured 39,544 on `main`: six bytes, which is not a
+line. Relocation is the remedy, never deleting an existing trap to make room and never raising the
+ceiling. So the rules live where a worker touching this code actually reads them: the module banner
+and `FatalTokens` JSDoc in `src/parser/fatals.ts`, the `OFFSET_FRAMES` / `ParseFrame` /
+`DicomParseError` JSDoc in `src/parser/errors.ts`, `ParseContext.frame` and `DicomPosition` in
+`src/parser/types.ts`, the block `"PHI: a byteOffset names the frame it is counted in"` in
+`test/integration/fatal-diagnostic-surface.test.ts`, and this file.
+
+**Provenance.** Every figure below is a measurement taken in this repo. The base-tree ones were taken
+on `028fe85` (`main` at the time the slice opened); the rest on the slice's own tree and are
+reproducible from the tests named beside them. No spec claim is made here that is not already carried
+by an existing citation in `src/parser/fatals.ts`.
+
+---
+
+### 1. What was open
+
+`#93` bound the last wire-derived number out of the Tier-3 factory signatures: through `0.0.14`
+`ELEMENT_LENGTH_EXCEEDS_BUFFER` and `FILE_META_GROUP_LENGTH_OVERRUNS` each rendered
+`buffer.length - cursor.position`, which inside a defined-length Sequence Item is that Item's own
+32-bit declared Value (Item) Length less an offset the same message publishes.
+
+That remedy left **`err.byteOffset` as the sole locator on both changed messages**, and it is
+slice-relative inside a defined-length Item. Measured on the `overDeclareInsideAnItem` fixture, whose
+Item slice begins at absolute offset **202**:
+
+| over-declaring element sits | `err.byteOffset` | absolute offset in the caller's buffer |
+| --------------------------- | ---------------- | -------------------------------------- |
+| first in the Item           | `0`              | `202`                                  |
+| 24 bytes in                 | `24`             | `226`                                  |
+| 40 bytes in                 | `40`             | `242`                                  |
+
+Nothing on `DicomParseError` said which of the two coordinate systems the number was in. A number
+alone does not say where its zero is, and the wrong reading is not an error a consumer can detect: it
+is a valid index into a buffer, returning a real element, just not the one the diagnostic named.
+**This is the same defect `#80` closed for `snippet` and did not close for the offset.**
+
+The harm is measured on the `oneFileTwoFrames` fixture, which was built for `#80` and already carries
+a name at the colliding root offset: a `{ strict: true }` escalation raised inside the Item reports an
+item-relative `byteOffset` that, read against the file, lands inside `"MR BRAIN SMITHSON "`. A
+consumer that cuts its own copy of the file at `err.byteOffset` reproduces `#80`'s defect in its own
+code, and until this slice nothing on the error warned it not to.
+
+### 2. The remedy, and why it is a slot removal rather than a filter
+
+`DicomParseError` gains **`offsetFrame`**, a required constructor argument (not optional, for the
+same reason `byteOffset` is not: an offset whose frame is optional is an offset whose frame is
+usually missing). Its value is drawn from `OFFSET_FRAMES`, three literals this parser chooses:
+`"input"`, `"inflated-dataset"`, `"value-slice"`. The `Error.message` suffix carries it too, so it
+reads `(offset=N frame=F)`. **The message and not only the field**, because the most common thing a
+consumer does with one of these is log it, and a field alone would not have reached that path.
+
+**`ParseContext.buffer` became `ParseContext.frame: ParseFrame`, one object with two readonly
+members.** Two sibling fields would have been the same defect one step removed: a frame change is one
+fact, and two assignments are two chances to move the bytes and leave the label behind. Every Tier-3
+factory takes the same object rather than a `Buffer`, so no factory can be handed a snippet source
+without the label that belongs beside it.
+
+**🛑 THAT IS THE OMISSION MODE AND IT IS THE ONLY ONE THE TYPE CLOSES. DO NOT WRITE THAT A
+DISAGREEMENT IS "NOT EXPRESSIBLE" - A GRADED PASS BUILT ONE.**
+`elementLengthExceedsBuffer({ buffer: itemSlice, name: OFFSET_FRAMES.INPUT }, 0)` type-checks, lints,
+and renders a mislabelled offset beside a faithful snippet of the Item. The pair did not vanish; it
+moved from an argument list into an object literal at the sites that compose a frame. What the type
+actually buys is that composing one is a single assignment, so no site can half-update. The honest
+limit is pinned in `fatals.test.ts` rather than left to a test title: the mismatched pair is asserted
+to RENDER.
+
+**🛑 AND WRITE NO COUNT OF THOSE SITES.** The first remedy to this finding said "exactly four" in
+five artifacts, and the next graded pass measured **five**: the omitted one is the ROOT composition
+in `parseDicom`, which reads `"input"` - the very label a forged pair would claim. A worker sweeping
+frame compositions from that census reviews four of five and reads clean, which is this lineage's
+own "a detector zero can be a gap, not a clearance" arriving by way of a numeral. Derive it instead,
+in two seconds and never stale:
+`grep -rn "OFFSET_FRAMES\." src/parser/`.
+
+**That derivation OVER-reports and is chosen for it.** Naming a frame is not composing one, so read
+every hit rather than counting them. A narrower pattern that returned only the object literals would
+be a detector with a floor, and this file's whole subject is what a floor hides. Over-reporting is
+the safe direction for a census you must not miss a member of.
+
+**The frame's NAME is published; its ORIGIN is not, deliberately.** That asymmetry is asserted, not
+just stated: `"publishes the frame's NAME and never its ORIGIN"` searches every digit run of the
+message for `202` and pins the clean result beside a reconstructed message that DOES publish it,
+which the same search catches.
+
+**The rationale is a trade, not an impossibility, and a graded pass was right to press it.** A frame
+origin is a position, and this library publishes positions freely in the `"input"` frame and as
+`Element.byteOffset` at the root; recovering a specific 32-bit declared length from one needs a
+second published number, not one. So the argument is that an origin buys a consumer nothing the frame
+name does not already buy, while sitting one number away from a field these messages withhold. The
+item asked for the frame to be NAMED. Do not restate this as "an origin would leak the length".
+
+### 3. 🛑 THE UNIVERSAL DEFENDING THE BOUND WAS FALSE
+
+**No count is written here, deliberately.** A first draft said three in one sentence and four in the
+heading above it and three again in the changeset, and a graded pass caught all three plus a carrier
+the list had missed. The carriers are enumerated below; the list is the census.
+
+The artifacts justified withholding a declared length with a variant of *"a fatal about a length
+field that lies fires precisely when bytes inside somebody's value are being read as a header"*.
+`#93` pass 3 ranked it over-stated **even for the two old fields**. It is, and the counterexample is
+an ordinary one. Measured on `028fe85`, with no fabrication anywhere:
+
+- A spec-clean object cut short by 2, 4, 6, 8 or 10 bytes raises `ELEMENT_LENGTH_EXCEEDS_BUFFER` at
+  offset 182, with every declared length in the file honest. The transport lost bytes; nobody lied.
+- The same object cut short inside its File Meta group raises `FILE_META_GROUP_LENGTH_OVERRUNS` at
+  offset 132 with `(0002,0000)` untouched, reading back the same 28 it was written with.
+
+**The bound is right in both readings and the universal was never what made it right.** The withheld
+number is a raw 32-bit field a sender wrote either way; what makes the desynchronized reading the
+sharp one is that those four bytes are then part of somebody's name. That is the corrected claim, and
+it is pinned by
+`"the 'fires precisely when a length field is lying' universal is FALSE, and is corrected not
+repeated"` in `test/integration/fatal-diagnostic-surface.test.ts`.
+
+**🛑 THIS IS CORRECTION NUMBER ONE. A SECOND REWORDING DELETES IT.** Checked with
+`git log -S "fires precisely when"`: the phrase entered every carrier in one commit, `b7a77fe`
+(`#80`), and had not been reworded since. The sweep was run **newline-folded** over every tracked
+file, against eleven phrasings, because a line-based `grep` misses a claim that wraps.
+
+Carriers corrected here, enumerated rather than counted:
+
+- `README.md`, the `DicomParseError` section.
+- `docs-content/spec-notes-tolerance.md`, "A Tier-3 fatal's `message` is bounded the same way".
+- `docs-content/troubleshooting.md`, the "Keeping PHI out of logs" bullet. **A first draft of this
+  list omitted it while the same commit was correcting it**, which is how a relocated census goes
+  stale: the next worker re-runs the sweep from the list and misses a carrier.
+- `src/parser/fatals.ts`, the `FILE_META_GROUP_LENGTH_OVERRUNS` registry comment.
+- `src/parser/fatals.ts`, `fileMetaGroupLengthOverruns`'s JSDoc, which said **"raised exactly when"**
+  and would have been missed by a sweep for the README's wording alone.
+
+**Four other `fires precisely when` sentences were checked and LEFT, because they are true.**
+`renderTransferSyntax`, `tokens.ts`'s charset token, and two in `warnings.ts` all describe a code
+whose trigger genuinely IS a failed membership test. `sequence.ts`'s "a file whose length fields are
+by definition lying" was checked too and is sound for a different reason: that emit site fires only
+when two declared fields disagree, both fully present, so at least one is not describing the bytes.
+**Do not sweep the vocabulary and call the class closed.**
+
+### 4. 🛑 THE ARITY PIN DID NOT PIN WHAT IT CLAIMED
+
+`fatals.test.ts` and `fatal-diagnostic-surface.test.ts` both asserted
+`elementLengthExceedsBuffer.length === 2`, under a comment reading "a call site cannot pass what a
+signature does not accept". **`Function.prototype.length` stops counting at the first defaulted or
+rest parameter.** So `(frame, offset, remaining = 0)` - the exact slot the pin exists to refuse -
+reports `2`, and both pins would have stayed green while the slot came back.
+
+Replaced by `declaredParameters` in `test/helpers/declared-parameters.ts`, which reads the parameter
+list off the function's own source text and compares it **whole** rather than by count, so a third
+parameter is refused whatever it is named and whatever default it carries. It throws rather than
+returning an empty list on a source it cannot parse, because an empty list reads as "no parameters" -
+a clean result that is a gap.
+
+It lives in a helper rather than being copied into both suites because a copied detector goes stale
+on one side and reads clean there.
+
+### 5. Every clean result here is pinned beside a positive
+
+The lesson this lineage has paid three slices for is that **a detector zero can be a gap rather than
+a clearance**. Each clean assertion in this slice is stated with the positive that proves the
+detector works:
+
+| Clean result                                                          | The positive it is pinned beside                                                                          |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `declaredParameters` shows no third parameter on the two factories     | `controlWithDefault` (`length` reads 2, declared list has 3) and `controlWithRest` (1 against 2)           |
+| No digit run of the message equals the frame origin `202`              | A reconstructed message that appends `"The frame begins at 202."` IS caught by the same search             |
+| The factory pair travels: `offsetFrame` matches the snippet's source   | A hand-made mismatched `ParseFrame` DOES render, asserted, so the type is not mistaken for a proof         |
+| `leaksIn(err.message, payload)` is empty with the frame in the message | The whole existing detector, whose own non-vacuity control is `0a8c6e3`'s template, unchanged and still red |
+| The frame label is `"value-slice"` inside an Item                      | The same number read against the caller's buffer returns 16 different bytes, asserted `false` on equality  |
+| A root-level fatal still reports `"input"`                             | Its snippet equals the file cut at that offset, byte for byte                                              |
+| A Deflated fatal reports `"inflated-dataset"`                          | Its offset is IN RANGE of the compressed input and its snippet still does not match it                     |
+| `UNSUPPORTED_TRANSFER_SYNTAX`'s snippet is NOT a cut of its frame        | A truncated-file fatal's snippet IS byte-identical to the frame cut, in the same test                      |
+
+**The Deflated row is the one worth reading twice**, and it is NAMED rather than pointed at, because
+a first draft said "that last row" and a later row was appended under it. Measured: the offset is
+`26` and the compressed input is `224` bytes, so a bounds check on the offset would have read clean.
+**"It does not index the input" is a statement about meaning, not about range**, which is precisely
+why a label was needed and a range check is not a substitute.
+
+### 6. What is NOT closed, stated rather than implied
+
+- **`DicomParseWarning.position` carries no frame** beyond its `deflated` flag. Its JSDoc said byte
+  offsets "are relative to the source buffer for non-deflated transfer syntaxes", which is false
+  inside a defined-length Item; the claim is corrected on `DicomPosition` and the residual is
+  disclosed there. `PRE-EXISTING`, not fixed.
+- **`Element.byteOffset` carries none at all** and disagrees with itself: `0` inside a defined-length
+  item, file-absolute inside an undefined-length one. Unchanged.
+- **`DicomParseError.snippet` is still 16 raw source bytes** (D-10) and is still PHI. Naming the frame
+  made it more certainly the named element's content, not less. **Do not read "the offset is framed"
+  as "the error is safe to log".**
+- **The standing product call is untouched.** `report.removedPrivateTags`,
+  `report.unauditableSequences[].tag`, `uidMap`, `contextPath` and the two `byteLength` fields are
+  model fields, not messages, and a bound there empties them on every well-formed file. This slice did
+  not go near them.
+- **`ds.warnings` is still uncapped**, package-wide.
+- **`CHANGELOG.md` still carries the falsified universal**, in the released `#80` and `#93` entries.
+  It is **generated** from changeset summaries and is never hand-edited in this repo, and a released
+  entry is a record of what was claimed at the time. It is named here rather than silently left, so a
+  reader who greps the changelog and finds the sentence knows it is history and not current doctrine.
+- **`UNSUPPORTED_TRANSFER_SYNTAX`'s `snippet` is not a cut of the frame it names.** The slot carries
+  PS3.6's own name for the unsupported UID (`"RLE Lossless"`) when the registry publishes one, and
+  16 raw bytes only when it does not. That is `PRE-EXISTING`, deliberate, and unchanged. A first
+  draft of this slice wrote a universal on `DicomParseError`'s own JSDoc that was false because of
+  it, and a graded pass reproduced the counterexample. A second pass then found the same false
+  universal surviving in `at()`'s own JSDoc, which said **two** factories bypass it when three do.
+  **Never write a universal about `snippet` without this row.** Pinned in
+  `fatal-diagnostic-surface.test.ts`.
+- **`ParseFrame` closes the OMISSION mode only.** A deliberately mismatched
+  `{ buffer, name }` still type-checks and renders faithfully; a graded pass built one, and the
+  claim that a disagreement is "not expressible" is corrected in every artifact that carried it.
+  The real guard is that composing a frame is one assignment, so no site can half-update. **The
+  count of those sites is deleted rather than corrected** - see the note in section 2.
+- **The origin-withholding rationale is weaker than an impossibility, and is stated as weaker.** A
+  frame origin is a position, and this library publishes positions freely in the `"input"` frame;
+  recovering a specific declared length from one needs a second published number. A graded pass made
+  that point and could not turn it into a defect. The item asked for the frame to be NAMED, which is
+  what shipped.
+
+### 7. Blast radius a consumer sees
+
+- `Error.message` suffix changes from `(offset=N)` to `(offset=N frame=F)` on **every** Tier-3 fatal
+  and on every `{ strict: true }` escalation. A string match on that suffix stops matching. `err.code`
+  is unchanged, and which files throw is unchanged.
+- New public exports: `OFFSET_FRAMES` and `OffsetFrame`. New public readonly field:
+  `DicomParseError.offsetFrame`.
+- `DicomParseError`'s constructor gains a required fourth argument. It is `@internal` and no consumer
+  is expected to call it, but it is not private, so this is stated rather than assumed harmless.
+
+---
+
+<a id="dicom-lo-length-value-over-length"></a>
+
+## dicom - the over-long `(0012,0063)` Value nothing disclosed, on either route (2026-08-08)
+
+`DICOM-LO-LENGTH-AND-SILENT-REPLACE`, third and last open half. The first two closed in `#74`
+(`f8f2c0d`) and `#75` (`6d05366`, 3 passes, NOT REFUTED, 512/512 subsets, 2,816 cells, 0 over).
+Written here rather than in `documentation/agent-notes.md` because that file is **over** its
+250,000-byte budget on `main` and the hook refuses growth (an umbrella size rule, since retired). **Nothing dropped.** The
+precedent is `#97` and `#98`, which relocated the same way.
+
+**Provenance.** The spec claims are read from the SHA-pinned vendored copy under `vendor/nema/`,
+**PS3.5 2026c** (Table 6.2-1's `LO` row) and **PS3.15 2026c** (§E.1.1). Every figure below is a
+measurement taken in this repo and quoted with the sha it was taken at.
+
+**`CLAUDE.md` CARRIES NO NEW LINE FOR THIS, DELIBERATELY, AND THAT IS A BUDGET GAP RATHER THAN A
+JUDGEMENT THAT THE TRAP IS SMALL.** Its ratchet is 39,550 bytes and it measured 39,544 on `main`:
+six bytes, which is not a line. The remedy is relocation, never deleting a trap to make room and
+never raising a ceiling. Its existing `(0012,0063)` bullet already points at
+`agent-notes.md#dicom-lo-length-and-silent-replace`, which still holds halves one and two. The rules
+this half paid for live in the JSDoc on `hasValueOverLoMaximum` and
+`deidentMethodValueOverLength`, in `test/deident/deident-method-lo-length.test.ts` under "an
+over-long Value this run did not compose is written through, and SAYS SO", and in this file.
+
+### The defect
+
+`(0012,0063)` De-identification Method is `LO`, and PS3.5 2026c Table 6.2-1's `LO` row is "64 chars
+maximum". **That row describes a Value, and `(0012,0063)` is `1-n`**, so the bound falls on each
+value between `5CH` delimiters and never on the Value Field. Reading a per-Value clause as a
+per-Field one is exactly the misreading that left `#74`'s hole (there it was §6.4, a clause about
+where the ENCODER puts its pad, read as a bound on a COMPARISON). A field of 619 bytes made of ten
+Values of 61 is conformant; a field of 76 bytes made of one Value is not.
+
+`#75` made the text this library composes for itself multi-valued, and swept all 512 option subsets
+to prove no Value it writes can be over. **It left two Values the library does not compose written
+through with nothing said about their length:**
+
+1. a caller's `deidentificationMethod`, whose bytes are the caller's; and
+2. a value the **source file** already carried, kept because PS3.15 2026c §E.1.1 says a method is
+   "inserted in or **added to**" that attribute, so rewriting a prior de-identifier's record would
+   destroy the provenance the attribute exists to carry.
+
+Both were `PRE-EXISTING`, both had residual tests pinning the silence, and the item stayed open for
+one reason:
+
+> **🔴 THE LIBRARY IS THE LIKELIEST WRITER OF AN OVER-LONG PRIOR.** Every object de-identified
+> without a caller method by **any published release** carries the 76-character value, and
+> re-de-identifying one **KEEPS** it. **Retention is disclosed; the LENGTH is not.**
+
+Measured, on a `(0012,0063)` seeded with the 76-character text every release up to `0.0.11` wrote:
+flat **138** bytes over four passes, Values of **76** and **61**, `DICOM_DEIDENT_METHOD_PRIOR_RETAINED`
+raised on every pass for the retention and **nothing at all about the length**. So "a sender's
+non-conformant `LO` is the sender's" - the sentence a graded pass refuted in `#75` - does not reach
+the common case, because in the common case the sender is us.
+
+### The remedy, and what it deliberately is not
+
+A new Tier-2 code, `DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH`, raised when the `(0012,0063)` Value
+Field `deidentify()` is about to write carries at least one Value longer than 64 bytes.
+
+**🛑 IT IS A DISCLOSURE AND NOT A BOUND. NOTHING IS SHORTENED, SPLIT OR TRUNCATED BY IT.** Splitting
+or truncating either Value would invent a de-identification record nobody made, which is the same
+refusal `#75` wrote for the ceiling fallback ("this package reports rather than invents"). The act
+is byte-for-byte unchanged; only the silence is closed. A test asserts the caller's over-long value
+comes back out at its full length in the same row that asserts the code fires, so a future remedy
+that started truncating would turn it red.
+
+**The check is over the value WRITTEN, not over any one route.** One call site therefore covers the
+caller route, the retained-prior route and both replacement fallbacks (which write `added`). That is
+also why it fires on **every** pass rather than only the first: a code raised once would leave every
+re-de-identification of an object carrying the 76-character Value silent again, which is the exact
+shape this half exists to close. Pinned as four identical code arrays over four passes, not as one.
+
+**🛑 WIDENED BY UNION, NEVER BY REPLACEMENT, AND THE SUPERSET IS PROVED.** `#97` made a dispatch
+exclusive and introduced a worse leak than it closed; `#98`'s `INTRODUCED` major was an exemption
+that subtracted a detection on a blocking route. Nothing here is exclusive: no existing branch moved
+and the new code is only ever pushed **beside** the others. Proved two ways rather than argued:
+
+- a matrix over five input shapes strips the new code from `report.warnings` and asserts the
+  remaining codes equal the base's answers exactly - no prior, a conformant `LO` prior, an over-long
+  `LO` prior, a non-`LO` prior, and an over-long caller method beside a conformant prior. Nothing
+  goes `1 -> 0`.
+- a sweep of all **512** option subsets counts the new code raised **0** times on the text this
+  library composes for itself. The `#75` sweep proves no Value it writes is over; this one proves
+  the disclosure agrees with that measurement rather than firing beside it.
+
+### The cost, disclosed rather than argued away
+
+**The measurement is over BYTES.** No character repertoire encodes a character in fewer than one
+byte, so a Value of 64 bytes or fewer can never hold more than 64 characters: the check **cannot
+miss** a Value that is genuinely over the maximum.
+
+**🛑 THE CONVERSE FAILS WHENEVER A VALUE'S BYTES OUTNUMBER ITS COUNTED CHARACTERS, AND THE
+ENUMERATION OF WAYS THAT HAPPENS IS DELETED RATHER THAN WRITTEN A THIRD TIME.** Two graded passes
+refuted two drafts of it, and this repo's rule for that is deletion, not a third wording:
+
+- **Draft 1** put in the frozen registry message that 64 bytes is "the largest an `LO` Value may be
+  **under a single-byte repertoire**". Pass 1 refuted it from the vendored PS3.5 2026c, in the
+  paragraph immediately above Table 6.2-1: those lengths are "expressly specified in characters
+  rather than bytes ... because the mapping from a character to the number of bytes used for that
+  character's encoding may be dependent on the character set used. **Escape Sequences used for Code
+  Extension shall not be included in the count of characters.**" Table 6.2-1's `LO` Character
+  Repertoire cell admits ESC "when used for ISO/IEC 2022 escape sequences", and a multi-valued
+  `(0008,0005)` (Level 4, §6.1.2.5.4) makes that legal.
+- **Draft 2** said the converse fails "for two reasons", named the multi-byte repertoire and the
+  escape sequence, and added that the encoder's trailing pad could not do it "because both operands
+  reach the check trimmed" - true of the **field**, which is where `trimTrailingPad` runs at the
+  write, and false of a Value that is not last. Pass 2 refuted it with a prior field of
+  `"X"x64 + SPACE + "\" + "ACME"`, whose first Value is 65 bytes and raises the code. **That draft
+  used §6.4 - a clause about what an ENCODER writes - to bound what the MEASUREMENT can see**, which
+  is the misreading the item names as rule one of the three this lineage paid for.
+- **Draft 3** wrote pass 2's own counter-example up as a third over-report direction, calling that
+  65-byte Value "conformant". **Pass 3 refuted that too, and refuted pass 2's premise with it**,
+  from the paragraph three above the note both earlier drafts quoted: "An individual Value,
+  **including padding**, shall not exceed the Length of Value, **except in the case of the last
+  Value of a multi-valued field** as specified in §6.4." So padding counts toward the length, the
+  sole exception is the last Value, and a 65-character non-last Value is **not conformant**: the
+  code firing on it is a **true positive**, not an over-report. Pass 3 measured the boundary and
+  found the guard exactly on §6.2's line - `"X"x63 + SPACE` in a non-last Value raises nothing,
+  `"X"x64 + SPACE` raises.
+
+**🛑 SO THERE IS NO PADDING SENTENCE ANYWHERE, IN EITHER DIRECTION, AND THERE MUST NOT BE A FOURTH.**
+Three graded passes refuted three drafts. This paragraph is the history, which is what this file is
+for; every other artifact - the registry message, both JSDoc blocks, `types.ts`, `README.md`,
+`docs-content/troubleshooting.md`, the changeset and the test module docblock - carries only the
+general rule and says nothing about padding at all. The test row that measures the three padded
+cases is named for what it measures and claims nothing.
+
+What survives every counter-example is the general rule: the byte measurement over-reports whenever
+a Value's bytes outnumber its **counted** characters, which is §6.2's escape-sequence exclusion and
+its characters-not-bytes rule and nothing else. The two measurements that instantiate it stay,
+because they are measurements rather than an enumeration: 40 characters of `ISO_IR 192` is 120
+bytes, and `\ISO 2022 IR 100` with `ESC 2/13 4/1` plus 64 single-byte characters is 67 bytes carrying
+64 counted characters and parses with no warnings.
+
+The repertoire pins are files that **declare** the repertoire. A first draft built the multi-byte
+fixture without `(0008,0005)`, under which the default repertoire is ISO-IR 6 and "40 characters"
+would have been a claim the fixture could not support - green by fixture, which is this repo's
+recurring failure mode.
+
+**`position.byteOffset` locates the prior element, and is `0` when there was none.** This is the
+first method code that can be raised on a Data Set carrying no `(0012,0063)` at all - the other three
+cannot fire without a prior element - so on the caller route the offset is a sentinel rather than a
+location. There is nothing to point at: the over-long bytes are the caller's argument, not the
+file's. Stated rather than glossed, because that locator is the compensating control for withholding
+the value, the length, the count and the origin, and pinned on both routes so the `0` reads as an
+absence and not a constant.
+
+Decoding per `(0008,0005)` to count characters exactly was refused here: the charset of an attribute
+whose Values may predate this run is not something the function can establish, and a disclosure that
+under-reports is worth less than one that over-reports. **Read the code as "a Value in this
+attribute is over 64 bytes", which is what is measured, never as "the attribute is
+non-conformant".** That wording is in the registry message, in the JSDoc, in the README and in
+`docs-content/troubleshooting.md`.
+
+### The message carries no value, no length, no count and no origin
+
+A diagnostic about a length defect is itself a PHI surface, and **a raw length has no table to be a
+member of** - which is why `DICOM-DIAGNOSTIC-PHI-RESIDUALS` bound one out of six other messages. So:
+
+- **64 is in the message**; it is a constant of the VR, like the tag in
+  `DICOM_DEIDENT_METHOD_NOT_ADDED`.
+- **the offending Value's own length is not**; it is a measurement over document content.
+- **the count of how many Values are over is not**; same kind of number.
+- **the origin is not**; which Value came from the caller and which from the file is not decidable
+  when the two are equal, so naming one would be a claim rather than a report.
+
+The message no longer says "which is the largest an `LO` Value may be under a single-byte
+repertoire". It says the Value is longer than 64 bytes, cites §6.2's characters-not-bytes rule, and
+states the one direction that holds: 64 bytes or fewer can never carry more than 64 characters, a
+longer one is not necessarily over.
+
+Pinned with a **name-bearing payload and a non-vacuity assertion**, because `#55`'s pin here was
+vacuous by fixture: the over-long prior carries `SMITHSON^BRAIN`, the test asserts those bytes really
+do reach the output before it asserts anything about the message, and every four-character window of
+the name is checked against `warning.message` (four letters is a leak). The windows are taken over
+the NAME rather than the whole value, for the reason `#75`'s first draft went red: the registry prose
+is English and a four-character window of the surrounding words collides by coincidence.
+
+The detector's clean result is pinned **beside a positive it does catch, one byte away** - 64 clean,
+65 raised, `SMITHSON` in both - because a detector zero can be a gap rather than a clearance. And the
+per-Value reading has its own row: ten Values of 61 in a 619-byte field are clean, one Value of 65
+among nine conformant ones is caught. A detector that measured the Value Field would fail both. The
+512-subset sweep asserts the size of the domain it walked beside its zero, so a tenth option (1,024)
+or a removed one (256) cannot turn the clearance into a smaller sweep silently.
+
+### Base-red, re-run after every test change
+
+**12 of 125, in 2 files of 4, on `4bc6930`**, with `src/` **replaced** (`rm -rf src` then a file copy
+from a pristine snapshot, never `git checkout`):
+
+- `test/deident/deident-method-lo-length.test.ts` **11 of 34**
+- `test/property/warning-codes.snapshot.test.ts` **1 of 5** (the locked public-surface snapshot)
+- `test/deident/deident-method-add.test.ts` **0 of 29**, deliberately
+- `test/integration/phi-diagnostic-surface.test.ts` **0 of 57**, deliberately
+
+**This figure moved twice inside the slice, and the rule earned its fifth outing.** The first
+measurement read 9 of 122 with the last file quoted at 0 of 50; **a graded pass refuted the 50**,
+and the note's own total gave it away: 31 + 5 + 29 + 50 is 115, not 122. The file is byte-identical
+on both trees, so no reading of "which base" rescues it. It was then re-run again after the pass-1
+remedy added three rows to the first file. **Re-run it after every test you add, STRENGTHEN OR
+DELETE, and never carry one forward.**
+
+The two deliberate zeros pin behaviour this slice says it does not change, so a red in either would
+mean it changed something it claims it did not.
+
+**Two of the new rows are green on base and that is what they are for**, not an omission: the
+512-subset sweep counts the new code at 0 on both trees, and the superset matrix pins the base's
+answers so the new tree has something to be compared against. A row that is red on base is a change
+detector; these two are non-regression pins, and saying so is the honest reading.
+
+### Still open, and NOT folded in
+
+**`(0012,0063)` records the UNION of the options ever applied, never a per-run history**, so a later
+pass with fewer options leaves no trace an earlier one had more. `#75` introduced that when it split
+the record per option and de-duplicated per value; the base's one-value-per-run text did distinguish
+two such runs. It is **conservative** - the union over-states retention, never understates it - so it
+is not a leak, and it stays a backlog line rather than a rider here for three reasons:
+
+1. it changes what **every** run writes into every de-identified object, which is a product decision
+   about what E.1.1's provenance carrier holds, not a disclosure;
+2. a per-run history re-opens unbounded growth. Each pass would append its own record even when a
+   superset is already present, which is precisely the growth the fixed-point rule cost five graded
+   passes to close and which the 65,534-byte ceiling guard exists to stop; and
+3. entangling it with a length disclosure would make one base-red figure answer for two unrelated
+   properties.
+
+Its residual test is unchanged and still pins it.
+
+**Also open, `PRE-EXISTING`, raised by pass 1 and left as a backlog line:**
+`test/integration/phi-diagnostic-surface.test.ts` claims in its header to enumerate every
+consumer-controlled position on the diagnostic surface, and it has no slot for this code. The
+enumeration was already incomplete before this slice; widening it is a sweep across every code in
+`WARNING_MESSAGES`, not a rider on one of them. The code's own PHI properties are pinned in
+`test/deident/deident-method-lo-length.test.ts` under "the disclosure carries no value, no length,
+no count and no origin".
+
+---
+
+<a id="dicom-phi-scan-atx-heading"></a>
+
+## The override log refuses a `###` run an invisible character separates from the path
+
+> **⚠ DISCOVERABILITY, DISCLOSED RATHER THAN PAPERED OVER.** `CLAUDE.md` was **not** edited: derived
+> headroom is **39,544 - 39,544 = 0 bytes**, so the file cannot take one more byte. **That is
+> HEADROOM, not file size, and the shorthand has been misread twice.** Derive it, never restate it:
+> `git show origin/main:CLAUDE.md | wc -c` against `REPO_CLAUDE` in the meta-repo's
+> size hook (since retired, with the budget). The **"a few bytes" reading is stale in the only direction that
+> matters** - the ratchet was lowered on a shrink, and the answer today is zero.
+> `documentation/agent-notes.md` is **over its 250,000 ceiling** on `main`, so this record is here
+> instead (budgeted at `REPO_DOC_MAX`). **No trap deleted, no ceiling raised.** What points at it,
+> derived with `git grep -an dicom-phi-scan-atx-heading` on the commit that carries it rather than
+> asserted: `scripts/phi-scan.ts`, `scripts/measure-phi-scan-atx-heading.ts`,
+> `test/scripts/phi-scan-matchers.test.ts`, `test/scripts/commonmark-pin.test.ts`,
+> `vendor/commonmark/README.md` and `documentation/agent-notes.md#dicom-phi-scan-html-blocks`.
+> **No always-read file does.** A first draft of this line named two of them and was caught by a
+> gate: the ones it omitted were added by the same commit, which is exactly why the derivation has
+> to be re-run against the commit rather than written from memory.
+
+`DICOM-RESIDUALS`, `conformance-refuter` gate. `#118`, base `94069e8` (`#117`). Last verified
+2026-08-11.
+No pass count is written here: a draft carried one that had not happened yet when it was typed.
+
+Closes the residual `#117`'s first pass named and left open, **`D-R6`**: `tripleHashValue`
+separated the `###` run from the path with the whole of `\s`, where **CommonMark 0.31.2 section 4.2
+says the opening run "must be followed by spaces or tabs, or by the end of line"**. So a line whose
+separator was an invisible character was a **LIVE allow entry** where the document renders a
+**PARAGRAPH**, and `--allow-fixture` exempted that PHI scan target at exit 0.
+
+### The measurement that came first, because the row read UNMEASURED
+
+Three trees, each restored **by file copy**, each run twice over a target holding a synthetic
+`FAMILY^GIVEN`: once with `--allow-fixture` and once without.
+
+| separator                                         | `58c9f2e`            | `8139687`            | `94069e8`            |
+| ------------------------------------------------- | -------------------- | -------------------- | -------------------- |
+| a space, a tab                                    | exit 0               | exit 0               | exit 0               |
+| `NBSP`, `IDEOGRAPHIC SPACE`, `ZWNBSP`, `EM SPACE` | **exit 0, EXEMPTED** | **exit 0, EXEMPTED** | **exit 0, EXEMPTED** |
+| no entry at all (control)                         | exit 2               | exit 2               | exit 2               |
+
+Every one of those targets exits **1** on the same bytes without the flag, which is what makes exit
+0 an exemption rather than an empty run. `PRE-EXISTING` is therefore measured rather than inherited,
+and it reaches further back than the two trees the filed line named.
+
+### 🛑 ONE CONJUNCT, WHICH IS WHY A DIRECTION CAN BE STATED HERE AT ALL
+
+Everything else in this parser is parity, and this lineage has had a fail-safe-direction argument
+refuted three times. This one is different, and the difference is structural rather than argued:
+the change is **a single conjunct on the pattern the function replaced**, so for every line it
+returns either `/^###\s+(.+?)\s*$/`'s answer or `null`, never a third answer. No line that was not
+already an entry can become one, so every difference is a **REFUSAL at exit 2**.
+
+**🛑 THAT IS A PROPERTY OF THE SOURCE, AND NO TEST HERE PROVES IT.** A draft of this slice shipped a
+case that claimed to, and a gate showed the case was true by construction: it compared a test-local
+oracle against the pattern the oracle was built from and never loaded `phi-scan.ts` at all, so
+replacing the parser's return with a garbage string left it **green**. It is DELETED rather than
+reworded, and the sentence it was sold as evidence for is corrected wherever it was written.
+
+What stands behind the property instead, each re-derivable:
+
+- the **comment-stripped diff**, below, which is one added early return before the pattern's scan
+  and nothing else. That is what makes the reading structural rather than a hope;
+- **behaviourally**, the per-log relation the instrument prints against a base: the one log the two
+  trees differ on reads `a-subset-of-b`, and every other reads `equal`;
+- the two cases that go **red on base**, which say the conjunct fires at all.
+
+### 🔴 THE STRIP IS CONTESTED, AND TAKING IT WAS REFUSED BY THE GATE
+
+Section 4.2 also says the raw contents are "stripped of leading and trailing space or tabs". **The
+reference implementation of the pinned document version does not do that.**
+`commonmark@0.31.2`, `lib/inlines.js`, strips with `block._string_content.trim()`, which is
+`String.prototype.trim`, which is the whole of `\s` - what this parser does and what the pattern
+did. Re-measured directly rather than taken from the gate that raised it:
+
+| input                | `commonmark@0.31.2` renders | this parser names |
+| -------------------- | --------------------------- | ----------------- |
+| `###<NBSP>path`      | `<p>###<NBSP>path</p>`      | nothing           |
+| `### path<NBSP>`     | `<h3>path</h3>`             | `path`            |
+| `### <NBSP>path`     | `<h3>path</h3>`             | `path`            |
+| `### path` (control) | `<h3>path</h3>`             | `path`            |
+
+The separator row is why this slice exists and the parser now agrees with both the prose and the
+implementation. The other rows are a document arguing with itself, and **a gate whose job is to
+agree with a rendered page does not get to pick a side of that on prose alone.**
+
+**A DRAFT OF THIS SLICE TOOK THE PROSE, AND IT IS DELETED RATHER THAN REWORDED.** It made
+`### path<NBSP>` name `path<NBSP>`, which **exempted at exit 0 a target this parser refuses at exit
+2** - a new invisible route, introduced inside the remedy for an invisible route - under a headline
+saying an invisible character could no longer exempt a target. The gate measured it in the real `all`
+mode and refused the slice. What shipped is the separator alone, which is what `D-R6` names.
+`test/scripts/phi-scan-matchers.test.ts` pins the strip as it is, so the draft cannot return by
+accident.
+
+**Reproducing the implementation column needs a package this repository does not vendor** (no
+network in CI, and `vendor/commonmark/` is the document, not an implementation):
+`npm i commonmark@0.31.2` in a scratch directory, then render the four inputs above.
+
+### What else is not modelled, and each one is a CASE
+
+**🛑 THAT HEADING IS A CLAIM AND IT WAS FALSE WHEN IT WAS FIRST WRITTEN.** A gate mutated
+`isLineTerminatorCode` down to `LF` and `CR` - deleting the only thing between `### a<LS>b.dcm` and
+a live allow entry - and the **whole suite stayed green**, so the `LS`/`PS` line was a sentence
+dressed as a pin. It is a case now, and so is the container-block line, which had none either.
+
+- **Section 4.2's optional CLOSING sequence.** `### x ###` is a heading whose contents are `x`;
+  this parser names `x ###`. **And `### ###` names `###`**, where the contents are empty and the
+  heading names nothing - a second shape, found by the gate after the first was disclosed alone.
+- **INLINE parsing.** The contents are "parsed as inline content", so a backslash escape or an
+  emphasis run renders as something other than itself: `### a\_b.dcm` renders `a_b.dcm` and this
+  parser names `a\_b.dcm`; `### a*b*.dcm` renders `ab.dcm` and it names `a*b*.dcm`.
+- **No CONTAINER blocks.** `### <path>` is recognised at column 0 only, so a heading a reviewer sees
+  inside a block quote or a list item is a DROPPED entry.
+- the `###` run is anchored at **column 0**, where section 4.2 allows up to three spaces of
+  indentation. Pinned by ` ### indented` in the shared case list;
+- an **`LS` or `PS`** inside the heading text refuses the whole line, which is what is left of the
+  pattern's `(.+?)`. `splitCommonMarkLines` ends a line at neither, so they are the only two that
+  reach it, and the mutant above is now red on one case.
+
+The first three are the ones with a direction worth naming, and **all three are VISIBLE to whoever
+reviews the rendered log** - which is exactly what the separator was not. That is the line this
+slice cut along. Each is offered as a `DICOM-RESIDUALS` row rather than a sentence filed here alone.
+
+### The measurement instrument
+
+`scripts/measure-phi-scan-atx-heading.ts` (shipped, `pnpm measure:phi-scan-atx-heading`) reads the
+entry sets of one or two `phi-scan.ts` PATHS, so nothing here touches the working tree and a base is
+restored **by file copy, never `git checkout`**. Its corpus is **derived from `\s` over all 65,536
+code points**, not typed: an earlier draft of this class named six characters and a gate measured
+three more, so the list a reader would have checked is not written anywhere.
+
+**THE PER-LOG GRID IS NOT TRANSCRIBED HERE.** A hand-copied grid is the item's
+`AN INHERITED FIGURE IS NOT A RE-MEASUREMENT`, and one has already been caught in this lineage
+stating a row count the commit carrying it had moved. The instrument ships, so the grid is one
+command:
+
+```
+pnpm measure:phi-scan-atx-heading scripts/phi-scan.ts <a copy of base>
+```
+
+What is quoted is its SUMMARY, re-run against `94069e8` on the tree that carries this sentence:
+
+```
+logs where the two scripts differ: 1 of 7
+  invisible-separator: a-subset-of-b
+controls: scanner identity OK, entry-exempts OK, committed-log anchor OK, positive control OK
+```
+
+The `invisible-trailer` and `invisible-leader` rows reading **`equal`** are what says the contested
+strip did not move; they are in the corpus for that reason and not as decoration.
+
+**🩺 IT CARRIES ONE CONTROL THE SIBLING INSTRUMENTS DO NOT, AND IT IS THE ONE THIS ITEM KEEPS
+ASKING FOR.** The other three are the HTML-blocks instrument's, unchanged in kind: the
+scanner-identity negative control, the **committed-log anchor** (every script measured must read
+zero live entries in this repository's own log), and the **positive control** (the corpus must
+produce both an empty and a non-empty entry set, and a comparison at least one non-`equal`
+relation). The fourth is **THE EXEMPTION CONTROL**: an entry is measured everywhere else by whether
+`--allow-fixture` was ACCEPTED, which is one inference away from what matters, so one log is run
+twice over a target holding a synthetic `PN` and the pair must be **exit 0 with the flag against
+exit 1 without it**. A script that exited 0 on both would be finding no PHI at all and every
+acceptance it reported would mean nothing. All four **throw**; they do not report. A gate confirmed
+each one fires against a script built to trip it.
+
+### Tests: 2 red on base of 1,394, and the rest green on base BY DESIGN
+
+Full suite with base `94069e8`'s `scripts/phi-scan.ts` restored **by file copy** into this tree:
+**`2 failed | 1391 passed | 1 todo` across 76 files**, both in
+`test/scripts/phi-scan-matchers.test.ts`. **The red fraction is small because the change is small**,
+and the number is stated rather than padded: the refused draft read 6 of 1,393, and four of those
+six were cases going red for a behaviour that is no longer shipped.
+
+**The green-on-base cases are counted separately rather than folded in**, because a padded red
+fraction is this lineage's recurring claim defect:
+
+- the new `commonmark-pin` case reads the **vendored document** and says nothing about `phi-scan`'s
+  behaviour. A red one would mean the pin was wrong;
+- the **contested strip**, the **all-whitespace** heading, the **closing sequence**, **inline
+  parsing**, **container blocks** and the **`LS`/`PS` refusal** cases all pin behaviour this slice
+  deliberately did not change. Green on base is what they are for, and each is red under a mutant.
+
+**Mutants, re-measured on what shipped rather than carried from the draft:**
+
+| mutant                                                    | result                                                              |
+| --------------------------------------------------------- | ------------------------------------------------------------------- |
+| the section 4.2 conjunct removed                          | 2 cases red                                                         |
+| **the refused draft put back** (strip made section 4.2's) | **6 cases red**, including the strip pin and the all-whitespace pin |
+| `isLineTerminatorCode` narrowed to `LF` and `CR`          | 1 case red                                                          |
+| the all-whitespace narrowing DELETED                      | **whole suite green**                                               |
+
+**🔴 THE LAST ROW IS A GAP AND IS PRINTED AS ONE RATHER THAN LEFT OUT.** Under the shipped strip the
+guard is reachable only as the EMPTY string, which names no path either way, so nothing observes it.
+It becomes load-bearing only under the refused draft, where the second row shows the pin catching
+it. That is a rule no test can break today, stated rather than claimed. **The third row was the same
+shape until a gate measured it** - it read whole-suite green too, which is why the `LS`/`PS` case
+exists.
+
+### The scan route is untouched, checked with the transpiler rather than by eye
+
+Comment-stripped with `removeComments`, base and head differ by **one added conjunct inside
+`tripleHashValue` and nothing else**: **43,351 B on base, 43,497 B on head.** The base figure is the
+one `#117` recorded for its own head, which is a cross-check rather than an inherited number.
+
+### 🔴 Not closed, and named rather than claimed away
+
+- **The contested strip**, above. Not a defect to fix - a disagreement between the pinned document
+  and its reference implementation, and the slice that resolves it needs an oracle this repository
+  does not have.
+- **Section 4.2's optional closing sequence** (two shapes), **inline parsing** and **container
+  blocks**, above. All three offered to the meta-repo as new `DICOM-RESIDUALS` rows.
+- **Start condition 7** and **section 4.5's backtick-info-string opener** are untouched, both
+  `PRE-EXISTING`, both already `DICOM-RESIDUALS` lines.
+- Unchanged by this slice, in either direction: `hits` unbounded as an array; the relocation,
+  `position.contextPath` and `attributes[].tag`; a flood within one recognizer entry still burying a
+  later hit; the never-draining-reader wait and `run-script.ts`'s 1 MiB `maxBuffer`. **This slice
+  measures nothing about the heap and nothing about the corpus.**
+
+---
+
+<a id="dicom-phi-scan-config-parsers"></a>
+
+## The gate constructs no `RegExp` at all, and its override log is no longer fence-blind
+
+> **⚠ DISCOVERABILITY, DISCLOSED RATHER THAN PAPERED OVER.** `CLAUDE.md` was **not** edited: derived
+> headroom is **39,550 - 39,544 = 6 bytes**, which is not a line. **That is HEADROOM, not file size,
+> and the shorthand has been misread twice.** Derive it, never restate it:
+> `git show origin/main:CLAUDE.md | wc -c` against `REPO_CLAUDE` in the meta-repo's
+> size hook (since retired, with the budget). `documentation/agent-notes.md` is **257,209 B, over its 250,000
+> ceiling** on `main`, so this record is here instead (**budgeted at `REPO_DOC_MAX`, not unbudgeted**).
+> **No trap deleted, no ceiling raised.** What points at it, verified by `git grep` rather than
+> asserted: `scripts/phi-scan.ts`, `scripts/measure-phi-scan-regex-statics.ts` and
+> `documentation/agent-notes.md#dicom-phi-scan-regex-statics`. **No always-read file does.**
+>
+> 🩺 **The refuter's pass-1 major was this paragraph.** It named those three pointers when only the
+> third existed, called the destination unbudgeted when the hook gives it `REPO_DOC_MAX`, and the
+> same commit **deleted** `scripts/phi-scan.ts`'s only citation of this lineage's record without
+> replacing it. So the one compensating control for `CLAUDE.md`'s six bytes of headroom was a
+> sentence that was false by inspection, in the commit that wrote it. The citations are restored and
+> the claim is now checked by the command above.
+
+`DICOM-RESIDUALS`, `conformance-refuter` gate. Base `01d0983`. Last verified 2026-08-10.
+
+Closes the two residuals `#112` left open, and they turned out to be **one mechanism**, which the
+census showed rather than an argument:
+
+- _"The gate's own CONFIGURATION is still a `RegExp` subject"_, disclosed **by a measured figure
+  rather than a description**: every clean column read `input 3772`.
+- _"`PRE-EXISTING`: `loadOverrideLog` is FENCE-BLIND, so the committed `phi-scan-overrides.md`
+  template line parses as a live allow entry."_
+
+### The disclosed figure, verified before anything was built to it
+
+`scripts/phi-allow-list.txt` is **3,774 bytes** and **3,772 UTF-16 code units**. The two differ by
+exactly the one astral emoji in it, four bytes for two units. So `input 3772` is the allow-list
+**in code units**, and quoting the byte count would have been wrong by two.
+
+A runtime census over five invocation modes on `01d0983`, taken by wrapping `RegExp.prototype`'s
+`exec`/`test` and the four `Symbol` methods and recording every call with its stack:
+
+| route                      | regex operations                             | subject held at exit                       |
+| -------------------------- | -------------------------------------------- | ------------------------------------------ |
+| no arguments (all-mode)    | **3,773**, every one `loadAllowList`'s split | `input` 3,772, `lastMatch` `"\n"`          |
+| `--max-hit-lines 5 <path>` | 3,775                                        | `input` 3,772                              |
+| `--staged`                 | 3,774                                        | `input` 32, the git raw record             |
+| `--allow-fixture <path>`   | 597                                          | **`input` = `lastMatch` = `"### <path>"`** |
+| `--max-hit-lines banana`   | 2                                            | `input` 0                                  |
+
+### 🛑 The census is what made this ONE slice rather than two
+
+The last row is the finding. On the route that reads the override log, **the retained `RegExp`
+subject IS the fence-blind template line**, held verbatim in both `input` and `lastMatch`. The two
+residuals are not neighbours, they are the same eleven lines of code: `loadOverrideLog` held **two
+of the five** live regex sites, and its fence-blindness is a defect of the same line-oriented parse
+the regex was doing.
+
+Every one of the five sites was on the configuration route. There were none anywhere else, which is
+what `#112` had already achieved for the scan route.
+
+### The fix
+
+**The script now constructs no `RegExp`.** Five sites became forward scanners: `isAllDigits`,
+`splitLines`, `tripleHashValue`, `fenceRun` + `overrideLogPaths`, and `rawRecordMode`.
+
+**The carve-out sentence is DELETED rather than worded a fifth time.** `#112` was refused in passes
+1, 2 and 3 for a universal its own config parsers falsified, and its final remedy deleted the
+sentence. The way to stop wording a carve-out is to remove what it carved out, and the universal is
+now simply true. **A scrub was again available and again refused** (`#109`, `#111`, `#112`): a bound
+that holds only from where a cleanup is called is not a bound. There is nothing to clean up.
+
+### 🔴 One parser is DELIBERATELY narrower, in the fail-closed direction
+
+`overrideLogPaths` is **not** an equivalence, and this is the only intended behaviour change:
+
+1. **Fence-awareness**, the residual itself.
+2. **An all-whitespace heading no longer registers a lone space as a path.** Found while measuring
+   the pattern, not inherited: `\s+` is greedy and `(.+?)` needs one character, so `"###  "` makes
+   the engine hand one space back out of the run and capture it. `normalizePath(" ")` is then a
+   root-level entry for a file named with a single space.
+
+Both narrowings are fail-closed **as narrowings of `overrideLogPaths`**: a dropped entry makes
+`--allow-fixture` **refuse the run** (exit 2), so the target is not exempted. Exit 2 does not scan
+it either, and saying so was a third wording this record had to correct: the run stops and says
+nothing about the corpus, which is a refusal rather than a clearance.
+
+### 🛑 But `fenceRun` has no safe direction, and two passes were spent learning it
+
+**FENCE STATE IS PARITY.** Three drafts of `fenceRun`'s comment claimed a fail-safe direction and
+two gates refused it, the second with the measurement that kills the shape entirely. On
+`open / A / close-with-a-trailer / B / close / C`:
+
+| how the trailer is read           | dropped  | live    |
+| --------------------------------- | -------- | ------- |
+| as bare, so it closes             | `A`, `C` | **`B`** |
+| as an info string, so it does not | `A`, `B` | **`C`** |
+
+Getting one fence wrong does not merely drop or admit that block's headings, **it swaps every block
+boundary after it**, moving entries in both directions at once. So "narrower is safer" is false
+here, and the argument is **DELETED rather than worded a third time**. What replaces it is not a
+safety heuristic but a specification: CommonMark 0.31.2 §4.5.
+
+Two defects were found this way, each by a different pass, each measured on the head that carried
+it and each now a named test plus a mutant:
+
+1. **Pass 1:** `bare` used `isSpaceCode`, the whole of `\s`. §4.5 admits only spaces and tabs after
+   a closing run. A closing run trailed by an invisible `NBSP` or `IDEOGRAPHIC SPACE` **closed the
+   block**, and a heading written inside what a human sees as a code block became a live allow
+   entry, exempting the target at exit 0.
+2. **Pass 2:** after narrowing to space and tab, **the tab arm was unpinned** and dropping it passed
+   all 18 cases. Dropped, the same parity flip happens with a tab. The control in the other
+   direction had only ever used a space; it now uses both.
+
+### 🔴 Two corrections applied AFTER the fourth pass, and therefore UNGRADED
+
+The gate returned `NOT REFUTED` at the cap with two `minor` findings, and named both as backlog
+lines safe to ship around. They were applied anyway, because each is a **deletion of a false
+sentence** and a comment cannot change behaviour. **They carry no refuter verdict and that is stated
+rather than glossed:**
+
+1. `Fence.bare` claimed _"each arm has been wrong once and each is pinned by its own case."_ Both
+   halves false: `isSpaceCode` admits `0x20` and `0x09`, so no head ever shipped a wrong arm, and
+   dropping **either** arm reds the **same** single case. Replaced with that measurement.
+2. The exit-2 misstatement was corrected in the note and the changeset but **left standing in the
+   two code carriers**, which are what a maintainer reads first. Corrected to the wording the fourth
+   pass measured as true.
+
+**🔴 And one RED GATE that no refuter pass caught, because it is not a conformance question.** CI's
+`CodeQL` check refused the first push with **1 new high-severity alert in code changed by this PR**:
+`js/file-system-race` on `missingFromOverrideLog`'s `existsSync`-then-`writeFileSync`. A
+check-then-act race, in the helper written to prove the override log is parsed correctly. Closed by
+**deleting the check** and writing unconditionally, which is also what the helper wanted: every
+candidate is a throwaway file whose only job is to make the refusal be about the missing LOG ENTRY
+rather than about a missing file. Worth recording because `scripts/verify.sh dicom` was green
+throughout and **does not run CodeQL**: a locally green gate is not the whole gate.
+
+### 🔴 One known divergence from §4.5, PRE-EXISTING and disclosed rather than argued harmless
+
+§4.5 also says an info string after a **backtick** fence may not contain backticks. `fenceRun` opens
+on ` ```a\`b `anyway. Measured: on`open-with-that-info-string / X / close / Y / close`, this tree
+makes `Y`a live allow entry where CommonMark renders it inside a code block. **Base`01d0983`is
+fence-blind and makes both live**, so this tree is strictly the smaller surface and the divergence
+is`PRE-EXISTING` in outcome. It is a backlog line, not this slice's to close: narrowing the opener
+is a third selection change on a function that has already cost two passes.
+
+### 🛑 The inertness was RE-MEASURED, not inherited, and it holds twice over
+
+`#112` recorded the fence-blind entry as inert. Re-measured here, in a throwaway repository with a
+PHI-bearing file whose repo-relative path IS the placeholder:
+
+| route                                      | can a target normalize to `<path>`?                                                                  | outcome                               |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `all` (what CI runs)                       | **no**, the placeholder is a ROOT-LEVEL path and `SCAN_ROOTS` is `test`, `README.md`, `docs-content` | never a target                        |
+| `--staged` (what the pre-commit hook runs) | **no**; the file was staged, git listed it in `--raw`, and `SCAN_SCOPE` dropped it                   | never a target                        |
+| explicit paths                             | **yes**                                                                                              | **exit 0, target exempted, silently** |
+
+So the inertness is stronger than "no tracked path is named `<path>`": **neither gating route can
+produce such a target at all.** It was live only where a caller names the file itself. Pinned beside
+its controls: the same bytes with no flag exit **1**, and a path with no entry at all exits **2**.
+
+**This is NOT a stop-the-line finding.** It is closed here regardless, because an allow-list entry
+no human wrote is a silent exemption waiting for a path to match it.
+
+### Figures, all re-measured on the shipped artifact
+
+Base `01d0983` restored **by file copy**, never `git checkout`. Instrument extended and shipped as
+`scripts/measure-phi-scan-regex-statics.ts`.
+
+|                                                   | base                     | here                                           |
+| ------------------------------------------------- | ------------------------ | ---------------------------------------------- |
+| scan shapes leaving a `RegExp` subject            | **7 of 7**, `input 3772` | **0 of 7**                                     |
+| config routes leaving one                         | **5 of 6**               | **0 of 6**                                     |
+| config routes byte-identical to base, as required |                          | **5**                                          |
+| config routes DELIBERATELY different              |                          | **1**, and the instrument refuses if it is not |
+| routes disagreeing with either expectation        |                          | **0**                                          |
+
+| equivalence, whole output byte for byte             |                                                     |
+| --------------------------------------------------- | --------------------------------------------------- |
+| cells (real corpus + adversarial + 32 fuzz corpora) | **34**                                              |
+| **cells differing from base in any byte**           | **0**                                               |
+| cells that refused (exit 1)                         | 33                                                  |
+| hit lines compared                                  | **9,283**                                           |
+| **MUTATION CONTROL, same cells, one character**     | **17 cells differ**                                 |
+| detector positive control                           | fires, and **the instrument throws if it does not** |
+
+**🛑 THE ZERO IS PINNED BESIDE POSITIVE CONTROLS AT BOTH ENDS.** The detector must report a token a
+regex has just matched; the equivalence grid must report a one-character mutant; and the config
+comparison names the one route that MUST differ, refusing with `NO CHANGE, where one was intended`
+if the fence fix ever stops working. A control that cannot fail is not a control.
+
+### Tests: 12 new cases, 8 red on base, and why 4 are green by design
+
+**8 of 12 are red on `01d0983`.** The other **4 are GREEN ON BASE BY DESIGN**: they assert that
+removing the regexes moved nothing, so a red one would mean the slice changed behaviour it should
+not have. The figure that says they are not vacuous is the mutation grid, over the 18 cases in the
+two files:
+
+| mutant                                                             | cases red |
+| ------------------------------------------------------------------ | --------- |
+| `splitLines` splits on a lone `CR`                                 | 1         |
+| `isAllDigits` widened to `Number()`                                | 1         |
+| `tripleHashValue` drops the `LineTerminator` check                 | 1         |
+| `fenceRun` never sees a fence (base behaviour)                     | **6**     |
+| a closing fence need not be bare                                   | 2         |
+| fence indent allowance removed                                     | 1         |
+| tilde fences not recognized                                        | 1         |
+| all-whitespace narrowing reverted (base behaviour)                 | 1         |
+| `isSpaceCode` drops `NBSP`                                         | **5**     |
+| **`bare` computed over all of `\s` (the refuter's pass-1 defect)** | **1**     |
+| **`bare` drops its tab arm (the refuter's pass-2 defect)**         | **1**     |
+| **`rawRecordMode` accepts UPPERCASE hex**                          | **0**     |
+
+The override-log parser is driven as a **membership oracle**: `--allow-fixture` is repeatable and
+the refusal names every path it could not find an entry for, so one subprocess reports exactly which
+of a candidate set the parser produced. Both directions are asked separately.
+
+### 🔴 Not closed, and named rather than claimed away
+
+- **One shape is unreachable from outside the script and NO TEST CLAIMS IT.** `rawRecordMode`
+  cannot be shown an uppercase-hex sha or trailing bytes after the status, because git does not emit
+  either, and mutants widening both pass. **`splitLines`'s `CRLF` handling was named here as a
+  second such shape and that was WRONG** - the section below closes it. **A first draft of this
+  slice's JSDoc claimed an exhaustive differential for each. Both sentences were DELETED** rather
+  than reworded, on this repo's own rule that a disclosure naming a test must name one that exists.
+  What does pin `rawRecordMode` was measured instead: a mutant that never parses a record reds **14**
+  of `phi-scan.test.ts`'s 138 cases, and one returning the SOURCE mode reds **12**.
+- **The `#112` note's own two carriers of the closed disclosure were found by a `-a` phrase sweep
+  with newlines folded** and updated rather than left to read as current. The sweep's positive
+  control is `test/integration/fatal-diagnostic-surface.test.ts`, which plain `grep` prints nothing
+  for: **5 tracked files in this repo carry a literal NUL.** A first draft said 7, which is what
+  `grep -I` rejects; the other two are the empty `.gitkeep` files, and rejecting-for-no-match is not
+  the same measurement as carrying a NUL.
+- Unchanged by this slice, in either direction: `hits` unbounded as an array; the relocation,
+  `contextPath` and `attributes[].tag`; a flood within one recognizer entry still burying a later
+  hit; the never-draining-reader wait and `run-script.ts`'s 1 MiB `maxBuffer`; the exit code still
+  cannot see an unread tail. **This slice measures nothing about the heap.**
+
+### 🛑 The `CRLF` half WAS observable, and the disclosure saying it was not is DELETED
+
+> **This section is `#115`'s record and describes the call graph AS IT WAS.** `#116` moved
+> `overrideLogPaths` onto its own CommonMark splitter, so the caller named below is now
+> `splitCommonMarkLines` and `splitLines` is the allow list's alone. The finding stands; the
+> function names have moved. See `documentation/agent-notes.md#dicom-phi-scan-line-endings`.
+
+`#113` shipped `splitLines` with a 🔴 disclosure on it: the `CRLF` half was unobservable through
+either caller and claimed by no test, because `loadAllowList` trims and `tripleHashValue` trims.
+Those two premises are true. **The conclusion is FALSE, and false in exactly the way this file's own
+`isSpaceCode` paragraph warns about** - it reasoned from what a caller does to a line AFTERWARDS,
+which is the "bound that holds only from the call site" shape the slice was otherwise built to
+refuse.
+
+`overrideLogPaths` hands the RAW line to `fenceRun` BEFORE anything trims it, and `bare` there
+admits a space or a tab and nothing else (CommonMark 0.31.2 §4.5, the rule `#113`'s own two refuter
+passes were spent on). So on an override log written with `CRLF`, a `CR`-blind split leaves a `CR`
+after the closing run, the run is read as an info string rather than as a close, the block never
+ends, and every entry below it is dropped.
+
+**Measured on one log - a fenced template, two live entries below it - both `--allow-fixture`
+directions asked on each arm:**
+
+| arm                           | the two entries below the fence | the fenced template |
+| ----------------------------- | ------------------------------- | ------------------- |
+| shipped, `CRLF` log           | exit 0, both honoured           | exit 2, refused     |
+| `CR`-blind mutant, `CRLF` log | **exit 2, both dropped**        | exit 2, refused     |
+| shipped AND mutant, `LF` log  | exit 0, both honoured           | exit 2, refused     |
+
+The `LF` row is what makes this a fact about the line ending rather than about the fence rules
+`#113` already pinned, and the template column is the other direction, so a parser that made
+everything below an entry fails it too. The test runs both arms before asserting either, so a mutant
+reports both in one failure (`{ crlf: Set{2}, lf: Set{} }`) instead of stopping at the first.
+
+### 🛑 NO DIRECTION IS CLAIMED FOR THAT MUTANT, and the draft that claimed one was refuted BY MEASUREMENT
+
+A draft of the section above argued the `CR`-blind mutant was **fail-CLOSED** - a `CR` can only
+prevent a close and never cause one, `tripleHashValue` trims one off a heading, therefore the
+mutant's entry set is a strict SUBSET and its cost is a refused `--allow-fixture` rather than an
+exempted target. **That is the parity fallacy, it is the THIRD attempt at a fail-safe direction on
+`fenceRun` in this lineage, and the gate falsified it with an input.** On a log whose lines are all
+`CRLF` except one opening fence:
+
+| target                     | shipped              | `CR`-blind mutant    |
+| -------------------------- | -------------------- | -------------------- |
+| `--allow-fixture decoy`    | **exit 0, exempted** | exit 2, refused      |
+| `--allow-fixture smuggled` | exit 2, refused      | **exit 0, EXEMPTED** |
+
+The two entry sets are `{decoy}` and `{smuggled}` - **disjoint, not nested** - and the mutant
+exempts a target the shipped script refuses. A prevented close CAN invert later boundaries, which
+is what "fence state is PARITY" means and what the `fenceRun` section above already measured. **The
+argument is DELETED, not narrowed.** The branch is claimed by a test; nothing needs a direction.
+
+**Mutation figure, re-measured on this slice's own head rather than inherited** (a figure
+without its sha is not a fact, and the base moves): the `CR`-blind mutant (dropping the `i - 1`
+test) reds **1 of 1,369 cases across all 75 test files**, the 1 being the new case. The run is
+`1 failed | 1,367 passed | 1 todo`; the **`todo` is what makes those three numerals add up**, and
+the shipped tree reads `1,368 passed | 1 todo`. On base `fd0b92a`, the same mutant over the base
+suite reds **0 of 1,368**, so `#113`'s "passes the whole suite" is re-measured as **0 before, 1
+after** rather than restated.
+
+**This slice changes no behaviour.** Every changed line in `scripts/phi-scan.ts` is a comment line -
+checked with the TypeScript transpiler rather than by eye, `removeComments` output byte-identical on
+base and head - so the gate's exit codes, hits and totals are what `fd0b92a` produced.
+
+**🔴 THE CARRIER COUNT IS SCOPED TO THIS SUBMODULE, AND THE SCOPING IS THE POINT.** A draft said the
+false disclosure had "exactly four carriers"; the sweep that produced that numeral never left
+`/workspace/dicom`, so the numeral asserted an exhaustiveness it had not measured. **Four carriers
+inside this repository** are corrected: two in `scripts/phi-scan.ts` (the config-parser header list
+and the `splitLines` JSDoc), one in `test/scripts/phi-scan-matchers.test.ts`, and the bullet above.
+The sweep was `-a` and newline-folded, positive control
+`test/integration/fatal-diagnostic-surface.test.ts` - **read whole, 84,556 bytes carrying 4 NULs** -
+so the zero elsewhere is one the sweep could have broken. **TWO MORE CARRIERS ARE LIVE IN THE
+META-REPO AND ARE NOT THIS PR'S TO EDIT**, both now false by this slice's measurement:
+`operations/BACKLOG.md`'s `DICOM-RESIDUALS` line and
+`documentation/repos/dicom/phi-scan-value-excerpt.md`, each still reading _"`splitLines`'s CRLF half
+is claimed by no test (both callers `trim()`, so a `CR`-blind mutant passes the suite)"_. They are
+handed to the meta-repo, named rather than left to read as current.
+
+**Unchanged by this slice, in either direction:** `hits` unbounded as an array; the relocation,
+`contextPath` and `attributes[].tag`; a flood within one recognizer entry still burying a later hit;
+the never-draining-reader wait and `run-script.ts`'s 1 MiB `maxBuffer`; the `rawRecordMode` shapes
+git cannot emit. **It measures nothing about the heap and nothing about the corpus.**
+
+**🟢 AND ONE THE GATE RAISED THAT IS NOW CLOSED.** `splitLines` mirrored `/\r?\n/`, so a LONE `CR`
+was not a separator; CommonMark counts one as a line ending, which made `overrideLogPaths` diverge
+on a log carrying one, in the direction that admits an entry a human reading the rendered log does
+not see. It was filed here as a backlog line rather than absorbed (ADR 0016 rule 2), with the figure
+left un-retaken because grounding it needed a CommonMark oracle this repository did not vendor.
+**`#116` vendored one and closed it**: `documentation/agent-notes.md#dicom-phi-scan-line-endings`.
+
+---
+
+<a id="dicom-phi-scan-exit-flush"></a>
+
+## `phi-scan` ended `process.exit()`, so the tail of its report was dropped on a pipe
+
+_`DICOM-PHI-SCAN-EXIT-FLUSH`, 2026-08-09. Base **`21d42f5`**. Filed because `ci / verify (24,
+ubuntu-latest)` - a REQUIRED check - was red on `main` itself._
+
+Written here rather than in `documentation/agent-notes.md` because that file is **over** its
+250,000-byte budget on `main` and the hook refuses growth (an umbrella size rule, since retired). **Nothing dropped.**
+
+**`CLAUDE.md` carries no line for this.** Its ratchet is 39,550 bytes and it measures 39,544 on
+`main`: six bytes, which is not a line. Relocation is the remedy, never deleting an existing trap to
+make room and never raising the ceiling. So the rule lives where a worker touching this code reads
+it: the JSDoc on the last statement of `scripts/phi-scan.ts`, the case in
+`test/scripts/phi-scan.test.ts` under `"phi-scan: the report's TAIL survives a stderr pipe the reader
+is not draining"`, and this file.
+
+**Provenance.** Every figure below is a measurement taken on this repo against base **`21d42f5`**,
+quoted with that sha and no other. The base column is reproducible with
+`git show 21d42f5:scripts/phi-scan.ts > /tmp/base-phi-scan.ts`.
+
+### What was red, and what it was not
+
+| sha | slice | `verify (22)` | `verify (24)` |
+| --- | --- | --- | --- |
+| `b784c38` | `#103` | success | success |
+| `08ed3ee` | `#104` | success | **failure** |
+| `21d42f5` | `#105` | success | **failure** |
+
+Plus `#106`'s own PR head `e32e595`: `verify (22)` success, `verify (24)` **failure**. Against that,
+`#104`'s and `#105`'s PR heads were both **green** on `verify (24)`. Six observations, three red:
+**this is a roughly 50% flake, not a step change at a commit.** `#104` did not introduce it. It was
+the first slice to emit a 200-line report, and that is all it did.
+
+Every failure is one of the two `--max-hit-lines 0` cases and always the same shape:
+
+| run | test | got | expected |
+| --- | --- | --- | --- |
+| `08ed3ee` main | `caps by DEFAULT, with no flag` | 193 | 200 |
+| `21d42f5` main | `caps by DEFAULT, with no flag` | 193 | 200 |
+| `e32e595` (`#106` PR) | `` `--max-hit-lines 0` prints every one `` | 191 | 200 |
+
+### What rules out "the scanner found fewer hits on Node 24"
+
+**The scan is deterministic.** The fixture is 200 distinct PN-shaped tokens written by the test, the
+allow-list is copied from this repo, and `scanText`'s three passes are plain global regexes over the
+whole file. The same bytes produce the same 200 hits on every run and every Node version, so the hit
+COUNT cannot vary. What varied is what arrived.
+
+**"With no ordering or timing input" was in that sentence and is DELETED**: `CUTOFF_YEAR` is
+`new Date().getFullYear() - 120`, a wall-clock read, so the premise was false as written even though
+the conclusion holds - the 200 tokens carry no digits, so neither date pass can fire on them. A
+refuter caught it as the same shape as the syllogism it replaced.
+
+**🛑 AN EARLIER DRAFT ARGUED THIS FROM THE EXIT CODE INSTEAD - "exit 1 was correct, therefore all
+200 writes were issued" - AND A REFUTER FALSIFIED IT.** Exit 1 means `hits.length >= 1` and nothing
+more, so it is equally consistent with 193 hits having been found. The conclusion held; the argument
+did not. It is DELETED rather than reworded. Do not write it again.
+
+### The mechanism, established rather than assumed
+
+`scripts/phi-scan.ts` ended:
+
+```js
+const exitCode = run();
+process.exit(exitCode);
+```
+
+`process.exit()` tears the process down without waiting for stdio that libuv has accepted but not
+yet written. Under every caller that matters this script's stderr is a **pipe** - `spawnSync` in
+this repo's own suite, and the shell pipeline a CI job runs it in - and a pipe write that cannot
+complete immediately is queued and flushed on a later loop turn, which `process.exit()` never
+allows. `report()` returning is not the same as its bytes having left the process.
+
+**Control 1 - the mechanism in isolation.** 5,000 small stderr writes, reader deliberately stalled:
+
+| script tail | hit lines delivered | exit code |
+| --- | --- | --- |
+| `process.exit(1)` | **784** of 5,000, 3 of 3 runs | 1 |
+| `process.exitCode = 1` | **5,000** of 5,000, 3 of 3 runs | 1 |
+
+784 lines is ~64 KiB, which is a Linux pipe. **Node 22.23.1 and Node 24.19.0 gave the same 784 on
+the same box**, so the stdio semantics are NOT the version split - the split is scheduling, and Node
+24 is where this suite happens to lose the race.
+
+**Control 2 - the CI failure itself, reproduced.** Real `scripts/phi-scan.ts` at `21d42f5`, real
+200-hit fixture, real `spawnSync`, with two knobs turned to make the reader lose: `fs.pipe-user-pages-soft`
+exhausted by holding 1,400 open FIFOs, so newly created pipes get a single page instead of 64 KiB,
+plus 220 busy loops for CPU contention. Rootless, no `sudo`, no sysctl.
+
+| script tail | runs | truncated | hit-line counts seen |
+| --- | --- | --- | --- |
+| `process.exit(exitCode)` | 60 | **30** | 200 x30, 190 x17, 191 x6, 170 x2, 192 x1, 171 x1 |
+| `process.exitCode = run()` | 60 | **0** | 200 x60 |
+
+**That is the CI signature, on this box: the same ~50% rate, the same short-by-7-to-10 counts (191
+and 192 among them), exit 1 every time.** The coordinator's 150+ clean local runs were clean because
+an idle box drains the pipe faster than the child fills it; the defect needs a reader that does not.
+
+### What shipped
+
+```js
+const discardLateStdioError = (): void => {};
+process.stdout.on("error", discardLateStdioError);
+process.stderr.on("error", discardLateStdioError);
+
+process.exitCode = run();
+```
+
+Node returns from the main script and exits once the loop has drained.
+
+**The two listeners are not decoration, and they are here because pass 1 of the gate REFUTED the
+slice without them.** `process.exit()` hid every late stdio error; without it a write to a pipe
+whose reader has gone fails with `EPIPE` on a **later tick**, after `run()` has returned, so
+`run()`'s try/catch cannot see it and Node's default unhandled-`'error'` path exits **1** - the one
+code that means "PHI was found". Measured, reader closed (`| head -n 0`):
+
+| run | `21d42f5` | one statement, no listeners | shipped |
+| --- | --- | --- | --- |
+| clean corpus | 0 | **1** | 0 |
+| invocation error (`--max-hit-lines banana`) | 2 | **1** | 2 |
+
+`2 -> 1` turns "the scan did not complete, so it says nothing about the corpus" into a confident
+wrong answer, and it printed an uncaught-exception stack that the `run()` JSDoc forbids. Both codes
+hold again under `node` and under `tsx`, which is the invocation `pnpm phi-scan` uses.
+
+**The error is DISCARDED rather than reported, and that is base parity rather than a judgement that
+it does not matter.** `process.exit()` made every late stdio error unreachable, so the exit code was
+always exactly what `run()` returned; it stays exactly that. There is also nowhere to report it -
+the stream that failed is the one a diagnostic would go to.
+
+**🔴 THE COST, MEASURED AND NOT CLOSED HERE: with a reader that never drains at all, the script now
+WAITS instead of exiting**, where `process.exit()` ended it by dropping the report. An earlier draft
+of the JSDoc claimed this "does not change when the process ends"; that is FALSE and is deleted.
+It is INTRODUCED, on `node` and under `tsx` alike, which is the runner `pnpm phi-scan` uses.
+Blocking until the reader takes the bytes is what makes the report whole; a timeout here would
+re-introduce the defect this slice closed.
+
+**🛑 A SECOND DRAFT TRIED TO SOFTEN THAT RESIDUAL AND A REFUTER FALSIFIED THE SOFTENER TOO.** It
+read "every caller in this repo drains, and the shipped `pnpm phi-scan` path runs under `tsx`, which
+does not exit on a stalled reader on `21d42f5` either." Both halves were wrong: base exits under
+`tsx` in ~430 ms as well as under `node`, so the hang is this slice's; and the suite has had TWO
+`spawn` sites since this slice added one, and the one it added destroys its read ends rather than
+attaching a listener. **The clause is DELETED, not reworded a third time.** The residual stands
+unqualified, which is the honest form of it.
+
+**🛑 AND A NOTE ON HOW THAT ONE GOT IN, BECAUSE IT IS THE REUSABLE PART.** It was inherited from a
+refuter's own finding and written into the tree WITHOUT BEING RE-MEASURED. When it finally was, the
+first draw agreed with the false version and four repeats refuted it. A single draw against a
+process that races a timeout is not a measurement.
+
+### Why this could not be folded into `#106`
+
+`#106` had identified the same one-liner and **declined to apply it**, correctly: it changes the
+stdio contract of the very script that slice's 195-cell matrix was graded against. That makes the
+contract change its own slice, and it makes "what does it break" the question this slice owes an
+answer to.
+
+### The superset, checked rather than argued
+
+**It changes WHAT ARRIVES, never WHAT IS WRITTEN.** Base and fixed, same corpus, same argv,
+`spawnSync` with a normally-draining reader so neither side is truncated, comparing exit code +
+stdout bytes + stderr bytes:
+
+| case | exit | stderr bytes | identical |
+| --- | --- | --- | --- |
+| clean corpus, all mode | 0 | 0 | yes |
+| flood, DEFAULT cap | 1 | 2,007 | yes |
+| flood, `--max-hit-lines 0` | 1 | 16,745 | yes |
+| flood, `--max-hit-lines 1` | 1 | 455 | yes |
+| flood, `--max-hit-lines 3` | 1 | 617 | yes |
+| net-leak control: flood THEN named | 1 | 828 | yes |
+| non-monotone case: mixed, capped at 3 | 1 | 630 | yes |
+| non-monotone case: mixed, uncapped | 1 | 16,921 | yes |
+| hits fit under the cap | 1 | 385 | yes |
+| bad `--max-hit-lines` | 2 | 102 | yes |
+| missing flag argument | 2 | 53 | yes |
+| all mode, leak in `docs-content/` | 1 | 382 | yes |
+
+**12 of 12 byte-identical, over a DRAINING reader, and all three exit codes of the contract
+(0 / 1 / 2) are exercised.** The draining qualifier is load-bearing and was added because a refuter
+refused the sentence without it: a vanished reader is a different question and is answered by its
+own table under "What shipped". So:
+
+- **`#104`'s per-file print cap is untouched.** The default, `0`, `1` and `3` all emit the same bytes
+  as base, and the net-leak control still names both paths.
+- **`#105`'s finding that `report()` is NOT monotone in `hits` at the cap still holds, unchanged.**
+  Both cells of it are byte-identical to base. This slice does not make the printed set monotone and
+  does not claim to; it makes the printed set **arrive**.
+- **`#106`'s 195-cell matrix, graded against `21d42f5`, is not invalidated.** Every cell of it is an
+  exit code and a set of printed values, and both are byte-identical here. Checked concretely as
+  well as argued: `#106`'s tree at `e32e595` with this one statement applied runs **1,329 tests, 73
+  files, all green**, in a throwaway detached worktree. The branch itself was not touched.
+
+### The regression case, and why it is not the flaky one
+
+The two assertions that were failing are a ~50% flake in CI and never fire on an idle box, so they
+pin nothing. The new case stalls the reader instead of hoping the scheduler does: it reads one chunk
+from the child's stderr, pauses 500 ms, then resumes.
+
+| script tail | result |
+| --- | --- |
+| `21d42f5` | short, **3 of 3 runs**, total line absent |
+| shipped | 5,000 of 5,000, total line present |
+
+**No numeral is quoted for how short, deliberately.** How much of the report base delivers depends
+on the reader, and two honest measurements of it disagree: through this case in the suite it read
+171 of 5,000, and a refuter running the same shape standalone read 962-964 of 5,000. Both are the
+defect. Neither is a property of the scanner, so neither belongs in prose as one.
+
+The fixture is 25 x `floodText()` = 5,000 hits, ~400 KB of report, deliberately: a stalled reader can
+still receive one chunk plus one full pipe, about 128 KiB, and the 962-964 measurement is ~80 KB
+against that bound, so a smaller fixture lets a truncating scanner pass. **Do not shrink it.**
+
+The second case pins the cost of the remedy rather than the defect: with both read ends destroyed,
+a clean corpus must still exit 0 and an invocation error must still exit 2. It **fails** on the
+one-statement version and **passes** on `21d42f5`, which is what makes it a parity guard and not a
+new invention.
+
+### Residual, unchanged by this slice and NOT closed here
+
+**`test/helpers/run-script.ts` inherits `spawnSync`'s 1 MiB `maxBuffer`, which truncates at ~15,400
+lines - in BOTH exit modes.** It is a real latent hazard for any future case that scans a loud
+object, and it is a different defect: it is the PARENT dropping bytes it was handed, not the child
+failing to hand them over. It is not this one, and 200 lines is ~16 KB. Filed, not fixed.
+
+**The other `process.exit()` call sites in `scripts/` are untouched and unmeasured.** They are error
+paths that write a line or two before exiting, so the same hazard is available to them in principle
+and was not observed. This slice measured `phi-scan.ts` and changed `phi-scan.ts`.
+
+---
+
+<a id="dicom-phi-scan-html-blocks"></a>
+
+## The override log models CommonMark's HTML blocks, so a comment can no longer exempt a scan target
+
+> **⚠ DISCOVERABILITY, DISCLOSED RATHER THAN PAPERED OVER.** `CLAUDE.md` was **not** edited: derived
+> headroom is **39,550 - 39,544 = 6 bytes**, which is not a line. **That is HEADROOM, not file size,
+> and the shorthand has been misread twice.** Derive it, never restate it:
+> `git show origin/main:CLAUDE.md | wc -c` against `REPO_CLAUDE` in the meta-repo's
+> size hook (since retired, with the budget). `documentation/agent-notes.md` is **over its 250,000 ceiling** on
+> `main`, so this record is here instead (budgeted at `REPO_DOC_MAX`). **No trap deleted, no ceiling
+> raised.** What points at it, derived with `git grep -an dicom-phi-scan-html-blocks` rather than
+> asserted: `scripts/phi-scan.ts`, `scripts/measure-phi-scan-html-blocks.ts` and
+> `vendor/commonmark/README.md`. **No always-read file does.**
+
+`DICOM-RESIDUALS`, `conformance-refuter` gate. Base `8139687` (`#116`). Last verified 2026-08-10.
+
+Closes the `PRE-EXISTING` residual `#116` filed against itself and handed to the meta-repo as its
+own backlog line: **`overrideLogPaths` modelled fenced code blocks and nothing else, so a
+`### <path>` a human sees inside a section 4.6 HTML block was a LIVE allow entry and
+`--allow-fixture` exempted that target at exit 0.**
+
+### Why this residual, out of everything on the open list
+
+It is the only one left that **silently exempts a PHI scan target**, which is the direction this
+parser exists to refuse, and it is the sharper form of what `#116` closed. A fenced code block
+**shows** its contents to a reviewer; an HTML comment shows **nothing at all**. A log reading
+
+```
+<!--
+### somebody-elses-study.dcm
+-->
+```
+
+renders as an empty document and exempted that path. The rest of the open list is a dropped entry,
+a diagnostic field, a memory bound or a decision already taken.
+
+### What is modelled, and what is not
+
+CommonMark 0.31.2 section 4.6 defines seven kinds of HTML block by a start and an end condition.
+`htmlBlockStart` and `htmlBlockCloses` implement **kinds 1 to 6**, and `overrideLogPaths` treats an
+open block the way section 4.6 says a parser must: _"any HTML within an HTML block that might
+otherwise be recognised as a start condition will be ignored by the parser"_, and so is a fence, and
+so is a heading.
+
+**🔴 KIND 7 IS SCOPED OUT, WITH ITS COST MEASURED IN BOTH DIRECTIONS RATHER THAN ASSUMED.** Its
+start condition is a complete open or closing tag alone on a line, and section 4.6 adds that
+_"blocks of type 7 may not interrupt a paragraph"_. That is **paragraph state**, which this parser
+does not have and cannot acquire without modelling every other leaf block, and **approximating it is
+the parity trap below**: a guess that a line is not in a paragraph opens blocks CommonMark does not,
+which moves entries in both directions at once. So it is scoped, named on the function, and pinned
+by a test, arm by arm:
+
+| log                                             | CommonMark         | base `8139687` | here                 |
+| ----------------------------------------------- | ------------------ | -------------- | -------------------- |
+| `<span>` after a BLANK line                     | kind 7, no heading | live entry     | **live entry**       |
+| `<span>` after a PARAGRAPH line                 | no block, heading  | live entry     | live entry           |
+| `</pre>`, then a comment holding a fence opener | kind 7, no heading | **exit 2**     | **exit 0, EXEMPTED** |
+
+The second row is why the case asserts more than one arm: a test showing only the first would read
+as an accepted behaviour rather than as a measured gap.
+
+**🔴 THE THIRD ROW IS THIS SLICE WIDENING THE HOLE, AND IT WAS FOUND BY THE GATE RATHER THAN BY THE
+SLICE.** `</pre>` alone on a line is a complete closing tag, so CommonMark starts a kind-7 block
+there that runs to the end of the document; neither tree models that. But the comment opener beneath
+it is read here, and it swallows the fence delimiter that used to hide the heading, so **this tree
+exempts at exit 0 a target base refused at exit 2.** The CLASS was disclosed, the INSTANCE was not,
+and that gap is the same shape `#116` disclosed against itself. It is now a corpus row
+(`condition-seven-widened`) and a test arm.
+
+**🛑 AND IT FALSIFIES THE `DICOM-RESIDUALS` LINE THAT EXISTS, WHICH THIS SUBMODULE CANNOT EDIT.** That
+line reads that the class is `PRE-EXISTING` on the `LF` form and that `#116` widened its reach BY ONE
+INPUT, the lone `CR` form. This input is pure `LF` and moves base exit 2 to head exit 0, so both
+halves are now wrong. **The correction is OWED to the meta-repo and is named here rather than
+asserted as already made.**
+
+### 🛑 NO DIRECTION IS CLAIMED, AND THE DISJOINTNESS ROW IS WHY
+
+A block boundary is **PARITY**. This lineage has had a fail-safe-direction argument refuted three
+times (`#113` on the fence, `#115` on the entry sets, `#116` on the line ending), so the evidence
+here is an input rather than an argument. On a log with an **odd** number of fence delimiters inside
+a comment:
+
+````
+<!--
+```
+-->
+### alpha
+```
+### bravo
+````
+
+| target                  | head                 | base `8139687`       |
+| ----------------------- | -------------------- | -------------------- |
+| `--allow-fixture alpha` | **exit 0, exempted** | exit 2, refused      |
+| `--allow-fixture bravo` | exit 2, refused      | **exit 0, EXEMPTED** |
+
+The two entry sets are `{alpha}` and `{bravo}`: **disjoint, both non-empty**, each exempting at exit
+0 a target the other refuses at exit 2. Modelling HTML blocks is therefore not "narrower" and is not
+defended as safer. What decides it is the document.
+
+### The measurement
+
+`scripts/measure-phi-scan-html-blocks.ts` (shipped, `pnpm measure:phi-scan-html-blocks`) reads the
+entry sets of one or two `phi-scan.ts` PATHS, so nothing here touches the working tree and a base is
+restored **by file copy, never `git checkout`**.
+
+**🛑 THE PER-LOG GRID IS NOT TRANSCRIBED HERE, AND THAT IS THE REMEDY FOR A DEFECT A GATE CAUGHT IN
+THIS FILE.** A hand-copied grid stated eleven rows while the commit carrying it grew the corpus to
+twelve, and the row it omitted was the only one showing the leak direction. That is the item's
+`AN INHERITED FIGURE IS NOT A RE-MEASUREMENT`, inside the remedy for a different trap, which is the
+shape `#109` paid for. The instrument ships, so the grid is **one command** and cannot go stale:
+
+```
+pnpm measure:phi-scan-html-blocks scripts/phi-scan.ts <a copy of base>
+```
+
+What is quoted is its SUMMARY, re-run against `8139687` on the tree that carries this sentence:
+
+```
+logs where the two scripts differ: 7 of 12
+  comment: a-subset-of-b
+  comment-lone-cr: a-subset-of-b
+  div: a-subset-of-b
+  pre: a-subset-of-b
+  fence-in-comment: b-subset-of-a
+  parity: disjoint
+  condition-seven-widened: b-subset-of-a
+controls: scanner identity OK, committed-log anchor OK, positive control OK
+```
+
+Two rows carry the whole argument and are named rather than left to be read off: **`parity`** is
+`{alpha}` against `{bravo}`, and **`condition-seven-widened`** is `{widened}` against `{}`. The
+`committed` anchor reads `{}` on both.
+
+**🛑 THE `relate` HELPER DIFFERS FROM THE SIBLING LINE-ENDINGS INSTRUMENT BY ONE ORDERING, AND THE
+DIFFERENCE IS THE POINT.** An empty set shares nothing with anything **and** is a subset of
+everything, so `disjoint` and a subset label are both true of it. Reported as `disjoint`, the
+`fence-in-comment` row would have looked like parity evidence while resting on an empty side. The
+subset test runs first here, and the disjointness claim rests on the `parity` row, whose two sides
+are both non-empty.
+
+Three checks **throw** rather than report, unchanged in kind from the sibling instrument: the
+scanner-identity negative control (a bad `--max-hit-lines` must be refused with phi-scan's own
+message, which is what catches a same-named file from another package in a shared scratch area), the
+**committed-log anchor** (every script measured must read zero live entries in this repository's own
+log), and the **positive control** (the corpus must produce both an empty and a non-empty entry set,
+and a comparison must produce at least one non-`equal` relation).
+
+### The tag tables are read out of the pinned document, not typed
+
+Start conditions 1 and 6 close over tag names, and a table nobody checked against the spec is a
+table somebody typed. `test/helpers/commonmark-spec.ts` re-hashes `vendor/commonmark/spec/` on load,
+walks the headings to **derive** that HTML blocks are section 4.6, and reads both lists out of the
+section between anchors that are **required to occur exactly once in the section and once in the
+document**. Zero and two are both refusals, which is the meta-repo's rule about locating a spec
+section, and this repository has paid for the first-match shape before (`#80` cited PS3.5 section 7.5
+twice when the sentence is in 7.5.2).
+
+`test/scripts/phi-scan-matchers.test.ts` then drives **one `--allow-fixture` per derived name, from
+BOTH lists**, through the membership oracle in a single subprocess, so each committed table is
+checked **behaviourally** rather than by a text regex over the source. **NO COUNT OF EITHER LIST IS
+WRITTEN ANYWHERE**, here or in `phi-scan.ts`.
+
+**🛑 CONDITION 1's LIST WAS DRIVEN BY NOTHING IN THE FIRST DRAFT, AND THE GATE PROVED IT WITH A
+MUTANT: reducing that table to a single name left the WHOLE SUITE GREEN.** The claim above was
+written in the plural while half of it was verified by a second typed literal in a test, which is
+the "table somebody typed" this section names, one file over. The loop was extended rather than the
+sentence narrowed, because the unguarded direction is the leak direction: a name missing from the
+shipped table means that tag starts no block, so the heading under it is a live allow entry.
+
+**No exhaustiveness is claimed in the other direction.** An over-wide table is caught only for
+NAMED controls: `divx` and `paramx`, each a LISTED NAME FOLLOWED BY MORE tag-name characters, which
+is what pins the maximal-munch read (the listed name is the prefix, not the control), plus `source`,
+`canvas` and `video`, which are unrelated names a table grown by one entry would fail on. A method
+plus a named list, asserting no completeness.
+
+Both mutants the gate used are now red, re-measured on the remedy rather than argued:
+
+| mutant                                  | before the remedy     | after      |
+| --------------------------------------- | --------------------- | ---------- |
+| condition 1's table reduced to one name | **whole suite green** | 1 case red |
+| `source` added to condition 6's table   | both test files green | 1 case red |
+
+**The control for the other direction is `<divx` and `<paramx`**: a listed name followed by more
+tag-name characters. CommonMark starts no block on either, and they are not complete tags so
+condition 7 does not reach them, so the heading below each must stay live. That is what makes the
+maximal-munch read of the name safe to state: the five things section 4.6 allows after a listed name
+(space, tab, end of line, `>`, `/>`) are none of them tag-name characters, so a listed name that is
+a strict PREFIX of the run is never followed by one of them.
+
+### Tests: 8 red on base of 1,388, and 3 green on base BY DESIGN
+
+Full suite with base `8139687`'s `scripts/phi-scan.ts` restored **by file copy** into this tree:
+**`8 failed | 1379 passed | 1 todo` across 76 files.** All eight are this slice's new behavioural
+cases and all eight are in one file. **The figure was re-taken after the remedy rather than carried:
+it read 7 of 1,388 before the condition-7 case gained its widening arm**, which is red on base
+because base refuses the target this tree exempts.
+
+**The 3 green-on-base cases are counted separately rather than folded in**, because a padded red
+fraction is this lineage's recurring claim defect:
+
+- the two `commonmark-pin` cases read a **vendored document** and say nothing about `phi-scan`'s
+  behaviour. A red one would mean the pin was wrong;
+- the **committed-log anchor** is green on both trees, which is exactly what it is for: this
+  repository's own log carries no HTML and adding a block class must not have moved it.
+
+The condition-7 case's first two arms are green on base, and only its third is red. It is counted in
+the red fraction as one case, which is what the runner counts.
+
+Every behavioural case asks **both directions** in the same run, so a parser that dropped everything
+fails as surely as one that dropped nothing.
+
+### The scan route is untouched, checked with the transpiler rather than by eye
+
+Comment-stripped with `removeComments`, base and head differ by exactly the new block machinery and
+the `overrideLogPaths` wiring, and nothing else: **39,046 B on base, 43,351 B on head**. The base
+figure is the one `#116` recorded for its own head, which is a cross-check rather than an inherited
+number, and the detector produced a real diff rather than the empty-output false "identical" `#115`
+caught.
+
+### 🔴 Not closed, and named rather than claimed away
+
+- **Start condition 7**, above. It is a `DICOM-RESIDUALS` line, not a sentence filed here alone.
+- **`tripleHashValue` still refuses a heading whose text contains `LS` or `PS`** (`U+2028`,
+  `U+2029`), and **section 4.5's backtick-info-string opener** is untouched. Both `PRE-EXISTING`.
+- **🟢 `tripleHashValue` ADMITTED IN THE OTHER DIRECTION TOO, WHICH WAS UNNAMED UNTIL A GATE NAMED
+  IT, AND IT IS CLOSED NOW** (`D-R6`, `#118`). It separated the `###` run from the text with
+  `isSpaceCode`, the whole of `\s`, where section 4.2 allows only a space or a tab. So a heading
+  whose separator is whitespace that section 4.2 does not admit and that does not end the line
+  renders as a PARAGRAPH and was a **live allow entry on both trees**. **The enumeration that stood
+  here is DELETED rather than completed**: it named six such characters and a gate measured three
+  more, and this lineage's rule is that a list corrected once is cut, not extended. The predicate is
+  the whole of `\s`, which is complete and does not need an illustration. **Only the SEPARATOR is
+  closed.** The strip is a second class, it is contested between the pinned document and its
+  reference implementation, and a draft that changed it opened a new exit-0 exemption and was
+  refused. The record is `documentation/agent-notes.md#dicom-phi-scan-atx-heading`.
+- **This parser still models no CONTAINER blocks.** A `### <path>` is only ever recognised at column
+  0, so a heading inside a block quote or a list item is a dropped entry rather than an admitted
+  one, and nothing here changes that. It is stated because "models section 4.6" must not be read as
+  "agrees with a renderer".
+- Unchanged by this slice, in either direction: `hits` unbounded as an array; the relocation,
+  `position.contextPath` and `attributes[].tag`; a flood within one recognizer entry still burying a
+  later hit; the never-draining-reader wait and `run-script.ts`'s 1 MiB `maxBuffer`; the
+  `rawRecordMode` shapes git cannot emit. **This slice measures nothing about the heap and nothing
+  about the corpus**, and the false-positive count remains a property of the byte histogram rather
+  than a rate.
+
+---
+
+<a id="dicom-phi-scan-line-endings"></a>
+
+## The override log is parsed with CommonMark's line ending, and the spec is now a pinned precondition
+
+> **⚠ DISCOVERABILITY, DISCLOSED RATHER THAN PAPERED OVER.** `CLAUDE.md` was **not** edited: derived
+> headroom is **39,550 - 39,544 = 6 bytes**, which is not a line. **That is HEADROOM, not file size,
+> and the shorthand has been misread twice.** Derive it, never restate it:
+> `git show origin/main:CLAUDE.md | wc -c` against `REPO_CLAUDE` in the meta-repo's
+> size hook (since retired, with the budget). `documentation/agent-notes.md` is **257,209 B, over its 250,000
+> ceiling** on `main`, so this record is here instead (budgeted at `REPO_DOC_MAX`, 90,000).
+> **No trap deleted, no ceiling raised.** What points at it, derived with
+> `git grep -an dicom-phi-scan-line-endings` rather than asserted: `scripts/phi-scan.ts`,
+> `scripts/measure-phi-scan-line-endings.ts`, `vendor/commonmark/README.md` and
+> `documentation/agent-notes.md#dicom-phi-scan-config-parsers`. **No always-read file does.**
+>
+> 🩺 **The gate's pass-1 major was this paragraph, for the second slice running.** It named three
+> pointers when `scripts/phi-scan.ts` did not yet carry one, which is the verbatim `#113` pass-1
+> major recurring inside the paragraph that records it. The citation was added rather than the
+> sentence reworded, and the list is now derived by the command above.
+
+`DICOM-RESIDUALS`, `conformance-refuter` gate. Base `734736f` (`#115`). Last verified 2026-08-10.
+
+Closes the `PRE-EXISTING` residual `#115` filed against itself: **a lone `CR` in
+`phi-scan-overrides.md` hides a heading AND a fence opener from the line split, so a `### <path>` a
+human sees INSIDE a rendered code block becomes a LIVE allow entry at exit 0.** That is a silently
+exempted PHI scan target, which is the one direction this parser exists to refuse.
+
+### The mechanism, and why the fence opener is the dangerous half
+
+`overrideLogPaths` produces the set of paths `--allow-fixture` will exempt. A lone `CR` hides two
+different things from a `/\r?\n/` split:
+
+| what the `CR` hides | why                                                        | cost                           |
+| ------------------- | ---------------------------------------------------------- | ------------------------------ |
+| a `###` heading     | `tripleHashValue` anchors `###` at column 0                | a dropped entry, exit 2        |
+| a fence **OPENER**  | `fenceRun` reads the first non-space character of the line | **an exempted target, exit 0** |
+
+A hidden opener means the block never opens, so every `### <path>` a human sees inside that code
+block is live.
+
+### 🛑 The two readings are DISJOINT, so no direction is claimed and none is available
+
+Measured with `scripts/measure-phi-scan-line-endings.ts` (shipped), head against `734736f` restored
+**by file copy**:
+
+| log                | head (section 2.1) | base `734736f` (`/\r?\n/`) | relation            |
+| ------------------ | ------------------ | -------------------------- | ------------------- |
+| `committed`        | `{}`               | `{}`                       | equal (the anchor)  |
+| `hidden-opener`    | `{visible}`        | **`{smuggled}`**           | **disjoint**        |
+| `hidden-opener-lf` | `{visible}`        | `{visible}`                | equal (the control) |
+| `crlf-close`       | `{below-one}`      | `{below-one}`              | equal               |
+| `heading-shapes`   | 14 of 14           | 8 of 14                    | base is a SUBSET    |
+
+`smuggled` is a path base **exempts at exit 0** and head refuses at exit 2. `visible` is the
+reverse. One log reads **disjoint** and another reads **strict subset**, which is why "narrower is
+safer" is not available here and is not asserted: fence state is PARITY, so a wrong line ending
+moves entries in both directions at once. What decides it is the document, not a direction.
+
+The `hidden-opener-lf` row is what makes this a fact about the LINE ENDING rather than about the
+fence rules `#113` already pinned: the same document with every lone `CR` written `LF` reads equal.
+
+### The fix, and the one thing deliberately NOT changed
+
+`splitCommonMarkLines` implements CommonMark 0.31.2 section 2.1's line ending; `overrideLogPaths`
+calls it. **`loadAllowList` keeps `splitLines`, which stays `/\r?\n/` exactly.**
+
+That split is deliberate and is the reason this is not one function: **`scripts/phi-allow-list.txt`
+is not a markdown document, so CommonMark's line rule does not govern it.** That is the whole
+reason. The case that would go red if anyone unified them anyway is already in
+`test/scripts/phi-scan-matchers.test.ts`.
+
+**🛑 A SECOND REASON WAS DRAFTED AND IS DELETED, BECAUSE IT WAS THE PARITY FALLACY ONE FUNCTION
+OVER.** It argued that unifying would WIDEN the allow list, on the premise that a `CR`-joined line
+is a dead entry today. The gate falsified both halves with controls: `trimTrailingPad` strips only
+TRAILING pad, so an interior `CR` survives into the compared value, and a `CR`-joined line is a
+LIVE entry that exempts a hit at exit 0. The two readings' allow-entry sets are `{"ALFA\rBRAVO"}`
+and `{"ALFA", "BRAVO"}`, **disjoint rather than nested**, each exempting at exit 0 something the
+other reports at exit 1. So the allow list has no safe direction either, and the sentence claiming
+one is deleted rather than worded a second time. Behaviour there is `PRE-EXISTING` and identical on
+both trees; only the sentence was new.
+
+**🔴 THE COST, STATED RATHER THAN ARGUED AWAY:** `splitLines`'s `CRLF` half is unobservable through
+its only caller again, because `loadAllowList` trims. That is a fact about the caller and not a
+reason to drop the half, which would key the function to what today's caller does afterwards. The
+observable `CRLF` claim `#115` bought did not disappear, it moved to `splitCommonMarkLines` with the
+caller, through the same `--allow-fixture` oracle.
+
+### 🩺 The CommonMark spec is vendored, because the previous slice named the missing oracle
+
+`documentation/agent-notes.md#dicom-phi-scan-config-parsers` recorded this residual's figure as one it could not re-take,
+"because grounding it needs a CommonMark oracle this repository does not vendor". So one is
+vendored: `vendor/commonmark/spec/<sha256>/spec.txt`, the git-tagged 0.31.2 document, pinned exactly
+as `vendor/nema/` pins NEMA's DocBook.
+
+`test/scripts/commonmark-pin.test.ts` makes it a **precondition rather than a citation**:
+
+1. the document **hashes to its pin**, so a byte cannot be edited to make a citation true;
+2. the **version is read from its own front matter**, never from the URL it was fetched with. The
+   published copy at `spec.commonmark.org` is byte-identical **apart from having that front matter
+   stripped**, which is why the tagged one is vendored;
+3. every section number is **DERIVED by walking the headings**, not asserted. The walk must exclude
+   the spec's own example blocks, which contain markdown headings: counting those reads
+   `Fenced code blocks` as **section 14.1** instead of 4.5;
+4. each cited sentence occurs **EXACTLY ONCE** in the document and inside the section claimed for
+   it. Zero and two are both refusals, and the locator's own control asserts both:
+   `"a carriage return is not a line ending"` (absent) and `"interrupt a paragraph"` (in many
+   sections) each make it throw.
+
+Three numbers stop being asserted as a result: **2.1** Characters and lines, **4.5** Fenced code
+blocks (which `Fence.bare` already cited through two refuter passes) and **4.2** ATX headings.
+4.2 and 4.5 are load-bearing for the disjointness log specifically: a fence opener on the line after
+a paragraph line really does open a block, and a `###` on the line after one really is a heading, so
+the log is a claim about the rendered document rather than about our parser.
+
+**The spec is hard-wrapped, so every search folds whitespace first.** A line-based `grep` for any of
+these sentences finds nothing, which reads as absence. That is this lineage's own sweep trap, hit
+inside the file written to avoid it.
+
+### 🛑 The em-dash gate needed a second named vendor root, and that is a real widening
+
+`vendor/commonmark/spec/<sha256>/spec.txt` carries **five em dashes**, all in the document's prose
+(two of them inside quotations of John Gruber's original syntax description, so no single author is
+named for them). `VENDOR_PINNED_DOC` in `scripts/check-no-emdash.sh` becomes
+`^vendor/(nema|commonmark)/[^/]+/[0-9a-f]{64}/`.
+
+The case is byte for byte the NEMA one the script already argues: the rule's own remedy ("rewrite
+the sentence") cannot be applied to a document vendored VERBATIM, and editing one byte breaks the
+SHA-256 pin a test re-hashes as a precondition. **It is a second NAMED root, never a widening to
+`vendor/`**: a new vendor root still cannot inherit the exemption without being named, and a full
+SHA-256 still cannot be written as prose. Every hand-written file under `vendor/commonmark/` stays
+in scope (`README.md` and `spec/SHA.txt`), which is where this tree's only real violation was ever
+found. **Measured after the change: 5 pinned documents match, up from 4, and the gate reports
+`248 of 254 tracked files; 6 skipped`.**
+
+### Tests: 2 red on base of 1,377, and 6 green on base BY DESIGN
+
+Full suite with base `734736f`'s `scripts/phi-scan.ts` restored **by file copy** into this tree:
+**`2 failed | 1374 passed | 1 todo` across 76 files.** Both failures are this slice's new
+behavioural cases, and the second names exactly which entries base drops
+(`{cm-a2, cm-a3, cm-b2, cm-b3, cm-b4, cm-b6}`), predicted before it was run.
+
+**The 6 `commonmark-pin` cases are GREEN on base and that is not a defect**: they read a vendored
+document and say nothing about `phi-scan`'s behaviour. A red one would mean the pin was wrong. They
+are counted separately rather than folded into the red fraction, because an inherited or padded
+figure is this lineage's recurring claim defect.
+
+The new behavioural cases:
+
+- **the exempted target**, both directions asked and the `LF` control run beside it;
+- **the split itself, differentially against an INDEPENDENT reading of section 2.1** (`/\r\n|\n|\r/`,
+  the sentence's three alternatives as a pattern), over one fence-free log carrying a heading pair
+  per line-ending shape, answered in one subprocess by the membership oracle. **Its non-vacuity
+  control is the other split**: the shapes are chosen so `/\r?\n/` and section 2.1 disagree on
+  several, and the case asserts that they do, so it cannot pass against a `CR`-blind parser.
+
+### The instrument
+
+`scripts/measure-phi-scan-line-endings.ts`, `pnpm measure:phi-scan-line-endings`, takes one or two
+`phi-scan.ts` PATHS so nothing has to touch the working tree. Three checks **throw** rather than
+report: the scanner-identity negative control (a bad `--max-hit-lines` must be refused with
+phi-scan's own message), the **committed-log anchor** (every script must read zero live entries in
+this repository's own log), and the **positive control** (the corpus must produce both an empty and
+a non-empty entry set, and a comparison must produce at least one non-`equal` relation). A detector
+that cannot fire is not a detector.
+
+### 🛑 What is closed is the FENCED-BLOCK route, and section 4.6 is a hole in the ADMITTING direction
+
+**`overrideLogPaths` is now spec-grounded on section 2.1's line, but its block structure is a
+hand-rolled subset of section 4: fenced code blocks and nothing else.** Section 4.6's HTML blocks
+also suppress headings in a rendered document, and this parser does not model them, so a `### <path>`
+a human sees inside an HTML block is a LIVE allow entry. Re-measured here on both trees rather than
+inherited from the gate that raised it, `--allow-fixture commented` against a log carrying
+`intro / <!-- / ### commented / -->`:
+
+| log                     | head                 | base `734736f`       |
+| ----------------------- | -------------------- | -------------------- |
+| HTML comment, `LF`      | **exit 0, EXEMPTED** | **exit 0, EXEMPTED** |
+| HTML comment, lone `CR` | **exit 0, EXEMPTED** | exit 2, refused      |
+| `<div>` block, `LF`     | **exit 0, EXEMPTED** | **exit 0, EXEMPTED** |
+
+So the class is `PRE-EXISTING` and unchanged in the `LF` shapes, **and this slice moves one more
+input into it**: a lone `CR` inside an HTML block used to hide the whole construct from the parse
+and now does not. That is the parity property this record states everywhere else, landing on this
+slice rather than against it, and it is named here because `fenceRun`'s own rule is that a measured
+divergence gets written down rather than argued harmless. **It is a backlog line and not this
+slice's to close**: modelling section 4.6 means seven start conditions and their end conditions,
+which is a block-structure feature, not a fourth selection change on a function that has already
+cost this lineage two passes. **It is HANDED TO THE META-REPO as its own `DICOM-RESIDUALS` open
+line, now and not "later"**, beside the section 4.5 backtick-info-string entry that is its sibling.
+Filing it as a sentence in this record alone would be the shape this lineage refuses.
+
+**Read every claim in this record as scoped to fenced code blocks.** "No longer a live allow entry"
+means the fenced route, measured; it is not a statement that the parser now agrees with a renderer.
+
+### 🔴 Not closed, and named rather than claimed away
+
+- **`tripleHashValue` still refuses a heading whose text contains `LS` or `PS`** (`U+2028`,
+  `U+2029`). CommonMark makes neither a line ending, so a human sees the heading and this parser
+  does not produce it. That is a dropped entry (exit 2), it is `PRE-EXISTING`, and it is **not
+  re-measured here**: closing it is a fourth selection change on the heading recognizer and belongs
+  beside the open section 4.5 backtick-info-string line. The `isLineTerminatorCode` check stays
+  exactly as it is, because removing it would key the function to what today's caller hands it.
+- **Section 4.5's backtick-info-string opener** is untouched, as is `#113`'s record of it.
+- Unchanged by this slice, in either direction: `hits` unbounded as an array; the relocation,
+  `contextPath` and `attributes[].tag`; a flood within one recognizer entry still burying a later
+  hit; the never-draining-reader wait and `run-script.ts`'s 1 MiB `maxBuffer`; the `rawRecordMode`
+  shapes git cannot emit. **This slice measures nothing about the heap and nothing about the
+  corpus**, and the false-positive count remains a property of the byte histogram rather than a rate.
+- **The scan route is untouched, checked with the TypeScript transpiler rather than by eye.**
+  Comment-stripped, base and head differ by exactly the new `splitCommonMarkLines` and the one call
+  site in `overrideLogPaths`, and nothing else: **38,603 B on base, 39,046 B on head** (the base
+  figure is the one `#115` recorded, which is a cross-check rather than an inherited number). The
+  detector produced a real diff, so this is not the empty-output false "identical" `#115` caught.
+
+---
+
+<a id="dicom-phi-scan-name-dispatch"></a>
+
+## `scanTarget` dispatched by NAME, so a `.md` whose bytes were a DICOM object was never scanned as one
+
+_`DICOM-PHI-SCAN-RESIDUALS`, 2026-08-09. Base `08ed3ee`. The `PRE-EXISTING` half of that item; the
+sibling residual (`scanDicom` reports nothing about bytes it never read) is **not** closed here and is
+**not** part of this slice - see "Why this was one slice and not two" below._
+
+**Provenance.** The spec claims are read from the SHA-pinned vendored copy at `vendor/nema/part05/`,
+**PS3.5 2026c** (§7.1 tag ordering, §7.5.2 undefined-length Sequences). Every other figure is a
+measurement taken on this repo against base **`08ed3ee`**, quoted with that sha and no other. The
+base column is reproducible with `git show 08ed3ee:scripts/phi-scan.ts > /tmp/base-phi-scan.ts &&
+node /tmp/base-phi-scan.ts <path>` run with `cwd=<repo root>`, since the script resolves its
+allow-list from `process.cwd()`.
+
+### The defect
+
+`scanTarget` branched on the file's **extension** before it read a byte:
+
+```
+const TEXT_EXTENSIONS = new Set([".json", ".txt", ".md", ".csv"]);
+...
+if (TEXT_EXTENSIONS.has(ext)) { scanText(...); scanEmbeddedObjects(...); return; }
+```
+
+so `scanDicom` never ran on one of those four whatever its bytes were. The halt (`#102`), the
+preamble (`DICOM-SCANTARGET-PREAMBLELESS`) and now the **filename** are the same defect three times:
+each is a thing that does not decide what the bytes are, used to decide which sweep reads them.
+
+**The real path is not exotic.** A de-identification report, a bug repro, or a fixture saved under
+the wrong extension carries patient identifiers past the gate entirely.
+
+**What the extension cost, concretely:** the tag table is the only route that can see a
+**single-component** `(0010,0010)`. That shape has no caret, so the text sweep's PN pass has nothing
+to match, and losing `scanDicom` loses the name completely rather than losing a second opinion.
+
+### The measurement
+
+11 objects x 7 extensions = **77 cells**, one `node scripts/phi-scan.ts <path>` run each, recording
+the exit code and which planted value the run printed. Base `08ed3ee` against the shipped tree.
+
+Legend: `B` = a single-component name printed, `C` = a caret-bearing name printed, `D` = a recent
+`DA` printed, `t` = the hit named `(0010,0010)`.
+
+| object                                                        | `.md` `.txt` `.json` `.csv` base | ... shipped | `.dcm` `.bin` `.dat` (both) |
+| ------------------------------------------------------------- | -------------------------------- | ----------- | --------------------------- |
+| preamble-FUL, single-component PN                             | `0----`                          | **`1B--t`** | `1B--t`                     |
+| preamble-LESS, single-component PN                            | `0----`                          | **`1B--t`** | `1B--t`                     |
+| preamble-FUL, recent `DA`                                     | `1--D-`                          | `1--D-`     | `1--D-`                     |
+| preamble-FUL, caret PN behind an undefined-length `SQ`        | `1-C--`                          | `1-C--`     | `1-C--`                     |
+| preamble-FUL, Explicit VR BE dataset                          | `1-C--`                          | `1-C--`     | `1-C--`                     |
+| preamble-FUL, single-component PN then a halt then a caret PN | `1-C--`                          | **`1BC--`** | `1BC--`                     |
+| preamble-FUL, allow-listed PN + allow-listed `DA`             | `0----`                          | `0----`     | `0----`                     |
+| not a DICOM stream, caret PN in prose                         | `1-C--`                          | `1-C--`     | `1-C--`                     |
+| not a DICOM stream, allow-listed PN                           | `0----`                          | `0----`     | `0----`                     |
+| a base64 object inside a markdown page                        | `1-C--`                          | `1-C--`     | `1-C--`                     |
+| preamble-LESS, caret PN behind an undefined-length `SQ`       | `1-C--`                          | `1-C--`     | `1-C--`                     |
+
+**The superset, checked mechanically over all 77 cells rather than read off the table: 65 identical,
+12 strictly more reported, 0 violations.** No cell went exit 1 -> 0, no cell went to exit 2, and no
+cell lost a mark it had on base. The 12 are 8 cells that went **0 -> 1** (the leak) and 4 that gained
+a **second** name that the text sweep alone could not see.
+
+**🛑 THE `DA` ROW IS NOT A LEAK AND MUST NOT BE QUOTED AS ONE.** A `DA` value is eight digits, which
+the text sweep's compact-date pass matches as a standalone token, so it exited 1 under every
+extension on base too. Only the PN rows leaked. A first draft of this note said "the tag route's
+findings were lost"; the measurement says which ones.
+
+**The corpus is unmoved.** `node scripts/phi-scan.ts` with no arguments produces **byte-identical**
+stdout and stderr before and after, and still exits 0. It has to: `fileMetaStart` answers non-null
+only for a 132-byte preamble plus `DICM`, or for a first `uint16le` of `0x0002` with two ASCII
+uppercase letters at offset 4 - a leading NUL byte, which no file in this corpus has. **This is not a
+false-positive rate and there is none to quote here**; the rate is a property of a payload's byte
+histogram, and this package commits no `.dcm` files at all. See `documentation/agent-notes.md#dicom-scandicom-silent-halt`.
+
+### Why this cannot be `#97`'s net leak, and why the argument is structural
+
+**`#97` paid a blocker for the rule that an `if/else` dispatch can make a fix a NET LEAK**, because
+`scanDicom` gives up quietly at an undefined-length `SQ` (PS3.5 2026c §7.5.2 defines `0xFFFFFFFF` as
+one of two Sequence delimitations, both of which decoders shall support; §7.1 orders tags ascending,
+so `(0008,1110)` precedes `(0010,0010)` in a conformant file). Routing a file to `scanDicom`
+**instead of** the text sweep once took a name behind an `SQ` from exit 1 to exit 0.
+
+**The remedy here is a DELETION.** The removed branch's two calls were `scanText` and
+`scanEmbeddedObjects`. The branch that replaces it makes the **same two calls unconditionally** and
+adds one conditional `scanDicom`. `hits` is only ever appended to, so the **hit set, the totals and
+the exit code** are a strict superset on every input. The by-name branch's own justification - that a
+`.md` whose first bytes look like group `0002` must not lose `scanEmbeddedObjects` - was an argument
+against an exclusive **swap**, and there is no swap.
+
+Rows 4, 10 and 11 of the table are that claim under measurement rather than under assertion: each is
+a file whose only detectable name is behind a halt, and each is still exit 1.
+
+### Why this was one slice and not two
+
+The item names two `PRE-EXISTING` residuals. They were treated as **two slices**, and only the first
+is closed:
+
+- **Dispatch** (closed here) is a **deletion** whose superset is structural. It adds no output, no
+  new diagnostic field, and no new false-positive surface beyond `scanDicom` running on bytes that
+  are a DICOM object.
+- **`scanDicom` reporting nothing about bytes it never read** is an **addition**: a new diagnostic
+  surface, and `documentation/repos/dicom/diagnostic-phi-traps.md` opens on the rule that a
+  diagnostic about a PHI leak is itself a PHI surface. It has to decide what a halt disclosure says,
+  whether it moves the exit code, and what it costs on a corpus of conformant files carrying
+  undefined-length Sequences. Mixing an addition into a deletion-only remedy would forfeit the one
+  property that makes this one safe to reason about.
+
+They also fail differently. This one is about **which sweep reads the bytes**; the sibling is about
+**what the sweep says when it stops**. `#102` already mitigated the sibling by putting the text sweep
+behind every Part 10 object, so the two do not have to land together to close a leak.
+
+### What is still open
+
+- **`scanDicom` STILL REPORTS NOTHING ABOUT THE BYTES IT NEVER READ.** Unchanged, and the reason it
+  is unchanged is above. A value past the halt that is neither `FAMILY^GIVEN` nor an eight-digit date
+  run is still invisible - an MRN and an institution name among them.
+  **▶ CLOSED SINCE, as its own slice, in `documentation/agent-notes.md#dicom-phi-scan-unread-tail`. The REPORTING is what
+  closed: the walk is unchanged, so the sentence above about what is invisible still stands.**
+- **The `hits` array is still unbounded IN MEMORY** (`#104`'s residual). Untouched. This slice can
+  only add hits, so it moves that surface in the wrong direction on a corpus that has any; it is
+  disclosed rather than claimed away, and it is zero on this corpus.
+- **The recognizers are unchanged.** Widening the walk and widening the recognizer are two different
+  changes. Nothing here teaches the scanner an MRN, an accession number, an institution name, a phone
+  number, an email address, an SSN or a vendor UID root.
+
+### For the next worker
+
+- **The probe is 11 objects x 7 extensions and it is worth rebuilding rather than trusting this
+  table.** Every object was verified through `@cosyte/dicom`'s **own parser** before any zero it
+  produced was believed - `parseDicom` read each planted value back - because a generator is an
+  instrument and `#102` caught two of its own wrong.
+- **Reverting `scripts/phi-scan.ts` alone turns 11 tests red.**
+- **Do not use a text extension to disable the DICOM route in a test.** One pre-existing control did
+  (`"the payload is invisible to the text sweep"` wrote the bytes as `.txt` and expected exit 0), and
+  that method **is** the defect. It now disables the route by CONTENT - one byte in front of the
+  stream, so `fileMetaStart` answers `null` and every other byte, including the name, stays put - and
+  it pins the unshifted bytes under the same name as a hit, so the control cannot pass by asserting
+  the leak.
+
+---
+
+<a id="dicom-phi-scan-regex-statics"></a>
+
+## The scan route hands no target bytes to a `RegExp`
+
+> **⚠ DISCOVERABILITY, DISCLOSED RATHER THAN PAPERED OVER.** `CLAUDE.md` was **not** edited:
+> derived headroom is **39,550 - 39,544 = 6 bytes**, which is not a line. Derive it, never restate
+> it: `git show origin/main:CLAUDE.md | wc -c` against `REPO_CLAUDE` in the meta-repo's
+> size hook (since retired, with the budget). `documentation/agent-notes.md` is **257,209 B, over its 250,000
+> ceiling** on `main`, so this record is here instead. **No trap deleted, no ceiling raised.**
+> What points at it is `scripts/phi-scan.ts` and `scripts/measure-phi-scan-regex-statics.ts`, which
+> are unbudgeted and cite this slug. **No always-read file does.**
+
+`DICOM-RESIDUALS`, `conformance-refuter` gate. Last verified 2026-08-09.
+
+Closes the retention path `#110` disclosed and **left unmeasured**: *"V8's legacy `RegExp` statics
+retain one subject string, bounded by the largest single file rather than the corpus."*
+
+### Why this slice, out of the six that were open
+
+The five others were each ruled out on the record rather than on preference:
+
+- the **relocation** and **`position.contextPath`** are the `#81` mis-structure, where an
+  over-declaring item and an under-declaring sequence are byte-identical. Both sanctioned cut-backs
+  are refused standing;
+- **`attributes[].tag`** is table-bound and `contextPath` is inert, so neither carries a payload;
+- **`hits` as an array** has no remedy that is not a cap, and a cap makes the totals a claim about
+  what was **kept** rather than what was **found**;
+- **a flood burying a later hit within one entry** is a selection-policy change, the class that
+  refused `#97`, `#104` and `#105`. Its only available remedy, the date-pass split, `#111` weighed
+  and declined as growing the code to fit the claim. Re-taking it a slice later would be re-opening
+  a decision, not closing a residual.
+
+This one is the opposite shape, and for the same reason `#110` gave for taking its own slice first:
+**the printed output is byte-identical to base**, so the net-leak class is structurally absent, and
+the thing being closed is measurable. It was also the only open item nobody had put a number on.
+
+### It is a PHI question, not only a memory one
+
+V8 keeps the last successful match on the `RegExp` **constructor**: `RegExp.input` (`$_`) is the
+whole subject string, `RegExp.lastMatch` (`$&`) is the matched text **verbatim**, and
+`leftContext`, `rightContext`, `lastParen` and `$1` to `$9` sit beside them. These are ordinary
+readable properties of a global object.
+
+So the shape is worse than the retention framing `#110` used. `#109` bounded the hit line's excerpt
+to 194 characters and `#110` made that excerpt own its bytes, and all the while
+**`RegExp.lastMatch` held the same patient name UNEXCERPTED**, readable from anywhere in the
+process, with the whole page behind it in `RegExp.input`.
+
+### The fix, and why it is not a scrub
+
+**The scan route hands no target bytes to a `RegExp`.** Seven sites moved to forward scanners and
+character predicates: the three `scanText` recognizers, the tag route's pad trim, the
+transfer-syntax NUL trim, `checkDate`'s eight-digit test, and the two-letter VR test in
+`readElementExplicit` and `fileMetaStart`. The gate's own configuration was a different route and
+was untouched **by this slice**; the section below measures what it left, and a later slice removed
+it too (`documentation/agent-notes.md#dicom-phi-scan-config-parsers`), so **the script now constructs no `RegExp` at all.**
+
+**Overwriting the statics after the scan was available and is not what was done.** A scrub is a
+bound that holds only from where the cleanup is called, which this lineage has refused twice
+(`#109`, `#111`): remove the slot, do not filter the value. There is no cleanup here because there
+is nothing left to clean up.
+
+`base64Runs` had already replaced a regex with a forward scanner **in this same file**, for an
+unrelated reason (an 8 MiB run overflowed V8's backtrack stack). Same shape, same standard of
+evidence: each function is a different REPRESENTATION of the pattern it replaces, never a wider or
+narrower predicate.
+
+**`isSpaceCode` writes out the whole of `\s`** rather than the subset a latin1 decode can reach.
+Keying on what today's callers happen to decode would be a bound that holds only from the call
+site, and it would go wrong silently the first time a caller decoded something else.
+
+### Figures, all re-measured on the shipped artifact
+
+Base `7fbc8e9` restored **by file copy**, never `git checkout`. Instrument shipped as
+`scripts/measure-phi-scan-regex-statics.ts`.
+
+| shape | base | here |
+| --- | --- | --- |
+| hit-free control | clean | clean |
+| text PN, one small page | `input`, `lastMatch` | clean |
+| text PN, 4 MiB page | `input` (4,195,860), `lastMatch` | clean |
+| text ISO date, 4 MiB page | `input` (4,195,852), `lastMatch` | clean |
+| text compact date, 4 MiB page | `input` (4,195,850), `lastMatch` | clean |
+| tag PN + tag DA, Part 10 object | `input`, `lastMatch`, `rightContext` | clean |
+| loud 4 MiB page, then a clean one | `input` (4,195,860), `lastMatch` | clean |
+
+**6 of 7 shapes carried a token on base, 0 here.** The `rightContext` column on the Part 10 shape is
+a carrier the first draft of the detector did not look for, which is why it looks for all ten.
+
+**🛑 THE ZERO IS PINNED BESIDE A POSITIVE CONTROL.** The same observer over a child that does
+nothing but match the same token reports `input, lastMatch`, and the instrument **throws instead of
+reporting** if it does not. A detector that cannot fire is not a detector. Three further refusals
+run before any number is printed: each scanner must behave like this package's phi-scan (the
+wrong-package negative control), the hit-free control must scan clean, and every shape must produce
+the hit lines it claims.
+
+#### Equivalence, which is the other half
+
+| | |
+| --- | --- |
+| cells (real corpus + adversarial + 32 fuzz corpora) | **34** |
+| **cells differing from base in any byte** | **0** |
+| cells that refused (exit 1) | 33 |
+| hit lines compared | **9,283** |
+| **MUTATION CONTROL, same cells, one character changed** | **17 cells differ** |
+
+Whole output compared: stdout, stderr and exit code, byte for byte, no labelling and no class
+counting, so a single differing byte is a violation.
+
+### 🛑 The grid caught a defect in the remedy, and the defect is now the control
+
+The first draft of `pnRuns` floored the trailing backtrack at `second + 1`, which lets the second
+`[A-Za-z\-']+` hold nothing. On `ABC^D-` it matched `ABC^D`, where the pattern matches nothing at
+all: **a hit the gate would have printed that the pattern never found**, in a scanner written to
+change no hit. The adversarial cell reported it on the first run.
+
+That one character is now the grid's mutation control and a named test case, so the zero above is a
+clearance rather than a gap. **A generator is an instrument: it is verified before a zero it prints
+is believed, and it ships so the figures can be re-run.**
+
+### What the tests pin, and what they do not
+
+- `test/integration/phi-scan-regex-statics.test.ts`: no carrier after a scan, **beside a positive
+  control in the same file.** It is a subprocess because it has to be: the statics are overwritten
+  by the next successful match anywhere in the realm, so an in-process assertion reads clean whether
+  or not the scanner left anything behind.
+- `test/scripts/phi-scan-matchers.test.ts`: the **patterns themselves are the oracle**, held in the
+  test and run over the same bytes, across adversarial shapes and an 800-line seeded fuzz. The pad
+  trim is pinned over **all 256 values a latin1 decode can end with**, in one object.
+
+**🛑 5 of the 6 new test cases are GREEN ON BASE, BY DESIGN, AND THAT IS THE POINT.** They assert
+base's behaviour is preserved, so a red one would mean the slice moved a hit. The figure that says
+they are not vacuous is the mutation one: **3 of 6 go red on a one-character mutant** of `pnRuns`,
+and the pad case goes red on dropping `0xa0` from `isSpaceCode`. Only the retention pin is red on
+base, because only it asserts a property base did not have.
+
+### 🔴 Not closed, and named rather than claimed away
+
+- **✅ CLOSED by a later slice, and the figure below is the SUPERSEDED reading.** It is kept because
+  it is what this slice measured, not because it is current: **the clean columns above now read
+  `input 0`.** The gate's own CONFIGURATION was still a `RegExp` subject here, and the residual was
+  visible in the numbers rather than described: every clean column above reads `input 3772`, which
+  is the exact length in code units of `scripts/phi-allow-list.txt`. The remaining subjects were
+  `process.argv`, the allow-list, `phi-scan-overrides.md` and `git diff --cached --raw` output.
+  **Neither config file is inside `SCAN_ROOTS`** (`test`, `README.md`, `docs-content`), so the walk
+  and `--staged` never reach either as a target. Unchanged **by this slice**; closed in
+  `documentation/agent-notes.md#dicom-phi-scan-config-parsers`, which also re-measured the 3,772
+  and found it is **code units, not the 3,774 BYTES** the file is on disk.
+- `hits` is still unbounded as an array; the relocation, `contextPath` and `attributes[].tag` stand;
+  a flood within one recognizer entry still buries a later hit; the never-draining-reader wait and
+  `run-script.ts`'s 1 MiB `maxBuffer` are untouched by this slice in either direction.
+- This slice says nothing about heap retention. `#110` closed the excerpt's copy; **the subject
+  string is no longer held by a static, but nothing here measures the heap**, and inheriting
+  `#110`'s figures for a different mechanism would be exactly the trap `#109` pass 2 was refused for.
+
+---
+
+<a id="dicom-phi-scan-report-cap"></a>
+
+## dicom - `report()` printed one stderr line per hit, uncapped (2026-08-09)
+
+`DICOM-PHI-SCAN-RESIDUALS`, the slice the `DICOM-SCANDICOM-SILENT-HALT` write-up deferred to an item
+of its own. Written here rather than in `documentation/agent-notes.md` because that file is **over**
+its 250,000-byte budget on `main` and the hook refuses growth (an umbrella size rule, since retired). **Nothing dropped.**
+
+**`CLAUDE.md` CARRIES NO LINE FOR THIS, AND THAT IS A GAP RATHER THAN A JUDGEMENT THAT THE TRAP IS
+SMALL.** Its ratchet is 39,550 bytes and it measured 39,544 on `main`: six bytes, which is not a
+line. Relocation is the remedy, never deleting an existing trap to make room and never raising the
+ceiling. So the rule lives where a worker touching this code reads it: the JSDoc on
+`DEFAULT_HIT_LINES_PER_RECOGNIZER` (this file's `DEFAULT_HIT_LINES_PER_FILE`, renamed when the budget
+became per recognizer) and on `report`, the block in `test/scripts/phi-scan.test.ts` under
+`"phi-scan: the hit report is capped PER FILE, and the cap cannot move the verdict"`, and this file.
+
+**Provenance.** Every figure below is a measurement taken against base **`b784c38`**, quoted with
+that sha and no other. The base column is reproducible with
+`git show b784c38:scripts/phi-scan.ts > /tmp/base-phi-scan.ts && node /tmp/base-phi-scan.ts <path>`
+run with `cwd=<repo root>`, since the script resolves its allow-list from `process.cwd()`.
+
+### The defect, re-measured before it was built to
+
+`report()` grouped hits by path and wrote one stderr line per hit with no bound. `#102` widened what
+reaches it: the text sweep now runs over **every** Part 10 object's bytes, and its recognizers fire
+on image noise at a rate that is a property of the payload's **byte histogram**.
+
+**THE FILED FIGURE IS CONFIRMED IN MAGNITUDE AND IS NOT A CONSTANT.** The item carried
+**71,122 hits per 8 MiB**. Re-measured on `b784c38` with a fresh generator and a different seed, the
+same histogram produced **71,447**. Both are single draws over a random payload, so they are the same
+finding and neither is a rate. **Do not quote either as a fact about the scanner.**
+
+| 8 MiB `(7FE0,0010) OW` payload | base `b784c38` exit | hits | stderr lines | stderr bytes |
+|---|---|---|---|---|
+| uniform `0x41-0x60` (letters, the caret `0x5E` is inside the band) | 1 | 71,447 | 71,449 | 6,037,715 |
+| uniform `0x30-0x3F` (4-bit-quantised region) | 1 | 849 | 851 | 80,872 |
+| uniform `0x00-0x2F` (dark frame) | 0 | 0 | 0 | 0 |
+
+**THE DARK FRAME IS THE NEGATIVE CONTROL AND IT IS LOAD-BEARING.** A run that emitted nothing on it
+is what says the two loud rows are the payload's doing and not the harness's.
+
+**🩺 THE GENERATOR IS AN INSTRUMENT AND WAS VERIFIED BEFORE ANY ZERO WAS BELIEVED.** `#102` caught two
+of its own generators wrong (an LCG whose product exceeds 2^53 loses its low bits to float precision
+and degenerates into structured bytes) and nearly shipped their zeros as findings. This one is
+`Math.imul`-based xorshift32, and it **prints the realised histogram of every payload it writes**
+before writing it: for the letters row, 32 distinct byte values spanning `0x41` to `0x60`, per-value
+counts between 260,664 and 263,051, and 262,208 occurrences of the caret. A zero from a generator
+that has not printed its own histogram is not evidence here.
+
+### What shipped
+
+A **print cap**, per file, defaulting to the constant, with `--max-hit-lines <n>` to
+change it and `--max-hit-lines 0` to print every line. Same three payloads, same shas:
+
+| payload | base lines | capped-default lines | `--max-hit-lines 0` lines |
+|---|---|---|---|
+| uniform `0x41-0x60` | 71,449 | 23 | 71,449 |
+| uniform `0x30-0x3F` | 851 | 23 | 851 |
+| dark frame | 0 | 0 | 0 |
+
+**THE SUPERSET IS PROVED IN THE STRONGEST FORM AVAILABLE: `--max-hit-lines 0` REPRODUCES BASE'S
+STDERR BYTE FOR BYTE** on all three payloads (`cmp` identical), and so does the **default** run on
+the committed corpus and on any file whose hits fit under the cap. Nothing was removed from the
+report. One thing was defaulted off, and it is one flag away.
+
+### Why a cap is not a net leak here, which is the only question that matters
+
+**A CAPPED REPORT THAT DROPS THE LINE NAMING REAL PHI IS A NET LEAK EVEN THOUGH NOTHING BROKE.** That
+is the shape `#97` paid a blocker for, arriving in the output layer instead of the dispatch layer.
+Three properties stop it, each pinned by a test:
+
+1. **It is a PRINT cap and nothing else.** `main` derives the exit code from `hits.length` and the
+   summary reports `hits.length`; neither is capped. A withheld line **cannot** turn exit 1 into
+   exit 0 or shrink the number a reader sees. Pinned at `--max-hit-lines 1` over a 200-hit file:
+   one line printed, exit **1**, and `OK - no hits` absent.
+2. **It is PER FILE, never global.** A global cap is the net-leak shape: one flooding file consumes
+   the budget and every later file's hits, including one naming an actual patient, go unprinted with
+   the flooding file's path the only one on screen. Pinned by scanning a 200-hit flood **first** and
+   a name-bearing file second, in paths mode so the order is the test's: both paths are named and
+   the name is printed.
+3. **The withholding is stated exactly.** The per-file line carries the exact remainder and the flag
+   that prints it; the summary repeats the total withheld. Both are derived, never written down.
+
+**AND THE COST IS STATED RATHER THAN CLAIMED AWAY: A WITHHELD LINE IS WITHHELD.** A hit naming a
+person, sitting behind more hits than the cap in the same file, is **not printed by default**. The
+run still refuses, the count still includes it, the file is still named, and `--max-hit-lines 0`
+prints it. A test asserts exactly that, in both directions, rather than asserting nothing is lost.
+
+**🛑 WHICH LINES SURVIVE IS SCAN ORDER, NOT FILE ORDER, AND THE OBVIOUS READING IS WRONG.** Measured:
+with the person name at the start of an appended block and the DOB after it, the capped report prints
+the **DOB** and not the name. "The first n hits" is not "the first n in the file".
+
+**🛑 AN EARLIER DRAFT ENUMERATED THAT ORDER AND ARGUED FROM IT THAT PER-RECOGNIZER CAP SLOTS "BUY
+COMPLEXITY AND NO SAFETY". A REFUTER FALSIFIED BOTH HALVES**: the enumeration omitted
+`scanEmbeddedObjects`, which `scanTarget` runs after both of the routes it named, so the doc corpus's
+embedded objects rank last and are withheld first; and the `0x30-0x3F` row above is a case where the
+noise and the name are not the same class. **Both are DELETED rather than reworded**, per this repo's
+standing rule. **Do not write either of them again**: the order is not enumerated here, and no claim
+is made about what reserving slots would or would not buy.
+
+### The false-positive spread, which is the reason none of this narrows the detector
+
+**⚖️ THE RATE IS NOT ONE NUMBER: 0 to tens of thousands of hits per 8 MiB on payloads differing only
+in which bytes they use.** The spread and its full table belong to
+`documentation/agent-notes.md#dicom-scandicom-silent-halt`; it is named here only because a cap is exactly the place somebody
+would be tempted to answer it by narrowing a recognizer instead. **Do not.** The trade is not
+symmetric: a false positive costs a developer one look at a hit line, and the silent halt it replaced
+printed `OK - no hits` over a patient name.
+
+**IT IS ZERO ON THE CORPUS THIS GATE ACTUALLY READS, BECAUSE THE PACKAGE COMMITS NO `.dcm` FILES AT
+ALL.** `pnpm phi-scan` exits 0 on base and exits 0 here, with byte-identical output. **So a green
+local run says nothing about this fix, and the fix was not narrowed on the strength of one.**
+**🛑 If imaging fixtures are ever committed here, that spread is the first thing to look at.**
+
+### Residuals, disclosed and NOT closed
+
+- **THE `hits` ARRAY IS STILL UNBOUNDED IN MEMORY.** This slice caps what is **printed**, not what is
+  **accumulated**: one `Hit` object, holding the matched value as a string, is retained per hit for
+  the life of the run. That is a deliberate boundary, not an oversight. The exit code and the totals
+  are computed from that array, so capping it would make the count a claim about what was kept rather
+  than about the corpus, which is the failure this whole script is written against. A bound with
+  honest totals is a different change.
+- **A TEXT EXTENSION IS STILL DISPATCHED BY NAME**, so a `.md` whose raw bytes are a DICOM object is
+  never scanned as one. `PRE-EXISTING`, unchanged, its own slice.
+- **`scanDicom` STILL REPORTS NOTHING ABOUT BYTES IT NEVER READ.** `PRE-EXISTING`, unchanged, its own
+  slice.
+- **THE NUMBER OF FILE HEADERS IS UNCAPPED**, on purpose. Capping the set of paths named is the
+  net-leak shape in property 2, so the report grows with the number of hit-bearing FILES and not with
+  the number of hits. That is the direction to keep if this is ever revisited.
+- **THE BUDGET IS SPENT PER RECOGNIZER PER FILE NOW, NOT PER FILE**, so the figures above are a
+  measurement of the per-file budget this slice shipped and are not re-derivable from the current
+  tree. The rows headed `capped-default lines` are single-recognizer payloads, where the two policies
+  agree; a mixed payload prints more here than the number in that column. Nothing above is retracted.
+  `documentation/agent-notes.md#dicom-phi-scan-report-monotonicity` carries the change, the superset grid and its cost.
+- **THE DEFAULT'S VALUE IS WRITTEN IN EXACTLY ONE PLACE**, the constant. No test and no prose here
+  quotes it: the suite pins that a default run prints strictly fewer lines than an uncapped one over
+  the same corpus while reporting the same total, which fails **closed** if the default is ever
+  raised past the fixture's hit count.
+
+---
+
+<a id="dicom-phi-scan-report-monotonicity"></a>
+
+## dicom - the PHI gate's print budget is spent PER RECOGNIZER (2026-08-09)
+
+`DICOM-RESIDUALS`, the slice `documentation/agent-notes.md#dicom-phi-scan-report-cap` left open and `#109`, `#110` and
+`documentation/agent-notes.md#dicom-phi-scan-unread-tail` each re-disclosed unchanged: **`report()` was not monotone at the
+per-file cap.** Written here rather than in `documentation/agent-notes.md` because that file is over
+its 250,000-byte budget on `main` and the hook refuses growth (an umbrella size rule, since retired). **Nothing dropped.**
+
+**`CLAUDE.md` CARRIES NO LINE FOR THIS, AND THAT IS A GAP RATHER THAN A JUDGEMENT THAT THE TRAP IS
+SMALL.** Derive the headroom, never restate it: `git show origin/main:CLAUDE.md | wc -c` against this
+repo's entry in the meta-repo's size hook (since retired, with the budget). It is a handful of bytes, which is not
+a line. So the rule lives where a worker touching this code reads it: the JSDoc on
+`DEFAULT_HIT_LINES_PER_RECOGNIZER`, on `RECOGNIZERS` and on `report`, the block in
+`test/scripts/phi-scan.test.ts` under
+`"phi-scan: the print budget is spent PER RECOGNIZER, so no class spends another's"`, and this file.
+
+**Provenance.** Every figure below is a measurement on the tree that shipped, against base
+**`7754a6c`** restored **by file copy**, never `git checkout`. **The grid and every count in it come
+out of the committed instrument**, which prints them in one run:
+
+```
+git show 7754a6c:scripts/phi-scan.ts > /tmp/base-phi-scan.ts
+pnpm measure:phi-scan-monotonicity /tmp/base-phi-scan.ts
+```
+
+**The red-on-base test figure is NOT from that script** and says so where it is written. Nothing else
+on this page is a figure.
+
+### The defect
+
+`report()` grouped a file's hits and printed the first `n` in scan order. That is one budget for the
+whole file, and the file's routes do not append to it independently: **`scanDicom` appends before
+`scanText` within a file, so how many of the text sweep's findings were printed was decided by how
+many the tag walk had already made.** So ADDING hits could REMOVE a printed line. The text sweep's PN
+recognizer is the only route that can see a caret-joined name in bytes the tag table never typed
+(`#102`, `documentation/agent-notes.md#dicom-scandicom-silent-halt`), and it is the one at the end of the queue.
+
+**IT WAS NEVER A FALSE GREEN AND IS NOT DESCRIBED AS ONE.** The exit code, the total, the set of files
+named and the withheld count are computed off `hits` and were right throughout. What moved was
+**which** lines a reader saw.
+
+**AND THE ITEM'S OWN WORD FOR IT IS WIDER THAN WHAT ANY CAP CAN FIX.** See the section below: this
+slice closes the cross-entry half and measures the rest rather than claiming it.
+
+**WHY A 77-CELL CHECK WAS BLIND TO IT:** it never got a file above three hits against a default budget
+of twenty. A cap that is never reached selects nothing.
+
+### The fix, and where the bound lives
+
+The budget is spent **per entry of a closed `RECOGNIZERS` table, per file**. A hit prints when its
+index among that file's hits **from its own recognizer** is under the budget - a question no other
+recognizer's findings are an input to.
+
+**THE TABLE IS A TYPE, NOT AN ANALYSIS OF THE PUSH SITES.** Budgeting on `reason` would have been one
+field cheaper and would not have been a bound: `reason` is assembled at the push site, so one future
+recognizer interpolating a payload-derived token into it hands the payload a vote on how many classes
+exist, and a per-class budget times an attacker-chosen class count is no budget. `Hit.recognizer` is a
+union of four literals, so the per-file line bound is `n x |RECOGNIZERS|` and TypeScript refuses a
+push site that does not name one. Same shape as `HitValue` in `#109`: **remove the slot, do not filter
+the value.**
+
+**THE `hits` ARRAY IS STILL NOT CAPPED, DELIBERATELY.** A cap there makes the totals a claim about
+what was kept rather than about what was found. Unchanged, and not revisited.
+
+**THE RECOGNIZER IS NOT PRINTED.** This slice answers a selection question, not a reporting one; the
+hit line's fields and the suppression line are byte-for-byte the shapes they were. A diagnostic about
+a PHI leak is itself a PHI surface, and a per-recognizer breakdown on the suppression line would be a
+new one for no gain.
+
+### 🛑 THIS IS NOT MONOTONICITY, AND CALLING IT THAT WAS THIS SLICE'S OWN REFUSED CLAIM
+
+Pass 1 refused the sentence *"adding hits cannot remove a printed line"*, in the commit subject, the
+changeset, a test name and this page. **Pass 2 then found it still in a fifth carrier - the header
+comment over the test block - after the other four had been scoped**, which is this repo's own trap
+arriving inside its remedy: a first pass that sweeps the VOCABULARY leaves the carriers still
+carrying the CLAIM. It is DELETED in all five, never reworded. It is false, and not narrowly:
+
+- **Under ANY budget that cuts it is unavailable** (`--max-hit-lines 0` does not cut). `n+1` hits
+  from one entry print `n`. There is no
+  print cap for which the general property holds, so no amount of partitioning would have made the
+  sentence true.
+- **Several sweeps share one entry**, so the shortfall is larger than "the same sweep twice".
+  `scanText`'s ISO pass and its compact `YYYYMMDD` pass both push `textDate`, and `scanText` runs
+  AGAIN on every object `scanEmbeddedObjects` decodes.
+
+Re-measured on the shipped tree and on base `7754a6c` restored by file copy, **identical on both**:
+
+| | base `7754a6c` | here |
+|---|---|---|
+| 200 ISO dates then 200 compact ones, default budget: ISO lines / compact lines | **20 / 0** | **20 / 0** |
+| 19 ISO dates then one compact DOB: is the DOB printed | yes | yes |
+| **20** ISO dates then one compact DOB: is the DOB printed | **no** | **no** |
+
+So the compact pass, the only route that sees a bare eight-digit DOB, can print nothing at all while
+the ISO pass spends the entry. **`PRE-EXISTING`, unchanged in both directions by this slice**, and now
+pinned by a test rather than left to prose.
+
+**Splitting the two date passes is available and was NOT taken here** - the claim was cut instead,
+because growing the table would not have made the refused sentence true and this lineage has converged
+only by deleting. **Splitting per embedded object is NOT available at all:** the number of objects on
+a page is the payload's choice, and a per-class budget times a payload-chosen class count is no
+budget.
+
+**What IS closed, and it is the whole of what is claimed: one entry's budget cannot be spent by
+another entry's findings.**
+
+**Pass 3 (NOT REFUTED, and the ADR 0016 ceiling) found a SIXTH carrier - the word "monotonicity" as a
+comment LABEL inside the block the pass-2 remedy had just swept.** Cut too. Three refuter passes and
+five sweeps to get one sentence out of one slice is the measurement worth keeping: in this lineage a
+phrase sweep that finds nothing on its first pass has not finished.
+
+### The superset, which is the only question a selection-policy change gets asked
+
+A selection-policy change is exactly the class that refused `#97`, `#104` and `#105`: routing
+differently took a name from exit 1 to exit 0 once. So the claim is the strong one and it is
+mechanical: **a hit that was among a file's first `n` overall is among its own recognizer's first
+`n`**, so at every cap the printed set is a SUPERSET of base's. Nothing base printed goes unprinted,
+which is what makes a net leak structurally unavailable here rather than merely unobserved.
+
+Measured over the grid, both scanners run on byte-identical corpora at the same cap:
+
+| | |
+|---|---|
+| cells (9 shapes x 8 caps) | **72** |
+| **superset violations** | **0** |
+| cells that refused (exit 1) | 64 |
+| hit lines compared, base / here | **2,936 / 3,268** |
+| cells printing strictly more than base | **29** |
+| cells that withheld lines (a cut line) | 49 |
+| cells with a recognizer at its ceiling | 50 |
+| **cells where base STARVED a recognizer entirely** | **23** |
+| largest cell, in hits | 803 |
+
+Exit code, total, the set of files named, and `withheld == total - printed` are re-checked in every
+cell and never differ.
+
+**🛑 WHAT THE GRID'S LAST THREE COUNTERS CANNOT SEE, and the superset does not depend on it.** The
+counters label a line by its printed REASON, and several sweeps share a reason, so `cells where base
+STARVED a recognizer` cannot see one date pass starving the other. **The superset comparison is over
+the raw hit DETAIL lines and uses no labelling at all**, so the 0 and the 332 stand whatever the
+labels do. The starvation the counters miss is measured in the table above instead.
+
+**🩺 THE ZERO IS PINNED BESIDE A POSITIVE THE DETECTOR DOES CATCH.** A grid that cannot fail reports
+zero violations on anything. Run with the two scanners SWAPPED - base in the tree, the shipped one
+passed as the base argument - the same 72 cells report **332 violations**. The detector fires.
+
+**AND THE INSTRUMENT REFUSES BEFORE IT REPORTS:** each scanner handed to it must answer a bad
+`--max-hit-lines` with this script's own message and exit 2 (the negative control against a sibling
+package's file of the same name, which this shared-scratch environment has produced before); the
+hit-free control must exit 0 with no hit lines; and every shape must produce a hit from each
+recognizer it claims, so a shape that silently produced nothing cannot read as a clean cell. The
+default budget is **derived from a run**, not written into the instrument as a numeral, so the
+`default` rows are checked against a ceiling rather than skipped.
+
+### What it costs, stated rather than claimed away
+
+**A FILE'S REPORT CAN NOW BE LONGER.** The bound went from `n` lines per file to `n` per recognizer
+per file. Measured at the default budget on the loudest shape in the grid: **20 lines on base, 61
+here**, over a file carrying 803 hits. That is the price of the quiet recognizer's line being printed,
+and it is bounded by a closed table rather than by the payload.
+
+**⚖️ AND WITHIN ONE ENTRY A FLOOD STILL BURIES A LATER HIT.** A per-recognizer budget makes an
+entry's budget its own; it does not make it infinite, and the section above says which parts of that
+are closable and which are not. `--max-hit-lines 0` still prints every line, the total still counts
+them, and tests pin both measurements.
+
+### Tests
+
+**Eight cases changed or added. Four are red on base `7754a6c`**, measured by restoring the base
+scanner **by file copy** and re-running the suite. **Four are green on base by design** and are named
+as such here so nobody quotes "eight tests" as "eight regressions caught": they pin what this change
+must NOT move (the verdict, the totals, the files named, the withheld arithmetic), the two costs it
+does NOT close, and the line shape it does not touch.
+
+**🛑 AND ONLY TWO OF THE FOUR ARE RED ON THE DEFECT.** The other two are red on a NON-VACUITY guard
+whose own half is green on base, which a second refuter pass caught this page under-stating as one:
+the doubling case requires more than one printed REASON before it compares the two line counts (a
+reason, not a recognizer - the guard can only see what the line carries), and at a budget of one on
+base there is only one; the strengthened scan-order case requires
+more lines printed than the flag's value, and on base there are exactly as many. **Both arithmetic
+halves are green on base.** This is stated because "red on base" reads as "caught a regression", and
+for two of these four it does not.
+
+**No case writes the budget as a numeral.**
+
+**🛑 AND THE FIRST DRAFT OF THE BOUND CASE PINNED THE SHORTFALL RATHER THAN THE BOUND.** It asserted
+that each printed reason appears EXACTLY the cap times. That passes only because the two date passes
+share an entry, so a correct split of them would turn it red: it was a guard against fixing the
+residual above. **Deleted rather than reworded.** What is asserted in its place is the property a
+reader actually depends on and that the output can carry: **doubling every flood prints the same
+lines**, so past the ceiling the report stops growing with the hits and a payload cannot choose the
+size of the diagnostic.
+
+The one existing case that had assumed "printed == the flag's value" now reads the printed count off
+the run: that assumption is precisely what a per-recognizer budget breaks, and writing the flag's
+value there would have pinned an arithmetic the report does not do.
+
+### Still open, and NOT touched by this slice
+
+- **`hits` is still unbounded IN MEMORY.** Each entry is bounded (`#109`) and owns its bytes (`#110`);
+  the array is not. Unchanged.
+- **Within one entry of `RECOGNIZERS`, `report()` is still not monotone**, as above, and the two date
+  passes plus every embedded-object sweep share entries. Measured, `PRE-EXISTING`, unchanged.
+- **V8's legacy `RegExp` statics retain one subject string** (`#110`). Untouched: this slice adds no
+  recognizer and no match.
+- **A never-draining reader still makes the gate WAIT** (`#107`), and `test/helpers/run-script.ts`
+  still inherits `spawnSync`'s 1 MiB `maxBuffer`. This slice moves the largest report UP, by the
+  factor above, so it makes the second one easier to reach rather than harder. Bounded by a closed
+  table, disclosed here, and not closed.
+- **A CI job that reads only the exit code still cannot see an unread tail** (`#106`).
+- The relocation, `position.contextPath` and `attributes[].tag` are parser-side residuals.
+
+---
+
+<a id="dicom-phi-scan-unread-tail"></a>
+
+## `scanDicom` said nothing about the bytes it never read, so `OK - no hits` covered them
+
+_`DICOM-PHI-SCAN-RESIDUALS`, 2026-08-09. Base `21d42f5`. The ADDITION half of that item; the
+by-name dispatch (`#105`) was the deletion half, and the two did not land together on purpose.
+See `documentation/agent-notes.md#dicom-phi-scan-name-dispatch` § "Why this was one slice and not two"._
+
+**Provenance.** The spec claims are read from the SHA-pinned vendored copy at `vendor/nema/part05/`,
+**PS3.5 2026c** (§7.1 tag ordering, §7.5.2 undefined-length Sequences). Every other figure is a
+measurement taken on this repo against base **`21d42f5`**, quoted with that sha and no other. The
+base column is reproducible with `git show 21d42f5:scripts/phi-scan.ts > /tmp/base-phi-scan.ts &&
+node /tmp/base-phi-scan.ts <path>` run with `cwd=<repo root>`, since the script resolves its
+allow-list from `process.cwd()`.
+
+### The defect
+
+`scanDicom`'s two walks each `break` at the first header they cannot read, and both `readElement`
+helpers answered `ElementHeader | null`. Five distinguishable conditions therefore arrived at the
+caller as ONE indistinguishable value, the caller had nothing to say about them, and it said
+nothing. A file the tag table abandoned partway through produced the same `[phi-scan] OK - no hits`
+as one it read end to end.
+
+**The way in is CONFORMANT, which is what makes it worth a disclosure.** PS3.5 2026c §7.5.2 defines
+`0xFFFFFFFF` as one of TWO Sequence delimitations, the encoder's choice, both of which "shall be
+supported by decoders"; §7.1 orders tags ascending, so `(0008,1110)` precedes `(0010,0010)` in a
+conformant file. Encapsulated `(7FE0,0010) OB` pixel data is the same shape.
+
+**🛑 EXPLICIT VR BIG ENDIAN IS NOT A SECOND CONFORMANT ROUTE AND MUST NOT BE QUOTED AS ONE.** A
+draft of this note said it was, and a refuter refused it against the pinned edition: PS3.5 2026c
+§A.3's whole body is _"This Transfer Syntax was retired in 2006. For the most recent description of
+it, see PS3.5 2016b."_, the UID `1.2.840.10008.1.2.2` appears **nowhere** in the document, and this
+package's own generated `src/dictionary/generated/uids.ts` marks it `retired: true`. What is true is
+the measurement, and it is worth keeping for a different reason: **`@cosyte/dicom`'s own parser
+reads such an object with ZERO warnings and hands back both values**, while this scanner's tag walk
+treats every transfer syntax other than `1.2.840.10008.1.2` as little endian and stops on it. **A
+lenient parser's silence is not a spec verdict**, and reading it as one is how the word got written.
+The conformance leg above rests on §7.5.2 alone and does not need this row.
+
+**A guard that has never been pointed at an input has not cleared that input.** That is the
+sentence, and it is the same one `#102` and `#105` were filed under.
+
+### What the new output carries, and what it deliberately does not
+
+Per file, one line on stderr:
+
+```
+[phi-scan] PARTIAL: <path>: the DICOM sweep stopped before the end of N object(s),
+  leaving M byte(s) it never read: <reasons>
+```
+
+**CARRIES:** the file's own repo-relative path (the same locus every hit already carries), two
+counts, and tokens from the closed `HALT_REASONS` table.
+
+**DOES NOT CARRY:** no tag, no VR, no value, no byte of the object. The bytes at a halt are
+precisely the bytes that did not read as a Data Element header, so a tag or a VR named off them
+would be unvouched-for input, and the value bytes are the leak itself.
+
+**🩺 "NO OFFSET" IS NOT ON THAT LIST, AND A DRAFT THAT PUT IT THERE WAS REFUSED.** No offset is
+printed, but for a file holding one object `bytes` is `objectLength - haltOffset`, and the object's
+length is the file's own committed size, so the halt offset is recoverable from the line. That is
+the same locus a hit line already prints outright, beside a value. The honest statement is that the
+two counts are structural positions rather than content, not that a position is absent.
+
+**🛑 THE SLOT IS REMOVED, NOT FILTERED.** There is no string parameter for anything to travel
+through: `recordUnread` takes a path, a number and a `HaltReason`, and `HaltReason` is a union over
+six literals fixed at authoring time. That is the same shape as `entryKind` and `gitModeKind`
+already in this script, and the same reason `warnings.ts` has no message parameter. A bound that
+held only at the call site would not be a bound.
+
+**Bounded in memory, which `hits` is not.** One `Map` entry per file, holding two numbers and a
+`Set` that cannot exceed six members. An attacker-chosen object count moves the counts, not the
+footprint. `hits` staying unbounded is this item's other open residual and is untouched here.
+
+### The exit code does not move, and that is a decision with a cost
+
+The banner's enumeration is **quoted from the banner rather than restated**, and this paragraph is
+the reason: a draft wrote "0 clean" back into a comment four lines above the `return`, in the same
+commit that cut the word from the banner, and gave exit 2 a second definition while it was there.
+Read the banner for the current set. An unread tail is none of the non-zero codes in it: nothing was
+found, and nothing refused the scan.
+
+Two reasons it is not exit 2. It would fire on a file **§7.5.2 makes legal**, which is what "do not
+add a code for a conformant file" means on this side of the package. And it would **mask a real
+hit** whenever both were present, downgrading a detection to an invocation error.
+
+**🔴 SO A CI JOB THAT READS ONLY THE EXIT CODE STILL CANNOT SEE THIS.** Open, disclosed, not argued
+away. Making it visible to one is a change to this script's contract with every caller.
+
+**🛑 THE BANNER LATER GREW A FOURTH CODE, AND IT IS NOT THIS ONE. DO NOT READ THE TWO AS THE SAME
+RULE.** Exit 3 says the run was handed a target it ENUMERATED and then never OPENED, which today
+means an `--allow-fixture` bypass an operator logged and passed. Everything the two paragraphs above
+argue still holds for the unread tail, because the two cases differ in the only respect that decides
+it: an unread tail is a file the scan **did** open, on an encoding the standard permits and nobody
+asked for, so there is no caller to act on a refusal and no request to withdraw; a withheld target is
+a file it opened **not at all**, on an explicit instruction that can be taken back. That is also why
+3 rather than 2: the run that returns 3 opened every other target and its hit lines are real, where
+an unlogged bypass returns 2 having opened nothing at all. The residual above is unchanged and
+remains open.
+
+**And the word `OK` is CUT rather than qualified.** With any partial file the clean line reads
+`no hits, over a corpus in which the DICOM sweep stopped early in N file(s), listed on stderr. This
+run is not an all-clear.` With none, it is byte-identical to what it always was. It says "on stderr"
+and not "above" because the clean line goes to stdout and the `PARTIAL:` lines to stderr, so a
+consumer capturing the two separately would read a locative pointing at nothing.
+
+**🛑 THE COVERAGE SENTENCE IS NOT WRITTEN ANYWHERE, INCLUDING AS A SUPPORTING CLAUSE.** `scanTarget`
+and `scanEmbeddedObjects` both run `scanText` unconditionally over the whole buffer, so "they were
+swept anyway" is tempting; the sweep runs over `buf.toString("utf8")`, a lossy decode of arbitrary
+bytes, and the text pass has **no tag table**, so it cannot see a single-component PN or the date at
+the head of a `DT`. Neither half supports the sentence. A draft refused it in two places and then
+deployed it as a parenthetical propping up "the scan did complete"; a refuter caught that, and the
+parenthetical is cut. This paragraph is where the bounds live.
+
+### The measurement
+
+**13 objects x 5 carriers x 3 cap settings = 195 cells**, each one run of
+`node <scanner> [cap flags] <path>` on base and on the shipped tree over byte-identical input.
+Carriers: `.dcm`, `.md`, `.bin`, base64 inside a `.md` page, base64 inside a `.ts` source. Cap
+settings: default, `--max-hit-lines 0`, `--max-hit-lines 1`.
+
+|                                                                                         |               |
+| --------------------------------------------------------------------------------------- | ------------- |
+| exit code identical                                                                     | **195 / 195** |
+| hit detail lines identical as a multiset                                                | **195 / 195** |
+| output identical                                                                        | **60**        |
+| output strictly larger (a `PARTIAL` line added)                                         | **105**       |
+| output differs ONLY by the withdrawn `OK - no hits`, with a `PARTIAL` line in its place | **30**        |
+| violations                                                                              | **0**         |
+| cells printing a `PARTIAL` line                                                         | **135**       |
+
+**The 30 are the ONE line this change removes, and the checker tests for exactly that** rather than
+reading it off the table: a cell counts as a claim-cut only when the missing set is exactly
+`{"[phi-scan] OK - no hits"}` with multiplicity 1, a `PARTIAL` line is present, and the replacement
+line is present. Anything else in the missing set is a violation.
+
+**The 60 identical cells are the detector-zero pin.** They are the four objects with no unread tail,
+across all fifteen carrier/cap combinations, and **they are silent for TWO different reasons that
+must not be collapsed**: three are complete walks that reach the last byte (an allow-listed object,
+a name-bearing one, a recent-`DA` one), and the fourth is not a DICOM stream at all, so
+`fileMetaStart` answers null and the DICOM route is **never entered**. A draft called all four "the
+walk reads to the end", which is false for the fourth. The detector is silent exactly there and loud
+on the other nine, in the same runs, so a zero is a measurement rather than a wiring failure.
+
+Reasons observed, one object each: `an undefined-length value (0xFFFFFFFF)` (SQ, encapsulated pixel
+data), `a value length that runs past the end of the object` (over-declare, and Explicit VR BE),
+`a header whose VR field is not two uppercase letters`, `a header the remaining bytes cannot hold`
+(eight bytes of a twelve-byte long-form header), `a tail too short to hold an element header`.
+
+**`noAdvance` is unreachable and stays in the table as the defensive arm.** `nextOffset` is
+`valueOffset + valueLength` and `valueOffset` is at least eight past the cursor, so the check that
+predates this change cannot fire. It is named here so the next reader does not hunt for a fixture.
+
+**The corpus is unmoved.** `node scripts/phi-scan.ts` with no arguments produces byte-identical
+stdout and stderr before and after, and still exits 0. Measured with a probe on base: the all-mode
+run reaches `scanDicom` **17 times** across seven `docs-content/` pages, and **all 17 read to the
+last byte** (`end == objlen` on every one), so there is no `PARTIAL` line to print. **That zero is
+pinned by the 135 cells that do print one**, not asserted.
+
+**This is not a false-positive rate and there is none to quote here.** The rate is a property of a
+payload's byte histogram, and this package commits no `.dcm` files at all. See
+`documentation/agent-notes.md#dicom-scandicom-silent-halt`.
+
+### The generator, verified before any zero it produced was believed
+
+Every object was put through **`@cosyte/dicom`'s own `parseDicom`** and **classified by what the
+parse produced, never by its label**: the well-formed ones had to read the planted value back, and
+the malformed ones had to FATAL. That caught a real mislabel: `08-big-endian-dataset` was written as
+`parses: false`, and the parser accepted it with **zero warnings** and both values readable. It is
+**well formed under a RETIRED transfer syntax**, which is what the row above rests on, and the label
+was corrected from the measurement rather than from the intent behind the fixture. Separately, every
+planted value is asserted present in the RAW BYTES, so nothing is claimed about a value the
+assembler never wrote.
+
+**The generator is committed as `scripts/measure-phi-scan-unread.ts`**, so the table is
+re-derivable rather than a figure only its author could produce. `pnpm measure:phi-scan-unread
+[<base scanner path>]` prints the object verification, the row summary and the cell counts; with no
+argument it verifies the generator and prints the reasons without a base comparison.
+
+### Interaction with `#104`'s cap and `#105`'s non-monotone finding: none, and it is structural
+
+`#104` capped **hit** lines per file, and `#105` found `report()` is not monotone in `hits` at that
+cap, because `scanDicom`'s hits append before `scanText`'s. Neither can reach this line. It is not a
+hit, it is written by a different function, and it is in no budget. Pinned at `--max-hit-lines 1`
+over a file whose hits run to the hundreds: one hit line, the suppression line, and the `PARTIAL`
+line all present; and with a second file behind it, both files' `PARTIAL` lines survive.
+
+**It cannot flood, so it needs no cap of its own.** The output is bounded by the number of FILES.
+A page carrying ten thousand halting objects prints ONE line with the count on it.
+
+### What is still open
+
+- **The exit code, as above.** A CI job reading only exit codes still sees a green.
+- **🔴 A FILE-META HALT IS REPORTED ONLY IF THE DATASET LOOP ALSO STOPS AT THAT OFFSET, AND UNDER
+  IMPLICIT VR LE IT MAY NOT.** Only the dataset loop records, so the file-meta loop's own halt is
+  covered only when the second loop reaches the same verdict at the same offset. Under Explicit VR
+  the two agree, because they call the same reader; `readElementImplicit` is a different predicate
+  set, so the same bytes can report a DIFFERENT reason, or read as a header and let the walk
+  continue past the offset the File Meta group gave up at, reporting nothing. Measured on two
+  objects differing only in the transfer-syntax UID. Stated, not closed: the remedy is to record in
+  the file-meta loop too, and that is a second disclosure with its own shape.
+- **`hits` is still unbounded IN MEMORY.** Untouched. This slice adds no hits at all, so it does not
+  move that surface in either direction.
+- **A hit line still echoes the violating `value` unbounded.** Untouched.
+- **The recognizers are unchanged.** Widening the walk's REPORTING and widening the recognizer are
+  different changes. Nothing here teaches the scanner an MRN, an accession number, an institution
+  name, a phone number, an email address, an SSN or a vendor UID root. **`PARTIAL` on a file is not
+  a finding, and no `PARTIAL` on a file is not a clearance of it either.**
+- **The walk itself is unchanged.** This slice says what the walk did not read; it does not read
+  more. Teaching `scanDicom` to descend an undefined-length Sequence is a separate change with its
+  own false-positive surface, and it is deliberately not made here.
+
+### For the next worker
+
+- **Rebuild the matrix rather than trusting the table**, and it is one command:
+  `git show 21d42f5:scripts/phi-scan.ts > /tmp/base.ts && pnpm measure:phi-scan-unread /tmp/base.ts`.
+  13 objects x 5 carriers x 3 cap settings, comparing exit code, hit-line multiset and output-line
+  multiset per cell.
+- **Reverting `scripts/phi-scan.ts` alone turns 9 tests red**, measured on `21d42f5` over the suite
+  as it stands after this slice. **No count of the new cases is written beside it** - a draft said
+  "eleven" where the block holds ten, and a numeral that has been wrong once in an index is cut
+  rather than corrected. The two cases green on base by design are the non-vacuity control and the
+  byte-identical clean line.
+- **The clean line is the assertion that moves.** One pre-existing case (`#102`'s
+  `"a preamble-FUL object whose payload is allow-listed is still clean"`) asserted `OK - no hits`
+  over an object carrying an undefined-length `SQ`. That assertion WAS the other half of this
+  defect, and it is corrected rather than deleted: same exit code, no `OK`.
+
+---
+
+<a id="dicom-phi-scan-value-excerpt"></a>
+
+## dicom - a hit line echoed the violating value UNBOUNDED (2026-08-09)
+
+`DICOM-RESIDUALS`, one of the six residuals the item still carried. Written here rather than in
+`documentation/agent-notes.md` because that file is **over** its 250,000-byte budget on `main` and
+the hook refuses growth (an umbrella size rule, since retired). **Nothing dropped, no ceiling raised, no trap deleted.**
+
+**`CLAUDE.md` CARRIES NO LINE FOR THIS, AND THAT IS A GAP RATHER THAN A JUDGEMENT THAT THE TRAP IS
+SMALL.** Measured on this base: the file is 39,544 bytes against a 39,550-byte ratchet, so there
+are **six bytes of headroom**, which is not a line. (Read the two numbers together. "`CLAUDE.md` has
+6 bytes" is a misreading of this figure and is false; the file is 39 KB.) So the rule lives where a
+worker touching this code reads it: the JSDoc on `MAX_HIT_VALUE_LENGTH`, on `excerptValue` and on
+`report`, the block in `test/scripts/phi-scan.test.ts` under
+`"phi-scan: a hit line echoes an EXCERPT of the value, bounded at construction"`, and this file.
+
+**Provenance.** Every figure below was measured against base **`4984a96`**, quoted with that sha and
+no other. Restore the base scanner **by file copy**, never by checkout:
+`git show 4984a96:scripts/phi-scan.ts > <scratch>/base/phi-scan.ts`, then
+`node <scratch>/base/phi-scan.ts <path>` with `cwd` set to a repo root, since the script resolves
+its allow-list and its corpus from `process.cwd()`.
+
+### The defect
+
+`report()` wrote `value=${JSON.stringify(h.value)}` and `h.value` was a `string` off the payload.
+
+**IT WAS THE ONLY UNBOUNDED PAYLOAD-DERIVED SLOT ON THE LINE, AND THE ONLY ONE WHOSE SIZE THE
+PAYLOAD CHOSE.** `path` is the path the enumeration chose; `tag` is `tagDisplay`'s rendering of two
+16-bit numbers; `offset` is a position; `reason` is one of this file's own literals; `vr` is a
+literal at each `hits.push` and never the two bytes off the wire. `value` is the bytes. An element
+declares its own length, so a `(0010,0010)` claiming the rest of the object put the rest of the
+object - other elements' values, pixel data, whatever follows - on one stderr line, to say that a
+name was not on the allow-list. **A diagnostic about a PHI leak is itself a PHI surface.**
+
+Measured on base, one hit line per cell:
+
+| value | base line length | after |
+|---|---|---|
+| text `PN` token, 1 MiB | **1,048,640 chars** | 281 |
+| `(0010,0010) PN`, 65,000 chars | 65,066 | 281 |
+| `(0008,002A) DT`, 65,000 chars | 65,083 | 298 |
+| `(0010,0010) PN` inside a base64 doc fixture, 65,000 chars | 65,066 | 281 |
+
+**Three of the six push sites can exceed the bound** (the `PN` and `DT` tag routes, and the text
+sweep's `PN` token). The other three are held under it by their own recognizers: the two text date
+passes match a fixed-width run, and `checkDate` refuses a `DA` value that is not exactly eight
+digits. **That analysis is written down and is NOT what the bound rests on** - it is a fact about
+what each caller happens to pass today, which is exactly the kind of bound this lineage has watched
+relocate to a sibling.
+
+### The remedy: the SLOT, not the printer
+
+`Hit.value` is no longer a `string`. It is `HitValue`, a branded pair of the excerpt and the length
+the value had, and `excerptValue()` is the only thing that makes one.
+
+**Truncating inside `report` would have been a bound that holds only from where the printer is
+CALLED** (`#93`): the hit would still carry the whole payload, and the next consumer of `Hit.value`
+- a second printer, a summary line, a JSON mode - would start from an unbounded string again.
+
+**THE TYPE IS THE ENFORCEMENT, AND IT WAS VERIFIED RATHER THAN ASSERTED.** Reverting one of the six
+push sites to the raw string it used to pass fails the build:
+`scripts/phi-scan.ts(1307,9): error TS2322: Type 'string' is not assignable to type 'HitValue'`,
+and restoring it is green again. A test pins the arithmetic the compiler cannot state: the number of
+`hits.push({` sites equals the number of `value: excerptValue(` sites.
+
+### Where 194 comes from, and the UNIT that a refuter caught
+
+**PS3.5 2026c Table 6.2-1, the `PN` row.** The sentences were located by the rule this repo pays
+for: every `<tr>` of `table_6.2-1` was collected and **exactly one** contains all three of
+`64 chars maximum per component group`, `up to 3 groups of components` and
+`no more than two component group delimiters`; its first cell is `PN`. `3 x 64 + 2 = 194`, and `PN`
+is the longest of the three VRs this scanner reads.
+
+**🛑 AND THAT NUMBER IS IN CHARACTERS, WHILE THIS BOUND IS IN `String.length`. PASS 1 REFUTED THE
+CLAIM BUILT ON MISSING THAT, AND IT WAS FALSE IN FOUR ARTIFACTS AT ONCE.** The draft said *"a single
+conformant value prints WHOLE and its line is byte-identical to base"*, and qualified it with an
+enumeration of two escape hatches. The `PN` row's length cell cross-references **`note_6.1-2-1`**,
+which is where the unit is: the lengths of VRs whose Character Repertoire can be extended or
+replaced are `expressly specified in characters rather than bytes`, *because the mapping from a
+character to the number of bytes may depend on the character set*. Located the same way: the
+sentence occurs **exactly once** in `part05.xml`. This script has no such unit - the tag route
+decodes latin1, so it counts **bytes**, and the text route counts **UTF-16 code units**.
+
+**🛑 AND PASS 2 REFUTED THE FIGURES THAT FIRST STOOD HERE, WHICH IS THE SAME DEFECT ONE LEVEL IN.**
+The counter-example was re-measured rather than inherited, but on a PROBE fixture, and then the
+figures were written beside a TEST that builds a different `PN` (the probe put a `^` inside the
+ideographic and phonetic groups, which is 4 bytes cheaper). Three of five numerals were wrong.
+**The figures below are measured on the fixture the committed test ships, and nothing else.**
+A single-valued, conformant `(0010,0010) PN` of exactly three 64-character component groups under
+`(0008,0005) ISO_IR 192`:
+
+| | |
+|---|---|
+| characters | **194** |
+| bytes on the wire | **450** |
+| base line | 516 chars, whole value |
+| here | 279 chars, **`[+256 not printed]`** |
+
+**A BYTE FIGURE IS A FACT ABOUT THAT FIXTURE AND NOT ABOUT THE CLASS** - a conformant 194-character
+`PN` has no one byte length, it depends on the characters - so no byte numeral is written in the
+JSDoc at all, and the test asserts `wire.length - bound` with both terms derived.
+
+**So 194 bounds what the report prints and says NOTHING about what the standard admits.** The
+sentence is deleted rather than re-worded, in all four carriers, and the counter-example is pinned
+as a **test** rather than as a disclosure (`"🛑 CUTS A CONFORMANT 194-CHARACTER PN"`), because a
+shape in the harness is what this repo asks for in place of a sentence.
+
+**THE WITHHELD AMOUNT THEREFORE CARRIES NO UNIT** - `value="..." [+64806 not printed]`. It was
+`char(s)`, which was wrong on both routes. The unit is named once, exactly, on `excerptValue`.
+
+**THE PRINTED FIELD IS BOUNDED, WHICH IS THE NUMBER THAT MATTERS.** `JSON.stringify`'s longest
+expansion of one unit is a six-character escape, measured rather than assumed: 194 NULs and 194
+lone surrogates both render as a **1,166-character** field, a doubled quote as 390. So the field is
+at most `6 x 194 + 2` however many bytes the element declared.
+
+### The superset proof: 30 cells, 0 violations
+
+**A CAP IS A CANDIDATE NET LEAK** (`#97`, `#104`), so the grid runs **base and fixed side by side**
+over both dispatch routes and compares exit code, stdout, the `N hits across M file(s)` summary, the
+set of `HIT:` paths, the number of hit detail lines, and every line's tag, VR, offset and reason.
+
+Cells: `{10, 193, 194, 195, 1000, 65000}` characters x `{text .txt, (0010,0010) PN .dcm,
+(0008,002A) DT .dcm, base64 object in a .md}`, plus a 1 MiB text value, a 60,000-character `.dcm`,
+a six-file corpus, an invocation error, `--max-hit-lines 1` over a 200-hit flood, and this
+repository's own committed corpus.
+
+**Result: 30 cells, 0 violations. 19 hit lines byte-identical, 30 excerpted.** In every cell the
+exit code, the totals and the set of files named are **equal to base**; every excerpt is a **prefix**
+of what base printed; and every withheld count equals `base length - 194` exactly. The committed
+corpus is **byte-identical on stdout AND stderr, exit 0 both**.
+
+**The `--max-hit-lines 1` cell is byte-identical**, which is the interaction with `#104` stated
+rather than assumed: the excerpt shortens a line, the cap decides how many lines there are, and
+neither reads the other.
+
+**The harness was verified before its zeros were believed, and its first version was wrong.** It
+parsed a hit line with one greedy regex, so a `DT` line's reason (`(>= 1906)`, parentheses) was read
+as part of its value field and **three cells reported false violations**. The committed test helper
+carries the fixed parser, which walks the JSON string to its closing quote.
+
+### What is pinned, and what is green on base
+
+Eight cases. **Seven are red on base `4984a96` and green here.** The eighth - *"cannot move the
+verdict, the totals or the set of files named"* - is **green on base too, deliberately**: it pins a
+property base already had and this change must not lose. It is named here so nobody quotes
+"8 tests" as "8 regressions caught".
+
+**No case writes the bound as a numeral.** Each derives it from a run that actually cut a value and
+then places the two boundary cases either side of it, for the reason `#104`'s cases do not name
+their default: a numeral copied into a test is a second source of truth that drifts from the
+constant.
+
+### Still open, and NOT touched by this slice
+
+- **`hits` is still unbounded IN MEMORY.** Each element of it is now bounded; the array is not.
+  Capping it would make the totals a claim about what was kept rather than about the corpus, which
+  is the net-leak shape one level down (`#104`).
+- **`report()` is still NOT MONOTONE at the per-file cap** (`#105`): `scanDicom`'s hits append
+  before `scanText`'s, so a flooding file can push a caret name off the default report. Unchanged
+  here in both directions; this slice shortens lines and never reorders them.
+- **A never-draining reader still makes the gate WAIT** (`#107`), and `test/helpers/run-script.ts`
+  still inherits `spawnSync`'s 1 MiB `maxBuffer`. This change makes the second one much harder to
+  reach - the largest line the grid produced fell from 1,048,640 to 298 - but it does
+  **not** close it: the number of lines is still unbounded.
+- **The relocation, `position.contextPath` and `attributes[].tag`** are parser-side residuals and
+  are untouched.
+
+---
+
+<a id="dicom-phi-scan-value-retention"></a>
+
+## dicom - the PHI gate's hit excerpt now OWNS its bytes (2026-08-09)
+
+`DICOM-RESIDUALS`, the slice `documentation/agent-notes.md#dicom-phi-scan-value-excerpt` deferred in its own words: _"V8 returns
+a sliced string from `raw.slice(0, 194)`, which retains its parent. So `HitValue.text` is bounded
+logically while the hit may still retain the whole payload in memory."_ Written here rather than in
+`documentation/agent-notes.md` because that file is over its 250,000-byte budget on `main` and the
+hook refuses growth (an umbrella size rule, since retired). **Nothing dropped.**
+
+**`CLAUDE.md` CARRIES NO LINE FOR THIS, AND THAT IS A GAP RATHER THAN A JUDGEMENT THAT THE TRAP IS
+SMALL.** Derive the headroom, never restate it: `git show origin/main:CLAUDE.md | wc -c` against this
+repo's entry in the meta-repo's size hook (since retired, with the budget). It is a handful of bytes, which is
+not a line. So the rule lives where a worker touching this code reads it: the JSDoc on
+`excerptValue`, the block in `test/scripts/phi-scan.test.ts` under
+`"phi-scan: a hit does NOT retain the payload its excerpt was cut from"`, and this file.
+
+**Provenance.** Every figure below was measured on the tree that shipped, against base **`88be779`**
+restored **by file copy**. **The two tables and the grid, and nothing else, come out of the committed
+instrument**, which prints all three in one run:
+
+```
+git show 88be779:scripts/phi-scan.ts > /tmp/base-phi-scan.ts
+pnpm measure:phi-scan-retention /tmp/base-phi-scan.ts
+```
+
+**The other figures on this page are NOT from that script and are not claimed for it** - the
+discarded-instrument readings, the `RegExp.input` probe and the red-on-base test figure each say
+where they came from where they are written. A first draft of this page said "every figure" was
+re-derivable by that one command, which was false of five of them, and **the sentence was cut rather
+than the script grown to make it true.**
+
+### The defect
+
+`excerptValue` cut the value with `raw.slice(0, MAX_HIT_VALUE_LENGTH)`, and the value it was handed
+was itself either a regexp match against a file's whole decoded text or a trimmed decode of an
+element's declared span. **V8 answers both with a string that points into its parent.** So a 19
+character name matched inside an 8 MiB page produced an excerpt whose 19 characters kept the 8 MiB
+page alive for the rest of the run, and `hits` lives for the whole run.
+
+**BOTH BRANCHES LEAKED, AND THE SHORT ONE IS THE EASY ONE TO MISS.** The truncating branch is the
+obvious carrier, but a value already under the bound is returned unchanged, and a regexp match under
+the bound is a pointer too. Fixing only the branch that cuts would have left the text sweep's PN
+route, which is the route that finds names, retaining exactly as much as before.
+
+### The instrument, and why the obvious one reads zero
+
+`scripts/phi-scan.ts` is synchronous from its first line to its last, so **nothing on its event loop
+runs while it is scanning.** A `setInterval` sampler preloaded into it fires once before the scan and
+once after it, when `hits` is already unreachable; both readings are about an idle process. That was
+measured, not assumed: the first sampler built for this slice reported the same 5.1 MiB for a 16 MiB
+corpus and for a 160 MiB one, which is what a sampler that never fires looks like.
+
+**A GENERATOR IS AN INSTRUMENT.** Three further readings, each taken by a throwaway harness during
+this slice and none of them re-derivable from the committed script, were discarded for the same
+class of reason before the shape below was settled on, and each is worth knowing:
+
+- **`--max-old-space-size` does not bound this at all.** A string produced by `Buffer.toString()` is
+  counted in `process.memoryUsage().external`, not in `heapUsed`, and the old-space limit does not
+  apply to it. Base finished a 80 MiB corpus under `--max-old-space-size=16`. **The retained payload
+  is invisible to the heap limit**, which makes it harder to notice rather than safer.
+- **Peak RSS is swamped by garbage.** Polling `/proc/<pid>/status` VmHWM separated base from the fix
+  by 16 MiB on a corpus where the real difference is 64, because a hit-free control already read
+  159.5 MiB of uncollected transient.
+- **An at-exit reading measures garbage too.** Without a forced GC it reported an `external` that
+  went DOWN as the corpus grew.
+
+What works: preload an observer that hooks `fs.readFileSync`, so it runs **inside** the scan, once
+per file, with `hits` live, and force a full GC before reading `process.memoryUsage()`. The observer
+lives in the test and in the measurement script; `scripts/phi-scan.ts` is not touched and runs
+exactly as it ships.
+
+**🩺 THE INSTRUMENT IS VERIFIED BEFORE ANY NUMBER IT PRINTS IS BELIEVED, AND EACH TABLE VERIFIES WHAT
+ITS OWN CONCLUSION NEEDS.** The **first** table, whose conclusion is about growth with corpus size,
+scans every corpus twice: once with one PN-shaped token per file, and once byte-for-byte the same
+size with no token in it. That second run is the negative control, and it is what says a retention
+difference is the doing of the hits rather than of the corpus; the harness throws rather than reports
+if the positive corpus does not produce one hit per file, if the observer did not fire once per file,
+or if the control is not clean. **The second table has NO control and needs none**, because its
+conclusion is a base-against-shipped delta over byte-identical corpora with equal hit counts; it
+asserts only that the loud pages produced many hits and that the observer fired once per file. **That
+distinction is written down because the sentence above it was once a universal, and the second table
+falsified it the moment it was added.**
+
+### What it measures
+
+Retained peak, forced GC, sampled once per file during the scan:
+
+| corpus               | base `88be779` | shipped  | hit-free control, base / shipped |
+| -------------------- | -------------- | -------- | -------------------------------- |
+| 2 x 8 MiB = 16 MiB   | 34.0 MiB       | 33.6 MiB | 26.0 / 25.6 MiB                  |
+| 5 x 8 MiB = 40 MiB   | 58.0 MiB       | 33.6 MiB | 26.0 / 25.6 MiB                  |
+| 10 x 8 MiB = 80 MiB  | 98.0 MiB       | 33.7 MiB | 26.0 / 25.7 MiB                  |
+| 20 x 8 MiB = 160 MiB | 178.0 MiB      | 33.7 MiB | 26.0 / 25.7 MiB                  |
+
+**Base grows by one whole file per hit-bearing file. The shipped tree does not grow at all.** Three
+repeats of every cell agreed to the tenth of a MiB. **At two files the two trees read the same**, and
+that row is kept rather than dropped: the fix buys nothing on a small corpus, and a table that only
+showed the loud rows would be arguing rather than reporting.
+
+### 🔴 The direction the copy COSTS on, which the table above cannot show
+
+That table is the favourable axis: few excerpts, large pages. The unfavourable one is many hits
+inside each page, where a resident copy of up to the excerpt bound replaces a resident pointer, and
+the `hits` array is still unbounded. Five 8 MiB pages of back-to-back PN tokens:
+
+| token length        | hits      | base `88be779` | shipped   |
+| ------------------- | --------- | -------------- | --------- |
+| 200, over the bound | 208,675   | 82.3 MiB       | 87.2 MiB  |
+| 20, under the bound | 1,997,290 | 292.3 MiB      | 280.2 MiB |
+
+**It goes both ways and it is small in both**, which is why it is a row rather than a redesign: over
+the bound the copy costs 4.9 MiB on 82.3, and under it the copy is CHEAPER than the pointer it
+replaced by 12.1 MiB on 292.3. What is unchanged is the kind of thing retained: excerpts, never
+whole payloads.
+
+**🩺 THE FIRST DRAFT OF THIS TABLE READ FLAT AND IT WAS THE INSTRUMENT, NOT THE RESULT.** It used ONE
+loud file, and the observer fires as a file is READ, before that file has contributed a hit, so the
+only sample it took was of an empty `hits`. It printed 25.9 MiB against 25.6 MiB, a difference
+indistinguishable from the baseline, and it would have shipped as "no cost". The largest sample of
+an `n` file corpus sees `n - 1` scanned files; every row here uses five.
+
+### The shape, which is the same one `#109` used
+
+The copy is inside **`excerptValue`, the only constructor of `HitValue`**, so it is on the slot and
+not on a caller. There is no `hits.push` that can put a pointer-into-a-payload on a hit, for the same
+reason there is none that can put an unbounded string on one.
+
+**The round trip is `utf16le`, and `utf8` would have been a silent value corruption.**
+`Buffer.from(s, "utf8")` turns an unpaired surrogate into U+FFFD, so the report would print a
+character the file does not contain, which is the same class of wrong answer as printing too much.
+`utf16le` round-trips all 65,536 code units, paired or not. **That no caller can hand this an
+unpaired surrogate today is exactly the reasoning this slot exists to not depend on.**
+
+**🛑 AND NO TEST DISCRIMINATES THE THREE ENCODINGS, WHICH IS SAID HERE RATHER THAN LEFT TO BE
+INFERRED FROM A CASE NAMED FOR THEM.** Nothing reachable through the CLI can carry an unpaired
+surrogate: the tag route decodes latin1 and the text sweep's recognizers match ASCII, so `latin1`,
+`utf8` and `utf16le` all round-trip every value this scanner can produce identically. The suite pins
+that the excerpt equals the value's own first characters over the whole latin1 alphabet; the choice
+of `utf16le` is an argument about the slot, and this page does not dress it as a measurement.
+
+### The superset, in the strongest form available
+
+**42 of 42 grid cells byte-identical to base on exit code, stdout AND stderr; 0 violations.** The
+grid crosses six routes (tag PN, tag DA, tag DT, text PN, text dates, embedded object) with five
+value lengths either side of the bound and three cap settings, plus a clean corpus per cap.
+
+**NON-VACUITY IS PRINTED, NOT ASSUMED: 39 of the 42 cells exit 1, 47 hit lines are printed, and 18 of
+them carry a cut value.** A grid whose cells printed nothing would read identical on every one.
+
+**PROVED BY MUTATION.** Cutting one character less (`MAX_HIT_VALUE_LENGTH - 1`) takes the grid from
+42 identical to **24 identical and 18 violations**. The grid can see a changed value.
+
+**And the loud case, taken by hand rather than by the instrument** (a one-off harness in a scratch
+directory, not committed, and named as such). An 8 MiB `(7FE0,0010) OW` payload uniform over
+`0x41-0x60` produced **71,734 hits** with `--max-hit-lines 0`: stderr is **byte-identical** between
+the two trees (6,063,059 bytes, `cmp` clean), and the wall clocks overlap across three runs each.
+**No ratio is quoted, and 71,734 is a fourth draw of a spread that is not a rate** (the item already
+carries 71,122 / 71,447 / 71,525, and a dark frame reads 0).
+
+### The tests, and which of them run red on base
+
+Three cases. **One is the property and it goes red on base**: nine hit-bearing files must not cost
+more retention than three, and on `88be779` six more files cost **12,626,394 bytes** against a
+threshold of one file (read off the failing assertion with the base tree restored by file copy, not
+from the instrument). **The other two are green on base by design and are named as such** rather
+than counted as evidence: the detector-zero control (the filler alone is hit-free, so the difference
+is the hits' doing) and the round-trip fidelity case, which guards the new copy and has nothing to
+regress on a tree without it.
+
+**No case writes down how many bytes a run may hold.** The claim is a shape, not a size, so the
+assertion is a difference between two corpus sizes; `pnpm measure:phi-scan-retention` prints the
+sizes. **The suite's own scanner path is this repository's**, so a test cannot be pointed at a base
+tree; a base reading is taken by restoring `scripts/phi-scan.ts` by file copy and re-running.
+
+### 🔴 Residuals, disclosed and NOT closed
+
+- **⚠ V8's legacy `RegExp` statics retain ONE subject string, and that is why the shipped column is
+  not the control.** `RegExp.input` holds the last successfully matched subject, so one file's whole
+  decoded text stays alive after its scan regardless of anything `Hit` does. Measured by a one-off
+  probe rather than by the committed instrument, which has no row for it:
+  after a match on an 8 MiB subject, with every local reference dropped and a forced GC,
+  `RegExp.input.length` reads 8,388,628. It is what the constant 8 MiB gap between the shipped
+  column and the control is, and the gap tracked file size exactly across 2, 4, 8 and 16 MiB files.
+  **Bounded by the LARGEST SINGLE FILE, not by the corpus.** Its own slice if ever; the obvious
+  remedy is a throwaway match after each file, which is a bound holding only from where it is
+  called.
+- **The `hits` ARRAY is still unbounded.** Each element is now bounded in what it prints AND in what
+  it holds; the array is not. Capping it would make the totals a claim about what was kept rather
+  than about the corpus, which is the net-leak shape `#104` refused.
+- **`report()` is still NOT MONOTONE at the per-file cap** (`#105`). Untouched here in both
+  directions: this slice changes no printed byte.
+- **A never-draining reader still makes the gate WAIT** (`#107`), and `test/helpers/run-script.ts`
+  still inherits `spawnSync`'s 1 MiB `maxBuffer`.
+- **The relocation, `position.contextPath` and `attributes[].tag`** are parser-side residuals and are
+  untouched.
+
+---
+
+<a id="dicom-scandicom-silent-halt"></a>
+
+## dicom - `scanDicom` halted SILENTLY behind a preamble, and no text sweep followed (2026-08-08)
+
+`DICOM-SCANDICOM-SILENT-HALT`, filed `PRE-EXISTING` and surfaced by `#97`'s refuter pass. Written
+here rather than in `documentation/agent-notes.md` because that file is **over** its 250,000-byte
+budget on `main` and the hook refuses growth (an umbrella size rule, since retired). **Nothing dropped.**
+
+**`CLAUDE.md` CARRIES NO LINE FOR THIS, AND THAT IS A GAP RATHER THAN A JUDGEMENT THAT THE TRAP IS
+SMALL.** Its ratchet is 39,550 bytes and it measured 39,544 on `main`: six bytes, which is not a
+line. Relocation is the remedy, never deleting an existing trap to make room and never raising the
+ceiling. So the rule lives where a worker touching this code actually reads it: the JSDoc on
+`scanTarget` and on `base64Runs`, the block in `test/scripts/phi-scan.test.ts` under
+`"phi-scan: a preamble-FUL object's silent halt"`, and this file.
+
+**Provenance.** The spec claims are read from the SHA-pinned vendored copy at `vendor/nema/part05/`,
+**PS3.5 2026c** (§7.1 tag ordering, §7.5.2 undefined-length Sequences). Every other figure is a
+measurement taken on this repo against base **`21e25a0`**, quoted with that sha and no other. The
+base column is reproducible with `git show 21e25a0:scripts/phi-scan.ts` run with
+`cwd=<repo root>`, since the script resolves its allow-list from `process.cwd()`.
+
+### The defect
+
+`scanTarget` ran the text sweep under `if (!isDicom(buf))`. That made the sweep an `else` for a
+preamble-**ful** Part 10 object, and `scanDicom` **gives up quietly**: its walk `break`s at the first
+header it cannot read, and `readElementExplicit` answers `null` for an undefined-length value
+(`0xFFFFFFFF`).
+
+**THE HALT IS A PROPERTY OF THE DATASET, AND THE PREAMBLE IS NOT PART OF THE DATASET.** That is the
+whole defect in one line. 132 bytes of preamble and `DICM` change nothing about whether the walk can
+read the elements behind them, so `isDicom` was deciding who is owed a text sweep on evidence that
+has no bearing on the question. The identical dataset was caught **without** a preamble and missed
+**with** one, in silence, over a name-bearing `(0010,0010)`.
+
+`#97` closed the preamble-**less** half by running both routes. This is the mirror case, and the
+lesson generalises past both: **`scanDicom` returning without a hit is not evidence of anything.**
+It has no way to say how far it got, so nothing may be conditioned on it having got anywhere.
+
+Quote **PS3.5 §7.5.2 whole**: it defines TWO Sequence delimitations, the encoder chooses, and "Both
+ways of encoding shall be supported by decoders." A file carrying an undefined-length `SQ` is
+conformant, not malformed; calling it "the normative encoding" overstates it and is not needed here.
+§7.1 then orders Data Elements by ascending tag, so a conformant object puts `(0008,1110) SQ`
+**before** `(0010,0010)`. A non-LE transfer syntax stops the walk the same way, at the first dataset
+element.
+
+### Measured, base `21e25a0`
+
+One object per row. The name is this suite's own synthetic `RIVERA^JUANITA`; `ANON^PATIENT` and
+`DATE:20240115` are on the allow-list and are the clean controls.
+
+| target | base | shipped |
+|---|---|---|
+| preamble-FUL, `(0008,1110)` undefined-length `SQ` then `(0010,0010) PN` | exit **0**, `OK - no hits` | exit 1 |
+| preamble-FUL, the name at `(0008,1030) LO` (no tag table covers it) | exit **0** | exit 1 |
+| preamble-FUL, Explicit VR **Big Endian** dataset, `(0010,0010) PN` | exit **0** | exit 1 |
+| the first row's object **base64'd into a `.md`** | exit **0** | exit 1 |
+| **CONTROL** the first row's object **without** the preamble | exit 1 | exit 1 |
+| **CONTROL** preamble-FUL `(0010,0010) PN`, no halt in front of it | exit 1 | exit 1 |
+| **CONTROL** the same `.md` shape, no halt | exit 1 | exit 1 |
+| **CLEAN** preamble-FUL, allow-listed PN + allow-listed DA | exit 0 | exit 0 |
+| **CLEAN** preamble-FUL, allow-listed name at `(0008,1030) LO` | exit 0 | exit 0 |
+| **UNCHANGED** preamble-less, plain `(0010,0010) PN` | exit 1 | exit 1 |
+| **UNCHANGED** a `.dcm` that is not a DICOM stream at all | exit 1 | exit 1 |
+
+**THE LAST FIVE ROWS ARE WHAT MAKE THE FIRST FOUR EVIDENCE.** Three are positives the detector
+already caught on base, so a green anywhere here would be a **gap** rather than a clearance; two are
+clean results pinned **beside** them.
+
+**A NEGATIVE CONTROL AGAINST THE WRONG PACKAGE.** The first row's object was handed to
+`hl7/scripts/phi-scan.ts` and `x12/scripts/phi-scan.ts`, each with its own repo as `cwd`: both exit
+**0**, and neither script is byte-identical to this one. So the exit codes above are `dicom`'s.
+
+**A `N OF M` FIGURE HAS A MOVING BASE.** Quoted with its sha and no other: with the tests as they
+stand at the end of this slice, `test/scripts/phi-scan.test.ts` runs **5 failed, 76 passed, of 81**
+against base `21e25a0`'s `scripts/phi-scan.ts`. The passing majority is the point: a control that
+only passes after the fix is not a control.
+
+### The remedy, and the superset property to preserve
+
+The binary branch asks two independent questions and runs **both** answers, unconditionally:
+
+| input | base `21e25a0` | shipped |
+|---|---|---|
+| `isDicom` true | `scanDicom` only | `scanDicom` **and** `scanText` **and** `scanEmbeddedObjects`. Pure addition. |
+| preamble-less | `scanDicom` and `scanText` and `scanEmbeddedObjects` | unchanged |
+| neither | `scanText` and `scanEmbeddedObjects` | unchanged |
+
+**`scanEmbeddedObjects` IS NAMED IN EVERY ROW ON PURPOSE.** A draft of this table stopped at
+`scanText`, which reads as though the base64 decode were a markdown feature, and it also made rows 2
+and 3 wrong about the base: both ran the decode there already.
+
+`scanEmbeddedObjects` gained a second route on the object it decodes, for the same reason and
+one level down. **The enclosing page's own text sweep does not stand in for it**: the object arrives
+base64-encoded, so the name is not in the page's bytes in any form the PN regex could match. That is
+pinned by a control which strips the base64 run from the same page and requires exit 0.
+
+**WIDEN BY UNION, NEVER BY REPLACEMENT.** `#97` paid a blocker for this and it has not softened: an
+`if`/`else` dispatch can make a fix a net leak. Nothing here may become an `else`, and no cheaper
+predicate may be reached for to decide who is owed a text sweep, because the halt is invisible to any
+test on the first 132 bytes.
+
+### The cost, taken deliberately and MEASURED rather than asserted
+
+The text sweep now runs over binary values, so its recognizers fire on image noise. This is the
+`DICOM-DEIDENT-OVER-REDACTION` false-positive shape and it was accepted before coding: **a silent
+PHI-scan halt over a name-bearing `(0010,0010)` is a false green, and a false positive is not.** The
+trade is not symmetric. A false positive costs a developer one look at a hit line; the halt it
+replaces printed `OK - no hits` over a patient name.
+
+**🛑 THERE IS NO SENTENCE HERE RANKING THE RECOGNIZERS, AND ITS ABSENCE IS THE FINDING. TWO WORDINGS
+WERE REFUTED IN A ROW, SO THE CLAIM IS DELETED RATHER THAN WRITTEN A THIRD TIME** (`CLAUDE.md`
+§ Method). Draft one said the **compact-date** pass was the price, reasoning from the item's phrase
+"flags digit runs inside pixel data" instead of counting; pass 1 refuted it. Draft two said it was
+the **PN-shape** pass "and not the compact-date one", generalising from high-entropy noise; pass 2
+refuted that too, and the counter-measurement reproduced here. **Both recognizers fire, and WHICH ONE
+DOMINATES IS A PROPERTY OF THE PAYLOAD'S BYTE HISTOGRAM, not of this scanner.** The table is the
+statement. **Do not replace it with a sentence.**
+
+Hits per 8 MiB of `(7FE0,0010) OW` value, shipped scanner. **Base `21e25a0` is 0 on every row,
+because base swept none of it.** One draw per row unless the row says otherwise, over a synthetic
+payload named by its byte histogram; these are ILLUSTRATIVE OF RANGE and are not rates.
+
+| 8 MiB pixel payload | PN-shape hits | date hits |
+|---|---|---|
+| uniform over `0x00-0x2F` (dark frame) | 0 | 0 |
+| 8-bit ramp | 0 | 0 |
+| 16-bit LE ramp | 0 | 0 |
+| CSPRNG, 8 independent draws (compressed or encapsulated frame) | 8 to 23 | 0 in all 8 |
+| gaussian mu `0x35` sd 10 (narrow histogram) | 0 | 25 |
+| uniform over `0x30-0x3F` (4-bit-quantised region) | 0 | 843 |
+| ASCII digits and dots (adversarial; the dot fraction is a knob, so this row moves most) | 0 | ~1,000 |
+| uniform over `0x41-0x60` (letters, and the caret sits in it) | **71,122** | 0 |
+
+**THE SPREAD IS THE POINT: 0 TO 71,122 HITS OVER THE SAME 8 MiB, ON PAYLOADS THAT DIFFER ONLY IN
+WHICH BYTES THEY USE.** A rate quoted off any one row is a fact about that row's histogram. The last
+row is what refuted draft two: the PN pass is not rare, it is rare **on high-entropy noise**, and a
+payload whose values land in the letter band puts the caret `0x5E` inside its own alphabet. The
+`0x30-0x3F` row is the same lesson pointed the other way, on a payload with no letters in it at all.
+**NO ROW HERE CLAIMS TO BE WHAT A REAL MODALITY WRITES**, and a draft that called one "not
+adversarial at all" was asserting the shape of real imaging data without measuring any, which is the
+move that got drafts one and two refused. These are histograms, chosen to span the range.
+
+**THE RATE IS A PROPERTY OF THE CORPUS, NOT OF THIS SCRIPT.** On the corpus this gate actually reads
+it is **zero**: `pnpm phi-scan` exits 0 on `main` and exits 0 here, because the package commits **no
+`.dcm` files at all** and a `.ts` source was already getting the text sweep. Every figure above is a
+statement about a hypothetical corpus of committed imaging objects.
+
+**A ZERO IN THE TABLE ABOVE IS A FIXTURE PROPERTY, NOT A CLEARANCE.** Each zero has its own cause in
+that row's histogram, and no zero generalises to the row above or below it. **Do not restate any of
+them as "pixel data does not false-positive".**
+
+**🛑 AND A FIRST DRAFT OF THIS TABLE READ 0 ON EVERY ROW, WHICH WAS A FIXTURE ARTIFACT REPORTED AS A
+FINDING** - this repo's recurring failure mode. The generator was `x = (x * 1103515245 + 12345) >>> 0`,
+and that product exceeds 2^53, so the low bits are lost to float precision and the sequence degenerates
+into structured bytes rather than noise. Any pseudo-random fixture here uses `Math.imul`-based
+xorshift32 or `crypto.randomFillSync`, and the test that needs a big deterministic run says so in a
+comment for exactly this reason.
+
+**COST: LINEAR, ~40 ms per MiB**, best of three at 1/2/4/8/16 MiB on both a CSPRNG and an
+adversarial digits-only payload, with the ~130 ms process-start floor subtracted. Base was ~0 on
+every size because it did no sweep. There is no superlinear term: the sweep is three linear regex
+passes plus one linear run scan.
+
+### What this ALSO closed, `PRE-EXISTING`, because this item put weight on it
+
+**A MULTI-MEGABYTE BASE64 RUN REFUSED THE SCAN (exit 2).** The run matcher was
+`new RegExp("[A-Za-z0-9+/]{16,}={0,2}", "g")`, and V8 keeps per-character backtrack state for a
+greedy quantifier, so ONE long run threw `RangeError: Maximum call stack size exceeded`. `run()`
+turns that into exit 2. Measured on base `21e25a0` over a plain `.md` carrying one run: 0.5, 1, 2 and
+4 MiB exit 0; 8 MiB exits **2**. It was reachable on the doc corpus and on any preamble-less object,
+which is why it is `PRE-EXISTING` rather than introduced here; **this item made it reachable on
+preamble-ful objects too** (base 0, first draft 2), and a Part 10 object is routinely megabytes, so it
+is closed rather than disclosed.
+
+`base64Runs()` is a forward scan with no backtracking and no per-character stack. It is a different
+**representation** of the same predicate, not a wider or narrower one, and the equivalence is
+measured rather than asserted: over every tracked file under `docs-content/`, `README.md`, `test/`,
+`src/` and `scripts/` it yields **0 mismatches** against the pattern it replaced, and 0 across a set
+of edge and adversarial strings including a 4 MiB single run (below the threshold where the pattern
+throws), padding of zero, one, two and three `=`, and a run one character below the floor.
+
+**🛑 THE RUN COUNT IS DELIBERATELY NOT WRITTEN DOWN.** A draft quoted one and it matched neither sha;
+a second draft quoted two more, naming "base" and "head", and the "head" figure was already wrong at
+the sha it shipped on. **Both are deleted rather than corrected a third time**, because the compared
+corpus contains files this slice edits: any identifier of 16 or more base64 characters written into
+`scripts/phi-scan.ts` or `test/` is itself a counted run, so the figure moves with the code that
+produces it. (**Not with this file.** `documentation/` is in none of the five globs below, and a
+draft that said "every line of this very paragraph" moves the number was wrong about that.) It is one
+command, so derive it, comparing `[...t.matchAll(/[A-Za-z0-9+\/]{16,}={0,2}/g)].map(m => m[0])` with
+`[...base64Runs(t)]` over `git ls-files -z -- docs-content README.md test src scripts`. **What
+matters is that the mismatch count is zero, and zero does not move.**
+
+**AND NO TEST PINS THAT EQUIVALENCE.** A draft of the `base64Runs` JSDoc claimed one did; the named
+test pins the no-refusal property and says nothing about the run set. **DELETED, not reworded.** It
+cannot be a unit test as things stand, because `phi-scan.ts` is a CLI that calls `process.exit` at
+module scope, so nothing in it is importable. What the suite does pin is the **floor**, which is the
+end a narrowing shows up at first: `"reaches the SHORTEST real fixture in docs-content, not just a
+test-built one"` takes the shortest DICOM-shaped run out of the shipped corpus and requires a name
+appended to it to be found. That test predates this slice and is why the floor is guarded at all.
+
+**🛑 THE THRESHOLD IS A PROPERTY OF V8'S STACK, NOT OF THIS SCRIPT.** The test pins the PROPERTY (a
+6 MiB run is swept, and the object after it is still reported) and not the number. On a build with a
+larger stack the old matcher would have passed it too, and that is fine: the assertion carrying the
+weight is the HIT, which a refusal loses.
+
+### Residuals, disclosed and NOT closed
+
+- ~~**A TEXT EXTENSION IS STILL DISPATCHED BY NAME, SO A `.md`/`.json`/`.txt`/`.csv` FILE WHOSE RAW
+  BYTES ARE A DICOM OBJECT IS NEVER SCANNED AS ONE.**~~ **CLOSED** by `DICOM-PHI-SCAN-RESIDUALS`
+  (2026-08-09). The prediction in this bullet - that closing it means running **both** routes on a
+  text extension - is what shipped, and the branch was DELETED rather than widened, so nothing was
+  swapped. Read `documentation/agent-notes.md#dicom-phi-scan-name-dispatch` for the before/after matrix and the superset proof.
+- **`scanDicom` STILL REPORTS NOTHING ABOUT THE BYTES IT NEVER READ.** The text sweep behind it is a
+  net, not a fix for the walk: a value that is neither `FAMILY^GIVEN` nor an eight-digit date run is
+  still invisible past the halt, an MRN and an institution name among them. Teaching the walk to
+  descend a Sequence, or to report where it stopped, is a different change and is not made here.
+- **THE EMBEDDED DECODE IS NOT RE-ENTERED ON THE DECODED BYTES.** One level is what a doc fixture is;
+  recursing would spend unbounded time on an object whose pixel data happens to be alphanumeric.
+- The `--staged` route still drops `D` (a deletion has no staged blob) and `U` (an unmerged path has
+  no single one). `PRE-EXISTING`, untouched, and already stated in the script's own banner.
+- **A DUPLICATE LINE IS THE PRICE AND IT IS THE RIGHT WAY ROUND.** A DICOM object can now report one
+  value twice, once under its tag and once as `(text)`. Two lines naming one value is not a defect in
+  a gate whose output a human reads before committing. A missing line is.
+- **`report()` PRINTED ONE STDERR LINE PER HIT, UNCAPPED, AND THIS SLICE WIDENED WHAT CAN REACH IT.**
+  `PRE-EXISTING`: base already had no cap, on every text file and every non-DICOM binary. An
+  adversarial 128 KiB payload yields tens of thousands of PN matches. **CLOSED 2026-08-09 by a
+  per-file PRINT cap** (`DICOM-PHI-SCAN-RESIDUALS`), which changes nothing about the exit code, the
+  totals or what is detected. The figures, the superset proof and the residuals it does **not** close
+  are in [`documentation/agent-notes.md#dicom-phi-scan-report-cap`](documentation/agent-notes.md#dicom-phi-scan-report-cap). The same shape is recorded
+  against `deidentify()` in `CLAUDE.md` ("58,255 findings and 36 MB of warnings from a 1 MiB input"),
+  and the remedy there was a per-run cap, not a narrower detector.
+
+---
+
+<a id="dicom-scantarget-preambleless"></a>
+
+## dicom - `scanTarget` sent a preamble-less object on disk to the TEXT sweep (2026-08-08)
+
+`DICOM-SCANTARGET-PREAMBLELESS`, filed `PRE-EXISTING` and the last open item from the finished
+roadmap. Written here rather than in `documentation/agent-notes.md` because that file is **over** its
+250,000-byte budget on `main` and the hook refuses growth (an umbrella size rule, since retired). **Nothing dropped.**
+
+**Provenance:** the spec claims are read from the SHA-pinned vendored copy at
+`vendor/nema/part05/`, **PS3.5 2026c** (§7.1 tag ordering, §7.5.2 undefined-length Sequences). Every
+other figure is a measurement taken on this repo, quoted with the sha it was taken at, and the two
+mutation controls are reproducible with `git show <sha>:scripts/phi-scan.ts` over the current tests.
+
+**`CLAUDE.md` CARRIES NO LINE FOR THIS, DELIBERATELY, AND THAT IS A GAP RATHER THAN A JUDGEMENT THAT
+THE TRAP IS SMALL.** Its ratchet is 39,550 bytes and it measured 39,544 on `main`: six bytes, which
+is not a line. The remedy in that situation is relocation, never deleting an existing trap to make
+room, and never raising the ceiling. So the rule lives in three places that a worker touching this
+code actually reads: the JSDoc on `scanTarget` itself, the ten cases in
+`test/scripts/phi-scan.test.ts` under "a preamble-less object ON DISK reaches the DICOM route", and
+this file.
+
+### The defect
+
+`scripts/phi-scan.ts` has two DICOM shape tests and they are not the same test.
+
+- `isDicom(buf)` is the Part 10 test: 132 bytes minimum, `DICM` at 128. It answers **false** for a
+  preamble-less stream.
+- `fileMetaStart(buf)` knows **both** shapes: 132 for a Part 10 object, and 0 for a stream that opens
+  directly on group `0002` in Explicit VR LE. It is what `scanDicom` calls, and what
+  `scanEmbeddedObjects` has called since the doc-corpus route was written.
+
+`scanTarget` dispatched on the wrong one. A `.dcm` or `.bin`, and anything under an unknown
+extension, was gated on `isDicom` **before** reaching `scanDicom`; a preamble-less object failed that
+gate and fell to the `scanText` fallback instead. So the DICOM-aware sweep - the PN/DA/DT tag table,
+the transfer-syntax dispatch off `(0002,0010)`, the per-element value decode - **never ran on a
+preamble-less object on disk**, and the gate printed `[phi-scan] OK - no hits` over it.
+
+A missing preamble is not an exotic input here. It is a deviation the parser tolerates on the read
+path and warns about with `DICOM_MISSING_PREAMBLE`, and `docs-content/cookbook.md` ships a fixture in
+exactly that shape to demonstrate the warning. The doc corpus reached `scanDicom` correctly; only an
+object **on disk** did not.
+
+### Why the text fallback is not a narrower scan but a different one
+
+This is the part worth keeping, because "it still got scanned, just by the other route" is the
+reading that makes the defect look cosmetic. The two routes detect different things, and the text
+route cannot see what the tag table sees:
+
+- The text pass matches PN only as `FAMILY^GIVEN` (`/\b[A-Z][A-Za-z\-']+\^[A-Z][A-Za-z\-']+\b/`). A
+  **single-component** `(0010,0010)` carries no caret, so there is nothing to match. The DICOM route
+  does not care about the shape of the value at all: any value at a `PN_TAGS` tag that is not on the
+  allow-list is a hit.
+- The text pass matches a date only as `YYYY-MM-DD` or as a standalone eight-digit token. A `DT`
+  value's `YYYYMMDD` head sits inside a longer digit run, so the word-boundary anchors miss it; the
+  DICOM route slices the head off and checks it.
+- Under Implicit VR LE there is no VR on the wire at all, so only a tag table can classify a value.
+
+### Measured, base `5ae8fe4`
+
+One preamble-less object per row, Explicit VR LE, `(0008,0020) DA` and `(0010,0010) PN`, written to
+disk and handed to the scanner in paths mode. The name is `WESTERGAARD` - invented, single-component,
+and **not** matchable by the text sweep, which is what makes the exit codes evidence rather than
+coincidence.
+
+| target | base | with the fix |
+|---|---|---|
+| preamble-less `.dcm`, name-bearing PN | exit **0**, no hit | exit 1, `(0010,0010)` |
+| preamble-less `.bin`, same | exit **0**, no hit | exit 1, `(0010,0010)` |
+| preamble-less `.dat` (unknown ext), same | exit **0**, no hit | exit 1, `(0010,0010)` |
+| the same object **with** a preamble | exit 1, `(0010,0010)` | exit 1, `(0010,0010)` |
+| preamble-less `.dcm`, allow-listed `ANON^PATIENT` | exit 0 | exit 0 |
+
+The fourth row is what makes the first three a gate defect rather than an undetectable payload: the
+identical bytes, plus 132 bytes of preamble and magic, were caught all along. The fifth is the clean
+result pinned beside the positives, so a green is a green and not an absent detector.
+
+**A `N OF M` FIGURE HAS A MOVING BASE.** Quoted with its sha and no other: with the tests as they
+stand at the end of this slice, `test/scripts/phi-scan.test.ts` runs **6 failed, 46 passed, of 52**
+against base `5ae8fe4`'s `scripts/phi-scan.ts`, and **3 failed, 49 passed, of 52** against the
+refused first draft `1ff2ab4`'s. The passing majority in both columns is the point: a control that
+only passes after the fix is not a control.
+
+### 🛑 THE FIRST DRAFT WAS REFUSED, AND THE FINDING IS THE RULE
+
+The first draft made the binary branch an if/else: recognized by `fileMetaStart` goes to `scanDicom`,
+otherwise `scanText`. A `conformance-refuter` pass refused it, and the finding reproduced
+independently. **ADDING THE DICOM ROUTE MUST NOT SUBTRACT THE TEXT ONE, BECAUSE `scanDicom` GIVES UP
+QUIETLY.** Its walk `break`s at the first header it cannot read, and `readElementExplicit` answers
+`null` for an undefined-length value (`0xFFFFFFFF`). That is not a malformed file. **Quote §7.5.2
+whole: it defines TWO delimitations, the encoder chooses, and "Both ways of encoding shall be
+supported by decoders."** Calling undefined length "the normative encoding" overstates it and was
+corrected here; the argument needs only the half the clause states outright, which is that a
+conformant file may carry it and a decoder shall support it. §7.1 then orders Data Elements by
+ascending tag, so a conformant object puts `(0008,1110) SQ` **before** `(0010,0010)`. A non-LE
+transfer syntax stops the walk the same way, at the first dataset element.
+
+Measured, same bytes, three scanners. Preamble-less, `(0008,1110)` undefined-length SQ, then
+`(0010,0010) PN` carrying this suite's own synthetic `RIVERA^JUANITA`:
+
+| scanner | result |
+|---|---|
+| base `5ae8fe4` | exit 1, the text sweep reports the name |
+| refused draft `1ff2ab4` | **exit 0, `OK - no hits`** |
+| shipped | exit 1 |
+
+A gate that reports clean over a name it used to report is a worse defect than the one being fixed.
+
+### The remedy
+
+`scanTarget` dispatches a text extension by NAME. For everything else it asks **two independent
+questions and runs both answers**, which makes it a strict **superset** of the `isDicom` gate on
+every input. That superset property is the thing to preserve if this is ever touched again:
+
+> **⚠ THE FIRST SENTENCE IS SUPERSEDED AND THE REST IS NOT.** `DICOM-PHI-SCAN-RESIDUALS` (2026-08-09)
+> DELETED the by-name branch, so the two questions are now asked of **every** target and the table
+> below describes all of them rather than the non-text-extension ones.
+> `documentation/agent-notes.md#dicom-phi-scan-name-dispatch`.
+
+| input | base `5ae8fe4` | shipped |
+|---|---|---|
+| `isDicom` true | `scanDicom` | `scanDicom`. Byte-for-byte unchanged. |
+| preamble-less | `scanText` | `scanDicom` **and** `scanText`. Pure addition. |
+| neither | `scanText` | `scanText`. Byte-for-byte unchanged. |
+
+Because the middle row keeps the text sweep it used to get, **nothing that was found before can be
+lost**, which is what the refused draft could not say. `.dcm`, `.bin` and unknown extensions were
+three copies of one branch and are one branch now. `isDicom` is not deleted - `fileMetaStart` calls
+it as the Part 10 half of the answer, and the branch calls it again to decide whether the text sweep
+is owed - but nothing may gate the **DICOM** scan on it. **The DICOM route asks `fileMetaStart`,
+never `isDicom`; the text route is not an `else`.**
+
+The cost, stated rather than left to be discovered: a preamble-less object can now report one value
+twice, once under its tag and once as `(text)`. Two lines naming one value is not a defect in a gate
+whose output a human reads before committing. A missing line is.
+
+The superset shape also settles a second question the exclusive draft had opened. `fileMetaStart`'s
+preamble-less test is **looser** than the library's own tolerated shape (`src/parser/part10-header.ts`
+requires exactly `(0002,0000) UL 0x0004`; the scanner accepts any `(0002,eeee)` with two ASCII
+capitals at bytes 4-5). Under an if/else that looseness could **remove** a text sweep from a binary
+the library itself would refuse as `NOT_DICOM_PART_10`. Running both routes means a false recognition
+costs a wasted walk and never a lost scan, so the two tests do not have to be reconciled here.
+
+### Residuals, disclosed and NOT closed
+
+- **🩺 `scanDicom` HALTS SILENTLY, AND A PREAMBLE-FUL PART 10 OBJECT HAD NO TEXT SWEEP BEHIND IT.
+  ✅ CLOSED by `DICOM-SCANDICOM-SILENT-HALT`; the mechanism, the measurements and the accepted
+  false-positive cost are in
+  [`documentation/agent-notes.md#dicom-scandicom-silent-halt`](documentation/agent-notes.md#dicom-scandicom-silent-halt).** The text sweep is
+  unconditional on the binary branch now, and `scanEmbeddedObjects` runs it on the object it decodes
+  as well. **What is NOT closed is the first half of that heading**: `scanDicom` still reports
+  nothing about the bytes it never read, so a value the text sweep cannot match is still invisible
+  past a halt. Read the residuals in that file before calling the class closed.
+  **▶ The test that pinned the old boundary has been REPLACED, not deleted.** `"a PREAMBLE-FUL object
+  is still scanned by the DICOM route ALONE, byte-for-byte as before"` asserted exit 0 over an object
+  carrying `RIVERA^JUANITA` at `(0008,1030) LO`; the successor asserts exit 1 on the same fixture and
+  keeps the non-vacuity control that the same value at `(0010,0010)` is reported **under its tag**.
+  **▶ This still bounds what the row-4 control above proves.** "The identical bytes plus 132 bytes of
+  preamble were caught all along" is true of a fixture with no undefined-length element in it, and is
+  **not** a general property of the preamble-ful route. Do not restate it as one.
+- ~~**A TEXT EXTENSION IS STILL DISPATCHED BY NAME, SO A `.md`/`.json`/`.txt`/`.csv` FILE WHOSE RAW
+  BYTES ARE A DICOM OBJECT IS NEVER SCANNED AS ONE.**~~ **CLOSED** by `DICOM-PHI-SCAN-RESIDUALS`
+  (2026-08-09), by running **both** routes on every target - which is exactly what this bullet said
+  closing it would take. The doc page keeps `scanEmbeddedObjects`, because the branch was DELETED
+  and not swapped. `documentation/agent-notes.md#dicom-phi-scan-name-dispatch`.
+- The `--staged` route still drops `D` (a deletion has no staged blob) and `U` (an unmerged path has
+  no single one). `PRE-EXISTING`, untouched here, and already stated in the script's own banner.
+- Nothing about the **hit** surface moved. A hit still reports the element's tag, VR, offset and
+  value, which is what the scanner is for; the PHI-diagnostic bounds that govern the *library's*
+  warnings do not apply to a developer-facing gate that exists to print the violating value.
+
+---
+
+<a id="phi-scan-walk-root-scope"></a>
+
+## dicom - the PHI gate's walk root excluded the only place fixtures live (2026-08-08)
+
+`PHI-SCAN-WALK-ROOT-SCOPE`, the org-wide class filed against every `@cosyte/*` repo. Written here
+rather than in `documentation/agent-notes.md` because that file is **over** its 250,000-byte budget
+on `main` and the hook refuses growth (an umbrella size rule, since retired). **Nothing dropped.**
+
+**`CLAUDE.md` CARRIES NO LINE FOR THIS, DELIBERATELY, AND THAT IS A GAP RATHER THAN A JUDGEMENT THAT
+THE TRAP IS SMALL.** Its ratchet is 39,550 bytes and it measured 39,544 on `main`: six bytes, which
+is not a line. The remedy in that situation is relocation, never deleting an existing trap to make
+room, and never raising the ceiling. So the rules live where a worker touching this code actually
+reads them: the banner on `scripts/phi-scan.ts`, the cases in `test/scripts/phi-scan.test.ts` under
+"the walk root is test/, not test/fixtures/", "an embedded base64 object is decoded outside markdown
+too", "a declared root that cannot be walked refuses the scan" and "the walk is reconciled against
+git ls-files", and this file. This is the same disposition `DICOM-SCANTARGET-PREAMBLELESS` reached
+one day earlier, for the same reason.
+
+**Provenance:** every figure below is a measurement taken on this repo, quoted with the sha it was
+taken at. Base is `8982a16`. The base-side measurements are reproducible with
+`git show 8982a16:scripts/phi-scan.ts` run from a checkout of that sha, and the throwaway-repo cases
+are reproducible from the tests themselves.
+
+**🛑 THE SCOPE WAS RE-DERIVED FROM THIS REPO'S OWN FILES, NOT PORTED.** The class's governing rule is
+that a sibling's residual is not evidence about this one, and `hl7` measured two ported residuals as
+NOT open there. Two of the sibling numbers do not survive here at all: **this package has no
+`test/fixtures/` corpus to widen from** (see below), and its regular-file-root exit code is neither
+`hl7`/`fhir`/`cli`'s `2` nor `terminology`'s `1` but **two different wrong answers depending on which
+path was replaced**, both measured.
+
+### What the gate was actually reading
+
+The walk rooted at `test/fixtures/` and `README.md` + `docs-content/`. The number that makes the rest
+of this file make sense:
+
+| | base `8982a16` | head |
+| --- | --- | --- |
+| tracked files | 226 | 229 |
+| opened by all-mode | **13** | **95** |
+| outside the all-mode walk | **213** | 134 (133 outside the roots + 1 corpus exemption) |
+| tracked under `test/` outside it | **82** | **1** (the corpus exemption, printed every run) |
+
+**"Outside the all-mode walk" is not "scanned by neither route", and the two are easy to quote as
+each other.** One of those 82, `test/fixtures/phi-scan/README.md`, was reachable by `--staged`, which
+has never applied the corpus exemption. So the figure for **neither** route is **212 and 81**. Both
+are written down.
+
+**The fixture root contributed EXACTLY ZERO files.** Every file this package writes under
+`test/fixtures/` is gitignored, because the suite regenerates them on every run
+(`test/fixtures/phi-scan/*.dcm|json|txt`); the one tracked file left there is a `README.md` the walk
+skipped by name. So the "fixture corpus" the gate was named for was empty, and the 13 files it opened
+were the package README and the twelve pages under `docs-content/`.
+
+**That matters more here than the shape of the number suggests, and this is the part that is
+dicom-specific.** This package ships **no committed `.dcm` files at all** - `test/integration/parser-security.test.ts`
+asserts as much as an invariant. Every fixture it owns is BUILT IN A `.ts` SOURCE FILE by
+`test/helpers/build-dicom.ts`. So the entire committed fixture corpus was inside the 81 tracked files
+under `test/` that the walk root excluded, and the gate had never opened one of them.
+
+Pointing this scanner at that root finds **81 PN/date hits across 20 files**. Naming all 82 tracked
+files under `test/` by path finds **83 across 21**; the two extra are in the corpus-exempt README,
+which all-mode does not open. Both numbers are written down so neither can be quoted as the other.
+
+### The four ways a declared root went unopened while the gate printed clean
+
+Each was measured on base, and each is pinned by a case with a positive beside it.
+
+| shape | base `8982a16` | head |
+| --- | --- | --- |
+| root MISSING entirely | exit **0**, `OK - no hits` | exit 2, names the root |
+| root a DANGLING symlink | exit **0**, `OK - no hits` | exit 2, "a symbolic link" |
+| root a symlink at a REAL directory | **followed and walked** (see below) | exit 2, "a symbolic link" |
+| root a REGULAR FILE | exit **0** at `test`, exit **1** at `test/fixtures` | exit 2 |
+| root present but EMPTIED | exit **0** | exit 2, via `git ls-files` |
+
+**One row of that table is a different KIND of fact and saying so cost a refuter pass.** Four of the
+five are exit 0 *structurally*: nothing was opened, so nothing could be found. The symlinked-at-a-
+real-directory row is not - base FOLLOWED the link and scanned whatever was behind it, so it exits 0
+over clean contents and **1** over a name-bearing file. The defect there is not the exit code; it is
+that the gate reported on a tree the declared root does not name, and would have reported clean over
+the corpus if the link pointed somewhere empty.
+
+**The dangling case is the sharpest, and it is an `existsSync` fact rather than a `walk()` fact.**
+`existsSync` FOLLOWS the link, so a dangling one answers `false`; the old code's
+`if (existsSync(root))` returned before `readdirSync` was ever called, which means the
+not-a-regular-file rule that catches a link INSIDE a root could not fire for the root itself. The fix
+is `lstatSync`, which answers about the link rather than the target, so a root is classified by the
+same closed set as any entry under it.
+
+**🛑 THE EXIT CODE IS DERIVED FROM THIS SCRIPT'S OWN CONTRACT AND PORTING ONE IS THE BUG.** The
+banner says 0 clean / 1 hits / 2 invocation error, and every refusal here is an `InvocationError`, so
+it is **2**. Base answered the regular-file shape two different wrong ways and neither was 2: a
+regular file at `test` meant the old root `test/fixtures` did not exist, so the run exited **0**; a
+regular file at `test/fixtures` itself raised an uncaught `ENOTDIR` out of `readdirSync` and the
+process exited **1**, the one code that means "PHI was found".
+
+**EXISTENCE IS NOT OBSERVATION, so both halves ship.** Refusing a MISSING root leaves the other half
+open, because an EMPTIED root is perfectly present and hands the walk nothing. The remedy for that
+half is reconciling the walked set against `git ls-files` over the declared roots: every tracked path
+must land in exactly one of OPENED, GITIGNORED or corpus-EXEMPT, and anything else refuses.
+
+**🛑 AND A DENOMINATOR DOES NOT DETECT IT.** `ncpdp` refuted that remedy and the refutation holds
+here: a count of the files that were reached counts only the roots that were there to reach. Nothing
+in this change prints a scanned-file count, deliberately.
+
+### 🔴 The escape this does NOT close, and no repo in the org has
+
+**The reconciliation compares path SETS, not the bytes git carries at those paths.** A working tree
+whose files are clean reconciles and exits 0 even when the INDEX at the same paths holds PHI, and a
+root swapped for a directory that mirrors the tracked names does the same over decoy contents. It is
+pinned by a test that asserts the escape rather than a fix, with the control that the identical bytes
+ARE caught by `--staged`.
+
+Widening the root makes this **narrower rather than safer**: a decoy now has to mirror every tracked
+name under `test/` instead of the handful under `test/fixtures/`. Narrower is not closed.
+
+### 🛑 Enumeration buys the floor, and the other half was open here too
+
+The class's most expensive rule is that widening the walk and widening the recognizer are **two
+different changes**, each "in addition to" and never "instead of". Both halves were open here, and
+the second is dicom-specific.
+
+`scanEmbeddedObjects` decodes base64 runs and scans the ones that are DICOM objects, and it ran
+**only for a name in `TEXT_EXTENSIONS`** (`.json`, `.txt`, `.md`, `.csv`). A `.ts` file got
+`scanText` and nothing else. Measured on base with one object and one name-bearing `(0010,0010)`:
+
+- the same bytes as `probe.md` -> exit 1, `(0010,0010) PN` reported
+- the same bytes as `probe.dcm` -> exit 1, `(0010,0010) PN` reported
+- the same bytes as `probe.ts` -> exit 0, `OK - no hits`
+
+So widening the walk root alone would have opened 81 `.ts` files and read straight past every object
+encoded in one, in a package whose fixtures are exactly that. The decode runs **in addition to**
+`scanText` and never instead of it, which keeps the strict-superset property the `scanTarget` banner
+already documents.
+
+> **⚠ `TEXT_EXTENSIONS` NO LONGER EXISTS**, so the measurement above is a record of base and not a
+> description of the scanner. `DICOM-PHI-SCAN-RESIDUALS` (2026-08-09) deleted the by-name branch
+> outright; every target now gets `scanText`, `scanEmbeddedObjects` and - if its bytes say so -
+> `scanDicom`. `documentation/agent-notes.md#dicom-phi-scan-name-dispatch`.
+
+**🩺 THE CLEAN RESULTS ARE PINNED BESIDE POSITIVES THE DETECTOR DOES CATCH, because a detector zero
+can be a gap rather than a clearance.** The `.ts` zero above sits beside the `.md` and `.dcm` ones on
+identical bytes; the "allow-listed payload in a `.ts`" case sits beside the violator case; the
+narrow-exemption case writes the SAME payload one directory across and requires a hit. `#55`'s pin in
+this repo was vacuous BY FIXTURE, so no payload here is anonymous: each carries a person name.
+
+### What the 81 newly opened files turned out to hold
+
+**🩺 A HAND-WRITTEN CENSUS IS A CLAIM; the file list is derived** with
+`git ls-files test/ | grep -v '^test/fixtures/'`. Every one of the 81 was read end to end before this
+change landed, across five fresh contexts, and the readings agreed: **no patient-identifying content**.
+
+The hits the gate now sees are synthetic fixture values, disposed of as EXACT allow-list entries
+(the entries this change ADDS are exact; the pre-existing prefixes are untouched, and it is the
+pre-existing `Doe^` that excuses `Doe^Jane` across the newly opened files): `BOND^JAMES`,
+`DEEPER^PATIENT`, `DEFLATE^TEST`, `NESTED^PATIENT`, `ROOT^PATIENT`, `SMITH^REF`, `SMITHSON^BRAIN`,
+`XOE^JANE`, and `Yamada^Tarou`, which is PS3.5's own worked example for the three PN component
+groups. `Yam^Tar` beside it is **not** in the standard: the vendored PS3.5 2026c carries
+`Yamada^Tarou=<ideographic>=<phonetic>`, and `Yam^Tar` is the test's ASCII stand-in for the
+ideographic group. A draft of the allow-list comment cited both as the standard's. Dates
+`19800101` and `20240115`. And four entries that are **not dates at all** but DICOM tag numbers
+satisfying the `YYYYMMDD` shape - `40101006`, `70011001`, `70011002`, `70011003` - listed as such in
+the allow-list rather than mislabelled.
+
+**🛑 WHAT THE HAND-READ FOUND THAT THIS GATE CANNOT SEE, and would not have seen if it ran forever.**
+The recognizers look for caret-joined person names, ISO and compact dates, and PN/DA/DT values under
+a hardcoded tag table. They do not look for an MRN, an accession number, an institution name, a phone
+number, an email address, an SSN, or a vendor UID root. The newly opened files carry all of those
+shapes, and every instance is synthetic or public:
+
+- synthetic MRNs and accession numbers: `MRN-11111`, `MRN-99999`, `SECRET-MRN-123`, `ID-000123`, `ACC0099`, `12345`
+- an invented institution: `ACME GENERAL HOSPITAL`, and the institution-shaped carriers
+  `MERCY GENERAL HOSPITAL` / `MERCY GENERAL HOSPITALS` used as `(0008,0080)` fillers
+- real, published, non-patient organisation identifiers, correct by necessity: DCMTK's
+  `1.2.276.0.7230010.3.0.3.6.4` and `OFFIS_DCMTK_364`; the vendor private-creator strings
+  `GEMS_IDEN_01`, `GEMS_ACQU_01`, `SIEMENS CSA HEADER`, `SIEMENS MEDCOM HEADER`; the NEMA
+  `1.2.840.10008.*` registry; the GE root `1.2.840.113619` and the Medical Connections root
+  `1.2.826.0.1.3680043` under invented suffixes
+
+**"Newly scanned" is therefore not "newly cleared", and the reading is what cleared them, not the
+gate.** Saying otherwise would be the exact overstatement this class keeps refuting.
+
+### The circularity the widening creates, and why it is not answered with an exemption
+
+The scanner's own test suite has to carry values the scanner must **reject**, and once the walk root
+covers `test/` those values are in the corpus. Three ways out, and the reasons the first two were
+refused:
+
+1. **Allow-list them.** Not available: the tests assert `exit 1` on exactly those values, so
+   allow-listing them makes the assertions fail. It would also have put the most plausible real name
+   in the set on a permanent global allow-list.
+2. **Exempt `test/scripts/phi-scan.test.ts` by path.** Available, and rejected: it is a 50 KB file,
+   and an exemption that large is a hole the gate cannot see into.
+3. **Assemble the values from parts that match no recognizer.** Chosen, in
+   `test/helpers/phi-scan-violators.ts`. That file's bytes carry no caret-joined name and no date
+   run, so **it is scanned like every other file under `test/` and needs no exemption at all**, while
+   the values stay plain to a reader. The gate proved it works during this change: a first draft of
+   that file's own explanatory comment spelled the PN shape out and the scanner reported it.
+
+**So this change adds ZERO new exemptions.** The one exemption in force is the one that was already
+here, `test/fixtures/phi-scan/README.md`, which documents the deliberate violator values in a table.
+Two things changed about it and both are narrowings:
+
+- it is now **ONE LITERAL PATH**, `test/fixtures/phi-scan/README.md`, rather than the old
+  skip-any-`readme.md`-the-walk-meets rule, so widening the root did not widen the exemption by a
+  single file. A `README.md` one level up at `test/fixtures/README.md` is scanned, and so is
+  `test/smoke/README.md`; a case writes the same payload into two of those paths and requires one
+  hit and one pass.
+- it is **printed on stdout every run**. An exemption nobody can see is the same shape as a root
+  nobody notices is empty.
+
+**🛑 AND A DRAFT MADE IT WORSE IN THE ONE DIRECTION THIS ITEM FORBIDS, WHICH A REFUTER CAUGHT.** That
+draft wrote the exemption as a PREDICATE ("a `readme.md` under `test/fixtures/`") and applied it to
+`--staged` as well, on the reasoning that a rule cannot go stale and that the two routes ought to
+agree. Both halves were wrong:
+
+- **A predicate fails OPEN, an exact path fails CLOSED.** A stale exact path means the file moved,
+  so it gets scanned and the gate reds until somebody looks. A predicate means every future
+  `README.md` anywhere under `test/fixtures/`, at any depth, is exempt for as long as nobody
+  notices. Staleness that reds is the cheap failure.
+- **`--staged` is the pre-commit gate** (`package.json`'s `pre-commit` is `pnpm phi-scan --staged`)
+  and it had never applied the exemption, so teaching it to SUBTRACTED a detection the base had, on
+  the commit-blocking route. Measured on the refused draft: a staged README under `test/fixtures/`
+  carrying a name exited **1** on base and **0** on the draft. The class went from one route to
+  zero.
+
+So the exemption is one literal path, on the `all` route only. The two routes disagree about exactly
+that one file, they disagreed about it on base too, and the disagreement fails CLOSED: `--staged` is
+the stricter of the two. That friction (a commit touching that README reds the hook) is
+`PRE-EXISTING` and stays, because the only way to close it here is to scan less.
+
+### Two more things the widening does not fix, disclosed
+
+**The allow-list is GLOBAL and has no path scoping, so adding to it is a real widening.** The scanner
+reads `scripts/phi-allow-list.txt` into one Set and applies it to every corpus it opens, so a value
+listed because a `.ts` fixture needs it is equally excused in `README.md`, in `docs-content/` and in
+a `.dcm`. A refuter measured exactly that on a `docs-content` page carrying the new values: clean at
+head, exit 1 at the previous sha. The two worth naming are `DATE:19800101` and `DATE:20240115`, which
+are plausible real birth and study dates. Path scoping is a change to the allow-list FORMAT and is
+deliberately not made here; the cost is written into the file itself instead.
+
+**🔴 The reconciliation is vacuous on an empty index.** `trackedInScope()` guards a git FAILURE, but
+a legitimately empty answer passes in silence: in a repository where nothing under the declared roots
+is tracked yet, there is nothing to reconcile against. It is a check against the INDEX and is exactly
+as strong as the index is. Most of the throwaway-repo cases in `test/scripts/phi-scan.test.ts` never
+commit, so the reconciliation is vacuous in them by construction; the four that exercise it call
+`git add` first, and they are the only ones that say anything about it.
+
+**An unexpected error used to exit 1.** `main()` had no top-level catch, so a `readdirSync` `EACCES`
+on an unreadable subdirectory exited 1, the code that means "PHI was found". Widening the walk root
+from `test/fixtures/` to `test/` enlarged the surface that can happen on, so it is closed here rather
+than disclosed: an unexpected throw now prints `This is not a hit` and exits 2. Measured before the
+catch existed: exit **1**.
+
+### What is still out of scope, with the reason
+
+Of 229 tracked files, 95 are opened, 1 is corpus-exempt, and **133 are outside the declared roots
+entirely**: `src/` (72), `vendor/` (17), `scripts/` (13), `.github/` (8), `.changeset/` (4),
+`documentation/` (3), `.claude/` (1) and 15 files at the repository root. Admitting them is a
+**product call with its own false-positive surface**, not a side effect of this one.
+
+**No hit count for them is written down, deliberately.** It is a number about prose as much as about
+code: a draft of the banner comment moved the `scripts/` figure by one just by naming a tag in
+eight-digit form, and a draft of this file moved the `documentation/` figure by one just by
+existing. Derive it instead, in one command:
+`git ls-files -z <dir> | xargs -0 pnpm phi-scan --`.
+
+The two big ones are structural rather than accidental. `src/dictionary/generated/annex-e.ts` is a
+generated table of DICOM tags, and tag numbers like `(4008,0101)` written as eight digits satisfy the `YYYYMMDD` shape, so the
+compact-date pass matches hundreds of them; `vendor/nema/` is a SHA-pinned copy of a standards
+document full of real publication dates. Neither is PHI, and neither is fixed by a walk root.
+
+### What this change does NOT touch
+
+`DICOM-SCANDICOM-SILENT-HALT` is a separate open item and is untouched: a **preamble-ful** Part 10
+object still gets no text sweep behind `scanDicom`, so an early halt on one is still silent. Closing
+it means sweeping every Part 10 object as text too, which would flag eight-digit runs inside pixel
+data. That is a gate-behaviour change with its own false-positive surface and its own item.

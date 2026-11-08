@@ -936,6 +936,6 @@ describe("docs-content: numerals that go stale in silence", () => {
     expect(declaredNodeFloor('{"engines":{"node":">=22.0.0"}}')).toBe("22");
     expect(findNodeFloors("Node.js >= 20. The suite targets Node 20+.")).toEqual(["20", "20"]);
     // The house support line names the floor once; the tested lines after it are not floors.
-    expect(findNodeFloors("Node.js 22 or later, tested on 22 and 24.")).toEqual(["22"]);
+    expect(findNodeFloors("Node.js 22 or later, tested on 22, 24, and 26.")).toEqual(["22"]);
   });
 });

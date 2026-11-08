@@ -368,7 +368,7 @@ const heading = (line: string): string | null => /^###\s+(.+?)\s*$/.exec(line)?.
  * it. What stands behind the property is the comment-stripped diff (one added early return, nothing
  * else) and, behaviourally, the per-log relation
  * `scripts/measure-phi-scan-atx-heading.ts` prints against a base;
- * `documentation/agent-notes/dicom-phi-scan-atx-heading.md` carries both.
+ * `documentation/agent-notes.md#dicom-phi-scan-atx-heading` carries both.
  */
 const atxSeparator = (line: string): string | null => {
   if (line.length > 3) {

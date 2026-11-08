@@ -7,7 +7,7 @@
  *
  * The same reason `scripts/measure-phi-scan-unread.ts` exists: a figure only its author can produce
  * is not evidence. **The two tables and the grid** in
- * `documentation/agent-notes/dicom-phi-scan-value-retention.md` come out of this file. The figures
+ * `documentation/agent-notes.md#dicom-phi-scan-value-retention` come out of this file. The figures
  * that file takes by other means say so where they are written, and none of them is claimed for
  * this script.
  *

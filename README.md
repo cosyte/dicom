@@ -12,7 +12,7 @@
 [![npm version](https://img.shields.io/npm/v/@cosyte/dicom.svg)](https://www.npmjs.com/package/@cosyte/dicom)
 [![CI](https://img.shields.io/github/actions/workflow/status/cosyte/dicom/ci.yml?branch=main&label=CI)](https://github.com/cosyte/dicom/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/cosyte/dicom/blob/main/LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](https://nodejs.org)
+[![Node](https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen.svg)](https://nodejs.org)
 
 DICOM Part 10 parser + utility library for Node.js and TypeScript: metadata-first, vendor-quirky-tolerant, dual ESM/CJS.
 
@@ -47,7 +47,7 @@ Most software that touches medical imaging needs a handful of header fields and 
 pnpm add @cosyte/dicom
 ```
 
-- **Node.js 22 or later, tested on 22 and 24.** `engines.node` is `>=22.0.0`.
+- **Node.js 22 or later, tested on 22, 24, and 26.** `engines.node` is `>=22.0.0`.
 - **Module format: dual ESM and CJS**, with per-condition type declarations, so `import` and `require` both resolve against the type that matches them.
 - **Strict TypeScript** (`noUncheckedIndexedAccess`, no `any`), with JSDoc and an `@example` on every public export feeding your editor's IntelliSense.
 

@@ -21,7 +21,7 @@ taken).
 
 ## Prerequisites
 
-- **Node.js 22 or later, tested on 22 and 24.** The whole `@cosyte/*` suite targets ES2023 and Node.js 22 or later.
+- **Node.js 22 or later, tested on 22, 24, and 26.** The whole `@cosyte/*` suite targets ES2023 and Node.js 22 or later.
 - A package manager: `pnpm`, `npm`, or `yarn`.
 - **No runtime dependencies, no native build, no post-install script.** The data dictionary is
   generated from the official DICOM Part 6 source at build time and committed, so at runtime there is

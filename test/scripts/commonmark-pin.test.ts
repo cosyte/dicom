@@ -10,7 +10,7 @@
  *
  * 🛑 EVERY ONE OF THOSE WAS AN ASSERTED SECTION NUMBER UNTIL THIS FILE EXISTED, AND THIS REPOSITORY
  * HAS PAID FOR THAT SHAPE BEFORE. `#80` cited PS3.5 section 7.5 twice when the sentence is in
- * 7.5.2, and `documentation/agent-notes/dicom-phi-scan-config-parsers.md` records the lone-`CR`
+ * 7.5.2, and `documentation/agent-notes.md#dicom-phi-scan-config-parsers` records the lone-`CR`
  * divergence as one whose figure could not be re-taken, "because grounding it needs a CommonMark
  * oracle this repository does not vendor". This is that oracle.
  *
@@ -206,7 +206,7 @@ describe("the vendored CommonMark spec is a precondition, not a citation", () =>
     // which is the whole of `\s` and is what this parser does. Locating the sentence is therefore
     // NOT an argument that the parser should follow it, and a draft that did follow it exempted at
     // exit 0 a target this parser refuses at exit 2. See
-    // `documentation/agent-notes/dicom-phi-scan-atx-heading.md`.
+    // `documentation/agent-notes.md#dicom-phi-scan-atx-heading`.
     const strip = theSectionCarrying(
       "The raw contents of the heading are stripped of leading and trailing space or tabs before " +
         "being parsed as inline content.",
