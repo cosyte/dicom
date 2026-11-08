@@ -1377,7 +1377,7 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
 // compact-date pass, one naming the PN-shape pass - and a refuter refuted both;
 // a claim reworded twice is deleted rather than written a third time. The measured
 // table, which spans 0 to five figures over the same 8 MiB, is in
-// `documentation/agent-notes/dicom-scandicom-silent-halt.md`. NO RATE IS QUOTED
+// `documentation/agent-notes.md#dicom-scandicom-silent-halt`. NO RATE IS QUOTED
 // HERE - it is a property of a corpus, not of this suite.
 //
 // 🛑 AND THE SHAPE IS NAMED, NEVER SPELLED. A draft of this paragraph wrote the
@@ -1614,7 +1614,7 @@ describe("phi-scan: a preamble-FUL object's silent halt", () => {
 // from exit 1 to exit 0.
 //
 // The full before/after matrix is 11 objects x 7 extensions; it is in
-// `documentation/agent-notes/dicom-phi-scan-name-dispatch.md`. NO SUMMARY OF IT
+// `documentation/agent-notes.md#dicom-phi-scan-name-dispatch`. NO SUMMARY OF IT
 // IS RESTATED HERE, because the rows this suite pins are the rows it asserts.
 
 describe("phi-scan: a target is dispatched by CONTENT, never by its extension", () => {
@@ -2106,7 +2106,7 @@ describe("phi-scan: the walk is reconciled against git ls-files", () => {
 // property of the payload's byte histogram. Re-measured on `b784c38`: 8 MiB of
 // synthetic `(7FE0,0010) OW` pixel data uniform over `0x41-0x60` produced tens of
 // thousands of hits and one stderr line each. The figures and the generator are
-// in `documentation/agent-notes/dicom-phi-scan-report-cap.md`.
+// in `documentation/agent-notes.md#dicom-phi-scan-report-cap`.
 //
 // 🛑 THE CAP IS THE PLACE A FIX BECOMES A NET LEAK, so the cases below pin the
 // three properties that stop it being one, and the one thing it genuinely costs:
@@ -2249,7 +2249,7 @@ describe("phi-scan: the hit report is capped PER FILE, and the cap cannot move t
     // 🛑 AN EARLIER DRAFT ENUMERATED THAT ORDER HERE AND ARGUED FROM IT THAT
     // PER-RECOGNIZER CAP SLOTS BUY NO SAFETY. A refuter falsified both halves and
     // both are DELETED rather than reworded. Do not write either again; see
-    // `documentation/agent-notes/dicom-phi-scan-report-cap.md`. The assertions
+    // `documentation/agent-notes.md#dicom-phi-scan-report-cap`. The assertions
     // below are unchanged: they are the measurement, not the explanation.
     const root = makeRepo();
     const mixed = join(root, "test", "fixtures", "mixed.txt");

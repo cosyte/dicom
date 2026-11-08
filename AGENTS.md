@@ -19,7 +19,7 @@ pnpm test
 
 ## The gate
 
-From the repo root, in this order, before you push. CI runs steps 1 to 9 on Node 22 and 24.
+From the repo root, in this order, before you push. CI runs steps 1 to 9 on Node 22, 24, and 26.
 
 1. `pnpm install --frozen-lockfile`
 2. `pnpm typecheck`

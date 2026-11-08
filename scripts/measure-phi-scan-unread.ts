@@ -3,7 +3,7 @@
  *
  * ## Why this file exists rather than a table in a note
  *
- * The note `documentation/agent-notes/dicom-phi-scan-unread-tail.md` quotes a 195-cell result, and
+ * The note `documentation/agent-notes.md#dicom-phi-scan-unread-tail` quotes a 195-cell result, and
  * a refuter's objection to the first draft was exact: **a figure only its author can produce is not
  * evidence.** The 13 objects, the 5 carriers and the 3 cap settings live here, so the table is
  * re-derivable by anyone, against any base.

@@ -354,9 +354,9 @@ function structureProblems(md: string, description: string): string[] {
     if (!/^pnpm add @cosyte\/dicom$/m.test(body)) {
       problems.push('section "Install": no copy-pasteable `pnpm add @cosyte/dicom` command');
     }
-    if (!body.includes("Node.js 22 or later, tested on 22 and 24")) {
+    if (!body.includes("Node.js 22 or later, tested on 22, 24, and 26")) {
       problems.push(
-        'section "Install": does not state the Node support line, "Node.js 22 or later, tested on 22 and 24"',
+        'section "Install": does not state the Node support line, "Node.js 22 or later, tested on 22, 24, and 26"',
       );
     }
     if (!/dual ESM and CJS/.test(body)) {

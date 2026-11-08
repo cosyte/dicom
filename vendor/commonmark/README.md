@@ -63,6 +63,6 @@ PRs (the same rule `vendor/nema/` states).
   (section 4.6, HTML blocks).
 - `test/scripts/commonmark-pin.test.ts`: the precondition, the version, and the section locator.
 - `test/helpers/commonmark-spec.ts`: section 4.6's tag lists, read out of the document.
-- `documentation/agent-notes/dicom-phi-scan-line-endings.md`,
-  `documentation/agent-notes/dicom-phi-scan-html-blocks.md` and
-  `documentation/agent-notes/dicom-phi-scan-atx-heading.md`: the records.
+- `documentation/agent-notes.md#dicom-phi-scan-line-endings`,
+  `documentation/agent-notes.md#dicom-phi-scan-html-blocks` and
+  `documentation/agent-notes.md#dicom-phi-scan-atx-heading`: the records.
