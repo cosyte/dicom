@@ -3,16 +3,16 @@
  * OVER YAML TEXT.
  *
  * WHY THIS FILE EXISTS. `Release` is this package's only publish path: it delegates to
- * `cosyte/.github/.github/workflows/release.yml@main`, which is what publishes to npm with
- * provenance, derives the release body from the consumed changesets, and holds the job at this
- * repository's `release` environment for a human. That shared workflow declares `actions: read`, and
- * a called workflow's `GITHUB_TOKEN` can only be equal to or more restrictive than its caller's,
- * never elevated. So a calling job that pins `contents`/`id-token`/`pull-requests` and no `actions`
- * is granting `actions: none`, the request for `actions: read` is an ELEVATION, and GitHub refuses
- * the whole workflow at STARTUP: no job, no step, no log, no annotation. The run concludes
- * `startup_failure` with nothing in it to read. That is what every `Release` run in this repository
- * did from June until it was fixed in `84f68a4`, and nobody noticed, because there was nothing to
- * see.
+ * `cosyte/.github/.github/workflows/release.yml` at a published `workflows-*` reference, which is
+ * what publishes to npm with provenance, derives the release body from the consumed changesets, and
+ * holds the job at this repository's `release` environment for a human. That shared workflow
+ * declares `actions: read`, and a called workflow's `GITHUB_TOKEN` can only be equal to or more
+ * restrictive than its caller's, never elevated. So a calling job that pins
+ * `contents`/`id-token`/`pull-requests` and no `actions` is granting `actions: none`, the request
+ * for `actions: read` is an ELEVATION, and GitHub refuses the whole workflow at STARTUP: no job, no
+ * step, no log, no annotation. The run concludes `startup_failure` with nothing in it to read. That
+ * is what every `Release` run in this repository did from June until it was fixed in `84f68a4`, and
+ * nobody noticed, because there was nothing to see.
  *
  * `actionlint`, which this repository's CI already runs through the shared `ci.yml`, does NOT catch
  * that class: the caller-versus-called permission relationship is a GitHub-side runtime rule about
@@ -444,8 +444,8 @@ export function pushBranches(source: string): string[] {
 }
 
 /**
- * The `@ref` of every job delegating to the shared release workflow, so a test can pin `@main`
- * without re-implementing the search above.
+ * The `@ref` of every job delegating to the shared release workflow, so a test can pin the
+ * published reference without re-implementing the search above.
  */
 export function sharedReleaseRefs(source: string): string[] {
   const jobs = asMap(parseWorkflow(source)["jobs"]) ?? {};
