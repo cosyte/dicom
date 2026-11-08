@@ -143,7 +143,7 @@ describe("Dataset.directory reads a long CS run in linear time (polynomial backt
 
 describe("each linear trim returns exactly what the pattern it replaced returned", () => {
   /** Short strings over the pad bytes, a delimiter and a letter: every edge the patterns had. */
-  const padded = fc.stringOf(fc.constantFrom("\0", " ", "\\", "A"), { maxLength: 24 });
+  const padded = fc.string({ unit: fc.constantFrom("\0", " ", "\\", "A"), maxLength: 24 });
   const RUNS = 10_000;
 
   it("stripTrailingNulls matches /\\0+$/", () => {

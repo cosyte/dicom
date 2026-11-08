@@ -44,7 +44,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: pnpm
@@ -55,14 +55,15 @@ jobs:
       - run: pnpm examples
       - run: pnpm phi-scan:examples
 
-  # The house checks from @cosyte/script-utils.
+  # The house checks from @cosyte/script-utils, and `cosyte-process check`, which grades the
+  # process wiring: the verb scripts, cosyte-process.config.json, and the direct vitest pin.
   standards:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
           cache: pnpm
@@ -70,3 +71,4 @@ jobs:
       - run: pnpm check:readme
       - run: pnpm check:claude-card
       - run: pnpm check:catalog
+      - run: pnpm check:process

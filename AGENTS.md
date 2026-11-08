@@ -30,8 +30,10 @@ From the repo root, in this order, before you push. CI runs steps 1 to 9 on Node
 7. `pnpm test:coverage`
 8. `pnpm build`
 9. `pnpm attw`
-10. `pnpm check:readme`, `pnpm check:claude-card`, and `pnpm check:catalog` (CI's `standards`
-    job: the house checks from `@cosyte/script-utils`)
+10. `pnpm check:readme`, `pnpm check:claude-card`, `pnpm check:catalog`, and
+    `pnpm check:process` (CI's `standards` job: the house checks from `@cosyte/script-utils`, and
+    the process wiring check from `@cosyte/process`, which runs the build, test, lint, typecheck,
+    and format tools at the versions it pins)
 11. `pnpm check:no-emdash`
 12. `pnpm check:no-internal-refs`
 

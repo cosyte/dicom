@@ -16,7 +16,7 @@ Required on `main`: `ci / verify (22, ubuntu-latest)`, `ci / verify (24, ubuntu-
 pnpm install --frozen-lockfile && pnpm typecheck && pnpm lint && pnpm format:check
 pnpm phi-scan && pnpm test && pnpm test:coverage && pnpm build && pnpm attw
 pnpm typecheck:examples && pnpm lint:examples && pnpm examples && pnpm phi-scan:examples
-pnpm check:readme && pnpm check:claude-card && pnpm check:catalog
+pnpm check:readme && pnpm check:claude-card && pnpm check:catalog && pnpm check:process
 pnpm check:no-emdash && pnpm check:no-internal-refs
 ```
 
