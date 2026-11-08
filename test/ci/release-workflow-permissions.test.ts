@@ -106,10 +106,14 @@ describe("the shared release workflow's caller-side precondition", () => {
       expect(checkReleaseWorkflowCaller(source)).toEqual([]);
     });
 
-    test("is RETAINED: it triggers on a push to main and delegates to the shared workflow", () => {
+    test("is RETAINED: it triggers on a push to main and delegates to the shared workflow at a published reference", () => {
       const source = readWorkflowSource(WORKFLOW_ABSOLUTE) ?? "";
       expect(pushBranches(source)).toContain("main");
-      expect(sharedReleaseRefs(source)).toEqual(["main"]);
+      // A published `workflows-*` reference names one commit and never another; `@main` would
+      // hand this publish path every later change to the shared workflow, reviewed nowhere here.
+      const refs = sharedReleaseRefs(source);
+      expect(refs).toHaveLength(1);
+      expect(refs[0]).toMatch(/^workflows-\d{4}-\d{2}-\d{2}-[0-9a-f]{12}$/);
     });
 
     test("its calling job pins all four grants, by name", () => {

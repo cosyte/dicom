@@ -46,26 +46,20 @@ name: Em-dash gate
 # WHY A SEPARATE WORKFLOW, and not a job in ci.yml:
 #
 #   The shared ci pipeline is not an option. dicom's `ci` job calls
-#   cosyte/.github/.github/workflows/ci.yml@main, which runs a fixed ladder and no
-#   arbitrary repo script. Adding the gate there would also flip crew, config, iac,
-#   and assets red on their next run: all four violate the ban wholesale today, and
-#   remediating them is separate, founder-gated work. A shared pipeline is the wrong
-#   place to land a rule several of its callers cannot yet satisfy. The correct
-#   variant of the script also differs per repo (repos with no binaries take
-#   knowledgebase's text-only shape, repos tracking undeclared binaries take website's
-#   NUL-partition one), so the gate stays per-repo until every caller carries a script.
+#   cosyte/.github/.github/workflows/ci.yml at a published reference, which runs a fixed
+#   ladder and no arbitrary repo script. The shared gate workflow this file calls exists
+#   for exactly that reason: it carries the plumbing, and the command it runs is ours.
 #
 #   Within dicom, the deciding factor is the trigger. The PR-text half below needs the
 #   `edited` activity type, which is not a default: without it, a title or body edited
 #   after the last push is never re-checked. What makes that matter is exactly what a
-#   squash merge lands here, which is a repo setting and was read rather than assumed:
-#   `squash_merge_commit_title: COMMIT_OR_PR_TITLE` and
-#   `squash_merge_commit_message: COMMIT_MESSAGES`. So the subject on main comes from the
-#   PR title (or from the lone commit's subject), and the body is the branch commit
-#   messages concatenated. The PR BODY does not land. It is scanned anyway, deliberately:
-#   it is a Cosyte surface in its own right and it costs nothing to cover. But ci.yml's
-#   triggers drive the shared pipeline over the Node 22 + 24 matrix (typecheck, lint, format,
-#   PHI scan, test, coverage, build, attw, dual ESM/CJS smoke). Re-running all of that
+#   squash merge lands here, which is a repo setting (read it with
+#   `gh api repos/cosyte/dicom`, never trust a copy): since 2026-11-07 the squash commit
+#   takes the PR title as its subject and the PR body as its message, so an edited title
+#   or body is exactly the text that lands on main. The branch commit messages are scanned
+#   as well, because they are what the branch carries until then. But ci.yml's
+#   triggers drive the shared pipeline over the Node 22, 24, and 26 matrix (typecheck, lint,
+#   format, PHI scan, test, coverage, build, attw, dual ESM/CJS smoke). Re-running all of that
 #   every time someone fixes a typo in a PR description is a large cost for no extra
 #   safety. Same call hl7, fhir, pathways, website, x12 and ncpdp made, for the same
 #   reason.
@@ -91,12 +85,11 @@ concurrency:
 jobs:
   # The check-run context prefix. See the note above before touching this id.
   no-emdash:
-    # Pinned to the 40 character commit, not to the tag beside it: a tag can be moved
-    # or deleted by anyone who gains write access to the workflow's repository, so a
-    # tag is not an immutable reference and is not a pin. The trailing comment is the
-    # published reference that commit was released as, so the release note stays
+    # Called by the published reference's name, as its release notes show, the same
+    # reference every other caller in this directory names. That release is immutable,
+    # so GitHub refuses to move or delete its tag, and the name keeps the release note
     # findable from here.
-    uses: cosyte/.github/.github/workflows/gate-no-emdash.yml@84ecccd771cbc9c1ece003a3f8ff61415360395b # workflows-2026-09-18-84ecccd771cb
+    uses: cosyte/.github/.github/workflows/gate-no-emdash.yml@workflows-2026-11-07-498c7c13c886
     # No more than the scan needs. A called workflow's GITHUB_TOKEN can only be
     # downgraded by its caller, and this gate reads the tree and nothing else.
     permissions:

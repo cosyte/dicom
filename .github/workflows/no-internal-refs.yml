@@ -62,12 +62,11 @@ concurrency:
 jobs:
   # The check-run context prefix. See the note above before touching this id.
   no-internal-refs:
-    # Pinned to the 40 character commit, not to the tag beside it: a tag can be moved
-    # or deleted by anyone who gains write access to the workflow's repository, so a
-    # tag is not an immutable reference and is not a pin. The trailing comment is the
-    # published reference that commit was released as, so the release note stays
+    # Called by the published reference's name, as its release notes show, the same
+    # reference every other caller in this directory names. That release is immutable,
+    # so GitHub refuses to move or delete its tag, and the name keeps the release note
     # findable from here.
-    uses: cosyte/.github/.github/workflows/gate-no-internal-refs.yml@84ecccd771cbc9c1ece003a3f8ff61415360395b # workflows-2026-09-18-84ecccd771cb
+    uses: cosyte/.github/.github/workflows/gate-no-internal-refs.yml@workflows-2026-11-07-498c7c13c886
     # No more than the scan needs. A called workflow's GITHUB_TOKEN can only be
     # downgraded by its caller, and this gate reads the tree and nothing else.
     permissions:
