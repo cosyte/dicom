@@ -28,7 +28,7 @@ jobs:
   # this line changes. The shared actionlint job runs rhysd/actionlint's release binary, checked by
   # its SHA-256, so it runs on the nightly `schedule` run as well.
   ci:
-    uses: cosyte/.github/.github/workflows/ci.yml@workflows-2026-11-07-498c7c13c886
+    uses: cosyte/.github/.github/workflows/ci.yml@498c7c13c8869bf11b67fa8324684ec2dc691ec6 # workflows-2026-11-07-498c7c13c886
     with:
       run-phi-scan: true
 
