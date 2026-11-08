@@ -15,7 +15,6 @@ import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
 import { readPixelDataFragments, WARNING_CODES } from "../../src/index.js";
-import type { Dataset } from "../../src/dataset/dataset.js";
 import { DicomParseError, FATAL_CODES } from "../../src/parser/errors.js";
 import { parseDicom } from "../../src/parser/index.js";
 import { WARNING_MESSAGES } from "../../src/parser/warnings.js";
@@ -44,14 +43,10 @@ const NAME_FRAGMENT = Buffer.from("JANEJANEJANEJANE", "latin1");
 const NAME_LENGTH = Buffer.from("DOE^", "latin1").readUInt32LE(0);
 
 function fatalFrom(bytes: Buffer): DicomParseError {
-  let ds: Dataset | undefined;
   try {
-    ds = parseDicom(bytes);
+    parseDicom(bytes);
   } catch (err) {
-    if (err instanceof DicomParseError) {
-      expect(ds).toBeUndefined();
-      return err;
-    }
+    if (err instanceof DicomParseError) return err;
     throw err;
   }
   throw new Error("expected a DicomParseError and got a Dataset");
