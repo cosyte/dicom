@@ -326,7 +326,7 @@ export function _parseExplicit(
     }
     if (cursor.position + length > buffer.length) {
       // NEITHER length is passed, and the second one is the ninth instance of
-      // `DICOM-DIAGNOSTIC-PHI-RESIDUALS`. `buffer.length - cursor.position` is
+      // the diagnostic PHI-residuals defect. `buffer.length - cursor.position` is
       // the enclosing frame's size less the bytes consumed, and this loop runs
       // over a defined-length Item's SLICE as readily as over the input, so in
       // that frame the subtraction publishes the Item's own 32-bit declared

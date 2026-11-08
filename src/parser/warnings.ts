@@ -175,7 +175,7 @@ export interface DicomParseWarning {
  *
  * **🛑 "A REMAINDER THE BUFFER BOUNDS" USED TO BE ON THAT DERIVED LIST. IT IS
  * RETRACTED, AND IT COST THE EIGHTH INSTANCE OF
- * `DICOM-DIAGNOSTIC-PHI-RESIDUALS`.** {@link itemCrossesSequenceEnd} rendered
+ * THE DIAGNOSTIC PHI-RESIDUALS DEFECT.** {@link itemCrossesSequenceEnd} rendered
  * `endLimit - cursor.position`, kept under `buffer.length` by a conjunct at its
  * emit site. That number is the enclosing **sequence's** declared Value Length
  * less the bytes of that sequence already consumed, so an addition returns the
@@ -291,7 +291,7 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   // repeat count is chosen by the input.
   // 🛑 NO SPEC CITATION HERE, AND ITS ABSENCE IS DELIBERATE. A draft ended this
   // string "PS3.5 7.1.", which asserts that section's "at most once in a Data
-  // Set" governs the File Meta group - the applicability this slice states it
+  // Set" governs the File Meta group - the applicability this code states it
   // cannot establish, because PS3.10 governs that group and is not vendored
   // here. Under `{ strict: true }` this string is also the thrown message, so an
   // unqualified citation there is the claim, not a footnote. Do not put it back.
@@ -314,7 +314,7 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
     "A De-identification Method (0012,0063) value the source file already carried was kept beside the one this run recorded, as PS3.15 E.1.1 requires. That attribute is not in Table E.1-1, so no rule in this run inspected, audited or redacted those bytes: if the sender wrote identifying text there it is in the de-identified output, under (0012,0062) = YES. The text is withheld from this message.",
   // No value, no length, no count AND NO ORIGIN. 64 is a constant of the VR, not
   // a measurement over input; the offending Value's own length IS a measurement
-  // over input and is the number DICOM-DIAGNOSTIC-PHI-RESIDUALS bound out of six
+  // over input and is the number the diagnostic PHI-residuals fix bound out of six
   // other messages. How many Values are over is the same kind of number, and
   // which one of them the caller supplied versus which the file did is not
   // decidable when the two are equal.
@@ -341,7 +341,7 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   DICOM_DEIDENT_METHOD_CODES_PRIOR_REPLACED:
     "The De-identification Method Code Sequence (0012,0064) the source file carried was not a Sequence of Items this run could read (it was not encoded as SQ, or its Items were not parsed), so there were no Items to add this run's codes to (PS3.15 E.1.1) and the attribute was replaced with this run's codes alone. The replaced bytes are not in the output; if you need them, read (0012,0064) off the source dataset before de-identifying. Their content and their VR are both withheld from this message.",
   // BOTH of the disagreeing length fields are deliberately absent, and the
-  // second one is the eighth instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`: the
+  // second one is the eighth instance of the diagnostic PHI-residuals defect: the
   // remaining-bytes count this string used to carry was the enclosing sequence's
   // declared Value Length less the bytes of that sequence already consumed. See
   // `itemCrossesSequenceEnd`.
@@ -349,7 +349,7 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
     "Item ({tag}) declares a length reaching past its enclosing sequence's declared end, so it reads the enclosing Data Set's bytes. The file's two length fields disagree (PS3.5 7.5.1 and 7.5.2 govern them); the item's is used. Both declared lengths are withheld; the byte offset locates the item.",
   // Declared but not emitted by this build. The declared length is bound out
   // anyway: it is a raw 32-bit read off a header, so activating this code later
-  // with the slot still here would ship the leak this slice closed one code
+  // with the slot still here would ship the leak this change closed one code
   // over. `{n2}` stays - it is the product this parser computed from the image
   // description attributes, not a number it read. The tag is a constant.
   DICOM_PIXEL_DATA_LENGTH_MISMATCH:
@@ -542,7 +542,7 @@ interface WarningTokens {
    * neither a shape nor a membership a renderer could test. **Nor one of those
    * shifted by an amount the reader can compute**, which is the same number with
    * an addition in front of it and is what the eighth instance of
-   * `DICOM-DIAGNOSTIC-PHI-RESIDUALS` shipped as.
+   * the diagnostic PHI-residuals defect shipped as.
    */
   readonly n?: number;
   /** A second such number. */
@@ -657,7 +657,7 @@ export function undefinedLengthInExplicitVR(position: DicomPosition, tag: Tag): 
  *
  * ## 🛑 THE DECLARED LENGTH IS BOUND OUT OF THIS SIGNATURE AND MUST NOT COME BACK
  *
- * This is the code the fifth instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS` was
+ * This is the code the fifth instance of the diagnostic PHI-residuals defect was
  * measured on, and it rendered **eight consecutive payload bytes in one
  * message** - the worst of the six the item's sweeps found. An `ST` carrier
  * holding `"MR BRAIN SMITHSON "` whose Value Length under-declares by 12
@@ -904,7 +904,7 @@ export function unParsedAsSQ(position: DicomPosition, tag: Tag): DicomParseWarni
  * element rather than passing its bytes through
  * (`DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE`). The warning is what stops that
  * emptying being a silent drop. `RetainSafePrivate` plus a profile used to
- * exempt a private `SQ` from it; since `DICOM-PRIVATE-SQ-CARVE-OUT` it does not.
+ * exempt a private `SQ` from it; it no longer does.
  *
  * **Do not read it as "the sender is at fault".** It usually is, but the same
  * refusal is raised for a *conformant* file whose sequences nest deeper than
@@ -1759,7 +1759,7 @@ export function deidentMethodPriorRetained(position: DicomPosition): DicomParseW
  *
  * **No value, no length, no count, no origin.** 64 is a constant of the VR; the
  * offending Value's own length is a measurement over input, which is the number
- * `DICOM-DIAGNOSTIC-PHI-RESIDUALS` bound out of six other messages, and so is a
+ * the diagnostic PHI-residuals fix bound out of six other messages, and so is a
  * count of how many Values are over. Which Value came from the caller and which
  * from the file is not decidable when the two are equal.
  *
@@ -2023,8 +2023,8 @@ export function privateDeclarationNotResolved(position: DicomPosition): DicomPar
  * 2. A private element retained under `RetainSafePrivate` whose `Profile` entry
  *    declares it `SQ` while the parse tree says otherwise - `UN` under Implicit
  *    VR LE when the profile did not reach `parseDicom`, or whatever VR the
- *    sender wrote under Explicit VR, where the wire wins
- *    (`DICOM-PRIVATE-SQ-PARSE-VR`). **That file may be entirely conformant and
+ *    sender wrote under Explicit VR, where the wire wins.
+ *    **That file may be entirely conformant and
  *    raise nothing on `Dataset.warnings` at all**, so do not describe this code
  *    as always following a parse warning.
  *

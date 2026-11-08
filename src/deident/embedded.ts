@@ -93,8 +93,8 @@
  * one whose bytes did not tile still kept - 8 grid cells, measured. `SQ` is out
  * of scope for the same style of reason: a sequence
  * the parser declined to descend keeps its item stream as opaque bytes, which is
- * a different defect with a different remedy
- * (`DICOM-DEIDENT-RAWBYTES-PASSTHROUGH`), and folding it in would make this
+ * a different defect with a different remedy,
+ * and folding it in would make this
  * module answer a question it has not measured.
  *
  * ## Cost
@@ -421,8 +421,8 @@ export interface EmbeddedRun {
  * `isActionable` is supplied by the caller so the test is the run's own resolved
  * Annex E action - the same authority the Basic Profile and every active Retain
  * Option resolve through - rather than a second, drifting copy of it. It decides
- * two separate things: whether the run is reportable at all, and (since
- * `DICOM-DIAGNOSTIC-PHI-RESIDUALS`) which of the run's tags reach
+ * two separate things: whether the run is reportable at all, and (since the
+ * diagnostic PHI-residuals fix) which of the run's tags reach
  * {@link EmbeddedRun.hidden}.
  *
  * @param value        The carrier element's Value Field bytes.

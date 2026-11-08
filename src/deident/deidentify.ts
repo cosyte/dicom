@@ -69,7 +69,7 @@
  * - **A conformant attribute from a PS3.6 edition newer than this build's pin is
  *   removed**, because it has no registry row here and nothing separates it from
  *   an invented one. Over-redaction, deliberate, with no caller switch in this
- *   release (`DICOM-DEIDENT-OVER-REDACTION`).
+ *   release.
  * - The temporal declaration is written at the **top level only**, which is where
  *   §E.2 and §E.3.6 put it and where a recipient reads it. `(0028,0303)` has no
  *   row in Table E.1-1, so a copy the sender nested inside a Sequence Item is
@@ -82,7 +82,7 @@
  *   **unless it carries a Sequence of Items**. A private `SQ` the profile
  *   vouches for is retained as an element but its items are **walked**, so
  *   standard PHI attributes nested inside it are de-identified like any others
- *   (`DICOM-PRIVATE-SQ-CARVE-OUT`; it was kept whole and unexamined through
+ *   (it was kept whole and unexamined through
  *   `0.0.10`). The profile vouches that the *private attribute* is safe, which
  *   PS3.15 §E.3.10 is about; it cannot vouch for a Data Set nested in its value,
  *   which §E.1.1 covers "whether contained in the top level Data Set or embedded
@@ -91,8 +91,8 @@
  *   same bytes whenever the profile did not reach `parseDicom` (Implicit VR LE
  *   writes no VR) or the sender wrote a binary VR (Explicit VR, where the wire
  *   wins). A carrier the profile declares `SQ` and the tree did not resolve is
- *   emptied rather than kept, keeping its parsed VR
- *   (`DICOM-PRIVATE-SQ-PARSE-VR`). See {@link keepRetainedPrivate}.
+ *   emptied rather than kept, keeping its parsed VR.
+ *   See {@link keepRetainedPrivate}.
  * - **A retained private value this run did not ENUMERATE is REMOVED**, named in
  *   `report.removedPrivateTags` and recorded per instance in
  *   `report.unenumerablePrivateRemovals` with its reason, under the existing
@@ -107,8 +107,8 @@
  *   name safe is removed too. Getting such a value back needs either a
  *   declaration in the file - the sender's assertion, not an enumeration this
  *   run performed - or the content test that separates a nested Data Set from a
- *   legitimate binary blob, which is an open product question
- *   (`DICOM-DEIDENT-OVER-REDACTION`).
+ *   legitimate binary blob, which is an open product
+ *   question.
  * - A `SQ` whose `items` the parser did not
  *   materialize is **emptied**, not kept:
  *   its value is by PS3.5 §7.5.1 a stream of Data Sets, and a run that cannot
@@ -119,7 +119,7 @@
  *   verbatim*, which wrote the sender's own un-audited Data Elements - measured,
  *   `(0010,0020)` Patient IDs among them - into output stamped
  *   `(0012,0062) PatientIdentityRemoved = YES`
- *   (`DICOM-DEIDENT-RAWBYTES-PASSTHROUGH`, live through `0.0.6`).
+ *   (live through `0.0.6`).
  * - One thing is still kept verbatim, and it is **not** the private `SQ`: an
  *   undefined-length **`UN`** whose CP-246 descent was refused. It keeps
  *   `vr === "UN"`, and since every ordinary `UN` element also has no items, the
@@ -138,7 +138,7 @@
  *   Value Length upstream produces: the reader desynchronizes, reads leftover
  *   value bytes as a Data Element header, and the element that genuinely
  *   followed becomes its "value" - measured carrying a `(0010,0020)` Patient ID
- *   in full. §6.2 requires every undefined VR to be long-form, and this parser
+ *   in full. PS3.5 §6.2 requires every undefined VR to be long-form, and this parser
  *   reads it short-form, so those bytes are not a Value Field this library
  *   decoded under any VR. See {@link hasUndefinedVr}. **Unlike the `SQ` rule
  *   above this one has no carve-out** - it sits in `keepOrEmpty`, the only path
@@ -161,7 +161,7 @@
  *   implemented). Every private element the recursion **reaches** in such an
  *   Item, at any depth below it, is removed and named in
  *   `report.removedPrivateTags`. **The carve-out an earlier review refused for asserting
- *   away is CLOSED** (`DICOM-PRIVATE-SQ-CARVE-OUT`): `keepsPrivate` still decides
+ *   away is CLOSED**: `keepsPrivate` still decides
  *   before the descent, but a **private `SQ`** it vouches for now routes through
  *   {@link keepRetainedPrivate} into the ordinary `SQ` branches instead of being
  *   kept verbatim, so its items **are** walked and this rule **is** consulted
@@ -171,8 +171,8 @@
  *   on a malformed file and nothing at all on a conformant one; without it a
  *   private value the sender wrote **outside** the sequence was retained on the
  *   Item's reservation and written into output stamped `PatientIdentityRemoved =
- *   YES` with `removedPrivateTags: []` (`DICOM-PRIVATE-CREATOR-RESERVATION-LEAK`,
- *   measured on the published `0.0.8` tarball and fixed on `0.0.10`; there is no `0.0.9` on
+ *   YES` with `removedPrivateTags: []` (measured
+ *   on the published `0.0.8` tarball and fixed on `0.0.10`; there is no `0.0.9` on
  *   the registry). See {@link itemStreamOverrunsSequence}.
  * - `RetainSafePrivate` **retains nothing that a Data Set holds after a sequence
  *   whose own contents contradict the extent it declared** - the mirror
@@ -875,7 +875,7 @@ function actsOnTag(tag: Tag, ctx: DeidentifyContext): boolean {
  *
  * ## Where these come from, and what they carry
  *
- * **Until `DICOM-UNRECOGNIZED-VR-SHORT-FORM` the routine producer was a
+ * **Until an unrecognized VR was read long-form, the routine producer was a
  * malformed file, and now it is a conformant one.** The old reader took an
  * unrecognized VR short-form, so an **under**-declared Value Length upstream
  * would leave the remainder of a value to be read as the next Data Element
@@ -889,13 +889,13 @@ function actsOnTag(tag: Tag, ctx: DeidentifyContext): boolean {
  * the finding and the warning below still name no tag. What is new is the other
  * producer - a **section 6.2 conformant** file carrying a VR from a future
  * edition, which this parser now reads correctly and this rule then empties.
- * That is a real cost and it is the `DICOM-DEIDENT-OVER-REDACTION` trade, not a
+ * That is a real cost and it is the deliberate over-redaction trade, not a
  * defect.
  *
  * **There is no account here of what the old reader did with such a file, and
  * that is a decision.** An earlier release published "on a file conformant to
  * PS3.5 2026c the cost is zero"; it was never true. Three further attempts were
- * made while closing `DICOM-UNRECOGNIZED-VR-SHORT-FORM` to say what *was* true in
+ * made while fixing the short-form read to say what *was* true in
  * one sentence, and its gate refuted all three. The behaviour is shape-specific
  * and no sentence covers it. `scripts/measure-unrecognized-vr.ts` prints what
  * each named shape does on each tree - **add a shape rather than a sentence.**
@@ -929,8 +929,8 @@ function hasUndefinedVr(el: Element): boolean {
  * element a {@link Profile} vouches for under `RetainSafePrivate` routes here
  * **unless the profile or the parse tree says it carries a Sequence of Items**,
  * so it is covered too. A vouched-for private `SQ` goes down the descent
- * instead (`DICOM-PRIVATE-SQ-CARVE-OUT`), and one the profile declares `SQ` that
- * the tree did not resolve is emptied (`DICOM-PRIVATE-SQ-PARSE-VR`) - though an
+ * instead, and one the profile declares `SQ` that
+ * the tree did not resolve is emptied - though an
  * element whose on-wire VR is not one of the 34 still arrives here first, so
  * that route keeps its tag-free diagnostic. See {@link keepRetainedPrivate}.
  *
@@ -1054,7 +1054,7 @@ function emptyUndefinedVrElement(
  * two apart needs a mark the parser does not set. Measured, still leaking.
  *
  * A private `SQ` a {@link Profile} vouches for under `RetainSafePrivate` reaches
- * this predicate too, since `DICOM-PRIVATE-SQ-CARVE-OUT`: it arrives via
+ * this predicate too: it arrives via
  * {@link keepRetainedPrivate} rather than from `processElements` directly, and
  * an un-auditable one is emptied on the same terms as any other. The vouching
  * exempts nothing from this test. See {@link deidentify}'s module notes.
@@ -1240,7 +1240,7 @@ function removeUnregisteredElement(
  *
  * Split out of {@link emptyUnauditableSequence} so that
  * {@link keepRetainedPrivate} can take the same action on a carrier whose
- * **parsed** VR is not `SQ` - `DICOM-PRIVATE-SQ-PARSE-VR`. The two callers
+ * **parsed** VR is not `SQ` but the profile declares `SQ`. The two callers
  * differ only in what is written back, and that difference is deliberate:
  *
  * - A parsed `SQ` is rebuilt as an `SQ` with zero items, because that is what it
@@ -1369,7 +1369,7 @@ function emptyUnauditableCarrier(
  * the file's own declaration does not name safe is now removed. A caller who
  * needs such a value back out of a file that declares nothing needs a content
  * test that separates a nested Data Set from a legitimate binary blob, which is
- * an open product question (`DICOM-DEIDENT-OVER-REDACTION`) and not a flag on
+ * an open product question and not a flag on
  * this path. A run without `RetainSafePrivate` plus a `Profile` reaches none of
  * this, because the profile is the only route into it. **The file's own
  * (0008,0300) declaration is the other retention route and it does not arrive
@@ -1391,8 +1391,8 @@ function emptyUnauditableCarrier(
  *   room in it for an unexamined Data Set, and a creator whose value carries
  *   extra bytes fails that lookup and is removed rather than retained.
  * - **A zero-length value**, which encodes no Data Set. This is also what keeps
- *   the audit a fixed point over an already-de-identified object
- *   (`DICOM-DEIDENT-NOT-A-FIXED-POINT`): a carrier some other rule emptied must
+ *   the audit a fixed point over an already-de-identified object:
+ *   a carrier some other rule emptied must
  *   not then be removed and reported on the next run.
  * - **A value the file's own (0008,0300) declaration names safe**, and it is the
  *   one of the four that is not an enumeration this run performed. §E.3.10 names
@@ -1475,14 +1475,14 @@ function removeUnenumerablePrivate(
  * the profile and the element arrives as an `SQ` with items and
  * {@link keepRetainedPrivate} **walks** it, de-identifying its contents and
  * keeping the rest; parse without it and the same bytes arrive as `UN`, and the
- * carrier is **emptied** on the profile's declared VR
- * (`DICOM-PRIVATE-SQ-PARSE-VR`). Neither leaks now, and the difference is no
+ * carrier is **emptied** on the profile's declared VR.
+ * Neither leaks now, and the difference is no
  * longer between leaking and not - it is between retaining the vendor's
  * de-identified content and dropping it. **Pass the profile to `parseDicom` as
  * well when you rely on `RetainSafePrivate`**, or pay for it in content.
  *
  * **Per Data Set, not per run, and the difference is a PHI defect.** PS3.5 §7.5
- * makes each Sequence Item its own Data Set and §7.8.1 scopes a block
+ * makes each Sequence Item its own Data Set and PS3.5 §7.8.1 scopes a block
  * reservation to the Data Set the creator appears in, so the same block number
  * means different vendors at the root and inside an item. Resolving an
  * item-scoped private element against the root's reservation retains an element
@@ -1716,7 +1716,7 @@ function readDeclaredItem(item: Item, reserved: ReadonlySet<string>): DeclaredIt
  * creator value, and the block number an element sits in is resolved separately,
  * inside whichever Data Set that element lives in
  * ({@link creatorFor}). Carrying a block number across a Data Set boundary is
- * precisely `DICOM-PRIVATE-CREATOR-RESERVATION-LEAK`.
+ * precisely the reservation leak fixed in `0.0.10`.
  *
  * ## What it refuses to read
  *
@@ -1788,7 +1788,7 @@ function resolvePrivateDeclaration(
  * byte); the run supplies which block number that creator holds **here**. PS3.5
  * 2026c 7.8.1 scopes a reservation to one Data Set and items do not inherit an
  * enclosing one, so a reading that carried a block number across that boundary
- * would re-open `DICOM-PRIVATE-CREATOR-RESERVATION-LEAK`. It cannot: no block
+ * would re-open the reservation leak fixed in `0.0.10`. It cannot: no block
  * number is stored in the record at all.
  *
  * A Private Creator `(gggg,00EE)` is safe when the block it reserves retains at
@@ -1942,7 +1942,7 @@ function itemStreamOverrunsSequence(el: Element, encoding: BodyEncoding): boolea
  *    than against the sequence, so an item that runs past the sequence's
  *    declared end is *read*, and the span shows up as `rawBytes.length` exceeding
  *    `length` ({@link itemStreamOverrunsSequence}).
- *  - **Implicit VR LE.** That path slices the item stream to the declared Value
+ *  - **Implicit VR LE.** There the item stream is cut to the declared Value
  *    Length, so an item claiming more than fits is not a valid item stream at
  *    all: the descent is refused, `items` is `undefined`, and
  *    `DICOM_SQ_NOT_DESCENDED` is raised ({@link isUnauditableSequence}). Nothing
@@ -2047,8 +2047,7 @@ function keepsPrivate(
  * The VR the {@link Profile} **declares** for a retained private data element,
  * as opposed to the one the parse tree carries.
  *
- * The two can disagree, and the disagreement is the whole of
- * `DICOM-PRIVATE-SQ-PARSE-VR`:
+ * The two can disagree, in two ways:
  *
  * - **Implicit VR LE puts no VR on the wire at all** (PS3.5 2026c §7.1.3), so
  *   for a private tag the parser's `SQ` is an inference it draws from a profile
@@ -2131,16 +2130,16 @@ function declaredPrivateVr(
  * reserves **within that item** is removed and named in
  * `report.removedPrivateTags` - PS3.5 §7.8.1's per-Data-Set scope, which items
  * do not inherit. A vendor block that encodes its own reservation inside the
- * item, as §7.8.1 requires, is retained exactly as before. A non-`SQ` private
+ * item, as PS3.5 §7.8.1 requires, is retained exactly as before. A non-`SQ` private
  * element is untouched by this function and still routes to
  * {@link keepOrEmpty}.
  *
- * ## The second authority: the profile's DECLARED VR (`DICOM-PRIVATE-SQ-PARSE-VR`)
+ * ## The second authority: the profile's DECLARED VR
  *
  * The `SQ` branch keys on what the **parse tree** says, and the parse tree can
  * disagree with the profile about the same bytes - see {@link declaredPrivateVr}
  * for the two encodings that produce that. Keying on the parse tree alone left
- * a route open through `0.0.10` and through `DICOM-PRIVATE-SQ-CARVE-OUT`: the
+ * a route open through `0.0.10` and past the private `SQ` descent fix: the
  * identical file, the identical profile, `(0012,0062) = YES`, and the vendor's
  * whole nested Data Set copied into the output unexamined.
  *
@@ -2182,10 +2181,10 @@ function declaredPrivateVr(
  * **What it costs, priced rather than glossed.** Removing on "this run did not
  * enumerate the value" drops the vendor value out of every ordinary private
  * element a profile vouches for and nothing walked - a conformant `LO` scalar
- * included. That is over-redaction (`DICOM-DEIDENT-OVER-REDACTION`) and it is
+ * included. That is over-redaction and it is
  * deliberate here, because the alternative is retaining a value under
  * PS3.15 §E.3.10's "known ... to be safe" that nothing established as safe.
- * **It is NOT `DICOM-BINARY-CARRIER-OVERDECLARE`, which the founder accepted on
+ * **It is NOT the binary-carrier over-declare trade, which was accepted on
  * 2026-08-05** - that decision priced a measured over-declare swallow; this is
  * an honest length reached through `RetainSafePrivate`. Returning any of those
  * values to the output needs the content test that separates a nested Data Set
@@ -2260,8 +2259,8 @@ function keepRetainedPrivate(
   // `el.length > 0` because a zero-length value hides nothing, and without it
   // de-identifying an already de-identified object reports a second drop where
   // there is nothing left to drop - the emptied element still satisfies every
-  // other conjunct. `deidentify()` is a fixed point on its own output
-  // (`DICOM-DEIDENT-NOT-A-FIXED-POINT`), and that has to include the audit, not
+  // other conjunct. `deidentify()` is a fixed point on its own output,
+  // and that has to include the audit, not
   // just the bytes.
   if (!hasUndefinedVr(el) && el.length > 0 && declaredPrivateVr(el, ctx, creators) === "SQ") {
     emptyUnauditableCarrier(el, ctx, contextPath, out, freshScalar(el, Buffer.alloc(0), 0));
@@ -2301,7 +2300,7 @@ function keepRetainedPrivate(
   // profile declares `SQ` is emptied before that. A declared-safe private `SQ`
   // never arrives here at all - it takes the descent at the top of this
   // function, so the Data Sets below it are handled on their own merits
-  // (`DICOM-PRIVATE-SQ-CARVE-OUT`, and E.3.10's own Sequence paragraph).
+  // (as E.3.10's own Sequence paragraph requires).
   if (declaredSafe(el, ctx, creators)) return;
   removeUnenumerablePrivate(el, ctx, contextPath, out);
 }
@@ -2341,7 +2340,7 @@ function keepRetainedPrivate(
  * and named in `report.removedPrivateTags`.
  *
  * **What this used NOT to cover, and no longer needs qualifying** (the exact
- * refusal closed by `DICOM-PRIVATE-SQ-CARVE-OUT`): a **private `SQ`** the
+ * refusal now closed): a **private `SQ`** the
  * profile vouches for was settled by `keepsPrivate` -> `keepOrEmpty` **before**
  * {@link descendSequence} ran, so its items were never walked and this flag was
  * never carried into them, and a private element absorbed into such a carrier's
@@ -2935,7 +2934,7 @@ function hasValueOverLoMaximum(field: Buffer): boolean {
  * byte-identical to `287efae`, and still **replaced the whole prior chain** at
  * the ceiling - measured, at pass **9,362**. `LO` is a `1-n` VR and Table 6.2-1
  * describes a **Value**, so every value's trailing pad is padding, not only the
- * field's. §6.4 is about where the ENCODER puts its pad ("a single padding
+ * field's. PS3.5 §6.4 is about where the ENCODER puts its pad ("a single padding
  * character shall be applied to the end of the Value Field (**to the last
  * Value**)"), which is a fact about the write, not a bound on what a comparison
  * may ignore. **Trimming per value discards nothing**: it is the comparison that

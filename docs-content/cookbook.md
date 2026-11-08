@@ -35,7 +35,7 @@ name is deliberately narrow.
   `PS3.N §X`, `PS3.N section X`, or `PS3.N Annex X`, with the label next to its part, is resolved in
   the pinned document by collecting all candidate sections carrying that label and requiring exactly
   one. **A label the text writes away from its part is not covered**: a second label in a list
-  (`§7.5.1, §7.8.1`) and a bare `section X` whose part was named a sentence earlier are both read by
+  (`PS3.5 §7.5.1, §7.8.1`) and a bare `section X` whose part was named a sentence earlier are both read by
   a human, not by the gate. On top of that, each clause the text leans on for a normative statement
   is required to carry that sentence **in its own body, not in a subsection**, because a label proves
   the label exists and proves nothing about what the body says.

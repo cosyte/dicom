@@ -17,8 +17,8 @@
  *      Pixel Data is an encapsulated fragment stream (see `./encapsulated.ts`).
  *
  * Conservative behaviour (PS3.5): scalar values are padded to even length on
- * write (§6.2); retired `(gggg,0000)` group-length elements are omitted from
- * the dataset (§7.2); short/long-form headers are chosen by VR (§7.1.2); the
+ * write (PS3.5 §6.2); retired `(gggg,0000)` group-length elements are omitted from
+ * the dataset (PS3.5 §7.2); short/long-form headers are chosen by VR (PS3.5 §7.1.2); the
  * Data Elements of the root Data Set, and of every Sequence Item the writer can
  * walk, are emitted in ascending tag order (PS3.5 2026c §7.1 / §7.5.1, see
  * `./order.ts`), with Items kept in their order and no value byte changed;
@@ -30,7 +30,7 @@
  *
  * The ordering has limits, stated with it. A tag repeated inside an Item is
  * kept (both copies, in source order), so such output still breaks PS3.5 2026c
- * §7.1's "at most once". A Sequence that cannot be walked, one nested past
+ * PS3.5 §7.1's "at most once". A Sequence that cannot be walked, one nested past
  * `NESTING_DEPTH_LIMIT`, one whose parsed `items` do not match its bytes, and
  * any `UN`-carried Sequence (under Implicit VR LE that includes a private
  * Sequence inside an Item, even one a `Profile` resolved to `SQ`, since a
@@ -164,8 +164,8 @@ function encodeBody(
  * are re-emitted with correct even-length padding and File Meta group length.
  * Pure function - the input `Dataset` is never mutated.
  *
- * **Element order.** Every Data Set is written in ascending tag order (PS3.5
- * 2026c §7.1, §7.5.1): the root, and the Data Set of every Item in every
+ * **Element order.** Every Data Set is written in ascending tag order
+ * (PS3.5 2026c §7.1, §7.5.1): the root, and the Data Set of every Item in every
  * Sequence the writer can walk on the wire, at every depth up to
  * `NESTING_DEPTH_LIMIT`. Items stay in their order (PS3.5 2026c §7.5) and no
  * value changes; only whole element spans move, and only where the parsed
