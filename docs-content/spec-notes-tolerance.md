@@ -251,7 +251,7 @@ high-volume codes for a known-quirky source, without ever loosening a correct de
 
 | Field                | What it does                                                                                                                                                    |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `strict`             | Escalates **every** Tier-2 warning to a thrown `DicomParseError`. 🛑 That error carries a raw `snippet` the warning does not, so a PHI review of the lenient path does not transfer to the strict one. |
+| `strict`             | Escalates **every** Tier-2 warning to a thrown `DicomParseError` whose `code` is the warning's code. 🛑 That error carries a raw `snippet` the warning does not, so a PHI review of the lenient path does not transfer to the strict one. |
 | `onWarning`          | An `OnWarningCallback`, invoked once per Tier-2 warning as it is emitted. It fires after the warning is recorded, and a throw from it is swallowed rather than failing the parse. |
 | `stripPreamble`      | How to treat an object that arrives without the 128-byte preamble and `DICM`.                                                                                    |
 | `copyValues`         | Whether element values are copied out of the input buffer or held as views into it.                                                                              |
@@ -265,8 +265,8 @@ high-volume codes for a known-quirky source, without ever loosening a correct de
 | `WarningCode`       | The discriminant type over that registry. It widens with each new code, so treat it as open: [Compatibility](./compatibility#exports-that-grow-between-releases). |
 | `DicomParseWarning` | One recorded deviation: its `code`, its `position`, and a `message` looked up in the frozen registry.                                                              |
 | `FATAL_CODES`       | The frozen Tier-3 registry. Same rule: enumerate it, never count it.                                                                                              |
-| `FatalCode`         | The discriminant type over that registry.                                                                                                                         |
-| `DicomParseError`   | The thrown class. Carries `code`, `byteOffset`, `offsetFrame`, `message` and a raw hex `snippet` of the source. **Treat `snippet` as PHI.**                        |
+| `FatalCode`         | The discriminant type over that registry. `DicomParseError.code` is a `FatalCode` or, for an [escalated warning](./error-handling#when-a-warning-becomes-a-throw), that warning's `WarningCode`. |
+| `DicomParseError`   | The thrown class, for a fatal and for an escalated warning. Carries `code`, `byteOffset`, `offsetFrame`, `message` and a raw hex `snippet` of the source. **Treat `snippet` as PHI.** |
 | `DicomPosition`     | Where a diagnostic happened: `byteOffset`, plus `fileMeta` / `deflated` flags and a `contextPath` for a nested Sequence Item. Read the frame note below before indexing anything with it. |
 | `OFFSET_FRAMES`     | The frozen set of frames a `byteOffset` may be counted in: the caller's own input, the inflated Data Set of a Deflated object, or a slice this parser cut from inside a Value Field. |
 | `OffsetFrame`       | The discriminant type over that set. **Only the input frame's offsets index the buffer you passed in**, and `DicomParseError.offsetFrame` is what says which frame you have. |

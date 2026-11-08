@@ -102,18 +102,28 @@ export const WARNING_CODES = {
 } as const;
 
 /**
- * Discriminant type for `DicomParseWarning.code`. Narrowing a warning by
- * this code lets consumers write exhaustive `switch` blocks (enabled by
- * the `switch-exhaustiveness-check` lint rule) and guarantees a typo-free
- * comparison against the `WARNING_CODES` registry.
+ * Discriminant type for `DicomParseWarning.code`, and for
+ * `DicomParseError.code` when a warning is escalated. Narrowing by this
+ * code guarantees a typo-free comparison against the `WARNING_CODES`
+ * registry.
+ *
+ * **Treat the union as open.** The registry gains codes between releases,
+ * and each addition widens this union, so a `switch` that lists every
+ * current member stops compiling, or silently misses the new code, on an
+ * upgrade. Handle the codes you care about by name and give the `switch` a
+ * `default` branch for the rest.
  *
  * @example
  * ```ts
  * import type { DicomParseWarning, WarningCode } from "@cosyte/dicom";
  * function describe(w: DicomParseWarning): string {
  *   const code: WarningCode = w.code;
- *   if (code === "DICOM_MISSING_PREAMBLE") return "preamble missing";
- *   return `warning: ${code}`;
+ *   switch (code) {
+ *     case "DICOM_MISSING_PREAMBLE":
+ *       return "preamble missing";
+ *     default:
+ *       return `warning: ${code}`;
+ *   }
  * }
  * ```
  */

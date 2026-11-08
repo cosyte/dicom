@@ -4,7 +4,8 @@
  * Two rules hold the taxonomy in place:
  *   - `FATAL_CODES` is a frozen `as const` registry with EXACTLY four codes;
  *     anything less severe MUST be a Tier-2 warning.
- *   - `DicomParseError` carries `code`, `byteOffset`, `offsetFrame`,
+ *   - `DicomParseError` carries `code` (a `FatalCode`, or the `WarningCode`
+ *     of an escalated warning), `byteOffset`, `offsetFrame`,
  *     `snippet` (up to 16 source bytes, space-separated lowercase hex), and
  *     an optional `contextPath`. The thrown `Error.message` is formatted
  *     `[CODE] msg (offset=N frame=F)` with `… in path/segments` appended when
@@ -14,6 +15,8 @@
  */
 
 import type { Buffer } from "node:buffer";
+
+import type { WarningCode } from "./warnings.js";
 
 /**
  * Stable string codes for every Tier-3 fatal the parser may throw.
@@ -43,10 +46,16 @@ export const FATAL_CODES = {
 } as const;
 
 /**
- * Discriminant type for `DicomParseError.code`. Narrowing a caught error
- * by this code lets consumers write exhaustive `switch` blocks (enabled
- * by the `switch-exhaustiveness-check` lint rule) and guarantees a
- * typo-free comparison against the `FATAL_CODES` registry.
+ * The four Tier-3 fatal codes, the type over the `FATAL_CODES` registry.
+ * `FATAL_CODES` is locked, so an exhaustive `switch` over a `FatalCode`
+ * value stays exhaustive.
+ *
+ * **It is not the whole type of `DicomParseError.code`.** A Tier-2 warning
+ * escalated by `{ strict: true }` or by a profile's `escalate` list is
+ * thrown as a `DicomParseError` whose `code` is that warning's
+ * {@link WarningCode}, so `DicomParseError.code` is
+ * `FatalCode | WarningCode`. A `switch` over a caught error's `code` needs a
+ * `default` branch for the escalated warnings; see {@link DicomParseError}.
  *
  * @example
  * ```ts
@@ -229,13 +238,22 @@ export function fileOffsetIn(frame: ParseFrame, offset: number): number | undefi
 
 /**
  * Thrown by `parseDicom` when the input violates one of the four
- * unrecoverable Tier-3 structural rules - or, under `{ strict: true }`,
- * when any Tier-2 warning is escalated through the single `emit`
- * chokepoint. Carries byte-offset positional context plus a short
+ * unrecoverable Tier-3 structural rules - or when a Tier-2 warning is
+ * escalated through the single `emit` chokepoint, which `{ strict: true }`
+ * does for every warning and a profile's `escalate` list does for the codes
+ * it names. Carries byte-offset positional context plus a short
  * source snippet so consumers can log actionable errors.
  *
  * Message format: `[CODE] msg (offset=N frame=F)`, with `… in a/b/c`
  * appended when `contextPath` is provided.
+ *
+ * **`code` is a {@link FatalCode} or, for an escalated warning, that
+ * warning's {@link WarningCode}.** The escalated error keeps the warning's
+ * own code and registry message rather than mapping it onto one of the four
+ * fatal codes, so `err.code` can be any member of `FATAL_CODES` or
+ * `WARNING_CODES`. Test for the fatal codes you handle and give a `switch`
+ * a `default` branch for the escalated warnings: the warning registry grows
+ * between releases, so the union is open (see `WarningCode`).
  *
  * @remarks
  * Snippets may contain PHI when parsing real clinical files - redact at
@@ -276,9 +294,36 @@ export function fileOffsetIn(frame: ParseFrame, offset: number): number | undefi
  *   }
  * }
  * ```
+ *
+ * @example
+ * ```ts
+ * import { parseDicom, DicomParseError } from "@cosyte/dicom";
+ * try {
+ *   parseDicom(buffer, { strict: true });
+ * } catch (err) {
+ *   if (err instanceof DicomParseError) {
+ *     switch (err.code) {
+ *       case "EMPTY_INPUT":
+ *       case "NOT_DICOM_PART_10":
+ *       case "INVALID_FILE_META":
+ *       case "UNSUPPORTED_TRANSFER_SYNTAX":
+ *         // a Tier-3 fatal: the input could not be read
+ *         break;
+ *       default:
+ *         // an escalated warning: err.code is its WarningCode,
+ *         // such as "DICOM_MISSING_PREAMBLE"
+ *         break;
+ *     }
+ *   }
+ * }
+ * ```
  */
 export class DicomParseError extends Error {
-  public readonly code: FatalCode;
+  /**
+   * A {@link FatalCode}, or the {@link WarningCode} of a Tier-2 warning that
+   * `{ strict: true }` or a profile's `escalate` list escalated.
+   */
+  public readonly code: FatalCode | WarningCode;
   public readonly byteOffset: number;
   /**
    * The coordinate system {@link DicomParseError.byteOffset} is counted in.
@@ -298,7 +343,7 @@ export class DicomParseError extends Error {
    * @internal
    */
   public constructor(
-    code: FatalCode,
+    code: FatalCode | WarningCode,
     message: string,
     byteOffset: number,
     offsetFrame: OffsetFrame,

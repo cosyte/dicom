@@ -12,7 +12,7 @@ Every error the library throws is one of the typed classes below, each exported 
 
 ## `DicomParseError`
 
-Thrown by `parseDicom` on a Tier-3 fatal code. Carries the byte position, the **frame** that position is counted in, a registry-composed message, and a 16-byte hex `snippet` of the source. A code can stand for several structural reasons, and `INVALID_FILE_META` stands for most of them: a File Meta group that cannot be read, and a Data Set after it that is cut short or malformed, such as an element or Item whose declared length reaches past the end of the bytes. The message says which reason; nothing else on the error names it. **The message is looked up in a frozen registry and its factories take no tag, no wire-length parameter and no count of the bytes left in the buffer**, so none of them can be interpolated. The reason is not that such a fatal fires only on a lying length field: it fires on an honestly truncated file too, where nothing is fabricated and the transport simply lost bytes. Measured on a spec-clean object cut short by two bytes, `parseDicom` throws `INVALID_FILE_META` for an element whose Value Length reaches past the end of the input, with every declared length in the file honest. The bound covers both because the withheld numbers are four bytes a sender wrote either way, and because on the desynchronized reading those four bytes are somebody's name: an under-declaring `ST` carrier holding `"MR BRAIN SMITHSON "` once rendered `declared length=1330858068`, which is `"THSO"`.
+Thrown by `parseDicom` on a Tier-3 fatal code, and on an escalated warning ([below](#when-a-warning-becomes-a-throw)). Carries the byte position, the **frame** that position is counted in, a registry-composed message, and a 16-byte hex `snippet` of the source. A code can stand for several structural reasons, and `INVALID_FILE_META` stands for most of them: a File Meta group that cannot be read, and a Data Set after it that is cut short or malformed, such as an element or Item whose declared length reaches past the end of the bytes. The message says which reason; nothing else on the error names it. **The message is looked up in a frozen registry and its factories take no tag, no wire-length parameter and no count of the bytes left in the buffer**, so none of them can be interpolated. The reason is not that such a fatal fires only on a lying length field: it fires on an honestly truncated file too, where nothing is fabricated and the transport simply lost bytes. Measured on a spec-clean object cut short by two bytes, `parseDicom` throws `INVALID_FILE_META` for an element whose Value Length reaches past the end of the input, with every declared length in the file honest. The bound covers both because the withheld numbers are four bytes a sender wrote either way, and because on the desynchronized reading those four bytes are somebody's name: an under-declaring `ST` carrier holding `"MR BRAIN SMITHSON "` once rendered `declared length=1330858068`, which is `"THSO"`.
 
 `err.byteOffset` locates the element, and **`err.offsetFrame` says which coordinate system that number is counted in** (`OFFSET_FRAMES`: `"input"`, `"inflated-dataset"`, `"value-slice"`). Only in `"input"` is it an index into the buffer you passed in. A defined-length Sequence Item is parsed from a slice, so an offset raised inside one counts from that Item, and the same file reports `0`, `24`, or `40` for the same defect depending on where in the Item it sits. **Where a slice begins is deliberately not published**, because the distance between two frames is a declared Value Length off the wire. The frame is in the `Error.message` suffix too, which now reads `(offset=N frame=F)`, so a string match on that suffix stops matching. `err.code` is unchanged. `DicomParseWarning.position` still carries no frame beyond its `deflated` flag, and `Element.byteOffset` carries none at all: both are pre-existing and neither is closed here. On every fatal but one the snippet is raw input, cut in the frame that offset is counted in: treat it as PHI and redact it at your own boundary. The exception is `UNSUPPORTED_TRANSFER_SYNTAX`, where the slot carries PS3.6's own name for the unsupported UID (`"SMPTE ST 2110-20 Uncompressed Progressive Active Video"`) when the registry publishes one, and 16 raw bytes only when it does not. That is deliberate, it predates the frame, and it is named here rather than left to a universal that would be false on the first code an object under a refused syntax reaches.
 
@@ -28,6 +28,35 @@ try {
   }
 }
 caught; // => "EMPTY_INPUT"
+```
+
+## When a warning becomes a throw
+
+A Tier-2 warning is escalated to a throw in two ways: `{ strict: true }` escalates every warning, and a profile's `escalate` list escalates the codes it names (`profiles.strict` names a set of them). **An escalated warning is thrown as a `DicomParseError` whose `code` is the warning's own code**, such as `DICOM_MISSING_PREAMBLE`, not a member of `FATAL_CODES`. Its `message` is the warning's registry message, and `byteOffset`, `offsetFrame` and `snippet` locate the warning the same way they locate a fatal. The warning is not also added to `ds.warnings`, and `onWarning` does not fire for it.
+
+So `err.code` is typed `FatalCode | WarningCode`, not `FatalCode` alone. Test for the fatal codes you handle and treat any other `code` as an escalated warning: `err.code in FATAL_CODES` tells the two apart, and a `switch` over `err.code` needs a `default` branch. Do not list every warning code instead: the warning registry grows between releases, so that union is open (see [Compatibility](./compatibility#exports-that-grow-between-releases)).
+
+```ts runnable
+import { parseDicom, DicomParseError, FATAL_CODES } from "@cosyte/dicom";
+
+// Synthetic object with the preamble omitted: a tolerated quirk, escalated here.
+const buf = Buffer.from(
+  "AgAAAFVMBAAcAAAAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xAAgAYABDUwIAQ1QQACAATE8GAE1STi00Mg==",
+  "base64",
+);
+
+let code: string | undefined;
+let fatal: boolean | undefined;
+try {
+  parseDicom(buf, { strict: true });
+} catch (err) {
+  if (err instanceof DicomParseError) {
+    code = err.code;
+    fatal = err.code in FATAL_CODES;
+  }
+}
+code; // => "DICOM_MISSING_PREAMBLE"
+fatal; // => false
 ```
 
 ## `DicomValueError`

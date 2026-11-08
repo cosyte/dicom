@@ -337,15 +337,9 @@ describe("Strict-mode escalation gate (D-36, TOL-01) - every actively-emitted Ti
         }
         expect(thrown).toBeInstanceOf(DicomParseError);
         const e = thrown as DicomParseError;
-        // Strict-mode escalation routes the WarningCode through the FatalCode
-        // typed `code` field per CONTEXT D-35 (cast-through-as-unknown-as-FatalCode).
-        // `e.code` is typed as `FatalCode`; `fix.code` is a `WarningCode`.
-        // Under strict mode the chokepoint passes the WarningCode through
-        // the FatalCode-typed slot per D-35; cast both to plain string for
-        // the runtime equality assertion.
-        const observed: string = e.code;
-        const expected: string = fix.code;
-        expect(observed).toBe(expected);
+        // Strict-mode escalation carries the warning's own code in `e.code`,
+        // which is typed `FatalCode | WarningCode`.
+        expect(e.code).toBe(fix.code);
         expect(typeof e.byteOffset).toBe("number");
         expect(typeof e.snippet).toBe("string");
       });
