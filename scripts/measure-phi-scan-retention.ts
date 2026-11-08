@@ -106,8 +106,12 @@ function makeCorpus(files: number, mib: number, withHit: boolean): Corpus {
   return { root, files, mib };
 }
 
-/** The observer. Preloaded with `--require`; reports to a file so it cannot disturb stderr. */
-function writeObserver(dir: string, out: string): string {
+/**
+ * The observer. Preloaded with `--require`; reports to `peak.txt` beside itself so it cannot disturb
+ * stderr. Its source is fixed text: it finds the report through `__dirname` rather than having a
+ * path spliced into its code.
+ */
+function writeObserver(dir: string): string {
   const path = join(dir, "retained-observer.cjs");
   writeFileSync(
     path,
@@ -127,7 +131,7 @@ function writeObserver(dir: string, out: string): string {
       "  }",
       "  return r;",
       "};",
-      `process.on("exit", () => { require("node:fs").writeFileSync(${JSON.stringify(out)}, peak + " " + samples); });`,
+      'process.on("exit", () => { require("node:fs").writeFileSync(require("node:path").join(__dirname, "peak.txt"), peak + " " + samples); });',
       "",
     ].join("\n"),
     "utf8",
@@ -146,8 +150,9 @@ interface Run {
 async function measure(scanner: string, corpus: Corpus): Promise<Run> {
   const dir = mkdtempSync(join(tmpdir(), "dicom-phi-scan-observer-"));
   roots.push(dir);
+  // Where the observer writes: `peak.txt` beside itself, in `dir`.
   const report = join(dir, "peak.txt");
-  const observer = writeObserver(dir, report);
+  const observer = writeObserver(dir);
   const started = Date.now();
   const out = await new Promise<string>((res) => {
     const child = spawn(process.execPath, ["--expose-gc", "--require", observer, scanner], {

@@ -396,10 +396,14 @@ describe("phi-scan: --allow-fixture override (D-17)", () => {
   });
 
   it("honors --allow-fixture WITH an override-log entry (exit 0)", () => {
-    if (!existsSync(OVERRIDES_PATH)) {
-      throw new Error("phi-scan-overrides.md must exist before this test runs");
+    // Read the log outright rather than checking for it first: a missing log still fails here, by
+    // name, and there is no window between a check and the read for the file to change in.
+    let original: string;
+    try {
+      original = readFileSync(OVERRIDES_PATH, "utf8");
+    } catch (error) {
+      throw new Error("phi-scan-overrides.md must exist before this test runs", { cause: error });
     }
-    const original = readFileSync(OVERRIDES_PATH, "utf8");
     try {
       const entry =
         "\n### test/fixtures/phi-scan/recent-date-violator.dcm\n\n" +
@@ -3313,6 +3317,8 @@ function retainedPeak(files: number, withHit: boolean): RetainRun {
       withHit ? `${CARET_PN}\n${body}` : body,
     );
   }
+  // The observer writes `peak.txt` beside itself. Its source is fixed text that finds the report
+  // through `__dirname`, so no path is spliced into the code it runs.
   const report = join(root, "peak.txt");
   const observer = join(root, "observer.cjs");
   writeFileSync(
@@ -3333,7 +3339,7 @@ function retainedPeak(files: number, withHit: boolean): RetainRun {
       "  }",
       "  return r;",
       "};",
-      `process.on("exit", () => { require("node:fs").writeFileSync(${JSON.stringify(report)}, peak + " " + samples); });`,
+      'process.on("exit", () => { require("node:fs").writeFileSync(require("node:path").join(__dirname, "peak.txt"), peak + " " + samples); });',
       "",
     ].join("\n"),
   );
