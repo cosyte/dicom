@@ -39,7 +39,7 @@ import { splitTag } from "../dataset/tag.js";
 import type { Tag, VR } from "../dictionary/types.js";
 import { LONG_FORM_VRS } from "../parser/element-header.js";
 import { isRecognizedVr } from "../parser/endian.js";
-import { padValue } from "./element.js";
+import { MAX_SHORT_FORM_LENGTH, padValue, refuseTooLongForVr } from "./element.js";
 
 /**
  * cosyte's Implementation Class UID, emitted as `(0002,0012)` when the source
@@ -111,6 +111,12 @@ function encodeMetaElement(tag: Tag, vr: VR, rawValue: Buffer): Buffer {
       value,
     ]);
   }
+  // PS3.5 2026c section 6.2.2 would write a value past 65,534 bytes in a 16-bit-length VR as UN,
+  // and says the UN VR "shall not be used" for a File Meta Information element, so such a value
+  // has no encoding. Refused with a typed error rather than left to the 16-bit write, which threw
+  // a RangeError: a `(0002,xxxx)` the reader took at the odd length FFFFH pads to 65,536 bytes,
+  // and `deidentify` grows a multi-valued `(0002,0003)` past 65,534 bytes when it remaps each UID.
+  if (value.length > MAX_SHORT_FORM_LENGTH) refuseTooLongForVr("fileMeta");
   const lengthBuf = Buffer.alloc(2);
   lengthBuf.writeUInt16LE(value.length, 0);
   return Buffer.concat([groupBuf, elementBuf, vrBuf, lengthBuf, value]);

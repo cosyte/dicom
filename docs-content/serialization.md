@@ -32,6 +32,10 @@ publishes.
 - **Even-length Value Fields.** PS3.5 2026c §7.1.1 defines a Value Field as "an even number of bytes
   containing the Value(s) of the Data Element", so odd values are padded with the pad byte their VR
   specifies. An odd length that arrived tolerated goes out even.
+- **A value too long for a 16-bit Value Length Field goes out as `UN`.** Under Explicit VR, a value
+  past 65,534 bytes in a VR whose length field is 16 bits is written with VR `UN` in the long form,
+  as PS3.5 2026c §6.2.2 requires, and reads back as `UN`; a Private Creator or File Meta element,
+  for which that section forbids `UN`, is refused with `VALUE_TOO_LONG_FOR_VR` instead.
 - **Every Data Set in ascending tag order.** PS3.5 2026c §7.1 says the Data Elements in a Data Set
   "shall be ordered by increasing Data Element Tag Number", and §7.5.1 says the same inside every
   Item. The writer emits the root that way, and the Data Set of every Item of every Sequence it can
@@ -96,7 +100,7 @@ a code listed below.
 
 | Export                                                     | What it is                                                                                                                                   |
 | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SERIALIZE_ERROR_CODES`                                    | The frozen registry of the writer's codes: `MISSING_TRANSFER_SYNTAX`, `UNSUPPORTED_TRANSFER_SYNTAX`, `INVALID_ENCAPSULATED_PIXEL_DATA`, `DIRECTORY_OFFSET_UNRESOLVED`, `DIRECTORY_OFFSET_DEFLATED`. |
+| `SERIALIZE_ERROR_CODES`                                    | The frozen registry of the writer's codes: `MISSING_TRANSFER_SYNTAX`, `UNSUPPORTED_TRANSFER_SYNTAX`, `INVALID_ENCAPSULATED_PIXEL_DATA`, `DIRECTORY_OFFSET_UNRESOLVED`, `DIRECTORY_OFFSET_DEFLATED`, `VALUE_TOO_LONG_FOR_VR`. |
 | `SerializeErrorCode`                                       | The discriminant type over that registry, so a `switch` on a caught code is exhaustive.                                                      |
 | `DicomSerializeError`                                      | The thrown class. Narrow with `err instanceof DicomSerializeError`, then on `err.code`.                                                       |
 
@@ -136,6 +140,12 @@ the tree. `DIRECTORY_OFFSET_DEFLATED` means the DICOMDIR is written under Deflat
 a non-zero offset, which names no Item a reader of a deflated stream can seek to; one whose offsets
 are all zero is written. The limits of the record model are on
 [Known limitations](./limitations).
+
+`VALUE_TOO_LONG_FOR_VR` means a Private Creator Data Element under an Explicit VR syntax, or a File
+Meta Information element under any (the File Meta group is always Explicit VR Little Endian), has a
+value past 65,534 bytes in a VR with a 16-bit Value Length Field: PS3.5 2026c §6.2.2 forbids the
+`UN` every other such value is written as, so the value has no encoding and nothing is written.
+`deidentify()` throws it too when it re-encodes a Sequence Item that keeps such a creator.
 
 A `DicomSerializeError` message is built from the code and fixed structural text and nothing else:
 no Transfer Syntax UID, length, or byte from the `Dataset` reaches it, so unlike a `DicomParseError`

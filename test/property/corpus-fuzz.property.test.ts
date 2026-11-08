@@ -284,8 +284,19 @@ const TAG_FOR_VR: Readonly<Record<string, Tag>> = {
 const LONG_FORM: ReadonlySet<string> = new Set(["UC", "UR", "UT"]);
 
 /**
+ * Where a long value goes. `attribute` is the standard tag {@link TAG_FOR_VR} names for its VR.
+ * The other two are the elements PS3.5 2026c section 6.2.2 says the `UN` VR "shall not be used"
+ * for, so a value too long for a 16-bit Value Length Field cannot be written as `UN` there: a
+ * Private Creator Data Element (`LO`), and a File Meta Information element (`(0002,0100)` Private
+ * Information Creator UID, a `UI` the File Meta group carries Explicit VR Little Endian under
+ * every Transfer Syntax).
+ */
+const LONG_VALUE_TARGETS = ["attribute", "privateCreator", "fileMeta"] as const;
+
+/**
  * One string value made of a short unit repeated up to tens of thousands of times, at the root or
- * inside an Item, at an even length or at the odd length FFFFH the reader tolerates.
+ * inside an Item, at an even length or at the odd length FFFFH the reader tolerates, in a standard
+ * attribute, a Private Creator or the File Meta group.
  */
 function longValue(): fc.Arbitrary<Buffer> {
   const piece = fc.oneof(
@@ -323,14 +334,24 @@ function longValue(): fc.Arbitrary<Buffer> {
       ),
       keepOdd: fc.boolean(),
       inSequence: fc.boolean(),
+      target: fc.constantFrom(...LONG_VALUE_TARGETS),
     })
-    .map(({ ts, vr, head, unit, times, tail, charset, keepOdd, inSequence }) => {
+    .map(({ ts, vr, head, unit, times, tail, charset, keepOdd, inSequence, target }) => {
+      const fileMeta = target === "fileMeta";
+      const chosen: { tag: string; vr: VR } =
+        target === "attribute"
+          ? { tag: TAG_FOR_VR[vr] ?? "00081030", vr: vr as VR }
+          : fileMeta
+            ? { tag: "00020100", vr: "UI" }
+            : { tag: "00090010", vr: "LO" };
       // An Explicit VR short form carries a length up to FFFFH, and the reader tolerates the odd
-      // one, which the writer then pads past the field: keep it odd half the time.
-      const cap = LONG_FORM.has(vr) || ts === STRUCTURED_TS[0] ? 128 * 1024 : 0xffff;
+      // one, which the writer then pads past the field: keep it odd half the time. The File Meta
+      // group is Explicit VR Little Endian whatever the Transfer Syntax.
+      const cap =
+        LONG_FORM.has(chosen.vr) || (ts === STRUCTURED_TS[0] && !fileMeta) ? 128 * 1024 : 0xffff;
       let value = Buffer.from(head + unit.repeat(times) + tail, "latin1").subarray(0, cap);
       if (value.length % 2 === 1 && !keepOdd) value = value.subarray(0, value.length - 1);
-      const element: BuildDicomElement = { tag: TAG_FOR_VR[vr] ?? "00081030", vr: vr as VR, value };
+      const element: BuildDicomElement = { tag: chosen.tag, vr: chosen.vr, value };
       const elements: (BuildDicomElement | BuildDicomSqElement)[] = [
         ...(charset === undefined
           ? []
@@ -342,9 +363,15 @@ function longValue(): fc.Arbitrary<Buffer> {
               },
             ]),
         // Inside an Item, `deidentify` re-encodes the value itself when it acts on it.
-        inSequence ? { tag: "00081115", items: [{ elements: [element] }] } : element,
+        ...(fileMeta
+          ? []
+          : [inSequence ? { tag: "00081115", items: [{ elements: [element] }] } : element]),
       ];
-      return buildDicom({ transferSyntax: ts, elements });
+      return buildDicom({
+        transferSyntax: ts,
+        elements,
+        ...(fileMeta ? { fileMetaExtraElements: [element] } : {}),
+      });
     });
 }
 

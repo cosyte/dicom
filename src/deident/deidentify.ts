@@ -3315,6 +3315,13 @@ function hasUncleanedBurnedIn(ds: Dataset): boolean {
  * @throws {@link DeidentifyError} (`INVALID_OPTIONS`) for an unknown Retain option,
  *   for both PS3.15 §E.3.6 temporal Options in one call, or for a malformed
  *   `uidRoot`.
+ * @throws `DicomSerializeError` (`VALUE_TOO_LONG_FOR_VR`) when the run
+ *   re-encodes a Sequence Item, under an Explicit VR syntax, that keeps a Private
+ *   Creator Data Element whose value is longer than 65,534 bytes. Only a
+ *   `RetainSafePrivate` run whose `Profile` names a creator that long keeps one;
+ *   PS3.5 2026c section 6.2.2 forbids the `UN` such a value is otherwise written
+ *   as, so the Item has no encoding. The same element at the root is returned,
+ *   and `serializeDicom` refuses it with the same code.
  *
  * @example
  * ```ts

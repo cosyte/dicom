@@ -41,6 +41,13 @@
  *     not one 32-bit unsigned integer). A position inside a deflated stream
  *     names no Item a reader can seek to, so no offset can be written for it.
  *     A Deflated DICOMDIR whose offsets are all zero is written.
+ *   - `VALUE_TOO_LONG_FOR_VR` - a Private Creator Data Element `(gggg,00xx)`
+ *     under an Explicit VR Transfer Syntax, or a File Meta Information element
+ *     `(0002,xxxx)` under any, carries a value longer than 65,534 bytes in a VR
+ *     whose Explicit VR Value Length Field is 16 bits. PS3.5 2026c section 6.2.2
+ *     has such a value written with VR `UN`, which the writer does for every
+ *     other element, but says the `UN` VR "shall not be used" for these two, so
+ *     the value has no encoding and nothing is written.
  *
  * The message is built only from structural constants (never a decoded
  * attribute value, a Transfer Syntax UID, or a length or byte read from the
@@ -65,6 +72,7 @@ export const SERIALIZE_ERROR_CODES = {
   INVALID_ENCAPSULATED_PIXEL_DATA: "INVALID_ENCAPSULATED_PIXEL_DATA",
   DIRECTORY_OFFSET_UNRESOLVED: "DIRECTORY_OFFSET_UNRESOLVED",
   DIRECTORY_OFFSET_DEFLATED: "DIRECTORY_OFFSET_DEFLATED",
+  VALUE_TOO_LONG_FOR_VR: "VALUE_TOO_LONG_FOR_VR",
 } as const;
 
 /**
@@ -86,6 +94,8 @@ export const SERIALIZE_ERROR_CODES = {
  *       return "a DICOMDIR offset names no Directory Record the dataset holds";
  *     case "DIRECTORY_OFFSET_DEFLATED":
  *       return "a Deflated DICOMDIR carries a non-zero Directory Record offset";
+ *     case "VALUE_TOO_LONG_FOR_VR":
+ *       return "a Private Creator or File Meta value is too long for its VR";
  *   }
  * }
  * ```
@@ -114,6 +124,9 @@ export type SerializeErrorCode = (typeof SERIALIZE_ERROR_CODES)[keyof typeof SER
  *   }
  *   if (err instanceof DicomSerializeError && err.code === "DIRECTORY_OFFSET_UNRESOLVED") {
  *     // a DICOMDIR offset the writer cannot tie to a Directory Record
+ *   }
+ *   if (err instanceof DicomSerializeError && err.code === "VALUE_TOO_LONG_FOR_VR") {
+ *     // a Private Creator or File Meta value past 65,534 bytes, which UN may not carry
  *   }
  * }
  * ```
