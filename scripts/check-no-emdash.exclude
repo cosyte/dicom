@@ -1,0 +1,17 @@
+# What the dash gate (cosyte-no-emdash, from @cosyte/script-utils) leaves out of its scan.
+# One tracked path per line; the gate refuses an entry that no longer names a tracked path.
+#
+# CHANGELOG.md: everything above the archive heading is read for both dashes. The archive
+# below it is frozen (test/scripts/changelog-generation.test.ts pins it by digest), holds
+# an en dash in a released entry, and spells the em dash as an escape in an entry about an
+# earlier dash gate, so it is not read at all.
+CHANGELOG.md unread below ## Released before this file was generated
+#
+# The pinned upstream documents under vendor/: NEMA's and CommonMark's own text, kept byte
+# for byte under their SHA-256. Moving a pin renames the directory, so update the line here
+# in the same change.
+vendor/commonmark/spec/257c41ad946f7a1414a499aca402a1aa8fdac3678532266611348c1cf54f4b80/spec.txt
+vendor/nema/part05-2004/f045aabbbca747afbce425b390109840a89f2a981b7cfeb44d88bc219ad590c7/04_05pu.pdf
+vendor/nema/part05/4dfd7b8cbc7c368b7cf03e9c4b8a0773bed91266fcdb0bbf8ed634b7287cacca/part05.xml
+vendor/nema/part06/fa9f0f8d67eba692dcf95cfeae0a8f4e071beeb7844215a860bc4b9d5dfaad25/part06.xml
+vendor/nema/part15/1eb2a9724822476b3f1f3de23d15ae655a4c7f6e9d32bf16f2d9ef76d7d8437c/part15.xml

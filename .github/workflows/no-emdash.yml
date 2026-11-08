@@ -19,16 +19,17 @@ name: Em-dash gate
 # dicom also holds one tracked file with a functional NUL byte
 # (`src/dataset/vr/charset.ts`, DICOM's own padding stripped by a regex whose character
 # class holds the byte). grep classifies it binary. It carries no em dash today so it
-# scans green; if it ever gains one, grep reports a binary-file match on stderr instead
-# of a line on stdout, and the script's stderr capture reds the run. Measured, not
-# assumed. The script header has the full account.
+# scans green; a NUL-bearing file that carries one reds the gate. Measured, not
+# assumed.
 #
-# WHAT ACTUALLY SCANS, AND WHERE THE RULE LIVES. `pnpm check:no-emdash`, which is this
-# repository's own `scripts/check-no-emdash.sh`. The jobs below delegate the plumbing
-# (checkout, pnpm, Node) to the shared gate workflow, and that workflow carries no
+# WHAT ACTUALLY SCANS, AND WHERE THE RULE LIVES. `pnpm check:no-emdash`, which runs
+# `cosyte-no-emdash` from the `@cosyte/script-utils` devDependency: the one dash gate
+# every Cosyte repository runs. What it leaves out here is declared in
+# `scripts/check-no-emdash.exclude` (the frozen CHANGELOG.md archive and the pinned
+# vendor documents). The jobs below delegate the plumbing (checkout, pnpm, Node, and the
+# install the gate needs) to the shared gate workflow, and that workflow carries no
 # pattern, no allow-list and no file selection of its own: it prepares the tree, runs
-# the command, and lets the command's exit status decide the job. So the rule, the
-# variant and every measurement above stay in this repository.
+# the command, and lets the command's exit status decide the job.
 #
 # TWO CONTEXTS, NOT ONE, AND THE JOB ID IS LOAD-BEARING. A called job's check run is
 # named `<caller job id> / <inner job id>`, so the job id `no-emdash` below publishes
@@ -93,7 +94,7 @@ jobs:
     # reference every other caller in this directory names. That release is immutable,
     # so GitHub refuses to move or delete its tag, and the name keeps the release note
     # findable from here.
-    uses: cosyte/.github/.github/workflows/gate-no-emdash.yml@498c7c13c8869bf11b67fa8324684ec2dc691ec6 # workflows-2026-11-07-498c7c13c886
+    uses: cosyte/.github/.github/workflows/gate-no-emdash-install.yml@498c7c13c8869bf11b67fa8324684ec2dc691ec6 # workflows-2026-11-07-498c7c13c886
     # No more than the scan needs. A called workflow's GITHUB_TOKEN can only be
     # downgraded by its caller, and this gate reads the tree and nothing else.
     permissions:

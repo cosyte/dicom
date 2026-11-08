@@ -74,8 +74,8 @@ export type FatalCode = (typeof FATAL_CODES)[keyof typeof FATAL_CODES];
  * A byte offset is a number and a number alone says nothing about where its
  * zero is. This parser reads a Data Set out of three different buffers over one
  * `parseDicom` call, so the same small integer means three different things
- * depending on which one is being read - and until `DICOM-DIAGNOSTIC-PHI-
- * RESIDUALS` closed it, nothing on the thrown error said which. A consumer
+ * depending on which one is being read - and until the diagnostic
+ * PHI-residuals fix closed it, nothing on the thrown error said which. A consumer
  * cutting `input.subarray(err.byteOffset, err.byteOffset + 16)` to see what
  * upset the parser was, inside a Sequence Item, cutting an unrelated element -
  * the exact defect the `{ strict: true }` snippet itself was once fixed for.
@@ -119,7 +119,7 @@ export const OFFSET_FRAMES = {
   /**
    * Byte 0 is byte 0 of a slice this parser cut from inside a Value Field: a
    * defined-length Sequence Item's value, or an `SQ`/`UN` value handed to a
-   * descent. **Where that slice begins is deliberately not published** - see
+   * descent. **Where that cut begins is deliberately not published** - see
    * this table's own note.
    */
   VALUE_SLICE: "value-slice",

@@ -40,7 +40,7 @@ default:
   `DICOM_PRIVATE_CREATOR_UNKNOWN` warning: never a wrong decode.
 
   The lookup is **scoped to one Data Set**. PS3.5 §7.8.1 reserves a private block for the Data Set
-  its Private Creator element sits in, and §7.5.1 makes every Sequence Item a Data Set of its own,
+  its Private Creator element sits in, and PS3.5 §7.5.1 makes every Sequence Item a Data Set of its own,
   so a block claimed at the root does not resolve an element inside an item, an item's claim does
   not resolve one in a sibling item, and neither survives back out to the enclosing Data Set. A
   private element whose block was never claimed in its own Data Set reads `UN` plus

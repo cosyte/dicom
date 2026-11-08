@@ -47,7 +47,7 @@
  *     invariant this threat reduces to once nesting is in play.** A descent
  *     that runs, fails and is retried costs 2x at one level and 2^depth across
  *     nested sequences - the same unbounded-CPU threat by a different route. An
- *     earlier draft of `DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ` tried a bounded
+ *     earlier draft of the unbounded item-read fix tried a bounded
  *     reading of a defined-length `SQ` and re-parsed item-driven when it was not
  *     adopted, and was measured at 75,475 ms for a 606-byte file with 20 nested
  *     sequences against 0.7 ms for one pass. `tryParseDefinedLengthSQ` and
@@ -346,7 +346,7 @@ export function parseSequence(
         // sequence that is the last thing in its buffer has nothing to reach
         // into - so neither says anything and neither warns.
         //
-        // **Disclosure only. Nothing is re-framed, and that is the slice.** The
+        // **Disclosure only. Nothing is re-framed, and that is the whole change.** The
         // two readings this file admits are byte-identical inputs - a file where
         // the ITEM over-declares and a file where the SEQUENCE under-declares are
         // the same bytes, proven in `test/integration/explicit-sq-item-bound.test.ts`
@@ -361,8 +361,8 @@ export function parseSequence(
         // unclaimed block is removed. It is false: which direction leaks depends
         // on where the SENDER put the Private Creator, not on which length field
         // a reader follows. Put the creator in the item's genuine content and
-        // the absorb direction leaks too - `DICOM-PRIVATE-CREATOR-RESERVATION-
-        // LEAK`, measured on `164eb39` and closed at the de-identify boundary,
+        // the absorb direction leaks too - the reservation leak,
+        // measured on `164eb39` and closed at the de-identify boundary,
         // never here. The eject direction is still open and pinned as a
         // residual. Neither reading is safe by construction, which is exactly
         // why this reports rather than decides.
@@ -372,7 +372,7 @@ export function parseSequence(
           cursor.position + itemLength > endLimit
         ) {
           // NEITHER length is passed, and the second one is the eighth instance
-          // of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`. `itemLength` is a raw 32-bit
+          // of the diagnostic PHI-residuals defect. `itemLength` is a raw 32-bit
           // wire read on a file whose length fields are by definition lying. So
           // is the remainder this call site used to compute:
           // `endLimit - cursor.position` is the enclosing SEQUENCE's declared
@@ -390,10 +390,10 @@ export function parseSequence(
         }
         const itemSlice = buffer.subarray(cursor.position, cursor.position + itemLength);
         // The item is parsed from a SLICE, so every offset raised inside it is
-        // relative to that slice - including a warning's `position.byteOffset`.
+        // relative to the start of the SLICE - including a warning's `position.byteOffset`.
         // `ctx.frame` is what `makeEmitter` cuts the `{ strict: true }` snippet
         // from AND what every diagnostic publishes as `offsetFrame`, so it has
-        // to be this slice or the snippet is an unrelated element's bytes and
+        // to be the same SLICE or the snippet is an unrelated element's bytes and
         // the offset is labelled with a frame it is not counted in. Restored on
         // the way out, and in a `finally` so a Tier-3 fatal thrown inside the
         // item does not leave the frame dangling for the enclosing Data Set's

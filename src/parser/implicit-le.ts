@@ -17,7 +17,7 @@
  * `parseSequence` (`./sequence.js`).
  *
  * **Both sequence-delimitation forms are descended, and only one of them used to
- * be** (`DICOM-IMPLICIT-SQ-NOT-DESCENDED`). PS3.5 section **7.5.2**
+ * be**. PS3.5 section **7.5.2**
  * "Delimitation of The Sequence of Items" lets an encoder delimit a sequence
  * either by a defined length or by undefined length plus a Sequence Delimitation
  * Item, and then requires that "Both ways of encoding shall be supported by

@@ -7,9 +7,9 @@ name: Public-surface gate
 # changesets, commit messages, pull request text, `test/`, and this repository's
 # own agent-context docs. This workflow is the CI half of that rule for dicom.
 #
-# The rule and the reasoning live in `scripts/check-no-internal-refs.ts`, which
-# is the single source of truth for what is a finding and where it looks. This
-# file only decides WHEN it runs. Run it locally with
+# `cosyte-internal-refs`, the shared gate from `@cosyte/script-utils`, enforces
+# it, configured by `scripts/internal-refs.json`: what is a finding and where it
+# looks. This file only decides WHEN it runs. Run it locally with
 # `pnpm check:no-internal-refs`.
 #
 # dicom was NOT already clean when this landed, and that is the thing worth
@@ -18,17 +18,19 @@ name: Public-surface gate
 # review actually reads. The build copies `src/` comment blocks verbatim into
 # the published `dist/index.d.ts` and `dist/index.d.cts`, so that is where the
 # rule regrows unseen and why a note would not have held. The change that added
-# this workflow rewrote all 530.
+# this workflow rewrote all 530. The shared gate, configured by
+# `scripts/internal-refs.json`, reports every one of those 530 lines on the same
+# tree.
 #
 # WHAT IS SHARED AND WHAT IS NOT. The job below delegates the plumbing (checkout,
-# pnpm, Node) to the shared gate workflow, which carries no pattern, no
-# allow-list and no file selection of its own: it prepares the tree, runs the
-# command, and lets the command's exit status decide the job. The rule set stays
-# here, because what counts as a project prefix and what counts as a domain
-# designator is a property of the package (here `CP-246` is a DICOM Change
-# Proposal and `MRN-42` is example patient-identifier data, and neither is a work
-# item). So the plumbing is shared and the checker under `scripts/` is not. That is
-# the same shape `no-emdash.yml` takes, for the same reasons.
+# pnpm, Node, and the install the gate needs) to the shared gate workflow, which
+# carries no pattern, no allow-list and no file selection of its own: it prepares
+# the tree, runs the command, and lets the command's exit status decide the job.
+# The engine and its canonical rules are shared. What stays here, in
+# `scripts/internal-refs.json`, is what is a property of the package: the prefixes,
+# the standards designations, the surface, and dicom's own extra rules (here
+# `CP-246` is a DICOM Change Proposal and `MRN-42` is example patient-identifier
+# data, and neither is a work item).
 #
 # WHY A SEPARATE WORKFLOW, and not a job in ci.yml. dicom's `ci` job calls the
 # shared ci pipeline, which runs a fixed ladder and no arbitrary repo script.
@@ -38,10 +40,8 @@ name: Public-surface gate
 #   identifiers BELONG on, so there is nothing there to scan; the checker reads
 #   tracked files and nothing else.
 #
-# WHY NO `pnpm install`. The checker has no dependencies and is run by `node`
-# directly, the way `measure:phi-scan-retention` already is. A checkout and one
-# process is the whole job, which is what keeps this cheap enough to run on
-# every push.
+# A checkout, an install from the committed lockfile and one scan is the whole
+# job, which is what keeps this cheap enough to run on every push.
 #
 # THE JOB ID IS LOAD-BEARING. A called job's check run is named
 # `<caller job id> / <inner job id>`, so the job id `no-internal-refs` below
@@ -69,7 +69,7 @@ jobs:
     # reference every other caller in this directory names. That release is immutable,
     # so GitHub refuses to move or delete its tag, and the name keeps the release note
     # findable from here.
-    uses: cosyte/.github/.github/workflows/gate-no-internal-refs.yml@498c7c13c8869bf11b67fa8324684ec2dc691ec6 # workflows-2026-11-07-498c7c13c886
+    uses: cosyte/.github/.github/workflows/gate-no-internal-refs-install.yml@498c7c13c8869bf11b67fa8324684ec2dc691ec6 # workflows-2026-11-07-498c7c13c886
     # No more than the scan needs. A called workflow's GITHUB_TOKEN can only be
     # downgraded by its caller, and this gate reads the tree and nothing else.
     permissions:

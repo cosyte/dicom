@@ -205,7 +205,7 @@ function parseInnolitics(jsonText: string): NormalizedEntry[] {
 // ----------------------------------------------------------------------------
 
 /** The character the founder directive bans (U+2014), built from its code point
- *  on purpose: `scripts/check-no-emdash.sh` scans tracked files for the literal
+ *  on purpose: the dash gate (`pnpm check:no-emdash`) scans tracked files for the literal
  *  byte AND for the backslash-u escape, so a detector for it cannot spell it
  *  either way. A numeric entity in a future PS3.15 edition would decode to this
  *  character and land in a generated attribute name, so the check is real. */

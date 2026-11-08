@@ -261,8 +261,7 @@ export interface EmbeddedAttributeFinding {
  * parser. The profile is the authority that retained the element, and it has
  * said the value is a Sequence of Items; with no items on the tree, the §E.1.1
  * obligation below falls on the carrier just the same. Such an element keeps its
- * parsed VR in the output and is emptied rather than re-typed to `SQ`
- * (`DICOM-PRIVATE-SQ-PARSE-VR`).
+ * parsed VR in the output and is emptied rather than re-typed to `SQ`.
  *
  * **🛑 THERE WAS A THIRD PRODUCER AND IT IS RETIRED: `applied: "kept"` IS GONE
  * FROM THIS TYPE AND FROM EVERY RUN.** Through `0.0.19` a private data element
@@ -679,7 +678,7 @@ export interface FileMetaDroppedElement {
  * Sequence Item alike, so a `(0004,xxxx)` planted inside an item is removed
  * there too. It is a test on **one element's tag**: it never stands in for a
  * decision about the Data Sets nested inside some other element, which is the
- * shape `DICOM-PRIVATE-SQ-CARVE-OUT` was opened for. Removing a `(0004,xxxx)`
+ * shape the private `SQ` descent fix was opened for. Removing a `(0004,xxxx)`
  * that is itself a Sequence removes its items with it, exactly as a Table E.1-1
  * `X` action does.
  *
@@ -834,8 +833,8 @@ export interface UnregisteredElementRemoval {
  *   resynchronize the reader onto four bytes that spell such a block. The
  *   package's usual answer to a
  *   fabricated header, `undefinedVrElements`, carries a byte offset and no tag,
- *   and still answers it whenever the fabricated VR is outside the 34 PS3.5
- *   §6.2 defines. It cannot when the fabricated VR is one of them, because those
+ *   and still answers it whenever the fabricated VR is outside the 34
+ *   PS3.5 §6.2 defines. It cannot when the fabricated VR is one of them, because those
  *   two files are byte-identical.
  * - **`unenumerablePrivateRemovals[].tag`** - see
  *   {@link UnenumerablePrivateRemoval}. The same four bytes by the same route,
@@ -874,7 +873,7 @@ export interface UnregisteredElementRemoval {
  *   redacting this field does not make the object safe.**
  *
  * `embeddedAttributes[].hidden` **left that list** in
- * `DICOM-DIAGNOSTIC-PHI-RESIDUALS` - an entry is now a literal PS3.15 Table
+ * the diagnostic PHI-residuals fix - an entry is now a literal PS3.15 Table
  * E.1-1 row, so it is not value-bearing. Its own disclosure had been reworded
  * twice by then, and this repo deletes a disclosure at that point rather than
  * writing a third; what is true of the field is stated once, on
@@ -960,7 +959,7 @@ export interface DeidentifyReport {
    * total. The unenumerable **removals** are budgeted apart from it and their
    * record is not capped at all.
    *
-   * **It covers private sequences too, since `DICOM-PRIVATE-SQ-CARVE-OUT`.** A
+   * **It covers private sequences too.** A
    * private `SQ` a {@link Profile} vouches for under `RetainSafePrivate` used to
    * be kept verbatim and never appear here; it is now emptied and listed on the
    * same terms as any other, because the profile's licence under PS3.15 §E.3.10
@@ -1002,7 +1001,7 @@ export interface DeidentifyReport {
    * Empty on a file conformant to **PS3.5 2026c**: a sender that writes one of
    * the 34 VRs that edition defines never produces one, and an Implicit VR LE
    * file **cannot** - there the VR comes from the dictionary. The edition is not
-   * pedantry: §6.2 exists precisely to say how a *future* VR will be encoded, so
+   * pedantry: PS3.5 §6.2 exists precisely to say how a *future* VR will be encoded, so
    * a file conformant to a later edition using a newly defined VR is the
    * population that sentence exists for. (What such a file does on this
    * library's parse path is not summarized here - it was measured and the
@@ -1029,7 +1028,7 @@ export interface DeidentifyReport {
    * `RetainSafePrivate` element a {@link Profile} vouches for still reaches this
    * test and is still emptied. Its sibling
    * {@link DeidentifyReport.unauditableSequences} had a real one until
-   * `DICOM-PRIVATE-SQ-CARVE-OUT`; neither has one now, and they arrive at that by
+   * the private `SQ` descent fix; neither has one now, and they arrive at that by
    * different routes - this one because nothing bypasses `keepOrEmpty`, that one
    * because a vouched-for private `SQ` is routed into the ordinary `SQ` branches.
    */

@@ -37,10 +37,10 @@ publishes.
   as PS3.5 2026c §6.2.2 requires, and reads back as `UN`; a Private Creator or File Meta element,
   for which that section forbids `UN`, is refused with `VALUE_TOO_LONG_FOR_VR` instead.
 - **Every Data Set in ascending tag order.** PS3.5 2026c §7.1 says the Data Elements in a Data Set
-  "shall be ordered by increasing Data Element Tag Number", and §7.5.1 says the same inside every
+  "shall be ordered by increasing Data Element Tag Number", and PS3.5 §7.5.1 says the same inside every
   Item. The writer emits the root that way, and the Data Set of every Item of every Sequence it can
   walk on the wire, at every depth up to `NESTING_DEPTH_LIMIT`, whatever order the source file, your
-  code or `deidentify()` left it in. Items stay in their order (§7.5), only whole elements move, so
+  code or `deidentify()` left it in. Items stay in their order (PS3.5 §7.5), only whole elements move, so
   no value byte changes, and nothing is written that the Sequence's own bytes did not carry. A
   Sequence is re-ordered only where its parsed `items` match its bytes, so the output reads back as
   the source did.

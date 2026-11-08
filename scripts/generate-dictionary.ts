@@ -267,7 +267,7 @@ function parseVr(raw: string): string[] {
 // -----------------------------------------------------------------------------
 
 // The character the founder directive bans (U+2014), built from its code point on
-// purpose. `scripts/check-no-emdash.sh` scans tracked files for the backslash-u
+// purpose. The dash gate (`pnpm check:no-emdash`) scans tracked files for the backslash-u
 // escape as well as for the literal byte, so a detector for the character cannot
 // spell it either way without reddening the gate that bans it. Do not "simplify"
 // this into a string literal. A numeric entity in a future PS3.6 edition would

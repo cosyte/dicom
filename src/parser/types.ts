@@ -198,7 +198,7 @@ export interface ParseOptions {
    * it is the bytes at the offset the diagnostic names: file-absolute at the
    * root, relative to the enclosing slice inside a defined-length Sequence or
    * Item, and into the inflated stream under Deflated Explicit VR LE. It was not
-   * always: until `DICOM-FATAL-MESSAGE-REGISTRY` the offset moved with the frame
+   * always: until the fatal-message registry the offset moved with the frame
    * while the cut was always taken from the whole file, so inside a
    * defined-length Item the 16 bytes were **an unrelated element's** - a
    * diagnostic disclosing data from a part of the document the reader was never
@@ -293,7 +293,7 @@ export interface ParseContext {
    * as they already do for {@link ParseContext.creators} and
    * {@link ParseContext.currentCharset}.
    *
-   * **🛑 IT WAS THE FILE EVERYWHERE UNTIL `DICOM-FATAL-MESSAGE-REGISTRY`, AND
+   * **🛑 IT WAS THE FILE EVERYWHERE UNTIL THE FATAL-MESSAGE REGISTRY, AND
    * THAT MADE THE SNIPPET RETURN AN UNRELATED ELEMENT'S BYTES.** A warning
    * raised inside a defined-length Sequence Item carries an item-relative
    * offset, so cutting the file at it returned whatever happened to sit at that
@@ -303,7 +303,7 @@ export interface ParseContext {
    * talking about the same element.
    *
    * **🛑 AND DO NOT SPLIT IT BACK INTO TWO FIELDS.** The name was absent
-   * entirely until the tenth instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`, and
+   * entirely until the tenth instance of the diagnostic PHI-residuals defect, and
    * a `buffer` beside a `frameName` is the same defect one step removed: two
    * assignments where a frame change is one fact, so a future swap site can
    * move the bytes and leave the label behind. {@link ParseFrame} closes that
