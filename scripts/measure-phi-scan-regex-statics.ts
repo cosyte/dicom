@@ -14,10 +14,7 @@
  * matched value (a patient name, a date) VERBATIM rather than excerpted.
  *
  * `DICOM-RESIDUALS` bounded what a hit line PRINTS (`#109`) and what a hit HOLDS (`#110`). This is
- * the third carrier of the same payload, disclosed by `#110` and not measured since. The records,
- * the figures below and what is left open are in
- * `documentation/agent-notes.md#dicom-phi-scan-regex-statics` (the scan route) and
- * `documentation/agent-notes.md#dicom-phi-scan-config-parsers` (the gate's own configuration).
+ * the third carrier of the same payload, disclosed by `#110` and not measured since.
  *
  * ## Why an in-process assertion cannot answer it
  *

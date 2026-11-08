@@ -16,7 +16,7 @@ Required on `main`: `ci / verify (22, ubuntu-latest)`, `ci / verify (24, ubuntu-
 pnpm install --frozen-lockfile && pnpm typecheck && pnpm lint && pnpm format:check
 pnpm phi-scan && pnpm test && pnpm test:coverage && pnpm build && pnpm attw
 pnpm typecheck:examples && pnpm lint:examples && pnpm examples && pnpm phi-scan:examples
-pnpm check:readme && pnpm check:claude-card && pnpm check:agent-notes && pnpm check:catalog
+pnpm check:readme && pnpm check:claude-card && pnpm check:catalog
 pnpm check:no-emdash && pnpm check:no-internal-refs
 ```
 
@@ -33,12 +33,10 @@ and every diagnostic as a route out.
 
 ## Rules
 
-Each names its PR; the full wording is at documentation/agent-notes.md#the-cards-rules-in-full.
-
 - Diagnostics take no string from the file: messages come by code from the frozen registries in
   `src/parser/warnings.ts` and `src/parser/fatals.ts` (#48, #80).
 - Name an element only through `renderTag` or `renderVr`, never a raw tag, length, or byte from
-  the wire (#55, #88, #90, #92, #93). documentation/agent-notes.md#dicom-diagnostic-phi-residuals
+  the wire (#55, #88, #90, #92, #93).
 - Cap a diagnostic a file can multiply once per run, on `DeidentifyContext` (#53, #54).
 - Keep the Annex E table current with the dictionary, and move the PS3.6 and PS3.15 pins under
   `vendor/nema/` together: a tag the table lacks is kept (#38, #146).

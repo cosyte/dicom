@@ -49,8 +49,6 @@
  * 🩺 RESTORE A BASE TREE BY FILE COPY, NEVER `git checkout`. That is a rule this lineage paid for
  * twice, and it is why this takes a script PATH rather than a revision: nothing here touches the
  * working tree.
- *
- * The record is `documentation/agent-notes.md#dicom-phi-scan-html-blocks`.
  */
 
 import { spawnSync } from "node:child_process";

@@ -501,8 +501,8 @@ describe("the diagnostic itself", () => {
       expect(thrown.message).not.toContain("SMITHSON");
       expect(thrown.message).not.toContain(PATIENT_ID);
       // `(0010,0020)`, VR `LO`, declared length 14, then "SMITHSON" - the tag the
-      // message withheld and eight bytes of the value, exactly as the CHANGELOG,
-      // the factory's JSDoc and `agent-notes.md` quote it.
+      // message withheld and eight bytes of the value, exactly as the CHANGELOG
+      // and the factory's JSDoc quote it.
       expect(thrown.snippet).toBe("10 00 20 00 4c 4f 0e 00 53 4d 49 54 48 53 4f 4e");
     }
   });

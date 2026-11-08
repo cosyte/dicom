@@ -6,10 +6,7 @@
  * ## Why this file exists rather than a table in a note
  *
  * The same reason `scripts/measure-phi-scan-unread.ts` exists: a figure only its author can produce
- * is not evidence. **The two tables and the grid** in
- * `documentation/agent-notes.md#dicom-phi-scan-value-retention` come out of this file. The figures
- * that file takes by other means say so where they are written, and none of them is claimed for
- * this script.
+ * is not evidence. **The two tables and the grid** behind that disclosure come out of this file.
  *
  * ## What it measures, and why an ordinary sampler cannot
  *

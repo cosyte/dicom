@@ -379,7 +379,7 @@ const SCOPE_SELF_TEST: readonly { readonly path: string; readonly inScope: boole
   { path: ".github/workflows/no-internal-refs.yml", inScope: false },
   { path: ".github/CODEOWNERS", inScope: false },
   { path: "CLAUDE.md", inScope: false },
-  { path: "documentation/agent-notes.md", inScope: false },
+  { path: "documentation/decisions/0001-example.md", inScope: false },
   { path: "scripts/check-no-internal-refs.ts", inScope: false },
   { path: "vendor/nema/README.md", inScope: false },
   { path: "pnpm-lock.yaml", inScope: false },
