@@ -806,12 +806,13 @@ function insertedSequence(tag: Tag, items: readonly Item[], encoding: BodyEncodi
   });
 }
 
-/** Decode a private-creator element's value (an `LO` vendor schema id - not PHI). */
+/**
+ * Decode a private-creator element's value (an `LO` vendor schema id - not PHI). The trailing
+ * pad goes by {@link trimTrailingPad}, one scan in from the end: the `/[\0 ]+$/` it replaces
+ * re-scanned a run of pad bytes from every position in it, quadratic in a length the file chooses.
+ */
 function decodeCreator(el: Element): string {
-  return el.rawBytes
-    .toString("latin1")
-    .replace(/[\0 ]+$/, "")
-    .trim();
+  return trimTrailingPad(el.rawBytes).toString("latin1").trim();
 }
 
 /** True when the (private) tag is a Private Creator data element `(gggg,00EE)`. */
@@ -1565,12 +1566,12 @@ function declarationKey(group: number, creator: string): string {
   return `${String(group)}:${creator}`;
 }
 
-/** Decode a `CS` Enumerated Value, less the padding PS3.5 Table 6.2-1 permits. */
+/**
+ * Decode a `CS` Enumerated Value, less the padding PS3.5 Table 6.2-1 permits, trimmed in linear
+ * time by {@link trimTrailingPad} as {@link decodeCreator} is.
+ */
 function decodeEnumerated(el: Element): string {
-  return el.rawBytes
-    .toString("latin1")
-    .replace(/[\0 ]+$/, "")
-    .trim();
+  return trimTrailingPad(el.rawBytes).toString("latin1").trim();
 }
 
 /**
@@ -3275,13 +3276,7 @@ function hasUncleanedBurnedIn(ds: Dataset): boolean {
   if (!ds.has(TAG_PIXEL_DATA)) return false;
   const flag = ds.get(TAG_BURNED_IN_ANNOTATION);
   if (flag === undefined) return true;
-  return (
-    flag.rawBytes
-      .toString("latin1")
-      .replace(/[\0 ]+$/, "")
-      .trim()
-      .toUpperCase() !== "NO"
-  );
+  return trimTrailingPad(flag.rawBytes).toString("latin1").trim().toUpperCase() !== "NO";
 }
 
 /**

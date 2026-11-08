@@ -250,8 +250,47 @@ export function directoryRecords(source: DirectorySource): DirectoryRecords {
  */
 function csValues(el: Element | undefined): readonly string[] | undefined {
   if (el === undefined) return undefined;
-  const text = el.rawBytes.toString("latin1").replace(/[\0 ]+$/u, "");
-  return Object.freeze(text === "" ? [] : text.split("\\").map((v) => v.replace(/^ +| +$/gu, "")));
+  const text = stripTrailingPad(el.rawBytes.toString("latin1"));
+  return Object.freeze(text === "" ? [] : text.split("\\").map(trimSpaces));
+}
+
+/**
+ * `text` less its trailing NULL (`0x00`) and SPACE (`0x20`) pad, scanning in from the end once.
+ * Linear in the length: the `/[\0 ]+$/u` this replaces re-scanned a run of pad bytes from every
+ * position in it, so a long run that ended in any other byte cost quadratic time in a length the
+ * file chooses.
+ *
+ * @example
+ * ```ts
+ * stripTrailingPad("IMAGE \0"); // "IMAGE"
+ * ```
+ */
+export function stripTrailingPad(text: string): string {
+  let end = text.length;
+  while (end > 0) {
+    const code = text.charCodeAt(end - 1);
+    if (code !== 0x00 && code !== 0x20) break;
+    end--;
+  }
+  return text.slice(0, end);
+}
+
+/**
+ * One `CS` value less its leading and trailing SPACE, scanning in from each end once. Linear in
+ * the value's length: the `/^ +| +$/gu` this replaces re-scanned a run of interior spaces from
+ * every position in it, as `src/dataset/vr/decode.ts` found for the same pattern.
+ *
+ * @example
+ * ```ts
+ * trimSpaces("  IMAGE "); // "IMAGE"
+ * ```
+ */
+export function trimSpaces(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value.charCodeAt(start) === 0x20) start++;
+  while (end > start && value.charCodeAt(end - 1) === 0x20) end--;
+  return value.slice(start, end);
 }
 
 /**
