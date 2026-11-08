@@ -112,6 +112,22 @@ export function dummyBytes(vr: VR): Buffer | null {
 }
 
 /**
+ * `text` less its trailing NULL (`0x00`) pad, scanning in from the end once. Linear in the
+ * length: the `/\0+$/` this replaces re-scanned a run of NULLs from every position in it, so a
+ * long run that ended in any other byte cost quadratic time in a length the file chooses.
+ *
+ * @example
+ * ```ts
+ * stripTrailingNulls("1.2.3\0\0"); // "1.2.3"
+ * ```
+ */
+export function stripTrailingNulls(text: string): string {
+  let end = text.length;
+  while (end > 0 && text.charCodeAt(end - 1) === 0x00) end--;
+  return text.slice(0, end);
+}
+
+/**
  * Re-encode a `UI` value, replacing each backslash-separated UID via `remap`.
  * UIDs are ASCII digits + dots; the result is null-padded to even length per
  * PS3.5 §6.2.
@@ -123,7 +139,7 @@ export function dummyBytes(vr: VR): Buffer | null {
  * ```
  */
 export function remapUidBytes(rawBytes: Buffer, remap: (uid: string) => string): Buffer {
-  const raw = rawBytes.toString("latin1").replace(/\0+$/, "");
+  const raw = stripTrailingNulls(rawBytes.toString("latin1"));
   const remapped = raw
     .split("\\")
     .map((uid) => remap(uid.trim()))
@@ -142,7 +158,7 @@ export function remapUidBytes(rawBytes: Buffer, remap: (uid: string) => string):
  * ```
  */
 export function uidValueMultiplicity(rawBytes: Buffer): number {
-  const raw = rawBytes.toString("latin1").replace(/\0+$/, "");
+  const raw = stripTrailingNulls(rawBytes.toString("latin1"));
   if (raw.length === 0) return 0;
   return raw.split("\\").length;
 }
