@@ -42,7 +42,9 @@ parseDicom(Buffer.from("plainly not a DICOM object, just ASCII bytes", "ascii"))
 | `EMPTY_INPUT`                 | Zero-length input.                                                     |
 
 Narrow on the caught error via `err instanceof DicomParseError` and `err.code === FATAL_CODES.*` (see
-[Tolerance and the warning model](./spec-notes-tolerance)). Everything a real-world archive does short
+[Tolerance and the warning model](./spec-notes-tolerance)). Under `{ strict: true }` or a profile that
+escalates, the same class is thrown for an escalated warning with that warning's code in `err.code`,
+so treat any code outside `FATAL_CODES` as one ([Error handling](./error-handling#when-a-warning-becomes-a-throw)). Everything a real-world archive does short
 of that (a missing preamble, an odd-length value, an off-spec VR, a group-length mismatch) is a
 warning you triage, not an exception you catch.
 

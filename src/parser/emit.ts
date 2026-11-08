@@ -8,10 +8,11 @@
  *   - Every Tier-2 emission flows through this one function. No
  *     per-call-site `if (ctx.strict) throw` checks anywhere else in the
  *     parser tree.
- *   - Strict-mode escalation: when `ctx.strict === true` the closure throws
- *     `DicomParseError` carrying the warning code (cast through
- *     `as unknown as FatalCode`, the same choice the `@cosyte/hl7` sibling
- *     made). Strict mode bypasses `ctx.warnings` entirely - no residue.
+ *   - Escalation: when `ctx.strict === true`, or the active profile
+ *     escalates the code, the closure throws `DicomParseError` carrying the
+ *     warning's own code, which `DicomParseError.code` admits by type
+ *     (`FatalCode | WarningCode`). An escalated warning bypasses
+ *     `ctx.warnings` entirely - no residue.
  *
  * This module is the ONLY reader of {@link ParseContext.frame}, and both the
  * snippet cut below and the `offsetFrame` published beside it are the reason
@@ -29,7 +30,7 @@
 
 import type { ParseContext } from "./types.js";
 import type { DicomParseWarning } from "./warnings.js";
-import { DicomParseError, buildSnippet, type FatalCode } from "./errors.js";
+import { DicomParseError, buildSnippet } from "./errors.js";
 
 /**
  * Build the per-context Tier-2 emission chokepoint.
@@ -38,20 +39,17 @@ import { DicomParseError, buildSnippet, type FatalCode } from "./errors.js";
  * FIRST, then invoke `ctx.onWarning` (if defined) inside
  * its own try/catch. Throwing handlers are silently swallowed.
  *
- * Strict (`ctx.strict === true`): throw `DicomParseError` carrying the
- * warning code. The `code` field is typed `FatalCode` at compile time
- * but at runtime carries the `WarningCode` literal - consumers narrow
- * on `err.code` after catch.
+ * Strict (`ctx.strict === true`), or a code the profile escalates: throw
+ * `DicomParseError` carrying the warning code. `DicomParseError.code` is
+ * typed `FatalCode | WarningCode`, so consumers narrow on `err.code` after
+ * catch with a `default` branch for the escalated warnings.
  *
  * @internal
  */
 export function makeEmitter(ctx: ParseContext): (w: DicomParseWarning) => void {
   const escalate = (w: DicomParseWarning): never => {
     throw new DicomParseError(
-      // The cast is deliberate: the WarningCode union does not overlap FatalCode at the
-      // type level, but at runtime the strict-thrown error carries the
-      // warning code so consumers can narrow on err.code uniformly.
-      w.code as unknown as FatalCode,
+      w.code,
       w.message,
       w.position.byteOffset,
       // Both come off the SAME frame object, so an escalation cannot name one
