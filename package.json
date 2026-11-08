@@ -84,6 +84,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "fuzz": "vitest run test/property/fuzz.property.test.ts test/property/corpus-fuzz.property.test.ts test/property/values-fuzz.property.test.ts",
     "examples": "tsx scripts/run-examples.ts",
     "typecheck:examples": "tsc -p examples/tsconfig.json",
     "lint:examples": "eslint examples --max-warnings=0",
