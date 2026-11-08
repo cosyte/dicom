@@ -724,7 +724,6 @@ describe("an over-long Value this run did not compose is written through, and SA
   it("a trailing space on the FIELD is trimmed at the write; on any other Value it is 65 and raises", () => {
     // 🛑 THREE DRAFTS OF A SENTENCE ABOUT PADDING WERE REFUTED IN THREE GRADED
     // PASSES, SO THERE IS NO SENTENCE: THIS ROW MEASURES AND SAYS NOTHING ELSE.
-    // The history is in `documentation/agent-notes.md#dicom-lo-length-value-over-length`.
     // 64 characters plus a space, on the field's last Value, where
     // `trimTrailingPad` runs at the write.
     const terminal = `${"Q".repeat(64)} `;

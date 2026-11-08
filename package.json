@@ -98,7 +98,6 @@
     "check:no-internal-refs": "node scripts/check-no-internal-refs.ts",
     "check:readme": "cosyte-readme",
     "check:claude-card": "cosyte-claude-card",
-    "check:agent-notes": "cosyte-agent-notes",
     "check:catalog": "cosyte-catalog",
     "measure:phi-scan-unread": "tsx scripts/measure-phi-scan-unread.ts",
     "measure:phi-scan-retention": "node scripts/measure-phi-scan-retention.ts",

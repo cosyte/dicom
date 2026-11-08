@@ -3,10 +3,9 @@
  *
  * ## Why this file exists rather than a table in a note
  *
- * The note `documentation/agent-notes.md#dicom-phi-scan-unread-tail` quotes a 195-cell result, and
- * a refuter's objection to the first draft was exact: **a figure only its author can produce is not
- * evidence.** The 13 objects, the 5 carriers and the 3 cap settings live here, so the table is
- * re-derivable by anyone, against any base.
+ * The disclosure quoted a 195-cell result, and a refuter's objection to the first draft was exact:
+ * **a figure only its author can produce is not evidence.** The 13 objects, the 5 carriers and the
+ * 3 cap settings live here, so the table is re-derivable by anyone, against any base.
  *
  * It is a **measurement harness, not a test**, and is not wired into CI. What it proves that a test
  * cannot is the comparison against a DIFFERENT TREE, per cell:

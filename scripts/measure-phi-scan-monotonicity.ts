@@ -6,9 +6,8 @@
  *
  * The same reason `scripts/measure-phi-scan-unread.ts` and
  * `scripts/measure-phi-scan-retention.ts` exist: a figure only its author can produce is not
- * evidence. The grid and every count in
- * `documentation/agent-notes.md#dicom-phi-scan-report-monotonicity` comes out of this file, and
- * anyone can re-run it against any base.
+ * evidence. The grid and every count behind the slice come out of this file, and anyone can re-run
+ * it against any base.
  *
  * ## What it measures
  *
@@ -154,8 +153,7 @@ function part10(dataset: Buffer): Buffer {
  * its compact pass print the same reason, and `scanText` runs again on every embedded object, so
  * `rescued` and `at cap` cannot see one of those starving another. THE SUPERSET COMPARISON USES NO
  * LABELLING AT ALL - it is a multiset over the raw hit lines - so the violation count does not
- * inherit this. What the counters miss is measured in
- * `documentation/agent-notes.md#dicom-phi-scan-report-monotonicity` instead.
+ * inherit this.
  */
 type Klass = "tag-pn" | "tag-date" | "text-pn" | "text-date";
 

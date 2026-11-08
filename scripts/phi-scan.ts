@@ -218,9 +218,8 @@ const CUTOFF_YEAR = new Date().getFullYear() - 120;
  * text sweep run over every Part 10 object's bytes, and its recognizers fire on image noise at a
  * rate that is a property of the payload's byte histogram. Re-measured on `b784c38` over 8 MiB of
  * synthetic `(7FE0,0010) OW` pixel data: a uniform `0x41-0x60` payload produced tens of thousands of
- * hits and one stderr line each. The figures, the generator and the negative control are in
- * `documentation/agent-notes.md#dicom-phi-scan-report-cap`; no rate is copied here, because it is a
- * fact about that payload's histogram and not about this script.
+ * hits and one stderr line each. No rate is copied here, because it is a fact about that payload's
+ * histogram and not about this script.
  */
 const DEFAULT_HIT_LINES_PER_RECOGNIZER = 20;
 
@@ -443,10 +442,8 @@ function* base64Runs(text: string): Generator<string> {
  * `scripts/phi-allow-list.txt`. That figure is what this pass closed, so the sentence carving the
  * configuration out is DELETED rather than worded again - it was refused in three wordings across
  * `#112`'s passes 1, 2 and 3, and the way to stop wording a carve-out is to remove what it carved
- * out. `scripts/measure-phi-scan-regex-statics.ts` is the instrument,
- * `test/integration/phi-scan-regex-statics.test.ts` is the pin, and the two records are
- * `documentation/agent-notes.md#dicom-phi-scan-regex-statics` (the scan route) and
- * `documentation/agent-notes.md#dicom-phi-scan-config-parsers` (this one, and what is left).
+ * out. `scripts/measure-phi-scan-regex-statics.ts` is the instrument and
+ * `test/integration/phi-scan-regex-statics.test.ts` is the pin.
  *
  * 🛑 THE BOUND IS ON THE SUBJECT, NOT ON A CLEANUP CALL. Overwriting the statics after the scan
  * would be a bound that holds only from where the cleanup is called, and this lineage has ruled
@@ -645,9 +642,9 @@ function splitLines(text: string): string[] {
  * wrongly does not only drop or admit that block's headings, it moves every boundary after it.
  * Measured on one log the two entry sets are DISJOINT, each exempting at exit 0 a target the other
  * refuses at exit 2, which is why this is specified against section 2.1 rather than argued to be
- * the safer of the two. `scripts/measure-phi-scan-line-endings.ts` prints the relation, and
- * `documentation/agent-notes.md#dicom-phi-scan-line-endings` is the record, including the block
- * classes where this parser is still measured to diverge from the spec it now cites.
+ * the safer of the two. `scripts/measure-phi-scan-line-endings.ts` prints the relation. Where this
+ * parser is still measured to diverge from the spec it cites, the divergence is written where it
+ * lives: at `fenceRun`, `tripleHashValue` and `htmlBlockStart`, and in `overrideLogPaths`'s list.
  */
 function splitCommonMarkLines(text: string): string[] {
   const out: string[] = [];
@@ -851,9 +848,8 @@ interface HitValue {
  * `raw.slice(0, n)` and a regexp match alike with a string that POINTS INTO ITS PARENT, so an
  * excerpt cut from an 8 MiB decode kept the whole 8 MiB alive for the run. Measured: retention grew
  * by one whole file per hit-bearing file and did not grow at all once the excerpt owned its bytes.
- * The tables, the direction this COSTS on, and the residual it does not close are in
- * `documentation/agent-notes.md#dicom-phi-scan-value-retention`; `pnpm measure:phi-scan-retention`
- * re-derives the tables.
+ * `pnpm measure:phi-scan-retention` re-derives the tables. What this does not bound is the `hits`
+ * array itself, which still grows with every hit.
  *
  * 🛑 AND THE ROUND TRIP IS `utf16le` BECAUSE `utf8` IS LOSSY AND WOULD HAVE BEEN A SILENT VALUE
  * CORRUPTION. `Buffer.from(s, "utf8")` turns an unpaired surrogate into U+FFFD, so the excerpt
@@ -1119,9 +1115,11 @@ interface Fence {
  *
  * What is left is not a safety heuristic but a specification: this follows CommonMark 0.31.2 §4.5,
  * and where it is measured to diverge that divergence is written down rather than argued to be
- * harmless. `documentation/agent-notes.md#dicom-phi-scan-config-parsers` carries the known
- * divergences, and carries no count of them. This file does not render markdown and none of this is here because it does; it is
- * here because `overrideLogPaths` has to agree with what a human reviewing that file sees.
+ * harmless. The known one, PRE-EXISTING and open: section 4.5 forbids a backtick in the info string
+ * of a backtick fence, and this opens such a fence anyway, so every fence boundary after it flips
+ * and a `### <path>` that CommonMark renders inside a later code block is a live allow entry here.
+ * This file does not render markdown and none of this is here because it does; it is here because
+ * `overrideLogPaths` has to agree with what a human reviewing that file sees.
  */
 function fenceRun(line: string): Fence | null {
   let i = 0;
@@ -1160,8 +1158,7 @@ function fenceRun(line: string): Fence | null {
  * made the STRIP section 4.2's was refused by a gate and is DELETED rather than reworded: it made
  * `### x<NBSP>` name `x<NBSP>` where the pattern named `x`, which exempted at exit 0 a target this
  * parser had refused at exit 2, and the reference implementation of the pinned document trims the
- * whole of `\s` there. That divergence is measured, disclosed and NOT taken:
- * `documentation/agent-notes.md#dicom-phi-scan-atx-heading`.
+ * whole of `\s` there. That divergence is measured, disclosed here and NOT taken.
  *
  * The rest is the pattern exactly. A heading whose text is entirely whitespace names no path
  * (NARROWING 2, see `overrideLogPaths`), and the capture is written `(.+?)` where `.` excludes
@@ -1349,8 +1346,7 @@ function isBlankLine(line: string): boolean {
  * line ending, and it is not written again here. Getting a start or an end wrong does not merely
  * drop or admit that block's headings; it moves every boundary after it, in both directions at
  * once. What decides this function is the document, and where it is measured to diverge from the
- * document that divergence is written down rather than argued harmless:
- * `documentation/agent-notes.md#dicom-phi-scan-html-blocks`.
+ * document that divergence is written down here rather than argued harmless.
  *
  * The conditions are tried in the spec's order and the first match wins. Indentation is up to three
  * SPACES, exactly as `fenceRun` allows: a tab anywhere in the indentation reaches column four or
@@ -1480,8 +1476,7 @@ function htmlBlockCloses(line: string, kind: HtmlBlockKind): boolean {
  *    the line ending this has NO DIRECTION: an HTML block hides a fence delimiter as readily as a
  *    heading, so entries move both ways, and the relation is printed rather than summarised by
  *    `scripts/measure-phi-scan-html-blocks.ts`. **Kind 7 is out of scope and its cost is measured,
- *    not assumed**: `htmlBlockStart` says why, and the record is
- *    `documentation/agent-notes.md#dicom-phi-scan-html-blocks`.
+ *    not assumed**: `htmlBlockStart` says why.
  *
  * 5. **What SEPARATES `###` from the path. A NARROWING.** The pattern's separator was `\s`;
  *    section 4.2's is a space or a tab, so a `###` run followed by an invisible character was a
@@ -1494,8 +1489,9 @@ function htmlBlockCloses(line: string, kind: HtmlBlockKind): boolean {
  *    optional CLOSING sequence, its INLINE parsing, and the STRIP are all out of scope with their
  *    cost measured rather than assumed** - the strip because the prose and the reference
  *    implementation of the pinned document disagree about it, and a draft that took the prose
- *    exempted at exit 0 a target this parser refuses at exit 2. The record is
- *    `documentation/agent-notes.md#dicom-phi-scan-atx-heading`, and
+ *    exempted at exit 0 a target this parser refuses at exit 2. Container blocks are not modelled
+ *    either: a `### <path>` inside a block quote or a list item, or one whose text holds `LS` or
+ *    `PS`, is a dropped entry, which refuses at exit 2.
  *    `scripts/measure-phi-scan-atx-heading.ts` prints the relation against any tree.
  *
  * Everything else is the pattern exactly. `test/scripts/phi-scan-matchers.test.ts` holds
@@ -2562,8 +2558,7 @@ function scanEmbeddedObjects(
  * rather than written a third time. WHICH RECOGNIZER DOMINATES IS A PROPERTY OF THE PAYLOAD'S BYTE
  * HISTOGRAM, not of this script: measured over 8 MiB of synthetic pixel data, the hit count runs from
  * 0 to five figures, with the PN pass dominant on some histograms and a date pass dominant on others.
- * Read the table in `documentation/agent-notes.md#dicom-scandicom-silent-halt` rather than carrying a
- * rate, or a recognizer's name, out of here.
+ * So no rate, and no recognizer's name, belongs here.
  *
  * It is still the `DICOM-DEIDENT-OVER-REDACTION` shape, and the trade is still not symmetric: a false
  * positive costs a developer one look at a hit line, while the silent halt it replaces printed
@@ -2590,10 +2585,6 @@ function scanEmbeddedObjects(
  * What the deleted branch was FOR, and why the reason does not survive: a `.md` whose first bytes
  * look like group `0002` is still a document, so it must not lose `scanEmbeddedObjects`. It does not.
  * That argument was only ever against an exclusive swap, and there is no swap here.
- *
- * The full 11-object x 7-extension matrix, the mechanical superset check over its 77 cells, and the
- * reason the sibling residual is NOT closed with it are in
- * `documentation/agent-notes.md#dicom-phi-scan-name-dispatch`. No count off it is copied here.
  */
 function scanTarget(target: Target, allow: AllowList, hits: Hit[], unread: UnreadByPath): void {
   let buf: Buffer;
@@ -2666,8 +2657,7 @@ function reportExemptions(): void {
  * with the same bytes. `scanTarget` and `scanEmbeddedObjects` both run `scanText` over the whole
  * buffer unconditionally, so it is tempting to write "but they were swept anyway"; the sweep runs
  * over `buf.toString("utf8")`, which is a lossy decode of arbitrary bytes, and the text pass has
- * no tag table, so the sentence would be a claim about coverage that neither half supports. It is
- * in `documentation/agent-notes.md#dicom-phi-scan-unread-tail` with its bounds, and not here.
+ * no tag table, so the sentence would be a claim about coverage that neither half supports.
  */
 function reportUnread(unread: UnreadByPath): void {
   if (unread.size === 0) return;
@@ -2940,8 +2930,7 @@ function run(): number {
  * Measured on `21d42f5`, `scripts/phi-scan.ts --max-hit-lines 0` over a 200-hit file, stderr on a
  * pipe whose reader is not keeping up: **30 of 60 runs delivered fewer than 200 hit lines** (190,
  * 191, 192, 170, 171 seen) with exit 1 every time, and **60 of 60 delivered all 200 with the line
- * below**. The generator and the conditions are in
- * `documentation/agent-notes.md#dicom-phi-scan-exit-flush`.
+ * below**.
  *
  * Setting `exitCode` lets Node return from the main script and exit once the loop has drained,
  * which is the only thing that makes the report's tail a guarantee rather than a race.
