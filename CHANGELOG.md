@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.2
+
+### Patch Changes
+
+- c6dff08: The README now says a file cut short mid-element throws `INVALID_FILE_META`, instead of naming a fatal code the package does not have.
+
+  The fatal codes are the four in `FATAL_CODES`. The README, the troubleshooting page, the tolerance notes and the `FatalCode` JSDoc example now say that `INVALID_FILE_META` covers a Data Set that is cut short or malformed as well as an unreadable File Meta group, and that the message text, not a separate name, says which reason applies. No behavior changes.
+
+- c6dff08: The README is shorter, so npm shows all of it, and its reference sections moved to the documentation pages.
+
+  Nothing was dropped. Access patterns, error handling, compatibility (with the supported transfer syntaxes), the short recipes, and the scope and non-goals each have a page on docs.cosyte.com, and the README links every one. The documentation now writes US spelling, the serial comma, and "and" in headings, and every page carries a one-sentence description. No code changed.
+
 ## 0.1.1
 
 ### Patch Changes
