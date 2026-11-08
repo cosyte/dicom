@@ -36,7 +36,7 @@ Thrown only by `image.frame(i)`: `FRAME_INDEX_OUT_OF_RANGE` for an index outside
 
 ## `DicomSerializeError`
 
-Thrown by `serializeDicom` for `MISSING_TRANSFER_SYNTAX` (the dataset names no transfer syntax to write in), `UNSUPPORTED_TRANSFER_SYNTAX`, or `INVALID_ENCAPSULATED_PIXEL_DATA` (a PS3.5 2026c section A.4 object whose top-level Pixel Data is absent, native, beside Float or Double Float Pixel Data, or a fragment stream section A.4 does not allow: undelimited, an odd or undefined Item Length, or an empty fragment), `DIRECTORY_OFFSET_UNRESOLVED` (a DICOMDIR offset the writer cannot tie to a Directory Record the dataset holds, refused rather than written stale or as zero) or `DIRECTORY_OFFSET_DEFLATED` (a Deflated DICOMDIR carrying a non-zero record offset). The message is a fixed string.
+Thrown by `serializeDicom` for `MISSING_TRANSFER_SYNTAX` (the dataset names no transfer syntax to write in), `UNSUPPORTED_TRANSFER_SYNTAX`, or `INVALID_ENCAPSULATED_PIXEL_DATA` (a PS3.5 2026c section A.4 object whose top-level Pixel Data is absent, native, beside Float or Double Float Pixel Data, or a fragment stream section A.4 does not allow: undelimited, an odd or undefined Item Length, or an empty fragment), `DIRECTORY_OFFSET_UNRESOLVED` (a DICOMDIR offset the writer cannot tie to a Directory Record the dataset holds, refused rather than written stale or as zero) `DIRECTORY_OFFSET_DEFLATED` (a Deflated DICOMDIR carrying a non-zero record offset), or `VALUE_TOO_LONG_FOR_VR` (a Private Creator or File Meta value past 65,534 bytes in a VR with a 16-bit length, which PS3.5 forbids writing as `UN`). The message is a fixed string.
 
 ## `ProfileDefinitionError` · `DeidentifyError`
 

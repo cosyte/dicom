@@ -238,7 +238,11 @@ function encodeBody(
  *   carries an offset that is not zero and names no Directory Record the
  *   `Dataset` holds, or is not one 32-bit unsigned integer (never written stale
  *   or as zero), or `DIRECTORY_OFFSET_DEFLATED` when a DICOMDIR under Deflated
- *   Explicit VR LE carries a non-zero offset. Nothing is returned on a throw.
+ *   Explicit VR LE carries a non-zero offset, or `VALUE_TOO_LONG_FOR_VR` when a
+ *   Private Creator Data Element under an Explicit VR syntax, or a File Meta
+ *   Information element under any, has a value past 65,534 bytes in a VR with a
+ *   16-bit Value Length Field (PS3.5 2026c section 6.2.2 forbids the `UN` such a
+ *   value is otherwise written as). Nothing is returned on a throw.
  *
  * @example
  * ```ts

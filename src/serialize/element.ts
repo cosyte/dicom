@@ -36,15 +36,43 @@ import { splitTag } from "../dataset/tag.js";
 import type { VR } from "../dictionary/types.js";
 import { LONG_FORM_VRS } from "../parser/element-header.js";
 import { BE_VR_STRIDE, isRecognizedVr } from "../parser/endian.js";
+import { DicomSerializeError, SERIALIZE_ERROR_CODES } from "./errors.js";
 
 /** `0xFFFFFFFF` - the undefined-length sentinel (PS3.5 §7.1.1). */
 const UNDEFINED_LENGTH = 0xffffffff;
 
 /**
  * `FFFEH`, the largest even Value Length a 16-bit Explicit VR Value Length Field carries (PS3.5
- * 2026c section 6.2.2). A longer value in a VR that has the 16-bit field is written as `UN`.
+ * 2026c section 6.2.2). A longer value in a VR that has the 16-bit field is written as `UN`, or
+ * refused where that section forbids `UN` (see {@link refuseTooLongForVr}).
+ *
+ * @internal
  */
-const MAX_SHORT_FORM_LENGTH = 0xfffe;
+export const MAX_SHORT_FORM_LENGTH = 0xfffe;
+
+// Fixed strings: nothing read from the Dataset, no tag, no length and no byte of the value is
+// interpolated, so the message is safe to log.
+const PRIVATE_CREATOR_TOO_LONG_MESSAGE =
+  "A Private Creator Data Element carries a value longer than 65,534 bytes under an Explicit VR Transfer Syntax, in a VR whose Value Length Field is 16 bits. PS3.5 section 6.2.2 has such a value written with VR UN, but says UN shall not be used for a Private Creator Data Element, so the value has no encoding and nothing is written.";
+const FILE_META_TOO_LONG_MESSAGE =
+  "A File Meta Information element carries a value longer than 65,534 bytes in a VR whose Explicit VR Value Length Field is 16 bits. PS3.5 section 6.2.2 has such a value written with VR UN, but says UN shall not be used for a File Meta Information element, so the value has no encoding and nothing is written.";
+
+/**
+ * Throw `VALUE_TOO_LONG_FOR_VR` for a value past {@link MAX_SHORT_FORM_LENGTH} in a 16-bit-length
+ * VR that PS3.5 2026c section 6.2.2 forbids writing as `UN`: a Private Creator Data Element, or a
+ * File Meta Information element (any tag `(0002,xxxx)`). The message names which of the two, and
+ * nothing else.
+ *
+ * @throws {@link DicomSerializeError} `VALUE_TOO_LONG_FOR_VR`, always.
+ *
+ * @internal
+ */
+export function refuseTooLongForVr(kind: "privateCreator" | "fileMeta"): never {
+  throw new DicomSerializeError(
+    SERIALIZE_ERROR_CODES.VALUE_TOO_LONG_FOR_VR,
+    kind === "privateCreator" ? PRIVATE_CREATOR_TOO_LONG_MESSAGE : FILE_META_TOO_LONG_MESSAGE,
+  );
+}
 
 /**
  * The dataset-body encoding a {@link Element} is serialized under. Mirrors the
@@ -197,10 +225,13 @@ export function encodeDatasetElement(
   // Explicit VR "and whose Value Length exceeds 65534" is encoded with a VR of UN, in the long
   // form. Without this branch the 16-bit length write threw a RangeError: a value the reader took
   // at the odd length FFFFH pads to 65,536 bytes, and `deidentify` grows a multi-valued UI past
-  // 65,534 bytes when it remaps every value. A Private Creator is not rewritten, because the same
-  // section says UN "shall not be used" for one, so a creator past 65,534 bytes still has no
-  // encoding here and still fails at the length write below.
-  if (value.length > MAX_SHORT_FORM_LENGTH && !isPrivateCreator(group, element)) {
+  // 65,534 bytes when it remaps every value. The same section says the UN VR "shall not be used"
+  // for a Private Creator Data Element or a File Meta Information element (any (0002,xxxx), which
+  // only a hand-built Dataset puts in the body), so such a value has no encoding at all and is
+  // refused with a typed error rather than left to the 16-bit length write below.
+  if (value.length > MAX_SHORT_FORM_LENGTH) {
+    if (isPrivateCreator(group, element)) refuseTooLongForVr("privateCreator");
+    if (group === 0x0002) refuseTooLongForVr("fileMeta");
     return Buffer.concat([
       uint16(group, littleEndian),
       uint16(element, littleEndian),
