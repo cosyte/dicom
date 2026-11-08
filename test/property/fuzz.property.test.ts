@@ -36,8 +36,13 @@ import {
   fuzzInput,
   truncatedValidFile,
 } from "./_arbitraries.js";
+import { amplified, fuzzTimeout } from "./_fuzz-config.js";
 
-/** Stable, generous run budget - fuzz wants volume. */
+/**
+ * Stable, generous run budget - fuzz wants volume. The nightly fuzz run scales it (or swaps it
+ * for a time budget) and can name the seed, through the `DICOM_FUZZ_*` variables read by
+ * `_fuzz-config.ts`; `pnpm test` runs it as written.
+ */
 const NUM_RUNS = 2000;
 
 /** Per-case wall-clock ceiling (ms). A parse that exceeds this is a hang/DoS. */
@@ -95,36 +100,56 @@ function describeThrown(err: unknown): string {
 }
 
 describe("dicom conformance: fuzz - arbitrary bytes never crash, hang, or OOM the parser", () => {
-  it("pure random byte buffers only ever throw a sanctioned Tier-3 fatal", () => {
-    fc.assert(fc.property(arbitraryBytes(), parseIsRobust), { numRuns: NUM_RUNS });
-  });
+  it(
+    "pure random byte buffers only ever throw a sanctioned Tier-3 fatal",
+    () => {
+      fc.assert(fc.property(arbitraryBytes(), parseIsRobust), amplified(NUM_RUNS));
+    },
+    fuzzTimeout(10_000),
+  );
 
-  it("DICOM-shaped garbage (valid preamble + DICM, then noise) is parsed robustly", () => {
-    fc.assert(fc.property(dicomShapedGarbage(), parseIsRobust), { numRuns: NUM_RUNS });
-  });
+  it(
+    "DICOM-shaped garbage (valid preamble + DICM, then noise) is parsed robustly",
+    () => {
+      fc.assert(fc.property(dicomShapedGarbage(), parseIsRobust), amplified(NUM_RUNS));
+    },
+    fuzzTimeout(10_000),
+  );
 
-  it("random truncations of valid files (all 4 transfer syntaxes) are parsed robustly", () => {
-    fc.assert(fc.property(truncatedValidFile(), parseIsRobust), { numRuns: NUM_RUNS });
-  });
+  it(
+    "random truncations of valid files (all 4 transfer syntaxes) are parsed robustly",
+    () => {
+      fc.assert(fc.property(truncatedValidFile(), parseIsRobust), amplified(NUM_RUNS));
+    },
+    fuzzTimeout(10_000),
+  );
 
-  it("the combined fuzz corpus never escapes the robustness contract", () => {
-    fc.assert(fc.property(fuzzInput(), parseIsRobust), { numRuns: NUM_RUNS });
-  });
+  it(
+    "the combined fuzz corpus never escapes the robustness contract",
+    () => {
+      fc.assert(fc.property(fuzzInput(), parseIsRobust), amplified(NUM_RUNS));
+    },
+    fuzzTimeout(10_000),
+  );
 
-  it("strict mode on arbitrary bytes also only throws DicomParseError (escalation stays typed)", () => {
-    // Strict mode escalates every Tier-2 warning to a throw; the thrown error is
-    // still a DicomParseError (carrying the warning code per D-35). So under
-    // fuzz, strict mode must never produce a non-DicomParseError either.
-    fc.assert(
-      fc.property(dicomShapedGarbage(), (bytes) => {
-        try {
-          parseDicom(bytes, { strict: true });
-        } catch (err) {
-          expect(err).toBeInstanceOf(DicomParseError);
-        }
-        return true;
-      }),
-      { numRuns: NUM_RUNS },
-    );
-  });
+  it(
+    "strict mode on arbitrary bytes also only throws DicomParseError (escalation stays typed)",
+    () => {
+      // Strict mode escalates every Tier-2 warning to a throw; the thrown error is
+      // still a DicomParseError (carrying the warning code per D-35). So under
+      // fuzz, strict mode must never produce a non-DicomParseError either.
+      fc.assert(
+        fc.property(dicomShapedGarbage(), (bytes) => {
+          try {
+            parseDicom(bytes, { strict: true });
+          } catch (err) {
+            expect(err).toBeInstanceOf(DicomParseError);
+          }
+          return true;
+        }),
+        amplified(NUM_RUNS),
+      );
+    },
+    fuzzTimeout(10_000),
+  );
 });
