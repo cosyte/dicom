@@ -30,8 +30,10 @@ From the repo root, in this order, before you push. CI runs steps 1 to 9 on Node
 7. `pnpm test:coverage`
 8. `pnpm build`
 9. `pnpm attw`
-10. `pnpm check:no-emdash`
-11. `pnpm check:no-internal-refs`
+10. `pnpm check:readme`, `pnpm check:claude-card`, `pnpm check:agent-notes`, and
+    `pnpm check:catalog` (CI's `standards` job: the house checks from `@cosyte/script-utils`)
+11. `pnpm check:no-emdash`
+12. `pnpm check:no-internal-refs`
 
 After the build, CI's `examples` job runs `pnpm typecheck:examples`, `pnpm lint:examples`,
 `pnpm examples`, and `pnpm phi-scan:examples`. A change under `vendor/`, to the generators in

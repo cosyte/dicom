@@ -39,8 +39,8 @@ import { cosyteVitest } from "@cosyte/vitest-config";
  * `testTimeout` below is UNCHANGED and is the global backstop. Do not raise it to accommodate one
  * slow test: it also governs several hundred fast ones, so raising it buys the slow test headroom
  * by handing the same headroom to all of them, trading a false red for a false green. Give the slow
- * test its own budget instead, as a third argument to `it` or to its `describe`, the way
- * `attw-gate` and the two generator suites already do.
+ * test its own budget instead, as a third argument to `it` or to its `describe`, the way the two
+ * generator suites already do.
  *
  * A hand-rolled `expect(performance.now() - started).toBeLessThan(N)` is an assertion about the
  * machine rather than about the code, and this suite still carries several. They are NOT enumerated

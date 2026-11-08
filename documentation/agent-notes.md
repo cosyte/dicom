@@ -49,7 +49,7 @@ Each still binds, and the pull request it names holds the failure behind it (`gh
 - Quote a "red on base" test count only with its sha, re-run after every test you add or strengthen, with `src/` replaced rather than overlaid. (#71)
 - Locate a spec section by its normative sentence: collect every heading match, keep those holding the sentence, require exactly one. First match reads the table of contents. (#40)
 - Cite the clause that holds the sentence: PS3.5 §7.5.2 for an `SQ`'s own length and §7.5.1 for an Item's, PS3.15 §E.1.1 not §E.1, and §E.3.10 whole, both branches; `test/docs/spec-citations.test.ts` checks the docs. (#50, #54, #66)
-- Run attw only as `pnpm attw` or `pnpm typecheck:exports` (both run `scripts/attw.mjs`): the bare CLI exits 0 when the declarations are missing. (#59)
+- Run attw only as `pnpm attw`, which runs `cosyte-attw` from `@cosyte/script-utils`: the bare CLI exits 0 when the declarations are missing. (#59) Until 2026-11-07 it ran this repository's own `scripts/attw.mjs`, with `pnpm typecheck:exports` as a node16-profile alias; both are gone, since attw's default `strict` profile already grades everything `node16` does.
 - `CHANGELOG.md` is generated from changesets: never hand-edit it or add an `[Unreleased]` heading, under which ten versions shipped calling released work unreleased. (#82)
 - A changeset's opening sentence fits in 200 characters: the release gate refuses a longer one after the version commit, and nothing publishes. (#42, #57)
 - `packageManager` is the only pnpm pin in CI: a `version:` input to `pnpm/action-setup` failed every regen run for weeks. (#34)
@@ -3000,6 +3000,13 @@ READING differs` is **not** new here: `#66` added it, and a draft of this entry 
   the script header and are shared across every copy, so fix them there, not here.
 
 ## The attw wrapper gate
+
+**Superseded on 2026-11-07.** `pnpm attw` runs `cosyte-attw`, the shared gate in
+`@cosyte/script-utils`, under attw's default `strict` profile with no `scripts/attw.exclude`;
+`scripts/attw.mjs`, its tests and `pnpm typecheck:exports` are deleted. Before the switch it was
+proved to fail closed here: with `dist/index.d.ts` and `dist/index.d.cts` removed from a real build
+it exits 1 naming both. What follows is the history of the local wrapper; the shared gate's own
+docblock (`attw.js` in that package) carries its current nets.
 
 - **▶ `attw` SAYS "does not contain types" AND EXITS 0, SO THE `attw` SCRIPT IS A WRAPPER, NOT THE
   BARE CLI.** `getExitCode.js` in `@arethetypeswrong/cli@0.18.4` opens with

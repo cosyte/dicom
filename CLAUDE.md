@@ -9,13 +9,14 @@ de-identification. Pixel data stays raw bytes; DIMSE and DICOMweb are out of sco
 ## Gate
 
 Required on `main`: `ci / verify (22, ubuntu-latest)`, `ci / verify (24, ubuntu-latest)`,
-`ci / actionlint`, and `no-emdash / tracked-files`; CI also runs Node 26. Use the pnpm that
-`packageManager` pins (AGENTS.md says how). The shared ladder, the examples job, then the gates:
+`ci / actionlint`, and `no-emdash / tracked-files`; CI also runs Node 26 and the `examples` and
+`standards` jobs. Use the pnpm `packageManager` pins (AGENTS.md says how). In CI order:
 
 ```sh
 pnpm install --frozen-lockfile && pnpm typecheck && pnpm lint && pnpm format:check
 pnpm phi-scan && pnpm test && pnpm test:coverage && pnpm build && pnpm attw
 pnpm typecheck:examples && pnpm lint:examples && pnpm examples && pnpm phi-scan:examples
+pnpm check:readme && pnpm check:claude-card && pnpm check:agent-notes && pnpm check:catalog
 pnpm check:no-emdash && pnpm check:no-internal-refs
 ```
 
@@ -53,8 +54,7 @@ Each names its PR; the full wording is at documentation/agent-notes.md#the-cards
   "red on base" count only with its sha, `src/` replaced rather than overlaid (#71).
 - Locate a spec section by its normative sentence (#40) and cite the clause that holds it, which
   `test/docs/spec-citations.test.ts` checks (#50, #54, #66).
-- Run attw only through `pnpm attw` or `pnpm typecheck:exports`: the bare CLI exits 0 when the
-  declarations are missing (#59). documentation/agent-notes.md#the-attw-wrapper-gate
+- `pnpm attw` runs `cosyte-attw`, never the bare `attw` CLI, which exits 0 with no types (#59).
 - Changesets write `CHANGELOG.md`: never hand-edit it or add an `[Unreleased]` heading (#82), and
   keep a changeset's opening sentence under 200 characters (#42, #57).
 - `packageManager` is the only pnpm pin in CI (#34).

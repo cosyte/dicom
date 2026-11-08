@@ -7,7 +7,7 @@ Two minimal harnesses that exercise the published-shape `dist/` artifacts:
 
 Each harness imports `VERSION` + `Dictionary` from `../../../dist/index.{mjs,cjs}`, runs ~9 assertions covering DICT-03 / DICT-04 / DICT-06 / D-10, and prints a single `[smoke:<label>] OK` line on success (assertion failures throw and exit non-zero).
 
-Why a relative path into `dist/` instead of `from "@cosyte/dicom"`? The package is **not** installed in `node_modules` during smoke. We test the built artifacts directly so any `exports`-map or condition-resolution bug surfaces immediately. `pnpm typecheck:exports` (= `attw --pack .`) covers the install-shape resolution complementarily.
+Why a relative path into `dist/` instead of `from "@cosyte/dicom"`? The package is **not** installed in `node_modules` during smoke. We test the built artifacts directly so any `exports`-map or condition-resolution bug surfaces immediately. `pnpm attw` (the shared `cosyte-attw` gate over `attw --pack .`) covers the install-shape resolution complementarily.
 
 The driver `scripts/smoke.ts` (run via `pnpm smoke`) spawns each harness in its own `node` subprocess (array-form `spawnSync`, `shell: false`) and aggregates exit codes. The harnesses must run **after** `pnpm build`; CI's job order is `build` → `smoke` so the `dist/` artifacts are guaranteed present.
 
