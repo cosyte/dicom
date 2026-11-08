@@ -24,6 +24,7 @@ import {
   parseDicom,
   serializeDicom,
 } from "../../src/index.js";
+import type { AnnexEActionCode } from "../../src/dictionary/annex-e.js";
 import type { Tag } from "../../src/dictionary/types.js";
 import {
   resolveAction,
@@ -96,6 +97,13 @@ describe("resolveAction (conditional collapse)", () => {
 
   it("passes single codes through unchanged", () => {
     for (const c of ["D", "Z", "X", "K", "C", "U"] as const) expect(resolveAction(c)).toBe(c);
+  });
+
+  it("strips every asterisk from the branch it takes, not only the first", () => {
+    // No code in the table today puts an asterisk on its leftmost branch, so this pins the
+    // collapse itself: a branch carrying two would otherwise come back as `U*`, not an action.
+    expect(resolveAction("U*" as AnnexEActionCode)).toBe("U");
+    expect(resolveAction("U**/X" as AnnexEActionCode)).toBe("U");
   });
 });
 

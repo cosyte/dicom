@@ -59,6 +59,12 @@
 # this port was wrongly believed impossible for a day. State it plainly, because the
 # whole question is what the gate does rather than what it is assumed to do.
 #
+# UPDATED 2026-11-08: charset.ts no longer carries the NUL. The regex below backtracked
+# quadratically on a long run of pad bytes, so the trim is now a loop over character
+# codes. Other tracked text files do hold a NUL (tests that build binary values in
+# source, and `scripts/measure-sq-bound-grid.ts`), so everything this section says about
+# a NUL-bearing file still holds for them. The history as it was written:
+#
 # `src/dataset/vr/charset.ts` carries a literal NUL inside `/[\x00 ]+$/u`, the regex that
 # strips DICOM's own NUL padding from string values. The byte IS the feature and cannot be
 # removed. GNU grep therefore classifies that file as binary. It holds ZERO em dashes today,

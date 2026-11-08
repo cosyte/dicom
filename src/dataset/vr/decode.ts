@@ -80,6 +80,28 @@ function stripPad(
   return bytes.subarray(0, end);
 }
 
+/**
+ * Strip the leading and trailing SPACE (`0x20`) from one value of a multi-valued
+ * string VR, scanning in from each end once. Linear in the value's length: the
+ * `/^ +| +$/g` this replaces re-scanned a run of interior spaces from every
+ * position in it, so one long run cost quadratic time.
+ */
+function trimSpaces(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value.charCodeAt(start) === SPACE) start++;
+  while (end > start && value.charCodeAt(end - 1) === SPACE) end--;
+  return value.slice(start, end);
+}
+
+/**
+ * PS3.5 DS grammar, written so that no input can be split two ways: the
+ * fraction is only reachable through the decimal point. The earlier spelling,
+ * `(\d+\.?\d*|\.\d+)`, let a long run of digits split between `\d+` and `\d*`
+ * at every position, which cost quadratic time on a value that then failed.
+ */
+const DECIMAL_STRING = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/u;
+
 function attachWarnings<T extends DicomValue>(value: T, warnings: DicomParseWarning[]): T {
   return warnings.length > 0 ? { ...value, warnings } : value;
 }
@@ -172,7 +194,7 @@ export function decodeElementValue(element: Element): DicomValue {
   }
   if (vr === "LO" || vr === "SH" || vr === "UC") {
     const text = decodeCharsetString(trimmed, tag, vr, charset, position, warnings);
-    const values = text.split("\\").map((v) => v.replace(/^ +| +$/gu, ""));
+    const values = text.split("\\").map(trimSpaces);
     return attachWarnings({ kind: "strings", values } as const, warnings);
   }
   if (vr === "LT" || vr === "ST" || vr === "UT") {
@@ -188,7 +210,7 @@ export function decodeElementValue(element: Element): DicomValue {
   }
   if (vr === "AE" || vr === "CS" || vr === "AS" || vr === "UI") {
     const text = decodeAsciiString(trimmed, tag, vr, position, warnings);
-    const values = text.split("\\").map((v) => v.replace(/^ +| +$/gu, ""));
+    const values = text.split("\\").map(trimSpaces);
     return attachWarnings({ kind: "strings", values } as const, warnings);
   }
   if (vr === "DS") {
@@ -198,7 +220,7 @@ export function decodeElementValue(element: Element): DicomValue {
       if (t.length === 0) return null;
       // PS3.5 DS grammar only - reject hex/binary/octal/Infinity literals that
       // `Number()` would otherwise coerce to a plausible-but-wrong value.
-      if (!/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/u.test(t)) return null;
+      if (!DECIMAL_STRING.test(t)) return null;
       const n = Number(t);
       return Number.isFinite(n) ? n : null;
     });

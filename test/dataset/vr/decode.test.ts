@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
 
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 
 import type { Tag, VR } from "../../../src/dictionary/types.js";
@@ -200,5 +201,103 @@ describe("decodeElementValue - charset threading", () => {
       el("LO", Buffer.from("Müller", "utf-8"), { charset: ["ISO_IR 192"] }),
     );
     expect(v).toMatchObject({ kind: "strings", values: ["Müller"] });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Linear time on a value a file controls
+// ---------------------------------------------------------------------------
+//
+// Three patterns here used to backtrack quadratically: the per-value trim of the multi-valued
+// string VRs (`/^ +| +$/g`, re-scanning a run of interior spaces from every position in it) and
+// the DS grammar (`(\d+\.?\d*|\.\d+)`, splitting a run of digits two ways at every position).
+// A value's length is the file's to choose, so one long run held the event loop for seconds.
+// Run against the shipped source (`a5f8f4b`, `src/` replaced), eight of the nine timed cases below
+// went red at 10 to 17 s each; the rewrite takes about a millisecond, so the one-second bound has
+// wide headroom on both sides.
+
+/** The patterns as they shipped, kept here only as the oracle the rewrite must agree with. */
+const SHIPPED_TRIM = (v: string): string => v.replace(/^ +| +$/gu, "");
+const SHIPPED_DS = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/u;
+
+/** What `stripPad` leaves of a non-UI value: the trailing SPACE and NULL bytes come off first. */
+function unpadded(s: string): string {
+  let end = s.length;
+  while (end > 0 && (s[end - 1] === " " || s[end - 1] === "\x00")) end--;
+  return s.slice(0, end);
+}
+
+function shippedDecimal(v: string): number | null {
+  const t = v.trim();
+  if (t.length === 0 || !SHIPPED_DS.test(t)) return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Decode `text` under `vr` and hand back its values, timing the call. */
+function timed(vr: VR, text: string): { values: unknown; ms: number } {
+  const started = performance.now();
+  const v = decodeElementValue(el(vr, ascii(text)));
+  const ms = performance.now() - started;
+  return { values: "values" in v ? v.values : v, ms };
+}
+
+describe("decodeElementValue - linear time on a long run (polynomial backtracking)", () => {
+  const RUN = 100_000;
+
+  it.each(["LO", "SH", "UC", "AE", "CS", "AS", "UI"] as const)(
+    "%s keeps a long interior run of spaces and trims only the ends",
+    (vr) => {
+      const inner = `a${" ".repeat(RUN)}b`;
+      const { values, ms } = timed(vr, `  ${inner}  `);
+      expect(values).toEqual([inner]);
+      expect(ms).toBeLessThan(1_000);
+    },
+  );
+
+  it("DS refuses a long run of digits that ends in a non-digit, without backtracking", () => {
+    const { values, ms } = timed("DS", `${"0".repeat(RUN)}x`);
+    expect(values).toEqual([null]);
+    expect(ms).toBeLessThan(1_000);
+  });
+
+  it("DS still reads a long valid literal", () => {
+    const { values, ms } = timed("DS", `1.${"0".repeat(RUN)}`);
+    expect(values).toEqual([1]);
+    expect(ms).toBeLessThan(1_000);
+  });
+});
+
+describe("decodeElementValue - the rewrite agrees with the shipped patterns", () => {
+  it("trims every value of a multi-valued string VR exactly as the shipped regex did", () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom<VR>("LO", "CS"),
+        fc.array(fc.constantFrom(" ", "a", "b", "\\"), { minLength: 1, maxLength: 24 }),
+        (vr, parts) => {
+          const text = parts.join("");
+          const expected = unpadded(text).split("\\").map(SHIPPED_TRIM);
+          expect(decodeElementValue(el(vr, ascii(text)))).toMatchObject({ values: expected });
+        },
+      ),
+      { numRuns: 2_000 },
+    );
+  });
+
+  it("accepts and refuses exactly the DS literals the shipped grammar did", () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.constantFrom("0", "7", ".", "e", "E", "+", "-", " ", "x", "\\"), {
+          minLength: 1,
+          maxLength: 16,
+        }),
+        (parts) => {
+          const text = parts.join("");
+          const expected = unpadded(text).split("\\").map(shippedDecimal);
+          expect(decodeElementValue(el("DS", ascii(text)))).toMatchObject({ values: expected });
+        },
+      ),
+      { numRuns: 4_000 },
+    );
   });
 });
