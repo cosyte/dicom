@@ -121,9 +121,9 @@ function buildPixelValueTransformation(
   item: Item,
 ): NonNullable<FrameFunctionalGroups["pixelValueTransformation"]> {
   const out: {
-    -readonly [K in keyof NonNullable<
-      FrameFunctionalGroups["pixelValueTransformation"]
-    >]: NonNullable<FrameFunctionalGroups["pixelValueTransformation"]>[K];
+    -readonly [
+      K in keyof NonNullable<FrameFunctionalGroups["pixelValueTransformation"]>
+    ]: NonNullable<FrameFunctionalGroups["pixelValueTransformation"]>[K];
   } = {};
   const rescaleSlope = readNumber(item, RESCALE_SLOPE);
   const rescaleIntercept = readNumber(item, RESCALE_INTERCEPT);

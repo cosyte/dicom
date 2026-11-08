@@ -2995,8 +2995,8 @@ Removed = YES` with `report.warnings` empty **and** `report.retained` `[]` - an 
   character in its cluster is `q` or `f`, which is sound because `-f` is `attw`'s only value-taking
   short option.
 
-  Measured the other way too, and both directions are stated because the bound matters: `--format
-  table-flipped` and `--format ascii` still print the sentence and blind nothing, and are refused
+  Measured the other way too, and both directions are stated because the bound matters:
+  `--format table-flipped` and `--format ascii` still print the sentence and blind nothing, and are refused
   anyway (value-parsing them would be a third moving part in the guard); while `--form json`,
   `--quiet=true` and `-f=json` each look like a route and are not, because commander rejects them
   outright with exit 1. **The over-strictness is bounded and nothing else is refused**: a forwarded

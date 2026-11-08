@@ -42,18 +42,7 @@ import { matchesRepeatingPattern } from "./repeating-groups.js";
  *   const code: AnnexEActionCode = "Z";
  */
 export type AnnexEActionCode =
-  | "D"
-  | "Z"
-  | "X"
-  | "K"
-  | "C"
-  | "U"
-  | "Z/D"
-  | "X/Z"
-  | "X/D"
-  | "X/Z/D"
-  | "X/Z/U*"
-  | "C/X";
+  "D" | "Z" | "X" | "K" | "C" | "U" | "Z/D" | "X/Z" | "X/D" | "X/Z/D" | "X/Z/U*" | "C/X";
 
 /**
  * One name per PS3.15 Annex E option column (E.3.1 to E.3.11), plus the second

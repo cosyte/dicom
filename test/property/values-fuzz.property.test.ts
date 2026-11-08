@@ -64,13 +64,13 @@ function runs(alphabet: readonly string[]): fc.Arbitrary<string> {
 
 /** Strings shaped like DA, TM and DT values, valid or a little off. */
 const temporal = fc.oneof(
-  fc.stringOf(fc.constantFrom(..."0123456789.-+: Z"), { maxLength: 40 }),
+  fc.string({ unit: fc.constantFrom(..."0123456789.-+: Z"), maxLength: 40 }),
   fc
     .tuple(
       fc.integer({ min: 0, max: 99_999 }),
       fc.integer({ min: 0, max: 99 }),
       fc.integer({ min: 0, max: 99 }),
-      fc.stringOf(fc.constantFrom(..."0123456789.+-"), { maxLength: 24 }),
+      fc.string({ unit: fc.constantFrom(..."0123456789.+-"), maxLength: 24 }),
     )
     .map(
       ([y, m, d, rest]) =>

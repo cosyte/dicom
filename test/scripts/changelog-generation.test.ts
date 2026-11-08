@@ -67,6 +67,7 @@ const CHANGELOG_PATH = join(REPO_ROOT, "CHANGELOG.md");
 const CONFIG_PATH = join(REPO_ROOT, ".changeset", "config.json");
 const PACKAGE_PATH = join(REPO_ROOT, "package.json");
 const IGNORE_PATH = join(REPO_ROOT, ".prettierignore");
+const PROCESS_CONFIG_PATH = join(REPO_ROOT, "cosyte-process.config.json");
 const CHANGESET_BIN = join(REPO_ROOT, "node_modules", "@changesets", "cli", "bin.js");
 
 /** The heading the hand-written history was moved under. Generated sections sit above it. */
@@ -103,6 +104,10 @@ const pkg = JSON.parse(readFileSync(PACKAGE_PATH, "utf8")) as {
   version?: string;
   files?: string[];
   scripts?: Record<string, string>;
+};
+
+const processConfig = JSON.parse(readFileSync(PROCESS_CONFIG_PATH, "utf8")) as {
+  format?: { globs?: string[] };
 };
 
 /** The two functions Changesets calls on whatever `changelog` names. */
@@ -528,8 +533,12 @@ describe("the Prettier pass, derived for this repo rather than copied", () => {
     //
     // Asked of PRETTIER ITSELF rather than by pattern-matching the ignore file, because a
     // hand-rolled reading of ignore semantics is its own way to get this wrong.
+    //
+    // `format:check` delegates to `cosyte-process format --check`, so the root markdown glob that
+    // puts CHANGELOG.md in the gate lives in cosyte-process.config.json's `format.globs`.
     expect(config.prettier).toBeUndefined();
-    expect(pkg.scripts?.["format:check"] ?? "").toContain('"*.{json,md,yml,yaml}"');
+    expect(pkg.scripts?.["format:check"]).toBe("cosyte-process format --check");
+    expect(processConfig.format?.globs ?? []).toContain("*.{json,md,yml,yaml}");
   });
 
   it("has a .prettierignore that does not take CHANGELOG.md out of the formatting gate", async () => {
@@ -586,8 +595,14 @@ describe("the archived history is frozen", () => {
    * is what corrupted a sibling's tarball. Do not re-baseline the constant to get green: work
    * out which of the two happened. Re-baselining is legitimate only for a deliberate, reviewed
    * correction of the historical record, and then the diff is the review.
+   *
+   * RE-BASELINED ONCE, deliberately, when the repo moved to Prettier 3.9.10 (the version
+   * @cosyte/process pins). Prettier 3.9 strips the indent from the continuation line of an inline
+   * code span that wraps inside a list item, so it would have reflowed one archived line, and the
+   * release's `changeset version` would have done the same. That line now breaks before the span
+   * instead of inside it: the same words, the same byte count, and stable under both versions.
    */
-  const FROZEN_ARCHIVE_SHA256 = "f8453784e58ca16c219d81c26bcd44152b71aebb1ea01fef802b2b2c3a13acdc";
+  const FROZEN_ARCHIVE_SHA256 = "8185eb9e935e6c5c8e0526d383515b8718e8e8e71a997fe5290288d5080dbda9";
   const FROZEN_ARCHIVE_BYTES = 202_681;
 
   it("has not been hand-edited since generation was turned on", () => {

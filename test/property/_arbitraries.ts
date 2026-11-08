@@ -146,7 +146,7 @@ const TEXT_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01234
 /** A non-empty printable ASCII value, padded with a trailing space to even length. */
 function textValueBytes(): fc.Arbitrary<Buffer> {
   return fc
-    .stringOf(fc.constantFrom(...TEXT_ALPHABET.split("")), { minLength: 1, maxLength: 14 })
+    .string({ unit: fc.constantFrom(...TEXT_ALPHABET.split("")), minLength: 1, maxLength: 14 })
     .map((s) => {
       const buf = Buffer.from(s, "ascii");
       return buf.length % 2 === 0 ? buf : Buffer.concat([buf, Buffer.from([0x20])]);
