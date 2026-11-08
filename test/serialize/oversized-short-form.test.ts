@@ -40,6 +40,8 @@ const EXPLICIT = [
 
 const SOP_INSTANCE_UID = "00080018";
 const STUDY_DESCRIPTION = "00081030";
+const REFERENCED_SERIES_SEQUENCE = "00081115";
+const REFERENCED_SOP_INSTANCE_UID = "00081155";
 const ROWS = "00280010";
 
 /** The fuzz case, minimized: a SOP Instance UID of 1,008 backslashes, 1,009 empty values. */
@@ -91,6 +93,46 @@ describe("a value past 65,534 bytes in a 16-bit-length VR is written as UN (PS3.
       const back = parseDicom(out).get(STUDY_DESCRIPTION);
       expect(back?.vr).toBe("LO");
       expect(back?.rawBytes.length).toBe(65_534);
+    });
+  }
+
+  for (const [name, ts] of EXPLICIT) {
+    it(`${name}: deidentify re-encodes an Item whose UI it grows past 65,534 bytes, as UN`, () => {
+      // `deidentify` rebuilds a Sequence it acts inside through the same element encoder, so on
+      // base the RangeError came out of `deidentify` itself, before anything was serialized.
+      const file = buildDicom({
+        transferSyntax: ts,
+        elements: [
+          {
+            tag: REFERENCED_SERIES_SEQUENCE,
+            items: [
+              {
+                elements: [
+                  {
+                    tag: REFERENCED_SOP_INSTANCE_UID,
+                    vr: "UI",
+                    value: Buffer.from("\\".repeat(1008), "ascii"),
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      });
+      const { dataset } = deidentify(parseDicom(file));
+      const remapped = dataset
+        .get(REFERENCED_SERIES_SEQUENCE)
+        ?.items?.[0]?.get(REFERENCED_SOP_INSTANCE_UID);
+      // In the model the element keeps its own VR; the Item's encoded bytes carry it as UN.
+      expect(remapped?.vr).toBe("UI");
+      expect(remapped?.rawBytes.length).toBeGreaterThan(65_534);
+
+      const back = parseDicom(serializeDicom(dataset));
+      const nested = back
+        .get(REFERENCED_SERIES_SEQUENCE)
+        ?.items?.[0]?.get(REFERENCED_SOP_INSTANCE_UID);
+      expect(nested?.vr).toBe("UN");
+      expect(nested?.rawBytes.equals(remapped?.rawBytes ?? Buffer.alloc(0))).toBe(true);
     });
   }
 
