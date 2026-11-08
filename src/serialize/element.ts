@@ -35,10 +35,16 @@ import type { Element } from "../dataset/element.js";
 import { splitTag } from "../dataset/tag.js";
 import type { VR } from "../dictionary/types.js";
 import { LONG_FORM_VRS } from "../parser/element-header.js";
-import { isRecognizedVr } from "../parser/endian.js";
+import { BE_VR_STRIDE, isRecognizedVr } from "../parser/endian.js";
 
 /** `0xFFFFFFFF` - the undefined-length sentinel (PS3.5 §7.1.1). */
 const UNDEFINED_LENGTH = 0xffffffff;
+
+/**
+ * `FFFEH`, the largest even Value Length a 16-bit Explicit VR Value Length Field carries (PS3.5
+ * 2026c section 6.2.2). A longer value in a VR that has the 16-bit field is written as `UN`.
+ */
+const MAX_SHORT_FORM_LENGTH = 0xfffe;
 
 /**
  * The dataset-body encoding a {@link Element} is serialized under. Mirrors the
@@ -87,6 +93,32 @@ function uint32(n: number, littleEndian: boolean): Buffer {
   if (littleEndian) buf.writeUInt32LE(n, 0);
   else buf.writeUInt32BE(n, 0);
   return buf;
+}
+
+/**
+ * `value` in Little Endian byte order. PS3.5 2026c section 6.2.2 makes a `UN` value Little Endian
+ * "irrespective of the current Transfer Syntax", and the Explicit VR Big Endian reader stores a
+ * numeric value as it came off the wire, so a value written as `UN` under Big Endian is swapped
+ * unit by unit (`AT` as two 16-bit units, per {@link BE_VR_STRIDE}). A trailing partial unit, which
+ * only a malformed value carries, is left as it is.
+ */
+function littleEndianValue(value: Buffer, vr: VR, littleEndian: boolean): Buffer {
+  const stride = BE_VR_STRIDE[vr];
+  if (littleEndian || stride === 0) return value;
+  const swapped = Buffer.from(value);
+  const whole = swapped.subarray(0, swapped.length - (swapped.length % stride));
+  if (stride === 2) whole.swap16();
+  else if (stride === 4) whole.swap32();
+  else whole.swap64();
+  return swapped;
+}
+
+/**
+ * `true` for a Private Creator Data Element: an odd group, element `0010` to `00FF`. PS3.5 2026c
+ * section 6.2.2 says the `UN` VR "shall not be used" for one.
+ */
+function isPrivateCreator(group: number, element: number): boolean {
+  return group % 2 === 1 && element >= 0x0010 && element <= 0x00ff;
 }
 
 /**
@@ -159,6 +191,23 @@ export function encodeDatasetElement(
       Buffer.from([0x00, 0x00]), // reserved (PS3.5 §7.1.2)
       uint32(value.length, littleEndian),
       value,
+    ]);
+  }
+  // PS3.5 2026c section 6.2.2: a Data Element whose VR has a 16-bit Value Length Field under
+  // Explicit VR "and whose Value Length exceeds 65534" is encoded with a VR of UN, in the long
+  // form. Without this branch the 16-bit length write threw a RangeError: a value the reader took
+  // at the odd length FFFFH pads to 65,536 bytes, and `deidentify` grows a multi-valued UI past
+  // 65,534 bytes when it remaps every value. A Private Creator is not rewritten, because the same
+  // section says UN "shall not be used" for one, so a creator past 65,534 bytes still has no
+  // encoding here and still fails at the length write below.
+  if (value.length > MAX_SHORT_FORM_LENGTH && !isPrivateCreator(group, element)) {
+    return Buffer.concat([
+      uint16(group, littleEndian),
+      uint16(element, littleEndian),
+      Buffer.from("UN", "ascii"),
+      Buffer.from([0x00, 0x00]), // reserved (PS3.5 §7.1.2)
+      uint32(value.length, littleEndian),
+      littleEndianValue(value, el.vr, littleEndian),
     ]);
   }
   return Buffer.concat([

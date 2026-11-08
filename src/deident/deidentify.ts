@@ -2963,6 +2963,12 @@ function hasValueOverLoMaximum(field: Buffer): boolean {
  * documented `DicomSerializeError` surface, taking the whole de-identified object
  * down. On base the same file serialized, because base replaced.
  *
+ * **The writer no longer throws there.** It now writes a value past `FFFEH` in a
+ * 16-bit-length VR as `UN`, as PS3.5 2026c section 6.2.2 requires, so the
+ * `RangeError` this paragraph and the guard notes below describe is what it did
+ * before that change. The ceiling stays for its own reason: a `(0012,0063)`
+ * written as `UN` reads back as `UN`, not as the `LO` a later pass appends to.
+ *
  * So when the value this would return exceeds {@link MAX_SHORT_FORM_VALUE_BYTES},
  * this falls back to the **pre-existing replacement** and says so, by returning
  * `replacedPrior`. That is not a new loss - it is what every released version did
