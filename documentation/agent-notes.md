@@ -2991,11 +2991,13 @@ READING differs` is **not** new here: `#66` added it, and a draft of this entry 
   said it was, but six em dashes lived in four non-markdown files and this slice removed them,
   including the npm `description`. **Measure every tracked file, not just markdown.**
   It deliberately omits `grep -I`, and that is the choice to understand before touching this file.
-  `src/dataset/vr/charset.ts` holds a **functional NUL** inside `/[\x00 ]+$/u` (DICOM's own padding,
-  stripped by that regex), so grep classifies it binary. It carries no em dash, so it scans green.
-  If it ever gains one, grep writes `binary file matches` to stderr with empty stdout and the
-  stderr capture reds the run. Adding `-I` would make that same edit pass in silence, so do not add
-  it, and do not remove the NUL to quiet the gate. When the gate goes red the fix is never to
+  Several tracked text files hold a NUL byte (tests that build binary values in source, and
+  `scripts/measure-sq-bound-grid.ts`), so grep classifies them binary. `src/dataset/vr/charset.ts`
+  held one too, inside `/[\x00 ]+$/u`, until 2026-11-08: that regex backtracked quadratically on a
+  long run of pad bytes, so the trim is now a loop over character codes. None of these files carries
+  an em dash, so each scans green. If one ever gains one, grep writes `binary file matches` to
+  stderr with empty stdout and the stderr capture reds the run. Adding `-I` would make that same edit
+  pass in silence, so do not add it, and do not remove a NUL to quiet the gate. When the gate goes red the fix is never to
   re-encode the character: rewrite with a period, colon, comma, or parentheses. Known limits are in
   the script header and are shared across every copy, so fix them there, not here.
 

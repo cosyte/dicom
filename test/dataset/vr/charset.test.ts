@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
 
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -8,6 +9,7 @@ import {
   parseSpecificCharacterSet,
   resolveDecoderLabel,
 } from "../../../src/dataset/vr/charset.js";
+import { WITHHELD } from "../../../src/parser/tokens.js";
 
 describe("parseSpecificCharacterSet (0008,0005)", () => {
   it("splits a multi-valued CS on backslash and trims pad", () => {
@@ -86,5 +88,49 @@ describe("decodeText (never throws)", () => {
 
   it("decodes ISO-8859-15 (Latin-9, ISO_IR 203) - euro sign at 0xA4", () => {
     expect(decodeText(Buffer.from([0xa4]), ["ISO_IR 203"])).toBe("€");
+  });
+});
+
+// The trim of each term used to be `/[\x00 ]+$/` and then `/^[ ]+/`. The first re-scanned a run of
+// pad bytes from every position in it when the run ended in any other byte, which is quadratic in a
+// length the file chooses. Run against the shipped source (`a5f8f4b`, `src/` replaced), both timed
+// cases below went red, at 13 and 8 s; the rewrite takes about a millisecond.
+describe("parseSpecificCharacterSet - linear time on a long pad run (polynomial backtracking)", () => {
+  const RUN = 100_000;
+
+  it("withholds a term that is a long NULL run followed by a byte, without backtracking", () => {
+    const started = performance.now();
+    const terms = parseSpecificCharacterSet(Buffer.from(`${"\x00".repeat(RUN)}X`, "latin1"));
+    expect(performance.now() - started).toBeLessThan(1_000);
+    expect(terms).toEqual([WITHHELD]);
+  });
+
+  it("finds a defined term between long runs of leading SPACE and trailing NULL and SPACE", () => {
+    const value = `${" ".repeat(RUN)}ISO_IR 192${"\x00 ".repeat(RUN / 2)}`;
+    const started = performance.now();
+    const terms = parseSpecificCharacterSet(Buffer.from(value, "latin1"));
+    expect(performance.now() - started).toBeLessThan(1_000);
+    expect(terms).toEqual(["ISO_IR 192"]);
+  });
+
+  it("trims every term exactly as the shipped patterns did", () => {
+    /** The patterns as they shipped, kept here only as the oracle the rewrite must agree with. */
+    const shipped = (raw: string): string[] =>
+      raw
+        .split("\\")
+        .map((t) => t.replace(/[\x00 ]+$/u, "").replace(/^[ ]+/u, ""))
+        .map((t) => (t === "" || isKnownCharsetTerm(t) ? t : WITHHELD));
+    fc.assert(
+      fc.property(
+        fc.array(fc.constantFrom("\x00", " ", "\\", "X", "ISO_IR 192", "ISO 2022 IR 87"), {
+          maxLength: 12,
+        }),
+        (parts) => {
+          const raw = parts.join("");
+          expect(parseSpecificCharacterSet(Buffer.from(raw, "latin1"))).toEqual(shipped(raw));
+        },
+      ),
+      { numRuns: 4_000 },
+    );
   });
 });
