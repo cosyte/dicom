@@ -101,6 +101,8 @@ export function runRepoScript(
   const r = spawnSync(bin, [...nodeArgs, join(root, "scripts", name), ...args], {
     cwd,
     encoding: "utf8",
+    // spawnSync's 1 MiB default kills a script that prints more, leaving code -1 and cut output.
+    maxBuffer: 256 * 1024 * 1024,
     shell: false,
   });
   return { code: r.status ?? -1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };

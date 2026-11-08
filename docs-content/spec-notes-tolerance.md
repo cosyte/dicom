@@ -262,7 +262,7 @@ high-volume codes for a known-quirky source, without ever loosening a correct de
 | Export              | What it is                                                                                                                                                        |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `WARNING_CODES`     | The frozen Tier-2 registry. **It is the list**, and the locked snapshot under `test/property/__snapshots__/` measures it on every run. Read it rather than a numeral written anywhere. |
-| `WarningCode`       | The discriminant type over that registry, so a `switch` over warning codes is exhaustive.                                                                          |
+| `WarningCode`       | The discriminant type over that registry. It widens with each new code, so treat it as open: [Compatibility](./compatibility#exports-that-grow-between-releases). |
 | `DicomParseWarning` | One recorded deviation: its `code`, its `position`, and a `message` looked up in the frozen registry.                                                              |
 | `FATAL_CODES`       | The frozen Tier-3 registry. Same rule: enumerate it, never count it.                                                                                              |
 | `FatalCode`         | The discriminant type over that registry.                                                                                                                         |
