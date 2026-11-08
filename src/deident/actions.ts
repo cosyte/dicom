@@ -17,6 +17,7 @@ import { Buffer } from "node:buffer";
 
 import type { AnnexEAction, AnnexEActionCode } from "../dictionary/annex-e.js";
 import type { VR } from "../dictionary/types.js";
+import { trimTrailingNulls } from "../dataset/vr/trim.js";
 import { DEIDENTIFY_OPTIONS, type DeidentifyOption } from "./types.js";
 
 /** A resolved, non-conditional Annex E action. */
@@ -123,7 +124,7 @@ export function dummyBytes(vr: VR): Buffer | null {
  * ```
  */
 export function remapUidBytes(rawBytes: Buffer, remap: (uid: string) => string): Buffer {
-  const raw = rawBytes.toString("latin1").replace(/\0+$/, "");
+  const raw = trimTrailingNulls(rawBytes.toString("latin1"));
   const remapped = raw
     .split("\\")
     .map((uid) => remap(uid.trim()))
@@ -142,7 +143,7 @@ export function remapUidBytes(rawBytes: Buffer, remap: (uid: string) => string):
  * ```
  */
 export function uidValueMultiplicity(rawBytes: Buffer): number {
-  const raw = rawBytes.toString("latin1").replace(/\0+$/, "");
+  const raw = trimTrailingNulls(rawBytes.toString("latin1"));
   if (raw.length === 0) return 0;
   return raw.split("\\").length;
 }

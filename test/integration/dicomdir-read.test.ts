@@ -18,6 +18,7 @@
 
 import { Buffer } from "node:buffer";
 
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -323,4 +324,70 @@ describe("[AC-4] an offset attribute whose Value Length is not 4", () => {
       expect(shape(ds.directory?.root ?? [])).toEqual(EXPECTED_TREE);
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// Linear time on a value a file controls
+// ---------------------------------------------------------------------------
+//
+// A record's (0004,1430) and (0004,1500) were read through `/[\0 ]+$/` and then `/^ +| +$/g`, and
+// `parseDicom` reads every record of a DICOMDIR before it returns. Each expression retried from
+// every position in a run of pad characters that another character ended, so one long run in one
+// record held the parse for seconds. Implicit VR LE, whose 32-bit Value Length lets a `CS` run past
+// 65,534 bytes.
+
+/** A `CS` value read by the expressions as they shipped, kept here only as the oracle. */
+function shippedCsValues(bytes: Buffer): string[] {
+  const text = bytes.toString("latin1").replace(/[\0 ]+$/u, "");
+  return text === "" ? [] : text.split("\\").map((v) => v.replace(/^ +| +$/gu, ""));
+}
+
+/** Parse a one-record DICOMDIR and read its record, timing both. */
+function timedRecord(spec: RecordSpec): { record: DirectoryRecord | undefined; ms: number } {
+  const { bytes } = buildDicomdir({ transferSyntax: TS_IMPLICIT_LE, records: [spec] });
+  const started = performance.now();
+  const record = parseDicom(bytes).directory?.records[0];
+  return { record, ms: performance.now() - started };
+}
+
+describe("a record's type and Referenced File ID are read in time linear in their length", () => {
+  const RUN = 100_000;
+
+  it("keeps a Directory Record Type that is a long run of NULL and SPACE ending in a letter", () => {
+    const type = `${"\0 ".repeat(RUN / 2)}X`;
+    const { record, ms } = timedRecord({ type });
+    expect(record?.type).toBe(type);
+    expect(ms).toBeLessThan(1_000);
+  });
+
+  it("keeps a long interior run of spaces in a Referenced File ID component and trims its ends", () => {
+    const component = `A${" ".repeat(RUN)}B`;
+    const { record, ms } = timedRecord({ type: "IMAGE", fileId: ["SYNTH", `  ${component}  `] });
+    expect(record?.referencedFileId).toEqual(["SYNTH", component]);
+    expect(ms).toBeLessThan(1_000);
+  });
+
+  it("reads every type and Referenced File ID exactly as the shipped expressions did", () => {
+    const value = fc
+      .array(fc.constantFrom("\0", " ", "\\", "A", "B"), { maxLength: 12 })
+      .map((parts) => parts.join(""));
+    fc.assert(
+      fc.property(value, value, (type, fileId) => {
+        const { bytes } = buildDicomdir({
+          transferSyntax: TS_IMPLICIT_LE,
+          records: [{ type, fileId: [fileId] }],
+        });
+        const ds = parseDicom(bytes);
+        const item = ds.get("00041220")?.items?.[0];
+        const record = ds.directory?.records[0];
+        expect(item).toBeDefined();
+        expect(record).toBeDefined();
+        const typeBytes = item?.get("00041430")?.rawBytes ?? Buffer.alloc(0);
+        const fileIdBytes = item?.get("00041500")?.rawBytes ?? Buffer.alloc(0);
+        expect(record?.type).toBe(shippedCsValues(typeBytes)[0]);
+        expect(record?.referencedFileId).toEqual(shippedCsValues(fileIdBytes));
+      }),
+      { numRuns: 1_000 },
+    );
+  });
 });

@@ -202,6 +202,7 @@ import { Element, type ElementInit } from "../dataset/element.js";
 import type { FileMeta } from "../dataset/file-meta.js";
 import { Item } from "../dataset/item.js";
 import { isPrivateTag, splitTag } from "../dataset/tag.js";
+import { trimTrailingNullsAndSpaces } from "../dataset/vr/trim.js";
 import { JPIP_REFERENCED_UIDS } from "../parser/jpip-referenced.js";
 import type { Profile } from "../parser/types.js";
 import type { DicomParseWarning } from "../parser/warnings.js";
@@ -808,10 +809,7 @@ function insertedSequence(tag: Tag, items: readonly Item[], encoding: BodyEncodi
 
 /** Decode a private-creator element's value (an `LO` vendor schema id - not PHI). */
 function decodeCreator(el: Element): string {
-  return el.rawBytes
-    .toString("latin1")
-    .replace(/[\0 ]+$/, "")
-    .trim();
+  return trimTrailingNullsAndSpaces(el.rawBytes.toString("latin1")).trim();
 }
 
 /** True when the (private) tag is a Private Creator data element `(gggg,00EE)`. */
@@ -1567,10 +1565,7 @@ function declarationKey(group: number, creator: string): string {
 
 /** Decode a `CS` Enumerated Value, less the padding PS3.5 Table 6.2-1 permits. */
 function decodeEnumerated(el: Element): string {
-  return el.rawBytes
-    .toString("latin1")
-    .replace(/[\0 ]+$/, "")
-    .trim();
+  return trimTrailingNullsAndSpaces(el.rawBytes.toString("latin1")).trim();
 }
 
 /**
@@ -3275,13 +3270,7 @@ function hasUncleanedBurnedIn(ds: Dataset): boolean {
   if (!ds.has(TAG_PIXEL_DATA)) return false;
   const flag = ds.get(TAG_BURNED_IN_ANNOTATION);
   if (flag === undefined) return true;
-  return (
-    flag.rawBytes
-      .toString("latin1")
-      .replace(/[\0 ]+$/, "")
-      .trim()
-      .toUpperCase() !== "NO"
-  );
+  return trimTrailingNullsAndSpaces(flag.rawBytes.toString("latin1")).trim().toUpperCase() !== "NO";
 }
 
 /**

@@ -31,6 +31,7 @@ import type { Tag } from "../dictionary/types.js";
 import type { Element } from "./element.js";
 import type { FileMeta } from "./file-meta.js";
 import type { Item } from "./item.js";
+import { trimSpaces, trimTrailingNullsAndSpaces } from "./vr/trim.js";
 
 /**
  * Media Storage Directory Storage: the SOP Class a DICOMDIR declares in
@@ -250,8 +251,8 @@ export function directoryRecords(source: DirectorySource): DirectoryRecords {
  */
 function csValues(el: Element | undefined): readonly string[] | undefined {
   if (el === undefined) return undefined;
-  const text = el.rawBytes.toString("latin1").replace(/[\0 ]+$/u, "");
-  return Object.freeze(text === "" ? [] : text.split("\\").map((v) => v.replace(/^ +| +$/gu, "")));
+  const text = trimTrailingNullsAndSpaces(el.rawBytes.toString("latin1"));
+  return Object.freeze(text === "" ? [] : text.split("\\").map(trimSpaces));
 }
 
 /**

@@ -53,6 +53,7 @@ import { parseDate, parseDateTime, parseTime } from "./datetime.js";
 import { decodeWithCodeExtensions, usesCodeExtensions, type DelimiterClass } from "./iso2022.js";
 import { decodeAttributeTags, decodeBigInts, decodeNumbers } from "./numeric.js";
 import { parsePersonName } from "./person-name.js";
+import { trimSpaces } from "./trim.js";
 import type { DicomValue } from "./types.js";
 
 const BINARY_VRS: ReadonlySet<VR> = new Set<VR>(["OB", "OD", "OF", "OL", "OV", "OW", "UN"]);
@@ -78,20 +79,6 @@ function stripPad(
     while (end > 0 && (bytes[end - 1] === SPACE || bytes[end - 1] === NULL)) end--;
   }
   return bytes.subarray(0, end);
-}
-
-/**
- * Strip the leading and trailing SPACE (`0x20`) from one value of a multi-valued
- * string VR, scanning in from each end once. Linear in the value's length: the
- * `/^ +| +$/g` this replaces re-scanned a run of interior spaces from every
- * position in it, so one long run cost quadratic time.
- */
-function trimSpaces(value: string): string {
-  let start = 0;
-  let end = value.length;
-  while (start < end && value.charCodeAt(start) === SPACE) start++;
-  while (end > start && value.charCodeAt(end - 1) === SPACE) end--;
-  return value.slice(start, end);
 }
 
 /**

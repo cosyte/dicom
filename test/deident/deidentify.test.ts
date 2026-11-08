@@ -11,6 +11,7 @@
 
 import { Buffer } from "node:buffer";
 
+import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -143,6 +144,43 @@ describe("remapUidBytes", () => {
     const out = remapUidBytes(Buffer.from("1.2.3\0"), (uid) => uid);
     expect(out.toString("latin1").replace(/\0+$/, "")).toBe("1.2.3");
   });
+
+  // The trailing-NULL strip used to be `/\0+$/`, which retried from every position in a run of
+  // NULL that any other byte ended: quadratic in a length the file chooses.
+  it("strips trailing NULs in time linear in the value's length", () => {
+    const source = `${"\0".repeat(100_000)}1.2.3`;
+    const started = performance.now();
+    const out = remapUidBytes(Buffer.from(`${source}\0`, "latin1"), (uid) => `9.${uid}`);
+    const ms = performance.now() - started;
+    expect(out.toString("latin1")).toBe(`9.${source}\0`);
+    expect(ms).toBeLessThan(1_000);
+  });
+
+  it("returns exactly what it returned with the shipped expression", () => {
+    /** The function as it shipped, kept here only as the oracle the rewrite must agree with. */
+    const shipped = (bytes: Buffer, remap: (uid: string) => string): Buffer => {
+      const raw = bytes.toString("latin1").replace(/\0+$/u, "");
+      const out = Buffer.from(
+        raw
+          .split("\\")
+          .map((uid) => remap(uid.trim()))
+          .join("\\"),
+        "latin1",
+      );
+      return out.length % 2 === 0 ? out : Buffer.concat([out, Buffer.from([0x00])]);
+    };
+    const remap = (uid: string): string => `<${uid}>`;
+    fc.assert(
+      fc.property(
+        fc.array(fc.constantFrom("\0", " ", "\\", "1", "."), { maxLength: 16 }),
+        (parts) => {
+          const bytes = Buffer.from(parts.join(""), "latin1");
+          expect(remapUidBytes(bytes, remap)).toEqual(shipped(bytes, remap));
+        },
+      ),
+      { numRuns: 2_000 },
+    );
+  });
 });
 
 describe("uidValueMultiplicity", () => {
@@ -150,6 +188,29 @@ describe("uidValueMultiplicity", () => {
     expect(uidValueMultiplicity(Buffer.from("1.2\\3.4"))).toBe(2);
     expect(uidValueMultiplicity(Buffer.from("1.2"))).toBe(1);
     expect(uidValueMultiplicity(Buffer.alloc(0))).toBe(0);
+  });
+
+  it("counts in time linear in the value's length", () => {
+    const started = performance.now();
+    const n = uidValueMultiplicity(Buffer.from(`${"\0".repeat(100_000)}1.2\\3.4\0`, "latin1"));
+    const ms = performance.now() - started;
+    expect(n).toBe(2);
+    expect(ms).toBeLessThan(1_000);
+  });
+
+  it("counts exactly as it did with the shipped expression", () => {
+    /** The function as it shipped, kept here only as the oracle the rewrite must agree with. */
+    const shipped = (bytes: Buffer): number => {
+      const raw = bytes.toString("latin1").replace(/\0+$/u, "");
+      return raw.length === 0 ? 0 : raw.split("\\").length;
+    };
+    fc.assert(
+      fc.property(fc.array(fc.constantFrom("\0", " ", "\\", "1"), { maxLength: 16 }), (parts) => {
+        const bytes = Buffer.from(parts.join(""), "latin1");
+        expect(uidValueMultiplicity(bytes)).toBe(shipped(bytes));
+      }),
+      { numRuns: 2_000 },
+    );
   });
 });
 
@@ -1009,5 +1070,178 @@ describe("deidentify - repeating-group family rows (PS3.15 Table E.1-1 masks)", 
     expect(audited?.applied).toBe("removed");
     expect(audited?.repeatingGroup).toBe("60xx4000");
     expect(serializeDicom(dataset).includes(Buffer.from(OVERLAY_TEXT, "latin1"))).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Linear time on a value a file controls
+// ---------------------------------------------------------------------------
+//
+// Three reads of a file's own values went through `/[\0 ]+$/` before `trim()`: the Private Creator
+// of every block in every Data Set, the Block Identifying Information Status (0008,0303) of a
+// declared block, and Burned In Annotation (0028,0301). Every UID the run remaps went through
+// `/\0+$/`. Each expression retried from every position in a run of pad characters that another
+// character ended, so one long run held `deidentify` for seconds. Implicit VR LE, whose 32-bit
+// Value Length lets a value run past 65,534 bytes.
+
+const ACME_PRIVATE = "ACME PRIVATE 01";
+const ACME_SAFE = "ACME SAFE BLOCK";
+const ACME_PROFILE = defineProfile({
+  name: "acme-linear-time",
+  privateTags: {
+    [ACME_PRIVATE]: { "0009XX01": { vr: "LO", keyword: "AcmeThing", name: "Acme Thing" } },
+  },
+});
+const PIXEL_DATA = {
+  tag: "7FE00010",
+  vr: "OW",
+  value: Buffer.from([0x00, 0x01, 0x02, 0x03]),
+} as const;
+const BURNED_IN = WARNING_CODES.DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED;
+const NOT_RESOLVED = WARNING_CODES.DICOM_DEIDENT_PRIVATE_DECLARATION_NOT_RESOLVED;
+
+/** An Implicit VR LE file of `elements`, parsed. */
+function implicitDataset(elements: BuildDicomOptions["elements"]): ReturnType<typeof parseDicom> {
+  return parseDicom(buildDicom({ transferSyntax: TS_IMPLICIT_LE, elements }));
+}
+
+/** The elements of a block of group 0009 reserved for ACME SAFE BLOCK and declared `status`. */
+function declaredBlock(status: Buffer): BuildDicomOptions["elements"] {
+  return [
+    {
+      tag: "00080300",
+      items: [
+        {
+          elements: [
+            { tag: "00080301", vr: "US", value: Buffer.from([0x09, 0x00]) },
+            { tag: "00080302", vr: "LO", value: pad(ACME_SAFE) },
+            { tag: "00080303", vr: "CS", value: status },
+          ],
+        },
+      ],
+    },
+    { tag: "00090010", vr: "LO", value: pad(ACME_SAFE) },
+  ];
+}
+
+/** De-identify `ds`, timing the call. */
+function timedDeidentify(
+  ds: ReturnType<typeof parseDicom>,
+  options?: Parameters<typeof deidentify>[1],
+): ReturnType<typeof deidentify> & { ms: number } {
+  const started = performance.now();
+  const out = deidentify(ds, options);
+  return { ...out, ms: performance.now() - started };
+}
+
+function warningCodes(report: ReturnType<typeof deidentify>["report"]): readonly string[] {
+  return report.warnings.map((w) => w.code);
+}
+
+describe("deidentify - linear time on a long pad run (polynomial backtracking)", () => {
+  const RUN = 100_000;
+
+  it("remaps a UID that is a long run of NULL ending in digits", () => {
+    const source = `${"\0".repeat(RUN)}1.2.3`;
+    const { dataset, report, ms } = timedDeidentify(
+      implicitDataset([{ tag: "00080018", vr: "UI", value: Buffer.from(`${source}\0`, "latin1") }]),
+    );
+    const replacement = report.uidMap.get(source);
+    expect(replacement).toMatch(/^2\.25\.\d+$/u);
+    expect(dataset.get("00080018")?.value).toEqual({ kind: "strings", values: [replacement] });
+    expect(ms).toBeLessThan(1_000);
+  });
+
+  it("recognizes a Private Creator after a long run of leading spaces", () => {
+    const { dataset, ms } = timedDeidentify(
+      implicitDataset([
+        { tag: "00090010", vr: "LO", value: pad(`${" ".repeat(RUN)}${ACME_PRIVATE}`) },
+      ]),
+      { retain: ["RetainSafePrivate"], profile: ACME_PROFILE },
+    );
+    expect(dataset.has("00090010")).toBe(true);
+    expect(ms).toBeLessThan(1_000);
+  });
+
+  it("reads a Block Identifying Information Status of SAFE after a long run of leading spaces", () => {
+    const { dataset, report, ms } = timedDeidentify(
+      implicitDataset(declaredBlock(pad(`${" ".repeat(RUN)}SAFE`))),
+      { retain: ["RetainSafePrivate"] },
+    );
+    expect(dataset.has("00090010")).toBe(true);
+    expect(warningCodes(report)).not.toContain(NOT_RESOLVED);
+    expect(ms).toBeLessThan(1_000);
+  });
+
+  it("reads a Burned In Annotation of NO after a long run of leading spaces", () => {
+    const { report, ms } = timedDeidentify(
+      implicitDataset([
+        { tag: "00280301", vr: "CS", value: pad(`${" ".repeat(RUN)}NO`) },
+        PIXEL_DATA,
+      ]),
+    );
+    expect(warningCodes(report)).not.toContain(BURNED_IN);
+    expect(ms).toBeLessThan(1_000);
+    // The control: the same file saying YES does warn, so the absence above is the value's doing.
+    const yes = deidentify(
+      implicitDataset([{ tag: "00280301", vr: "CS", value: pad("YES") }, PIXEL_DATA]),
+    );
+    expect(warningCodes(yes.report)).toContain(BURNED_IN);
+  });
+});
+
+describe("deidentify - each pad read decides exactly as it did with the shipped expression", () => {
+  /** A value read the way the shipped code read it, kept here only as the oracle. */
+  const shippedRead = (bytes: Buffer): string =>
+    bytes
+      .toString("latin1")
+      .replace(/[\0 ]+$/u, "")
+      .trim();
+  const valueOf = (...words: readonly string[]): fc.Arbitrary<Buffer> =>
+    fc
+      .array(fc.constantFrom("\0", " ", ...words), { minLength: 1, maxLength: 6 })
+      .map((parts) => pad(parts.join("")));
+
+  it("keeps a Private Creator exactly when the shipped read named the profile's creator", () => {
+    fc.assert(
+      fc.property(valueOf(ACME_PRIVATE, "X"), (value) => {
+        const { dataset } = deidentify(implicitDataset([{ tag: "00090010", vr: "LO", value }]), {
+          retain: ["RetainSafePrivate"],
+          profile: ACME_PROFILE,
+        });
+        expect(dataset.has("00090010")).toBe(shippedRead(value) === ACME_PRIVATE);
+      }),
+      { numRuns: 1_000 },
+    );
+  });
+
+  it("resolves a declared block status exactly as the shipped read did", () => {
+    fc.assert(
+      fc.property(valueOf("SAFE", "UNSAFE", "X"), (value) => {
+        const { dataset, report } = deidentify(implicitDataset(declaredBlock(value)), {
+          retain: ["RetainSafePrivate"],
+        });
+        const read = shippedRead(value);
+        expect(dataset.has("00090010")).toBe(read === "SAFE");
+        expect(warningCodes(report).includes(NOT_RESOLVED)).toBe(
+          read !== "SAFE" && read !== "UNSAFE",
+        );
+      }),
+      { numRuns: 1_000 },
+    );
+  });
+
+  it("warns on burned-in annotation exactly when the shipped read was not NO", () => {
+    fc.assert(
+      fc.property(valueOf("NO", "no", "YES"), (value) => {
+        const { report } = deidentify(
+          implicitDataset([{ tag: "00280301", vr: "CS", value }, PIXEL_DATA]),
+        );
+        expect(warningCodes(report).includes(BURNED_IN)).toBe(
+          shippedRead(value).toUpperCase() !== "NO",
+        );
+      }),
+      { numRuns: 1_000 },
+    );
   });
 });
