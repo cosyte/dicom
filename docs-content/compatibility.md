@@ -95,3 +95,10 @@ const acmeStrict = defineProfile({
   },
 });
 ```
+
+## Exports that grow between releases
+
+The warning registry and the de-identification report gain members as the package grows. Read them so that an addition cannot break your code:
+
+- `WARNING_CODES`, `WarningCode`: adding a member widens the exported union. That is additive for a consumer narrowing on a name, and breaking for one with an exhaustive `switch` over the union, so treat the union as open.
+- `DeidentifyReport`: read it by field name.
