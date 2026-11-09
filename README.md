@@ -150,7 +150,7 @@ The full reference is on [docs.cosyte.com/dicom](https://docs.cosyte.com/dicom):
 
 ## Support
 
-Questions, bug reports, and quirks from the scanners and archives you work with go in [GitHub issues](https://github.com/cosyte/dicom/issues). Use synthetic data only, never a real patient's. For help with an imaging integration, see our [integration services](https://cosyte.com/integration-services).
+Questions, bug reports, and quirks from the scanners and archives you work with go in [GitHub issues](https://github.com/cosyte/dicom/issues). Use synthetic data only, never a real patient's. Need a DICOM integration built, or hosted and run for you? See our [integration services](https://cosyte.com/integration-services).
 
 ## Security
 
