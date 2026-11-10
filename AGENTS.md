@@ -43,6 +43,34 @@ After the build, CI's `examples` job runs `pnpm typecheck:examples`, `pnpm lint:
 `pnpm gen:clean`, `pnpm gen:all`, then `git diff --exit-code src/dictionary/generated/` must print
 nothing.
 
+CI's `scaling-gate` job runs `pnpm test:perf`, the scaling gates in `test/perf/scaling-gate.perf.ts`:
+they fail when `parseDicom`, reading every tag, or `serializeDicom` grows faster than its input. They
+run apart from `pnpm test` and never under coverage.
+
+## Benchmarks
+
+`bench/dicom.bench.mjs` measures the built package on synthetic files in the shapes real traffic
+has: the Modality Worklist entry a modality reads all day, a 512 by 512 by 16-bit CT slice, an
+Enhanced CT series of 20 and 200 frames (100 MiB of Pixel Data), and a header-only SR of many small
+tags in sequences nested four deep. Each is parsed, parsed then read, and written.
+`bench/shapes.mjs` builds every file in code; `test/perf/bench-shapes.test.ts` holds that each reads
+cleanly and writes back to its own bytes.
+
+```sh
+pnpm build
+pnpm bench:reading --out bench-results/reading.json --summary bench-results/reading.md
+node bench/budgets.mjs bench-results/reading.json
+pnpm bench:compare --base <base checkout>/dist/index.mjs --head dist/index.mjs
+pnpm bench:profile --out bench-results/profile
+```
+
+A reading reports throughput, latency p50/p95/p99, allocations, peak heap, a long run for leaks,
+and the cold import with its gzip size. Its peak heap is the V8 heap only, so Pixel Data, a Buffer,
+is not in it: `pnpm bench:profile` measures each large size's peak resident memory and single-call
+time in a fresh process, then profiles the hottest paths. On a pull request CI compares the base
+build with the head at each shape's first size, and `.github/workflows/bench.yml` takes a reading
+and a profile on a hosted runner when `bench/` changes. Both are advisory.
+
 ## Data
 
 Synthetic data only: real patient data never enters this repository, in a fixture, a test, an

@@ -27,10 +27,27 @@ jobs:
   # immutable, so GitHub refuses to move or delete its tag, and nothing reaches this pipeline until
   # this line changes. The shared actionlint job runs rhysd/actionlint's release binary, checked by
   # its SHA-256, so it runs on the nightly `schedule` run as well.
+  #
+  # The performance standard's two jobs run beside `verify`, never after it, so a pull request waits
+  # for the slowest job rather than their sum:
+  # - `scaling-gate`: `pnpm test:perf`, the scaling gates on `parseDicom`, on reading every tag and
+  #   on `serializeDicom`, and their self-checks, never under coverage. A skipped job satisfies a
+  #   required check, so require `ci / scaling-gate` only while its input below stays on.
+  # - `bench-compare` (pull requests only): bench/dicom.bench.mjs timed on the base build and the
+  #   head build, interleaved on one runner, at each shape's first size. Advisory: it never fails,
+  #   so never require it. The large sizes are measured by bench.yml's reading instead.
+  #
+  # This caller alone is one release ahead of the others: the release of commit 0be6757a7738 is the
+  # first with those two jobs. Its name carries its date, which a PHI scan of a changed file reads
+  # as a date of service, so the comment names its commit instead. The other callers move to it
+  # with the next change to them.
   ci:
-    uses: cosyte/.github/.github/workflows/ci.yml@c0db8d8e5927269820de4401b3b5ad6141854b76 # workflows-2026-11-08-c0db8d8e5927
+    uses: cosyte/.github/.github/workflows/ci.yml@0be6757a773885cbd5165dbfa0f93772d907b3e8 # the release of 0be6757a7738
     with:
       run-phi-scan: true
+      run-scaling-gate: true
+      run-bench-compare: true
+      bench-suites: bench/dicom.bench.mjs
 
   # The runnable examples under examples/, checked the way a consumer meets them: each imports
   # `@cosyte/dicom` by name, which resolves through package.json `exports` to the BUILT dist/, so

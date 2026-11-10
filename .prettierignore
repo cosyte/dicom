@@ -1,5 +1,6 @@
 dist/
 coverage/
+bench-results/
 node_modules/
 .pnpm-store/
 pnpm-lock.yaml

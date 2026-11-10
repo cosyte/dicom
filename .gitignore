@@ -49,3 +49,6 @@ dist-artifacts/
 
 # `attw --pack .` writes a tarball into the repo root while it runs.
 *.tgz
+
+# Bench readings and profiles (`pnpm bench:reading --out bench-results/...`)
+bench-results/
