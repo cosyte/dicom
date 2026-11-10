@@ -180,7 +180,8 @@ function rowIndex(): Map<string, number> {
   // The rows start after the literal's opening line break, and each ends on one.
   let at = ANNEX_E_ROWS.indexOf("\n") + 1;
   while (at < ANNEX_E_ROWS.length) {
-    out.set(ANNEX_E_ROWS.slice(at, ANNEX_E_ROWS.indexOf("|", at)), at);
+    // A row's tag is written group,element: the key is its eight digits.
+    out.set(ANNEX_E_ROWS.slice(at, at + 4) + ANNEX_E_ROWS.slice(at + 5, at + 9), at);
     at = ANNEX_E_ROWS.indexOf("\n", at) + 1;
   }
   rowAt = out;
@@ -208,7 +209,7 @@ function exactRow(upper: string): AnnexEAction | undefined {
     }
   }
   const entry: AnnexEAction = Object.freeze({
-    tag: rowTag,
+    tag: rowTag.slice(0, 4) + rowTag.slice(5),
     keyword,
     basicProfile: basicProfile as AnnexEActionCode,
     optionSet: Object.freeze(optionSet),

@@ -39,7 +39,8 @@ function index(): Map<string, number> {
   let at = TAG_ROWS.indexOf("\n") + 1;
   while (at < TAG_ROWS.length) {
     const end = TAG_ROWS.indexOf("\n", at);
-    out.set(TAG_ROWS.slice(at, TAG_ROWS.indexOf("|", at)), at);
+    // A row's tag is written group,element: the key is its eight digits.
+    out.set(TAG_ROWS.slice(at, at + 4) + TAG_ROWS.slice(at + 5, at + 9), at);
     at = end + 1;
   }
   rowAt = out;
@@ -48,7 +49,9 @@ function index(): Map<string, number> {
 
 function build(at: number): DictionaryEntry {
   const fields = TAG_ROWS.slice(at, TAG_ROWS.indexOf("\n", at)).split("|");
-  const [tag = "", keyword = "", name = "", vrs = "", vm = "", retired = "", family = ""] = fields;
+  const [written = "", keyword = "", name = "", vrs = "", vm = "", retired = "", family = ""] =
+    fields;
+  const tag = written.slice(0, 4) + written.slice(5);
   const vr = (vrs === "" ? [] : vrs.split("/")) as VR[];
   const entry: DictionaryEntry =
     family === "x"

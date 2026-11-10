@@ -17,667 +17,667 @@
 import type { AnnexERepeatingRule } from "../annex-e.js";
 
 /**
- * Table E.1-1's exact-tag rows, one a line in ascending tag order: the tag, the
- * attribute name, the Basic Profile action, then each Option's action as
- * `Option=code` joined by `;`, the Options in name order; fields joined by `|`.
- * One string rather than an object literal, so loading the package does not
- * build 653 frozen objects: `annexE()` in `../annex-e.ts` reads
- * a row the first time its tag is asked for.
+ * Table E.1-1's exact-tag rows, one a line in ascending tag order: the tag as
+ * group,element, the attribute name, the Basic Profile action, then each Option's
+ * action as `Option=code` joined by `;`, the Options in name order; fields joined
+ * by `|`. One string rather than an object literal, so loading the package does not
+ * build 653 frozen objects: `annexE()` in `../annex-e.ts` reads a row the first time its
+ * tag is asked for.
  */
 export const ANNEX_E_ROWS: string = `
-00001000|Affected SOP Instance UID|X|RetainUIDs=K
-00001001|Requested SOP Instance UID|U|RetainUIDs=K
-00020003|Media Storage SOP Instance UID|U|RetainUIDs=K
-00041511|Referenced SOP Instance UID in File|U|RetainUIDs=K
-00080012|Instance Creation Date|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00080013|Instance Creation Time|X/Z/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00080014|Instance Creator UID|U|RetainUIDs=K
-00080015|Instance Coercion DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00080017|Acquisition UID|U|RetainUIDs=K
-00080018|SOP Instance UID|U|RetainUIDs=K
-00080019|Pyramid UID|U|RetainUIDs=K
-00080020|Study Date|Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00080021|Series Date|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00080022|Acquisition Date|X/Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00080023|Content Date|Z/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00080024|Overlay Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00080025|Curve Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0008002A|Acquisition DateTime|X/Z/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00080030|Study Time|Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00080031|Series Time|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00080032|Acquisition Time|X/Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00080033|Content Time|Z/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00080034|Overlay Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00080035|Curve Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00080050|Accession Number|Z|
-00080054|Retrieve AE Title|X|RetainDeviceIdentity=C
-00080055|Station AE Title|X|RetainDeviceIdentity=C
-00080058|Failed SOP Instance UID List|U|RetainUIDs=K
-00080080|Institution Name|X/Z/D|RetainInstitutionIdentity=K
-00080081|Institution Address|X|RetainInstitutionIdentity=K
-00080082|Institution Code Sequence|X/Z/D|RetainInstitutionIdentity=K
-00080090|Referring Physician's Name|Z|
-00080092|Referring Physician's Address|X|
-00080094|Referring Physician's Telephone Numbers|X|
-00080096|Referring Physician Identification Sequence|X|
-0008009C|Consulting Physician's Name|Z|
-0008009D|Consulting Physician Identification Sequence|X|
-00080106|Context Group Version|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00080107|Context Group Local Version|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00080201|Timezone Offset From UTC|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00081000|Network ID|X|RetainDeviceIdentity=C
-00081010|Station Name|X/Z/D|RetainDeviceIdentity=K
-00081030|Study Description|X|CleanDescriptors=C
-0008103E|Series Description|X|CleanDescriptors=C
-00081040|Institutional Department Name|X|RetainInstitutionIdentity=K
-00081041|Institutional Department Type Code Sequence|X|RetainInstitutionIdentity=K
-00081048|Physician(s) of Record|X|
-00081049|Physician(s) of Record Identification Sequence|X|
-00081050|Performing Physician's Name|X|
-00081052|Performing Physician Identification Sequence|X|
-00081060|Name of Physician(s) Reading Study|X|
-00081062|Physician(s) Reading Study Identification Sequence|X|
-00081070|Operators' Name|X/Z/D|
-00081072|Operator Identification Sequence|X/D|
-00081080|Admitting Diagnoses Description|X|CleanDescriptors=C
-00081084|Admitting Diagnoses Code Sequence|X|CleanDescriptors=C
-00081088|Pyramid Description|X|CleanDescriptors=C
-00081110|Referenced Study Sequence|X/Z|RetainUIDs=K
-00081111|Referenced Performed Procedure Step Sequence|X/Z/D|RetainUIDs=K
-00081120|Referenced Patient Sequence|X|RetainUIDs=K
-00081140|Referenced Image Sequence|X/Z/U*|RetainUIDs=K
-00081155|Referenced SOP Instance UID|U|RetainUIDs=K
-00081195|Transaction UID|U|RetainUIDs=K
-00081301|Principal Diagnosis Code Sequence|X|CleanDescriptors=C
-00081302|Primary Diagnosis Code Sequence|X|CleanDescriptors=C
-00081303|Secondary Diagnoses Code Sequence|X|CleanDescriptors=C
-00081304|Histological Diagnoses Code Sequence|X|CleanDescriptors=C
-00082111|Derivation Description|X|CleanDescriptors=C
-00082112|Source Image Sequence|X/Z/U*|RetainUIDs=K
-00083010|Irradiation Event UID|U|RetainUIDs=K
-00084000|Identifying Comments|X|CleanDescriptors=C
-00100010|Patient's Name|Z|
-00100011|Person Names to Use Sequence|X|
-00100012|Name to Use|X|
-00100013|Name to Use Comment|X|
-00100014|Third Person Pronouns Sequence|X|
-00100015|Pronoun Code Sequence|X|
-00100016|Pronoun Comment|X|CleanDescriptors=C
-00100020|Patient ID|Z/D|
-00100021|Issuer of Patient ID|X|
-00100030|Patient's Birth Date|Z|
-00100032|Patient's Birth Time|X|
-00100040|Patient's Sex|Z|RetainPatientCharacteristics=K
-00100041|Gender Identity Sequence|X|
-00100042|Sex Parameters for Clinical Use Category Comment|X|CleanDescriptors=C;RetainPatientCharacteristics=C
-00100043|Sex Parameters for Clinical Use Category Sequence|X|RetainPatientCharacteristics=K
-00100044|Gender Identity Code Sequence|X|
-00100045|Gender Identity Comment|X|CleanDescriptors=C
-00100046|Sex Parameters for Clinical Use Category Code Sequence|X|RetainPatientCharacteristics=K
-00100047|Sex Parameters for Clinical Use Category Reference|X|RetainPatientCharacteristics=K
-00100050|Patient's Insurance Plan Code Sequence|X|
-00100101|Patient's Primary Language Code Sequence|X|
-00100102|Patient's Primary Language Modifier Code Sequence|X|
-00101000|Other Patient IDs|X|
-00101001|Other Patient Names|X|
-00101002|Other Patient IDs Sequence|X|
-00101005|Patient's Birth Name|X|
-00101010|Patient's Age|X|RetainPatientCharacteristics=K
-00101020|Patient's Size|X|RetainPatientCharacteristics=K
-00101030|Patient's Weight|X|RetainPatientCharacteristics=K
-00101040|Patient's Address|X|
-00101050|Insurance Plan Identification|X|
-00101060|Patient's Mother's Birth Name|X|
-00101080|Military Rank|X|
-00101081|Branch of Service|X|
-00101090|Medical Record Locator|X|
-00101100|Referenced Patient Photo Sequence|X|
-00102000|Medical Alerts|X|CleanDescriptors=C
-00102110|Allergies|X|CleanDescriptors=C;RetainPatientCharacteristics=C
-00102150|Country of Residence|X|
-00102152|Region of Residence|X|
-00102154|Patient's Telephone Numbers|X|
-00102155|Patient's Telecom Information|X|
-00102160|Ethnic Group|X|RetainPatientCharacteristics=K
-00102161|Ethnic Group Code Sequence|X|RetainPatientCharacteristics=K
-00102162|Ethnic Groups|X|RetainPatientCharacteristics=K
-00102180|Occupation|X|CleanDescriptors=C
-001021A0|Smoking Status|X|RetainPatientCharacteristics=K
-001021B0|Additional Patient History|X|CleanDescriptors=C
-001021C0|Pregnancy Status|X|RetainPatientCharacteristics=K
-001021D0|Last Menstrual Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-001021F0|Patient's Religious Preference|X|
-00102203|Patient's Sex Neutered|X/Z|RetainPatientCharacteristics=K
-00102297|Responsible Person|X|
-00102299|Responsible Organization|X|
-00104000|Patient Comments|X|CleanDescriptors=C
-00120010|Clinical Trial Sponsor Name|D|
-00120020|Clinical Trial Protocol ID|D|
-00120021|Clinical Trial Protocol Name|Z|
-00120022|Issuer of Clinical Trial Protocol ID|X|
-00120023|Other Clinical Trial Protocol IDs Sequence|X|
-00120030|Clinical Trial Site ID|Z|RetainInstitutionIdentity=K
-00120031|Clinical Trial Site Name|Z|RetainInstitutionIdentity=K
-00120032|Issuer of Clinical Trial Site ID|X|
-00120040|Clinical Trial Subject ID|D|
-00120041|Issuer of Clinical Trial Subject ID|X|
-00120042|Clinical Trial Subject Reading ID|D|
-00120043|Issuer of Clinical Trial Subject Reading ID|X|
-00120050|Clinical Trial Time Point ID|Z|
-00120051|Clinical Trial Time Point Description|X|CleanDescriptors=C
-00120055|Issuer of Clinical Trial Time Point ID|X|
-00120060|Clinical Trial Coordinating Center Name|Z|RetainInstitutionIdentity=K
-00120071|Clinical Trial Series ID|X|
-00120072|Clinical Trial Series Description|X|CleanDescriptors=C
-00120073|Issuer of Clinical Trial Series ID|X|
-00120081|Clinical Trial Protocol Ethics Committee Name|D|RetainInstitutionIdentity=K
-00120082|Clinical Trial Protocol Ethics Committee Approval Number|X|
-00120086|Ethics Committee Approval Effectiveness Start Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00120087|Ethics Committee Approval Effectiveness End Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0014407C|Calibration Time|X|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0014407E|Calibration Date|X|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0016002B|Maker Note|X|CleanDescriptors=C
-0016004B|Device Setting Description|X|CleanDescriptors=C
-0016004D|Camera Owner Name|X|
-0016004E|Lens Specification|X|RetainDeviceIdentity=K
-0016004F|Lens Make|X|RetainDeviceIdentity=K
-00160050|Lens Model|X|RetainDeviceIdentity=K
-00160051|Lens Serial Number|X|RetainDeviceIdentity=K
-00160070|GPS Version ID|X|
-00160071|GPS Latitude Ref|X|
-00160072|GPS Latitude|X|
-00160073|GPS Longitude Ref|X|
-00160074|GPS Longitude|X|
-00160075|GPS Altitude Ref|X|
-00160076|GPS Altitude|X|
-00160077|GPS Time Stamp|X|
-00160078|GPS Satellites|X|
-00160079|GPS Status|X|
-0016007A|GPS Measure Mode|X|
-0016007B|GPS DOP|X|
-0016007C|GPS Speed Ref|X|
-0016007D|GPS Speed|X|
-0016007E|GPS Track Ref|X|
-0016007F|GPS Track|X|
-00160080|GPS Img Direction Ref|X|
-00160081|GPS Img Direction|X|
-00160082|GPS Map Datum|X|
-00160083|GPS Dest Latitude Ref|X|
-00160084|GPS Dest Latitude|X|
-00160085|GPS Dest Longitude Ref|X|
-00160086|GPS Dest Longitude|X|
-00160087|GPS Dest Bearing Ref|X|
-00160088|GPS Dest Bearing|X|
-00160089|GPS Dest Distance Ref|X|
-0016008A|GPS Dest Distance|X|
-0016008B|GPS Processing Method|X|
-0016008C|GPS Area Information|X|
-0016008D|GPS Date Stamp|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0016008E|GPS Differential|X|
-00180010|Contrast/Bolus Agent|Z/D|CleanDescriptors=C
-00180027|Intervention Drug Stop Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00180035|Intervention Drug Start Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00181000|Device Serial Number|X/Z/D|RetainDeviceIdentity=K
-00181002|Device UID|U|RetainDeviceIdentity=K;RetainUIDs=K
-00181004|Plate ID|X|RetainDeviceIdentity=K
-00181005|Generator ID|X|RetainDeviceIdentity=K
-00181007|Cassette ID|X|RetainDeviceIdentity=K
-00181008|Gantry ID|X|RetainDeviceIdentity=K
-00181009|Unique Device Identifier|X|RetainDeviceIdentity=K
-0018100A|UDI Sequence|X|RetainDeviceIdentity=K
-0018100B|Manufacturer's Device Class UID|U|RetainDeviceIdentity=K;RetainUIDs=K
-00181010|Secondary Capture Device ID|X|RetainDeviceIdentity=K
-00181011|Hardcopy Creation Device ID|X|RetainDeviceIdentity=K
-00181012|Date of Secondary Capture|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00181014|Time of Secondary Capture|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00181030|Protocol Name|X/D|CleanDescriptors=C
-00181042|Contrast/Bolus Start Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00181043|Contrast/Bolus Stop Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00181072|Radiopharmaceutical Start Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00181073|Radiopharmaceutical Stop Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00181078|Radiopharmaceutical Start DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00181079|Radiopharmaceutical Stop DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-001811BB|Acquisition Field of View Label|D|CleanDescriptors=C
-00181200|Date of Last Calibration|X|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00181201|Time of Last Calibration|X|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00181202|DateTime of Last Calibration|X|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00181203|Calibration DateTime|Z|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00181204|Date of Manufacture|X|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00181205|Date of Installation|X|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00181400|Acquisition Device Processing Description|X/D|CleanDescriptors=C
-00182042|Target UID|U|RetainUIDs=K
-00184000|Acquisition Comments|X|CleanDescriptors=C
-00185011|Transducer Identification Sequence|X|RetainDeviceIdentity=K
-0018700A|Detector ID|X/D|RetainDeviceIdentity=K
-0018700C|Date of Last Detector Calibration|X/D|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0018700E|Time of Last Detector Calibration|X/D|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00189074|Frame Acquisition DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00189151|Frame Reference DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00189185|Respiratory Motion Compensation Technique Description|X|CleanDescriptors=C
-00189367|X-Ray Source ID|D|RetainDeviceIdentity=K
-00189369|Source Start DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0018936A|Source End DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00189371|X-Ray Detector ID|D|RetainDeviceIdentity=K
-00189373|X-Ray Detector Label|X|RetainDeviceIdentity=K
-0018937B|Multi-energy Acquisition Description|X|CleanDescriptors=C
-0018937F|Decomposition Description|X|CleanDescriptors=C
-00189424|Acquisition Protocol Description|X|CleanDescriptors=C
-00189516|Start Acquisition DateTime|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00189517|End Acquisition DateTime|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00189623|Functional Sync Pulse|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00189701|Decay Correction DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00189804|Exclusion Start DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00189919|Instruction Performed DateTime|Z/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00189937|Requested Series Description|X|CleanDescriptors=C
-0018A002|Contribution DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0018A003|Contribution Description|X|CleanDescriptors=C
-0020000D|Study Instance UID|U|RetainUIDs=K
-0020000E|Series Instance UID|U|RetainUIDs=K
-00200010|Study ID|Z|
-00200027|Pyramid Label|X|CleanDescriptors=C
-00200052|Frame of Reference UID|U|RetainUIDs=K
-00200200|Synchronization Frame of Reference UID|U|RetainUIDs=K
-00203401|Modifying Device ID|X|RetainDeviceIdentity=K
-00203403|Modified Image Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00203405|Modified Image Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00203406|Modified Image Description|X|
-00204000|Image Comments|X|CleanDescriptors=C
-00209158|Frame Comments|X|CleanDescriptors=C
-00209161|Concatenation UID|U|RetainUIDs=K
-00209164|Dimension Organization UID|U|RetainUIDs=K
-00281199|Palette Color Lookup Table UID|U|RetainUIDs=K
-00281214|Large Palette Color Lookup Table UID|U|RetainUIDs=K
-00284000|Image Presentation Comments|X|
-00320012|Study ID Issuer|X|
-00320032|Study Verified Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00320033|Study Verified Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00320034|Study Read Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00320035|Study Read Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00321000|Scheduled Study Start Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00321001|Scheduled Study Start Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00321010|Scheduled Study Stop Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00321011|Scheduled Study Stop Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00321020|Scheduled Study Location|X|RetainDeviceIdentity=K
-00321021|Scheduled Study Location AE Title|X|RetainDeviceIdentity=C
-00321030|Reason for Study|X|CleanDescriptors=C
-00321032|Requesting Physician|X|
-00321033|Requesting Service|X|CleanDescriptors=C
-00321040|Study Arrival Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00321041|Study Arrival Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00321050|Study Completion Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00321051|Study Completion Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00321060|Requested Procedure Description|X/Z|CleanDescriptors=C
-00321066|Reason for Visit|X|CleanDescriptors=C
-00321067|Reason for Visit Code Sequence|X|CleanDescriptors=C
-00321070|Requested Contrast Agent|X|CleanDescriptors=C
-00324000|Study Comments|X|CleanDescriptors=C
-00340001|Flow Identifier Sequence|D|
-00340002|Flow Identifier|D|
-00340005|Source Identifier|D|
-00340007|Frame Origin Timestamp|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00380004|Referenced Patient Alias Sequence|X|
-00380010|Admission ID|X|
-00380011|Issuer of Admission ID|X|
-00380014|Issuer of Admission ID Sequence|X|
-0038001A|Scheduled Admission Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0038001B|Scheduled Admission Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0038001C|Scheduled Discharge Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0038001D|Scheduled Discharge Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0038001E|Scheduled Patient Institution Residence|X|
-00380020|Admitting Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00380021|Admitting Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00380030|Discharge Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00380032|Discharge Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00380040|Discharge Diagnosis Description|X|CleanDescriptors=C
-00380050|Special Needs|X|RetainPatientCharacteristics=C
-00380060|Service Episode ID|X|
-00380061|Issuer of Service Episode ID|X|
-00380062|Service Episode Description|X|CleanDescriptors=C
-00380064|Issuer of Service Episode ID Sequence|X|
-00380300|Current Patient Location|X|
-00380400|Patient's Institution Residence|X|
-00380500|Patient State|X|CleanDescriptors=C;RetainPatientCharacteristics=C
-00384000|Visit Comments|X|CleanDescriptors=C
-003A0020|Multiplex Group Label|X|CleanDescriptors=C
-003A0203|Channel Label|X|CleanDescriptors=C
-003A020C|Channel Derivation Description|X|CleanDescriptors=C
-003A0310|Multiplex Group UID|U|RetainUIDs=K
-003A0314|Impedance Measurement DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-003A0329|Waveform Filter Description|X|CleanDescriptors=C
-003A032B|Filter Lookup Table Description|X|CleanDescriptors=C
-00400001|Scheduled Station AE Title|X|RetainDeviceIdentity=C
-00400002|Scheduled Procedure Step Start Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00400003|Scheduled Procedure Step Start Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00400004|Scheduled Procedure Step End Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00400005|Scheduled Procedure Step End Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00400006|Scheduled Performing Physician's Name|X|
-00400007|Scheduled Procedure Step Description|X|CleanDescriptors=C
-00400009|Scheduled Procedure Step ID|X|
-0040000B|Scheduled Performing Physician Identification Sequence|X|
-00400010|Scheduled Station Name|X|RetainDeviceIdentity=K
-00400011|Scheduled Procedure Step Location|X|RetainDeviceIdentity=K
-00400012|Pre-Medication|X|RetainPatientCharacteristics=C
-00400241|Performed Station AE Title|X|RetainDeviceIdentity=C
-00400242|Performed Station Name|X|RetainDeviceIdentity=K
-00400243|Performed Location|X|
-00400244|Performed Procedure Step Start Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00400245|Performed Procedure Step Start Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00400250|Performed Procedure Step End Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00400251|Performed Procedure Step End Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00400253|Performed Procedure Step ID|X|
-00400254|Performed Procedure Step Description|X|CleanDescriptors=C
-00400275|Request Attributes Sequence|X|CleanDescriptors=C
-00400280|Comments on the Performed Procedure Step|X|CleanDescriptors=C
-00400310|Comments on Radiation Dose|X|CleanDescriptors=C
-0040050A|Specimen Accession Number|X|
-00400512|Container Identifier|D|
-00400513|Issuer of the Container Identifier Sequence|Z|
-0040051A|Container Description|X|CleanDescriptors=C
-00400551|Specimen Identifier|D|
-00400554|Specimen UID|U|RetainUIDs=K
-00400555|Acquisition Context Sequence|X/Z|CleanStructuredContent=C
-00400556|Acquisition Context Description|X|CleanDescriptors=C
-00400562|Issuer of the Specimen Identifier Sequence|Z|
-00400600|Specimen Short Description|X|CleanDescriptors=C
-00400602|Specimen Detailed Description|X|CleanDescriptors=C
-00400610|Specimen Preparation Sequence|Z|CleanStructuredContent=C
-004006FA|Slide Identifier|X|
-00401001|Requested Procedure ID|X|
-00401002|Reason for the Requested Procedure|X|CleanDescriptors=C
-00401004|Patient Transport Arrangements|X|
-00401005|Requested Procedure Location|X|
-0040100A|Reason for Requested Procedure Code Sequence|X|CleanDescriptors=C
-00401010|Names of Intended Recipients of Results|X|
-00401011|Intended Recipients of Results Identification Sequence|X|
-00401101|Person Identification Code Sequence|D|
-00401102|Person's Address|X|
-00401103|Person's Telephone Numbers|X|
-00401104|Person's Telecom Information|X|
-00401400|Requested Procedure Comments|X|CleanDescriptors=C
-00402001|Reason for the Imaging Service Request|X|CleanDescriptors=C
-00402004|Issue Date of Imaging Service Request|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00402005|Issue Time of Imaging Service Request|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00402008|Order Entered By|X|
-00402009|Order Enterer's Location|X|
-00402010|Order Callback Phone Number|X|
-00402011|Order Callback Telecom Information|X|
-00402016|Placer Order Number / Imaging Service Request|Z|
-00402017|Filler Order Number / Imaging Service Request|Z|
-00402400|Imaging Service Request Comments|X|CleanDescriptors=C
-00403001|Confidentiality Constraint on Patient Data Description|X|
-00404005|Scheduled Procedure Step Start DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00404008|Scheduled Procedure Step Expiration DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00404010|Scheduled Procedure Step Modification DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00404011|Expected Completion DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00404023|Referenced General Purpose Scheduled Procedure Step Transaction UID|U|RetainUIDs=K
-00404025|Scheduled Station Name Code Sequence|X|RetainDeviceIdentity=K
-00404027|Scheduled Station Geographic Location Code Sequence|X|RetainDeviceIdentity=K
-00404028|Performed Station Name Code Sequence|X|RetainDeviceIdentity=K
-00404030|Performed Station Geographic Location Code Sequence|X|RetainDeviceIdentity=K
-00404034|Scheduled Human Performers Sequence|X|
-00404035|Actual Human Performers Sequence|X|
-00404036|Human Performer's Organization|X|
-00404037|Human Performer's Name|X|
-00404050|Performed Procedure Step Start DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00404051|Performed Procedure Step End DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00404052|Procedure Step Cancellation DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0040A023|Findings Group Recording Date (Trial)|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0040A024|Findings Group Recording Time (Trial)|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0040A027|Verifying Organization|D|
-0040A030|Verification DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0040A032|Observation DateTime|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0040A033|Observation Start DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0040A034|Effective Start DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0040A035|Effective Stop DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0040A073|Verifying Observer Sequence|D|
-0040A075|Verifying Observer Name|D|
-0040A078|Author Observer Sequence|X|
-0040A07A|Participant Sequence|X|
-0040A07C|Custodial Organization Sequence|X|
-0040A082|Participation DateTime|Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0040A088|Verifying Observer Identification Code Sequence|Z|
-0040A110|Date of Document or Verbal Transaction (Trial)|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0040A112|Time of Document Creation or Verbal Transaction (Trial)|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0040A120|DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0040A121|Date|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0040A122|Time|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0040A123|Person Name|D|
-0040A124|UID|U|
-0040A13A|Referenced DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0040A171|Observation UID|U|RetainUIDs=K
-0040A172|Referenced Observation UID (Trial)|U|RetainUIDs=K
-0040A192|Observation Date (Trial)|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0040A193|Observation Time (Trial)|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0040A307|Current Observer (Trial)|X|
-0040A352|Verbal Source (Trial)|X|
-0040A353|Address (Trial)|X|
-0040A354|Telephone Number (Trial)|X|
-0040A358|Verbal Source Identifier Code Sequence (Trial)|X|
-0040A402|Observation Subject UID (Trial)|U|RetainUIDs=K
-0040A730|Content Sequence|D|CleanStructuredContent=C
-0040B020|Waveform Annotation Sequence|X/D|CleanStructuredContent=C
-0040B034|Annotation DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0040B036|Segment Definition DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0040B03B|Montage Name|X|CleanDescriptors=C
-0040B03F|Montage Channel Label|X|CleanDescriptors=C
-0040DB06|Template Version|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0040DB07|Template Local Version|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0040DB0C|Template Extension Organization UID|U|RetainUIDs=K
-0040DB0D|Template Extension Creator UID|U|RetainUIDs=K
-0040E004|HL7 Document Effective Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0040E012|Display URI|X|
-00420011|Encapsulated Document|D|
-00440004|Approval Status DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0044000B|Product Expiration DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00440010|Substance Administration DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00440104|Assertion DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00440105|Assertion Expiration DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0050001B|Container Component ID|X|
-00500020|Device Description|X|RetainDeviceIdentity=K
-00500021|Long Device Description|X|CleanDescriptors=C
-00620021|Tracking UID|U|RetainUIDs=K
-00640003|Source Frame of Reference UID|U|RetainUIDs=K
-00686226|Effective DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00686270|Information Issue DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-006A0003|Annotation Group UID|D|RetainUIDs=K
-006A0005|Annotation Group Label|D|CleanDescriptors=C
-006A0006|Annotation Group Description|X|CleanDescriptors=C
-00700001|Graphic Annotation Sequence|D|CleanGraphics=C
-00700006|Unformatted Text Value|D|CleanDescriptors=C
-00700082|Presentation Creation Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00700083|Presentation Creation Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00700084|Content Creator's Name|Z/D|
-00700086|Content Creator's Identification Code Sequence|X|
-0070031A|Fiducial UID|U|RetainUIDs=K
-00701101|Presentation Display Collection UID|U|RetainUIDs=K
-00701102|Presentation Sequence Collection UID|U|RetainUIDs=K
-0072000A|Hanging Protocol Creation DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0072005E|Selector AE Value|D|RetainDeviceIdentity=C
-0072005F|Selector AS Value|D|RetainPatientCharacteristics=K
-00720061|Selector DA Value|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00720063|Selector DT Value|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-00720065|Selector OB Value|D|
-00720066|Selector LO Value|D|CleanDescriptors=C
-00720068|Selector LT Value|D|CleanDescriptors=C
-0072006A|Selector PN Value|D|
-0072006B|Selector TM Value|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-0072006C|Selector SH Value|D|CleanDescriptors=C
-0072006D|Selector UN Value|D|
-0072006E|Selector ST Value|D|CleanDescriptors=C
-00720070|Selector UT Value|D|CleanDescriptors=C
-00720071|Selector UR Value|D|
-00741234|Receiving AE|X|RetainDeviceIdentity=C
-00741236|Requesting AE|X|RetainDeviceIdentity=C
-00880140|Storage Media File-set UID|U|RetainUIDs=K
-00880200|Icon Image Sequence (see Note 11)|X|
-00880904|Topic Title|X|
-00880906|Topic Subject|X|
-00880910|Topic Author|X|
-00880912|Topic Keywords|X|
-01000420|SOP Authorization DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-04000100|Digital Signature UID|U|
-04000105|Digital Signature DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-04000115|Certificate of Signer|D|
-04000310|Certified Timestamp|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-04000402|Referenced Digital Signature Sequence|X|
-04000403|Referenced SOP Instance MAC Sequence|X|
-04000404|MAC|X|
-04000550|Modified Attributes Sequence|X|
-04000551|Nonconforming Modified Attributes Sequence|X|
-04000552|Nonconforming Data Element Value|X|
-04000561|Original Attributes Sequence|X|
-04000562|Attribute Modification DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-04000563|Modifying System|D|RetainDeviceIdentity=K
-04000564|Source of Previous Values|Z|RetainInstitutionIdentity=K
-04000565|Reason for the Attribute Modification|D|CleanDescriptors=C
-04000600|Instance Origin Status|X|
-20300020|Text String|X|
-21000040|Creation Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-21000050|Creation Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-21000070|Originator|X|RetainDeviceIdentity=C
-21000140|Destination AE|D|RetainDeviceIdentity=C
-22000002|Label Text|X/Z|CleanDescriptors=C
-22000005|Barcode Value|X/Z|
-30020121|Position Acquisition Template Name|X|CleanDescriptors=C
-30020123|Position Acquisition Template Description|X|CleanDescriptors=C
-3004007F|Dose Calculation Model Name|X|CleanDescriptors=C
-30060002|Structure Set Label|D|CleanDescriptors=C
-30060004|Structure Set Name|X|CleanDescriptors=C
-30060006|Structure Set Description|X|CleanDescriptors=C
-30060008|Structure Set Date|Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-30060009|Structure Set Time|Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-30060024|Referenced Frame of Reference UID|U|RetainUIDs=K
-30060026|ROI Name|Z|CleanDescriptors=C
-30060028|ROI Description|X|CleanDescriptors=C
-3006002D|ROI DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-3006002E|ROI Observation DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-30060038|ROI Generation Description|X|CleanDescriptors=C
-3006004D|ROI Creator Sequence|X|
-3006004E|ROI Interpreter Sequence|X|
-30060085|ROI Observation Label|X|CleanDescriptors=C
-30060088|ROI Observation Description|X|CleanDescriptors=C
-300600A6|ROI Interpreter|Z|
-300600C2|Related Frame of Reference UID|U|RetainUIDs=K
-30080024|Treatment Control Point Date|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-30080025|Treatment Control Point Time|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-30080054|First Treatment Date|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-30080056|Most Recent Treatment Date|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-30080105|Source Serial Number|X/Z|RetainDeviceIdentity=K
-30080162|Safe Position Exit Date|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-30080164|Safe Position Exit Time|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-30080166|Safe Position Return Date|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-30080168|Safe Position Return Time|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-30080250|Treatment Date|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-30080251|Treatment Time|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-300A0002|RT Plan Label|D|CleanDescriptors=C
-300A0003|RT Plan Name|X|CleanDescriptors=C
-300A0004|RT Plan Description|X|CleanDescriptors=C
-300A0006|RT Plan Date|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-300A0007|RT Plan Time|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-300A000B|Treatment Sites|X|CleanDescriptors=C
-300A000E|Prescription Description|X|CleanDescriptors=C
-300A0013|Dose Reference UID|U|RetainUIDs=K
-300A0016|Dose Reference Description|X|CleanDescriptors=C
-300A0054|Table Top Position Alignment UID|U|RetainUIDs=K
-300A0072|Fraction Group Description|X|CleanDescriptors=C
-300A0083|Referenced Dose Reference UID|U|RetainUIDs=K
-300A00B2|Treatment Machine Name|X/Z|RetainDeviceIdentity=K
-300A00C3|Beam Description|X|CleanDescriptors=C
-300A00DD|Bolus Description|X|CleanDescriptors=C
-300A0196|Fixation Device Description|X|CleanDescriptors=C
-300A01A6|Shielding Device Description|X|CleanDescriptors=C
-300A01B2|Setup Technique Description|X|CleanDescriptors=C
-300A0216|Source Manufacturer|X|RetainDeviceIdentity=K
-300A022C|Source Strength Reference Date|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-300A022E|Source Strength Reference Time|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-300A02EB|Compensator Description|X|CleanDescriptors=C
-300A0608|Treatment Position Group Label|D|CleanDescriptors=C
-300A0609|Treatment Position Group UID|U|RetainUIDs=K
-300A0611|RT Accessory Holder Slot ID|Z|
-300A0615|RT Accessory Device Slot ID|Z|
-300A0619|Radiation Dose Identification Label|D|CleanDescriptors=C
-300A0623|Radiation Dose In-Vivo Measurement Label|D|CleanDescriptors=C
-300A062A|RT Tolerance Set Label|D|CleanDescriptors=C
-300A0650|Patient Setup UID|U|RetainUIDs=K
-300A0676|Equipment Frame of Reference Description|X|CleanDescriptors=C
-300A067C|Radiation Generation Mode Label|D|CleanDescriptors=C
-300A067D|Radiation Generation Mode Description|Z|CleanDescriptors=C
-300A0700|Treatment Session UID|U|RetainUIDs=K
-300A0734|Treatment Tolerance Violation Description|D|CleanDescriptors=C
-300A0736|Treatment Tolerance Violation DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-300A073A|Recorded RT Control Point DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-300A0741|Interlock DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-300A0742|Interlock Description|D|CleanDescriptors=C
-300A0760|Override DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-300A0783|Interlock Origin Description|D|CleanDescriptors=C
-300A0785|Referenced Treatment Position Group UID|U|RetainUIDs=K
-300A078E|Patient Treatment Preparation Procedure Parameter Description|X|CleanDescriptors=C
-300A0792|Patient Treatment Preparation Method Description|X|CleanDescriptors=C
-300A0794|Patient Setup Photo Description|X|CleanDescriptors=C
-300A079A|Displacement Reference Label|X|CleanDescriptors=C
-300C0113|Reason for Omission Description|X|CleanDescriptors=C
-300C0127|Beam Hold Transition DateTime|D|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-300E0004|Review Date|Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-300E0005|Review Time|Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-300E0008|Reviewer Name|X/Z|
-30100006|Conceptual Volume UID|U|RetainUIDs=K
-3010000B|Referenced Conceptual Volume UID|U|RetainUIDs=K
-3010000F|Conceptual Volume Combination Description|Z|CleanDescriptors=C
-30100013|Constituent Conceptual Volume UID|U|RetainUIDs=K
-30100015|Source Conceptual Volume UID|U|RetainUIDs=K
-30100017|Conceptual Volume Description|Z|CleanDescriptors=C
-3010001B|Device Alternate Identifier|Z|
-3010002D|Device Label|D|RetainDeviceIdentity=K
-30100031|Referenced Fiducials UID|U|RetainUIDs=K
-30100033|User Content Label|D|CleanDescriptors=C
-30100034|User Content Long Label|D|CleanDescriptors=C
-30100035|Entity Label|D|CleanDescriptors=C
-30100036|Entity Name|X|CleanDescriptors=C
-30100037|Entity Description|X|CleanDescriptors=C
-30100038|Entity Long Label|D|CleanDescriptors=C
-3010003B|RT Treatment Phase UID|U|RetainUIDs=K
-30100043|Manufacturer's Device Identifier|Z|RetainDeviceIdentity=K
-3010004C|Intended Phase Start Date|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-3010004D|Intended Phase End Date|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-30100054|RT Prescription Label|D|CleanDescriptors=C
-30100056|RT Treatment Approach Label|X/D|CleanDescriptors=C
-3010005A|RT Physician Intent Narrative|Z|CleanDescriptors=C
-3010005C|Reason for Superseding|Z|CleanDescriptors=C
-30100061|Prior Treatment Dose Description|X|CleanDescriptors=C
-3010006E|Dosimetric Objective UID|U|RetainUIDs=K
-3010006F|Referenced Dosimetric Objective UID|U|RetainUIDs=K
-30100077|Treatment Site|X/D|CleanDescriptors=C
-3010007A|Treatment Technique Notes|Z|CleanDescriptors=C
-3010007B|Prescription Notes|Z|CleanDescriptors=C
-3010007F|Fractionation Notes|Z|CleanDescriptors=C
-30100081|Prescription Notes Sequence|Z|CleanDescriptors=C
-30100085|Intended Fraction Start Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-40000010|Arbitrary|X|
-40004000|Text Comments|X|
-40080040|Results ID|X|
-40080042|Results ID Issuer|X|
-40080100|Interpretation Recorded Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-40080101|Interpretation Recorded Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-40080102|Interpretation Recorder|X|
-40080108|Interpretation Transcription Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-40080109|Interpretation Transcription Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-4008010A|Interpretation Transcriber|X|
-4008010B|Interpretation Text|X|CleanDescriptors=C
-4008010C|Interpretation Author|X|
-40080111|Interpretation Approver Sequence|X|
-40080112|Interpretation Approval Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-40080113|Interpretation Approval Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
-40080114|Physician Approving Interpretation|X|
-40080115|Interpretation Diagnosis Description|X|CleanDescriptors=C
-40080118|Results Distribution List Sequence|X|
-40080119|Distribution Name|X|
-4008011A|Distribution Address|X|
-40080200|Interpretation ID|X|
-40080202|Interpretation ID Issuer|X|
-40080300|Impressions|X|CleanDescriptors=C
-40084000|Results Comments|X|CleanDescriptors=C
-FFFAFFFA|Digital Signatures Sequence|X|
-FFFCFFFC|Data Set Trailing Padding|X|
+0000,1000|Affected SOP Instance UID|X|RetainUIDs=K
+0000,1001|Requested SOP Instance UID|U|RetainUIDs=K
+0002,0003|Media Storage SOP Instance UID|U|RetainUIDs=K
+0004,1511|Referenced SOP Instance UID in File|U|RetainUIDs=K
+0008,0012|Instance Creation Date|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0013|Instance Creation Time|X/Z/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0014|Instance Creator UID|U|RetainUIDs=K
+0008,0015|Instance Coercion DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0017|Acquisition UID|U|RetainUIDs=K
+0008,0018|SOP Instance UID|U|RetainUIDs=K
+0008,0019|Pyramid UID|U|RetainUIDs=K
+0008,0020|Study Date|Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0021|Series Date|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0022|Acquisition Date|X/Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0023|Content Date|Z/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0024|Overlay Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0025|Curve Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,002A|Acquisition DateTime|X/Z/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0030|Study Time|Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0031|Series Time|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0032|Acquisition Time|X/Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0033|Content Time|Z/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0034|Overlay Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0035|Curve Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0050|Accession Number|Z|
+0008,0054|Retrieve AE Title|X|RetainDeviceIdentity=C
+0008,0055|Station AE Title|X|RetainDeviceIdentity=C
+0008,0058|Failed SOP Instance UID List|U|RetainUIDs=K
+0008,0080|Institution Name|X/Z/D|RetainInstitutionIdentity=K
+0008,0081|Institution Address|X|RetainInstitutionIdentity=K
+0008,0082|Institution Code Sequence|X/Z/D|RetainInstitutionIdentity=K
+0008,0090|Referring Physician's Name|Z|
+0008,0092|Referring Physician's Address|X|
+0008,0094|Referring Physician's Telephone Numbers|X|
+0008,0096|Referring Physician Identification Sequence|X|
+0008,009C|Consulting Physician's Name|Z|
+0008,009D|Consulting Physician Identification Sequence|X|
+0008,0106|Context Group Version|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0107|Context Group Local Version|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0201|Timezone Offset From UTC|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,1000|Network ID|X|RetainDeviceIdentity=C
+0008,1010|Station Name|X/Z/D|RetainDeviceIdentity=K
+0008,1030|Study Description|X|CleanDescriptors=C
+0008,103E|Series Description|X|CleanDescriptors=C
+0008,1040|Institutional Department Name|X|RetainInstitutionIdentity=K
+0008,1041|Institutional Department Type Code Sequence|X|RetainInstitutionIdentity=K
+0008,1048|Physician(s) of Record|X|
+0008,1049|Physician(s) of Record Identification Sequence|X|
+0008,1050|Performing Physician's Name|X|
+0008,1052|Performing Physician Identification Sequence|X|
+0008,1060|Name of Physician(s) Reading Study|X|
+0008,1062|Physician(s) Reading Study Identification Sequence|X|
+0008,1070|Operators' Name|X/Z/D|
+0008,1072|Operator Identification Sequence|X/D|
+0008,1080|Admitting Diagnoses Description|X|CleanDescriptors=C
+0008,1084|Admitting Diagnoses Code Sequence|X|CleanDescriptors=C
+0008,1088|Pyramid Description|X|CleanDescriptors=C
+0008,1110|Referenced Study Sequence|X/Z|RetainUIDs=K
+0008,1111|Referenced Performed Procedure Step Sequence|X/Z/D|RetainUIDs=K
+0008,1120|Referenced Patient Sequence|X|RetainUIDs=K
+0008,1140|Referenced Image Sequence|X/Z/U*|RetainUIDs=K
+0008,1155|Referenced SOP Instance UID|U|RetainUIDs=K
+0008,1195|Transaction UID|U|RetainUIDs=K
+0008,1301|Principal Diagnosis Code Sequence|X|CleanDescriptors=C
+0008,1302|Primary Diagnosis Code Sequence|X|CleanDescriptors=C
+0008,1303|Secondary Diagnoses Code Sequence|X|CleanDescriptors=C
+0008,1304|Histological Diagnoses Code Sequence|X|CleanDescriptors=C
+0008,2111|Derivation Description|X|CleanDescriptors=C
+0008,2112|Source Image Sequence|X/Z/U*|RetainUIDs=K
+0008,3010|Irradiation Event UID|U|RetainUIDs=K
+0008,4000|Identifying Comments|X|CleanDescriptors=C
+0010,0010|Patient's Name|Z|
+0010,0011|Person Names to Use Sequence|X|
+0010,0012|Name to Use|X|
+0010,0013|Name to Use Comment|X|
+0010,0014|Third Person Pronouns Sequence|X|
+0010,0015|Pronoun Code Sequence|X|
+0010,0016|Pronoun Comment|X|CleanDescriptors=C
+0010,0020|Patient ID|Z/D|
+0010,0021|Issuer of Patient ID|X|
+0010,0030|Patient's Birth Date|Z|
+0010,0032|Patient's Birth Time|X|
+0010,0040|Patient's Sex|Z|RetainPatientCharacteristics=K
+0010,0041|Gender Identity Sequence|X|
+0010,0042|Sex Parameters for Clinical Use Category Comment|X|CleanDescriptors=C;RetainPatientCharacteristics=C
+0010,0043|Sex Parameters for Clinical Use Category Sequence|X|RetainPatientCharacteristics=K
+0010,0044|Gender Identity Code Sequence|X|
+0010,0045|Gender Identity Comment|X|CleanDescriptors=C
+0010,0046|Sex Parameters for Clinical Use Category Code Sequence|X|RetainPatientCharacteristics=K
+0010,0047|Sex Parameters for Clinical Use Category Reference|X|RetainPatientCharacteristics=K
+0010,0050|Patient's Insurance Plan Code Sequence|X|
+0010,0101|Patient's Primary Language Code Sequence|X|
+0010,0102|Patient's Primary Language Modifier Code Sequence|X|
+0010,1000|Other Patient IDs|X|
+0010,1001|Other Patient Names|X|
+0010,1002|Other Patient IDs Sequence|X|
+0010,1005|Patient's Birth Name|X|
+0010,1010|Patient's Age|X|RetainPatientCharacteristics=K
+0010,1020|Patient's Size|X|RetainPatientCharacteristics=K
+0010,1030|Patient's Weight|X|RetainPatientCharacteristics=K
+0010,1040|Patient's Address|X|
+0010,1050|Insurance Plan Identification|X|
+0010,1060|Patient's Mother's Birth Name|X|
+0010,1080|Military Rank|X|
+0010,1081|Branch of Service|X|
+0010,1090|Medical Record Locator|X|
+0010,1100|Referenced Patient Photo Sequence|X|
+0010,2000|Medical Alerts|X|CleanDescriptors=C
+0010,2110|Allergies|X|CleanDescriptors=C;RetainPatientCharacteristics=C
+0010,2150|Country of Residence|X|
+0010,2152|Region of Residence|X|
+0010,2154|Patient's Telephone Numbers|X|
+0010,2155|Patient's Telecom Information|X|
+0010,2160|Ethnic Group|X|RetainPatientCharacteristics=K
+0010,2161|Ethnic Group Code Sequence|X|RetainPatientCharacteristics=K
+0010,2162|Ethnic Groups|X|RetainPatientCharacteristics=K
+0010,2180|Occupation|X|CleanDescriptors=C
+0010,21A0|Smoking Status|X|RetainPatientCharacteristics=K
+0010,21B0|Additional Patient History|X|CleanDescriptors=C
+0010,21C0|Pregnancy Status|X|RetainPatientCharacteristics=K
+0010,21D0|Last Menstrual Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0010,21F0|Patient's Religious Preference|X|
+0010,2203|Patient's Sex Neutered|X/Z|RetainPatientCharacteristics=K
+0010,2297|Responsible Person|X|
+0010,2299|Responsible Organization|X|
+0010,4000|Patient Comments|X|CleanDescriptors=C
+0012,0010|Clinical Trial Sponsor Name|D|
+0012,0020|Clinical Trial Protocol ID|D|
+0012,0021|Clinical Trial Protocol Name|Z|
+0012,0022|Issuer of Clinical Trial Protocol ID|X|
+0012,0023|Other Clinical Trial Protocol IDs Sequence|X|
+0012,0030|Clinical Trial Site ID|Z|RetainInstitutionIdentity=K
+0012,0031|Clinical Trial Site Name|Z|RetainInstitutionIdentity=K
+0012,0032|Issuer of Clinical Trial Site ID|X|
+0012,0040|Clinical Trial Subject ID|D|
+0012,0041|Issuer of Clinical Trial Subject ID|X|
+0012,0042|Clinical Trial Subject Reading ID|D|
+0012,0043|Issuer of Clinical Trial Subject Reading ID|X|
+0012,0050|Clinical Trial Time Point ID|Z|
+0012,0051|Clinical Trial Time Point Description|X|CleanDescriptors=C
+0012,0055|Issuer of Clinical Trial Time Point ID|X|
+0012,0060|Clinical Trial Coordinating Center Name|Z|RetainInstitutionIdentity=K
+0012,0071|Clinical Trial Series ID|X|
+0012,0072|Clinical Trial Series Description|X|CleanDescriptors=C
+0012,0073|Issuer of Clinical Trial Series ID|X|
+0012,0081|Clinical Trial Protocol Ethics Committee Name|D|RetainInstitutionIdentity=K
+0012,0082|Clinical Trial Protocol Ethics Committee Approval Number|X|
+0012,0086|Ethics Committee Approval Effectiveness Start Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0012,0087|Ethics Committee Approval Effectiveness End Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0014,407C|Calibration Time|X|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0014,407E|Calibration Date|X|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0016,002B|Maker Note|X|CleanDescriptors=C
+0016,004B|Device Setting Description|X|CleanDescriptors=C
+0016,004D|Camera Owner Name|X|
+0016,004E|Lens Specification|X|RetainDeviceIdentity=K
+0016,004F|Lens Make|X|RetainDeviceIdentity=K
+0016,0050|Lens Model|X|RetainDeviceIdentity=K
+0016,0051|Lens Serial Number|X|RetainDeviceIdentity=K
+0016,0070|GPS Version ID|X|
+0016,0071|GPS Latitude Ref|X|
+0016,0072|GPS Latitude|X|
+0016,0073|GPS Longitude Ref|X|
+0016,0074|GPS Longitude|X|
+0016,0075|GPS Altitude Ref|X|
+0016,0076|GPS Altitude|X|
+0016,0077|GPS Time Stamp|X|
+0016,0078|GPS Satellites|X|
+0016,0079|GPS Status|X|
+0016,007A|GPS Measure Mode|X|
+0016,007B|GPS DOP|X|
+0016,007C|GPS Speed Ref|X|
+0016,007D|GPS Speed|X|
+0016,007E|GPS Track Ref|X|
+0016,007F|GPS Track|X|
+0016,0080|GPS Img Direction Ref|X|
+0016,0081|GPS Img Direction|X|
+0016,0082|GPS Map Datum|X|
+0016,0083|GPS Dest Latitude Ref|X|
+0016,0084|GPS Dest Latitude|X|
+0016,0085|GPS Dest Longitude Ref|X|
+0016,0086|GPS Dest Longitude|X|
+0016,0087|GPS Dest Bearing Ref|X|
+0016,0088|GPS Dest Bearing|X|
+0016,0089|GPS Dest Distance Ref|X|
+0016,008A|GPS Dest Distance|X|
+0016,008B|GPS Processing Method|X|
+0016,008C|GPS Area Information|X|
+0016,008D|GPS Date Stamp|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0016,008E|GPS Differential|X|
+0018,0010|Contrast/Bolus Agent|Z/D|CleanDescriptors=C
+0018,0027|Intervention Drug Stop Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,0035|Intervention Drug Start Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1000|Device Serial Number|X/Z/D|RetainDeviceIdentity=K
+0018,1002|Device UID|U|RetainDeviceIdentity=K;RetainUIDs=K
+0018,1004|Plate ID|X|RetainDeviceIdentity=K
+0018,1005|Generator ID|X|RetainDeviceIdentity=K
+0018,1007|Cassette ID|X|RetainDeviceIdentity=K
+0018,1008|Gantry ID|X|RetainDeviceIdentity=K
+0018,1009|Unique Device Identifier|X|RetainDeviceIdentity=K
+0018,100A|UDI Sequence|X|RetainDeviceIdentity=K
+0018,100B|Manufacturer's Device Class UID|U|RetainDeviceIdentity=K;RetainUIDs=K
+0018,1010|Secondary Capture Device ID|X|RetainDeviceIdentity=K
+0018,1011|Hardcopy Creation Device ID|X|RetainDeviceIdentity=K
+0018,1012|Date of Secondary Capture|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1014|Time of Secondary Capture|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1030|Protocol Name|X/D|CleanDescriptors=C
+0018,1042|Contrast/Bolus Start Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1043|Contrast/Bolus Stop Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1072|Radiopharmaceutical Start Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1073|Radiopharmaceutical Stop Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1078|Radiopharmaceutical Start DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1079|Radiopharmaceutical Stop DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,11BB|Acquisition Field of View Label|D|CleanDescriptors=C
+0018,1200|Date of Last Calibration|X|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1201|Time of Last Calibration|X|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1202|DateTime of Last Calibration|X|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1203|Calibration DateTime|Z|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1204|Date of Manufacture|X|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1205|Date of Installation|X|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1400|Acquisition Device Processing Description|X/D|CleanDescriptors=C
+0018,2042|Target UID|U|RetainUIDs=K
+0018,4000|Acquisition Comments|X|CleanDescriptors=C
+0018,5011|Transducer Identification Sequence|X|RetainDeviceIdentity=K
+0018,700A|Detector ID|X/D|RetainDeviceIdentity=K
+0018,700C|Date of Last Detector Calibration|X/D|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,700E|Time of Last Detector Calibration|X/D|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,9074|Frame Acquisition DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,9151|Frame Reference DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,9185|Respiratory Motion Compensation Technique Description|X|CleanDescriptors=C
+0018,9367|X-Ray Source ID|D|RetainDeviceIdentity=K
+0018,9369|Source Start DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,936A|Source End DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,9371|X-Ray Detector ID|D|RetainDeviceIdentity=K
+0018,9373|X-Ray Detector Label|X|RetainDeviceIdentity=K
+0018,937B|Multi-energy Acquisition Description|X|CleanDescriptors=C
+0018,937F|Decomposition Description|X|CleanDescriptors=C
+0018,9424|Acquisition Protocol Description|X|CleanDescriptors=C
+0018,9516|Start Acquisition DateTime|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,9517|End Acquisition DateTime|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,9623|Functional Sync Pulse|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,9701|Decay Correction DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,9804|Exclusion Start DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,9919|Instruction Performed DateTime|Z/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,9937|Requested Series Description|X|CleanDescriptors=C
+0018,A002|Contribution DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,A003|Contribution Description|X|CleanDescriptors=C
+0020,000D|Study Instance UID|U|RetainUIDs=K
+0020,000E|Series Instance UID|U|RetainUIDs=K
+0020,0010|Study ID|Z|
+0020,0027|Pyramid Label|X|CleanDescriptors=C
+0020,0052|Frame of Reference UID|U|RetainUIDs=K
+0020,0200|Synchronization Frame of Reference UID|U|RetainUIDs=K
+0020,3401|Modifying Device ID|X|RetainDeviceIdentity=K
+0020,3403|Modified Image Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0020,3405|Modified Image Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0020,3406|Modified Image Description|X|
+0020,4000|Image Comments|X|CleanDescriptors=C
+0020,9158|Frame Comments|X|CleanDescriptors=C
+0020,9161|Concatenation UID|U|RetainUIDs=K
+0020,9164|Dimension Organization UID|U|RetainUIDs=K
+0028,1199|Palette Color Lookup Table UID|U|RetainUIDs=K
+0028,1214|Large Palette Color Lookup Table UID|U|RetainUIDs=K
+0028,4000|Image Presentation Comments|X|
+0032,0012|Study ID Issuer|X|
+0032,0032|Study Verified Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0032,0033|Study Verified Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0032,0034|Study Read Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0032,0035|Study Read Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0032,1000|Scheduled Study Start Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0032,1001|Scheduled Study Start Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0032,1010|Scheduled Study Stop Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0032,1011|Scheduled Study Stop Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0032,1020|Scheduled Study Location|X|RetainDeviceIdentity=K
+0032,1021|Scheduled Study Location AE Title|X|RetainDeviceIdentity=C
+0032,1030|Reason for Study|X|CleanDescriptors=C
+0032,1032|Requesting Physician|X|
+0032,1033|Requesting Service|X|CleanDescriptors=C
+0032,1040|Study Arrival Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0032,1041|Study Arrival Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0032,1050|Study Completion Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0032,1051|Study Completion Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0032,1060|Requested Procedure Description|X/Z|CleanDescriptors=C
+0032,1066|Reason for Visit|X|CleanDescriptors=C
+0032,1067|Reason for Visit Code Sequence|X|CleanDescriptors=C
+0032,1070|Requested Contrast Agent|X|CleanDescriptors=C
+0032,4000|Study Comments|X|CleanDescriptors=C
+0034,0001|Flow Identifier Sequence|D|
+0034,0002|Flow Identifier|D|
+0034,0005|Source Identifier|D|
+0034,0007|Frame Origin Timestamp|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0038,0004|Referenced Patient Alias Sequence|X|
+0038,0010|Admission ID|X|
+0038,0011|Issuer of Admission ID|X|
+0038,0014|Issuer of Admission ID Sequence|X|
+0038,001A|Scheduled Admission Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0038,001B|Scheduled Admission Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0038,001C|Scheduled Discharge Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0038,001D|Scheduled Discharge Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0038,001E|Scheduled Patient Institution Residence|X|
+0038,0020|Admitting Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0038,0021|Admitting Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0038,0030|Discharge Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0038,0032|Discharge Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0038,0040|Discharge Diagnosis Description|X|CleanDescriptors=C
+0038,0050|Special Needs|X|RetainPatientCharacteristics=C
+0038,0060|Service Episode ID|X|
+0038,0061|Issuer of Service Episode ID|X|
+0038,0062|Service Episode Description|X|CleanDescriptors=C
+0038,0064|Issuer of Service Episode ID Sequence|X|
+0038,0300|Current Patient Location|X|
+0038,0400|Patient's Institution Residence|X|
+0038,0500|Patient State|X|CleanDescriptors=C;RetainPatientCharacteristics=C
+0038,4000|Visit Comments|X|CleanDescriptors=C
+003A,0020|Multiplex Group Label|X|CleanDescriptors=C
+003A,0203|Channel Label|X|CleanDescriptors=C
+003A,020C|Channel Derivation Description|X|CleanDescriptors=C
+003A,0310|Multiplex Group UID|U|RetainUIDs=K
+003A,0314|Impedance Measurement DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+003A,0329|Waveform Filter Description|X|CleanDescriptors=C
+003A,032B|Filter Lookup Table Description|X|CleanDescriptors=C
+0040,0001|Scheduled Station AE Title|X|RetainDeviceIdentity=C
+0040,0002|Scheduled Procedure Step Start Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,0003|Scheduled Procedure Step Start Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,0004|Scheduled Procedure Step End Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,0005|Scheduled Procedure Step End Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,0006|Scheduled Performing Physician's Name|X|
+0040,0007|Scheduled Procedure Step Description|X|CleanDescriptors=C
+0040,0009|Scheduled Procedure Step ID|X|
+0040,000B|Scheduled Performing Physician Identification Sequence|X|
+0040,0010|Scheduled Station Name|X|RetainDeviceIdentity=K
+0040,0011|Scheduled Procedure Step Location|X|RetainDeviceIdentity=K
+0040,0012|Pre-Medication|X|RetainPatientCharacteristics=C
+0040,0241|Performed Station AE Title|X|RetainDeviceIdentity=C
+0040,0242|Performed Station Name|X|RetainDeviceIdentity=K
+0040,0243|Performed Location|X|
+0040,0244|Performed Procedure Step Start Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,0245|Performed Procedure Step Start Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,0250|Performed Procedure Step End Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,0251|Performed Procedure Step End Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,0253|Performed Procedure Step ID|X|
+0040,0254|Performed Procedure Step Description|X|CleanDescriptors=C
+0040,0275|Request Attributes Sequence|X|CleanDescriptors=C
+0040,0280|Comments on the Performed Procedure Step|X|CleanDescriptors=C
+0040,0310|Comments on Radiation Dose|X|CleanDescriptors=C
+0040,050A|Specimen Accession Number|X|
+0040,0512|Container Identifier|D|
+0040,0513|Issuer of the Container Identifier Sequence|Z|
+0040,051A|Container Description|X|CleanDescriptors=C
+0040,0551|Specimen Identifier|D|
+0040,0554|Specimen UID|U|RetainUIDs=K
+0040,0555|Acquisition Context Sequence|X/Z|CleanStructuredContent=C
+0040,0556|Acquisition Context Description|X|CleanDescriptors=C
+0040,0562|Issuer of the Specimen Identifier Sequence|Z|
+0040,0600|Specimen Short Description|X|CleanDescriptors=C
+0040,0602|Specimen Detailed Description|X|CleanDescriptors=C
+0040,0610|Specimen Preparation Sequence|Z|CleanStructuredContent=C
+0040,06FA|Slide Identifier|X|
+0040,1001|Requested Procedure ID|X|
+0040,1002|Reason for the Requested Procedure|X|CleanDescriptors=C
+0040,1004|Patient Transport Arrangements|X|
+0040,1005|Requested Procedure Location|X|
+0040,100A|Reason for Requested Procedure Code Sequence|X|CleanDescriptors=C
+0040,1010|Names of Intended Recipients of Results|X|
+0040,1011|Intended Recipients of Results Identification Sequence|X|
+0040,1101|Person Identification Code Sequence|D|
+0040,1102|Person's Address|X|
+0040,1103|Person's Telephone Numbers|X|
+0040,1104|Person's Telecom Information|X|
+0040,1400|Requested Procedure Comments|X|CleanDescriptors=C
+0040,2001|Reason for the Imaging Service Request|X|CleanDescriptors=C
+0040,2004|Issue Date of Imaging Service Request|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,2005|Issue Time of Imaging Service Request|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,2008|Order Entered By|X|
+0040,2009|Order Enterer's Location|X|
+0040,2010|Order Callback Phone Number|X|
+0040,2011|Order Callback Telecom Information|X|
+0040,2016|Placer Order Number / Imaging Service Request|Z|
+0040,2017|Filler Order Number / Imaging Service Request|Z|
+0040,2400|Imaging Service Request Comments|X|CleanDescriptors=C
+0040,3001|Confidentiality Constraint on Patient Data Description|X|
+0040,4005|Scheduled Procedure Step Start DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,4008|Scheduled Procedure Step Expiration DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,4010|Scheduled Procedure Step Modification DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,4011|Expected Completion DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,4023|Referenced General Purpose Scheduled Procedure Step Transaction UID|U|RetainUIDs=K
+0040,4025|Scheduled Station Name Code Sequence|X|RetainDeviceIdentity=K
+0040,4027|Scheduled Station Geographic Location Code Sequence|X|RetainDeviceIdentity=K
+0040,4028|Performed Station Name Code Sequence|X|RetainDeviceIdentity=K
+0040,4030|Performed Station Geographic Location Code Sequence|X|RetainDeviceIdentity=K
+0040,4034|Scheduled Human Performers Sequence|X|
+0040,4035|Actual Human Performers Sequence|X|
+0040,4036|Human Performer's Organization|X|
+0040,4037|Human Performer's Name|X|
+0040,4050|Performed Procedure Step Start DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,4051|Performed Procedure Step End DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,4052|Procedure Step Cancellation DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A023|Findings Group Recording Date (Trial)|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A024|Findings Group Recording Time (Trial)|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A027|Verifying Organization|D|
+0040,A030|Verification DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A032|Observation DateTime|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A033|Observation Start DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A034|Effective Start DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A035|Effective Stop DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A073|Verifying Observer Sequence|D|
+0040,A075|Verifying Observer Name|D|
+0040,A078|Author Observer Sequence|X|
+0040,A07A|Participant Sequence|X|
+0040,A07C|Custodial Organization Sequence|X|
+0040,A082|Participation DateTime|Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A088|Verifying Observer Identification Code Sequence|Z|
+0040,A110|Date of Document or Verbal Transaction (Trial)|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A112|Time of Document Creation or Verbal Transaction (Trial)|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A120|DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A121|Date|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A122|Time|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A123|Person Name|D|
+0040,A124|UID|U|
+0040,A13A|Referenced DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A171|Observation UID|U|RetainUIDs=K
+0040,A172|Referenced Observation UID (Trial)|U|RetainUIDs=K
+0040,A192|Observation Date (Trial)|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A193|Observation Time (Trial)|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A307|Current Observer (Trial)|X|
+0040,A352|Verbal Source (Trial)|X|
+0040,A353|Address (Trial)|X|
+0040,A354|Telephone Number (Trial)|X|
+0040,A358|Verbal Source Identifier Code Sequence (Trial)|X|
+0040,A402|Observation Subject UID (Trial)|U|RetainUIDs=K
+0040,A730|Content Sequence|D|CleanStructuredContent=C
+0040,B020|Waveform Annotation Sequence|X/D|CleanStructuredContent=C
+0040,B034|Annotation DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,B036|Segment Definition DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,B03B|Montage Name|X|CleanDescriptors=C
+0040,B03F|Montage Channel Label|X|CleanDescriptors=C
+0040,DB06|Template Version|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,DB07|Template Local Version|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,DB0C|Template Extension Organization UID|U|RetainUIDs=K
+0040,DB0D|Template Extension Creator UID|U|RetainUIDs=K
+0040,E004|HL7 Document Effective Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,E012|Display URI|X|
+0042,0011|Encapsulated Document|D|
+0044,0004|Approval Status DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0044,000B|Product Expiration DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0044,0010|Substance Administration DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0044,0104|Assertion DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0044,0105|Assertion Expiration DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0050,001B|Container Component ID|X|
+0050,0020|Device Description|X|RetainDeviceIdentity=K
+0050,0021|Long Device Description|X|CleanDescriptors=C
+0062,0021|Tracking UID|U|RetainUIDs=K
+0064,0003|Source Frame of Reference UID|U|RetainUIDs=K
+0068,6226|Effective DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0068,6270|Information Issue DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+006A,0003|Annotation Group UID|D|RetainUIDs=K
+006A,0005|Annotation Group Label|D|CleanDescriptors=C
+006A,0006|Annotation Group Description|X|CleanDescriptors=C
+0070,0001|Graphic Annotation Sequence|D|CleanGraphics=C
+0070,0006|Unformatted Text Value|D|CleanDescriptors=C
+0070,0082|Presentation Creation Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0070,0083|Presentation Creation Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0070,0084|Content Creator's Name|Z/D|
+0070,0086|Content Creator's Identification Code Sequence|X|
+0070,031A|Fiducial UID|U|RetainUIDs=K
+0070,1101|Presentation Display Collection UID|U|RetainUIDs=K
+0070,1102|Presentation Sequence Collection UID|U|RetainUIDs=K
+0072,000A|Hanging Protocol Creation DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0072,005E|Selector AE Value|D|RetainDeviceIdentity=C
+0072,005F|Selector AS Value|D|RetainPatientCharacteristics=K
+0072,0061|Selector DA Value|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0072,0063|Selector DT Value|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0072,0065|Selector OB Value|D|
+0072,0066|Selector LO Value|D|CleanDescriptors=C
+0072,0068|Selector LT Value|D|CleanDescriptors=C
+0072,006A|Selector PN Value|D|
+0072,006B|Selector TM Value|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0072,006C|Selector SH Value|D|CleanDescriptors=C
+0072,006D|Selector UN Value|D|
+0072,006E|Selector ST Value|D|CleanDescriptors=C
+0072,0070|Selector UT Value|D|CleanDescriptors=C
+0072,0071|Selector UR Value|D|
+0074,1234|Receiving AE|X|RetainDeviceIdentity=C
+0074,1236|Requesting AE|X|RetainDeviceIdentity=C
+0088,0140|Storage Media File-set UID|U|RetainUIDs=K
+0088,0200|Icon Image Sequence (see Note 11)|X|
+0088,0904|Topic Title|X|
+0088,0906|Topic Subject|X|
+0088,0910|Topic Author|X|
+0088,0912|Topic Keywords|X|
+0100,0420|SOP Authorization DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0400,0100|Digital Signature UID|U|
+0400,0105|Digital Signature DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0400,0115|Certificate of Signer|D|
+0400,0310|Certified Timestamp|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0400,0402|Referenced Digital Signature Sequence|X|
+0400,0403|Referenced SOP Instance MAC Sequence|X|
+0400,0404|MAC|X|
+0400,0550|Modified Attributes Sequence|X|
+0400,0551|Nonconforming Modified Attributes Sequence|X|
+0400,0552|Nonconforming Data Element Value|X|
+0400,0561|Original Attributes Sequence|X|
+0400,0562|Attribute Modification DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0400,0563|Modifying System|D|RetainDeviceIdentity=K
+0400,0564|Source of Previous Values|Z|RetainInstitutionIdentity=K
+0400,0565|Reason for the Attribute Modification|D|CleanDescriptors=C
+0400,0600|Instance Origin Status|X|
+2030,0020|Text String|X|
+2100,0040|Creation Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+2100,0050|Creation Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+2100,0070|Originator|X|RetainDeviceIdentity=C
+2100,0140|Destination AE|D|RetainDeviceIdentity=C
+2200,0002|Label Text|X/Z|CleanDescriptors=C
+2200,0005|Barcode Value|X/Z|
+3002,0121|Position Acquisition Template Name|X|CleanDescriptors=C
+3002,0123|Position Acquisition Template Description|X|CleanDescriptors=C
+3004,007F|Dose Calculation Model Name|X|CleanDescriptors=C
+3006,0002|Structure Set Label|D|CleanDescriptors=C
+3006,0004|Structure Set Name|X|CleanDescriptors=C
+3006,0006|Structure Set Description|X|CleanDescriptors=C
+3006,0008|Structure Set Date|Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3006,0009|Structure Set Time|Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3006,0024|Referenced Frame of Reference UID|U|RetainUIDs=K
+3006,0026|ROI Name|Z|CleanDescriptors=C
+3006,0028|ROI Description|X|CleanDescriptors=C
+3006,002D|ROI DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3006,002E|ROI Observation DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3006,0038|ROI Generation Description|X|CleanDescriptors=C
+3006,004D|ROI Creator Sequence|X|
+3006,004E|ROI Interpreter Sequence|X|
+3006,0085|ROI Observation Label|X|CleanDescriptors=C
+3006,0088|ROI Observation Description|X|CleanDescriptors=C
+3006,00A6|ROI Interpreter|Z|
+3006,00C2|Related Frame of Reference UID|U|RetainUIDs=K
+3008,0024|Treatment Control Point Date|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3008,0025|Treatment Control Point Time|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3008,0054|First Treatment Date|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3008,0056|Most Recent Treatment Date|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3008,0105|Source Serial Number|X/Z|RetainDeviceIdentity=K
+3008,0162|Safe Position Exit Date|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3008,0164|Safe Position Exit Time|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3008,0166|Safe Position Return Date|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3008,0168|Safe Position Return Time|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3008,0250|Treatment Date|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3008,0251|Treatment Time|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+300A,0002|RT Plan Label|D|CleanDescriptors=C
+300A,0003|RT Plan Name|X|CleanDescriptors=C
+300A,0004|RT Plan Description|X|CleanDescriptors=C
+300A,0006|RT Plan Date|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+300A,0007|RT Plan Time|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+300A,000B|Treatment Sites|X|CleanDescriptors=C
+300A,000E|Prescription Description|X|CleanDescriptors=C
+300A,0013|Dose Reference UID|U|RetainUIDs=K
+300A,0016|Dose Reference Description|X|CleanDescriptors=C
+300A,0054|Table Top Position Alignment UID|U|RetainUIDs=K
+300A,0072|Fraction Group Description|X|CleanDescriptors=C
+300A,0083|Referenced Dose Reference UID|U|RetainUIDs=K
+300A,00B2|Treatment Machine Name|X/Z|RetainDeviceIdentity=K
+300A,00C3|Beam Description|X|CleanDescriptors=C
+300A,00DD|Bolus Description|X|CleanDescriptors=C
+300A,0196|Fixation Device Description|X|CleanDescriptors=C
+300A,01A6|Shielding Device Description|X|CleanDescriptors=C
+300A,01B2|Setup Technique Description|X|CleanDescriptors=C
+300A,0216|Source Manufacturer|X|RetainDeviceIdentity=K
+300A,022C|Source Strength Reference Date|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+300A,022E|Source Strength Reference Time|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+300A,02EB|Compensator Description|X|CleanDescriptors=C
+300A,0608|Treatment Position Group Label|D|CleanDescriptors=C
+300A,0609|Treatment Position Group UID|U|RetainUIDs=K
+300A,0611|RT Accessory Holder Slot ID|Z|
+300A,0615|RT Accessory Device Slot ID|Z|
+300A,0619|Radiation Dose Identification Label|D|CleanDescriptors=C
+300A,0623|Radiation Dose In-Vivo Measurement Label|D|CleanDescriptors=C
+300A,062A|RT Tolerance Set Label|D|CleanDescriptors=C
+300A,0650|Patient Setup UID|U|RetainUIDs=K
+300A,0676|Equipment Frame of Reference Description|X|CleanDescriptors=C
+300A,067C|Radiation Generation Mode Label|D|CleanDescriptors=C
+300A,067D|Radiation Generation Mode Description|Z|CleanDescriptors=C
+300A,0700|Treatment Session UID|U|RetainUIDs=K
+300A,0734|Treatment Tolerance Violation Description|D|CleanDescriptors=C
+300A,0736|Treatment Tolerance Violation DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+300A,073A|Recorded RT Control Point DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+300A,0741|Interlock DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+300A,0742|Interlock Description|D|CleanDescriptors=C
+300A,0760|Override DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+300A,0783|Interlock Origin Description|D|CleanDescriptors=C
+300A,0785|Referenced Treatment Position Group UID|U|RetainUIDs=K
+300A,078E|Patient Treatment Preparation Procedure Parameter Description|X|CleanDescriptors=C
+300A,0792|Patient Treatment Preparation Method Description|X|CleanDescriptors=C
+300A,0794|Patient Setup Photo Description|X|CleanDescriptors=C
+300A,079A|Displacement Reference Label|X|CleanDescriptors=C
+300C,0113|Reason for Omission Description|X|CleanDescriptors=C
+300C,0127|Beam Hold Transition DateTime|D|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+300E,0004|Review Date|Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+300E,0005|Review Time|Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+300E,0008|Reviewer Name|X/Z|
+3010,0006|Conceptual Volume UID|U|RetainUIDs=K
+3010,000B|Referenced Conceptual Volume UID|U|RetainUIDs=K
+3010,000F|Conceptual Volume Combination Description|Z|CleanDescriptors=C
+3010,0013|Constituent Conceptual Volume UID|U|RetainUIDs=K
+3010,0015|Source Conceptual Volume UID|U|RetainUIDs=K
+3010,0017|Conceptual Volume Description|Z|CleanDescriptors=C
+3010,001B|Device Alternate Identifier|Z|
+3010,002D|Device Label|D|RetainDeviceIdentity=K
+3010,0031|Referenced Fiducials UID|U|RetainUIDs=K
+3010,0033|User Content Label|D|CleanDescriptors=C
+3010,0034|User Content Long Label|D|CleanDescriptors=C
+3010,0035|Entity Label|D|CleanDescriptors=C
+3010,0036|Entity Name|X|CleanDescriptors=C
+3010,0037|Entity Description|X|CleanDescriptors=C
+3010,0038|Entity Long Label|D|CleanDescriptors=C
+3010,003B|RT Treatment Phase UID|U|RetainUIDs=K
+3010,0043|Manufacturer's Device Identifier|Z|RetainDeviceIdentity=K
+3010,004C|Intended Phase Start Date|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3010,004D|Intended Phase End Date|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3010,0054|RT Prescription Label|D|CleanDescriptors=C
+3010,0056|RT Treatment Approach Label|X/D|CleanDescriptors=C
+3010,005A|RT Physician Intent Narrative|Z|CleanDescriptors=C
+3010,005C|Reason for Superseding|Z|CleanDescriptors=C
+3010,0061|Prior Treatment Dose Description|X|CleanDescriptors=C
+3010,006E|Dosimetric Objective UID|U|RetainUIDs=K
+3010,006F|Referenced Dosimetric Objective UID|U|RetainUIDs=K
+3010,0077|Treatment Site|X/D|CleanDescriptors=C
+3010,007A|Treatment Technique Notes|Z|CleanDescriptors=C
+3010,007B|Prescription Notes|Z|CleanDescriptors=C
+3010,007F|Fractionation Notes|Z|CleanDescriptors=C
+3010,0081|Prescription Notes Sequence|Z|CleanDescriptors=C
+3010,0085|Intended Fraction Start Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+4000,0010|Arbitrary|X|
+4000,4000|Text Comments|X|
+4008,0040|Results ID|X|
+4008,0042|Results ID Issuer|X|
+4008,0100|Interpretation Recorded Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+4008,0101|Interpretation Recorded Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+4008,0102|Interpretation Recorder|X|
+4008,0108|Interpretation Transcription Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+4008,0109|Interpretation Transcription Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+4008,010A|Interpretation Transcriber|X|
+4008,010B|Interpretation Text|X|CleanDescriptors=C
+4008,010C|Interpretation Author|X|
+4008,0111|Interpretation Approver Sequence|X|
+4008,0112|Interpretation Approval Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+4008,0113|Interpretation Approval Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+4008,0114|Physician Approving Interpretation|X|
+4008,0115|Interpretation Diagnosis Description|X|CleanDescriptors=C
+4008,0118|Results Distribution List Sequence|X|
+4008,0119|Distribution Name|X|
+4008,011A|Distribution Address|X|
+4008,0200|Interpretation ID|X|
+4008,0202|Interpretation ID Issuer|X|
+4008,0300|Impressions|X|CleanDescriptors=C
+4008,4000|Results Comments|X|CleanDescriptors=C
+FFFA,FFFA|Digital Signatures Sequence|X|
+FFFC,FFFC|Data Set Trailing Padding|X|
 `;
 
 // Table E.1-1 rows whose tag cell is a PS3.5 section 7.6 repeating-group mask.

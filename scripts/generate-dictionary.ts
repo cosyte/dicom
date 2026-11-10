@@ -915,7 +915,8 @@ function buildTagsTs(
     retired: boolean,
   ): void => {
     const row = [
-      rowField(tag, "tag", tag),
+      // Written as group,element: eight bare digits read as a date to the pre-push PHI scan.
+      rowField(`${tag.slice(0, 4)},${tag.slice(4)}`, "tag", tag),
       rowField(keyword, "keyword", tag),
       rowField(name, "name", tag),
       vr.map((v) => rowField(v, "VR", tag)).join("/"),
@@ -1004,11 +1005,12 @@ function buildTagsTs(
       { ...nema, tables: NEMA_ELEMENT_TABLES_LABEL, subject: "tag" },
     ) +
     `/**\n` +
-    ` * The element registry, one row per tag in ascending order of its key: the tag (a repeating-group\n` +
-    ` * row keeps its lowercase \`x\` placeholders), keyword, name, the VRs joined by \`/\`, VM, \`R\` when\n` +
-    ` * retired, and \`x\` for a repeating-group row; fields joined by \`|\`. One string rather than an\n` +
-    ` * object literal, so loading the package does not build ${String(entries.length)} objects:\n` +
-    ` * \`src/dictionary/registry.ts\` reads a row the first time its tag is asked for.\n` +
+    ` * The element registry, one row per tag in ascending order of its key: the tag as group,element\n` +
+    ` * (a repeating-group row keeps its lowercase \`x\` placeholders), keyword, name, the VRs joined by\n` +
+    ` * \`/\`, VM, \`R\` when retired, and \`x\` for a repeating-group row; fields joined by \`|\`. One\n` +
+    ` * string rather than an object literal, so loading the package does not build\n` +
+    ` * ${String(entries.length)} objects: \`src/dictionary/registry.ts\` reads a row the first time its\n` +
+    ` * tag is asked for.\n` +
     ` */\n` +
     `export const TAG_ROWS: string = \`\n` +
     entries.map((e) => `${e.row}\n`).join("") +

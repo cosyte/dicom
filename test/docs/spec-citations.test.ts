@@ -284,11 +284,17 @@ interface RegistryEntry {
 const REGISTRY: ReadonlyMap<string, RegistryEntry> = (() => {
   const src = readFileSync(join(REPO_ROOT, "src", "dictionary", "generated", "tags.ts"), "utf8");
   const out = new Map<string, RegistryEntry>();
-  // One row per tag: tag, keyword, name, then the rest, joined by `|` (see the generated file).
-  for (const m of src.matchAll(/^([0-9A-F]{8})\|([^|\n]*)\|([^|\n]*)\|/gm)) {
-    const [, tag, keyword, name] = m;
-    if (tag !== undefined && keyword !== undefined && name !== undefined) {
-      out.set(tag, { name, keyword });
+  // One row per tag: tag (group,element), keyword, name, then the rest, joined by `|` (see the
+  // generated file).
+  for (const m of src.matchAll(/^([0-9A-F]{4}),([0-9A-F]{4})\|([^|\n]*)\|([^|\n]*)\|/gm)) {
+    const [, group, element, keyword, name] = m;
+    if (
+      group !== undefined &&
+      element !== undefined &&
+      keyword !== undefined &&
+      name !== undefined
+    ) {
+      out.set(group + element, { name, keyword });
     }
   }
   return out;

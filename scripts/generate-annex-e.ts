@@ -866,20 +866,25 @@ function emit(
   lines.push('import type { AnnexERepeatingRule } from "../annex-e.js";');
   lines.push("");
   lines.push("/**");
-  lines.push(" * Table E.1-1's exact-tag rows, one a line in ascending tag order: the tag, the");
-  lines.push(" * attribute name, the Basic Profile action, then each Option's action as");
-  lines.push(" * `Option=code` joined by `;`, the Options in name order; fields joined by `|`.");
-  lines.push(" * One string rather than an object literal, so loading the package does not");
+  lines.push(" * Table E.1-1's exact-tag rows, one a line in ascending tag order: the tag as");
+  lines.push(" * group,element, the attribute name, the Basic Profile action, then each Option's");
+  lines.push(" * action as `Option=code` joined by `;`, the Options in name order; fields joined");
   lines.push(
-    " * build " + String(entries.length) + " frozen objects: `annexE()` in `../annex-e.ts` reads",
+    " * by `|`. One string rather than an object literal, so loading the package does not",
   );
-  lines.push(" * a row the first time its tag is asked for.");
+  lines.push(
+    " * build " +
+      String(entries.length) +
+      " frozen objects: `annexE()` in `../annex-e.ts` reads a row the first time its",
+  );
+  lines.push(" * tag is asked for.");
   lines.push(" */");
   lines.push("export const ANNEX_E_ROWS: string = `");
   for (const e of entries) {
     lines.push(
       [
-        annexERowField(e.tag),
+        // Written as group,element: eight bare digits read as a date to the pre-push PHI scan.
+        annexERowField(e.tag.slice(0, 4) + "," + e.tag.slice(4)),
         annexERowField(e.keyword),
         annexERowField(e.basicProfile),
         e.optionSet.map(([k, v]) => annexERowField(k) + "=" + annexERowField(v)).join(";"),

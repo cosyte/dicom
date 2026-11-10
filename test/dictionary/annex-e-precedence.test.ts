@@ -28,7 +28,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../../src/dictionary/generated/annex-e.js", () => ({
-  // One exact row a line, as the generator emits them: tag, name, Basic Profile
+  // One exact row a line, as the generator emits them: tag (group,element), name, Basic Profile
   // action, then `Option=code` pairs joined by `;`; fields joined by `|`.
   //
   // (6000,4000) is inside the (60xx,4000) mask below. The real table has no such
@@ -40,8 +40,8 @@ vi.mock("../../src/dictionary/generated/annex-e.js", () => ({
   // neighbouring-column one.
   ANNEX_E_ROWS: [
     "",
-    "60004000|Constructed Exact Row|K|",
-    "00080020|Study Date|Z|RetainLongitudinalTemporal=K",
+    "6000,4000|Constructed Exact Row|K|",
+    "0008,0020|Study Date|Z|RetainLongitudinalTemporal=K",
     "",
   ].join("\n"),
   ANNEX_E_REPEATING: Object.freeze([
