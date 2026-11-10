@@ -331,7 +331,7 @@ export function usesCodeExtensions(
   return (
     terms !== undefined &&
     terms.length > 1 &&
-    /* v8 ignore next -- unreachable: `terms.length > 1` holds, so `terms[0]` is defined. */
+    // A sparse list can leave Value 1 a hole, which reads as an empty Value 1.
     !NO_CODE_EXTENSION_VALUE_1.has(terms[0] ?? "")
   );
 }
@@ -358,10 +358,11 @@ export function decodeWithCodeExtensions(
 ): CodeExtensionDecode {
   const declared = new Set<number>();
   for (const term of terms) for (const ir of TERM_ROWS.get(term)?.declares ?? []) declared.add(ir);
-  if (terms[0] === "") declared.add(6);
-  // Callers reach this only through `usesCodeExtensions`, so `terms` has more than one Value.
-  /* v8 ignore next -- unreachable: `terms[0]` is defined for a list of two or more. */
-  const initial = TERM_ROWS.get(terms[0] ?? "")?.initial ?? { g0: 6, g1: undefined };
+  // A hole in Value 1, which a JavaScript caller's sparse list can leave, is an empty Value 1 for
+  // the declarations as well as for the initial designations.
+  const value1 = terms[0] ?? "";
+  if (value1 === "") declared.add(6);
+  const initial = TERM_ROWS.get(value1)?.initial ?? { g0: 6, g1: undefined };
 
   let g0 = initial.g0;
   let g1 = initial.g1;
