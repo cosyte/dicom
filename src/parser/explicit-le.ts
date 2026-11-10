@@ -157,13 +157,16 @@ export function _parseExplicit(
     const position = { byteOffset: headerStart };
 
     // VR-mismatch check: only meaningful for STANDARD tags
-    // (private tags have no dictionary entry to compare against).
+    // (private tags have no dictionary entry to compare against). A row that
+    // lists several VRs ("US or SS", "OB or OW") accepts any of them, so the
+    // on-wire VR mismatches only when the row lists none like it. The warning
+    // names the row's first VR.
     const groupNum = parseInt(tag.slice(0, 4), 16);
     const isPrivate = groupNum % 2 === 1;
     if (!isPrivate) {
-      const dictEntry = dictionaryLookup(tag);
-      const dictVr = dictEntry?.vr[0];
-      if (dictVr !== undefined && dictVr !== vr) {
+      const dictVrs = dictionaryLookup(tag)?.vr ?? [];
+      const dictVr = dictVrs[0];
+      if (dictVr !== undefined && !dictVrs.includes(vr)) {
         emit(vrMismatch(position, tag, dictVr, vr));
       }
     }
