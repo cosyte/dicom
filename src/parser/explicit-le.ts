@@ -10,8 +10,12 @@
  *   - FFFE markers route through the same endian-aware ByteCursor
  *     as every other read; ItemDelim termination of undefined-length items
  *     is supported via `opts.stopOnItemDelim`.
- *   - An undefined-length SQ is legal in Explicit VR but emits
- *     `DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR`.
+ *   - An undefined-length SQ is conformant under Explicit VR, so it is read
+ *     with no warning. PS3.5 2026c section 7.1.2: "Undefined Lengths may be
+ *     used for Data Elements having the Value Representation (VR) Sequence of
+ *     Items (SQ) and Unknown (UN)", and Table 7.5-2 is an Explicit VR example of
+ *     one. Undefined length on any other VR, outside the two cases below, is
+ *     still refused with a thrown `INVALID_FILE_META`.
  *   - CP-246 fallback: when `VR=UN` AND `length=0xFFFFFFFF`, attempt
  *     SQ descent using **Implicit VR LE inner encoding**. On success →
  *     promote element to `VR=SQ` + emit `DICOM_UN_PARSED_AS_SQ` + set
@@ -69,7 +73,6 @@ import {
   groupLengthInDataset,
   oddLengthValuePadded,
   pixelDataFragmentsNotDelimited,
-  undefinedLengthInExplicitVR,
   vrMismatch,
   type DicomParseWarning,
 } from "./warnings.js";
@@ -182,7 +185,6 @@ export function _parseExplicit(
       const valueStart = cursor.position;
       let seqResult;
       if (length === UNDEFINED_LENGTH) {
-        emit(undefinedLengthInExplicitVR(position, tag));
         const seqOpts: ParseSequenceOptions = {
           explicitLength: undefined,
           littleEndian: mode.littleEndian,

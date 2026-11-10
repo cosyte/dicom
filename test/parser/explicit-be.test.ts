@@ -140,9 +140,8 @@ describe("parseExplicitBE - FFFE under BE (D-25 + PITFALLS §2.3)", () => {
       ],
     });
     const ds = parseDicom(buf);
-    expect(
-      ds.warnings.some((w) => w.code === WARNING_CODES.DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR),
-    ).toBe(true);
+    // Conformant under Explicit VR (PS3.5 2026c section 7.1.2), so no warning.
+    expect(ds.warnings).toEqual([]);
     const el = elementsOf(ds).get("0040A730");
     expect(el?.vr).toBe("SQ");
     // The bug being closed: a naive BE parser reading FFFE markers as

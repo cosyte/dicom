@@ -328,8 +328,8 @@ function recoverableFixture(): fc.Arbitrary<Buffer> {
     }),
   );
 
-  // DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR - SQ with undefined length under
-  // Explicit-LE (legal but flagged).
+  // An SQ with undefined length under Explicit-LE: conformant, and read with no
+  // warning, but a sequence shape the lenient reader must take.
   const undefinedLenExplicit = fc.constant(
     buildDicom({
       transferSyntax: TS_EXPLICIT_LE,

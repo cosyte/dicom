@@ -38,7 +38,6 @@ const ACTIVE_CODES: readonly WarningCode[] = [
   WARNING_CODES.DICOM_MISSING_PREAMBLE,
   WARNING_CODES.DICOM_FILE_META_GROUP_LENGTH_MISSING,
   WARNING_CODES.DICOM_FILE_META_GROUP_LENGTH_MISMATCH,
-  WARNING_CODES.DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR,
   WARNING_CODES.DICOM_ODD_LENGTH_VALUE_PADDED,
   WARNING_CODES.DICOM_VR_MISMATCH,
   WARNING_CODES.DICOM_PRIVATE_TAG_NO_CREATOR,
@@ -199,25 +198,6 @@ const FIXTURES: readonly PairFixture[] = [
         transferSyntax: TS_EXPLICIT_LE,
         elements: [],
         fileMetaGroupLength: "wrong",
-      }),
-  },
-  {
-    code: WARNING_CODES.DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR,
-    // Undefined-length SQ under Explicit-LE → emits the warning per D-29.
-    buildBuffer: () =>
-      buildDicom({
-        transferSyntax: TS_EXPLICIT_LE,
-        elements: [
-          {
-            tag: "0040A730",
-            undefinedLength: true,
-            items: [
-              {
-                elements: [{ tag: "00080100", vr: "SH", value: Buffer.from("CODE", "ascii") }],
-              },
-            ],
-          },
-        ],
       }),
   },
   {

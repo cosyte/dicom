@@ -4,16 +4,16 @@
  * is held here to read cleanly and to write back to its own bytes: the shapes are spec-clean Part 10,
  * in ascending tag order with even lengths, so the writer has nothing to change.
  *
- * The one warning allowed is the SR's `DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR`, one for each
- * undefined-length sequence, which the SR shape writes on purpose: many SR producers do. Small sizes
- * only; the builders are the same at every size.
+ * Every shape reads with no warning, the SR's undefined-length sequences included: the SR shape
+ * writes them on purpose, as many SR producers do, and PS3.5 2026c section 7.1.2 allows them. Small
+ * sizes only; the builders are the same at every size.
  */
 
 import { describe, expect, it } from "vitest";
 
 import { readTags } from "../../bench/dicom.bench.mjs";
 import { ctImage, enhancedCt, srDocument, worklistItem } from "../../bench/shapes.mjs";
-import { parseDicom, serializeDicom, WARNING_CODES } from "../../src/index.js";
+import { parseDicom, serializeDicom } from "../../src/index.js";
 
 describe("the bench's synthetic shapes", () => {
   it("a worklist item reads with no warning, about 1 KiB, the same length at every index", () => {
@@ -55,11 +55,10 @@ describe("the bench's synthetic shapes", () => {
     expect(pixels?.subarray(0, frame).equals(pixels.subarray(frame))).toBe(false);
   });
 
-  it("an SR reads with only the undefined-length warning it writes on purpose", () => {
+  it("an SR of undefined-length sequences reads with no warning", () => {
     const bytes = srDocument(4, 6);
     const ds = parseDicom(bytes);
-    const codes = new Set(ds.warnings.map((w) => w.code));
-    expect([...codes]).toEqual([WARNING_CODES.DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR]);
+    expect(ds.warnings).toEqual([]);
     expect(ds.get("0040A730")?.items).toHaveLength(6);
     expect(ds.get("7FE00010")).toBeUndefined();
     expect(serializeDicom(ds).equals(bytes)).toBe(true);

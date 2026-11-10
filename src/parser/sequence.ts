@@ -10,11 +10,9 @@
  *     `DICOM_EMPTY_ITEM_IN_SEQUENCE` and continue. The one exception is the
  *     FIRST Item of encapsulated Pixel Data, the Basic Offset Table, whose
  *     empty form is conformant (PS3.5 2026c section A.4) and raises nothing.
- *   - An undefined-length SQ in Explicit VR is legal but emits
- *     `DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR` (caller responsibility - the
- *     warning fires from the per-TS strategy, NOT from inside parseSequence
- *     because Implicit-LE-undefined-length-SQ is the spec-default form for
- *     that TS).
+ *   - An undefined-length SQ is conformant under every transfer syntax
+ *     (PS3.5 2026c section 7.1.2), so neither this module nor the per-TS
+ *     strategies warn on one.
  *   - CP-246 fallback: when `VR=UN` AND `length=0xFFFFFFFF`, attempt
  *     SQ descent using **Implicit VR LE inner encoding**. On success →
  *     promote element to `VR=SQ` + emit `DICOM_UN_PARSED_AS_SQ`. On failure →
