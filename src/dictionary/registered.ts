@@ -41,7 +41,7 @@
  * @module
  */
 
-import { TAGS } from "./generated/tags.js";
+import { hasRow, maskedKeys } from "./registry.js";
 import { REPEATING_GROUP_RANGES, matchesRepeatingPattern } from "./repeating-groups.js";
 import type { Tag } from "./types.js";
 
@@ -49,14 +49,6 @@ const CONCRETE_TAG_RE = /^[0-9A-F]{8}$/;
 
 /** The mask character PS3.6 prints, as the generated registry spells it. */
 const MASK_CHAR = "x";
-
-/**
- * Every masked registry row, read once. A literal row's key is eight uppercase
- * hex digits; a masked row's key carries at least one lowercase `x`.
- */
-const MASKED_ROWS: readonly string[] = Object.freeze(
-  Object.keys(TAGS).filter((key) => key.includes(MASK_CHAR)),
-);
 
 /**
  * `true` when `pattern` is one of the PS3.5 section 7.6 repeating-group families,
@@ -102,6 +94,8 @@ export function isRegisteredTag(tag: Tag): boolean {
   if (typeof tag !== "string") return false;
   const upper = tag.toUpperCase();
   if (!CONCRETE_TAG_RE.test(upper)) return false;
-  if (Object.prototype.hasOwnProperty.call(TAGS, upper)) return true;
-  return MASKED_ROWS.some((pattern) => matchesMaskedRow(pattern, upper));
+  if (hasRow(upper)) return true;
+  // Every masked registry row: a literal row's key is eight uppercase hex
+  // digits, a masked row's key carries at least one lowercase `x`.
+  return maskedKeys().some((pattern) => matchesMaskedRow(pattern, upper));
 }

@@ -44,7 +44,7 @@ const PARTS: readonly Part[] = [
     dir: "part06",
     file: "part06.xml",
     subtitle: /<subtitle>\s*DICOM PS3\.6 ([0-9]{4}[a-z]?) - Data Dictionary\s*<\/subtitle>/,
-    artifacts: ["tags.ts", "keywords.ts", "uids.ts"],
+    artifacts: ["tags.ts", "uids.ts"],
     label: "PS3.6",
   },
   {

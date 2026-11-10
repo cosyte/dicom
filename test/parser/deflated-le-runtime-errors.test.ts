@@ -15,18 +15,28 @@
 import { Buffer } from "node:buffer";
 import type * as Zlib from "node:zlib";
 
+import type * as Builtins from "../../src/builtins.js";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ParseContext } from "../../src/parser/types.js";
 
 const inflate = vi.hoisted(() => ({ impl: undefined as (() => never) | undefined }));
 
-vi.mock("node:zlib", async (importOriginal) => {
-  const actual = await importOriginal<typeof Zlib>();
+// The reader loads `node:zlib` on first use through `src/builtins.ts`, so the replacement goes in
+// there: `zlibModule()` hands back the real module with `inflateRawSync` swapped.
+vi.mock("../../src/builtins.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof Builtins>();
   return {
     ...actual,
-    inflateRawSync: (...args: Parameters<typeof actual.inflateRawSync>) =>
-      inflate.impl !== undefined ? inflate.impl() : actual.inflateRawSync(...args),
+    zlibModule: (): typeof Zlib => {
+      const zlib = actual.zlibModule();
+      return {
+        ...zlib,
+        inflateRawSync: (...args: Parameters<typeof zlib.inflateRawSync>) =>
+          inflate.impl !== undefined ? inflate.impl() : zlib.inflateRawSync(...args),
+      };
+    },
   };
 });
 

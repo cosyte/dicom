@@ -203,12 +203,38 @@ export function decodeText(bytes: Buffer, terms: readonly string[] | undefined):
   if (usesCodeExtensions(terms)) return decodeWithCodeExtensions(bytes, terms, "text").text;
   const label = resolveDecoderLabel(terms);
   try {
-    return new TextDecoder(label, { fatal: false }).decode(bytes);
+    return decoderFor(label).decode(bytes);
   } catch {
     try {
-      return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+      return decoderFor("utf-8").decode(bytes);
     } catch {
       return bytes.toString("latin1");
     }
   }
+}
+
+type Decoder = InstanceType<typeof TextDecoder>;
+
+/**
+ * One `TextDecoder` per label, made on first use and kept. A decoder used
+ * without `{ stream: true }` keeps no state between calls, so a kept one decodes
+ * exactly as a new one does; the labels are the closed set `TERM_TO_LABEL`
+ * maps to. A label the runtime refuses throws here, as `new TextDecoder` did,
+ * and is not kept. The decoders are the global `TextDecoder`'s: when that is
+ * replaced, they are dropped and made again from the one in place.
+ */
+const DECODERS = new Map<string, Decoder>();
+let decodersOf: typeof TextDecoder | undefined;
+
+function decoderFor(label: string): Decoder {
+  if (decodersOf !== globalThis.TextDecoder) {
+    DECODERS.clear();
+    decodersOf = globalThis.TextDecoder;
+  }
+  let decoder = DECODERS.get(label);
+  if (decoder === undefined) {
+    decoder = new TextDecoder(label, { fatal: false });
+    DECODERS.set(label, decoder);
+  }
+  return decoder;
 }

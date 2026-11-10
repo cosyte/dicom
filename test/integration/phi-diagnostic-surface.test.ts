@@ -43,12 +43,13 @@
  *
  * ## Codes deliberately not slotted
  *
- * **Two** codes are declared in `WARNING_CODES` with no emit site anywhere in
- * `src/`, so no input can carry a marker through either:
- * `DICOM_PIXEL_DATA_LENGTH_MISMATCH` (whose factory exists and is unreachable)
- * and `DICOM_CHARSET_AMBIGUOUS_SEPARATOR` (which has no factory at all). They
- * are named here rather than silently omitted, because "the table skipped it"
- * and "the code cannot fire" are different facts and only the second is safe.
+ * **Three** codes are declared in `WARNING_CODES` with no emit site anywhere in
+ * `src/`, so no input can carry a marker through any of them:
+ * `DICOM_PIXEL_DATA_LENGTH_MISMATCH` and `DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR`
+ * (whose factories exist and are unreachable) and
+ * `DICOM_CHARSET_AMBIGUOUS_SEPARATOR` (which has no factory at all). They are
+ * named here rather than silently omitted, because "the table skipped it" and
+ * "the code cannot fire" are different facts and only the second is safe.
  *
  * ## What this table does NOT cover, stated because a gate believed to cover
  * more than it does is the failure it exists to prevent
@@ -475,7 +476,9 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
           },
         ],
       }),
-    expectCode: WARNING_CODES.DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR,
+    // Conformant (PS3.5 2026c section 7.1.2), so the reader raises nothing here:
+    // the slot stays so a diagnostic that did come back would be swept.
+    expectCode: null,
   },
   {
     name: "(0040,A730) ContentSequence, value in the item beside an empty item",

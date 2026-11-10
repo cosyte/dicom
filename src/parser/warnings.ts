@@ -230,8 +230,9 @@ export interface DicomParseWarning {
  * a registry message, and deliberately not changed here. The third has no model
  * field and is simply gone.
  *
- * Two codes are declared and never emitted by this build:
- * `DICOM_CHARSET_AMBIGUOUS_SEPARATOR` and `DICOM_PIXEL_DATA_LENGTH_MISMATCH`.
+ * Three codes are declared and never emitted by this build:
+ * `DICOM_CHARSET_AMBIGUOUS_SEPARATOR`, `DICOM_PIXEL_DATA_LENGTH_MISMATCH` and
+ * `DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR`.
  * They still carry a registry entry so the record stays total over
  * `WarningCode`, which is what makes "every message comes from here" checkable
  * by the type system rather than by reading.
@@ -647,9 +648,13 @@ export function fileMetaGroupLengthMismatch(
 }
 
 /**
- * Build a `DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR` warning. Emitted for an
- * SQ element with length `0xFFFFFFFF` parsed under an Explicit VR transfer
- * syntax - legal per the standard but commonly misencoded by older tools.
+ * Build a `DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR` warning. The code stays in the
+ * registry, but the reader no longer emits it: it used to fire for every `SQ`
+ * of undefined length under an Explicit VR transfer syntax, which PS3.5 2026c
+ * section 7.1.2 allows ("Undefined Lengths may be used for Data Elements having
+ * the Value Representation (VR) Sequence of Items (SQ) and Unknown (UN)"), so
+ * every one was a false report. An undefined length the standard does not allow
+ * under Explicit VR is refused with a thrown `INVALID_FILE_META`, as before.
  *
  * @example
  * ```ts

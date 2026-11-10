@@ -136,10 +136,10 @@ function itemStreamEnd(raw: Buffer): number {
 }
 
 /**
- * The on-wire bytes of a section A.4 Data Set's top-level Pixel Data: `OB` of
- * undefined length, the input's Basic Offset Table Item and fragment Items
- * byte for byte, then a zero-length Sequence Delimitation Item. Reads `ds`,
- * never changes it.
+ * The on-wire bytes of a section A.4 Data Set's top-level Pixel Data, as the
+ * parts to write in order: `OB` of undefined length, the input's Basic Offset
+ * Table Item and fragment Items byte for byte (a view, not a copy), then a
+ * zero-length Sequence Delimitation Item. Reads `ds`, never changes it.
  *
  * @throws {@link DicomSerializeError} with code
  *   `INVALID_ENCAPSULATED_PIXEL_DATA` when the top-level Data Set is not one a
@@ -147,7 +147,7 @@ function itemStreamEnd(raw: Buffer): number {
  *
  * @internal
  */
-export function encapsulatedPixelData(ds: Dataset): Buffer {
+export function encapsulatedPixelData(ds: Dataset): readonly Buffer[] {
   if (ds.has(FLOAT_PIXEL_DATA) || ds.has(DOUBLE_FLOAT_PIXEL_DATA)) refuse("float");
   const el = ds.get(PIXEL_DATA);
   if (el === undefined) refuse("absent");
@@ -165,9 +165,6 @@ export function encapsulatedPixelData(ds: Dataset): Buffer {
     refuse("notFragmentSpan");
   }
   const end = itemStreamEnd(raw);
-  return Buffer.concat([
-    PIXEL_DATA_HEADER,
-    raw.subarray(ELEMENT_HEADER_LENGTH, end),
-    SEQUENCE_DELIMITATION_ITEM,
-  ]);
+  // The parts in order, uncopied: the writer copies each once, into its output.
+  return [PIXEL_DATA_HEADER, raw.subarray(ELEMENT_HEADER_LENGTH, end), SEQUENCE_DELIMITATION_ITEM];
 }

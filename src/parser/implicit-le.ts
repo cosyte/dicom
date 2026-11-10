@@ -47,10 +47,9 @@
 import type { Buffer } from "node:buffer";
 
 import { Element } from "../dataset/element.js";
-import { joinTag } from "../dataset/tag.js";
 import type { Tag } from "../dictionary/types.js";
 import { ByteCursor, copyValueBytes } from "./byte-cursor.js";
-import { defineElement } from "./data-set-map.js";
+import { defineElement, parsedElement } from "./data-set-map.js";
 import {
   applySpecificCharacterSet,
   registerPrivateCreator,
@@ -67,6 +66,10 @@ import {
 import { parseSequence, tryParseDefinedLengthSQ, tryParseUnAsSQ } from "./sequence.js";
 import type { ParseContext } from "./types.js";
 import { groupLengthInDataset, type DicomParseWarning } from "./warnings.js";
+import { tagOf } from "./wire-tokens.js";
+
+/** The `(0008,0005)` Specific Character Set tag. */
+const SPECIFIC_CHARACTER_SET_TAG: Tag = "00080005";
 
 /**
  * Parse the dataset portion of an Implicit VR LE buffer starting at
@@ -92,7 +95,7 @@ export function parseImplicitLE(
   const cursor = new ByteCursor(buffer, true, datasetStart);
   const elements = new Map<Tag, Element>();
 
-  while (cursor.remaining() > 0) {
+  while (cursor.position < buffer.length) {
     const headerStart = cursor.position;
     let group: number;
     let element: number;
@@ -110,7 +113,8 @@ export function parseImplicitLE(
       /* v8 ignore next -- unreachable: the cursor reads throw only RangeError. */
       throw err;
     }
-    const tag = joinTag(group, element);
+    // The same eight upper-case hex digits `joinTag` builds, built once per tag.
+    const tag = tagOf(group, element);
 
     // FFFE markers under Implicit VR LE are item / item-delim / seq-delim
     // markers. ItemDelim (FFFE,E00D) terminates an undefined-length SQ
@@ -142,23 +146,24 @@ export function parseImplicitLE(
         });
         const valueRawStart = headerStart;
         cursor.position = seq.endOffset;
-        const rawBytes = ctx.copyValues
-          ? copyValueBytes(buffer.subarray(valueRawStart, cursor.position))
-          : buffer.subarray(valueRawStart, cursor.position);
         const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
         defineElement(
           elements,
-          new Element({
+          parsedElement(
+            ctx,
+            buffer,
+            valueRawStart,
+            cursor.position,
             tag,
             vr,
-            vm: seq.items.length,
-            length: 0xffffffff,
-            rawBytes,
-            byteOffset: headerStart,
-            littleEndian: true,
-            items: seq.items,
-            ...(privateCreator !== undefined ? { privateCreator } : {}),
-          }),
+            seq.items.length,
+            0xffffffff,
+            headerStart,
+            true,
+            undefined,
+            privateCreator,
+            seq.items,
+          ),
           emit,
         );
         continue;
@@ -226,9 +231,6 @@ export function parseImplicitLE(
 
     const valueStart = cursor.position;
     const valueEnd = valueStart + length;
-    const valueSlice = ctx.copyValues
-      ? copyValueBytes(buffer.subarray(valueStart, valueEnd))
-      : buffer.subarray(valueStart, valueEnd);
     cursor.position = valueEnd;
 
     // Defined-length SQ. PS3.5 section 7.5.2 gives an encoder two ways to delimit
@@ -264,17 +266,21 @@ export function parseImplicitLE(
         const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
         defineElement(
           elements,
-          new Element({
+          parsedElement(
+            ctx,
+            buffer,
+            valueStart,
+            valueEnd,
             tag,
             vr,
-            vm: seq.items.length,
+            seq.items.length,
             length,
-            rawBytes: valueSlice,
-            byteOffset: headerStart,
-            littleEndian: true,
-            items: seq.items,
-            ...(privateCreator !== undefined ? { privateCreator } : {}),
-          }),
+            headerStart,
+            true,
+            undefined,
+            privateCreator,
+            seq.items,
+          ),
           emit,
         );
         continue;
@@ -292,27 +298,32 @@ export function parseImplicitLE(
 
     // Private Creator slot (gggg,0010..00FF) - register into the stack.
     if (group % 2 === 1 && element >= 0x0010 && element <= 0x00ff) {
-      registerPrivateCreator(tag, valueSlice, ctx);
+      registerPrivateCreator(tag, buffer.subarray(valueStart, valueEnd), ctx);
     }
 
     // (0008,0005) Specific Character Set governs subsequent text decode.
-    applySpecificCharacterSet(tag, valueSlice, ctx, emit, position);
+    if (tag === SPECIFIC_CHARACTER_SET_TAG) {
+      applySpecificCharacterSet(tag, buffer.subarray(valueStart, valueEnd), ctx, emit, position);
+    }
 
     const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
     defineElement(
       elements,
-      new Element({
+      parsedElement(
+        ctx,
+        buffer,
+        valueStart,
+        valueEnd,
         tag,
         vr,
-        // Placeholder - the value decoders derive VM from VR + value layout.
-        vm: 1,
+        1,
         length,
-        rawBytes: valueSlice,
-        byteOffset: headerStart,
-        littleEndian: true,
-        ...(ctx.currentCharset !== undefined ? { specificCharacterSet: ctx.currentCharset } : {}),
-        ...(privateCreator !== undefined ? { privateCreator } : {}),
-      }),
+        headerStart,
+        true,
+        ctx.currentCharset,
+        privateCreator,
+        undefined,
+      ),
       emit,
     );
   }

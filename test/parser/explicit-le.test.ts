@@ -4,7 +4,7 @@
  * Covers TS-02 end-to-end through `parseDicom`, plus the per-VR Explicit-LE
  * header layout (short-form / long-form), TOL-07 (odd-length-padded),
  * TOL-08 (VR mismatch), DICOM_NONZERO_RESERVED_BYTES, undefined-length-SQ
- * (DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR), CP-246 success + failure
+ * (read with no warning), CP-246 success + failure
  * (DICOM_UN_PARSED_AS_SQ + cp246Promoted hint), encapsulated pixel data
  * structural recognition (D-31), private-creator block-reservation, and
  * truncation throws (T-02-04-01).
@@ -19,6 +19,7 @@ import type { Element } from "../../src/dataset/element.js";
 import type { Tag } from "../../src/dictionary/types.js";
 import { DicomParseError } from "../../src/parser/errors.js";
 import { parseDicom } from "../../src/parser/index.js";
+import { profiles } from "../../src/profiles/index.js";
 import { WARNING_CODES } from "../../src/parser/warnings.js";
 
 interface DatasetWithElements {
@@ -170,9 +171,13 @@ describe("parseExplicitLE - explicit-length SQ", () => {
   });
 });
 
-describe("parseExplicitLE - undefined-length SQ (D-29)", () => {
-  it("emits DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR; SQ parsed correctly", () => {
-    const buf = buildDicom({
+describe("parseExplicitLE - undefined-length SQ", () => {
+  // PS3.5 2026c section 7.1.2: "Undefined Lengths may be used for Data Elements
+  // having the Value Representation (VR) Sequence of Items (SQ) and Unknown
+  // (UN)". An undefined-length SQ under Explicit VR is conformant, so it reads
+  // with no warning, in lenient and in strict mode alike.
+  const undefinedLengthSq = (): Buffer =>
+    buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
       elements: [
         {
@@ -186,12 +191,98 @@ describe("parseExplicitLE - undefined-length SQ (D-29)", () => {
         },
       ],
     });
-    const ds = parseDicom(buf);
-    expect(
-      ds.warnings.some((w) => w.code === WARNING_CODES.DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR),
-    ).toBe(true);
+
+  it("reads with no warning; SQ parsed correctly", () => {
+    const ds = parseDicom(undefinedLengthSq());
+    expect(ds.warnings).toEqual([]);
     const el = elementsOf(ds).get("0040A730");
     expect(el?.vr).toBe("SQ");
+    expect(el?.length).toBe(0xffffffff);
+    expect(el?.items).toHaveLength(1);
+  });
+
+  it("reads under { strict: true } and the strict profile, which escalated the old warning", () => {
+    expect(parseDicom(undefinedLengthSq(), { strict: true }).warnings).toEqual([]);
+    expect(parseDicom(undefinedLengthSq(), { profile: profiles.strict }).warnings).toEqual([]);
+  });
+
+  it("an undefined-length SQ nested in an undefined-length Item reads with no warning", () => {
+    const ds = parseDicom(
+      buildDicom({
+        transferSyntax: TS_EXPLICIT_LE,
+        elements: [
+          {
+            tag: "0040A730",
+            undefinedLength: true,
+            items: [
+              {
+                undefinedLength: true,
+                elements: [
+                  {
+                    tag: "0040A043",
+                    undefinedLength: true,
+                    items: [
+                      {
+                        elements: [
+                          { tag: "00080100", vr: "SH", value: Buffer.from("CODE", "ascii") },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    expect(ds.warnings).toEqual([]);
+    expect(elementsOf(ds).get("0040A730")?.items?.[0]?.get("0040A043")?.items).toHaveLength(1);
+  });
+
+  it("an undefined length where Explicit VR forbids it is still refused", () => {
+    // The same 0xFFFFFFFF on a VR that may not carry it, (0040,A160) Text Value,
+    // a UT: not SQ, not UN, not encapsulated Pixel Data. It is refused with a
+    // thrown INVALID_FILE_META in lenient and strict mode.
+    const fmOnly = buildDicom({ transferSyntax: TS_EXPLICIT_LE, elements: [] });
+    const element = Buffer.concat([
+      Buffer.from([0x40, 0x00, 0x60, 0xa1]),
+      Buffer.from("UT", "ascii"),
+      Buffer.from([0x00, 0x00, 0xff, 0xff, 0xff, 0xff]),
+    ]);
+    const buf = Buffer.concat([fmOnly, element]);
+    for (const options of [{}, { strict: true }]) {
+      let caught: unknown;
+      try {
+        parseDicom(buf, options);
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBeInstanceOf(DicomParseError);
+      expect((caught as DicomParseError).code).toBe("INVALID_FILE_META");
+      expect((caught as DicomParseError).message).toContain("VR=UT");
+    }
+  });
+
+  it("an undefined-length UN still reports how it was read", () => {
+    // Undefined length on UN is conformant (PS3.5 2026c section 6.2.2), and the
+    // reader still reports reading one as a Sequence (CP-246). A private tag, so
+    // no dictionary VR is compared with the UN on the wire.
+    const implicitItem = Buffer.concat([
+      Buffer.from([0xfe, 0xff, 0x00, 0xe0, 0xff, 0xff, 0xff, 0xff]),
+      Buffer.from([0x08, 0x00, 0x00, 0x01, 0x04, 0x00, 0x00, 0x00]),
+      Buffer.from("CODE", "ascii"),
+      Buffer.from([0xfe, 0xff, 0x0d, 0xe0, 0x00, 0x00, 0x00, 0x00]),
+      Buffer.from([0xfe, 0xff, 0xdd, 0xe0, 0x00, 0x00, 0x00, 0x00]),
+    ]);
+    const fmOnly = buildDicom({ transferSyntax: TS_EXPLICIT_LE, elements: [] });
+    const header = Buffer.concat([
+      Buffer.from([0x09, 0x00, 0x10, 0x10]),
+      Buffer.from("UN", "ascii"),
+      Buffer.from([0x00, 0x00, 0xff, 0xff, 0xff, 0xff]),
+    ]);
+    const ds = parseDicom(Buffer.concat([fmOnly, header, implicitItem]));
+    expect(ds.warnings.map((w) => w.code)).toEqual([WARNING_CODES.DICOM_UN_PARSED_AS_SQ]);
   });
 });
 

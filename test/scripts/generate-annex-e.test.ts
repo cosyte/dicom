@@ -379,7 +379,8 @@ describe("generate-annex-e", () => {
       // mutant is committed under its own SHA-256, which the generator prints in
       // the provenance header, so the header legitimately differs and the rows
       // must not.
-      const tableOf = (text: string): string => text.slice(text.indexOf("export const ANNEX_E"));
+      const tableOf = (text: string): string =>
+        text.slice(text.indexOf("export const ANNEX_E_ROWS"));
       withMutatedDocBook(
         (xml) => {
           const thead = annexEThead(xml);
@@ -400,7 +401,7 @@ describe("generate-annex-e", () => {
   it("AC-1: emits the modified-dates column as a per-attribute action", () => {
     // The generator's half of AC-1: the column reaches the committed artifact at
     // all. `test/dictionary/annex-e.test.ts` holds the resolution half.
-    expect(artifactAfter).toContain('"RetainLongitudinalTemporalModifiedDates"');
+    expect(artifactAfter).toContain("RetainLongitudinalTemporalModifiedDates=");
     expect(artifactAfter).toBe(artifactBefore);
   });
 

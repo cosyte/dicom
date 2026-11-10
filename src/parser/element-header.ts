@@ -19,13 +19,14 @@
  * @module
  */
 
-import { TAGS } from "../dictionary/generated/tags.js";
+import { repeatingGroupEntries, tagEntry } from "../dictionary/registry.js";
 import type { Buffer } from "node:buffer";
 
 import { isKnownCharsetTerm, parseSpecificCharacterSet } from "../dataset/vr/charset.js";
 import type { DictionaryEntry, Tag, VR } from "../dictionary/types.js";
 import type { ByteCursor } from "./byte-cursor.js";
 import { isRecognizedVr } from "./endian.js";
+import { tagOf, vrAt } from "./wire-tokens.js";
 import type { DicomPosition, ParseContext } from "./types.js";
 import {
   implicitVRForPrivateTagWithoutVR,
@@ -172,7 +173,7 @@ export function resolveImplicitVR(
   }
 
   // Cases 1, 2, 3, 5 - standard (even-group) tag.
-  const direct = TAGS[tag];
+  const direct = tagEntry(tag);
   if (direct !== undefined) {
     // Case 1 / 2: dict has a direct entry. Pick first VR (multi-VR
     // ambiguity documented above). PS3.6 gives a few retired rows, such as
@@ -258,6 +259,15 @@ export function safeModelCreator(
 }
 
 /**
+ * The private-block reservations an Item starts with: none. It is never written;
+ * {@link registerPrivateCreator} gives the Item a map of its own the first time
+ * the Item claims a block.
+ *
+ * @internal
+ */
+export const NO_PRIVATE_CREATORS: Map<number, Map<number, string>> = new Map();
+
+/**
  * Register a Private Creator declaration `(gggg,00XX) VR=LO` into
  * `ctx.creators`. Called by per-TS parser strategies when a creator
  * element is read.
@@ -283,6 +293,7 @@ export function registerPrivateCreator(tag: Tag, value: Buffer, ctx: ParseContex
   while (end > 0 && (value[end - 1] === 0x20 || value[end - 1] === 0x00)) end--;
   const creatorString = value.subarray(0, end).toString("ascii");
   if (creatorString.length === 0) return;
+  if (ctx.creators === NO_PRIVATE_CREATORS) ctx.creators = new Map();
   let inner = ctx.creators.get(group);
   if (inner === undefined) {
     inner = new Map<number, string>();
@@ -296,24 +307,6 @@ export function registerPrivateCreator(tag: Tag, value: Buffer, ctx: ParseContex
 // ---------------------------------------------------------------------------
 
 /**
- * Memoized list of repeating-group family entries from the dictionary.
- * Computed once on first call (the dictionary is frozen and the family
- * list is small).
- */
-let cachedFamilyEntries: readonly DictionaryEntry[] | undefined;
-
-function getFamilyEntries(): readonly DictionaryEntry[] {
-  if (cachedFamilyEntries !== undefined) return cachedFamilyEntries;
-  const out: DictionaryEntry[] = [];
-  for (const k of Object.keys(TAGS)) {
-    const e = TAGS[k];
-    if (e !== undefined && e.repeatingGroup === true) out.push(e);
-  }
-  cachedFamilyEntries = Object.freeze(out);
-  return cachedFamilyEntries;
-}
-
-/**
  * Match a concrete 8-hex-char tag against any repeating-group family
  * pattern from the dictionary. The family pattern's `tag` field carries
  * lowercase `x` placeholders that act as wildcards (e.g., `"50xx3000"`
@@ -325,7 +318,7 @@ function getFamilyEntries(): readonly DictionaryEntry[] {
  * @internal
  */
 export function matchRepeatingGroup(tag: Tag): DictionaryEntry | undefined {
-  const families = getFamilyEntries();
+  const families = repeatingGroupEntries();
   for (const fam of families) {
     if (matchesFamilyPattern(fam.tag, tag)) return fam;
   }
@@ -357,6 +350,10 @@ function matchesFamilyPattern(pattern: string, concrete: Tag): boolean {
  */
 export interface ExplicitElementHeader {
   readonly tag: Tag;
+  /** The tag's group number. */
+  readonly group: number;
+  /** The tag's element number. */
+  readonly element: number;
   readonly vr: VR;
   readonly length: number;
   /** Offset of the first byte of the header (group bytes). */
@@ -406,15 +403,16 @@ export function readExplicitElementHeader(
   cursor: ByteCursor,
   _ctx: ParseContext,
   emit: (w: DicomParseWarning) => void,
+  out: MutableExplicitElementHeader = emptyExplicitElementHeader(),
 ): ExplicitElementHeader {
   const headerStart = cursor.position;
   const group = cursor.readUInt16();
   const element = cursor.readUInt16();
-  const tag: Tag =
-    `${group.toString(16).padStart(4, "0")}${element.toString(16).padStart(4, "0")}`.toUpperCase();
+  // The same eight upper-case hex digits every element of this tag gets, built once.
+  const tag: Tag = tagOf(group, element);
   // VR is always 2 ASCII bytes regardless of cursor endianness.
-  const vrSlice = cursor.slice(2);
-  const vr = vrSlice.toString("ascii") as VR;
+  const vr = vrAt(cursor.buffer, cursor.position);
+  cursor.position += 2;
 
   let length: number;
   let headerLength: 8 | 12;
@@ -436,5 +434,32 @@ export function readExplicitElementHeader(
     length = cursor.readUInt16();
     headerLength = 8;
   }
-  return { tag, vr, length, headerStart, headerLength };
+  out.tag = tag;
+  out.group = group;
+  out.element = element;
+  out.vr = vr;
+  out.length = length;
+  out.headerStart = headerStart;
+  out.headerLength = headerLength;
+  return out;
+}
+
+/**
+ * A header record {@link readExplicitElementHeader} fills in place. A Data Set's
+ * element loop keeps one and reads each header into it, so a header costs no
+ * object; the loop takes what it needs from it before reading the next.
+ *
+ * @internal
+ */
+export type MutableExplicitElementHeader = {
+  -readonly [K in keyof ExplicitElementHeader]: ExplicitElementHeader[K];
+};
+
+/**
+ * A header record to fill.
+ *
+ * @internal
+ */
+export function emptyExplicitElementHeader(): MutableExplicitElementHeader {
+  return { tag: "", group: 0, element: 0, vr: "UN", length: 0, headerStart: 0, headerLength: 8 };
 }

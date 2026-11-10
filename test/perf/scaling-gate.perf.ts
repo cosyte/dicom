@@ -37,8 +37,12 @@ import { parseDicom, serializeDicom, type Dataset } from "../../src/index.js";
 const COUNT = 500;
 /** Measurements in the size axis's base SR, about 128 KiB; the scaled phase has 4 times as many. */
 const MEASUREMENTS = 250;
-/** SR documents in each size-axis phase. */
-const DOCUMENTS = 2;
+/**
+ * SR documents in each size-axis phase. Four, so the faster reader's base phase stays clear of the
+ * contract's 4 ms minimum on a hosted runner, where two came to 3.9 ms; the documents are the same
+ * size either way, so the self-check's per-document regression is unchanged.
+ */
+const DOCUMENTS = 4;
 /** The chunk the regressed copy appends at a time. */
 const CHUNK = 16;
 

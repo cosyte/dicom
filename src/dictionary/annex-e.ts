@@ -21,7 +21,7 @@
  */
 
 import type { Tag } from "./types.js";
-import { ANNEX_E, ANNEX_E_REPEATING } from "./generated/annex-e.js";
+import { ANNEX_E_REPEATING, ANNEX_E_ROWS } from "./generated/annex-e.js";
 import { matchesRepeatingPattern } from "./repeating-groups.js";
 
 /**
@@ -50,7 +50,7 @@ export type AnnexEActionCode =
  *
  * `CleanPixelData` (E.3.1) and `CleanRecognizableVisual` (E.3.2) act on pixel
  * data, not metadata, and never appear as `optionSet` keys in the generated
- * `ANNEX_E` map; they remain in the union for the pixel-decode API.
+ * exact-tag rows; they remain in the union for the pixel-decode API.
  *
  * **E.3.6 is two mutually exclusive Options and Table E.1-1 gives them separate
  * columns**, so it takes two names here: `RetainLongitudinalTemporal` carries
@@ -164,9 +164,67 @@ export interface AnnexERepeatingRule {
 export function annexE(tag: Tag): AnnexEAction | undefined {
   if (typeof tag !== "string" || tag.length === 0) return undefined;
   const upper = tag.toUpperCase();
-  const entry = ANNEX_E[upper];
+  const entry = exactRow(upper);
   if (entry !== undefined) return entry;
   return matchRepeatingRule(upper);
+}
+
+/** Where each exact-tag row starts in `ANNEX_E_ROWS`, by tag, built on first use. */
+let rowAt: Map<string, number> | undefined;
+/** The exact-tag entries built so far, by tag: each built once, frozen, and kept. */
+const built = new Map<string, AnnexEAction>();
+
+function rowIndex(): Map<string, number> {
+  if (rowAt !== undefined) return rowAt;
+  const out = new Map<string, number>();
+  // The rows start after the literal's opening line break, and each ends on one.
+  let at = ANNEX_E_ROWS.indexOf("\n") + 1;
+  while (at < ANNEX_E_ROWS.length) {
+    // A row's tag is written group,element: the key is its eight digits.
+    out.set(ANNEX_E_ROWS.slice(at, at + 4) + ANNEX_E_ROWS.slice(at + 5, at + 9), at);
+    at = ANNEX_E_ROWS.indexOf("\n", at) + 1;
+  }
+  rowAt = out;
+  return out;
+}
+
+/**
+ * The exact-tag row for `upper`, as the frozen entry the generated table used to hold: `tag`,
+ * `keyword`, `basicProfile`, then a frozen `optionSet` of the row's Options in name order.
+ */
+function exactRow(upper: string): AnnexEAction | undefined {
+  const known = built.get(upper);
+  if (known !== undefined) return known;
+  const at = rowIndex().get(upper);
+  if (at === undefined) return undefined;
+  const [rowTag = "", keyword = "", basicProfile = "", options = ""] = ANNEX_E_ROWS.slice(
+    at,
+    ANNEX_E_ROWS.indexOf("\n", at),
+  ).split("|");
+  const optionSet: Partial<Record<AnnexEOption, AnnexEActionCode>> = {};
+  if (options !== "") {
+    for (const pair of options.split(";")) {
+      const eq = pair.indexOf("=");
+      optionSet[pair.slice(0, eq) as AnnexEOption] = pair.slice(eq + 1) as AnnexEActionCode;
+    }
+  }
+  const entry: AnnexEAction = Object.freeze({
+    tag: rowTag.slice(0, 4) + rowTag.slice(5),
+    keyword,
+    basicProfile: basicProfile as AnnexEActionCode,
+    optionSet: Object.freeze(optionSet),
+  });
+  built.set(upper, entry);
+  return entry;
+}
+
+/**
+ * Every exact-tag row's tag, in ascending order.
+ *
+ * @internal
+ */
+export function annexETags(): readonly Tag[] {
+  return [...rowIndex().keys()];
 }
 
 /**

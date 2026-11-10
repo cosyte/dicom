@@ -40,7 +40,7 @@
  */
 
 import type { Buffer } from "node:buffer";
-import { inflateRawSync } from "node:zlib";
+import { zlibModule } from "../builtins.js";
 
 import type { Element } from "../dataset/element.js";
 import type { Tag } from "../dictionary/types.js";
@@ -108,7 +108,7 @@ export function parseDeflatedLEWithCap(
 
   let inflated: Buffer;
   try {
-    inflated = inflateRawSync(compressed, { maxOutputLength: maxInflatedBytes });
+    inflated = zlibModule().inflateRawSync(compressed, { maxOutputLength: maxInflatedBytes });
   } catch (err) {
     const errAny = err as { code?: string; message?: string };
     const code = errAny.code;

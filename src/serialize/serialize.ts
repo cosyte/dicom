@@ -48,8 +48,8 @@
  */
 
 import { Buffer } from "node:buffer";
-import { deflateRawSync } from "node:zlib";
 
+import { zlibModule } from "../builtins.js";
 import type { Dataset } from "../dataset/dataset.js";
 import { DIRECTORY_TAGS, isDicomdir } from "../dataset/directory.js";
 import type { Element } from "../dataset/element.js";
@@ -57,7 +57,7 @@ import { splitTag } from "../dataset/tag.js";
 import { ENCAPSULATED_TRANSFER_SYNTAX_UIDS } from "../dictionary/generated/encapsulated-transfer-syntaxes.js";
 import type { Tag } from "../dictionary/types.js";
 import { PLACED_TAGS, rewriteDirectoryOffsets, type PlacedElement } from "./directory.js";
-import { type BodyEncoding, encodeDatasetElement } from "./element.js";
+import { type BodyEncoding, encodeDatasetElementParts } from "./element.js";
 import { encapsulatedPixelData, PIXEL_DATA } from "./encapsulated.js";
 import { DicomSerializeError, SERIALIZE_ERROR_CODES } from "./errors.js";
 import { encodeFileMeta } from "./file-meta.js";
@@ -88,9 +88,19 @@ const BODY_ENCODING: Readonly<Record<string, BodyEncoding>> = {
  */
 const ENCAPSULATED_SYNTAXES: ReadonlySet<string> = new Set(ENCAPSULATED_TRANSFER_SYNTAX_UIDS);
 
-/** 128-byte zero preamble + the `DICM` magic (PS3.10 §7.1). */
-function part10Preamble(): Buffer {
-  return Buffer.concat([Buffer.alloc(128, 0x00), Buffer.from("DICM", "ascii")]);
+/** The 128-byte File Preamble plus the `DICM` prefix (PS3.10 §7.1). */
+const PREAMBLE_LENGTH = 132;
+
+/** Write the 128-byte zero preamble and the `DICM` magic (PS3.10 §7.1) at the start of `out`. */
+function writePreamble(out: Buffer): void {
+  out.fill(0x00, 0, 128);
+  out.write("DICM", 128, "ascii");
+}
+
+/** A Data Set body as the parts to write in order, uncopied, and their total length. */
+interface BodyParts {
+  readonly parts: readonly Buffer[];
+  readonly length: number;
 }
 
 /**
@@ -101,6 +111,9 @@ function part10Preamble(): Buffer {
  * not show where a reader ends it follows the ascending rest, in the
  * `Dataset`'s order. The input `Dataset` is read, never changed.
  *
+ * The body comes back as parts, not bytes: a value is a view of the `Dataset`'s
+ * own bytes, so the one copy of it is the one into the output.
+ *
  * `pixelData`, when given, is the whole on-wire top-level Pixel Data element a
  * section A.4 syntax writes (see {@link encapsulatedPixelData}); it ends on its
  * own Sequence Delimitation Item, so it is placed by its tag like any other.
@@ -108,16 +121,17 @@ function part10Preamble(): Buffer {
 function encodeBody(
   ds: Dataset,
   encoding: BodyEncoding,
-  pixelData?: Buffer,
+  pixelData?: readonly Buffer[],
   placed?: Map<Tag, PlacedElement>,
-): Buffer {
+): BodyParts {
   // PS3.5 §7.2: omit retired (gggg,0000) group-length elements on write.
   // (File Meta group lengths are handled separately and never appear in the
   // dataset element map.)
   const kept = ds.elements().filter((el) => splitTag(el.tag).element !== 0x0000);
   interface Encoded {
     readonly tag: number;
-    readonly bytes: Buffer;
+    readonly parts: readonly Buffer[];
+    readonly length: number;
     readonly el: Element;
     readonly placements?: ElementEmission["placements"];
   }
@@ -125,34 +139,45 @@ function encodeBody(
   const open: Encoded[] = [];
   for (const el of kept) {
     if (pixelData !== undefined && el.tag === PIXEL_DATA) {
-      closed.push({ tag: tagNumber(el.tag), bytes: pixelData, el });
+      const length = pixelData.reduce((n, part) => n + part.length, 0);
+      closed.push({ tag: tagNumber(el.tag), parts: pixelData, length, el });
       continue;
     }
     // Only a DICOMDIR's Directory Record Sequence is asked where its Items land.
     const emission = emissionOf(el, encoding, placed !== undefined && el.tag === RECORD_SEQUENCE);
-    const bytes = encodeDatasetElement(el, encoding, emission.rawBytes);
-    const entry = { tag: tagNumber(el.tag), bytes, el, placements: emission.placements };
+    const parts: Buffer[] = [];
+    const length = encodeDatasetElementParts(el, encoding, parts, emission.rawBytes);
+    const entry = { tag: tagNumber(el.tag), parts, length, el, placements: emission.placements };
     if (emission.closed) closed.push(entry);
     else open.push(entry);
   }
   // Stable, so two model elements with one tag keep their relative order.
   closed.sort((a, b) => a.tag - b.tag);
   const ordered = [...closed, ...open];
-  if (placed !== undefined) {
-    let start = 0;
-    for (const entry of ordered) {
-      if (PLACED_TAGS.has(entry.el.tag)) {
-        placed.set(entry.el.tag, {
-          el: entry.el,
-          start,
-          bytes: entry.bytes,
-          placements: entry.placements,
-        });
-      }
-      start += entry.bytes.length;
+  const parts: Buffer[] = [];
+  let start = 0;
+  for (const entry of ordered) {
+    if (placed !== undefined && PLACED_TAGS.has(entry.el.tag)) {
+      placed.set(entry.el.tag, {
+        el: entry.el,
+        start,
+        length: entry.length,
+        placements: entry.placements,
+      });
     }
+    for (const part of entry.parts) parts.push(part);
+    start += entry.length;
   }
-  return Buffer.concat(ordered.map((entry) => entry.bytes));
+  return { parts, length: start };
+}
+
+/** Copy `parts` into `out` from `at`, in order. */
+function copyParts(out: Buffer, parts: readonly Buffer[], at: number): void {
+  let p = at;
+  for (const part of parts) {
+    part.copy(out, p);
+    p += part.length;
+  }
 }
 
 /**
@@ -276,17 +301,41 @@ export function serializeDicom(ds: Dataset): Buffer {
   // Checked before a byte is built, so a refusal returns nothing.
   const pixelData = encapsulated ? encapsulatedPixelData(ds) : undefined;
 
-  const preamble = part10Preamble();
   const fileMeta = encodeFileMeta(ds.fileMeta);
   const deflated = tsUid === TS_DEFLATED_LE;
-  if (!isDicomdir(ds.fileMeta)) {
-    const body = encodeBody(ds, encoding, pixelData);
-    return Buffer.concat([preamble, fileMeta, deflated ? deflateRawSync(body) : body]);
-  }
   // A DICOMDIR: every offset is rewritten to where its record lands in these
   // bytes, or the whole write is refused before anything is returned.
-  const placed = new Map<Tag, PlacedElement>();
+  const placed = isDicomdir(ds.fileMeta) ? new Map<Tag, PlacedElement>() : undefined;
   const body = encodeBody(ds, encoding, pixelData, placed);
-  rewriteDirectoryOffsets(ds, body, placed, encoding, preamble.length + fileMeta.length, deflated);
-  return Buffer.concat([preamble, fileMeta, deflated ? deflateRawSync(body) : body]);
+  const bodyFileOffset = PREAMBLE_LENGTH + fileMeta.length;
+  if (deflated) {
+    const plain = Buffer.allocUnsafe(body.length);
+    copyParts(plain, body.parts, 0);
+    if (placed !== undefined) {
+      rewriteDirectoryOffsets(ds, plain, placed, encoding, bodyFileOffset, true);
+    }
+    const deflatedBody = zlibModule().deflateRawSync(plain);
+    const out = Buffer.allocUnsafe(bodyFileOffset + deflatedBody.length);
+    writePreamble(out);
+    fileMeta.copy(out, PREAMBLE_LENGTH);
+    deflatedBody.copy(out, bodyFileOffset);
+    return out;
+  }
+  // One allocation and one copy of every byte, Pixel Data included: the parts
+  // are views of the Dataset's own bytes until they land here.
+  const out = Buffer.allocUnsafe(bodyFileOffset + body.length);
+  writePreamble(out);
+  fileMeta.copy(out, PREAMBLE_LENGTH);
+  copyParts(out, body.parts, bodyFileOffset);
+  if (placed !== undefined) {
+    rewriteDirectoryOffsets(
+      ds,
+      out.subarray(bodyFileOffset),
+      placed,
+      encoding,
+      bodyFileOffset,
+      false,
+    );
+  }
+  return out;
 }

@@ -131,7 +131,15 @@ export class Dataset {
    * ```
    */
   public elements(): readonly Element[] {
-    return [...this._elements.values()];
+    // An array of exactly the map's size, filled in insertion order: the same
+    // elements a spread of `values()` gives, without growing an array to fit or
+    // stepping an iterator.
+    const out = new Array<Element>(this._elements.size);
+    let i = 0;
+    this._elements.forEach((el) => {
+      out[i++] = el;
+    });
+    return out;
   }
 
   /**

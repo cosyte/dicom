@@ -9,8 +9,8 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { annexE, type AnnexEAction } from "../../src/dictionary/annex-e.js";
-import { ANNEX_E, ANNEX_E_REPEATING } from "../../src/dictionary/generated/annex-e.js";
+import { annexE, annexETags, type AnnexEAction } from "../../src/dictionary/annex-e.js";
+import { ANNEX_E_REPEATING } from "../../src/dictionary/generated/annex-e.js";
 import {
   REPEATING_GROUP_RANGES,
   expandRepeatingGroups,
@@ -154,7 +154,7 @@ describe("PS3.15 normative overlay (DICOM-ANNEX-E-DEID-LAG)", () => {
     // (60xx,3000), (60xx,4000), and the odd-group private row) cannot be keys in
     // an exact-tag map; the generator counts and prints them on every run rather
     // than dropping them in silence.
-    expect(Object.keys(ANNEX_E).length).toBe(653);
+    expect(annexETags().length).toBe(653);
   });
 
   it("did not drop anything the previous table carried", () => {
@@ -190,7 +190,7 @@ describe("PS3.15 normative overlay (DICOM-ANNEX-E-DEID-LAG)", () => {
       "X/Z/U*",
       "C/X",
     ]);
-    for (const entry of Object.values(ANNEX_E)) {
+    for (const entry of everyRow()) {
       expect(codes.has(entry.basicProfile), `${entry.tag} ${entry.basicProfile}`).toBe(true);
       for (const [option, code] of Object.entries(entry.optionSet)) {
         expect(codes.has(code as string), `${entry.tag} ${option} ${String(code)}`).toBe(true);
@@ -254,7 +254,7 @@ describe("annexE (repeating-group family rows)", () => {
     // cannot be tested here at all: with the overlap set empty, inverting the
     // resolution order changes no answer in this table. The discriminating test
     // constructs an overlap, and lives in `annex-e-precedence.test.ts`.
-    const shadowed = Object.keys(ANNEX_E).filter((tag) =>
+    const shadowed = annexETags().filter((tag) =>
       ANNEX_E_REPEATING.some((r) => r.pattern.slice(0, 2) === tag.slice(0, 2)),
     );
     expect(shadowed).toEqual([]);
@@ -262,14 +262,18 @@ describe("annexE (repeating-group family rows)", () => {
 
   it("returns the generated row itself for every tag the table carries", () => {
     // A mask hit is a freshly constructed object carrying `repeatingGroup`; an
-    // exact hit is the frozen generated entry by identity. This says the 652
-    // published rows all come back untouched from the table. It does NOT prove
-    // the ordering - see the note above.
-    const tags = Object.keys(ANNEX_E);
+    // exact hit is the frozen entry built once from its generated row, the same
+    // object every time it is asked for. This says the 653 published rows all
+    // come back from the table and none from a mask. It does NOT prove the
+    // ordering - see the note above.
+    const tags = annexETags();
     expect(tags.length).toBeGreaterThan(600);
     for (const tag of tags) {
       const resolved = annexE(tag);
-      expect(resolved, tag).toBe(ANNEX_E[tag]);
+      expect(resolved?.tag, tag).toBe(tag);
+      expect(Object.isFrozen(resolved), tag).toBe(true);
+      expect(Object.isFrozen(resolved?.optionSet), tag).toBe(true);
+      expect(annexE(tag.toLowerCase()), tag).toBe(resolved);
       expect(resolved?.repeatingGroup, tag).toBeUndefined();
     }
   });
@@ -277,7 +281,7 @@ describe("annexE (repeating-group family rows)", () => {
   it("answers from a mask only where the exact table is silent", () => {
     const masked = "60004000";
     expect(matchesRepeatingPattern("60xx4000", masked)).toBe(true);
-    expect(Object.keys(ANNEX_E)).not.toContain(masked);
+    expect(annexETags()).not.toContain(masked);
     expect(annexE(masked)?.repeatingGroup).toBe("60xx4000");
   });
 
@@ -312,7 +316,10 @@ function only(option: DeidentifyOption): ReadonlySet<DeidentifyOption> {
 
 /** Every concrete Table E.1-1 row, as the generated table publishes it. */
 function everyRow(): readonly AnnexEAction[] {
-  return Object.values(ANNEX_E);
+  return annexETags().flatMap((tag) => {
+    const row = annexE(tag);
+    return row === undefined ? [] : [row];
+  });
 }
 
 /** The rows whose two published E.3.6 columns differ, derived from the table itself. */

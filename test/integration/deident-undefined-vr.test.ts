@@ -68,7 +68,7 @@ import { describe, expect, it } from "vitest";
 
 import { MAX_UNDEFINED_VR_FINDINGS, deidentify } from "../../src/deident/deidentify.js";
 import { annexE } from "../../src/dictionary/annex-e.js";
-import { TAGS } from "../../src/dictionary/generated/tags.js";
+import { registryKeys } from "../../src/dictionary/registry.js";
 import { isRegisteredTag } from "../../src/dictionary/registered.js";
 import type { Tag, VR } from "../../src/dictionary/types.js";
 import { defineProfile } from "../../src/index.js";
@@ -478,7 +478,7 @@ describe("DICOM-CARRIER-LEAF-LEAKS: an on-wire VR that is not a VR", () => {
     const elements: { tag: Tag; vr: VR; value: Buffer }[] = [
       { tag: "00100010", vr: "PN", value: ascii(ROOT_NAME) },
     ];
-    const registeredUnlisted = Object.keys(TAGS)
+    const registeredUnlisted = registryKeys()
       .filter((tag) => /^0018[0-9A-F]{4}$/u.test(tag) && !tag.endsWith("0000"))
       .filter((tag) => annexE(tag) === undefined)
       .sort();

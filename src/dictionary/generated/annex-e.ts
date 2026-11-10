@@ -14,663 +14,671 @@
 // CleanPixelData, E.3.2 CleanRecognizableVisual) are not represented per-attribute
 // here; they are enforced at the pixel-decode layer.
 
-import type { AnnexEAction, AnnexERepeatingRule } from "../annex-e.js";
+import type { AnnexERepeatingRule } from "../annex-e.js";
 
-export const ANNEX_E: Readonly<Record<string, AnnexEAction>> = Object.freeze({
-  "00001000": Object.freeze({ tag: "00001000", keyword: "Affected SOP Instance UID", basicProfile: "X", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00001001": Object.freeze({ tag: "00001001", keyword: "Requested SOP Instance UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00020003": Object.freeze({ tag: "00020003", keyword: "Media Storage SOP Instance UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00041511": Object.freeze({ tag: "00041511", keyword: "Referenced SOP Instance UID in File", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00080012": Object.freeze({ tag: "00080012", keyword: "Instance Creation Date", basicProfile: "X/D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00080013": Object.freeze({ tag: "00080013", keyword: "Instance Creation Time", basicProfile: "X/Z/D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00080014": Object.freeze({ tag: "00080014", keyword: "Instance Creator UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00080015": Object.freeze({ tag: "00080015", keyword: "Instance Coercion DateTime", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00080017": Object.freeze({ tag: "00080017", keyword: "Acquisition UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00080018": Object.freeze({ tag: "00080018", keyword: "SOP Instance UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00080019": Object.freeze({ tag: "00080019", keyword: "Pyramid UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00080020": Object.freeze({ tag: "00080020", keyword: "Study Date", basicProfile: "Z", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00080021": Object.freeze({ tag: "00080021", keyword: "Series Date", basicProfile: "X/D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00080022": Object.freeze({ tag: "00080022", keyword: "Acquisition Date", basicProfile: "X/Z", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00080023": Object.freeze({ tag: "00080023", keyword: "Content Date", basicProfile: "Z/D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00080024": Object.freeze({ tag: "00080024", keyword: "Overlay Date", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00080025": Object.freeze({ tag: "00080025", keyword: "Curve Date", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0008002A": Object.freeze({ tag: "0008002A", keyword: "Acquisition DateTime", basicProfile: "X/Z/D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00080030": Object.freeze({ tag: "00080030", keyword: "Study Time", basicProfile: "Z", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00080031": Object.freeze({ tag: "00080031", keyword: "Series Time", basicProfile: "X/D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00080032": Object.freeze({ tag: "00080032", keyword: "Acquisition Time", basicProfile: "X/Z", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00080033": Object.freeze({ tag: "00080033", keyword: "Content Time", basicProfile: "Z/D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00080034": Object.freeze({ tag: "00080034", keyword: "Overlay Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00080035": Object.freeze({ tag: "00080035", keyword: "Curve Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00080050": Object.freeze({ tag: "00080050", keyword: "Accession Number", basicProfile: "Z", optionSet: Object.freeze({}) }),
-  "00080054": Object.freeze({ tag: "00080054", keyword: "Retrieve AE Title", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "C" }) }),
-  "00080055": Object.freeze({ tag: "00080055", keyword: "Station AE Title", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "C" }) }),
-  "00080058": Object.freeze({ tag: "00080058", keyword: "Failed SOP Instance UID List", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00080080": Object.freeze({ tag: "00080080", keyword: "Institution Name", basicProfile: "X/Z/D", optionSet: Object.freeze({ "RetainInstitutionIdentity": "K" }) }),
-  "00080081": Object.freeze({ tag: "00080081", keyword: "Institution Address", basicProfile: "X", optionSet: Object.freeze({ "RetainInstitutionIdentity": "K" }) }),
-  "00080082": Object.freeze({ tag: "00080082", keyword: "Institution Code Sequence", basicProfile: "X/Z/D", optionSet: Object.freeze({ "RetainInstitutionIdentity": "K" }) }),
-  "00080090": Object.freeze({ tag: "00080090", keyword: "Referring Physician's Name", basicProfile: "Z", optionSet: Object.freeze({}) }),
-  "00080092": Object.freeze({ tag: "00080092", keyword: "Referring Physician's Address", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00080094": Object.freeze({ tag: "00080094", keyword: "Referring Physician's Telephone Numbers", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00080096": Object.freeze({ tag: "00080096", keyword: "Referring Physician Identification Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "0008009C": Object.freeze({ tag: "0008009C", keyword: "Consulting Physician's Name", basicProfile: "Z", optionSet: Object.freeze({}) }),
-  "0008009D": Object.freeze({ tag: "0008009D", keyword: "Consulting Physician Identification Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00080106": Object.freeze({ tag: "00080106", keyword: "Context Group Version", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00080107": Object.freeze({ tag: "00080107", keyword: "Context Group Local Version", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00080201": Object.freeze({ tag: "00080201", keyword: "Timezone Offset From UTC", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00081000": Object.freeze({ tag: "00081000", keyword: "Network ID", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "C" }) }),
-  "00081010": Object.freeze({ tag: "00081010", keyword: "Station Name", basicProfile: "X/Z/D", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "00081030": Object.freeze({ tag: "00081030", keyword: "Study Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "0008103E": Object.freeze({ tag: "0008103E", keyword: "Series Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00081040": Object.freeze({ tag: "00081040", keyword: "Institutional Department Name", basicProfile: "X", optionSet: Object.freeze({ "RetainInstitutionIdentity": "K" }) }),
-  "00081041": Object.freeze({ tag: "00081041", keyword: "Institutional Department Type Code Sequence", basicProfile: "X", optionSet: Object.freeze({ "RetainInstitutionIdentity": "K" }) }),
-  "00081048": Object.freeze({ tag: "00081048", keyword: "Physician(s) of Record", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00081049": Object.freeze({ tag: "00081049", keyword: "Physician(s) of Record Identification Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00081050": Object.freeze({ tag: "00081050", keyword: "Performing Physician's Name", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00081052": Object.freeze({ tag: "00081052", keyword: "Performing Physician Identification Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00081060": Object.freeze({ tag: "00081060", keyword: "Name of Physician(s) Reading Study", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00081062": Object.freeze({ tag: "00081062", keyword: "Physician(s) Reading Study Identification Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00081070": Object.freeze({ tag: "00081070", keyword: "Operators' Name", basicProfile: "X/Z/D", optionSet: Object.freeze({}) }),
-  "00081072": Object.freeze({ tag: "00081072", keyword: "Operator Identification Sequence", basicProfile: "X/D", optionSet: Object.freeze({}) }),
-  "00081080": Object.freeze({ tag: "00081080", keyword: "Admitting Diagnoses Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00081084": Object.freeze({ tag: "00081084", keyword: "Admitting Diagnoses Code Sequence", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00081088": Object.freeze({ tag: "00081088", keyword: "Pyramid Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00081110": Object.freeze({ tag: "00081110", keyword: "Referenced Study Sequence", basicProfile: "X/Z", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00081111": Object.freeze({ tag: "00081111", keyword: "Referenced Performed Procedure Step Sequence", basicProfile: "X/Z/D", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00081120": Object.freeze({ tag: "00081120", keyword: "Referenced Patient Sequence", basicProfile: "X", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00081140": Object.freeze({ tag: "00081140", keyword: "Referenced Image Sequence", basicProfile: "X/Z/U*", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00081155": Object.freeze({ tag: "00081155", keyword: "Referenced SOP Instance UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00081195": Object.freeze({ tag: "00081195", keyword: "Transaction UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00081301": Object.freeze({ tag: "00081301", keyword: "Principal Diagnosis Code Sequence", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00081302": Object.freeze({ tag: "00081302", keyword: "Primary Diagnosis Code Sequence", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00081303": Object.freeze({ tag: "00081303", keyword: "Secondary Diagnoses Code Sequence", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00081304": Object.freeze({ tag: "00081304", keyword: "Histological Diagnoses Code Sequence", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00082111": Object.freeze({ tag: "00082111", keyword: "Derivation Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00082112": Object.freeze({ tag: "00082112", keyword: "Source Image Sequence", basicProfile: "X/Z/U*", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00083010": Object.freeze({ tag: "00083010", keyword: "Irradiation Event UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00084000": Object.freeze({ tag: "00084000", keyword: "Identifying Comments", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00100010": Object.freeze({ tag: "00100010", keyword: "Patient's Name", basicProfile: "Z", optionSet: Object.freeze({}) }),
-  "00100011": Object.freeze({ tag: "00100011", keyword: "Person Names to Use Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00100012": Object.freeze({ tag: "00100012", keyword: "Name to Use", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00100013": Object.freeze({ tag: "00100013", keyword: "Name to Use Comment", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00100014": Object.freeze({ tag: "00100014", keyword: "Third Person Pronouns Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00100015": Object.freeze({ tag: "00100015", keyword: "Pronoun Code Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00100016": Object.freeze({ tag: "00100016", keyword: "Pronoun Comment", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00100020": Object.freeze({ tag: "00100020", keyword: "Patient ID", basicProfile: "Z/D", optionSet: Object.freeze({}) }),
-  "00100021": Object.freeze({ tag: "00100021", keyword: "Issuer of Patient ID", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00100030": Object.freeze({ tag: "00100030", keyword: "Patient's Birth Date", basicProfile: "Z", optionSet: Object.freeze({}) }),
-  "00100032": Object.freeze({ tag: "00100032", keyword: "Patient's Birth Time", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00100040": Object.freeze({ tag: "00100040", keyword: "Patient's Sex", basicProfile: "Z", optionSet: Object.freeze({ "RetainPatientCharacteristics": "K" }) }),
-  "00100041": Object.freeze({ tag: "00100041", keyword: "Gender Identity Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00100042": Object.freeze({ tag: "00100042", keyword: "Sex Parameters for Clinical Use Category Comment", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C", "RetainPatientCharacteristics": "C" }) }),
-  "00100043": Object.freeze({ tag: "00100043", keyword: "Sex Parameters for Clinical Use Category Sequence", basicProfile: "X", optionSet: Object.freeze({ "RetainPatientCharacteristics": "K" }) }),
-  "00100044": Object.freeze({ tag: "00100044", keyword: "Gender Identity Code Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00100045": Object.freeze({ tag: "00100045", keyword: "Gender Identity Comment", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00100046": Object.freeze({ tag: "00100046", keyword: "Sex Parameters for Clinical Use Category Code Sequence", basicProfile: "X", optionSet: Object.freeze({ "RetainPatientCharacteristics": "K" }) }),
-  "00100047": Object.freeze({ tag: "00100047", keyword: "Sex Parameters for Clinical Use Category Reference", basicProfile: "X", optionSet: Object.freeze({ "RetainPatientCharacteristics": "K" }) }),
-  "00100050": Object.freeze({ tag: "00100050", keyword: "Patient's Insurance Plan Code Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00100101": Object.freeze({ tag: "00100101", keyword: "Patient's Primary Language Code Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00100102": Object.freeze({ tag: "00100102", keyword: "Patient's Primary Language Modifier Code Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00101000": Object.freeze({ tag: "00101000", keyword: "Other Patient IDs", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00101001": Object.freeze({ tag: "00101001", keyword: "Other Patient Names", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00101002": Object.freeze({ tag: "00101002", keyword: "Other Patient IDs Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00101005": Object.freeze({ tag: "00101005", keyword: "Patient's Birth Name", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00101010": Object.freeze({ tag: "00101010", keyword: "Patient's Age", basicProfile: "X", optionSet: Object.freeze({ "RetainPatientCharacteristics": "K" }) }),
-  "00101020": Object.freeze({ tag: "00101020", keyword: "Patient's Size", basicProfile: "X", optionSet: Object.freeze({ "RetainPatientCharacteristics": "K" }) }),
-  "00101030": Object.freeze({ tag: "00101030", keyword: "Patient's Weight", basicProfile: "X", optionSet: Object.freeze({ "RetainPatientCharacteristics": "K" }) }),
-  "00101040": Object.freeze({ tag: "00101040", keyword: "Patient's Address", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00101050": Object.freeze({ tag: "00101050", keyword: "Insurance Plan Identification", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00101060": Object.freeze({ tag: "00101060", keyword: "Patient's Mother's Birth Name", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00101080": Object.freeze({ tag: "00101080", keyword: "Military Rank", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00101081": Object.freeze({ tag: "00101081", keyword: "Branch of Service", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00101090": Object.freeze({ tag: "00101090", keyword: "Medical Record Locator", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00101100": Object.freeze({ tag: "00101100", keyword: "Referenced Patient Photo Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00102000": Object.freeze({ tag: "00102000", keyword: "Medical Alerts", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00102110": Object.freeze({ tag: "00102110", keyword: "Allergies", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C", "RetainPatientCharacteristics": "C" }) }),
-  "00102150": Object.freeze({ tag: "00102150", keyword: "Country of Residence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00102152": Object.freeze({ tag: "00102152", keyword: "Region of Residence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00102154": Object.freeze({ tag: "00102154", keyword: "Patient's Telephone Numbers", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00102155": Object.freeze({ tag: "00102155", keyword: "Patient's Telecom Information", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00102160": Object.freeze({ tag: "00102160", keyword: "Ethnic Group", basicProfile: "X", optionSet: Object.freeze({ "RetainPatientCharacteristics": "K" }) }),
-  "00102161": Object.freeze({ tag: "00102161", keyword: "Ethnic Group Code Sequence", basicProfile: "X", optionSet: Object.freeze({ "RetainPatientCharacteristics": "K" }) }),
-  "00102162": Object.freeze({ tag: "00102162", keyword: "Ethnic Groups", basicProfile: "X", optionSet: Object.freeze({ "RetainPatientCharacteristics": "K" }) }),
-  "00102180": Object.freeze({ tag: "00102180", keyword: "Occupation", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "001021A0": Object.freeze({ tag: "001021A0", keyword: "Smoking Status", basicProfile: "X", optionSet: Object.freeze({ "RetainPatientCharacteristics": "K" }) }),
-  "001021B0": Object.freeze({ tag: "001021B0", keyword: "Additional Patient History", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "001021C0": Object.freeze({ tag: "001021C0", keyword: "Pregnancy Status", basicProfile: "X", optionSet: Object.freeze({ "RetainPatientCharacteristics": "K" }) }),
-  "001021D0": Object.freeze({ tag: "001021D0", keyword: "Last Menstrual Date", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "001021F0": Object.freeze({ tag: "001021F0", keyword: "Patient's Religious Preference", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00102203": Object.freeze({ tag: "00102203", keyword: "Patient's Sex Neutered", basicProfile: "X/Z", optionSet: Object.freeze({ "RetainPatientCharacteristics": "K" }) }),
-  "00102297": Object.freeze({ tag: "00102297", keyword: "Responsible Person", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00102299": Object.freeze({ tag: "00102299", keyword: "Responsible Organization", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00104000": Object.freeze({ tag: "00104000", keyword: "Patient Comments", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00120010": Object.freeze({ tag: "00120010", keyword: "Clinical Trial Sponsor Name", basicProfile: "D", optionSet: Object.freeze({}) }),
-  "00120020": Object.freeze({ tag: "00120020", keyword: "Clinical Trial Protocol ID", basicProfile: "D", optionSet: Object.freeze({}) }),
-  "00120021": Object.freeze({ tag: "00120021", keyword: "Clinical Trial Protocol Name", basicProfile: "Z", optionSet: Object.freeze({}) }),
-  "00120022": Object.freeze({ tag: "00120022", keyword: "Issuer of Clinical Trial Protocol ID", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00120023": Object.freeze({ tag: "00120023", keyword: "Other Clinical Trial Protocol IDs Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00120030": Object.freeze({ tag: "00120030", keyword: "Clinical Trial Site ID", basicProfile: "Z", optionSet: Object.freeze({ "RetainInstitutionIdentity": "K" }) }),
-  "00120031": Object.freeze({ tag: "00120031", keyword: "Clinical Trial Site Name", basicProfile: "Z", optionSet: Object.freeze({ "RetainInstitutionIdentity": "K" }) }),
-  "00120032": Object.freeze({ tag: "00120032", keyword: "Issuer of Clinical Trial Site ID", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00120040": Object.freeze({ tag: "00120040", keyword: "Clinical Trial Subject ID", basicProfile: "D", optionSet: Object.freeze({}) }),
-  "00120041": Object.freeze({ tag: "00120041", keyword: "Issuer of Clinical Trial Subject ID", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00120042": Object.freeze({ tag: "00120042", keyword: "Clinical Trial Subject Reading ID", basicProfile: "D", optionSet: Object.freeze({}) }),
-  "00120043": Object.freeze({ tag: "00120043", keyword: "Issuer of Clinical Trial Subject Reading ID", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00120050": Object.freeze({ tag: "00120050", keyword: "Clinical Trial Time Point ID", basicProfile: "Z", optionSet: Object.freeze({}) }),
-  "00120051": Object.freeze({ tag: "00120051", keyword: "Clinical Trial Time Point Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00120055": Object.freeze({ tag: "00120055", keyword: "Issuer of Clinical Trial Time Point ID", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00120060": Object.freeze({ tag: "00120060", keyword: "Clinical Trial Coordinating Center Name", basicProfile: "Z", optionSet: Object.freeze({ "RetainInstitutionIdentity": "K" }) }),
-  "00120071": Object.freeze({ tag: "00120071", keyword: "Clinical Trial Series ID", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00120072": Object.freeze({ tag: "00120072", keyword: "Clinical Trial Series Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00120073": Object.freeze({ tag: "00120073", keyword: "Issuer of Clinical Trial Series ID", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00120081": Object.freeze({ tag: "00120081", keyword: "Clinical Trial Protocol Ethics Committee Name", basicProfile: "D", optionSet: Object.freeze({ "RetainInstitutionIdentity": "K" }) }),
-  "00120082": Object.freeze({ tag: "00120082", keyword: "Clinical Trial Protocol Ethics Committee Approval Number", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00120086": Object.freeze({ tag: "00120086", keyword: "Ethics Committee Approval Effectiveness Start Date", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00120087": Object.freeze({ tag: "00120087", keyword: "Ethics Committee Approval Effectiveness End Date", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0014407C": Object.freeze({ tag: "0014407C", keyword: "Calibration Time", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K", "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0014407E": Object.freeze({ tag: "0014407E", keyword: "Calibration Date", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K", "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0016002B": Object.freeze({ tag: "0016002B", keyword: "Maker Note", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "0016004B": Object.freeze({ tag: "0016004B", keyword: "Device Setting Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "0016004D": Object.freeze({ tag: "0016004D", keyword: "Camera Owner Name", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "0016004E": Object.freeze({ tag: "0016004E", keyword: "Lens Specification", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "0016004F": Object.freeze({ tag: "0016004F", keyword: "Lens Make", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "00160050": Object.freeze({ tag: "00160050", keyword: "Lens Model", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "00160051": Object.freeze({ tag: "00160051", keyword: "Lens Serial Number", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "00160070": Object.freeze({ tag: "00160070", keyword: "GPS Version ID", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00160071": Object.freeze({ tag: "00160071", keyword: "GPS Latitude Ref", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00160072": Object.freeze({ tag: "00160072", keyword: "GPS Latitude", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00160073": Object.freeze({ tag: "00160073", keyword: "GPS Longitude Ref", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00160074": Object.freeze({ tag: "00160074", keyword: "GPS Longitude", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00160075": Object.freeze({ tag: "00160075", keyword: "GPS Altitude Ref", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00160076": Object.freeze({ tag: "00160076", keyword: "GPS Altitude", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00160077": Object.freeze({ tag: "00160077", keyword: "GPS Time Stamp", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00160078": Object.freeze({ tag: "00160078", keyword: "GPS Satellites", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00160079": Object.freeze({ tag: "00160079", keyword: "GPS Status", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "0016007A": Object.freeze({ tag: "0016007A", keyword: "GPS Measure Mode", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "0016007B": Object.freeze({ tag: "0016007B", keyword: "GPS DOP", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "0016007C": Object.freeze({ tag: "0016007C", keyword: "GPS Speed Ref", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "0016007D": Object.freeze({ tag: "0016007D", keyword: "GPS Speed", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "0016007E": Object.freeze({ tag: "0016007E", keyword: "GPS Track Ref", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "0016007F": Object.freeze({ tag: "0016007F", keyword: "GPS Track", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00160080": Object.freeze({ tag: "00160080", keyword: "GPS Img Direction Ref", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00160081": Object.freeze({ tag: "00160081", keyword: "GPS Img Direction", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00160082": Object.freeze({ tag: "00160082", keyword: "GPS Map Datum", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00160083": Object.freeze({ tag: "00160083", keyword: "GPS Dest Latitude Ref", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00160084": Object.freeze({ tag: "00160084", keyword: "GPS Dest Latitude", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00160085": Object.freeze({ tag: "00160085", keyword: "GPS Dest Longitude Ref", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00160086": Object.freeze({ tag: "00160086", keyword: "GPS Dest Longitude", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00160087": Object.freeze({ tag: "00160087", keyword: "GPS Dest Bearing Ref", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00160088": Object.freeze({ tag: "00160088", keyword: "GPS Dest Bearing", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00160089": Object.freeze({ tag: "00160089", keyword: "GPS Dest Distance Ref", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "0016008A": Object.freeze({ tag: "0016008A", keyword: "GPS Dest Distance", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "0016008B": Object.freeze({ tag: "0016008B", keyword: "GPS Processing Method", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "0016008C": Object.freeze({ tag: "0016008C", keyword: "GPS Area Information", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "0016008D": Object.freeze({ tag: "0016008D", keyword: "GPS Date Stamp", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0016008E": Object.freeze({ tag: "0016008E", keyword: "GPS Differential", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00180010": Object.freeze({ tag: "00180010", keyword: "Contrast/Bolus Agent", basicProfile: "Z/D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00180027": Object.freeze({ tag: "00180027", keyword: "Intervention Drug Stop Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00180035": Object.freeze({ tag: "00180035", keyword: "Intervention Drug Start Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00181000": Object.freeze({ tag: "00181000", keyword: "Device Serial Number", basicProfile: "X/Z/D", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "00181002": Object.freeze({ tag: "00181002", keyword: "Device UID", basicProfile: "U", optionSet: Object.freeze({ "RetainDeviceIdentity": "K", "RetainUIDs": "K" }) }),
-  "00181004": Object.freeze({ tag: "00181004", keyword: "Plate ID", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "00181005": Object.freeze({ tag: "00181005", keyword: "Generator ID", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "00181007": Object.freeze({ tag: "00181007", keyword: "Cassette ID", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "00181008": Object.freeze({ tag: "00181008", keyword: "Gantry ID", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "00181009": Object.freeze({ tag: "00181009", keyword: "Unique Device Identifier", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "0018100A": Object.freeze({ tag: "0018100A", keyword: "UDI Sequence", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "0018100B": Object.freeze({ tag: "0018100B", keyword: "Manufacturer's Device Class UID", basicProfile: "U", optionSet: Object.freeze({ "RetainDeviceIdentity": "K", "RetainUIDs": "K" }) }),
-  "00181010": Object.freeze({ tag: "00181010", keyword: "Secondary Capture Device ID", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "00181011": Object.freeze({ tag: "00181011", keyword: "Hardcopy Creation Device ID", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "00181012": Object.freeze({ tag: "00181012", keyword: "Date of Secondary Capture", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00181014": Object.freeze({ tag: "00181014", keyword: "Time of Secondary Capture", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00181030": Object.freeze({ tag: "00181030", keyword: "Protocol Name", basicProfile: "X/D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00181042": Object.freeze({ tag: "00181042", keyword: "Contrast/Bolus Start Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00181043": Object.freeze({ tag: "00181043", keyword: "Contrast/Bolus Stop Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00181072": Object.freeze({ tag: "00181072", keyword: "Radiopharmaceutical Start Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00181073": Object.freeze({ tag: "00181073", keyword: "Radiopharmaceutical Stop Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00181078": Object.freeze({ tag: "00181078", keyword: "Radiopharmaceutical Start DateTime", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00181079": Object.freeze({ tag: "00181079", keyword: "Radiopharmaceutical Stop DateTime", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "001811BB": Object.freeze({ tag: "001811BB", keyword: "Acquisition Field of View Label", basicProfile: "D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00181200": Object.freeze({ tag: "00181200", keyword: "Date of Last Calibration", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K", "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00181201": Object.freeze({ tag: "00181201", keyword: "Time of Last Calibration", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K", "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00181202": Object.freeze({ tag: "00181202", keyword: "DateTime of Last Calibration", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K", "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00181203": Object.freeze({ tag: "00181203", keyword: "Calibration DateTime", basicProfile: "Z", optionSet: Object.freeze({ "RetainDeviceIdentity": "K", "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00181204": Object.freeze({ tag: "00181204", keyword: "Date of Manufacture", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K", "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00181205": Object.freeze({ tag: "00181205", keyword: "Date of Installation", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K", "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00181400": Object.freeze({ tag: "00181400", keyword: "Acquisition Device Processing Description", basicProfile: "X/D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00182042": Object.freeze({ tag: "00182042", keyword: "Target UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00184000": Object.freeze({ tag: "00184000", keyword: "Acquisition Comments", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00185011": Object.freeze({ tag: "00185011", keyword: "Transducer Identification Sequence", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "0018700A": Object.freeze({ tag: "0018700A", keyword: "Detector ID", basicProfile: "X/D", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "0018700C": Object.freeze({ tag: "0018700C", keyword: "Date of Last Detector Calibration", basicProfile: "X/D", optionSet: Object.freeze({ "RetainDeviceIdentity": "K", "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0018700E": Object.freeze({ tag: "0018700E", keyword: "Time of Last Detector Calibration", basicProfile: "X/D", optionSet: Object.freeze({ "RetainDeviceIdentity": "K", "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00189074": Object.freeze({ tag: "00189074", keyword: "Frame Acquisition DateTime", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00189151": Object.freeze({ tag: "00189151", keyword: "Frame Reference DateTime", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00189185": Object.freeze({ tag: "00189185", keyword: "Respiratory Motion Compensation Technique Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00189367": Object.freeze({ tag: "00189367", keyword: "X-Ray Source ID", basicProfile: "D", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "00189369": Object.freeze({ tag: "00189369", keyword: "Source Start DateTime", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0018936A": Object.freeze({ tag: "0018936A", keyword: "Source End DateTime", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00189371": Object.freeze({ tag: "00189371", keyword: "X-Ray Detector ID", basicProfile: "D", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "00189373": Object.freeze({ tag: "00189373", keyword: "X-Ray Detector Label", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "0018937B": Object.freeze({ tag: "0018937B", keyword: "Multi-energy Acquisition Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "0018937F": Object.freeze({ tag: "0018937F", keyword: "Decomposition Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00189424": Object.freeze({ tag: "00189424", keyword: "Acquisition Protocol Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00189516": Object.freeze({ tag: "00189516", keyword: "Start Acquisition DateTime", basicProfile: "X/D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00189517": Object.freeze({ tag: "00189517", keyword: "End Acquisition DateTime", basicProfile: "X/D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00189623": Object.freeze({ tag: "00189623", keyword: "Functional Sync Pulse", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00189701": Object.freeze({ tag: "00189701", keyword: "Decay Correction DateTime", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00189804": Object.freeze({ tag: "00189804", keyword: "Exclusion Start DateTime", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00189919": Object.freeze({ tag: "00189919", keyword: "Instruction Performed DateTime", basicProfile: "Z/D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00189937": Object.freeze({ tag: "00189937", keyword: "Requested Series Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "0018A002": Object.freeze({ tag: "0018A002", keyword: "Contribution DateTime", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0018A003": Object.freeze({ tag: "0018A003", keyword: "Contribution Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "0020000D": Object.freeze({ tag: "0020000D", keyword: "Study Instance UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "0020000E": Object.freeze({ tag: "0020000E", keyword: "Series Instance UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00200010": Object.freeze({ tag: "00200010", keyword: "Study ID", basicProfile: "Z", optionSet: Object.freeze({}) }),
-  "00200027": Object.freeze({ tag: "00200027", keyword: "Pyramid Label", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00200052": Object.freeze({ tag: "00200052", keyword: "Frame of Reference UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00200200": Object.freeze({ tag: "00200200", keyword: "Synchronization Frame of Reference UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00203401": Object.freeze({ tag: "00203401", keyword: "Modifying Device ID", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "00203403": Object.freeze({ tag: "00203403", keyword: "Modified Image Date", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00203405": Object.freeze({ tag: "00203405", keyword: "Modified Image Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00203406": Object.freeze({ tag: "00203406", keyword: "Modified Image Description", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00204000": Object.freeze({ tag: "00204000", keyword: "Image Comments", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00209158": Object.freeze({ tag: "00209158", keyword: "Frame Comments", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00209161": Object.freeze({ tag: "00209161", keyword: "Concatenation UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00209164": Object.freeze({ tag: "00209164", keyword: "Dimension Organization UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00281199": Object.freeze({ tag: "00281199", keyword: "Palette Color Lookup Table UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00281214": Object.freeze({ tag: "00281214", keyword: "Large Palette Color Lookup Table UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00284000": Object.freeze({ tag: "00284000", keyword: "Image Presentation Comments", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00320012": Object.freeze({ tag: "00320012", keyword: "Study ID Issuer", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00320032": Object.freeze({ tag: "00320032", keyword: "Study Verified Date", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00320033": Object.freeze({ tag: "00320033", keyword: "Study Verified Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00320034": Object.freeze({ tag: "00320034", keyword: "Study Read Date", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00320035": Object.freeze({ tag: "00320035", keyword: "Study Read Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00321000": Object.freeze({ tag: "00321000", keyword: "Scheduled Study Start Date", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00321001": Object.freeze({ tag: "00321001", keyword: "Scheduled Study Start Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00321010": Object.freeze({ tag: "00321010", keyword: "Scheduled Study Stop Date", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00321011": Object.freeze({ tag: "00321011", keyword: "Scheduled Study Stop Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00321020": Object.freeze({ tag: "00321020", keyword: "Scheduled Study Location", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "00321021": Object.freeze({ tag: "00321021", keyword: "Scheduled Study Location AE Title", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "C" }) }),
-  "00321030": Object.freeze({ tag: "00321030", keyword: "Reason for Study", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00321032": Object.freeze({ tag: "00321032", keyword: "Requesting Physician", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00321033": Object.freeze({ tag: "00321033", keyword: "Requesting Service", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00321040": Object.freeze({ tag: "00321040", keyword: "Study Arrival Date", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00321041": Object.freeze({ tag: "00321041", keyword: "Study Arrival Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00321050": Object.freeze({ tag: "00321050", keyword: "Study Completion Date", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00321051": Object.freeze({ tag: "00321051", keyword: "Study Completion Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00321060": Object.freeze({ tag: "00321060", keyword: "Requested Procedure Description", basicProfile: "X/Z", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00321066": Object.freeze({ tag: "00321066", keyword: "Reason for Visit", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00321067": Object.freeze({ tag: "00321067", keyword: "Reason for Visit Code Sequence", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00321070": Object.freeze({ tag: "00321070", keyword: "Requested Contrast Agent", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00324000": Object.freeze({ tag: "00324000", keyword: "Study Comments", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00340001": Object.freeze({ tag: "00340001", keyword: "Flow Identifier Sequence", basicProfile: "D", optionSet: Object.freeze({}) }),
-  "00340002": Object.freeze({ tag: "00340002", keyword: "Flow Identifier", basicProfile: "D", optionSet: Object.freeze({}) }),
-  "00340005": Object.freeze({ tag: "00340005", keyword: "Source Identifier", basicProfile: "D", optionSet: Object.freeze({}) }),
-  "00340007": Object.freeze({ tag: "00340007", keyword: "Frame Origin Timestamp", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00380004": Object.freeze({ tag: "00380004", keyword: "Referenced Patient Alias Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00380010": Object.freeze({ tag: "00380010", keyword: "Admission ID", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00380011": Object.freeze({ tag: "00380011", keyword: "Issuer of Admission ID", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00380014": Object.freeze({ tag: "00380014", keyword: "Issuer of Admission ID Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "0038001A": Object.freeze({ tag: "0038001A", keyword: "Scheduled Admission Date", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0038001B": Object.freeze({ tag: "0038001B", keyword: "Scheduled Admission Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0038001C": Object.freeze({ tag: "0038001C", keyword: "Scheduled Discharge Date", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0038001D": Object.freeze({ tag: "0038001D", keyword: "Scheduled Discharge Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0038001E": Object.freeze({ tag: "0038001E", keyword: "Scheduled Patient Institution Residence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00380020": Object.freeze({ tag: "00380020", keyword: "Admitting Date", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00380021": Object.freeze({ tag: "00380021", keyword: "Admitting Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00380030": Object.freeze({ tag: "00380030", keyword: "Discharge Date", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00380032": Object.freeze({ tag: "00380032", keyword: "Discharge Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00380040": Object.freeze({ tag: "00380040", keyword: "Discharge Diagnosis Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00380050": Object.freeze({ tag: "00380050", keyword: "Special Needs", basicProfile: "X", optionSet: Object.freeze({ "RetainPatientCharacteristics": "C" }) }),
-  "00380060": Object.freeze({ tag: "00380060", keyword: "Service Episode ID", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00380061": Object.freeze({ tag: "00380061", keyword: "Issuer of Service Episode ID", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00380062": Object.freeze({ tag: "00380062", keyword: "Service Episode Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00380064": Object.freeze({ tag: "00380064", keyword: "Issuer of Service Episode ID Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00380300": Object.freeze({ tag: "00380300", keyword: "Current Patient Location", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00380400": Object.freeze({ tag: "00380400", keyword: "Patient's Institution Residence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00380500": Object.freeze({ tag: "00380500", keyword: "Patient State", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C", "RetainPatientCharacteristics": "C" }) }),
-  "00384000": Object.freeze({ tag: "00384000", keyword: "Visit Comments", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "003A0020": Object.freeze({ tag: "003A0020", keyword: "Multiplex Group Label", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "003A0203": Object.freeze({ tag: "003A0203", keyword: "Channel Label", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "003A020C": Object.freeze({ tag: "003A020C", keyword: "Channel Derivation Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "003A0310": Object.freeze({ tag: "003A0310", keyword: "Multiplex Group UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "003A0314": Object.freeze({ tag: "003A0314", keyword: "Impedance Measurement DateTime", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "003A0329": Object.freeze({ tag: "003A0329", keyword: "Waveform Filter Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "003A032B": Object.freeze({ tag: "003A032B", keyword: "Filter Lookup Table Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00400001": Object.freeze({ tag: "00400001", keyword: "Scheduled Station AE Title", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "C" }) }),
-  "00400002": Object.freeze({ tag: "00400002", keyword: "Scheduled Procedure Step Start Date", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00400003": Object.freeze({ tag: "00400003", keyword: "Scheduled Procedure Step Start Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00400004": Object.freeze({ tag: "00400004", keyword: "Scheduled Procedure Step End Date", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00400005": Object.freeze({ tag: "00400005", keyword: "Scheduled Procedure Step End Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00400006": Object.freeze({ tag: "00400006", keyword: "Scheduled Performing Physician's Name", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00400007": Object.freeze({ tag: "00400007", keyword: "Scheduled Procedure Step Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00400009": Object.freeze({ tag: "00400009", keyword: "Scheduled Procedure Step ID", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "0040000B": Object.freeze({ tag: "0040000B", keyword: "Scheduled Performing Physician Identification Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00400010": Object.freeze({ tag: "00400010", keyword: "Scheduled Station Name", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "00400011": Object.freeze({ tag: "00400011", keyword: "Scheduled Procedure Step Location", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "00400012": Object.freeze({ tag: "00400012", keyword: "Pre-Medication", basicProfile: "X", optionSet: Object.freeze({ "RetainPatientCharacteristics": "C" }) }),
-  "00400241": Object.freeze({ tag: "00400241", keyword: "Performed Station AE Title", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "C" }) }),
-  "00400242": Object.freeze({ tag: "00400242", keyword: "Performed Station Name", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "00400243": Object.freeze({ tag: "00400243", keyword: "Performed Location", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00400244": Object.freeze({ tag: "00400244", keyword: "Performed Procedure Step Start Date", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00400245": Object.freeze({ tag: "00400245", keyword: "Performed Procedure Step Start Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00400250": Object.freeze({ tag: "00400250", keyword: "Performed Procedure Step End Date", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00400251": Object.freeze({ tag: "00400251", keyword: "Performed Procedure Step End Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00400253": Object.freeze({ tag: "00400253", keyword: "Performed Procedure Step ID", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00400254": Object.freeze({ tag: "00400254", keyword: "Performed Procedure Step Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00400275": Object.freeze({ tag: "00400275", keyword: "Request Attributes Sequence", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00400280": Object.freeze({ tag: "00400280", keyword: "Comments on the Performed Procedure Step", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00400310": Object.freeze({ tag: "00400310", keyword: "Comments on Radiation Dose", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "0040050A": Object.freeze({ tag: "0040050A", keyword: "Specimen Accession Number", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00400512": Object.freeze({ tag: "00400512", keyword: "Container Identifier", basicProfile: "D", optionSet: Object.freeze({}) }),
-  "00400513": Object.freeze({ tag: "00400513", keyword: "Issuer of the Container Identifier Sequence", basicProfile: "Z", optionSet: Object.freeze({}) }),
-  "0040051A": Object.freeze({ tag: "0040051A", keyword: "Container Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00400551": Object.freeze({ tag: "00400551", keyword: "Specimen Identifier", basicProfile: "D", optionSet: Object.freeze({}) }),
-  "00400554": Object.freeze({ tag: "00400554", keyword: "Specimen UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00400555": Object.freeze({ tag: "00400555", keyword: "Acquisition Context Sequence", basicProfile: "X/Z", optionSet: Object.freeze({ "CleanStructuredContent": "C" }) }),
-  "00400556": Object.freeze({ tag: "00400556", keyword: "Acquisition Context Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00400562": Object.freeze({ tag: "00400562", keyword: "Issuer of the Specimen Identifier Sequence", basicProfile: "Z", optionSet: Object.freeze({}) }),
-  "00400600": Object.freeze({ tag: "00400600", keyword: "Specimen Short Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00400602": Object.freeze({ tag: "00400602", keyword: "Specimen Detailed Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00400610": Object.freeze({ tag: "00400610", keyword: "Specimen Preparation Sequence", basicProfile: "Z", optionSet: Object.freeze({ "CleanStructuredContent": "C" }) }),
-  "004006FA": Object.freeze({ tag: "004006FA", keyword: "Slide Identifier", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00401001": Object.freeze({ tag: "00401001", keyword: "Requested Procedure ID", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00401002": Object.freeze({ tag: "00401002", keyword: "Reason for the Requested Procedure", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00401004": Object.freeze({ tag: "00401004", keyword: "Patient Transport Arrangements", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00401005": Object.freeze({ tag: "00401005", keyword: "Requested Procedure Location", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "0040100A": Object.freeze({ tag: "0040100A", keyword: "Reason for Requested Procedure Code Sequence", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00401010": Object.freeze({ tag: "00401010", keyword: "Names of Intended Recipients of Results", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00401011": Object.freeze({ tag: "00401011", keyword: "Intended Recipients of Results Identification Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00401101": Object.freeze({ tag: "00401101", keyword: "Person Identification Code Sequence", basicProfile: "D", optionSet: Object.freeze({}) }),
-  "00401102": Object.freeze({ tag: "00401102", keyword: "Person's Address", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00401103": Object.freeze({ tag: "00401103", keyword: "Person's Telephone Numbers", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00401104": Object.freeze({ tag: "00401104", keyword: "Person's Telecom Information", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00401400": Object.freeze({ tag: "00401400", keyword: "Requested Procedure Comments", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00402001": Object.freeze({ tag: "00402001", keyword: "Reason for the Imaging Service Request", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00402004": Object.freeze({ tag: "00402004", keyword: "Issue Date of Imaging Service Request", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00402005": Object.freeze({ tag: "00402005", keyword: "Issue Time of Imaging Service Request", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00402008": Object.freeze({ tag: "00402008", keyword: "Order Entered By", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00402009": Object.freeze({ tag: "00402009", keyword: "Order Enterer's Location", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00402010": Object.freeze({ tag: "00402010", keyword: "Order Callback Phone Number", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00402011": Object.freeze({ tag: "00402011", keyword: "Order Callback Telecom Information", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00402016": Object.freeze({ tag: "00402016", keyword: "Placer Order Number / Imaging Service Request", basicProfile: "Z", optionSet: Object.freeze({}) }),
-  "00402017": Object.freeze({ tag: "00402017", keyword: "Filler Order Number / Imaging Service Request", basicProfile: "Z", optionSet: Object.freeze({}) }),
-  "00402400": Object.freeze({ tag: "00402400", keyword: "Imaging Service Request Comments", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00403001": Object.freeze({ tag: "00403001", keyword: "Confidentiality Constraint on Patient Data Description", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00404005": Object.freeze({ tag: "00404005", keyword: "Scheduled Procedure Step Start DateTime", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00404008": Object.freeze({ tag: "00404008", keyword: "Scheduled Procedure Step Expiration DateTime", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00404010": Object.freeze({ tag: "00404010", keyword: "Scheduled Procedure Step Modification DateTime", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00404011": Object.freeze({ tag: "00404011", keyword: "Expected Completion DateTime", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00404023": Object.freeze({ tag: "00404023", keyword: "Referenced General Purpose Scheduled Procedure Step Transaction UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00404025": Object.freeze({ tag: "00404025", keyword: "Scheduled Station Name Code Sequence", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "00404027": Object.freeze({ tag: "00404027", keyword: "Scheduled Station Geographic Location Code Sequence", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "00404028": Object.freeze({ tag: "00404028", keyword: "Performed Station Name Code Sequence", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "00404030": Object.freeze({ tag: "00404030", keyword: "Performed Station Geographic Location Code Sequence", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "00404034": Object.freeze({ tag: "00404034", keyword: "Scheduled Human Performers Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00404035": Object.freeze({ tag: "00404035", keyword: "Actual Human Performers Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00404036": Object.freeze({ tag: "00404036", keyword: "Human Performer's Organization", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00404037": Object.freeze({ tag: "00404037", keyword: "Human Performer's Name", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00404050": Object.freeze({ tag: "00404050", keyword: "Performed Procedure Step Start DateTime", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00404051": Object.freeze({ tag: "00404051", keyword: "Performed Procedure Step End DateTime", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00404052": Object.freeze({ tag: "00404052", keyword: "Procedure Step Cancellation DateTime", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0040A023": Object.freeze({ tag: "0040A023", keyword: "Findings Group Recording Date (Trial)", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0040A024": Object.freeze({ tag: "0040A024", keyword: "Findings Group Recording Time (Trial)", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0040A027": Object.freeze({ tag: "0040A027", keyword: "Verifying Organization", basicProfile: "D", optionSet: Object.freeze({}) }),
-  "0040A030": Object.freeze({ tag: "0040A030", keyword: "Verification DateTime", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0040A032": Object.freeze({ tag: "0040A032", keyword: "Observation DateTime", basicProfile: "X/D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0040A033": Object.freeze({ tag: "0040A033", keyword: "Observation Start DateTime", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0040A034": Object.freeze({ tag: "0040A034", keyword: "Effective Start DateTime", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0040A035": Object.freeze({ tag: "0040A035", keyword: "Effective Stop DateTime", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0040A073": Object.freeze({ tag: "0040A073", keyword: "Verifying Observer Sequence", basicProfile: "D", optionSet: Object.freeze({}) }),
-  "0040A075": Object.freeze({ tag: "0040A075", keyword: "Verifying Observer Name", basicProfile: "D", optionSet: Object.freeze({}) }),
-  "0040A078": Object.freeze({ tag: "0040A078", keyword: "Author Observer Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "0040A07A": Object.freeze({ tag: "0040A07A", keyword: "Participant Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "0040A07C": Object.freeze({ tag: "0040A07C", keyword: "Custodial Organization Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "0040A082": Object.freeze({ tag: "0040A082", keyword: "Participation DateTime", basicProfile: "Z", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0040A088": Object.freeze({ tag: "0040A088", keyword: "Verifying Observer Identification Code Sequence", basicProfile: "Z", optionSet: Object.freeze({}) }),
-  "0040A110": Object.freeze({ tag: "0040A110", keyword: "Date of Document or Verbal Transaction (Trial)", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0040A112": Object.freeze({ tag: "0040A112", keyword: "Time of Document Creation or Verbal Transaction (Trial)", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0040A120": Object.freeze({ tag: "0040A120", keyword: "DateTime", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0040A121": Object.freeze({ tag: "0040A121", keyword: "Date", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0040A122": Object.freeze({ tag: "0040A122", keyword: "Time", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0040A123": Object.freeze({ tag: "0040A123", keyword: "Person Name", basicProfile: "D", optionSet: Object.freeze({}) }),
-  "0040A124": Object.freeze({ tag: "0040A124", keyword: "UID", basicProfile: "U", optionSet: Object.freeze({}) }),
-  "0040A13A": Object.freeze({ tag: "0040A13A", keyword: "Referenced DateTime", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0040A171": Object.freeze({ tag: "0040A171", keyword: "Observation UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "0040A172": Object.freeze({ tag: "0040A172", keyword: "Referenced Observation UID (Trial)", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "0040A192": Object.freeze({ tag: "0040A192", keyword: "Observation Date (Trial)", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0040A193": Object.freeze({ tag: "0040A193", keyword: "Observation Time (Trial)", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0040A307": Object.freeze({ tag: "0040A307", keyword: "Current Observer (Trial)", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "0040A352": Object.freeze({ tag: "0040A352", keyword: "Verbal Source (Trial)", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "0040A353": Object.freeze({ tag: "0040A353", keyword: "Address (Trial)", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "0040A354": Object.freeze({ tag: "0040A354", keyword: "Telephone Number (Trial)", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "0040A358": Object.freeze({ tag: "0040A358", keyword: "Verbal Source Identifier Code Sequence (Trial)", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "0040A402": Object.freeze({ tag: "0040A402", keyword: "Observation Subject UID (Trial)", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "0040A730": Object.freeze({ tag: "0040A730", keyword: "Content Sequence", basicProfile: "D", optionSet: Object.freeze({ "CleanStructuredContent": "C" }) }),
-  "0040B020": Object.freeze({ tag: "0040B020", keyword: "Waveform Annotation Sequence", basicProfile: "X/D", optionSet: Object.freeze({ "CleanStructuredContent": "C" }) }),
-  "0040B034": Object.freeze({ tag: "0040B034", keyword: "Annotation DateTime", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0040B036": Object.freeze({ tag: "0040B036", keyword: "Segment Definition DateTime", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0040B03B": Object.freeze({ tag: "0040B03B", keyword: "Montage Name", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "0040B03F": Object.freeze({ tag: "0040B03F", keyword: "Montage Channel Label", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "0040DB06": Object.freeze({ tag: "0040DB06", keyword: "Template Version", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0040DB07": Object.freeze({ tag: "0040DB07", keyword: "Template Local Version", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0040DB0C": Object.freeze({ tag: "0040DB0C", keyword: "Template Extension Organization UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "0040DB0D": Object.freeze({ tag: "0040DB0D", keyword: "Template Extension Creator UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "0040E004": Object.freeze({ tag: "0040E004", keyword: "HL7 Document Effective Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0040E012": Object.freeze({ tag: "0040E012", keyword: "Display URI", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00420011": Object.freeze({ tag: "00420011", keyword: "Encapsulated Document", basicProfile: "D", optionSet: Object.freeze({}) }),
-  "00440004": Object.freeze({ tag: "00440004", keyword: "Approval Status DateTime", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0044000B": Object.freeze({ tag: "0044000B", keyword: "Product Expiration DateTime", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00440010": Object.freeze({ tag: "00440010", keyword: "Substance Administration DateTime", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00440104": Object.freeze({ tag: "00440104", keyword: "Assertion DateTime", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00440105": Object.freeze({ tag: "00440105", keyword: "Assertion Expiration DateTime", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0050001B": Object.freeze({ tag: "0050001B", keyword: "Container Component ID", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00500020": Object.freeze({ tag: "00500020", keyword: "Device Description", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "00500021": Object.freeze({ tag: "00500021", keyword: "Long Device Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00620021": Object.freeze({ tag: "00620021", keyword: "Tracking UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00640003": Object.freeze({ tag: "00640003", keyword: "Source Frame of Reference UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00686226": Object.freeze({ tag: "00686226", keyword: "Effective DateTime", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00686270": Object.freeze({ tag: "00686270", keyword: "Information Issue DateTime", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "006A0003": Object.freeze({ tag: "006A0003", keyword: "Annotation Group UID", basicProfile: "D", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "006A0005": Object.freeze({ tag: "006A0005", keyword: "Annotation Group Label", basicProfile: "D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "006A0006": Object.freeze({ tag: "006A0006", keyword: "Annotation Group Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00700001": Object.freeze({ tag: "00700001", keyword: "Graphic Annotation Sequence", basicProfile: "D", optionSet: Object.freeze({ "CleanGraphics": "C" }) }),
-  "00700006": Object.freeze({ tag: "00700006", keyword: "Unformatted Text Value", basicProfile: "D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00700082": Object.freeze({ tag: "00700082", keyword: "Presentation Creation Date", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00700083": Object.freeze({ tag: "00700083", keyword: "Presentation Creation Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00700084": Object.freeze({ tag: "00700084", keyword: "Content Creator's Name", basicProfile: "Z/D", optionSet: Object.freeze({}) }),
-  "00700086": Object.freeze({ tag: "00700086", keyword: "Content Creator's Identification Code Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "0070031A": Object.freeze({ tag: "0070031A", keyword: "Fiducial UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00701101": Object.freeze({ tag: "00701101", keyword: "Presentation Display Collection UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00701102": Object.freeze({ tag: "00701102", keyword: "Presentation Sequence Collection UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "0072000A": Object.freeze({ tag: "0072000A", keyword: "Hanging Protocol Creation DateTime", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0072005E": Object.freeze({ tag: "0072005E", keyword: "Selector AE Value", basicProfile: "D", optionSet: Object.freeze({ "RetainDeviceIdentity": "C" }) }),
-  "0072005F": Object.freeze({ tag: "0072005F", keyword: "Selector AS Value", basicProfile: "D", optionSet: Object.freeze({ "RetainPatientCharacteristics": "K" }) }),
-  "00720061": Object.freeze({ tag: "00720061", keyword: "Selector DA Value", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00720063": Object.freeze({ tag: "00720063", keyword: "Selector DT Value", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "00720065": Object.freeze({ tag: "00720065", keyword: "Selector OB Value", basicProfile: "D", optionSet: Object.freeze({}) }),
-  "00720066": Object.freeze({ tag: "00720066", keyword: "Selector LO Value", basicProfile: "D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00720068": Object.freeze({ tag: "00720068", keyword: "Selector LT Value", basicProfile: "D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "0072006A": Object.freeze({ tag: "0072006A", keyword: "Selector PN Value", basicProfile: "D", optionSet: Object.freeze({}) }),
-  "0072006B": Object.freeze({ tag: "0072006B", keyword: "Selector TM Value", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "0072006C": Object.freeze({ tag: "0072006C", keyword: "Selector SH Value", basicProfile: "D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "0072006D": Object.freeze({ tag: "0072006D", keyword: "Selector UN Value", basicProfile: "D", optionSet: Object.freeze({}) }),
-  "0072006E": Object.freeze({ tag: "0072006E", keyword: "Selector ST Value", basicProfile: "D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00720070": Object.freeze({ tag: "00720070", keyword: "Selector UT Value", basicProfile: "D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "00720071": Object.freeze({ tag: "00720071", keyword: "Selector UR Value", basicProfile: "D", optionSet: Object.freeze({}) }),
-  "00741234": Object.freeze({ tag: "00741234", keyword: "Receiving AE", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "C" }) }),
-  "00741236": Object.freeze({ tag: "00741236", keyword: "Requesting AE", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "C" }) }),
-  "00880140": Object.freeze({ tag: "00880140", keyword: "Storage Media File-set UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "00880200": Object.freeze({ tag: "00880200", keyword: "Icon Image Sequence (see Note 11)", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00880904": Object.freeze({ tag: "00880904", keyword: "Topic Title", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00880906": Object.freeze({ tag: "00880906", keyword: "Topic Subject", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00880910": Object.freeze({ tag: "00880910", keyword: "Topic Author", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "00880912": Object.freeze({ tag: "00880912", keyword: "Topic Keywords", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "01000420": Object.freeze({ tag: "01000420", keyword: "SOP Authorization DateTime", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "04000100": Object.freeze({ tag: "04000100", keyword: "Digital Signature UID", basicProfile: "U", optionSet: Object.freeze({}) }),
-  "04000105": Object.freeze({ tag: "04000105", keyword: "Digital Signature DateTime", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "04000115": Object.freeze({ tag: "04000115", keyword: "Certificate of Signer", basicProfile: "D", optionSet: Object.freeze({}) }),
-  "04000310": Object.freeze({ tag: "04000310", keyword: "Certified Timestamp", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "04000402": Object.freeze({ tag: "04000402", keyword: "Referenced Digital Signature Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "04000403": Object.freeze({ tag: "04000403", keyword: "Referenced SOP Instance MAC Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "04000404": Object.freeze({ tag: "04000404", keyword: "MAC", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "04000550": Object.freeze({ tag: "04000550", keyword: "Modified Attributes Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "04000551": Object.freeze({ tag: "04000551", keyword: "Nonconforming Modified Attributes Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "04000552": Object.freeze({ tag: "04000552", keyword: "Nonconforming Data Element Value", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "04000561": Object.freeze({ tag: "04000561", keyword: "Original Attributes Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "04000562": Object.freeze({ tag: "04000562", keyword: "Attribute Modification DateTime", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "04000563": Object.freeze({ tag: "04000563", keyword: "Modifying System", basicProfile: "D", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "04000564": Object.freeze({ tag: "04000564", keyword: "Source of Previous Values", basicProfile: "Z", optionSet: Object.freeze({ "RetainInstitutionIdentity": "K" }) }),
-  "04000565": Object.freeze({ tag: "04000565", keyword: "Reason for the Attribute Modification", basicProfile: "D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "04000600": Object.freeze({ tag: "04000600", keyword: "Instance Origin Status", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "20300020": Object.freeze({ tag: "20300020", keyword: "Text String", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "21000040": Object.freeze({ tag: "21000040", keyword: "Creation Date", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "21000050": Object.freeze({ tag: "21000050", keyword: "Creation Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "21000070": Object.freeze({ tag: "21000070", keyword: "Originator", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "C" }) }),
-  "21000140": Object.freeze({ tag: "21000140", keyword: "Destination AE", basicProfile: "D", optionSet: Object.freeze({ "RetainDeviceIdentity": "C" }) }),
-  "22000002": Object.freeze({ tag: "22000002", keyword: "Label Text", basicProfile: "X/Z", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "22000005": Object.freeze({ tag: "22000005", keyword: "Barcode Value", basicProfile: "X/Z", optionSet: Object.freeze({}) }),
-  "30020121": Object.freeze({ tag: "30020121", keyword: "Position Acquisition Template Name", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "30020123": Object.freeze({ tag: "30020123", keyword: "Position Acquisition Template Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "3004007F": Object.freeze({ tag: "3004007F", keyword: "Dose Calculation Model Name", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "30060002": Object.freeze({ tag: "30060002", keyword: "Structure Set Label", basicProfile: "D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "30060004": Object.freeze({ tag: "30060004", keyword: "Structure Set Name", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "30060006": Object.freeze({ tag: "30060006", keyword: "Structure Set Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "30060008": Object.freeze({ tag: "30060008", keyword: "Structure Set Date", basicProfile: "Z", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "30060009": Object.freeze({ tag: "30060009", keyword: "Structure Set Time", basicProfile: "Z", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "30060024": Object.freeze({ tag: "30060024", keyword: "Referenced Frame of Reference UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "30060026": Object.freeze({ tag: "30060026", keyword: "ROI Name", basicProfile: "Z", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "30060028": Object.freeze({ tag: "30060028", keyword: "ROI Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "3006002D": Object.freeze({ tag: "3006002D", keyword: "ROI DateTime", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "3006002E": Object.freeze({ tag: "3006002E", keyword: "ROI Observation DateTime", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "30060038": Object.freeze({ tag: "30060038", keyword: "ROI Generation Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "3006004D": Object.freeze({ tag: "3006004D", keyword: "ROI Creator Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "3006004E": Object.freeze({ tag: "3006004E", keyword: "ROI Interpreter Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "30060085": Object.freeze({ tag: "30060085", keyword: "ROI Observation Label", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "30060088": Object.freeze({ tag: "30060088", keyword: "ROI Observation Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300600A6": Object.freeze({ tag: "300600A6", keyword: "ROI Interpreter", basicProfile: "Z", optionSet: Object.freeze({}) }),
-  "300600C2": Object.freeze({ tag: "300600C2", keyword: "Related Frame of Reference UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "30080024": Object.freeze({ tag: "30080024", keyword: "Treatment Control Point Date", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "30080025": Object.freeze({ tag: "30080025", keyword: "Treatment Control Point Time", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "30080054": Object.freeze({ tag: "30080054", keyword: "First Treatment Date", basicProfile: "X/D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "30080056": Object.freeze({ tag: "30080056", keyword: "Most Recent Treatment Date", basicProfile: "X/D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "30080105": Object.freeze({ tag: "30080105", keyword: "Source Serial Number", basicProfile: "X/Z", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "30080162": Object.freeze({ tag: "30080162", keyword: "Safe Position Exit Date", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "30080164": Object.freeze({ tag: "30080164", keyword: "Safe Position Exit Time", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "30080166": Object.freeze({ tag: "30080166", keyword: "Safe Position Return Date", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "30080168": Object.freeze({ tag: "30080168", keyword: "Safe Position Return Time", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "30080250": Object.freeze({ tag: "30080250", keyword: "Treatment Date", basicProfile: "X/D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "30080251": Object.freeze({ tag: "30080251", keyword: "Treatment Time", basicProfile: "X/D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "300A0002": Object.freeze({ tag: "300A0002", keyword: "RT Plan Label", basicProfile: "D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300A0003": Object.freeze({ tag: "300A0003", keyword: "RT Plan Name", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300A0004": Object.freeze({ tag: "300A0004", keyword: "RT Plan Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300A0006": Object.freeze({ tag: "300A0006", keyword: "RT Plan Date", basicProfile: "X/D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "300A0007": Object.freeze({ tag: "300A0007", keyword: "RT Plan Time", basicProfile: "X/D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "300A000B": Object.freeze({ tag: "300A000B", keyword: "Treatment Sites", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300A000E": Object.freeze({ tag: "300A000E", keyword: "Prescription Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300A0013": Object.freeze({ tag: "300A0013", keyword: "Dose Reference UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "300A0016": Object.freeze({ tag: "300A0016", keyword: "Dose Reference Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300A0054": Object.freeze({ tag: "300A0054", keyword: "Table Top Position Alignment UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "300A0072": Object.freeze({ tag: "300A0072", keyword: "Fraction Group Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300A0083": Object.freeze({ tag: "300A0083", keyword: "Referenced Dose Reference UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "300A00B2": Object.freeze({ tag: "300A00B2", keyword: "Treatment Machine Name", basicProfile: "X/Z", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "300A00C3": Object.freeze({ tag: "300A00C3", keyword: "Beam Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300A00DD": Object.freeze({ tag: "300A00DD", keyword: "Bolus Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300A0196": Object.freeze({ tag: "300A0196", keyword: "Fixation Device Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300A01A6": Object.freeze({ tag: "300A01A6", keyword: "Shielding Device Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300A01B2": Object.freeze({ tag: "300A01B2", keyword: "Setup Technique Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300A0216": Object.freeze({ tag: "300A0216", keyword: "Source Manufacturer", basicProfile: "X", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "300A022C": Object.freeze({ tag: "300A022C", keyword: "Source Strength Reference Date", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "300A022E": Object.freeze({ tag: "300A022E", keyword: "Source Strength Reference Time", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "300A02EB": Object.freeze({ tag: "300A02EB", keyword: "Compensator Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300A0608": Object.freeze({ tag: "300A0608", keyword: "Treatment Position Group Label", basicProfile: "D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300A0609": Object.freeze({ tag: "300A0609", keyword: "Treatment Position Group UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "300A0611": Object.freeze({ tag: "300A0611", keyword: "RT Accessory Holder Slot ID", basicProfile: "Z", optionSet: Object.freeze({}) }),
-  "300A0615": Object.freeze({ tag: "300A0615", keyword: "RT Accessory Device Slot ID", basicProfile: "Z", optionSet: Object.freeze({}) }),
-  "300A0619": Object.freeze({ tag: "300A0619", keyword: "Radiation Dose Identification Label", basicProfile: "D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300A0623": Object.freeze({ tag: "300A0623", keyword: "Radiation Dose In-Vivo Measurement Label", basicProfile: "D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300A062A": Object.freeze({ tag: "300A062A", keyword: "RT Tolerance Set Label", basicProfile: "D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300A0650": Object.freeze({ tag: "300A0650", keyword: "Patient Setup UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "300A0676": Object.freeze({ tag: "300A0676", keyword: "Equipment Frame of Reference Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300A067C": Object.freeze({ tag: "300A067C", keyword: "Radiation Generation Mode Label", basicProfile: "D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300A067D": Object.freeze({ tag: "300A067D", keyword: "Radiation Generation Mode Description", basicProfile: "Z", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300A0700": Object.freeze({ tag: "300A0700", keyword: "Treatment Session UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "300A0734": Object.freeze({ tag: "300A0734", keyword: "Treatment Tolerance Violation Description", basicProfile: "D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300A0736": Object.freeze({ tag: "300A0736", keyword: "Treatment Tolerance Violation DateTime", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "300A073A": Object.freeze({ tag: "300A073A", keyword: "Recorded RT Control Point DateTime", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "300A0741": Object.freeze({ tag: "300A0741", keyword: "Interlock DateTime", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "300A0742": Object.freeze({ tag: "300A0742", keyword: "Interlock Description", basicProfile: "D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300A0760": Object.freeze({ tag: "300A0760", keyword: "Override DateTime", basicProfile: "D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "300A0783": Object.freeze({ tag: "300A0783", keyword: "Interlock Origin Description", basicProfile: "D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300A0785": Object.freeze({ tag: "300A0785", keyword: "Referenced Treatment Position Group UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "300A078E": Object.freeze({ tag: "300A078E", keyword: "Patient Treatment Preparation Procedure Parameter Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300A0792": Object.freeze({ tag: "300A0792", keyword: "Patient Treatment Preparation Method Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300A0794": Object.freeze({ tag: "300A0794", keyword: "Patient Setup Photo Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300A079A": Object.freeze({ tag: "300A079A", keyword: "Displacement Reference Label", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300C0113": Object.freeze({ tag: "300C0113", keyword: "Reason for Omission Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "300C0127": Object.freeze({ tag: "300C0127", keyword: "Beam Hold Transition DateTime", basicProfile: "D", optionSet: Object.freeze({ "RetainDeviceIdentity": "K", "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "300E0004": Object.freeze({ tag: "300E0004", keyword: "Review Date", basicProfile: "Z", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "300E0005": Object.freeze({ tag: "300E0005", keyword: "Review Time", basicProfile: "Z", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "300E0008": Object.freeze({ tag: "300E0008", keyword: "Reviewer Name", basicProfile: "X/Z", optionSet: Object.freeze({}) }),
-  "30100006": Object.freeze({ tag: "30100006", keyword: "Conceptual Volume UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "3010000B": Object.freeze({ tag: "3010000B", keyword: "Referenced Conceptual Volume UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "3010000F": Object.freeze({ tag: "3010000F", keyword: "Conceptual Volume Combination Description", basicProfile: "Z", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "30100013": Object.freeze({ tag: "30100013", keyword: "Constituent Conceptual Volume UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "30100015": Object.freeze({ tag: "30100015", keyword: "Source Conceptual Volume UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "30100017": Object.freeze({ tag: "30100017", keyword: "Conceptual Volume Description", basicProfile: "Z", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "3010001B": Object.freeze({ tag: "3010001B", keyword: "Device Alternate Identifier", basicProfile: "Z", optionSet: Object.freeze({}) }),
-  "3010002D": Object.freeze({ tag: "3010002D", keyword: "Device Label", basicProfile: "D", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "30100031": Object.freeze({ tag: "30100031", keyword: "Referenced Fiducials UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "30100033": Object.freeze({ tag: "30100033", keyword: "User Content Label", basicProfile: "D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "30100034": Object.freeze({ tag: "30100034", keyword: "User Content Long Label", basicProfile: "D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "30100035": Object.freeze({ tag: "30100035", keyword: "Entity Label", basicProfile: "D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "30100036": Object.freeze({ tag: "30100036", keyword: "Entity Name", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "30100037": Object.freeze({ tag: "30100037", keyword: "Entity Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "30100038": Object.freeze({ tag: "30100038", keyword: "Entity Long Label", basicProfile: "D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "3010003B": Object.freeze({ tag: "3010003B", keyword: "RT Treatment Phase UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "30100043": Object.freeze({ tag: "30100043", keyword: "Manufacturer's Device Identifier", basicProfile: "Z", optionSet: Object.freeze({ "RetainDeviceIdentity": "K" }) }),
-  "3010004C": Object.freeze({ tag: "3010004C", keyword: "Intended Phase Start Date", basicProfile: "X/D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "3010004D": Object.freeze({ tag: "3010004D", keyword: "Intended Phase End Date", basicProfile: "X/D", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "30100054": Object.freeze({ tag: "30100054", keyword: "RT Prescription Label", basicProfile: "D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "30100056": Object.freeze({ tag: "30100056", keyword: "RT Treatment Approach Label", basicProfile: "X/D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "3010005A": Object.freeze({ tag: "3010005A", keyword: "RT Physician Intent Narrative", basicProfile: "Z", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "3010005C": Object.freeze({ tag: "3010005C", keyword: "Reason for Superseding", basicProfile: "Z", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "30100061": Object.freeze({ tag: "30100061", keyword: "Prior Treatment Dose Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "3010006E": Object.freeze({ tag: "3010006E", keyword: "Dosimetric Objective UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "3010006F": Object.freeze({ tag: "3010006F", keyword: "Referenced Dosimetric Objective UID", basicProfile: "U", optionSet: Object.freeze({ "RetainUIDs": "K" }) }),
-  "30100077": Object.freeze({ tag: "30100077", keyword: "Treatment Site", basicProfile: "X/D", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "3010007A": Object.freeze({ tag: "3010007A", keyword: "Treatment Technique Notes", basicProfile: "Z", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "3010007B": Object.freeze({ tag: "3010007B", keyword: "Prescription Notes", basicProfile: "Z", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "3010007F": Object.freeze({ tag: "3010007F", keyword: "Fractionation Notes", basicProfile: "Z", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "30100081": Object.freeze({ tag: "30100081", keyword: "Prescription Notes Sequence", basicProfile: "Z", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "30100085": Object.freeze({ tag: "30100085", keyword: "Intended Fraction Start Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "40000010": Object.freeze({ tag: "40000010", keyword: "Arbitrary", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "40004000": Object.freeze({ tag: "40004000", keyword: "Text Comments", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "40080040": Object.freeze({ tag: "40080040", keyword: "Results ID", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "40080042": Object.freeze({ tag: "40080042", keyword: "Results ID Issuer", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "40080100": Object.freeze({ tag: "40080100", keyword: "Interpretation Recorded Date", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "40080101": Object.freeze({ tag: "40080101", keyword: "Interpretation Recorded Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "40080102": Object.freeze({ tag: "40080102", keyword: "Interpretation Recorder", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "40080108": Object.freeze({ tag: "40080108", keyword: "Interpretation Transcription Date", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "40080109": Object.freeze({ tag: "40080109", keyword: "Interpretation Transcription Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "4008010A": Object.freeze({ tag: "4008010A", keyword: "Interpretation Transcriber", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "4008010B": Object.freeze({ tag: "4008010B", keyword: "Interpretation Text", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "4008010C": Object.freeze({ tag: "4008010C", keyword: "Interpretation Author", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "40080111": Object.freeze({ tag: "40080111", keyword: "Interpretation Approver Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "40080112": Object.freeze({ tag: "40080112", keyword: "Interpretation Approval Date", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "40080113": Object.freeze({ tag: "40080113", keyword: "Interpretation Approval Time", basicProfile: "X", optionSet: Object.freeze({ "RetainLongitudinalTemporal": "K", "RetainLongitudinalTemporalModifiedDates": "C" }) }),
-  "40080114": Object.freeze({ tag: "40080114", keyword: "Physician Approving Interpretation", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "40080115": Object.freeze({ tag: "40080115", keyword: "Interpretation Diagnosis Description", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "40080118": Object.freeze({ tag: "40080118", keyword: "Results Distribution List Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "40080119": Object.freeze({ tag: "40080119", keyword: "Distribution Name", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "4008011A": Object.freeze({ tag: "4008011A", keyword: "Distribution Address", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "40080200": Object.freeze({ tag: "40080200", keyword: "Interpretation ID", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "40080202": Object.freeze({ tag: "40080202", keyword: "Interpretation ID Issuer", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "40080300": Object.freeze({ tag: "40080300", keyword: "Impressions", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "40084000": Object.freeze({ tag: "40084000", keyword: "Results Comments", basicProfile: "X", optionSet: Object.freeze({ "CleanDescriptors": "C" }) }),
-  "FFFAFFFA": Object.freeze({ tag: "FFFAFFFA", keyword: "Digital Signatures Sequence", basicProfile: "X", optionSet: Object.freeze({}) }),
-  "FFFCFFFC": Object.freeze({ tag: "FFFCFFFC", keyword: "Data Set Trailing Padding", basicProfile: "X", optionSet: Object.freeze({}) }),
-});
+/**
+ * Table E.1-1's exact-tag rows, one a line in ascending tag order: the tag as
+ * group,element, the attribute name, the Basic Profile action, then each Option's
+ * action as `Option=code` joined by `;`, the Options in name order; fields joined
+ * by `|`. One string rather than an object literal, so loading the package does not
+ * build 653 frozen objects: `annexE()` in `../annex-e.ts` reads a row the first time its
+ * tag is asked for.
+ */
+export const ANNEX_E_ROWS: string = `
+0000,1000|Affected SOP Instance UID|X|RetainUIDs=K
+0000,1001|Requested SOP Instance UID|U|RetainUIDs=K
+0002,0003|Media Storage SOP Instance UID|U|RetainUIDs=K
+0004,1511|Referenced SOP Instance UID in File|U|RetainUIDs=K
+0008,0012|Instance Creation Date|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0013|Instance Creation Time|X/Z/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0014|Instance Creator UID|U|RetainUIDs=K
+0008,0015|Instance Coercion DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0017|Acquisition UID|U|RetainUIDs=K
+0008,0018|SOP Instance UID|U|RetainUIDs=K
+0008,0019|Pyramid UID|U|RetainUIDs=K
+0008,0020|Study Date|Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0021|Series Date|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0022|Acquisition Date|X/Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0023|Content Date|Z/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0024|Overlay Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0025|Curve Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,002A|Acquisition DateTime|X/Z/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0030|Study Time|Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0031|Series Time|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0032|Acquisition Time|X/Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0033|Content Time|Z/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0034|Overlay Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0035|Curve Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0050|Accession Number|Z|
+0008,0054|Retrieve AE Title|X|RetainDeviceIdentity=C
+0008,0055|Station AE Title|X|RetainDeviceIdentity=C
+0008,0058|Failed SOP Instance UID List|U|RetainUIDs=K
+0008,0080|Institution Name|X/Z/D|RetainInstitutionIdentity=K
+0008,0081|Institution Address|X|RetainInstitutionIdentity=K
+0008,0082|Institution Code Sequence|X/Z/D|RetainInstitutionIdentity=K
+0008,0090|Referring Physician's Name|Z|
+0008,0092|Referring Physician's Address|X|
+0008,0094|Referring Physician's Telephone Numbers|X|
+0008,0096|Referring Physician Identification Sequence|X|
+0008,009C|Consulting Physician's Name|Z|
+0008,009D|Consulting Physician Identification Sequence|X|
+0008,0106|Context Group Version|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0107|Context Group Local Version|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,0201|Timezone Offset From UTC|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0008,1000|Network ID|X|RetainDeviceIdentity=C
+0008,1010|Station Name|X/Z/D|RetainDeviceIdentity=K
+0008,1030|Study Description|X|CleanDescriptors=C
+0008,103E|Series Description|X|CleanDescriptors=C
+0008,1040|Institutional Department Name|X|RetainInstitutionIdentity=K
+0008,1041|Institutional Department Type Code Sequence|X|RetainInstitutionIdentity=K
+0008,1048|Physician(s) of Record|X|
+0008,1049|Physician(s) of Record Identification Sequence|X|
+0008,1050|Performing Physician's Name|X|
+0008,1052|Performing Physician Identification Sequence|X|
+0008,1060|Name of Physician(s) Reading Study|X|
+0008,1062|Physician(s) Reading Study Identification Sequence|X|
+0008,1070|Operators' Name|X/Z/D|
+0008,1072|Operator Identification Sequence|X/D|
+0008,1080|Admitting Diagnoses Description|X|CleanDescriptors=C
+0008,1084|Admitting Diagnoses Code Sequence|X|CleanDescriptors=C
+0008,1088|Pyramid Description|X|CleanDescriptors=C
+0008,1110|Referenced Study Sequence|X/Z|RetainUIDs=K
+0008,1111|Referenced Performed Procedure Step Sequence|X/Z/D|RetainUIDs=K
+0008,1120|Referenced Patient Sequence|X|RetainUIDs=K
+0008,1140|Referenced Image Sequence|X/Z/U*|RetainUIDs=K
+0008,1155|Referenced SOP Instance UID|U|RetainUIDs=K
+0008,1195|Transaction UID|U|RetainUIDs=K
+0008,1301|Principal Diagnosis Code Sequence|X|CleanDescriptors=C
+0008,1302|Primary Diagnosis Code Sequence|X|CleanDescriptors=C
+0008,1303|Secondary Diagnoses Code Sequence|X|CleanDescriptors=C
+0008,1304|Histological Diagnoses Code Sequence|X|CleanDescriptors=C
+0008,2111|Derivation Description|X|CleanDescriptors=C
+0008,2112|Source Image Sequence|X/Z/U*|RetainUIDs=K
+0008,3010|Irradiation Event UID|U|RetainUIDs=K
+0008,4000|Identifying Comments|X|CleanDescriptors=C
+0010,0010|Patient's Name|Z|
+0010,0011|Person Names to Use Sequence|X|
+0010,0012|Name to Use|X|
+0010,0013|Name to Use Comment|X|
+0010,0014|Third Person Pronouns Sequence|X|
+0010,0015|Pronoun Code Sequence|X|
+0010,0016|Pronoun Comment|X|CleanDescriptors=C
+0010,0020|Patient ID|Z/D|
+0010,0021|Issuer of Patient ID|X|
+0010,0030|Patient's Birth Date|Z|
+0010,0032|Patient's Birth Time|X|
+0010,0040|Patient's Sex|Z|RetainPatientCharacteristics=K
+0010,0041|Gender Identity Sequence|X|
+0010,0042|Sex Parameters for Clinical Use Category Comment|X|CleanDescriptors=C;RetainPatientCharacteristics=C
+0010,0043|Sex Parameters for Clinical Use Category Sequence|X|RetainPatientCharacteristics=K
+0010,0044|Gender Identity Code Sequence|X|
+0010,0045|Gender Identity Comment|X|CleanDescriptors=C
+0010,0046|Sex Parameters for Clinical Use Category Code Sequence|X|RetainPatientCharacteristics=K
+0010,0047|Sex Parameters for Clinical Use Category Reference|X|RetainPatientCharacteristics=K
+0010,0050|Patient's Insurance Plan Code Sequence|X|
+0010,0101|Patient's Primary Language Code Sequence|X|
+0010,0102|Patient's Primary Language Modifier Code Sequence|X|
+0010,1000|Other Patient IDs|X|
+0010,1001|Other Patient Names|X|
+0010,1002|Other Patient IDs Sequence|X|
+0010,1005|Patient's Birth Name|X|
+0010,1010|Patient's Age|X|RetainPatientCharacteristics=K
+0010,1020|Patient's Size|X|RetainPatientCharacteristics=K
+0010,1030|Patient's Weight|X|RetainPatientCharacteristics=K
+0010,1040|Patient's Address|X|
+0010,1050|Insurance Plan Identification|X|
+0010,1060|Patient's Mother's Birth Name|X|
+0010,1080|Military Rank|X|
+0010,1081|Branch of Service|X|
+0010,1090|Medical Record Locator|X|
+0010,1100|Referenced Patient Photo Sequence|X|
+0010,2000|Medical Alerts|X|CleanDescriptors=C
+0010,2110|Allergies|X|CleanDescriptors=C;RetainPatientCharacteristics=C
+0010,2150|Country of Residence|X|
+0010,2152|Region of Residence|X|
+0010,2154|Patient's Telephone Numbers|X|
+0010,2155|Patient's Telecom Information|X|
+0010,2160|Ethnic Group|X|RetainPatientCharacteristics=K
+0010,2161|Ethnic Group Code Sequence|X|RetainPatientCharacteristics=K
+0010,2162|Ethnic Groups|X|RetainPatientCharacteristics=K
+0010,2180|Occupation|X|CleanDescriptors=C
+0010,21A0|Smoking Status|X|RetainPatientCharacteristics=K
+0010,21B0|Additional Patient History|X|CleanDescriptors=C
+0010,21C0|Pregnancy Status|X|RetainPatientCharacteristics=K
+0010,21D0|Last Menstrual Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0010,21F0|Patient's Religious Preference|X|
+0010,2203|Patient's Sex Neutered|X/Z|RetainPatientCharacteristics=K
+0010,2297|Responsible Person|X|
+0010,2299|Responsible Organization|X|
+0010,4000|Patient Comments|X|CleanDescriptors=C
+0012,0010|Clinical Trial Sponsor Name|D|
+0012,0020|Clinical Trial Protocol ID|D|
+0012,0021|Clinical Trial Protocol Name|Z|
+0012,0022|Issuer of Clinical Trial Protocol ID|X|
+0012,0023|Other Clinical Trial Protocol IDs Sequence|X|
+0012,0030|Clinical Trial Site ID|Z|RetainInstitutionIdentity=K
+0012,0031|Clinical Trial Site Name|Z|RetainInstitutionIdentity=K
+0012,0032|Issuer of Clinical Trial Site ID|X|
+0012,0040|Clinical Trial Subject ID|D|
+0012,0041|Issuer of Clinical Trial Subject ID|X|
+0012,0042|Clinical Trial Subject Reading ID|D|
+0012,0043|Issuer of Clinical Trial Subject Reading ID|X|
+0012,0050|Clinical Trial Time Point ID|Z|
+0012,0051|Clinical Trial Time Point Description|X|CleanDescriptors=C
+0012,0055|Issuer of Clinical Trial Time Point ID|X|
+0012,0060|Clinical Trial Coordinating Center Name|Z|RetainInstitutionIdentity=K
+0012,0071|Clinical Trial Series ID|X|
+0012,0072|Clinical Trial Series Description|X|CleanDescriptors=C
+0012,0073|Issuer of Clinical Trial Series ID|X|
+0012,0081|Clinical Trial Protocol Ethics Committee Name|D|RetainInstitutionIdentity=K
+0012,0082|Clinical Trial Protocol Ethics Committee Approval Number|X|
+0012,0086|Ethics Committee Approval Effectiveness Start Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0012,0087|Ethics Committee Approval Effectiveness End Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0014,407C|Calibration Time|X|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0014,407E|Calibration Date|X|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0016,002B|Maker Note|X|CleanDescriptors=C
+0016,004B|Device Setting Description|X|CleanDescriptors=C
+0016,004D|Camera Owner Name|X|
+0016,004E|Lens Specification|X|RetainDeviceIdentity=K
+0016,004F|Lens Make|X|RetainDeviceIdentity=K
+0016,0050|Lens Model|X|RetainDeviceIdentity=K
+0016,0051|Lens Serial Number|X|RetainDeviceIdentity=K
+0016,0070|GPS Version ID|X|
+0016,0071|GPS Latitude Ref|X|
+0016,0072|GPS Latitude|X|
+0016,0073|GPS Longitude Ref|X|
+0016,0074|GPS Longitude|X|
+0016,0075|GPS Altitude Ref|X|
+0016,0076|GPS Altitude|X|
+0016,0077|GPS Time Stamp|X|
+0016,0078|GPS Satellites|X|
+0016,0079|GPS Status|X|
+0016,007A|GPS Measure Mode|X|
+0016,007B|GPS DOP|X|
+0016,007C|GPS Speed Ref|X|
+0016,007D|GPS Speed|X|
+0016,007E|GPS Track Ref|X|
+0016,007F|GPS Track|X|
+0016,0080|GPS Img Direction Ref|X|
+0016,0081|GPS Img Direction|X|
+0016,0082|GPS Map Datum|X|
+0016,0083|GPS Dest Latitude Ref|X|
+0016,0084|GPS Dest Latitude|X|
+0016,0085|GPS Dest Longitude Ref|X|
+0016,0086|GPS Dest Longitude|X|
+0016,0087|GPS Dest Bearing Ref|X|
+0016,0088|GPS Dest Bearing|X|
+0016,0089|GPS Dest Distance Ref|X|
+0016,008A|GPS Dest Distance|X|
+0016,008B|GPS Processing Method|X|
+0016,008C|GPS Area Information|X|
+0016,008D|GPS Date Stamp|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0016,008E|GPS Differential|X|
+0018,0010|Contrast/Bolus Agent|Z/D|CleanDescriptors=C
+0018,0027|Intervention Drug Stop Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,0035|Intervention Drug Start Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1000|Device Serial Number|X/Z/D|RetainDeviceIdentity=K
+0018,1002|Device UID|U|RetainDeviceIdentity=K;RetainUIDs=K
+0018,1004|Plate ID|X|RetainDeviceIdentity=K
+0018,1005|Generator ID|X|RetainDeviceIdentity=K
+0018,1007|Cassette ID|X|RetainDeviceIdentity=K
+0018,1008|Gantry ID|X|RetainDeviceIdentity=K
+0018,1009|Unique Device Identifier|X|RetainDeviceIdentity=K
+0018,100A|UDI Sequence|X|RetainDeviceIdentity=K
+0018,100B|Manufacturer's Device Class UID|U|RetainDeviceIdentity=K;RetainUIDs=K
+0018,1010|Secondary Capture Device ID|X|RetainDeviceIdentity=K
+0018,1011|Hardcopy Creation Device ID|X|RetainDeviceIdentity=K
+0018,1012|Date of Secondary Capture|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1014|Time of Secondary Capture|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1030|Protocol Name|X/D|CleanDescriptors=C
+0018,1042|Contrast/Bolus Start Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1043|Contrast/Bolus Stop Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1072|Radiopharmaceutical Start Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1073|Radiopharmaceutical Stop Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1078|Radiopharmaceutical Start DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1079|Radiopharmaceutical Stop DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,11BB|Acquisition Field of View Label|D|CleanDescriptors=C
+0018,1200|Date of Last Calibration|X|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1201|Time of Last Calibration|X|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1202|DateTime of Last Calibration|X|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1203|Calibration DateTime|Z|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1204|Date of Manufacture|X|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1205|Date of Installation|X|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,1400|Acquisition Device Processing Description|X/D|CleanDescriptors=C
+0018,2042|Target UID|U|RetainUIDs=K
+0018,4000|Acquisition Comments|X|CleanDescriptors=C
+0018,5011|Transducer Identification Sequence|X|RetainDeviceIdentity=K
+0018,700A|Detector ID|X/D|RetainDeviceIdentity=K
+0018,700C|Date of Last Detector Calibration|X/D|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,700E|Time of Last Detector Calibration|X/D|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,9074|Frame Acquisition DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,9151|Frame Reference DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,9185|Respiratory Motion Compensation Technique Description|X|CleanDescriptors=C
+0018,9367|X-Ray Source ID|D|RetainDeviceIdentity=K
+0018,9369|Source Start DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,936A|Source End DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,9371|X-Ray Detector ID|D|RetainDeviceIdentity=K
+0018,9373|X-Ray Detector Label|X|RetainDeviceIdentity=K
+0018,937B|Multi-energy Acquisition Description|X|CleanDescriptors=C
+0018,937F|Decomposition Description|X|CleanDescriptors=C
+0018,9424|Acquisition Protocol Description|X|CleanDescriptors=C
+0018,9516|Start Acquisition DateTime|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,9517|End Acquisition DateTime|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,9623|Functional Sync Pulse|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,9701|Decay Correction DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,9804|Exclusion Start DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,9919|Instruction Performed DateTime|Z/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,9937|Requested Series Description|X|CleanDescriptors=C
+0018,A002|Contribution DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0018,A003|Contribution Description|X|CleanDescriptors=C
+0020,000D|Study Instance UID|U|RetainUIDs=K
+0020,000E|Series Instance UID|U|RetainUIDs=K
+0020,0010|Study ID|Z|
+0020,0027|Pyramid Label|X|CleanDescriptors=C
+0020,0052|Frame of Reference UID|U|RetainUIDs=K
+0020,0200|Synchronization Frame of Reference UID|U|RetainUIDs=K
+0020,3401|Modifying Device ID|X|RetainDeviceIdentity=K
+0020,3403|Modified Image Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0020,3405|Modified Image Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0020,3406|Modified Image Description|X|
+0020,4000|Image Comments|X|CleanDescriptors=C
+0020,9158|Frame Comments|X|CleanDescriptors=C
+0020,9161|Concatenation UID|U|RetainUIDs=K
+0020,9164|Dimension Organization UID|U|RetainUIDs=K
+0028,1199|Palette Color Lookup Table UID|U|RetainUIDs=K
+0028,1214|Large Palette Color Lookup Table UID|U|RetainUIDs=K
+0028,4000|Image Presentation Comments|X|
+0032,0012|Study ID Issuer|X|
+0032,0032|Study Verified Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0032,0033|Study Verified Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0032,0034|Study Read Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0032,0035|Study Read Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0032,1000|Scheduled Study Start Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0032,1001|Scheduled Study Start Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0032,1010|Scheduled Study Stop Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0032,1011|Scheduled Study Stop Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0032,1020|Scheduled Study Location|X|RetainDeviceIdentity=K
+0032,1021|Scheduled Study Location AE Title|X|RetainDeviceIdentity=C
+0032,1030|Reason for Study|X|CleanDescriptors=C
+0032,1032|Requesting Physician|X|
+0032,1033|Requesting Service|X|CleanDescriptors=C
+0032,1040|Study Arrival Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0032,1041|Study Arrival Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0032,1050|Study Completion Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0032,1051|Study Completion Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0032,1060|Requested Procedure Description|X/Z|CleanDescriptors=C
+0032,1066|Reason for Visit|X|CleanDescriptors=C
+0032,1067|Reason for Visit Code Sequence|X|CleanDescriptors=C
+0032,1070|Requested Contrast Agent|X|CleanDescriptors=C
+0032,4000|Study Comments|X|CleanDescriptors=C
+0034,0001|Flow Identifier Sequence|D|
+0034,0002|Flow Identifier|D|
+0034,0005|Source Identifier|D|
+0034,0007|Frame Origin Timestamp|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0038,0004|Referenced Patient Alias Sequence|X|
+0038,0010|Admission ID|X|
+0038,0011|Issuer of Admission ID|X|
+0038,0014|Issuer of Admission ID Sequence|X|
+0038,001A|Scheduled Admission Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0038,001B|Scheduled Admission Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0038,001C|Scheduled Discharge Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0038,001D|Scheduled Discharge Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0038,001E|Scheduled Patient Institution Residence|X|
+0038,0020|Admitting Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0038,0021|Admitting Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0038,0030|Discharge Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0038,0032|Discharge Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0038,0040|Discharge Diagnosis Description|X|CleanDescriptors=C
+0038,0050|Special Needs|X|RetainPatientCharacteristics=C
+0038,0060|Service Episode ID|X|
+0038,0061|Issuer of Service Episode ID|X|
+0038,0062|Service Episode Description|X|CleanDescriptors=C
+0038,0064|Issuer of Service Episode ID Sequence|X|
+0038,0300|Current Patient Location|X|
+0038,0400|Patient's Institution Residence|X|
+0038,0500|Patient State|X|CleanDescriptors=C;RetainPatientCharacteristics=C
+0038,4000|Visit Comments|X|CleanDescriptors=C
+003A,0020|Multiplex Group Label|X|CleanDescriptors=C
+003A,0203|Channel Label|X|CleanDescriptors=C
+003A,020C|Channel Derivation Description|X|CleanDescriptors=C
+003A,0310|Multiplex Group UID|U|RetainUIDs=K
+003A,0314|Impedance Measurement DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+003A,0329|Waveform Filter Description|X|CleanDescriptors=C
+003A,032B|Filter Lookup Table Description|X|CleanDescriptors=C
+0040,0001|Scheduled Station AE Title|X|RetainDeviceIdentity=C
+0040,0002|Scheduled Procedure Step Start Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,0003|Scheduled Procedure Step Start Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,0004|Scheduled Procedure Step End Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,0005|Scheduled Procedure Step End Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,0006|Scheduled Performing Physician's Name|X|
+0040,0007|Scheduled Procedure Step Description|X|CleanDescriptors=C
+0040,0009|Scheduled Procedure Step ID|X|
+0040,000B|Scheduled Performing Physician Identification Sequence|X|
+0040,0010|Scheduled Station Name|X|RetainDeviceIdentity=K
+0040,0011|Scheduled Procedure Step Location|X|RetainDeviceIdentity=K
+0040,0012|Pre-Medication|X|RetainPatientCharacteristics=C
+0040,0241|Performed Station AE Title|X|RetainDeviceIdentity=C
+0040,0242|Performed Station Name|X|RetainDeviceIdentity=K
+0040,0243|Performed Location|X|
+0040,0244|Performed Procedure Step Start Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,0245|Performed Procedure Step Start Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,0250|Performed Procedure Step End Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,0251|Performed Procedure Step End Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,0253|Performed Procedure Step ID|X|
+0040,0254|Performed Procedure Step Description|X|CleanDescriptors=C
+0040,0275|Request Attributes Sequence|X|CleanDescriptors=C
+0040,0280|Comments on the Performed Procedure Step|X|CleanDescriptors=C
+0040,0310|Comments on Radiation Dose|X|CleanDescriptors=C
+0040,050A|Specimen Accession Number|X|
+0040,0512|Container Identifier|D|
+0040,0513|Issuer of the Container Identifier Sequence|Z|
+0040,051A|Container Description|X|CleanDescriptors=C
+0040,0551|Specimen Identifier|D|
+0040,0554|Specimen UID|U|RetainUIDs=K
+0040,0555|Acquisition Context Sequence|X/Z|CleanStructuredContent=C
+0040,0556|Acquisition Context Description|X|CleanDescriptors=C
+0040,0562|Issuer of the Specimen Identifier Sequence|Z|
+0040,0600|Specimen Short Description|X|CleanDescriptors=C
+0040,0602|Specimen Detailed Description|X|CleanDescriptors=C
+0040,0610|Specimen Preparation Sequence|Z|CleanStructuredContent=C
+0040,06FA|Slide Identifier|X|
+0040,1001|Requested Procedure ID|X|
+0040,1002|Reason for the Requested Procedure|X|CleanDescriptors=C
+0040,1004|Patient Transport Arrangements|X|
+0040,1005|Requested Procedure Location|X|
+0040,100A|Reason for Requested Procedure Code Sequence|X|CleanDescriptors=C
+0040,1010|Names of Intended Recipients of Results|X|
+0040,1011|Intended Recipients of Results Identification Sequence|X|
+0040,1101|Person Identification Code Sequence|D|
+0040,1102|Person's Address|X|
+0040,1103|Person's Telephone Numbers|X|
+0040,1104|Person's Telecom Information|X|
+0040,1400|Requested Procedure Comments|X|CleanDescriptors=C
+0040,2001|Reason for the Imaging Service Request|X|CleanDescriptors=C
+0040,2004|Issue Date of Imaging Service Request|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,2005|Issue Time of Imaging Service Request|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,2008|Order Entered By|X|
+0040,2009|Order Enterer's Location|X|
+0040,2010|Order Callback Phone Number|X|
+0040,2011|Order Callback Telecom Information|X|
+0040,2016|Placer Order Number / Imaging Service Request|Z|
+0040,2017|Filler Order Number / Imaging Service Request|Z|
+0040,2400|Imaging Service Request Comments|X|CleanDescriptors=C
+0040,3001|Confidentiality Constraint on Patient Data Description|X|
+0040,4005|Scheduled Procedure Step Start DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,4008|Scheduled Procedure Step Expiration DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,4010|Scheduled Procedure Step Modification DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,4011|Expected Completion DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,4023|Referenced General Purpose Scheduled Procedure Step Transaction UID|U|RetainUIDs=K
+0040,4025|Scheduled Station Name Code Sequence|X|RetainDeviceIdentity=K
+0040,4027|Scheduled Station Geographic Location Code Sequence|X|RetainDeviceIdentity=K
+0040,4028|Performed Station Name Code Sequence|X|RetainDeviceIdentity=K
+0040,4030|Performed Station Geographic Location Code Sequence|X|RetainDeviceIdentity=K
+0040,4034|Scheduled Human Performers Sequence|X|
+0040,4035|Actual Human Performers Sequence|X|
+0040,4036|Human Performer's Organization|X|
+0040,4037|Human Performer's Name|X|
+0040,4050|Performed Procedure Step Start DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,4051|Performed Procedure Step End DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,4052|Procedure Step Cancellation DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A023|Findings Group Recording Date (Trial)|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A024|Findings Group Recording Time (Trial)|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A027|Verifying Organization|D|
+0040,A030|Verification DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A032|Observation DateTime|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A033|Observation Start DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A034|Effective Start DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A035|Effective Stop DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A073|Verifying Observer Sequence|D|
+0040,A075|Verifying Observer Name|D|
+0040,A078|Author Observer Sequence|X|
+0040,A07A|Participant Sequence|X|
+0040,A07C|Custodial Organization Sequence|X|
+0040,A082|Participation DateTime|Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A088|Verifying Observer Identification Code Sequence|Z|
+0040,A110|Date of Document or Verbal Transaction (Trial)|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A112|Time of Document Creation or Verbal Transaction (Trial)|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A120|DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A121|Date|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A122|Time|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A123|Person Name|D|
+0040,A124|UID|U|
+0040,A13A|Referenced DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A171|Observation UID|U|RetainUIDs=K
+0040,A172|Referenced Observation UID (Trial)|U|RetainUIDs=K
+0040,A192|Observation Date (Trial)|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A193|Observation Time (Trial)|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,A307|Current Observer (Trial)|X|
+0040,A352|Verbal Source (Trial)|X|
+0040,A353|Address (Trial)|X|
+0040,A354|Telephone Number (Trial)|X|
+0040,A358|Verbal Source Identifier Code Sequence (Trial)|X|
+0040,A402|Observation Subject UID (Trial)|U|RetainUIDs=K
+0040,A730|Content Sequence|D|CleanStructuredContent=C
+0040,B020|Waveform Annotation Sequence|X/D|CleanStructuredContent=C
+0040,B034|Annotation DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,B036|Segment Definition DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,B03B|Montage Name|X|CleanDescriptors=C
+0040,B03F|Montage Channel Label|X|CleanDescriptors=C
+0040,DB06|Template Version|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,DB07|Template Local Version|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,DB0C|Template Extension Organization UID|U|RetainUIDs=K
+0040,DB0D|Template Extension Creator UID|U|RetainUIDs=K
+0040,E004|HL7 Document Effective Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0040,E012|Display URI|X|
+0042,0011|Encapsulated Document|D|
+0044,0004|Approval Status DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0044,000B|Product Expiration DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0044,0010|Substance Administration DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0044,0104|Assertion DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0044,0105|Assertion Expiration DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0050,001B|Container Component ID|X|
+0050,0020|Device Description|X|RetainDeviceIdentity=K
+0050,0021|Long Device Description|X|CleanDescriptors=C
+0062,0021|Tracking UID|U|RetainUIDs=K
+0064,0003|Source Frame of Reference UID|U|RetainUIDs=K
+0068,6226|Effective DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0068,6270|Information Issue DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+006A,0003|Annotation Group UID|D|RetainUIDs=K
+006A,0005|Annotation Group Label|D|CleanDescriptors=C
+006A,0006|Annotation Group Description|X|CleanDescriptors=C
+0070,0001|Graphic Annotation Sequence|D|CleanGraphics=C
+0070,0006|Unformatted Text Value|D|CleanDescriptors=C
+0070,0082|Presentation Creation Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0070,0083|Presentation Creation Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0070,0084|Content Creator's Name|Z/D|
+0070,0086|Content Creator's Identification Code Sequence|X|
+0070,031A|Fiducial UID|U|RetainUIDs=K
+0070,1101|Presentation Display Collection UID|U|RetainUIDs=K
+0070,1102|Presentation Sequence Collection UID|U|RetainUIDs=K
+0072,000A|Hanging Protocol Creation DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0072,005E|Selector AE Value|D|RetainDeviceIdentity=C
+0072,005F|Selector AS Value|D|RetainPatientCharacteristics=K
+0072,0061|Selector DA Value|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0072,0063|Selector DT Value|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0072,0065|Selector OB Value|D|
+0072,0066|Selector LO Value|D|CleanDescriptors=C
+0072,0068|Selector LT Value|D|CleanDescriptors=C
+0072,006A|Selector PN Value|D|
+0072,006B|Selector TM Value|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0072,006C|Selector SH Value|D|CleanDescriptors=C
+0072,006D|Selector UN Value|D|
+0072,006E|Selector ST Value|D|CleanDescriptors=C
+0072,0070|Selector UT Value|D|CleanDescriptors=C
+0072,0071|Selector UR Value|D|
+0074,1234|Receiving AE|X|RetainDeviceIdentity=C
+0074,1236|Requesting AE|X|RetainDeviceIdentity=C
+0088,0140|Storage Media File-set UID|U|RetainUIDs=K
+0088,0200|Icon Image Sequence (see Note 11)|X|
+0088,0904|Topic Title|X|
+0088,0906|Topic Subject|X|
+0088,0910|Topic Author|X|
+0088,0912|Topic Keywords|X|
+0100,0420|SOP Authorization DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0400,0100|Digital Signature UID|U|
+0400,0105|Digital Signature DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0400,0115|Certificate of Signer|D|
+0400,0310|Certified Timestamp|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0400,0402|Referenced Digital Signature Sequence|X|
+0400,0403|Referenced SOP Instance MAC Sequence|X|
+0400,0404|MAC|X|
+0400,0550|Modified Attributes Sequence|X|
+0400,0551|Nonconforming Modified Attributes Sequence|X|
+0400,0552|Nonconforming Data Element Value|X|
+0400,0561|Original Attributes Sequence|X|
+0400,0562|Attribute Modification DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+0400,0563|Modifying System|D|RetainDeviceIdentity=K
+0400,0564|Source of Previous Values|Z|RetainInstitutionIdentity=K
+0400,0565|Reason for the Attribute Modification|D|CleanDescriptors=C
+0400,0600|Instance Origin Status|X|
+2030,0020|Text String|X|
+2100,0040|Creation Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+2100,0050|Creation Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+2100,0070|Originator|X|RetainDeviceIdentity=C
+2100,0140|Destination AE|D|RetainDeviceIdentity=C
+2200,0002|Label Text|X/Z|CleanDescriptors=C
+2200,0005|Barcode Value|X/Z|
+3002,0121|Position Acquisition Template Name|X|CleanDescriptors=C
+3002,0123|Position Acquisition Template Description|X|CleanDescriptors=C
+3004,007F|Dose Calculation Model Name|X|CleanDescriptors=C
+3006,0002|Structure Set Label|D|CleanDescriptors=C
+3006,0004|Structure Set Name|X|CleanDescriptors=C
+3006,0006|Structure Set Description|X|CleanDescriptors=C
+3006,0008|Structure Set Date|Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3006,0009|Structure Set Time|Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3006,0024|Referenced Frame of Reference UID|U|RetainUIDs=K
+3006,0026|ROI Name|Z|CleanDescriptors=C
+3006,0028|ROI Description|X|CleanDescriptors=C
+3006,002D|ROI DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3006,002E|ROI Observation DateTime|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3006,0038|ROI Generation Description|X|CleanDescriptors=C
+3006,004D|ROI Creator Sequence|X|
+3006,004E|ROI Interpreter Sequence|X|
+3006,0085|ROI Observation Label|X|CleanDescriptors=C
+3006,0088|ROI Observation Description|X|CleanDescriptors=C
+3006,00A6|ROI Interpreter|Z|
+3006,00C2|Related Frame of Reference UID|U|RetainUIDs=K
+3008,0024|Treatment Control Point Date|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3008,0025|Treatment Control Point Time|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3008,0054|First Treatment Date|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3008,0056|Most Recent Treatment Date|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3008,0105|Source Serial Number|X/Z|RetainDeviceIdentity=K
+3008,0162|Safe Position Exit Date|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3008,0164|Safe Position Exit Time|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3008,0166|Safe Position Return Date|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3008,0168|Safe Position Return Time|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3008,0250|Treatment Date|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3008,0251|Treatment Time|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+300A,0002|RT Plan Label|D|CleanDescriptors=C
+300A,0003|RT Plan Name|X|CleanDescriptors=C
+300A,0004|RT Plan Description|X|CleanDescriptors=C
+300A,0006|RT Plan Date|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+300A,0007|RT Plan Time|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+300A,000B|Treatment Sites|X|CleanDescriptors=C
+300A,000E|Prescription Description|X|CleanDescriptors=C
+300A,0013|Dose Reference UID|U|RetainUIDs=K
+300A,0016|Dose Reference Description|X|CleanDescriptors=C
+300A,0054|Table Top Position Alignment UID|U|RetainUIDs=K
+300A,0072|Fraction Group Description|X|CleanDescriptors=C
+300A,0083|Referenced Dose Reference UID|U|RetainUIDs=K
+300A,00B2|Treatment Machine Name|X/Z|RetainDeviceIdentity=K
+300A,00C3|Beam Description|X|CleanDescriptors=C
+300A,00DD|Bolus Description|X|CleanDescriptors=C
+300A,0196|Fixation Device Description|X|CleanDescriptors=C
+300A,01A6|Shielding Device Description|X|CleanDescriptors=C
+300A,01B2|Setup Technique Description|X|CleanDescriptors=C
+300A,0216|Source Manufacturer|X|RetainDeviceIdentity=K
+300A,022C|Source Strength Reference Date|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+300A,022E|Source Strength Reference Time|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+300A,02EB|Compensator Description|X|CleanDescriptors=C
+300A,0608|Treatment Position Group Label|D|CleanDescriptors=C
+300A,0609|Treatment Position Group UID|U|RetainUIDs=K
+300A,0611|RT Accessory Holder Slot ID|Z|
+300A,0615|RT Accessory Device Slot ID|Z|
+300A,0619|Radiation Dose Identification Label|D|CleanDescriptors=C
+300A,0623|Radiation Dose In-Vivo Measurement Label|D|CleanDescriptors=C
+300A,062A|RT Tolerance Set Label|D|CleanDescriptors=C
+300A,0650|Patient Setup UID|U|RetainUIDs=K
+300A,0676|Equipment Frame of Reference Description|X|CleanDescriptors=C
+300A,067C|Radiation Generation Mode Label|D|CleanDescriptors=C
+300A,067D|Radiation Generation Mode Description|Z|CleanDescriptors=C
+300A,0700|Treatment Session UID|U|RetainUIDs=K
+300A,0734|Treatment Tolerance Violation Description|D|CleanDescriptors=C
+300A,0736|Treatment Tolerance Violation DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+300A,073A|Recorded RT Control Point DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+300A,0741|Interlock DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+300A,0742|Interlock Description|D|CleanDescriptors=C
+300A,0760|Override DateTime|D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+300A,0783|Interlock Origin Description|D|CleanDescriptors=C
+300A,0785|Referenced Treatment Position Group UID|U|RetainUIDs=K
+300A,078E|Patient Treatment Preparation Procedure Parameter Description|X|CleanDescriptors=C
+300A,0792|Patient Treatment Preparation Method Description|X|CleanDescriptors=C
+300A,0794|Patient Setup Photo Description|X|CleanDescriptors=C
+300A,079A|Displacement Reference Label|X|CleanDescriptors=C
+300C,0113|Reason for Omission Description|X|CleanDescriptors=C
+300C,0127|Beam Hold Transition DateTime|D|RetainDeviceIdentity=K;RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+300E,0004|Review Date|Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+300E,0005|Review Time|Z|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+300E,0008|Reviewer Name|X/Z|
+3010,0006|Conceptual Volume UID|U|RetainUIDs=K
+3010,000B|Referenced Conceptual Volume UID|U|RetainUIDs=K
+3010,000F|Conceptual Volume Combination Description|Z|CleanDescriptors=C
+3010,0013|Constituent Conceptual Volume UID|U|RetainUIDs=K
+3010,0015|Source Conceptual Volume UID|U|RetainUIDs=K
+3010,0017|Conceptual Volume Description|Z|CleanDescriptors=C
+3010,001B|Device Alternate Identifier|Z|
+3010,002D|Device Label|D|RetainDeviceIdentity=K
+3010,0031|Referenced Fiducials UID|U|RetainUIDs=K
+3010,0033|User Content Label|D|CleanDescriptors=C
+3010,0034|User Content Long Label|D|CleanDescriptors=C
+3010,0035|Entity Label|D|CleanDescriptors=C
+3010,0036|Entity Name|X|CleanDescriptors=C
+3010,0037|Entity Description|X|CleanDescriptors=C
+3010,0038|Entity Long Label|D|CleanDescriptors=C
+3010,003B|RT Treatment Phase UID|U|RetainUIDs=K
+3010,0043|Manufacturer's Device Identifier|Z|RetainDeviceIdentity=K
+3010,004C|Intended Phase Start Date|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3010,004D|Intended Phase End Date|X/D|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+3010,0054|RT Prescription Label|D|CleanDescriptors=C
+3010,0056|RT Treatment Approach Label|X/D|CleanDescriptors=C
+3010,005A|RT Physician Intent Narrative|Z|CleanDescriptors=C
+3010,005C|Reason for Superseding|Z|CleanDescriptors=C
+3010,0061|Prior Treatment Dose Description|X|CleanDescriptors=C
+3010,006E|Dosimetric Objective UID|U|RetainUIDs=K
+3010,006F|Referenced Dosimetric Objective UID|U|RetainUIDs=K
+3010,0077|Treatment Site|X/D|CleanDescriptors=C
+3010,007A|Treatment Technique Notes|Z|CleanDescriptors=C
+3010,007B|Prescription Notes|Z|CleanDescriptors=C
+3010,007F|Fractionation Notes|Z|CleanDescriptors=C
+3010,0081|Prescription Notes Sequence|Z|CleanDescriptors=C
+3010,0085|Intended Fraction Start Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+4000,0010|Arbitrary|X|
+4000,4000|Text Comments|X|
+4008,0040|Results ID|X|
+4008,0042|Results ID Issuer|X|
+4008,0100|Interpretation Recorded Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+4008,0101|Interpretation Recorded Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+4008,0102|Interpretation Recorder|X|
+4008,0108|Interpretation Transcription Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+4008,0109|Interpretation Transcription Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+4008,010A|Interpretation Transcriber|X|
+4008,010B|Interpretation Text|X|CleanDescriptors=C
+4008,010C|Interpretation Author|X|
+4008,0111|Interpretation Approver Sequence|X|
+4008,0112|Interpretation Approval Date|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+4008,0113|Interpretation Approval Time|X|RetainLongitudinalTemporal=K;RetainLongitudinalTemporalModifiedDates=C
+4008,0114|Physician Approving Interpretation|X|
+4008,0115|Interpretation Diagnosis Description|X|CleanDescriptors=C
+4008,0118|Results Distribution List Sequence|X|
+4008,0119|Distribution Name|X|
+4008,011A|Distribution Address|X|
+4008,0200|Interpretation ID|X|
+4008,0202|Interpretation ID Issuer|X|
+4008,0300|Impressions|X|CleanDescriptors=C
+4008,4000|Results Comments|X|CleanDescriptors=C
+FFFA,FFFA|Digital Signatures Sequence|X|
+FFFC,FFFC|Data Set Trailing Padding|X|
+`;
 
 // Table E.1-1 rows whose tag cell is a PS3.5 section 7.6 repeating-group mask.
 // An exact-tag map cannot key them; `annexE()` falls back to these patterns, and

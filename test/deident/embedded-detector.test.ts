@@ -14,8 +14,7 @@ import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
 import { findEmbeddedAttributes, MAX_SCAN_BYTES } from "../../src/deident/embedded.js";
-import { annexE } from "../../src/dictionary/annex-e.js";
-import { ANNEX_E } from "../../src/dictionary/generated/annex-e.js";
+import { annexE, annexETags } from "../../src/dictionary/annex-e.js";
 import type { Tag, VR } from "../../src/dictionary/types.js";
 
 const PATIENT_ID_TAG: Tag = "00100020";
@@ -309,9 +308,9 @@ describe("findEmbeddedAttributes: hidden carries only the tags the run acts on",
     // The filter is one conjunct rather than two because of this fact about the
     // generated table. Asserted rather than assumed: if a future edition adds an
     // odd-group literal row, this reds and the reasoning gets re-derived.
-    const odd = Object.keys(ANNEX_E).filter((tag) => parseInt(tag.slice(0, 4), 16) % 2 === 1);
+    const odd = annexETags().filter((tag) => parseInt(tag.slice(0, 4), 16) % 2 === 1);
     expect(odd).toStrictEqual([]);
-    expect(Object.keys(ANNEX_E).length).toBeGreaterThan(600);
+    expect(annexETags().length).toBeGreaterThan(600);
   });
 
   it("an odd group is excluded even when the run's own action table acts on it", () => {

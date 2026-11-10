@@ -126,6 +126,8 @@ for (const shape of SHAPES) {
       name: `parseDicom: ${shape.name}`,
       sizes: sizes(shape),
       bind: (dicom) => (x) => dicom.parseDicom(x.bytes),
+      // Every shape reads with no warning, its undefined-length sequences included (PS3.5 2026c
+      // section 7.1.2 allows them), so a call weighs 1: the count only keeps the result in use.
       weigh: (ds) => ds.warnings.length + 1,
     }),
     defineBenchmark({

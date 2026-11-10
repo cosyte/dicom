@@ -10,8 +10,12 @@
  *   - FFFE markers route through the same endian-aware ByteCursor
  *     as every other read; ItemDelim termination of undefined-length items
  *     is supported via `opts.stopOnItemDelim`.
- *   - An undefined-length SQ is legal in Explicit VR but emits
- *     `DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR`.
+ *   - An undefined-length SQ is conformant under Explicit VR, so it is read
+ *     with no warning. PS3.5 2026c section 7.1.2: "Undefined Lengths may be
+ *     used for Data Elements having the Value Representation (VR) Sequence of
+ *     Items (SQ) and Unknown (UN)", and Table 7.5-2 is an Explicit VR example of
+ *     one. Undefined length on any other VR, outside the two cases below, is
+ *     still refused with a thrown `INVALID_FILE_META`.
  *   - CP-246 fallback: when `VR=UN` AND `length=0xFFFFFFFF`, attempt
  *     SQ descent using **Implicit VR LE inner encoding**. On success →
  *     promote element to `VR=SQ` + emit `DICOM_UN_PARSED_AS_SQ` + set
@@ -37,13 +41,13 @@
 import type { Buffer } from "node:buffer";
 
 import { Element } from "../dataset/element.js";
-import { joinTag } from "../dataset/tag.js";
-import { lookup as dictionaryLookup } from "../dictionary/index.js";
+import { tagEntry } from "../dictionary/registry.js";
 import type { Tag, VR } from "../dictionary/types.js";
 import { ByteCursor, copyValueBytes } from "./byte-cursor.js";
-import { defineElement } from "./data-set-map.js";
+import { defineElement, parsedElement } from "./data-set-map.js";
 import {
   applySpecificCharacterSet,
+  emptyExplicitElementHeader,
   readExplicitElementHeader,
   registerPrivateCreator,
   resolvePrivateCreator,
@@ -64,17 +68,26 @@ import {
   type InnerParser,
   type ParseSequenceOptions,
 } from "./sequence.js";
-import type { ParseContext } from "./types.js";
+import type { DicomPosition, ParseContext } from "./types.js";
 import {
   groupLengthInDataset,
   oddLengthValuePadded,
   pixelDataFragmentsNotDelimited,
-  undefinedLengthInExplicitVR,
   vrMismatch,
   type DicomParseWarning,
 } from "./warnings.js";
 
 const UNDEFINED_LENGTH = 0xffffffff;
+
+/** The `(0008,0005)` Specific Character Set tag. */
+const SPECIFIC_CHARACTER_SET_TAG: Tag = "00080005";
+
+/**
+ * The record every Explicit VR header is read into, at every depth. The element
+ * loop takes each field out of it as soon as it is read, so a nested Data Set's
+ * reads cannot reach a header still in use.
+ */
+const HEADER = emptyExplicitElementHeader();
 
 /**
  * Shared Explicit-VR element loop used by both the LE and BE
@@ -97,7 +110,7 @@ export function _parseExplicit(
   const cursor = new ByteCursor(buffer, mode.littleEndian, datasetStart);
   const elements = new Map<Tag, Element>();
 
-  while (cursor.remaining() > 0) {
+  while (cursor.position < buffer.length) {
     const headerStart = cursor.position;
 
     // Detect FFFE markers BEFORE the explicit-VR header read - FFFE
@@ -134,8 +147,8 @@ export function _parseExplicit(
         /* v8 ignore next -- unreachable: the cursor reads throw only RangeError. */
         throw err;
       }
-      const fffeTag = joinTag(grp, ele);
-      if (opts.stopOnItemDelim === true && fffeTag === "FFFEE00D") {
+      // `(FFFE,E00D)` Item Delimitation Item, compared as numbers.
+      if (opts.stopOnItemDelim === true && grp === 0xfffe && ele === 0xe00d) {
         // ItemDelim - cursor consumed past the 8-byte marker.
         return { elements, endOffset: cursor.position };
       }
@@ -145,36 +158,40 @@ export function _parseExplicit(
     // Standard Explicit-VR element header.
     let header;
     try {
-      header = readExplicitElementHeader(cursor, ctx, emit);
+      header = readExplicitElementHeader(cursor, ctx, emit, HEADER);
     } catch (err) {
       if (err instanceof RangeError) {
         throw truncatedExplicitVrHeader(ctx.frame, headerStart);
       }
       throw err;
     }
-    const { tag, vr, length } = header;
+    // Every field is taken out of the shared record here, before anything below
+    // can read another header into it.
+    const { tag, vr, length, group: groupNum, element: elementNum } = header;
 
-    const position = { byteOffset: headerStart };
+    // One position per element, made the first time a warning needs it, and
+    // shared by every warning raised for the element.
+    let position: DicomPosition | undefined;
 
     // VR-mismatch check: only meaningful for STANDARD tags
     // (private tags have no dictionary entry to compare against). A row that
     // lists several VRs ("US or SS", "OB or OW") accepts any of them, so the
     // on-wire VR mismatches only when the row lists none like it. The warning
     // names the row's first VR.
-    const groupNum = parseInt(tag.slice(0, 4), 16);
     const isPrivate = groupNum % 2 === 1;
     if (!isPrivate) {
-      const dictVrs = dictionaryLookup(tag)?.vr ?? [];
-      const dictVr = dictVrs[0];
-      if (dictVr !== undefined && !dictVrs.includes(vr)) {
-        emit(vrMismatch(position, tag, dictVr, vr));
+      // The tag is eight upper-case hex digits, so this is `Dictionary.lookup`'s answer.
+      const dictVrs = tagEntry(tag)?.vr;
+      const dictVr = dictVrs?.[0];
+      if (dictVr !== undefined && dictVrs?.includes(vr) === false) {
+        emit(vrMismatch((position ??= { byteOffset: headerStart }), tag, dictVr, vr));
       }
     }
 
     // Odd-length warning: emitted for explicit-length values whose declared
     // length is odd. Don't pad - that is the serializer's job.
     if (length !== UNDEFINED_LENGTH && length % 2 === 1) {
-      emit(oddLengthValuePadded(position, tag));
+      emit(oddLengthValuePadded((position ??= { byteOffset: headerStart }), tag));
     }
 
     // SQ branch.
@@ -182,7 +199,6 @@ export function _parseExplicit(
       const valueStart = cursor.position;
       let seqResult;
       if (length === UNDEFINED_LENGTH) {
-        emit(undefinedLengthInExplicitVR(position, tag));
         const seqOpts: ParseSequenceOptions = {
           explicitLength: undefined,
           littleEndian: mode.littleEndian,
@@ -198,23 +214,27 @@ export function _parseExplicit(
         seqResult = parseSequence(buffer, valueStart, ctx, emit, seqOpts);
       }
       cursor.position = seqResult.endOffset;
-      const rawBytes = ctx.copyValues
-        ? copyValueBytes(buffer.subarray(headerStart, cursor.position))
-        : buffer.subarray(headerStart, cursor.position);
-      const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
+      const privateCreator = isPrivate
+        ? safeModelCreator(resolvePrivateCreator(tag, ctx), ctx)
+        : undefined;
+      // `rawBytes` is the whole on-wire span, header included.
       defineElement(
         elements,
-        new Element({
+        parsedElement(
+          ctx,
+          buffer,
+          headerStart,
+          cursor.position,
           tag,
-          vr: "SQ",
-          vm: seqResult.items.length,
+          "SQ",
+          seqResult.items.length,
           length,
-          rawBytes,
-          byteOffset: headerStart,
-          littleEndian: mode.littleEndian,
-          items: seqResult.items,
-          ...(privateCreator !== undefined ? { privateCreator } : {}),
-        }),
+          headerStart,
+          mode.littleEndian,
+          undefined,
+          privateCreator,
+          seqResult.items,
+        ),
         emit,
       );
       continue;
@@ -234,7 +254,7 @@ export function _parseExplicit(
         // The stream ran out after its last whole Item with no (FFFE,E0DD), so
         // the fragment list may be short. Declared, never fatal: the metadata
         // is intact (PS3.5 2026c section A.4 requires the delimiter).
-        emit(pixelDataFragmentsNotDelimited(position));
+        emit(pixelDataFragmentsNotDelimited((position ??= { byteOffset: headerStart })));
       }
       cursor.position = result.endOffset;
       const rawBytes = ctx.copyValues
@@ -343,41 +363,55 @@ export function _parseExplicit(
     }
     const valueStart = cursor.position;
     const valueEnd = valueStart + length;
-    const valueSlice = ctx.copyValues
-      ? copyValueBytes(buffer.subarray(valueStart, valueEnd))
-      : buffer.subarray(valueStart, valueEnd);
     cursor.position = valueEnd;
 
     // Group-length elements in non-File-Meta groups.
-    const elementHexNum = parseInt(tag.slice(4, 8), 16);
+    const elementHexNum = elementNum;
     if (elementHexNum === 0x0000 && groupNum !== 0x0002) {
-      emit(groupLengthInDataset(position));
+      emit(groupLengthInDataset((position ??= { byteOffset: headerStart })));
     }
 
     // Private Creator slot (gggg,0010..00FF) - register into the stack.
     if (groupNum % 2 === 1 && elementHexNum >= 0x0010 && elementHexNum <= 0x00ff) {
-      registerPrivateCreator(tag, valueSlice, ctx);
+      registerPrivateCreator(tag, buffer.subarray(valueStart, valueEnd), ctx);
     }
 
     // (0008,0005) Specific Character Set governs subsequent text decode.
-    applySpecificCharacterSet(tag, valueSlice, ctx, emit, position);
+    if (tag === SPECIFIC_CHARACTER_SET_TAG) {
+      applySpecificCharacterSet(
+        tag,
+        buffer.subarray(valueStart, valueEnd),
+        ctx,
+        emit,
+        (position ??= { byteOffset: headerStart }),
+      );
+    }
 
-    const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
+    // An even group has no Private Creator, so it skips the reservation lookup.
+    const privateCreator = isPrivate
+      ? safeModelCreator(resolvePrivateCreator(tag, ctx), ctx)
+      : undefined;
     const finalVr: VR = vr; // Postel: trust on-wire VR (warning already emitted on mismatch).
+    // Every field named, none spread in: the constructor reads an `undefined`
+    // field exactly as an omitted one.
     defineElement(
       elements,
-      new Element({
+      parsedElement(
+        ctx,
+        buffer,
+        valueStart,
+        valueEnd,
         tag,
-        vr: finalVr,
+        finalVr,
         // Placeholder - the value decoders derive VM from VR + value layout.
-        vm: 1,
+        1,
         length,
-        rawBytes: valueSlice,
-        byteOffset: headerStart,
-        littleEndian: mode.littleEndian,
-        ...(ctx.currentCharset !== undefined ? { specificCharacterSet: ctx.currentCharset } : {}),
-        ...(privateCreator !== undefined ? { privateCreator } : {}),
-      }),
+        headerStart,
+        mode.littleEndian,
+        ctx.currentCharset,
+        privateCreator,
+        undefined,
+      ),
       emit,
     );
   }
