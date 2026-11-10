@@ -17,7 +17,7 @@
  * @module
  */
 
-import { createHash } from "node:crypto";
+import { cryptoModule } from "../builtins.js";
 
 import { DeidentifyError } from "./types.js";
 
@@ -97,7 +97,7 @@ export function makeUidRemapper(
 }
 
 function deriveUid(root: string, sourceUid: string): string {
-  const hex = createHash("sha256").update(sourceUid, "utf8").digest("hex");
+  const hex = cryptoModule().createHash("sha256").update(sourceUid, "utf8").digest("hex");
   const fullDecimal = BigInt(`0x${hex}`).toString(10);
   // Budget: "<root>." prefix + the value component, total ≤ 64 chars. The digest
   // is truncated to fit - deterministically, so referential integrity holds - but

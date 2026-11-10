@@ -28,9 +28,8 @@
  * @module
  */
 
-import { KEYWORDS } from "./generated/keywords.js";
-import { TAGS } from "./generated/tags.js";
 import { UIDS } from "./generated/uids.js";
+import { keywordTag, tagEntry } from "./registry.js";
 
 import type { DictionaryEntry, Tag, UidEntry, VR } from "./types.js";
 
@@ -38,29 +37,23 @@ export type { DictionaryEntry, Tag, UidEntry, VR };
 
 const TAG_HEX_RE = /^[0-9A-F]{8}$/;
 
-// Freeze the generated maps and every nested entry on first module load.
-// The generated files emit declarative `as const` literals (no Object.freeze)
-// so that re-running the generator stays byte-identical; the runtime freeze
-// happens here, exactly once. This is the immutability guardrail, verified by
-// the unit tests in `test/dictionary/index.test.ts`.
-function deepFreezeEntries<T extends object>(map: {
-  readonly [k: string]: T;
-}): {
-  readonly [k: string]: T;
-} {
-  for (const k of Object.keys(map)) {
-    const v = map[k];
-    if (v !== undefined && !Object.isFrozen(v)) {
-      Object.freeze(v);
-    }
-  }
-  Object.freeze(map);
-  return map;
-}
+// Every returned entry is frozen. A tag's entry is built and frozen the first
+// time it is asked for (see `./registry.ts`), and the UID table is frozen on the
+// first `uid` call, so loading the package does neither. The generated modules
+// emit declarative literals (no Object.freeze) so that re-running the generator
+// stays byte-identical; the freeze happens here. This is the immutability
+// guardrail, verified by the unit tests in `test/dictionary/index.test.ts`.
+let frozenUids: { readonly [uid: string]: UidEntry } | undefined;
 
-const FROZEN_TAGS = deepFreezeEntries(TAGS);
-const FROZEN_UIDS = deepFreezeEntries(UIDS);
-Object.freeze(KEYWORDS);
+function uidTable(): { readonly [uid: string]: UidEntry } {
+  if (frozenUids !== undefined) return frozenUids;
+  for (const k of Object.keys(UIDS)) {
+    const v = UIDS[k];
+    if (v !== undefined && !Object.isFrozen(v)) Object.freeze(v);
+  }
+  frozenUids = Object.freeze(UIDS);
+  return frozenUids;
+}
 
 /**
  * Look up a DICOM attribute by tag (`"00100010"`) or keyword (`"PatientName"`).
@@ -82,7 +75,7 @@ export function lookup(tagOrKeyword: string): DictionaryEntry | undefined {
   }
   const upper = tagOrKeyword.toUpperCase();
   if (TAG_HEX_RE.test(upper)) {
-    return FROZEN_TAGS[upper];
+    return tagEntry(upper);
   }
   return byKeyword(tagOrKeyword);
 }
@@ -102,11 +95,11 @@ export function byKeyword(keyword: string): DictionaryEntry | undefined {
   if (typeof keyword !== "string" || keyword.length === 0) {
     return undefined;
   }
-  const tag = KEYWORDS[keyword];
+  const tag = keywordTag(keyword);
   if (tag === undefined) {
     return undefined;
   }
-  return FROZEN_TAGS[tag];
+  return tagEntry(tag);
 }
 
 /**
@@ -128,5 +121,5 @@ export function uid(uidValue: string): UidEntry | undefined {
   if (typeof uidValue !== "string" || uidValue.length === 0) {
     return undefined;
   }
-  return FROZEN_UIDS[uidValue];
+  return uidTable()[uidValue];
 }

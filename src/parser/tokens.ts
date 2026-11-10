@@ -54,7 +54,7 @@
  * @module
  */
 
-import { lookup as dictionaryLookup } from "../dictionary/index.js";
+import { tagEntry } from "../dictionary/registry.js";
 import type { Tag, VR } from "../dictionary/types.js";
 import { KNOWN_VRS } from "./endian.js";
 import type { Profile } from "./types.js";
@@ -123,7 +123,7 @@ const TAG_SHAPE = /^[0-9A-F]{8}$/u;
  * ## Literal rows only. A MASK MATCH PROVES A RULE EXISTS, NOT THAT MEMBERSHIP IS
  * FINITE
  *
- * {@link dictionaryLookup} answers `undefined` for a tag that resolves only
+ * {@link tagEntry} answers `undefined` for a tag that resolves only
  * through a repeating-group family, and that exclusion is load-bearing rather
  * than incidental. `(50xx,xxxx)` Curve Data leaves the whole 16-bit element
  * number free, so a family test would admit 16 x 65,536 tags whose free bits are
@@ -148,5 +148,6 @@ const TAG_SHAPE = /^[0-9A-F]{8}$/u;
  */
 export function renderTag(tag: Tag | undefined): string {
   if (tag === undefined || !TAG_SHAPE.test(tag)) return WITHHELD;
-  return dictionaryLookup(tag) === undefined ? WITHHELD : tag;
+  // Eight upper-case hex digits, so `Dictionary.lookup` would answer exactly this.
+  return tagEntry(tag) === undefined ? WITHHELD : tag;
 }

@@ -92,7 +92,7 @@ import { Buffer } from "node:buffer";
 import type { Element } from "../dataset/element.js";
 import type { Item } from "../dataset/item.js";
 import { splitTag } from "../dataset/tag.js";
-import { TAGS } from "../dictionary/generated/tags.js";
+import { tagEntry } from "../dictionary/registry.js";
 import type { Tag, VR } from "../dictionary/types.js";
 import { LONG_FORM_VRS, matchRepeatingGroup } from "../parser/element-header.js";
 import { isRecognizedVr } from "../parser/endian.js";
@@ -259,7 +259,7 @@ function isImplicitSequence(tagNumberValue: number): boolean {
   const group = Math.floor(tagNumberValue / 0x10000);
   if (group % 2 === 1) return false;
   const tag = tagOf(tagNumberValue);
-  const entry = TAGS[tag] ?? matchRepeatingGroup(tag);
+  const entry = tagEntry(tag) ?? matchRepeatingGroup(tag);
   return entry?.vr[0] === "SQ";
 }
 

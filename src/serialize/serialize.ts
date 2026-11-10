@@ -48,8 +48,8 @@
  */
 
 import { Buffer } from "node:buffer";
-import { deflateRawSync } from "node:zlib";
 
+import { zlibModule } from "../builtins.js";
 import type { Dataset } from "../dataset/dataset.js";
 import { DIRECTORY_TAGS, isDicomdir } from "../dataset/directory.js";
 import type { Element } from "../dataset/element.js";
@@ -314,7 +314,7 @@ export function serializeDicom(ds: Dataset): Buffer {
     if (placed !== undefined) {
       rewriteDirectoryOffsets(ds, plain, placed, encoding, bodyFileOffset, true);
     }
-    const deflatedBody = deflateRawSync(plain);
+    const deflatedBody = zlibModule().deflateRawSync(plain);
     const out = Buffer.allocUnsafe(bodyFileOffset + deflatedBody.length);
     writePreamble(out);
     fileMeta.copy(out, PREAMBLE_LENGTH);

@@ -11,7 +11,7 @@
 import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
-import { TAGS } from "../../src/dictionary/generated/tags.js";
+import { registryKeys, tagEntry } from "../../src/dictionary/registry.js";
 import {
   matchRepeatingGroup,
   registerPrivateCreator,
@@ -222,8 +222,10 @@ describe("matchRepeatingGroup - pattern matching against family entries", () => 
   // The family branch of `resolveImplicitVR` relies on this: unlike four retired single-tag rows,
   // no repeating-group family row is without a VR, so a family match never reads as UN.
   it("every family entry in the generated dictionary lists at least one VR", () => {
-    const families = Object.values(TAGS).filter((e) => e.repeatingGroup === true);
+    const families = registryKeys()
+      .map((key) => tagEntry(key))
+      .filter((e) => e?.repeatingGroup === true);
     expect(families.length).toBeGreaterThan(0);
-    expect(families.filter((e) => e.vr.length === 0).map((e) => e.tag)).toEqual([]);
+    expect(families.filter((e) => e?.vr.length === 0).map((e) => e?.tag)).toEqual([]);
   });
 });

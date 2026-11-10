@@ -19,7 +19,7 @@
  * @module
  */
 
-import { TAGS } from "../dictionary/generated/tags.js";
+import { repeatingGroupEntries, tagEntry } from "../dictionary/registry.js";
 import type { Buffer } from "node:buffer";
 
 import { isKnownCharsetTerm, parseSpecificCharacterSet } from "../dataset/vr/charset.js";
@@ -172,7 +172,7 @@ export function resolveImplicitVR(
   }
 
   // Cases 1, 2, 3, 5 - standard (even-group) tag.
-  const direct = TAGS[tag];
+  const direct = tagEntry(tag);
   if (direct !== undefined) {
     // Case 1 / 2: dict has a direct entry. Pick first VR (multi-VR
     // ambiguity documented above). PS3.6 gives a few retired rows, such as
@@ -296,24 +296,6 @@ export function registerPrivateCreator(tag: Tag, value: Buffer, ctx: ParseContex
 // ---------------------------------------------------------------------------
 
 /**
- * Memoized list of repeating-group family entries from the dictionary.
- * Computed once on first call (the dictionary is frozen and the family
- * list is small).
- */
-let cachedFamilyEntries: readonly DictionaryEntry[] | undefined;
-
-function getFamilyEntries(): readonly DictionaryEntry[] {
-  if (cachedFamilyEntries !== undefined) return cachedFamilyEntries;
-  const out: DictionaryEntry[] = [];
-  for (const k of Object.keys(TAGS)) {
-    const e = TAGS[k];
-    if (e !== undefined && e.repeatingGroup === true) out.push(e);
-  }
-  cachedFamilyEntries = Object.freeze(out);
-  return cachedFamilyEntries;
-}
-
-/**
  * Match a concrete 8-hex-char tag against any repeating-group family
  * pattern from the dictionary. The family pattern's `tag` field carries
  * lowercase `x` placeholders that act as wildcards (e.g., `"50xx3000"`
@@ -325,7 +307,7 @@ function getFamilyEntries(): readonly DictionaryEntry[] {
  * @internal
  */
 export function matchRepeatingGroup(tag: Tag): DictionaryEntry | undefined {
-  const families = getFamilyEntries();
+  const families = repeatingGroupEntries();
   for (const fam of families) {
     if (matchesFamilyPattern(fam.tag, tag)) return fam;
   }

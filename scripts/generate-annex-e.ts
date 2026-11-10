@@ -826,6 +826,18 @@ function renderOptionSetLiteral(pairs: ReadonlyArray<readonly [string, string]>)
     : "Object.freeze({ " + rendered.join(", ") + " })";
 }
 
+/**
+ * The separators of an `ANNEX_E_ROWS` row are `|`, `;` and `=`. No field may carry one, a line
+ * break, or anything that would end or escape the template literal the rows are emitted in. Such a
+ * field is refused rather than escaped, so `annexE()` splits a row with no unescaping at all.
+ */
+function annexERowField(value: string): string {
+  if (/[|;=\n\r`\\]|\$\{/u.test(value)) {
+    fail("an Annex E field carries a character an ANNEX_E_ROWS row cannot hold: " + value);
+  }
+  return value;
+}
+
 function emit(
   entries: ReadonlyArray<NormalizedEntry>,
   repeating: ReadonlyArray<RepeatingEntry>,
@@ -851,25 +863,30 @@ function emit(
   lines.push("// CleanPixelData, E.3.2 CleanRecognizableVisual) are not represented per-attribute");
   lines.push("// here; they are enforced at the pixel-decode layer.");
   lines.push("");
-  lines.push('import type { AnnexEAction, AnnexERepeatingRule } from "../annex-e.js";');
+  lines.push('import type { AnnexERepeatingRule } from "../annex-e.js";');
   lines.push("");
-  lines.push("export const ANNEX_E: Readonly<Record<string, AnnexEAction>> = Object.freeze({");
+  lines.push("/**");
+  lines.push(" * Table E.1-1's exact-tag rows, one a line in ascending tag order: the tag, the");
+  lines.push(" * attribute name, the Basic Profile action, then each Option's action as");
+  lines.push(" * `Option=code` joined by `;`, the Options in name order; fields joined by `|`.");
+  lines.push(" * One string rather than an object literal, so loading the package does not");
+  lines.push(
+    " * build " + String(entries.length) + " frozen objects: `annexE()` in `../annex-e.ts` reads",
+  );
+  lines.push(" * a row the first time its tag is asked for.");
+  lines.push(" */");
+  lines.push("export const ANNEX_E_ROWS: string = `");
   for (const e of entries) {
     lines.push(
-      '  "' +
-        e.tag +
-        '": Object.freeze({ tag: "' +
-        e.tag +
-        '", keyword: "' +
-        escapeJsString(e.keyword) +
-        '", basicProfile: "' +
-        escapeJsString(e.basicProfile) +
-        '", optionSet: ' +
-        renderOptionSetLiteral(e.optionSet) +
-        " }),",
+      [
+        annexERowField(e.tag),
+        annexERowField(e.keyword),
+        annexERowField(e.basicProfile),
+        e.optionSet.map(([k, v]) => annexERowField(k) + "=" + annexERowField(v)).join(";"),
+      ].join("|"),
     );
   }
-  lines.push("});");
+  lines.push("`;");
   lines.push("");
   lines.push("// Table E.1-1 rows whose tag cell is a PS3.5 section 7.6 repeating-group mask.");
   lines.push("// An exact-tag map cannot key them; `annexE()` falls back to these patterns, and");

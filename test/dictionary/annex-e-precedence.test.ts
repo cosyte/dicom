@@ -28,26 +28,22 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../../src/dictionary/generated/annex-e.js", () => ({
-  ANNEX_E: Object.freeze({
-    // (6000,4000) is inside the (60xx,4000) mask below. The real table has no such
-    // row; if PS3.15 ever adds one, this is the behaviour it will get.
-    "60004000": Object.freeze({
-      tag: "60004000",
-      keyword: "Constructed Exact Row",
-      basicProfile: "K",
-      optionSet: Object.freeze({}),
-    }),
-    // (0008,0020) Study Date, rebuilt as the row PS3.15 2026c does not publish:
-    // the full-dates column says keep, and the modified-dates column beside it
-    // is EMPTY. Only this shape separates the Basic Profile fallback from the
-    // neighbouring-column one.
-    "00080020": Object.freeze({
-      tag: "00080020",
-      keyword: "Study Date",
-      basicProfile: "Z",
-      optionSet: Object.freeze({ RetainLongitudinalTemporal: "K" }),
-    }),
-  }),
+  // One exact row a line, as the generator emits them: tag, name, Basic Profile
+  // action, then `Option=code` pairs joined by `;`; fields joined by `|`.
+  //
+  // (6000,4000) is inside the (60xx,4000) mask below. The real table has no such
+  // row; if PS3.15 ever adds one, this is the behaviour it will get.
+  //
+  // (0008,0020) Study Date, rebuilt as the row PS3.15 2026c does not publish:
+  // the full-dates column says keep, and the modified-dates column beside it
+  // is EMPTY. Only this shape separates the Basic Profile fallback from the
+  // neighbouring-column one.
+  ANNEX_E_ROWS: [
+    "",
+    "60004000|Constructed Exact Row|K|",
+    "00080020|Study Date|Z|RetainLongitudinalTemporal=K",
+    "",
+  ].join("\n"),
   ANNEX_E_REPEATING: Object.freeze([
     Object.freeze({
       pattern: "60xx4000",

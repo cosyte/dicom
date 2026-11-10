@@ -5,8 +5,8 @@
  * `src/dictionary/generated/`.
  *
  * Runs via `pnpm gen:dictionary` (devDep `tsx`). Writes:
- *   - src/dictionary/generated/tags.ts     (Tag → DictionaryEntry)
- *   - src/dictionary/generated/keywords.ts (Keyword → Tag reverse map)
+ *   - src/dictionary/generated/tags.ts     (one row per Tag; `src/dictionary/registry.ts` reads it,
+ *                                           and derives the Keyword → Tag reverse map from it)
  *   - src/dictionary/generated/uids.ts     (UID → UidEntry)
  *
  * Reads:
@@ -14,7 +14,7 @@
  *   - vendor/innolitics/<short-sha>/sops.json
  *   - vendor/nema/part06/<sha-256>/part06.xml (the PS3.6 DocBook, normative)
  *
- * Authority for the element registry (tags.ts / keywords.ts):
+ * Authority for the element registry (tags.ts):
  *   NEMA's PS3.6 DocBook is the normative publication of the Registry of DICOM
  *   Data Elements. Innolitics' `attributes.json` is a convenient regenerated
  *   mirror of it, and its regeneration cadence is not ours to control: at the
@@ -840,7 +840,22 @@ function emitHeader(
 
 interface BuiltEntry {
   readonly tagOrKey: string;
-  readonly literal: string;
+  readonly row: string;
+}
+
+/**
+ * The separators of a `TAG_ROWS` row: fields by `|`, and a row's VRs by `/`. No field may carry a
+ * `|`, a line break, or anything that would end or escape the template literal the rows are
+ * emitted in, and no VR may carry a `/`. The generator refuses such a field rather than escaping
+ * it, so the runtime reader in `src/dictionary/registry.ts` splits rows with no unescaping at all.
+ */
+const ROW_FORBIDDEN = /[|\n\r`\\]|\$\{/u;
+
+function rowField(value: string, what: string, tag: string): string {
+  if (ROW_FORBIDDEN.test(value) || (what === "VR" && value.includes("/"))) {
+    throw new Error(`${what} of ${tag} carries a character a TAG_ROWS row cannot hold`);
+  }
+  return value;
 }
 
 interface OverlayStats {
@@ -899,17 +914,17 @@ function buildTagsTs(
     vm: string,
     retired: boolean,
   ): void => {
-    const fields: string[] = [
-      `tag: ${escape(tag)}`,
-      `keyword: ${escape(keyword)}`,
-      `name: ${escape(name)}`,
-      `vr: [${vr.map(escape).join(", ")}] as const`,
-      `vm: ${escape(vm)}`,
-      `retired: ${retired}`,
-    ];
-    if (repeatingGroup) fields.push("repeatingGroup: true as const");
+    const row = [
+      rowField(tag, "tag", tag),
+      rowField(keyword, "keyword", tag),
+      rowField(name, "name", tag),
+      vr.map((v) => rowField(v, "VR", tag)).join("/"),
+      rowField(vm, "VM", tag),
+      retired ? "R" : "",
+      repeatingGroup ? "x" : "",
+    ].join("|");
 
-    entries.push({ tagOrKey: tag, literal: `{ ${fields.join(", ")} }` });
+    entries.push({ tagOrKey: tag, row });
 
     // Build reverse map only for concrete tags with non-empty keyword.
     if (!repeatingGroup && keyword.length > 0) {
@@ -988,26 +1003,16 @@ function buildTagsTs(
       innoSha,
       { ...nema, tables: NEMA_ELEMENT_TABLES_LABEL, subject: "tag" },
     ) +
-    `import type { DictionaryEntry } from "../types.js";\n\n` +
-    `export const TAGS: { readonly [tag: string]: DictionaryEntry } = {\n` +
-    entries.map((e) => `  ${escape(e.tagOrKey)}: ${e.literal},`).join("\n") +
-    `\n};\n`;
-
-  const keywordsTs =
-    emitHeader(
-      "generate-dictionary.ts",
-      [{ path: "vendor/innolitics/<sha>/attributes.json", sha256: attrSha }],
-      innoSha,
-      { ...nema, tables: NEMA_ELEMENT_TABLES_LABEL, subject: "tag" },
-    ) +
-    `export const KEYWORDS: { readonly [keyword: string]: string } = {\n` +
-    keywordPairs.map((p) => `  ${escape(p.keyword)}: ${escape(p.tag)},`).join("\n") +
-    `\n};\n`;
-
-  // We're emitting two files in this single function - return TS for tags and
-  // pass keywordsTs out via a side channel by writing directly. Cleaner: split.
-  // Keep clean by writing keywords inline here and returning both:
-  writeFileSync(join(OUT_DIR, "keywords.ts"), keywordsTs, "utf8");
+    `/**\n` +
+    ` * The element registry, one row per tag in ascending order of its key: the tag (a repeating-group\n` +
+    ` * row keeps its lowercase \`x\` placeholders), keyword, name, the VRs joined by \`/\`, VM, \`R\` when\n` +
+    ` * retired, and \`x\` for a repeating-group row; fields joined by \`|\`. One string rather than an\n` +
+    ` * object literal, so loading the package does not build ${String(entries.length)} objects:\n` +
+    ` * \`src/dictionary/registry.ts\` reads a row the first time its tag is asked for.\n` +
+    ` */\n` +
+    `export const TAG_ROWS: string = \`\n` +
+    entries.map((e) => `${e.row}\n`).join("") +
+    `\`;\n`;
 
   return { ts: tagsTs, tagCount: entries.length, keywordCount: keywordPairs.length, stats };
 }
@@ -1178,7 +1183,7 @@ function main(): void {
 
   mkdirSync(OUT_DIR, { recursive: true });
 
-  console.log("[gen:dictionary] building tags + keywords...");
+  console.log("[gen:dictionary] building tags...");
   const {
     ts: tagsTs,
     tagCount,

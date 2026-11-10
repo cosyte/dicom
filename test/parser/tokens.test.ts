@@ -13,7 +13,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { TAGS } from "../../src/dictionary/generated/tags.js";
+import { registryKeys, tagEntry } from "../../src/dictionary/registry.js";
 import { WITHHELD, renderTag, renderVr } from "../../src/parser/tokens.js";
 
 describe("renderTag is a MEMBERSHIP test against PS3.6, not a shape test", () => {
@@ -45,9 +45,9 @@ describe("renderTag is a MEMBERSHIP test against PS3.6, not a shape test", () =>
     // Non-vacuity on the PREMISE, not just the outcome: this really is a tag the
     // `50xx` family covers, so the row cannot pass because it stopped being a
     // counterexample.
-    expect(TAGS["50xx5241"]).toBeUndefined();
-    expect(TAGS["50xx3000"]).toBeDefined();
-    expect(TAGS["50xx3000"]?.repeatingGroup).toBe(true);
+    expect(tagEntry("50xx5241")).toBeUndefined();
+    expect(tagEntry("50xx3000")).toBeDefined();
+    expect(tagEntry("50xx3000")?.repeatingGroup).toBe(true);
     expect(Buffer.from([0x0c, 0x50, 0x41, 0x52]).toString("latin1")).toBe("\fPAR");
   });
 
@@ -58,8 +58,8 @@ describe("renderTag is a MEMBERSHIP test against PS3.6, not a shape test", () =>
     // element is still in the Data Set under that tag and the warning's
     // `position.byteOffset` locates the header.
     expect(renderTag("60003000")).toBe(WITHHELD);
-    expect(TAGS["60003000"]).toBeUndefined();
-    expect(TAGS["60xx3000"]).toBeDefined();
+    expect(tagEntry("60003000")).toBeUndefined();
+    expect(tagEntry("60xx3000")).toBeDefined();
   });
 
   it("withholds a private tag and a Group Length tag", () => {
@@ -68,7 +68,7 @@ describe("renderTag is a MEMBERSHIP test against PS3.6, not a shape test", () =>
     // Exactly one registry row ends `0000`, and it is File Meta - which is why
     // `groupLengthInDataset`'s slot could never render and was bound out of the
     // signature instead of left to print `<withheld>` forever.
-    expect(Object.keys(TAGS).filter((k) => k.endsWith("0000"))).toStrictEqual(["00020000"]);
+    expect(registryKeys().filter((k) => k.endsWith("0000"))).toStrictEqual(["00020000"]);
   });
 
   it("still refuses a token that is not tag-shaped at all", () => {
@@ -87,16 +87,16 @@ describe("renderTag is a MEMBERSHIP test against PS3.6, not a shape test", () =>
     // `renderVr` renders against 34 members; this renders against the literal
     // rows of PS3.6's registry. Both are published sets a reader can hold in
     // their hand, which is what separates them from a shape test over 2^32.
-    const literal = Object.keys(TAGS).filter((k) => /^[0-9A-F]{8}$/u.test(k));
-    const masked = Object.keys(TAGS).filter((k) => !/^[0-9A-F]{8}$/u.test(k));
+    const literal = registryKeys().filter((k) => /^[0-9A-F]{8}$/u.test(k));
+    const masked = registryKeys().filter((k) => !/^[0-9A-F]{8}$/u.test(k));
     // PS3.6 2026d: 2026c's 5221 literal rows plus (3004,007F) (AC-12).
     expect(literal.length).toBe(5222);
     expect(masked.length).toBe(88);
     // Every masked key is flagged, and no literal key is: the two populations do
     // not overlap, so "literal row" and "not a repeating-group family" are the
     // same test here rather than two tests that happen to agree today.
-    expect(masked.every((k) => TAGS[k]?.repeatingGroup === true)).toBe(true);
-    expect(literal.some((k) => TAGS[k]?.repeatingGroup === true)).toBe(false);
+    expect(masked.every((k) => tagEntry(k)?.repeatingGroup === true)).toBe(true);
+    expect(literal.some((k) => tagEntry(k)?.repeatingGroup === true)).toBe(false);
     expect(renderVr("PN")).toBe("PN");
   });
 });

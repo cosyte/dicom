@@ -356,7 +356,7 @@ function hasByteOutsideRepertoire(region: Buffer, carrierVr: VR): boolean {
  * test: 653 rows, published, and a fabricated window that spells one discloses a
  * table entry rather than a document byte - the trade `renderVr` makes with the
  * 34 VRs, which is only honest against a set of that size. It subsumes the
- * odd-group case, since no literal row is odd-group (`ANNEX_E` is asserted
+ * odd-group case, since no exact Table E.1-1 row is odd-group (that is asserted
  * even-group-only by a test rather than assumed here).
  *
  * **The cost, stated twice over.** A genuinely swallowed **private** attribute
