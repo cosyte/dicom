@@ -244,6 +244,9 @@ function readU32(buf: Buffer, off: number, littleEndian: boolean): number {
  * mean deleting a value on the strength of a coincidence.
  */
 function decodeAt(value: Buffer, off: number, encoding: BodyEncoding): Decoded | undefined {
+  // Both callers start at most MIN_HEADER bytes before the end: the backward pass by its loop
+  // bound, and the run walk by `hit`, which only marks an offset whose run tiles to the end.
+  /* v8 ignore next -- unreachable: every caller leaves a whole header in front of `off`. */
   if (off + MIN_HEADER > value.length) return undefined;
   const littleEndian = encoding !== "explicitBE";
   const group = readU16(value, off, littleEndian);

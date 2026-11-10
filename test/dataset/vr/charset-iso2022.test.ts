@@ -20,7 +20,7 @@ import { Buffer } from "node:buffer";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { Element } from "../../../src/dataset/element.js";
+import { Element as ElementClass, type Element } from "../../../src/dataset/element.js";
 import { decodeText, resolveDecoderLabel } from "../../../src/dataset/vr/charset.js";
 import type { DicomValue, PersonNameGroup } from "../../../src/dataset/vr/types.js";
 import type { VR } from "../../../src/dictionary/types.js";
@@ -565,5 +565,42 @@ describe("AC-9: every other (0008,0005) decodes exactly as the pin's single-labe
     const t = terms(charset);
     expect(decodeText(bytes, t)).toBe(pin(bytes, t));
     expect(textOf(parsed(charset, "LT", bytes).value)).toBe(pin(bytes, t));
+  });
+});
+
+describe("terms whose Value 1 is a hole read as an empty Value 1", () => {
+  // A JavaScript caller can hand `decodeText` or a hand-built `Element` a sparse term list. A hole
+  // in Value 1 is no term at all, and reads as an empty Value 1 does: ISO-IR 6 in G0, and
+  // declared, so the ESC ( B that switches back to it is no undeclared escape.
+  // eslint-disable-next-line no-sparse-arrays
+  const HOLE: readonly string[] = [, "ISO 2022 IR 87"] as unknown as readonly string[];
+  const EMPTY: readonly string[] = ["", "ISO 2022 IR 87"];
+  // Example H.3-1's two ideographs between ESC $ B and ESC ( B, then ASCII.
+  const BYTES = hex("1B 24 42 3B 33 45 44 1B 28 42 41");
+
+  function element(specificCharacterSet: readonly string[]): DicomValue {
+    return new ElementClass({
+      tag: "00104000",
+      vr: "LT",
+      vm: 1,
+      length: BYTES.length + 1,
+      rawBytes: even(BYTES),
+      byteOffset: 0,
+      littleEndian: true,
+      specificCharacterSet,
+    }).value;
+  }
+
+  it("decodeText reads a sparse list as it reads an empty Value 1", () => {
+    expect(HOLE.length).toBe(2);
+    expect(0 in HOLE).toBe(false);
+    expect(decodeText(BYTES, HOLE)).toBe(decodeText(BYTES, EMPTY));
+    expect(decodeText(BYTES, HOLE)).toBe("山田A");
+  });
+
+  it("a hand-built element raises no undeclared-escape warning for the switch back to ISO-IR 6", () => {
+    expect(codes(element(EMPTY))).toStrictEqual([]);
+    expect(codes(element(HOLE))).toStrictEqual([]);
+    expect(textOf(element(HOLE))).toBe(textOf(element(EMPTY)));
   });
 });

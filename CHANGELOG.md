@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.1.11
+
+### Patch Changes
+
+- 673f959: Comments only: we mark each line no input can reach with a coverage exception that names its reason, so the test suite can hold every coverage metric at 100. No behavior changes.
+- b386e04: An Explicit VR element now agrees with any VR the dictionary lists for its tag, so Pixel Data written as OW no longer raises DICOM_VR_MISMATCH or throws under the strict preset.
+
+  The parser compared the on-wire VR with only the first VR the dictionary lists. Tags such as Pixel Data (7FE0,0010) as OB or OW, and Smallest Image Pixel Value (0028,0106) as US or SS, raised a false warning when written with the second VR, and the strict preset escalated it to a throw. A VR the dictionary does not list for the tag still raises the warning, which names the first listed VR.
+
+- 673f959: We read a hole in Value 1 of a sparse Specific Character Set list as an empty Value 1, so a hand-built Element no longer raises a false DICOM_CHARSET_ESCAPE_UNDECLARED.
+
+  Under code extensions an empty Value 1 puts ISO-IR 6 in G0 and declares it. A hole already put ISO-IR 6 in G0 but left it undeclared, so the ESC ( B that switches back to it was flagged. Parsed files are not affected: their term lists have no holes.
+
+## 0.1.10
+
+### Patch Changes
+
+- d329c52: The package now builds with tsup 9 through `@cosyte/process`. The JavaScript is byte-identical, and the API is unchanged.
+
+  The `.d.ts` and `.d.cts` files list type-only exports in their own `export type {}` statements, and the source maps embed two source files Prettier 3.9 reformatted. No code or behavior changes.
+
 ## 0.1.9
 
 ### Patch Changes

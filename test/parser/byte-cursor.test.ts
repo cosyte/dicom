@@ -51,6 +51,12 @@ describe("ByteCursor (D-05; T-02-01-06 truncation mitigation)", () => {
     expect(cur.position).toBe(0);
   });
 
+  it("readUInt32At honours littleEndian flag", () => {
+    const buf = Buffer.from([0x00, 0x01, 0x02, 0x03, 0x04]);
+    expect(new ByteCursor(buf, true).readUInt32At(1)).toBe(0x04030201);
+    expect(new ByteCursor(buf, false).readUInt32At(1)).toBe(0x01020304);
+  });
+
   it("slice returns a Buffer view of `length` bytes and advances position", () => {
     const cur = new ByteCursor(Buffer.from([0x01, 0x02, 0x03, 0x04]), true);
     const view = cur.slice(2);

@@ -102,10 +102,12 @@ export function parseImplicitLE(
       element = cursor.readUInt16();
       length = cursor.readUInt32();
     } catch (err) {
+      /* v8 ignore else -- unreachable: the cursor reads throw only RangeError. */
       if (err instanceof RangeError) {
         // Truncated-header mitigation.
         throw truncatedDatasetHeader(ctx.frame, headerStart);
       }
+      /* v8 ignore next -- unreachable: the cursor reads throw only RangeError. */
       throw err;
     }
     const tag = joinTag(group, element);

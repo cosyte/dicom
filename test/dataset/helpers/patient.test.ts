@@ -108,6 +108,29 @@ describe("buildPatient (§4.1 wrong-patient class)", () => {
     expect(p.otherIds).toEqual([]);
   });
 
+  it("an Other Patient ID item with no id keeps its issuer and type and invents no id", () => {
+    const ds = parseDicom(
+      buildDicom({
+        transferSyntax: TS_EXPLICIT_LE,
+        elements: [
+          {
+            tag: "00101002",
+            items: [
+              {
+                elements: [
+                  { tag: "00100021", vr: "LO", value: ascii("HOSP_B") },
+                  { tag: "00100022", vr: "CS", value: ascii("TEXT") },
+                ],
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    expect(ds.patient.otherIds).toEqual([{ issuer: "HOSP_B", typeCode: "TEXT" }]);
+    expect(ds.patient.otherIds[0]).not.toHaveProperty("id");
+  });
+
   it("memoises the view (same reference on repeat access)", () => {
     const ds = parseDicom(
       buildDicom({

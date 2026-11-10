@@ -107,9 +107,11 @@ export function _parseExplicit(
     try {
       peekGroup = cursor.readUInt16At(cursor.position);
     } catch (err) {
+      /* v8 ignore else -- unreachable: the cursor reads throw only RangeError. */
       if (err instanceof RangeError) {
         throw truncatedDatasetHeader(ctx.frame, headerStart);
       }
+      /* v8 ignore next -- unreachable: the cursor reads throw only RangeError. */
       throw err;
     }
 
@@ -125,9 +127,11 @@ export function _parseExplicit(
         // below, where it rendered four bytes of the document. See `./fatals.ts`.
         cursor.readUInt32();
       } catch (err) {
+        /* v8 ignore else -- unreachable: the cursor reads throw only RangeError. */
         if (err instanceof RangeError) {
           throw truncatedFffeHeader(ctx.frame, headerStart);
         }
+        /* v8 ignore next -- unreachable: the cursor reads throw only RangeError. */
         throw err;
       }
       const fffeTag = joinTag(grp, ele);
@@ -153,13 +157,16 @@ export function _parseExplicit(
     const position = { byteOffset: headerStart };
 
     // VR-mismatch check: only meaningful for STANDARD tags
-    // (private tags have no dictionary entry to compare against).
+    // (private tags have no dictionary entry to compare against). A row that
+    // lists several VRs ("US or SS", "OB or OW") accepts any of them, so the
+    // on-wire VR mismatches only when the row lists none like it. The warning
+    // names the row's first VR.
     const groupNum = parseInt(tag.slice(0, 4), 16);
     const isPrivate = groupNum % 2 === 1;
     if (!isPrivate) {
-      const dictEntry = dictionaryLookup(tag);
-      const dictVr = dictEntry?.vr[0];
-      if (dictVr !== undefined && dictVr !== vr) {
+      const dictVrs = dictionaryLookup(tag)?.vr ?? [];
+      const dictVr = dictVrs[0];
+      if (dictVr !== undefined && !dictVrs.includes(vr)) {
         emit(vrMismatch(position, tag, dictVr, vr));
       }
     }

@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { buildDicom } from "../helpers/build-dicom.js";
 import { DicomParseError, OFFSET_FRAMES } from "../../src/parser/errors.js";
 import { parseFileMeta } from "../../src/parser/file-meta.js";
+import { parseDicom } from "../../src/parser/index.js";
 import { parsePart10Header } from "../../src/parser/part10-header.js";
 import type { ParseContext } from "../../src/parser/types.js";
 import type { DicomParseWarning } from "../../src/parser/warnings.js";
@@ -345,5 +346,62 @@ describe("parseFileMeta - D-19 Transfer Syntax UID with wrong VR", () => {
       expect(err.code).toBe("INVALID_FILE_META");
       expect(err.message).toMatch(/Transfer Syntax UID/);
     }
+  });
+});
+
+describe("parseFileMeta - where the File Meta group stops", () => {
+  const TS = "1.2.840.10008.1.2.1";
+
+  function fatalOf(buf: Buffer): DicomParseError {
+    try {
+      parseDicom(buf);
+    } catch (err) {
+      if (err instanceof DicomParseError) return err;
+      throw err;
+    }
+    throw new Error("expected a DicomParseError");
+  }
+
+  /** The declared (0002,0000) of a File Meta group with no Data Set after it. */
+  const GROUP_LENGTH = buildDicom({ transferSyntax: TS, elements: [] }).readUInt32LE(140);
+
+  it("with no (0002,0000), a lone byte after the group is the Data Set's, refused there", () => {
+    const buf = buildDicom({
+      transferSyntax: TS,
+      elements: [],
+      fileMetaGroupLength: "omit",
+      dataSetBytes: Buffer.from([0x08]),
+    });
+    const err = fatalOf(buf);
+    expect(err.code).toBe("INVALID_FILE_META");
+    expect(err.message).toContain("Truncated dataset (header read past buffer end)");
+    expect(err.byteOffset).toBe(buf.length - 1);
+  });
+
+  it("past a mismatched (0002,0000), a lone byte after the group is the Data Set's, refused there", () => {
+    const buf = buildDicom({
+      transferSyntax: TS,
+      elements: [],
+      fileMetaGroupLength: GROUP_LENGTH - 2,
+      dataSetBytes: Buffer.from([0x08]),
+    });
+    const err = fatalOf(buf);
+    expect(err.code).toBe("INVALID_FILE_META");
+    expect(err.message).toContain("Truncated dataset (header read past buffer end)");
+    expect(err.byteOffset).toBe(buf.length - 1);
+  });
+
+  it("past a mismatched (0002,0000), a group 0002 element cut short is a truncated File Meta", () => {
+    const buf = buildDicom({
+      transferSyntax: TS,
+      elements: [],
+      fileMetaGroupLength: GROUP_LENGTH - 2,
+      // (0002,0013) and the first byte of its VR, then the input ends.
+      dataSetBytes: Buffer.from([0x02, 0x00, 0x13, 0x00, 0x55]),
+    });
+    const err = fatalOf(buf);
+    expect(err.code).toBe("INVALID_FILE_META");
+    expect(err.message).toContain("File Meta is truncated.");
+    expect(err.byteOffset).toBe(132);
   });
 });

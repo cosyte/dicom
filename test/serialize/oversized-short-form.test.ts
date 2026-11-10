@@ -155,6 +155,41 @@ describe("a value past 65,534 bytes in a 16-bit-length VR is written as UN (PS3.
     for (const k of [0, 1, 2, 255, 256, 32_766]) expect(value.readUInt16LE(k * 2)).toBe(k);
   });
 
+  it.each([
+    ["UL", "0040A132", 4],
+    ["FD", "00189087", 8],
+  ] as const)(
+    "Explicit VR Big Endian: a %s value written as UN is swapped unit by unit to Little Endian",
+    (vr, tag, stride) => {
+      // Units 0, 1, 2, ... in Big Endian, then a stray partial unit: 65,535 bytes at FFFFH.
+      const units = Math.floor(65_535 / stride);
+      const be = Buffer.alloc(65_535, 0x7f);
+      for (let k = 0; k < units; k++) {
+        if (stride === 4) be.writeUInt32BE(k, k * 4);
+        else be.writeDoubleBE(k, k * 8);
+      }
+      const header = Buffer.alloc(8);
+      header.writeUInt16BE(Number.parseInt(tag.slice(0, 4), 16), 0);
+      header.writeUInt16BE(Number.parseInt(tag.slice(4), 16), 2);
+      header.write(vr, 4, "ascii");
+      header.writeUInt16BE(0xffff, 6);
+      const file = buildDicom({
+        transferSyntax: TS_EXPLICIT_BE,
+        elements: [],
+        dataSetBytes: Buffer.concat([header, be]),
+      });
+
+      const back = parseDicom(serializeDicom(parseDicom(file))).get(tag);
+
+      expect(back?.vr).toBe("UN");
+      const value = back?.rawBytes ?? Buffer.alloc(0);
+      for (const k of [0, 1, 2, 255, units - 1]) {
+        const read = stride === 4 ? value.readUInt32LE(k * 4) : value.readDoubleLE(k * 8);
+        expect(read, `unit ${String(k)}`).toBe(k);
+      }
+    },
+  );
+
   it("Implicit VR Little Endian is untouched: its 32-bit lengths carry the value in its own VR", () => {
     const { dataset } = deidentify(parseDicom(manyEmptyUids(TS_IMPLICIT_LE)));
     const out = serializeDicom(dataset);

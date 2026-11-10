@@ -28,6 +28,17 @@ describe("decodeNumbers (PS3.5 §6.2 - signedness from VR, endianness from flag)
     expect(decodeNumbers(le, "SL", true)).toEqual([-1]);
   });
 
+  it("UL / SL / FL / FD honor big-endian", () => {
+    expect(decodeNumbers(Buffer.from([0x00, 0x01, 0x00, 0x02]), "UL", false)).toEqual([65538]);
+    expect(decodeNumbers(Buffer.from([0xff, 0xff, 0xff, 0xfe]), "SL", false)).toEqual([-2]);
+    const fl = Buffer.alloc(4);
+    fl.writeFloatBE(-0.5, 0);
+    expect(decodeNumbers(fl, "FL", false)).toEqual([-0.5]);
+    const fd = Buffer.alloc(8);
+    fd.writeDoubleBE(3.25, 0);
+    expect(decodeNumbers(fd, "FD", false)).toEqual([3.25]);
+  });
+
   it("FL / FD decode IEEE-754 floats", () => {
     const fl = Buffer.alloc(4);
     fl.writeFloatLE(1.5, 0);
@@ -64,6 +75,10 @@ describe("decodeBigInts (SV signed / UV unsigned 64-bit → bigint)", () => {
     const buf = Buffer.alloc(8);
     buf.writeBigUInt64BE(42n, 0);
     expect(decodeBigInts(buf, "UV", false)).toEqual([42n]);
+  });
+
+  it("returns [] for a VR that is not 64-bit (defensive default branch)", () => {
+    expect(decodeBigInts(Buffer.alloc(8, 0x01), "UL", true)).toEqual([]);
   });
 
   it("ignores a trailing partial 8-byte unit", () => {

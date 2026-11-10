@@ -292,6 +292,25 @@ describe("DICOM-DEIDENT-RAWBYTES-PASSTHROUGH: an undescended sequence is not pas
   });
 });
 
+describe("DICOM-DEIDENT-RAWBYTES-PASSTHROUGH: a sequence a Clean option keeps", () => {
+  it("a listed sequence cleaned by a Clean option is emptied, and the audit says emptied", () => {
+    // `(0008,1084)` Admitting Diagnoses Code Sequence is `X`, and `C` under
+    // CleanDescriptors. Cleaning means walking the Items, which this run cannot do.
+    const CLEANED_CARRIER = "00081084";
+    const ds = parseDicom(fixture(IMPLICIT_LE, 18, CLEANED_CARRIER));
+    expect(ds.get(CLEANED_CARRIER)?.items).toBeUndefined();
+
+    const { dataset, report } = deidentify(ds, { retain: ["CleanDescriptors"] });
+
+    const audited = report.attributes.find((a) => a.tag === CLEANED_CARRIER);
+    expect(audited?.action).toBe("C");
+    expect(audited?.applied).toBe("emptied");
+    expect(report.unauditableSequences.map((s) => s.tag)).toEqual([CLEANED_CARRIER]);
+    expect(dataset.get(CLEANED_CARRIER)?.rawBytes.toString("latin1")).not.toContain(PATIENT_ID);
+    expect(serializeDicom(dataset).toString("latin1")).not.toContain(PATIENT_ID);
+  });
+});
+
 describe("DICOM-DEIDENT-RAWBYTES-PASSTHROUGH: the no-loss controls", () => {
   it("a well-formed defined-length sequence is descended and kept, not emptied", () => {
     // The whole risk of this remedy is over-removal, so this is the control that

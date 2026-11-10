@@ -246,9 +246,11 @@ export function parseSequence(
         element = cursor.readUInt16();
         itemLength = cursor.readUInt32();
       } catch (err) {
+        /* v8 ignore else -- unreachable: the cursor reads throw only RangeError. */
         if (err instanceof RangeError) {
           throw sqItemHeaderTruncated(ctx.frame, itemHeaderStart);
         }
+        /* v8 ignore next -- unreachable: the cursor reads throw only RangeError. */
         throw err;
       }
       const itemTag = joinTag(group, element);
@@ -535,6 +537,8 @@ export function tryParseDefinedLengthSQ(
   } catch (err) {
     if (isStrictEscalation(err)) throw err;
     ctx.nestingDepth = savedDepth;
+    // `parseSequence` pops what it pushed in a `finally`, so a throw leaves the stack balanced.
+    /* v8 ignore next 3 -- unreachable: `parseSequence` restores the stack before rethrowing. */
     while (ctx.encodingContextStack.length > savedStackLen) {
       ctx.encodingContextStack.pop();
     }
@@ -624,6 +628,8 @@ export function tryParseUnAsSQ(
     }
     // Restore state - drop any warnings emitted during the failed descent.
     ctx.nestingDepth = savedDepth;
+    // `parseSequence` pops what it pushed in a `finally`, so a throw leaves the stack balanced.
+    /* v8 ignore next 3 -- unreachable: `parseSequence` restores the stack before rethrowing. */
     while (ctx.encodingContextStack.length > savedStackLen) {
       ctx.encodingContextStack.pop();
     }

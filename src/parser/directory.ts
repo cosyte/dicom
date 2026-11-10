@@ -67,6 +67,7 @@ export function emitDirectoryFindings(
     if (finding.item === undefined) return { byteOffset: finding.element.byteOffset };
     // Outside Deflated every Item of the root Data Set has a file offset; the
     // origin is the fallback only so the type narrows.
+    /* v8 ignore next -- unreachable: outside Deflated every root Item has a file offset. */
     const byteOffset = (finding.item.fileOffset ?? frame.origin) - frame.origin;
     const contextPath = [
       DIRECTORY_TAGS.RECORD_SEQUENCE,

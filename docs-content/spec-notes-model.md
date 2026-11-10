@@ -28,7 +28,9 @@ pixels are referenced by the Pixel Data Provider URL `(0028,7FE0)`, returned as 
 fetched; those are read only, and `serializeDicom` and `deidentify` both refuse them. In Implicit
 VR the on-wire VR is
 absent and is resolved from the dictionary; in Explicit VR the on-wire VR is honored and a
-disagreement with the dictionary is flagged (`DICOM_VR_MISMATCH`), never silently overridden.
+disagreement with the dictionary is flagged (`DICOM_VR_MISMATCH`), never silently overridden. A tag
+the dictionary lists with more than one VR, such as Pixel Data `(7FE0,0010)` as OB or OW, agrees
+with any VR it lists.
 
 ## Reaching elements
 

@@ -29,7 +29,7 @@ import {
   parseDicom,
   serializeDicom,
   type FileMeta,
-  type Item,
+  Item,
 } from "../../src/index.js";
 import type { Tag } from "../../src/dictionary/types.js";
 import {
@@ -311,5 +311,49 @@ describe("[AC-5] a Deflated DICOMDIR carrying a non-zero offset", () => {
     expect(again.fileMeta?.transferSyntaxUID).toBe(TS_DEFLATED_LE);
     expect(readUl(again.get("00041200"))).toBe(0);
     expect(again.directory?.root).toEqual([]);
+  });
+
+  it("[AC-5] a Deflated DICOMDIR whose record carries no offset attribute at all still writes", () => {
+    const built = buildDicomdir({
+      transferSyntax: TS_DEFLATED_LE,
+      firstRoot: "zero",
+      records: [{ type: "PATIENT", fileId: ["SYNTH", "P1"] }],
+    });
+    const ds = parseDicom(built.bytes);
+    const sequence = ds.get("00041220");
+    const record = sequence?.items?.[0];
+    if (sequence === undefined || record === undefined) throw new Error("fixture has no record");
+    // The record less its (0004,1400) and (0004,1420), as a caller could assemble it.
+    const bare = new Item({
+      index: 0,
+      warnings: [],
+      elements: new Map(
+        record
+          .elements()
+          .filter((el) => el.tag !== "00041400" && el.tag !== "00041420")
+          .map((el) => [el.tag, el] as const),
+      ),
+    });
+    const replaced = new Element({
+      tag: sequence.tag,
+      vr: sequence.vr,
+      vm: 1,
+      length: sequence.length,
+      rawBytes: sequence.rawBytes,
+      byteOffset: sequence.byteOffset,
+      littleEndian: sequence.littleEndian,
+      items: [bare],
+    });
+    const elements = new Map<Tag, Element>(
+      ds.elements().map((el) => [el.tag, el.tag === "00041220" ? replaced : el]),
+    );
+
+    const again = parseDicom(
+      serializeDicom(new Dataset({ fileMeta: fileMetaOf(ds), warnings: [], elements })),
+    );
+
+    expect(again.fileMeta?.transferSyntaxUID).toBe(TS_DEFLATED_LE);
+    expect(again.directory?.records.map((r) => r.type)).toEqual(["PATIENT"]);
+    expect(again.directory?.records[0]?.referencedFileId).toEqual(["SYNTH", "P1"]);
   });
 });

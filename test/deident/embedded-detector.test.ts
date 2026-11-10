@@ -501,3 +501,29 @@ describe("findEmbeddedAttributes: cost on an adversarial value", () => {
     expect(performance.now() - started).toBeLessThan(2_000);
   });
 });
+
+describe("findEmbeddedAttributes: Explicit VR Big Endian", () => {
+  /** An Explicit VR BE long-form element: tag, VR, 2 reserved, 4-byte length, all Big Endian. */
+  function longFormBE(group: number, element: number, vr: string, body: Buffer): Buffer {
+    const head = Buffer.alloc(12);
+    head.writeUInt16BE(group, 0);
+    head.writeUInt16BE(element, 2);
+    head.write(vr, 4, "latin1");
+    head.writeUInt32BE(body.length, 8);
+    return Buffer.concat([head, body]);
+  }
+
+  it("finds a long-form element whose header is Big Endian, reading its length in that order", () => {
+    const body = Buffer.from("2.25.1234567890 ", "latin1");
+    const value = Buffer.concat([Buffer.from("ORIGINAL"), longFormBE(0x0010, 0x0020, "UC", body)]);
+    expect(hiddenOf(findEmbeddedAttributes(value, "CS", "explicitBE", always))).toEqual([
+      PATIENT_ID_TAG,
+    ]);
+  });
+
+  it("does not read a Little Endian header as a Big Endian one", () => {
+    const body = Buffer.from("2.25.1234567890 ", "latin1");
+    const value = Buffer.concat([Buffer.from("ORIGINAL"), longForm(0x0010, 0x0020, "UC", body)]);
+    expect(findEmbeddedAttributes(value, "CS", "explicitBE", always)).toBeUndefined();
+  });
+});

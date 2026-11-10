@@ -105,6 +105,9 @@ function deriveUid(root: string, sourceUid: string): string {
   // The default `2.25` root keeps ~62 digits (collision-free in practice).
   const budget = MAX_UID_LENGTH - root.length - 1;
   // No leading zero in a UID component (PS3.5 §9.1); strip, never empty.
+  // `toString(10)` writes no leading zero, so only a digest of all zero bits would leave the body
+  // empty, and SHA-256 gives no known input that digest.
+  /* v8 ignore next -- unreachable: an all-zero SHA-256 digest has no known preimage. */
   const body = fullDecimal.slice(0, budget).replace(/^0+/, "") || "0";
   return `${root}.${body}`;
 }
