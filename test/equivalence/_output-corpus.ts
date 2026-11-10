@@ -10,7 +10,9 @@
  * (`test/property/_seed-corpus.ts`), the bench's shapes (`bench/shapes.mjs`) at small sizes, a few
  * Data Sets written out of order so the writer's ordering pass moves spans, and a fixed set of
  * mutations of each seed, drawn from a seeded generator rather than from fast-check so the corpus
- * does not move when a dependency does.
+ * does not move when a dependency does. Deflated seeds are not mutated, and a Deflated write is
+ * recorded inflated: compressed bytes are the runtime zlib's, and they differ between builds of
+ * Node, so a digest over them would differ between machines.
  *
  * The record of one document runs the read under every option that changes it (lenient, strict,
  * `copyValues`, each built-in profile), and on the lenient read: every element of every Data Set
@@ -24,6 +26,7 @@
 
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
+import { inflateRawSync } from "node:zlib";
 
 import type * as Dicom from "../../src/index.js";
 import { ctImage, enhancedCt, srDocument, worklistItem } from "../../bench/shapes.mjs";
@@ -59,6 +62,7 @@ const TS_IMPLICIT_LE = "1.2.840.10008.1.2";
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
 const TS_EXPLICIT_BE = "1.2.840.10008.1.2.2";
 const TS_DEFLATED_LE = "1.2.840.10008.1.2.1.99";
+const TS_JPIP_DEFLATE = "1.2.840.10008.1.2.4.95";
 
 /** Mutated variants of each seed. */
 const MUTANTS_PER_SEED = 32;
@@ -181,6 +185,12 @@ function unordered(ts: string, undefinedLength: boolean): Buffer {
   });
 }
 
+/** `true` for a document whose File Meta names a Deflated transfer syntax. */
+function isDeflated(bytes: Buffer): boolean {
+  const head = bytes.subarray(0, 512).toString("latin1");
+  return head.includes(TS_DEFLATED_LE) || head.includes(TS_JPIP_DEFLATE);
+}
+
 /** The corpus, in a fixed order, every document named once. */
 export function outputCorpus(): readonly CorpusDocument[] {
   const docs: CorpusDocument[] = [];
@@ -200,9 +210,13 @@ export function outputCorpus(): readonly CorpusDocument[] {
     docs.push({ name: `unordered/${label}/defined`, bytes: unordered(ts, false) });
     docs.push({ name: `unordered/${label}/undefined`, bytes: unordered(ts, true) });
   }
-  const seeds = SEED_CORPUS.map((seed) => seed.bytes);
+  // A Deflated seed is the output of this runtime's zlib, which is not the same bytes on every
+  // build of Node, so neither it nor its bytes are mutated: its mutants would read differently
+  // on different machines. It is still in the corpus above, read and written whole.
+  const mutable = SEED_CORPUS.filter((seed) => !isDeflated(seed.bytes));
+  const seeds = mutable.map((seed) => seed.bytes);
   const next = generator(0x5eed);
-  for (const seed of SEED_CORPUS) {
+  for (const seed of mutable) {
     for (let k = 0; k < MUTANTS_PER_SEED; k++) {
       const count = 1 + Math.floor(next() * 4);
       const mutations = Array.from({ length: count }, () => randomMutation(next, seeds.length));
@@ -346,6 +360,18 @@ function readOptions(api: OutputApi): readonly (readonly [string, Dicom.ParseOpt
   return out;
 }
 
+/**
+ * What `serializeDicom` writes, with a Deflated body inflated again: the bytes zlib compresses are
+ * the writer's, the compressed ones are the runtime's, and those differ between builds of Node.
+ * The writer always writes the File Meta group length, so the body starts after it.
+ */
+function writtenBytes(api: OutputApi, ds: Dicom.Dataset): Buffer {
+  const out = api.serializeDicom(ds);
+  if (ds.fileMeta?.transferSyntaxUID !== TS_DEFLATED_LE) return out;
+  const bodyStart = 144 + out.readUInt32LE(140);
+  return Buffer.concat([out.subarray(0, bodyStart), inflateRawSync(out.subarray(bodyStart))]);
+}
+
 /** Everything a caller can observe of one document, as plain data. */
 export function recordOf(api: OutputApi, doc: CorpusDocument): Plain {
   const record: Record<string, Plain> = {};
@@ -368,7 +394,7 @@ export function recordOf(api: OutputApi, doc: CorpusDocument): Plain {
   if (ds === undefined) return record;
 
   const r = new Recorder(api);
-  const written = r.attempt(() => api.serializeDicom(ds));
+  const written = r.attempt(() => writtenBytes(api, ds));
   record["write"] = written;
   try {
     const out = api.serializeDicom(ds);
@@ -389,7 +415,7 @@ export function recordOf(api: OutputApi, doc: CorpusDocument): Plain {
       record[`deidentify:${name}`] = {
         dataset: d.dataset(result.dataset, false),
         report: d.plain(result.report),
-        write: d.attempt(() => api.serializeDicom(result.dataset)),
+        write: d.attempt(() => writtenBytes(api, result.dataset)),
       };
     } catch (err) {
       record[`deidentify:${name}`] = d.error(err);
