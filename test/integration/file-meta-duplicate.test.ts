@@ -50,7 +50,7 @@ import { Buffer } from "node:buffer";
 
 import { describe, expect, it } from "vitest";
 
-import { DicomParseError, WARNING_CODES, parseDicom } from "../../src/index.js";
+import { DicomParseError, WARNING_CODES, parseDicom, serializeDicom } from "../../src/index.js";
 import type { Tag, VR } from "../../src/dictionary/types.js";
 import { WARNING_MESSAGES, duplicateFileMetaElement } from "../../src/parser/warnings.js";
 import { buildDicom, type BuildDicomElement } from "../helpers/build-dicom.js";
@@ -196,6 +196,26 @@ describe("a File Meta group that carries one modeled (0002,xxxx) tag twice", () 
       .filter((e) => e.tag === PRIVATE_INFORMATION)
       .map((e) => e.value.toString("latin1"));
     expect(kept).toEqual([first.toString("latin1"), second.toString("latin1")]);
+  });
+
+  it("a repeated NON-modeled (0002,xxxx) is written back in both copies, in their order", () => {
+    const first = val("PRIVATE-A");
+    const second = val("PRIVATE-B");
+    const ds = parseDicom(
+      withFileMeta([
+        tsElement(EXPLICIT_LE),
+        { tag: PRIVATE_INFORMATION, vr: "OB", value: first },
+        { tag: PRIVATE_INFORMATION, vr: "OB", value: second },
+      ]),
+    );
+
+    const again = parseDicom(serializeDicom(ds));
+
+    const kept = (again.fileMeta?.extraElements ?? [])
+      .filter((e) => e.tag === PRIVATE_INFORMATION)
+      .map((e) => e.value.toString("latin1"));
+    expect(kept).toEqual([first.toString("latin1"), second.toString("latin1")]);
+    expect(fmDuplicates(again.warnings)).toHaveLength(0);
   });
 
   it("a file with no repeat raises nothing (the control that makes every row above non-vacuous)", () => {

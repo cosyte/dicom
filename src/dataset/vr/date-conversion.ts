@@ -166,6 +166,7 @@ const MAX_OFFSET_MINUTES = 14 * 60 + 59;
  */
 function longestDayOfMonth(year: number | undefined, month: number): number {
   if (month === 2) return year === undefined || isLeapYear(year) ? 29 : 28;
+  /* v8 ignore next -- unreachable: the caller bounds `month` to an integer from 1 to 12. */
   return MONTH_LENGTHS[month - 1] ?? 31;
 }
 

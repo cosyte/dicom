@@ -413,6 +413,40 @@ describe("Tier 1: a spec-clean prior (0012,0064) is added to, never replaced", (
     ]);
   });
 
+  it("AC-6: a prior Item missing its designator or its value carries no code, so the code is still added", () => {
+    const { dataset } = deidentify(
+      source({
+        extra: [
+          {
+            tag: CODE_SEQUENCE,
+            items: [
+              // 113100 with no Coding Scheme Designator.
+              {
+                elements: [
+                  { tag: CODE_VALUE, vr: "SH", value: pad("113100") },
+                  { tag: CODE_MEANING, vr: "LO", value: pad("No designator") },
+                ],
+              },
+              // DCM with no Code Value.
+              {
+                elements: [
+                  { tag: CODING_SCHEME_DESIGNATOR, vr: "SH", value: pad("DCM") },
+                  { tag: CODE_MEANING, vr: "LO", value: pad("No value") },
+                ],
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    // Both priors are kept, and neither stands for 113100 DCM, so this run adds it.
+    expect(codesOf(dataset).map((c) => `${c.designator}:${c.value}`)).toStrictEqual([
+      ":113100",
+      "DCM:",
+      "DCM:113100",
+    ]);
+  });
+
   it("AC-7: a kept prior is disclosed under its own code, which never quotes it and never reaches the parse warnings", () => {
     const named = `Anonymized by hand, removed ${NAME}`;
     const input = source({ extra: [priorSequence([["99001", "99SYN", named]])] });

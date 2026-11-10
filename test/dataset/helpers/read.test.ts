@@ -42,6 +42,14 @@ describe("fail-safe readers", () => {
       readString(ds([{ tag: "00080060", vr: "CS", value: Buffer.alloc(0) }]), "00080060"),
     ).toBeUndefined();
     expect(readString(ds([]), "00080060")).toBeUndefined();
+    // An empty first value of a multi-valued string is absent, not "".
+    expect(
+      readString(ds([{ tag: "00080008", vr: "CS", value: ascii("\\DERIVED") }]), "00080008"),
+    ).toBeUndefined();
+    // A text VR whose value is only pad reads as absent, not "".
+    expect(
+      readString(ds([{ tag: "00084000", vr: "LT", value: ascii("  ") }]), "00084000"),
+    ).toBeUndefined();
     // wrong kind: a binary-numeric VR is not a string
     expect(
       readString(ds([{ tag: "00280010", vr: "US", value: us(5) }]), "00280010"),

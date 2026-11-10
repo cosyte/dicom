@@ -17,6 +17,7 @@ import type { Tag } from "../../src/dictionary/types.js";
 import { DicomParseError } from "../../src/parser/errors.js";
 import { parseDicom } from "../../src/parser/index.js";
 import { WARNING_CODES } from "../../src/parser/warnings.js";
+import { serializeDicom } from "../../src/serialize/serialize.js";
 
 /**
  * Reach the protected `_elements` map for Phase 2 verification. Phase 3
@@ -178,6 +179,31 @@ describe("parseImplicitLE - D-33 / D-34 private-creator block-reservation", () =
     expect(el?.privateCreator).toBeUndefined();
     expect(ds.warnings.map((w) => w.code)).toContain(WARNING_CODES.DICOM_PRIVATE_TAG_NO_CREATOR);
   });
+});
+
+describe("parseImplicitLE - a registered tag whose PS3.6 row lists no VR", () => {
+  // PS3.6 gives these four retired rows no VR, so the dictionary entry exists with an empty VR
+  // list. Implicit VR LE carries no VR on the wire, so the value reads as UN, as an unknown
+  // standard tag's does, and its bytes are kept as they were.
+  it.each(["00080202", "00189445", "00280020", "300A0135"] as const)(
+    "(%s) reads as UN with its bytes intact and no warning",
+    (tag) => {
+      const value = Buffer.from([0x01, 0x00, 0x02, 0x00]);
+      const buf = buildDicom({
+        transferSyntax: "1.2.840.10008.1.2",
+        elements: [{ tag, vr: "US", value }],
+      });
+      const ds = parseDicom(buf);
+      const el = elementsOf(ds).get(tag);
+      expect(el?.vr).toBe("UN");
+      expect(el?.rawBytes.equals(value)).toBe(true);
+      expect(ds.warnings).toEqual([]);
+      // Written back under the same transfer syntax, the value round-trips byte for byte.
+      const again = elementsOf(parseDicom(serializeDicom(ds))).get(tag);
+      expect(again?.vr).toBe("UN");
+      expect(again?.rawBytes.equals(value)).toBe(true);
+    },
+  );
 });
 
 describe("parseImplicitLE - undefined-length SQ descent (D-21 + parseSequence)", () => {

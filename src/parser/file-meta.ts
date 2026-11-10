@@ -101,9 +101,11 @@ export function parseFileMeta(
   try {
     firstElement = readExplicitLeElement(cursor);
   } catch (err) {
+    /* v8 ignore else -- unreachable: `readExplicitLeElement` throws only RangeError. */
     if (err instanceof RangeError) {
       throw fileMetaTruncated(ctx.frame, fmStart);
     }
+    /* v8 ignore next -- unreachable: `readExplicitLeElement` throws only RangeError. */
     throw err;
   }
 
@@ -142,9 +144,11 @@ export function parseFileMeta(
     try {
       next = readExplicitLeElement(cursor);
     } catch (err) {
+      /* v8 ignore else -- unreachable: `readExplicitLeElement` throws only RangeError. */
       if (err instanceof RangeError) {
         throw fileMetaTruncated(ctx.frame, fmStart);
       }
+      /* v8 ignore next -- unreachable: `readExplicitLeElement` throws only RangeError. */
       throw err;
     }
     fmElements.push(next);
@@ -170,9 +174,11 @@ export function parseFileMeta(
       try {
         next = readExplicitLeElement(cursor);
       } catch (err) {
+        /* v8 ignore else -- unreachable: `readExplicitLeElement` throws only RangeError. */
         if (err instanceof RangeError) {
           throw fileMetaTruncated(ctx.frame, fmStart);
         }
+        /* v8 ignore next -- unreachable: `readExplicitLeElement` throws only RangeError. */
         throw err;
       }
       fmElements.push(next);
@@ -267,6 +273,7 @@ function readExplicitLeElement(cursor: ByteCursor): FmRawElement {
   const value = cursor.slice(length);
   const bytesConsumed = cursor.position - headerStart;
   // Sanity invariant - bytesConsumed must equal headerLength + length.
+  /* v8 ignore next 3 -- unreachable: every read above advanced the cursor by exactly its width. */
   if (bytesConsumed !== headerLength + length) {
     throw new RangeError("File Meta element accounting mismatch");
   }

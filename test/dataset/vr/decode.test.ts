@@ -115,6 +115,16 @@ describe("decodeElementValue - numeric strings (fail-safe, never NaN→0)", () =
     expect(v).toMatchObject({ kind: "decimalString", values: [null, null, null, 150] });
   });
 
+  it("DS reads a conformant literal that overflows a double as null, never Infinity", () => {
+    const v = decodeElementValue(el("DS", ascii("1E999\\-1E999\\2")));
+    expect(v).toMatchObject({ kind: "decimalString", values: [null, null, 2] });
+  });
+
+  it("IS reads an empty value between delimiters as null, with no non-integer warning", () => {
+    const v = decodeElementValue(el("IS", ascii("7\\\\9")));
+    expect(v).toEqual({ kind: "integerString", values: [7, null, 9] });
+  });
+
   it("IS → integerString, non-integer → null + DICOM_IS_NONINTEGER_VALUE warning", () => {
     const v = decodeElementValue(el("IS", ascii("42\\3.5")));
     expect(v.kind).toBe("integerString");

@@ -169,6 +169,23 @@ describe("buildImage (full surface - present-arm coverage)", () => {
     expect(ds.image.realWorldValueMaps?.[0]?.slope).toBe(1);
     expect(ds.image.realWorldValueMaps?.[0]?.unitsCode).toBeUndefined();
   });
+
+  it("a Real World Value Map with no slope leaves slope absent rather than defaulting it to 1", () => {
+    const ds = parseDicom(
+      buildDicom({
+        transferSyntax: TS_EXPLICIT_LE,
+        elements: [
+          {
+            tag: "00409096",
+            items: [{ elements: [{ tag: "00409224", vr: "FD", value: fd(-1024) }] }],
+          },
+        ],
+      }),
+    );
+    const map = ds.image.realWorldValueMaps?.[0];
+    expect(map?.intercept).toBe(-1024);
+    expect(map).not.toHaveProperty("slope");
+  });
 });
 
 describe("buildImage (§4.3 looks-fine-measures-wrong class)", () => {
