@@ -2073,6 +2073,9 @@ function declaredPrivateVr(
 ): VR | undefined {
   if (ctx.profile === undefined || isPrivateCreatorElement(el.tag)) return undefined;
   const creator = creatorFor(el.tag, creators);
+  // Only a retained element reaches here, and `keepsPrivate` retains a data element only through
+  // a creator this same map resolves.
+  /* v8 ignore next -- unreachable: a retained private data element always has a creator. */
   if (creator === undefined) return undefined;
   return resolvePrivateTag(ctx.profile, el.tag, creator)?.vr;
 }
@@ -2510,6 +2513,8 @@ function descendSequence(
   const childReservationsUsable =
     reservationsUsable && !itemStreamOverrunsSequence(el, ctx.encoding);
   const newItems: Item[] = [];
+  // Every caller tests `isUnauditableSequence` first and empties a Sequence with no `items`.
+  /* v8 ignore next -- unreachable: a descended Sequence always has `items`. */
   (el.items ?? []).forEach((item, index) => {
     // 🩺 `el.tag` here is read off the wire and bound by nothing, so a
     // fabricated `SQ` header the reader was desynchronized onto is named in
@@ -2587,6 +2592,8 @@ function applySequenceAction(
         applied = "cleaned";
       }
       break;
+    // No Table E.1-1 row resolves an `SQ` to `U`: every `U*` on one follows an `X`.
+    /* v8 ignore next -- unreachable: no Sequence row of Table E.1-1 resolves to U. */
     case "U":
     case "K":
       if (isUnauditableSequence(el)) {
@@ -3457,6 +3464,8 @@ export function deidentify(
   const warnings: DicomParseWarning[] = [...declarationWarnings, ...processed.warnings];
   if (deidentMethod.replacedPrior) {
     warnings.push(
+      // `replacedPrior` is only ever set when the source carried a prior (0012,0063).
+      /* v8 ignore next -- unreachable: a replaced prior method element is present. */
       deidentMethodNotAdded({ byteOffset: priorMethod?.byteOffset ?? 0, fileMeta: false }),
     );
   }
@@ -3466,6 +3475,7 @@ export function deidentify(
   // items for - an audit that reads as a scrub it did not perform.
   if (deidentMethod.retainedPrior) {
     warnings.push(
+      /* v8 ignore next -- unreachable: a retained prior method element is present. */
       deidentMethodPriorRetained({ byteOffset: priorMethod?.byteOffset ?? 0, fileMeta: false }),
     );
   }
@@ -3474,6 +3484,7 @@ export function deidentify(
   // loss as the ceiling fallback, unrelated cause, so it has its own code.
   if (deidentMethod.replacedNonLoPrior) {
     warnings.push(
+      /* v8 ignore next -- unreachable: a replaced non-LO prior method element is present. */
       deidentMethodNotLo({ byteOffset: priorMethod?.byteOffset ?? 0, fileMeta: false }),
     );
   }
@@ -3495,15 +3506,19 @@ export function deidentify(
   // record this run could not add to. Both said, neither quoted.
   if (methodCodes.retainedPrior) {
     warnings.push(
+      /* v8 ignore next -- unreachable: retained prior Items come from a present (0012,0064). */
       deidentMethodCodesPriorRetained({ byteOffset: priorCodes?.byteOffset ?? 0, fileMeta: false }),
     );
   }
   if (methodCodes.replacedPrior) {
     warnings.push(
+      /* v8 ignore next -- unreachable: a replaced prior comes from a present (0012,0064). */
       deidentMethodCodesPriorReplaced({ byteOffset: priorCodes?.byteOffset ?? 0, fileMeta: false }),
     );
   }
   if (hasUncleanedBurnedIn(ds)) {
+    // `hasUncleanedBurnedIn` is `false` when the Data Set holds no Pixel Data.
+    /* v8 ignore next -- unreachable: Pixel Data is present on this branch. */
     const offset = ds.get(TAG_PIXEL_DATA)?.byteOffset ?? 0;
     warnings.push(burnedInAnnotationNotRemoved({ byteOffset: offset, fileMeta: false }));
   }

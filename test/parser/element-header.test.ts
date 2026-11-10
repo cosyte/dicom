@@ -213,4 +213,9 @@ describe("matchRepeatingGroup - pattern matching against family entries", () => 
     expect(matchRepeatingGroup("00100010")).toBeUndefined();
     expect(matchRepeatingGroup("0020000D")).toBeUndefined();
   });
+
+  it("does not match a tag that is not eight characters, even one a family prefix fits", () => {
+    expect(matchRepeatingGroup("6000001")).toBeUndefined();
+    expect(matchRepeatingGroup("600000100")).toBeUndefined();
+  });
 });

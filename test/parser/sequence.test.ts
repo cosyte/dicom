@@ -255,6 +255,41 @@ describe("tryParseUnAsSQ - CP-246 fallback (D-30)", () => {
     // State preserved: nestingDepth restored to 0.
     expect(ctx.nestingDepth).toBe(0);
   });
+
+  it("failure after a warning inside the descent: that warning is rolled back with the descent", () => {
+    // An empty Item (which raises DICOM_EMPTY_ITEM_IN_SEQUENCE while descending), then a
+    // foreign tag where the next Item belongs, which fails the descent.
+    const foreign = buildImplicitLeElement("00100010", 4, Buffer.from("DOE^", "latin1"));
+    const value = Buffer.concat([buildItemHeader(0, true), foreign]);
+    const ctx = makeContext(value);
+    const result = tryParseUnAsSQ(
+      value,
+      0,
+      0xffffffff,
+      ctx,
+      makeEmit(ctx),
+      parseImplicitLE,
+      "00091000",
+    );
+    expect(result.success).toBe(false);
+    expect(ctx.warnings).toEqual([]);
+    expect(ctx.encodingContextStack).toEqual(["Root"]);
+    expect(ctx.nestingDepth).toBe(0);
+  });
+
+  it("failure that is not a parse error still falls back, with state restored", () => {
+    // An inner reader that fails with something other than a DicomParseError: no strict-mode
+    // escalation can be one, so it is a failed descent like any other.
+    const failing: InnerParser = () => {
+      throw new TypeError("inner reader failed");
+    };
+    const value = Buffer.concat([buildItemHeader(8, true), Buffer.alloc(8), buildSeqDelim(true)]);
+    const ctx = makeContext(value);
+    const result = tryParseUnAsSQ(value, 0, 0xffffffff, ctx, makeEmit(ctx), failing, "00091000");
+    expect(result).toEqual({ success: false, items: [], endOffset: 0 });
+    expect(ctx.warnings).toEqual([]);
+    expect(ctx.nestingDepth).toBe(0);
+  });
 });
 
 describe("parseSequence - encapsulated pixel data (D-31)", () => {

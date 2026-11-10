@@ -15,6 +15,7 @@ import type { PersonName, PersonNameGroup } from "./types.js";
 function toGroup(raw: string): PersonNameGroup {
   const parts = raw.split("^");
   return {
+    /* v8 ignore next -- unreachable: `split` always returns at least one element. */
     familyName: parts[0] ?? "",
     givenName: parts[1] ?? "",
     middleName: parts[2] ?? "",
@@ -42,6 +43,7 @@ export function parsePersonName(value: string): PersonName {
     ideographic?: PersonNameGroup;
     phonetic?: PersonNameGroup;
   } = {
+    /* v8 ignore next -- unreachable: `split` always returns at least one element. */
     alphabetic: toGroup(groups[0] ?? ""),
   };
   if (groups.length > 1 && groups[1] !== undefined) result.ideographic = toGroup(groups[1]);

@@ -94,6 +94,8 @@ describe("matchesRepeatingPattern", () => {
   it("does not confuse a different group prefix for a repeating group", () => {
     expect(matchesRepeatingPattern("60xx4000", "70004000")).toBe(false);
     expect(matchesRepeatingPattern("60xx4000", "00104000")).toBe(false);
+    // A masked pattern whose prefix names no repeating group at all matches nothing.
+    expect(matchesRepeatingPattern("70xx4000", "70004000")).toBe(false);
   });
 
   it("rejects malformed inputs rather than guessing", () => {

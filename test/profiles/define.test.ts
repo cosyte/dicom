@@ -179,6 +179,19 @@ describe("defineProfile: extends composition", () => {
     expect(grand.lineage).toEqual(["base", "left", "right", "grand"]);
   });
 
+  it("does not repeat a name a parent's lineage already carries", () => {
+    // A refinement published under the name of the profile it extends.
+    const refined = defineProfile({ name: "base", extends: base });
+    expect(refined.lineage).toEqual(["base"]);
+  });
+
+  it("takes the description of the first parent that declares one, skipping those that do not", () => {
+    const silent = defineProfile({ name: "silent" });
+    const child = defineProfile({ name: "child", extends: [silent, base] });
+    expect(silent.description).toBeUndefined();
+    expect(child.description).toBe("base desc");
+  });
+
   it("detects a contradiction introduced by composition (parent escalates, child suppresses)", () => {
     expect(() =>
       defineProfile({

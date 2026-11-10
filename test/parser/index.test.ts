@@ -69,6 +69,23 @@ describe("parseDicom - PARSE-06 + D-13 EMPTY_INPUT dual check", () => {
       expect(err.code).toBe("EMPTY_INPUT");
     }
   });
+
+  it("a non-empty view the types exclude, which normalizes to no bytes, throws EMPTY_INPUT", () => {
+    // A JavaScript caller can pass a DataView. It has a byteLength, so the raw check passes, but
+    // `Buffer.from` reads no bytes out of it: the second half of the dual check refuses it rather
+    // than letting an empty buffer be parsed.
+    const view = new DataView(new ArrayBuffer(16));
+    try {
+      parseDicom(view as unknown as Uint8Array);
+      throw new Error("expected throw");
+    } catch (err) {
+      if (!(err instanceof DicomParseError)) throw err;
+      expect(err.code).toBe("EMPTY_INPUT");
+      expect(err.message).toContain("Input is empty after normalization.");
+      expect(err.byteOffset).toBe(0);
+      expect(err.snippet).toBe("");
+    }
+  });
 });
 
 describe("parseDicom - PARSE-05 + D-15 NOT_DICOM_PART_10", () => {

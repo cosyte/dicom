@@ -69,6 +69,7 @@ export function effectiveCode(
  * ```
  */
 export function resolveAction(code: AnnexEActionCode): ResolvedAction {
+  /* v8 ignore next -- unreachable: `split` always returns at least one element. */
   const first = code.split("/", 1)[0]?.replaceAll("*", "") ?? "K";
   return first as ResolvedAction;
 }

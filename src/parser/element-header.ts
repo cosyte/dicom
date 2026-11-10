@@ -176,11 +176,13 @@ export function resolveImplicitVR(
   if (direct !== undefined) {
     // Case 1 / 2: dict has a direct entry. Pick first VR (multi-VR
     // ambiguity documented above).
+    /* v8 ignore next -- unreachable: every generated dictionary entry lists at least one VR. */
     return direct.vr[0] ?? "UN";
   }
   // Case 3: try repeating-group family match.
   const family = matchRepeatingGroup(tag);
   if (family !== undefined) {
+    /* v8 ignore next -- unreachable: every generated dictionary entry lists at least one VR. */
     return family.vr[0] ?? "UN";
   }
   // Case 5: unknown standard tag - silent UN fallback.
@@ -228,6 +230,7 @@ export function resolvePrivateCreator(tag: Tag, ctx: ParseContext): string | und
   // Element (gggg,EEFF) with 0x10 ≤ EE ≤ 0xFF is owned by Private
   // Creator (gggg,00EE). Extract EE from the high byte of the element id.
   const blockId = (element >> 8) & 0xff;
+  /* v8 ignore next -- unreachable: `element` is 0x1000 to 0xFFFF here, so `blockId` is 0x10 to 0xFF. */
   if (blockId < 0x10 || blockId > 0xff) return undefined;
   return ctx.creators.get(group)?.get(blockId);
 }
@@ -334,6 +337,7 @@ function matchesFamilyPattern(pattern: string, concrete: Tag): boolean {
   for (let i = 0; i < 8; i++) {
     const p = pattern[i];
     const c = concrete[i];
+    /* v8 ignore next -- unreachable: both strings are eight characters long. */
     if (p === undefined || c === undefined) return false;
     if (p === "x" || p === "X") continue;
     if (p.toUpperCase() !== c.toUpperCase()) return false;

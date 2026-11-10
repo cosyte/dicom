@@ -233,6 +233,8 @@ function singleByteCharacter(ir: number, byte: number): string | undefined {
   let table = singleByteTables.get(ir);
   if (table === undefined) {
     const label = SINGLE_BYTE_LABELS.get(ir);
+    // Every G1 set an escape sequence can designate has a row in SINGLE_BYTE_LABELS.
+    /* v8 ignore next -- unreachable: no designated single-byte G1 set lacks a label. */
     const decoder = label === undefined ? undefined : decoderFor(label);
     const built: (string | undefined)[] = [];
     for (let b = 0xa0; b <= 0xff; b += 1) {
@@ -326,7 +328,12 @@ function isGr94(byte: number): boolean {
 export function usesCodeExtensions(
   terms: readonly string[] | undefined,
 ): terms is readonly string[] {
-  return terms !== undefined && terms.length > 1 && !NO_CODE_EXTENSION_VALUE_1.has(terms[0] ?? "");
+  return (
+    terms !== undefined &&
+    terms.length > 1 &&
+    /* v8 ignore next -- unreachable: `terms.length > 1` holds, so `terms[0]` is defined. */
+    !NO_CODE_EXTENSION_VALUE_1.has(terms[0] ?? "")
+  );
 }
 
 /**
@@ -352,6 +359,8 @@ export function decodeWithCodeExtensions(
   const declared = new Set<number>();
   for (const term of terms) for (const ir of TERM_ROWS.get(term)?.declares ?? []) declared.add(ir);
   if (terms[0] === "") declared.add(6);
+  // Callers reach this only through `usesCodeExtensions`, so `terms` has more than one Value.
+  /* v8 ignore next -- unreachable: `terms[0]` is defined for a list of two or more. */
   const initial = TERM_ROWS.get(terms[0] ?? "")?.initial ?? { g0: 6, g1: undefined };
 
   let g0 = initial.g0;

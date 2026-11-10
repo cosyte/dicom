@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
 
 import fc from "fast-check";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   decodeText,
@@ -88,6 +88,39 @@ describe("decodeText (never throws)", () => {
 
   it("decodes ISO-8859-15 (Latin-9, ISO_IR 203) - euro sign at 0xA4", () => {
     expect(decodeText(Buffer.from([0xa4]), ["ISO_IR 203"])).toBe("€");
+  });
+});
+
+// A Node built with small ICU has no `TextDecoder` for most non-Unicode labels and throws
+// `RangeError` on construction. These rows stand in for that runtime by refusing labels.
+describe("decodeText on a runtime whose TextDecoder lacks the label", () => {
+  const RealTextDecoder = globalThis.TextDecoder;
+
+  /** A `TextDecoder` that refuses every label not in `supported`. */
+  function decoderSupporting(supported: readonly string[]): typeof TextDecoder {
+    return class extends RealTextDecoder {
+      public constructor(label?: string, options?: ConstructorParameters<typeof TextDecoder>[1]) {
+        if (label === undefined || !supported.includes(label)) {
+          throw new RangeError(`The "${String(label)}" encoding is not supported`);
+        }
+        super(label, options);
+      }
+    };
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("falls back to UTF-8 when the term's own decoder is missing", () => {
+    vi.stubGlobal("TextDecoder", decoderSupporting(["utf-8"]));
+    // ISO_IR 13 resolves to shift_jis, which this runtime refuses.
+    expect(decodeText(Buffer.from("Ångström", "utf-8"), ["ISO_IR 13"])).toBe("Ångström");
+  });
+
+  it("falls back to Latin-1, byte for byte, when no decoder is available at all", () => {
+    vi.stubGlobal("TextDecoder", decoderSupporting([]));
+    expect(decodeText(Buffer.from([0x41, 0xc5, 0x42]), ["ISO_IR 13"])).toBe("A\u00c5B");
   });
 });
 
