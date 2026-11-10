@@ -175,14 +175,14 @@ export function resolveImplicitVR(
   const direct = TAGS[tag];
   if (direct !== undefined) {
     // Case 1 / 2: dict has a direct entry. Pick first VR (multi-VR
-    // ambiguity documented above).
-    /* v8 ignore next -- unreachable: every generated dictionary entry lists at least one VR. */
+    // ambiguity documented above). PS3.6 gives a few retired rows, such as
+    // (0028,0020), no VR at all; those read as UN, as an unknown tag does.
     return direct.vr[0] ?? "UN";
   }
   // Case 3: try repeating-group family match.
   const family = matchRepeatingGroup(tag);
   if (family !== undefined) {
-    /* v8 ignore next -- unreachable: every generated dictionary entry lists at least one VR. */
+    /* v8 ignore next -- unreachable: every repeating-group family entry in the dictionary lists a VR. */
     return family.vr[0] ?? "UN";
   }
   // Case 5: unknown standard tag - silent UN fallback.
