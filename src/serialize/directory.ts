@@ -47,16 +47,16 @@ import { DicomSerializeError, SERIALIZE_ERROR_CODES } from "./errors.js";
 import { type ItemPlacement, tagNumber } from "./order.js";
 
 /**
- * Where one root Data Element landed in the body: its first byte, the bytes
- * written for it, and, for the Directory Record Sequence, where its Items and
- * their elements landed inside those bytes.
+ * Where one root Data Element landed in the body: its first byte, how many
+ * bytes were written for it, and, for the Directory Record Sequence, where its
+ * Items and their elements landed inside those bytes.
  *
  * @internal
  */
 export interface PlacedElement {
   readonly el: Element;
   readonly start: number;
-  readonly bytes: Buffer;
+  readonly length: number;
   readonly placements: readonly ItemPlacement[] | undefined;
 }
 
@@ -137,7 +137,7 @@ export function rewriteDirectoryOffsets(
     const root = placed.get(tag);
     if (root === undefined) continue;
     // A well-formed offset is written as a header and its four value bytes.
-    slots.push({ value: readOffsetValue(root.el), at: root.start + root.bytes.length - 4 });
+    slots.push({ value: readOffsetValue(root.el), at: root.start + root.length - 4 });
   }
 
   // Where the Sequence's `rawBytes` begin in the body: after the header the
