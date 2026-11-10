@@ -706,8 +706,10 @@ export function oddLengthValuePadded(position: DicomPosition, tag: Tag): DicomPa
 
 /**
  * Build a `DICOM_VR_MISMATCH` warning. Emitted when an Explicit VR element's
- * on-wire VR differs from the value the data dictionary lists for that tag.
- * The parser trusts the on-wire VR (Postel's Law) but flags the divergence.
+ * on-wire VR is none of the VRs the data dictionary lists for that tag, so a
+ * tag listed as "OB or OW" or "US or SS" takes either without a warning.
+ * `dictVR` is the first VR the dictionary lists. The parser trusts the on-wire
+ * VR (Postel's Law) but flags the divergence.
  *
  * @example
  * ```ts
