@@ -715,6 +715,233 @@ function* compactDateRuns(text: string): Generator<number> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Workflow pin dates
+// ---------------------------------------------------------------------------
+
+/**
+ * The directory GitHub Actions reads workflows from, as a repo-relative prefix.
+ *
+ * A workflow pins a shared workflow by commit and names the release beside it, and that release
+ * name carries the day it was cut: `uses: <owner>/<repo>/<path>@<sha> # workflows-<date>-<12 hex>`.
+ * The ISO pass reads that date as a date of service. The pre-push hook names every outgoing path,
+ * workflow files included, so the hit reds every push that moves a pin.
+ *
+ * 🛑 THE EXEMPTION IS TWO SHAPES IN THIS DIRECTORY AND NOTHING ELSE, and every other date in the
+ * same file is still a hit: a `run` step, an `env` value, a `with:` input, and a comment that is not
+ * on or directly beside a `uses:` line. A path outside this prefix gets no exemption at all, and
+ * nor does an object decoded out of a workflow file's base64, which is not the page's own text.
+ * Only the ISO pass consults it; the compact pass never did see these dates.
+ */
+const WORKFLOW_DIR_PREFIX = ".github/workflows/";
+
+/** The release-name prefix a shared-workflow release carries before its date. */
+const RELEASE_NAME_PREFIX = "workflows-";
+
+/** The abbreviated commit a shared-workflow release name ends with, in hex digits. */
+const RELEASE_NAME_HEX_LENGTH = 12;
+
+function isWorkflowPath(relPath: string): boolean {
+  return relPath.startsWith(WORKFLOW_DIR_PREFIX);
+}
+
+/** `[0-9a-f]`: a lowercase hex digit, which is how git prints an abbreviated commit. */
+function isLowerHexCode(code: number): boolean {
+  return isDigitCode(code) || (code >= 0x61 && code <= 0x66);
+}
+
+/** A YAML blank: space or tab. */
+function isBlankCode(code: number): boolean {
+  return code === 0x20 || code === 0x09;
+}
+
+/**
+ * Whether the ISO date at `index` is the date inside a `workflows-YYYY-MM-DD-<12 hex>` release
+ * name: `workflows-` at a word boundary directly before it, then `-`, exactly twelve lowercase hex
+ * digits, and a word boundary.
+ */
+function isReleaseNameDate(text: string, index: number): boolean {
+  const start = index - RELEASE_NAME_PREFIX.length;
+  if (start < 0 || !text.startsWith(RELEASE_NAME_PREFIX, start)) return false;
+  if (!isWordBoundary(text, start)) return false;
+  const dash = index + 10;
+  if (text.charCodeAt(dash) !== 0x2d) return false;
+  for (let k = 1; k <= RELEASE_NAME_HEX_LENGTH; k += 1) {
+    if (!isLowerHexCode(text.charCodeAt(dash + k))) return false;
+  }
+  return isWordBoundary(text, dash + 1 + RELEASE_NAME_HEX_LENGTH);
+}
+
+/** One physical line of a workflow file, as YAML reads it for the exemption. */
+interface WorkflowLine {
+  /** Offset of the line's first character. */
+  start: number;
+  /** Offset of its terminator, or the end of the text. */
+  end: number;
+  /**
+   * `uses` for a `uses:` key line outside a block scalar, `comment` for a line holding only a
+   * comment outside a block scalar, and `other` for everything else, block scalar content included.
+   */
+  kind: "uses" | "comment" | "other";
+  /** On a `uses` line, the offset of the `#` that opens its trailing comment, else -1. */
+  commentStart: number;
+}
+
+function skipBlanks(text: string, at: number, end: number): number {
+  let p = at;
+  while (p < end && isBlankCode(text.charCodeAt(p))) p += 1;
+  return p;
+}
+
+/** Skip any `- ` sequence-entry indicators, so `- uses:` and `uses:` read alike. */
+function skipEntryIndicators(text: string, at: number, end: number): number {
+  let p = skipBlanks(text, at, end);
+  while (p + 1 < end && text.charCodeAt(p) === 0x2d && isBlankCode(text.charCodeAt(p + 1))) {
+    p = skipBlanks(text, p + 1, end);
+  }
+  return p;
+}
+
+/**
+ * On a `uses:` line, the offset of the `#` opening its trailing comment, or -1 when it has none;
+ * `null` when the line is not a `uses:` line.
+ *
+ * The value is one token, quoted or not, and the comment is a `#` after at least one blank
+ * following it. A line whose value runs on past a blank to anything but `#` has no comment here,
+ * so a date after it is still a hit.
+ */
+function usesCommentStart(text: string, start: number, end: number): number | null {
+  const key = skipEntryIndicators(text, start, end);
+  if (key + 5 > end || !text.startsWith("uses:", key)) return null;
+  const valueStart = skipBlanks(text, key + 5, end);
+  if (valueStart === key + 5 || valueStart >= end) return -1;
+  let p = valueStart;
+  const quote = text.charCodeAt(p);
+  if (quote === 0x22 || quote === 0x27) {
+    p += 1;
+    while (p < end && text.charCodeAt(p) !== quote) p += 1;
+    if (p >= end) return -1;
+    p += 1;
+  } else {
+    while (p < end && !isBlankCode(text.charCodeAt(p))) p += 1;
+  }
+  const hash = skipBlanks(text, p, end);
+  if (hash === p || hash >= end || text.charCodeAt(hash) !== 0x23) return -1;
+  return hash;
+}
+
+/**
+ * Whether a line outside a block scalar opens one: its last token, before any comment, is a
+ * block indicator (`|` or `>`, with optional chomping and indentation indicators) following a
+ * `:` or a `-`.
+ */
+function opensBlockScalar(text: string, start: number, end: number): boolean {
+  // Cut a trailing comment: a `#` at the line start or after a blank, outside quotes.
+  let cut = end;
+  let quote = 0;
+  for (let p = start; p < end; p += 1) {
+    const c = text.charCodeAt(p);
+    if (quote !== 0) {
+      if (c === quote) quote = 0;
+    } else if (c === 0x22 || c === 0x27) {
+      quote = c;
+    } else if (c === 0x23 && (p === start || isBlankCode(text.charCodeAt(p - 1)))) {
+      cut = p;
+      break;
+    }
+  }
+  let last = cut;
+  while (last > start && isSpaceCode(text.charCodeAt(last - 1))) last -= 1;
+  let first = last;
+  while (first > start && !isBlankCode(text.charCodeAt(first - 1))) first -= 1;
+  if (first === last || last - first > 3) return false;
+  const head = text.charCodeAt(first);
+  if (head !== 0x7c && head !== 0x3e) return false;
+  for (let p = first + 1; p < last; p += 1) {
+    const c = text.charCodeAt(p);
+    if (c !== 0x2b && c !== 0x2d && !(c >= 0x31 && c <= 0x39)) return false;
+  }
+  let before = first;
+  while (before > start && isBlankCode(text.charCodeAt(before - 1))) before -= 1;
+  if (before === first || before === start) return false;
+  const lead = text.charCodeAt(before - 1);
+  return lead === 0x3a || lead === 0x2d;
+}
+
+/**
+ * Read a workflow file into lines and classify each one.
+ *
+ * A YAML line break is `LF`, `CRLF` or a lone `CR`. Block scalar content, the body of a `run: |`
+ * step, is `other` on every line, so a shell comment or a `uses:` lookalike inside a script is
+ * never mistaken for a pin; a block runs while lines are blank or indented past the key that
+ * opened it.
+ */
+function workflowLines(text: string): WorkflowLine[] {
+  const out: WorkflowLine[] = [];
+  let blockIndent = -1;
+  let start = 0;
+  const n = text.length;
+  while (start <= n) {
+    let end = start;
+    while (end < n && text.charCodeAt(end) !== 0x0a && text.charCodeAt(end) !== 0x0d) end += 1;
+    const firstNonBlank = skipBlanks(text, start, end);
+    const indent = firstNonBlank - start;
+    const blank = firstNonBlank >= end;
+    let kind: WorkflowLine["kind"] = "other";
+    let commentStart = -1;
+    if (blockIndent >= 0 && (blank || indent > blockIndent)) {
+      // Block scalar content: `other`, whatever it looks like.
+    } else {
+      blockIndent = -1;
+      if (!blank && text.charCodeAt(firstNonBlank) === 0x23) {
+        kind = "comment";
+      } else if (!blank) {
+        const uses = usesCommentStart(text, start, end);
+        if (uses !== null) {
+          kind = "uses";
+          commentStart = uses;
+        } else if (opensBlockScalar(text, start, end)) {
+          const key = skipEntryIndicators(text, start, end);
+          blockIndent =
+            text.charCodeAt(key) === 0x7c || text.charCodeAt(key) === 0x3e ? indent : key - start;
+        }
+      }
+    }
+    out.push({ start, end, kind, commentStart });
+    if (end >= n) break;
+    start = text.charCodeAt(end) === 0x0d && text.charCodeAt(end + 1) === 0x0a ? end + 2 : end + 1;
+  }
+  return out;
+}
+
+/** The index in `lines` of the line holding `offset`. `lines` is in order and covers the text. */
+function lineIndexAt(lines: readonly WorkflowLine[], offset: number): number {
+  let lo = 0;
+  let hi = lines.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    const line = lines[mid];
+    if (line !== undefined && line.start <= offset) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo;
+}
+
+/**
+ * Whether the ISO date at `index` in a workflow file is a pin's date rather than a date of
+ * service: inside a release name, in the trailing comment of a `uses:` line, or on a
+ * comment-only line directly above or below a `uses:` line.
+ */
+function isWorkflowPinDate(text: string, lines: readonly WorkflowLine[], index: number): boolean {
+  if (isReleaseNameDate(text, index)) return true;
+  const at = lineIndexAt(lines, index);
+  const line = lines[at];
+  if (line === undefined) return false;
+  if (line.kind === "uses") return line.commentStart !== -1 && index > line.commentStart;
+  if (line.kind !== "comment") return false;
+  return lines[at - 1]?.kind === "uses" || lines[at + 1]?.kind === "uses";
+}
+
 /**
  * `/\b[A-Z][A-Za-z\-']+\^[A-Z][A-Za-z\-']+\b/g`, as `[start, end)` offsets.
  *
@@ -2385,13 +2612,28 @@ function scanDicom(
  * the whole page and the matched name outlived the scan. The scanners take the same offsets and
  * the same substrings; the sub-match groups are sliced off the run instead of being read out of
  * `m[1]`, which is why the `undefined` guards those groups needed are gone.
+ *
+ * `workflowPage` is true only for a page under `.github/workflows/`, and only then does the ISO
+ * pass skip a pin's date (see `WORKFLOW_DIR_PREFIX`).
  */
-function scanText(target: Target, content: string, allow: AllowList, hits: Hit[]): void {
+function scanText(
+  target: Target,
+  content: string,
+  allow: AllowList,
+  hits: Hit[],
+  workflowPage = false,
+): void {
+  // Read lazily: only a workflow page with an ISO date run pays for the line pass.
+  let lines: WorkflowLine[] | null = null;
   // ISO date `YYYY-MM-DD`
   for (const index of isoDateRuns(content)) {
     const full = content.slice(index, index + 10);
     const compact = `${full.slice(0, 4)}${full.slice(5, 7)}${full.slice(8, 10)}`;
     if (allow.dates.has(compact)) continue;
+    if (workflowPage) {
+      lines ??= workflowLines(content);
+      if (isWorkflowPinDate(content, lines, index)) continue;
+    }
     const year = Number(full.slice(0, 4));
     if (year >= CUTOFF_YEAR) {
       hits.push({
@@ -2607,7 +2849,9 @@ function scanTarget(target: Target, allow: AllowList, hits: Hit[], unread: Unrea
   // predicate that decides who is owed a text sweep: the halt is a property of the dataset, and no
   // cheap test on the first 132 bytes can see it.
   const text = buf.toString("utf8");
-  scanText(target, text, allow, hits);
+  // The workflow pin exemption is for this page's own text only; `scanEmbeddedObjects` passes
+  // nothing, so a decoded object inside a workflow file gets the full date rule.
+  scanText(target, text, allow, hits, isWorkflowPath(target.path));
   // 🛑 THE EMBEDDED DECODE IS NOT A MARKDOWN FEATURE, AND SCOPING IT TO A SET OF TEXT EXTENSIONS
   // MADE IT ONE. A Part 10 object pasted as base64 into a `.ts` source is the same fixture as one
   // pasted into a `.md` page, and every fixture this package commits is built in a `.ts` file.
