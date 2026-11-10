@@ -88,6 +88,7 @@
     "bench:reading": "cosyte-bench run --suite bench/dicom.bench.mjs --target dist/index.mjs",
     "bench:compare": "cosyte-bench compare --suite bench/dicom.bench.mjs",
     "bench:profile": "node --enable-source-maps bench/profile.mjs dist/index.mjs",
+    "capture:output-digests": "tsx test/equivalence/capture-output-digests.ts",
     "fuzz": "vitest run test/property/fuzz.property.test.ts test/property/corpus-fuzz.property.test.ts test/property/values-fuzz.property.test.ts",
     "examples": "tsx scripts/run-examples.ts",
     "typecheck:examples": "tsc -p examples/tsconfig.json",
