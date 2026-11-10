@@ -67,6 +67,15 @@ export interface ElementInit {
 }
 
 /**
+ * Hands the parser and the value decoders a way into an Element's private value
+ * range, set once by the class's static block. Not exported from the package.
+ */
+let setRange: (el: Element, source: Buffer, start: number, end: number) => void;
+let rangeSource: (el: Element) => Buffer;
+let rangeStart: (el: Element) => number;
+let rangeEnd: (el: Element) => number;
+
+/**
  * One DICOM Data Element as parsed.
  *
  * Structural surface: `tag`, `vr`, `vm`, `length`, `rawBytes`,
@@ -100,7 +109,6 @@ export class Element {
   public readonly vr: VR;
   public readonly vm: number;
   public readonly length: number;
-  public readonly rawBytes: Buffer;
   public readonly byteOffset: number;
   public readonly privateCreator: string | undefined;
   /**
@@ -123,6 +131,29 @@ export class Element {
   private _valueCache: DicomValue | undefined;
 
   /**
+   * The value's bytes once made: given at construction, or the view of
+   * `#source` made the first time `rawBytes` is read. ECMAScript private, so
+   * the source buffer never shows in `Object.keys`, a spread or a JSON dump.
+   */
+  #rawBytes: Buffer | undefined;
+  /** The buffer the value is a range of, until `rawBytes` makes its view. */
+  #source: Buffer | undefined;
+  #start = 0;
+  #end = 0;
+
+  static {
+    setRange = (el, source, start, end): void => {
+      el.#rawBytes = undefined;
+      el.#source = source;
+      el.#start = start;
+      el.#end = end;
+    };
+    rangeSource = (el) => el.#rawBytes ?? (el.#source as Buffer);
+    rangeStart = (el) => (el.#rawBytes === undefined ? el.#start : 0);
+    rangeEnd = (el) => (el.#rawBytes === undefined ? el.#end : el.#rawBytes.length);
+  }
+
+  /**
    * Construct a new structural `Element`. The parser builds these directly
    * from on-wire bytes; consumers receive them via `Dataset` after
    * `parseDicom`.
@@ -134,13 +165,29 @@ export class Element {
     this.vr = init.vr;
     this.vm = init.vm;
     this.length = init.length;
-    this.rawBytes = init.rawBytes;
+    this.#rawBytes = init.rawBytes;
     this.byteOffset = init.byteOffset;
     this.privateCreator = init.privateCreator;
     this.cp246Promoted = init.cp246Promoted;
     this.littleEndian = init.littleEndian;
     this.specificCharacterSet = init.specificCharacterSet;
     this.items = init.items;
+  }
+
+  /**
+   * The element's bytes, as the parser read them: a zero-copy `Buffer.subarray`
+   * view of the source buffer by default, made the first time it is read and
+   * the same Buffer every time after; a standalone copy under
+   * `{ copyValues: true }`. See the class doc.
+   */
+  public get rawBytes(): Buffer {
+    let bytes = this.#rawBytes;
+    if (bytes === undefined) {
+      bytes = (this.#source as Buffer).subarray(this.#start, this.#end);
+      this.#rawBytes = bytes;
+      this.#source = undefined;
+    }
+    return bytes;
   }
 
   /**
@@ -161,4 +208,45 @@ export class Element {
   public get value(): DicomValue {
     return (this._valueCache ??= decodeElementValue(this));
   }
+}
+
+/**
+ * Build an Element whose `rawBytes` is the range `start` to `end` of `source`,
+ * made into a view only when it is first read. `init.rawBytes` is ignored, and
+ * may be absent.
+ * What a caller reads is exactly what an Element built with
+ * `rawBytes: source.subarray(start, end)` gives.
+ *
+ * @internal
+ */
+export function elementOverRange(
+  init: ElementInit,
+  source: Buffer,
+  start: number,
+  end: number,
+): Element {
+  const el = new Element(init);
+  setRange(el, source, start, end);
+  return el;
+}
+
+/**
+ * The buffer an Element's value bytes sit in: the source until `rawBytes` is
+ * read, then `rawBytes` itself. Read the value from
+ * {@link elementValueStart} to {@link elementValueEnd} of it.
+ *
+ * @internal
+ */
+export function elementValueSource(el: Element): Buffer {
+  return rangeSource(el);
+}
+
+/** @internal */
+export function elementValueStart(el: Element): number {
+  return rangeStart(el);
+}
+
+/** @internal */
+export function elementValueEnd(el: Element): number {
+  return rangeEnd(el);
 }

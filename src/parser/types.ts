@@ -348,9 +348,10 @@ export interface ParseContext {
    * this parse, threaded onto each `Element` so the text decoders can
    * honour the dataset's charset. Mutable: set when `(0008,0005)` is read,
    * inherited into SQ items and restored per-item by `parseSequence`.
-   * `undefined` means the Default Repertoire (ISO_IR 6).
+   * `undefined` means the Default Repertoire (ISO_IR 6). Restored by
+   * assignment rather than `delete`, so the context keeps one shape.
    */
-  currentCharset?: readonly string[];
+  currentCharset?: readonly string[] | undefined;
   /**
    * Active source/vendor {@link Profile}. Threaded from
    * `ParseOptions.profile`. When absent the parse is unprofiled, which is the

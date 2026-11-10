@@ -67,9 +67,9 @@ import type { Buffer } from "node:buffer";
 
 import type { Element } from "../dataset/element.js";
 import { Item } from "../dataset/item.js";
-import { joinTag } from "../dataset/tag.js";
 import type { Tag } from "../dictionary/types.js";
 import { ByteCursor } from "./byte-cursor.js";
+import { NO_PRIVATE_CREATORS } from "./element-header.js";
 import { DicomParseError, fileOffsetIn, valueSliceFrame } from "./errors.js";
 import {
   encapsulatedFragmentExceedsBuffer,
@@ -90,8 +90,25 @@ import {
 
 const ITEM_TAG: Tag = "FFFEE000";
 // `(FFFE,E00D)` ItemDelim is consumed by the inner-strategy via the
-// `stopOnItemDelim` contract - never directly inside parseSequence.
-const SEQ_DELIM_TAG: Tag = "FFFEE0DD";
+// `stopOnItemDelim` contract - never directly inside parseSequence. The two
+// tags read here are compared as numbers: `(FFFE,E000)` Item and `(FFFE,E0DD)`
+// Sequence Delimitation Item.
+const ITEM_ELEMENT = 0xe000;
+const SEQ_DELIM_ELEMENT = 0xe0dd;
+
+/** The warnings an Item is built with: none. The Dataset copies it, so sharing it is safe. */
+const NO_WARNINGS: readonly DicomParseWarning[] = [];
+
+/** An Item, with `fileOffset` only when the frame gave it one. */
+function makeItem(
+  elements: ReadonlyMap<Tag, Element>,
+  index: number,
+  fileOffset: number | undefined,
+): Item {
+  return fileOffset === undefined
+    ? new Item({ warnings: NO_WARNINGS, elements, index })
+    : new Item({ warnings: NO_WARNINGS, elements, index, fileOffset });
+}
 const UNDEFINED_LENGTH = 0xffffffff;
 
 /**
@@ -190,13 +207,6 @@ export function parseSequence(
   // Items inherit the parent dataset's charset; an item's own (0008,0005)
   // override must NOT leak to sibling items or back to the parent.
   const parentCharset = ctx.currentCharset;
-  const restoreParentCharset = (): void => {
-    if (parentCharset === undefined) {
-      delete ctx.currentCharset;
-    } else {
-      ctx.currentCharset = parentCharset;
-    }
-  };
 
   // Private block reservations are scoped to one Data Set, and an Item is one.
   // PS3.5 section 7.5.1: "Each Item Value shall contain a DICOM Data Set
@@ -219,13 +229,11 @@ export function parseSequence(
   // as something the file does not say. Degrading to UN plus
   // `DICOM_PRIVATE_TAG_NO_CREATOR` is the fail-safe direction and the one an
   // unclaimed block gets, matching how `deidentify()` scopes the same rule.
+  //
+  // An Item starts on `NO_PRIVATE_CREATORS`, which is empty and never written:
+  // `registerPrivateCreator` swaps in a map of the Item's own the first time the
+  // Item claims a block, so an Item that claims none costs no map.
   const parentCreators = ctx.creators;
-  const restoreParentCreators = (): void => {
-    ctx.creators = parentCreators;
-  };
-  const beginItemCreatorScope = (): void => {
-    ctx.creators = new Map<number, Map<number, string>>();
-  };
 
   try {
     const cursor = new ByteCursor(buffer, opts.littleEndian, valueStart);
@@ -251,18 +259,17 @@ export function parseSequence(
         /* v8 ignore next -- unreachable: the cursor reads throw only RangeError. */
         throw err;
       }
-      const itemTag = joinTag(group, element);
       // Where this Item's tag sits in the file, when the frame has a file
       // position (see `ParseFrame.origin`). Taken here, before any frame swap
       // below, because `itemHeaderStart` counts in the enclosing frame.
       const fileOffset = fileOffsetIn(ctx.frame, itemHeaderStart);
-      const itemPosition = fileOffset !== undefined ? { fileOffset } : {};
 
-      if (itemTag === SEQ_DELIM_TAG) {
+      // `(FFFE,E0DD)` and `(FFFE,E000)` are compared as numbers.
+      if (group === 0xfffe && element === SEQ_DELIM_ELEMENT) {
         // SeqDelim - skip the 4-byte length field (already consumed) and exit.
         return { items, endOffset: cursor.position, delimited: true };
       }
-      if (itemTag !== ITEM_TAG) {
+      if (group !== 0xfffe || element !== ITEM_ELEMENT) {
         throw unexpectedTagInsideSequence(ctx.frame, itemHeaderStart);
       }
 
@@ -277,16 +284,9 @@ export function parseSequence(
         // raises `DICOM_EMPTY_ITEM_IN_SEQUENCE`.
         const emptyBasicOffsetTable = opts.encapsulatedPixelData === true && itemIndex === 0;
         if (!emptyBasicOffsetTable) {
-          emit(emptyItemInSequence({ byteOffset: itemHeaderStart }, itemTag));
+          emit(emptyItemInSequence({ byteOffset: itemHeaderStart }, ITEM_TAG));
         }
-        items.push(
-          new Item({
-            warnings: [],
-            elements: new Map(),
-            index: itemIndex,
-            ...itemPosition,
-          }),
-        );
+        items.push(makeItem(new Map(), itemIndex, fileOffset));
         itemIndex += 1;
         continue;
       }
@@ -302,9 +302,7 @@ export function parseSequence(
           throw encapsulatedFragmentExceedsBuffer(ctx.frame, itemHeaderStart);
         }
         cursor.position += itemLength;
-        items.push(
-          new Item({ warnings: [], elements: new Map(), index: itemIndex, ...itemPosition }),
-        );
+        items.push(makeItem(new Map(), itemIndex, fileOffset));
         itemIndex += 1;
         continue;
       }
@@ -312,22 +310,15 @@ export function parseSequence(
       // Reset to the parent charset before each item so an item's own
       // (0008,0005) cannot leak to its siblings, and give the item an empty
       // reservation map of its own for the same reason (PS3.5 section 7.8.1).
-      restoreParentCharset();
-      beginItemCreatorScope();
+      ctx.currentCharset = parentCharset;
+      ctx.creators = NO_PRIVATE_CREATORS;
       if (itemLength === UNDEFINED_LENGTH) {
         // Undefined-length item - call innerStrategy with stopOnItemDelim;
         // it returns the post-ItemDelim offset.
         const inner = opts.innerStrategy(buffer, cursor.position, ctx, emit, {
           stopOnItemDelim: true,
         });
-        items.push(
-          new Item({
-            warnings: [],
-            elements: inner.elements,
-            index: itemIndex,
-            ...itemPosition,
-          }),
-        );
+        items.push(makeItem(inner.elements, itemIndex, fileOffset));
         cursor.position = inner.endOffset;
       } else {
         // Defined-length item - slice and parse exactly `itemLength` bytes.
@@ -383,7 +374,7 @@ export function parseSequence(
           // nothing about its CONTENT.
           // The factory takes a parameter for neither. See
           // `itemCrossesSequenceEnd`.
-          emit(itemCrossesSequenceEnd({ byteOffset: itemHeaderStart }, itemTag));
+          emit(itemCrossesSequenceEnd({ byteOffset: itemHeaderStart }, ITEM_TAG));
         }
         if (cursor.position + itemLength > buffer.length) {
           throw itemLengthExceedsBuffer(ctx.frame, itemHeaderStart);
@@ -406,14 +397,7 @@ export function parseSequence(
         } finally {
           ctx.frame = enclosingFrame;
         }
-        items.push(
-          new Item({
-            warnings: [],
-            elements: inner.elements,
-            index: itemIndex,
-            ...itemPosition,
-          }),
-        );
+        items.push(makeItem(inner.elements, itemIndex, fileOffset));
         cursor.position += itemLength;
       }
       itemIndex += 1;
@@ -423,8 +407,8 @@ export function parseSequence(
   } finally {
     ctx.nestingDepth -= 1;
     ctx.encodingContextStack.pop();
-    restoreParentCharset();
-    restoreParentCreators();
+    ctx.currentCharset = parentCharset;
+    ctx.creators = parentCreators;
   }
 }
 

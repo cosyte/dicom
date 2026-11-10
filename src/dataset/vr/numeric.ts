@@ -30,24 +30,40 @@ import { joinTag } from "../tag.js";
  * ```
  */
 export function decodeNumbers(bytes: Buffer, vr: VR, littleEndian: boolean): number[] {
+  return decodeNumbersIn(bytes, 0, bytes.length, vr, littleEndian);
+}
+
+/**
+ * {@link decodeNumbers} over the bytes `start` to `end` of `bytes`, read in
+ * place: the same numbers, with no view made of the range.
+ *
+ * @internal
+ */
+export function decodeNumbersIn(
+  bytes: Buffer,
+  start: number,
+  end: number,
+  vr: VR,
+  littleEndian: boolean,
+): number[] {
   const out: number[] = [];
   if (vr === "US") {
-    for (let i = 0; i + 2 <= bytes.length; i += 2)
+    for (let i = start; i + 2 <= end; i += 2)
       out.push(littleEndian ? bytes.readUInt16LE(i) : bytes.readUInt16BE(i));
   } else if (vr === "SS") {
-    for (let i = 0; i + 2 <= bytes.length; i += 2)
+    for (let i = start; i + 2 <= end; i += 2)
       out.push(littleEndian ? bytes.readInt16LE(i) : bytes.readInt16BE(i));
   } else if (vr === "UL") {
-    for (let i = 0; i + 4 <= bytes.length; i += 4)
+    for (let i = start; i + 4 <= end; i += 4)
       out.push(littleEndian ? bytes.readUInt32LE(i) : bytes.readUInt32BE(i));
   } else if (vr === "SL") {
-    for (let i = 0; i + 4 <= bytes.length; i += 4)
+    for (let i = start; i + 4 <= end; i += 4)
       out.push(littleEndian ? bytes.readInt32LE(i) : bytes.readInt32BE(i));
   } else if (vr === "FL") {
-    for (let i = 0; i + 4 <= bytes.length; i += 4)
+    for (let i = start; i + 4 <= end; i += 4)
       out.push(littleEndian ? bytes.readFloatLE(i) : bytes.readFloatBE(i));
   } else if (vr === "FD") {
-    for (let i = 0; i + 8 <= bytes.length; i += 8)
+    for (let i = start; i + 8 <= end; i += 8)
       out.push(littleEndian ? bytes.readDoubleLE(i) : bytes.readDoubleBE(i));
   }
   return out;

@@ -20,9 +20,75 @@
  * @module
  */
 
-import type { Element } from "../dataset/element.js";
-import type { Tag } from "../dictionary/types.js";
+import type { Buffer } from "node:buffer";
+
+import { Element, elementOverRange, type ElementInit } from "../dataset/element.js";
+import type { Item } from "../dataset/item.js";
+import type { Tag, VR } from "../dictionary/types.js";
+import { copyValueBytes } from "./byte-cursor.js";
+import type { ParseContext } from "./types.js";
 import { duplicateTagInDataSet, type DicomParseWarning } from "./warnings.js";
+
+/**
+ * The one init every parsed Element is built from, filled in place for each
+ * element. The constructor copies every field out of it, so it is free again as
+ * soon as the Element exists, and a parse builds no init object per element.
+ * `rawBytes` is never set on it: a range stands in (see {@link parsedElement}).
+ */
+const INIT: { -readonly [K in keyof ElementInit]: ElementInit[K] | undefined } = {
+  tag: "",
+  vr: "UN",
+  vm: 0,
+  length: 0,
+  rawBytes: undefined,
+  byteOffset: 0,
+  privateCreator: undefined,
+  cp246Promoted: undefined,
+  littleEndian: true,
+  specificCharacterSet: undefined,
+  items: undefined,
+};
+
+/**
+ * The Element the parser reads at `start` to `end` of `buffer`. Under
+ * `{ copyValues: true }` its `rawBytes` is a standalone copy, made now, as it
+ * always was; otherwise the view of that range is made the first time
+ * `rawBytes` is read, so an element nobody reads costs no Buffer. Either way a
+ * caller reads the same bytes. An `undefined` field is read by the constructor
+ * exactly as an omitted one.
+ *
+ * @internal
+ */
+export function parsedElement(
+  ctx: ParseContext,
+  buffer: Buffer,
+  start: number,
+  end: number,
+  tag: Tag,
+  vr: VR,
+  vm: number,
+  length: number,
+  byteOffset: number,
+  littleEndian: boolean,
+  specificCharacterSet: readonly string[] | undefined,
+  privateCreator: string | undefined,
+  items: readonly Item[] | undefined,
+): Element {
+  INIT.tag = tag;
+  INIT.vr = vr;
+  INIT.vm = vm;
+  INIT.length = length;
+  INIT.byteOffset = byteOffset;
+  INIT.privateCreator = privateCreator;
+  INIT.littleEndian = littleEndian;
+  INIT.specificCharacterSet = specificCharacterSet;
+  INIT.items = items;
+  if (ctx.copyValues) {
+    const copied = { ...INIT, rawBytes: copyValueBytes(buffer.subarray(start, end)) };
+    return new Element(copied as ElementInit);
+  }
+  return elementOverRange(INIT as ElementInit, buffer, start, end);
+}
 
 /**
  * Insert `element` into the Data Set map under its own tag, emitting
