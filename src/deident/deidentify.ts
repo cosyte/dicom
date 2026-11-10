@@ -2592,8 +2592,9 @@ function applySequenceAction(
         applied = "cleaned";
       }
       break;
-    // No Table E.1-1 row resolves an `SQ` to `U`: every `U*` on one follows an `X`.
-    /* v8 ignore next -- unreachable: no Sequence row of Table E.1-1 resolves to U. */
+    // The switch keys on the wire VR, not the dictionary's: a `U` attribute such as Study Instance
+    // UID that the file sends as an `SQ` lands here. There is no UID to remap, so it is kept like
+    // a `K`, with every Item walked.
     case "U":
     case "K":
       if (isUnauditableSequence(el)) {

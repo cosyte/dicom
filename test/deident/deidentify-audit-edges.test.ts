@@ -5,7 +5,9 @@
  *   and the report says `emptied` rather than `kept`;
  * - an element with an on-wire VR outside the 34 inside a Sequence Item is recorded with the
  *   path to that Item, and emptied;
- * - a hand-assembled Sequence that names its Specific Character Set keeps it through the rebuild.
+ * - a hand-assembled Sequence that names its Specific Character Set keeps it through the rebuild;
+ * - a `U` attribute the file sends as a Sequence is kept with every Item de-identified, and the
+ *   audit says `kept` under the `U` its Table E.1-1 row resolves to.
  *
  * Every byte is synthetic. The identifiers are invented so their absence from output is visible.
  *
@@ -129,5 +131,63 @@ describe("a hand-assembled Sequence that names its Specific Character Set", () =
 
     expect(out?.specificCharacterSet).toEqual(["ISO_IR 192"]);
     expect(out?.items).toHaveLength(1);
+  });
+});
+
+describe("a U attribute the file sends as a Sequence", () => {
+  /** `(0010,0010)` Patient Name: `Z` in the Basic Profile. */
+  const PATIENT_NAME_TAG: Tag = "00100010";
+  const PATIENT_NAME = "SYNTHETIC^WIREVR";
+
+  function studyUidAsSequence(): Buffer {
+    return buildDicom({
+      transferSyntax: EXPLICIT_LE,
+      elements: [
+        {
+          tag: STUDY_UID_TAG,
+          items: [
+            {
+              elements: [
+                { tag: PATIENT_NAME_TAG, vr: "PN" as VR, value: ascii(PATIENT_NAME) },
+                { tag: PATIENT_ID_TAG, vr: "LO" as VR, value: ascii(PATIENT_ID) },
+                { tag: LEAF, vr: "LO" as VR, value: ascii("FILM-A") },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+  }
+
+  it("is kept with its Item walked, so no identifier inside it reaches the output", () => {
+    const parsed = parseDicom(studyUidAsSequence());
+    // Precondition: the wire VR wins over the dictionary's UI, and the name sits inside the Item.
+    expect(parsed.get(STUDY_UID_TAG)?.vr).toBe("SQ");
+    expect(parsed.warnings.map((w) => w.code)).toContain("DICOM_VR_MISMATCH");
+    const sourceItem = parsed.get(STUDY_UID_TAG)?.items?.[0];
+    expect(sourceItem?.get(PATIENT_NAME_TAG)?.rawBytes.toString("latin1")).toContain(PATIENT_NAME);
+
+    const { dataset, report } = deidentify(parsed);
+
+    const audited = report.attributes.find(
+      (a) => a.tag === STUDY_UID_TAG && a.contextPath === undefined,
+    );
+    expect(audited?.action).toBe("U");
+    expect(audited?.applied).toBe("kept");
+    const kept = dataset.get(STUDY_UID_TAG);
+    expect(kept?.vr).toBe("SQ");
+    expect(kept?.items).toHaveLength(1);
+    // The Item's own attributes were judged, each audited under the path to the Item.
+    const nested = report.attributes.filter((a) => a.contextPath?.[0] === `${STUDY_UID_TAG}[0]`);
+    expect(nested.map((a) => [a.tag, a.action])).toEqual(
+      expect.arrayContaining([
+        [PATIENT_NAME_TAG, "Z"],
+        [PATIENT_ID_TAG, "Z"],
+      ]),
+    );
+    expect(kept?.items?.[0]?.get(LEAF)?.rawBytes.toString("latin1")).toContain("FILM-A");
+    const written = serializeDicom(dataset).toString("latin1");
+    expect(written).not.toContain(PATIENT_NAME);
+    expect(written).not.toContain(PATIENT_ID);
   });
 });
