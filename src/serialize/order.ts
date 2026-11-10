@@ -89,13 +89,19 @@
 
 import { Buffer } from "node:buffer";
 
-import type { Element } from "../dataset/element.js";
+import {
+  type Element,
+  elementValueEnd,
+  elementValueSource,
+  elementValueStart,
+} from "../dataset/element.js";
 import type { Item } from "../dataset/item.js";
 import { splitTag } from "../dataset/tag.js";
 import { tagEntry } from "../dictionary/registry.js";
-import type { Tag, VR } from "../dictionary/types.js";
+import type { Tag } from "../dictionary/types.js";
 import { LONG_FORM_VRS, matchRepeatingGroup } from "../parser/element-header.js";
 import { isRecognizedVr } from "../parser/endian.js";
+import { tagOf, vrAt } from "../parser/wire-tokens.js";
 import { NESTING_DEPTH_LIMIT } from "../parser/sequence.js";
 import { type BodyEncoding, isFullSpanElement, padValue } from "./element.js";
 
@@ -130,12 +136,16 @@ const SYNTAX: Readonly<Record<BodyEncoding, WireSyntax>> = {
 };
 
 /**
- * The result of walking one span: the views that re-emit it in order, whether
- * anything in it moved, and the offset just past it.
+ * The result of walking one span: where it starts and the offset just past it,
+ * whether anything in it moved, and, when something did, the views that
+ * re-emit it in order. A span nothing moved in is emitted as the bytes from
+ * `start` to `end`, and no view is made of it unless something around it moves
+ * (see {@link pushParts}).
  */
 interface Walked {
-  readonly parts: readonly Buffer[];
+  readonly parts: readonly Buffer[] | undefined;
   readonly changed: boolean;
+  readonly start: number;
   readonly end: number;
 }
 
@@ -145,7 +155,6 @@ interface Walked {
  */
 interface Emitted extends Walked {
   readonly tag: number;
-  readonly start: number;
   readonly valueStart: number;
 }
 
@@ -232,6 +241,12 @@ function appendAll(target: Buffer[], source: readonly Buffer[]): void {
   for (const part of source) target.push(part);
 }
 
+/** Push the views that re-emit `walked`: its own when it moved, else its bytes as read. */
+function pushParts(target: Buffer[], buf: Buffer, walked: Walked): void {
+  if (walked.parts !== undefined) appendAll(target, walked.parts);
+  else target.push(buf.subarray(walked.start, walked.end));
+}
+
 /**
  * A tag as PS3.5 2026c section 7.1.1 defines one, "An ordered pair of 16-bit
  * unsigned integers representing the Group Number followed by Element Number",
@@ -240,13 +255,25 @@ function appendAll(target: Buffer[], source: readonly Buffer[]): void {
  * @internal
  */
 export function tagNumber(tag: Tag): number {
-  const { group, element } = splitTag(tag);
-  return group * 0x10000 + element;
+  let n = TAG_NUMBERS.get(tag);
+  if (n === undefined) {
+    const { group, element } = splitTag(tag);
+    n = group * 0x10000 + element;
+    if (TAG_NUMBERS.size < TAG_NUMBER_CACHE_LIMIT) TAG_NUMBERS.set(tag, n);
+  }
+  return n;
 }
 
-/** The model's `Tag` spelling of a Tag Number: eight upper-case hex digits. */
-function tagOf(tagNumberValue: number): Tag {
-  return tagNumberValue.toString(16).padStart(8, "0").toUpperCase();
+/** Tag Numbers already worked out, by tag; bounded, as a hand-built tag can be any string. */
+const TAG_NUMBERS = new Map<Tag, number>();
+const TAG_NUMBER_CACHE_LIMIT = 16_384;
+
+/**
+ * The model's `Tag` spelling of a Tag Number: eight upper-case hex digits, the
+ * same string the reader built for the tag.
+ */
+function tagOfNumber(tagNumberValue: number): Tag {
+  return tagOf(Math.floor(tagNumberValue / 0x10000), tagNumberValue % 0x10000);
 }
 
 /**
@@ -258,7 +285,7 @@ function tagOf(tagNumberValue: number): Tag {
 function isImplicitSequence(tagNumberValue: number): boolean {
   const group = Math.floor(tagNumberValue / 0x10000);
   if (group % 2 === 1) return false;
-  const tag = tagOf(tagNumberValue);
+  const tag = tagOfNumber(tagNumberValue);
   const entry = tagEntry(tag) ?? matchRepeatingGroup(tag);
   return entry?.vr[0] === "SQ";
 }
@@ -291,8 +318,8 @@ function readElementHeader(
   if (!syntax.explicitVr || isMarker(tag)) {
     return { tag, headerLength: MARKER_LENGTH, length: readUint32(buf, p + 4, le), vr: undefined };
   }
-  const vr = buf.toString("ascii", p + 4, p + 6);
-  if (LONG_FORM_VRS.has(vr as VR) || !isRecognizedVr(vr)) {
+  const vr = vrAt(buf, p + 4);
+  if (LONG_FORM_VRS.has(vr) || !isRecognizedVr(vr)) {
     if (p + 12 > stop) return undefined;
     return { tag, headerLength: 12, length: readUint32(buf, p + 8, le), vr };
   }
@@ -305,8 +332,8 @@ function isSequence(header: ElementHeader, syntax: WireSyntax): boolean {
 }
 
 /** A span emitted as read. */
-function verbatim(buf: Buffer, start: number, end: number): Walked {
-  return { parts: [buf.subarray(start, end)], changed: false, end };
+function verbatim(start: number, end: number): Walked {
+  return { parts: undefined, changed: false, start, end };
 }
 
 /**
@@ -366,7 +393,7 @@ function walkElement(
 ): ElementSpan | undefined {
   const header = readElementHeader(buf, p, stop, syntax);
   if (header === undefined) return undefined;
-  const model = item.get(tagOf(header.tag));
+  const model = item.get(tagOfNumber(header.tag));
   if (model === undefined) return undefined;
   const valueStart = p + header.headerLength;
   const undefinedLength = header.length === UNDEFINED_LENGTH;
@@ -387,21 +414,25 @@ function walkElement(
     // where the source's read of it ended (its `rawBytes` are the whole span),
     // and `agrees` compares those bytes once the Item has been walked.
     const end = undefinedLength ? p + model.rawBytes.length : valueStart + header.length;
-    walked = end < valueStart || end > stop ? undefined : verbatim(buf, valueStart, end);
+    walked = end < valueStart || end > stop ? undefined : verbatim(valueStart, end);
   }
   if (walked === undefined) return undefined;
-  const span = {
+  let parts: Buffer[] | undefined;
+  if (walked.changed) {
+    parts = [buf.subarray(p, valueStart)];
+    pushParts(parts, buf, walked);
+  }
+  return {
     tag: header.tag,
     start: p,
     valueStart,
     undefinedLength,
     descended: items !== undefined,
     model,
+    parts,
+    changed: walked.changed,
+    end: walked.end,
   };
-  if (!walked.changed) return { ...span, ...verbatim(buf, p, walked.end) };
-  const parts: Buffer[] = [buf.subarray(p, valueStart)];
-  appendAll(parts, walked.parts);
-  return { ...span, parts, changed: true, end: walked.end };
 }
 
 /**
@@ -414,13 +445,18 @@ function walkElement(
 function agrees(buf: Buffer, span: ElementSpan, encoding: BodyEncoding): boolean {
   const model = span.model;
   const valueOnly = !isFullSpanElement(model, encoding);
-  const bytes = buf.subarray(valueOnly ? span.valueStart : span.start, span.end);
-  if (span.descended) return model.rawBytes.length === bytes.length;
-  if (model.rawBytes.equals(bytes)) return true;
+  const from = valueOnly ? span.valueStart : span.start;
+  const length = span.end - from;
+  // The model's bytes, compared where they sit: no view of either is made.
+  const src = elementValueSource(model);
+  const start = elementValueStart(model);
+  const end = elementValueEnd(model);
+  if (span.descended) return end - start === length;
+  if (end - start === length && src.compare(buf, from, span.end, start, end) === 0) return true;
   return (
     valueOnly &&
-    bytes.length === model.rawBytes.length + 1 &&
-    padValue(model.rawBytes, model.vr).equals(bytes)
+    length === end - start + 1 &&
+    padValue(model.rawBytes, model.vr).equals(buf.subarray(from, span.end))
   );
 }
 
@@ -442,14 +478,14 @@ function walkDataSet(
 ): Walked | undefined {
   const stop = definedEnd ?? limit;
   const spans: ElementSpan[] = [];
-  let delimiter: Buffer | undefined;
+  let delimiterAt: number | undefined;
   let p = start;
   while (definedEnd === undefined || p < definedEnd) {
     if (p + MARKER_LENGTH > stop) return undefined;
     const tag = readTagNumber(buf, p, syntax.littleEndian);
     if (isMarker(tag)) {
       if (definedEnd !== undefined || tag !== ITEM_DELIMITATION) return undefined;
-      delimiter = buf.subarray(p, p + MARKER_LENGTH);
+      delimiterAt = p;
       p += MARKER_LENGTH;
       break;
     }
@@ -475,9 +511,11 @@ function walkDataSet(
       if (span.undefinedLength) return undefined;
       closed.push({
         tag: span.tag,
-        start: span.start,
         valueStart: span.valueStart,
-        ...verbatim(buf, span.start, span.end),
+        parts: undefined,
+        changed: false,
+        start: span.start,
+        end: span.end,
       });
     } else if (!agrees(buf, span, syntax.encoding)) {
       return undefined;
@@ -510,11 +548,11 @@ function walkDataSet(
     }
   }
   const moved = ordered.some((span, i) => span.start !== spans[i]?.start);
-  if (!moved && !ordered.some((span) => span.changed)) return verbatim(buf, start, p);
+  if (!moved && !ordered.some((span) => span.changed)) return verbatim(start, p);
   const parts: Buffer[] = [];
-  for (const span of ordered) appendAll(parts, span.parts);
-  if (delimiter !== undefined) parts.push(delimiter);
-  return { parts, changed: true, end: p };
+  for (const span of ordered) pushParts(parts, buf, span);
+  if (delimiterAt !== undefined) parts.push(buf.subarray(delimiterAt, delimiterAt + MARKER_LENGTH));
+  return { parts, changed: true, start, end: p };
 }
 
 /**
@@ -538,7 +576,9 @@ function walkItems(
   if (items === undefined) return undefined;
   const stop = definedEnd ?? limit;
   const le = syntax.littleEndian;
-  const parts: Buffer[] = [];
+  // Each Item's walk, kept until the end decides whether any view is needed.
+  const walkedItems: Walked[] = [];
+  let delimiterAt: number | undefined;
   let changed = false;
   let index = 0;
   let p = start;
@@ -546,7 +586,7 @@ function walkItems(
     if (p + MARKER_LENGTH > stop) return undefined;
     const tag = readTagNumber(buf, p, le);
     if (tag === SEQUENCE_DELIMITATION && definedEnd === undefined) {
-      parts.push(buf.subarray(p, p + MARKER_LENGTH));
+      delimiterAt = p;
       p += MARKER_LENGTH;
       break;
     }
@@ -554,8 +594,7 @@ function walkItems(
     if (tag !== ITEM || model === undefined) return undefined;
     const length = readUint32(buf, p + 4, le);
     const bodyStart = p + MARKER_LENGTH;
-    const placed: PlacedSpan[] = [];
-    const collect = placements !== undefined ? placed : undefined;
+    const collect: PlacedSpan[] | undefined = placements !== undefined ? [] : undefined;
     let item: Walked | undefined;
     if (length === UNDEFINED_LENGTH) {
       item = walkDataSet(buf, bodyStart, undefined, stop, syntax, depth, model, collect);
@@ -563,16 +602,25 @@ function walkItems(
       item = walkDataSet(buf, bodyStart, bodyStart + length, stop, syntax, depth, model, collect);
     }
     if (item === undefined) return undefined;
-    placements?.push({ itemStart: p, elements: placed });
-    parts.push(buf.subarray(p, bodyStart));
-    appendAll(parts, item.parts);
+    if (placements !== undefined && collect !== undefined) {
+      placements.push({ itemStart: p, elements: collect });
+    }
+    walkedItems.push(item);
     changed ||= item.changed;
     p = item.end;
     index += 1;
   }
   if (index !== items.length) return undefined;
-  if (!changed) return verbatim(buf, start, p);
-  return { parts, changed, end: p };
+  if (!changed) return verbatim(start, p);
+  // Every Item keeps its place, so each one's Item header is the 8 bytes before
+  // its body, and its body is its walk.
+  const parts: Buffer[] = [];
+  for (const item of walkedItems) {
+    parts.push(buf.subarray(item.start - MARKER_LENGTH, item.start));
+    pushParts(parts, buf, item);
+  }
+  if (delimiterAt !== undefined) parts.push(buf.subarray(delimiterAt, delimiterAt + MARKER_LENGTH));
+  return { parts, changed, start, end: p };
 }
 
 /**
@@ -608,7 +656,9 @@ function walkSequence(
   );
   if (walked?.end !== raw.length) return undefined;
   if (!walked.changed) return walked;
-  return { parts: [raw.subarray(0, valueStart), ...walked.parts], changed: true, end: raw.length };
+  const parts: Buffer[] = [raw.subarray(0, valueStart)];
+  pushParts(parts, raw, walked);
+  return { parts, changed: true, start: 0, end: raw.length };
 }
 
 /**
@@ -636,7 +686,7 @@ export function emissionOf(el: Element, encoding: BodyEncoding, place = false): 
   const walked = walkSequence(el, syntax, placements);
   if (walked === undefined) return { rawBytes: undefined, closed: valueOnly };
   return {
-    rawBytes: walked.changed ? Buffer.concat(walked.parts) : undefined,
+    rawBytes: walked.changed ? Buffer.concat(walked.parts as readonly Buffer[]) : undefined,
     closed: true,
     ...(placements !== undefined ? { placements } : {}),
   };
