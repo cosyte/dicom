@@ -22,7 +22,7 @@
 import type { Buffer } from "node:buffer";
 
 import type { ParsedDataSet } from "../dataset/compact.js";
-import { _parseExplicit } from "./explicit-le.js";
+import { _parseExplicit, explicitMode } from "./explicit-le.js";
 import type { ParseContext } from "./types.js";
 import type { DicomParseWarning } from "./warnings.js";
 
@@ -42,12 +42,7 @@ export function parseExplicitBE(
   emit: (w: DicomParseWarning) => void,
   opts: { stopOnItemDelim?: boolean } = {},
 ): ParsedDataSet {
-  return _parseExplicit(
-    buffer,
-    datasetStart,
-    ctx,
-    emit,
-    { littleEndian: false, innerStrategy: parseExplicitBE },
-    opts,
-  );
+  return _parseExplicit(buffer, datasetStart, ctx, emit, BE_MODE, opts);
 }
+
+const BE_MODE = explicitMode(false, parseExplicitBE);

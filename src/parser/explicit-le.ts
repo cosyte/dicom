@@ -104,7 +104,7 @@ export function _parseExplicit(
   datasetStart: number,
   ctx: ParseContext,
   emit: (w: DicomParseWarning) => void,
-  mode: { littleEndian: boolean; innerStrategy: InnerParser },
+  mode: ExplicitMode,
   opts: { stopOnItemDelim?: boolean } = {},
 ): ParsedDataSet {
   const cursor = new ByteCursor(buffer, mode.littleEndian, datasetStart);
@@ -202,12 +202,7 @@ export function _parseExplicit(
       const valueStart = cursor.position;
       let seqResult;
       if (length === UNDEFINED_LENGTH) {
-        const seqOpts: ParseSequenceOptions = {
-          explicitLength: undefined,
-          littleEndian: mode.littleEndian,
-          innerStrategy: mode.innerStrategy,
-        };
-        seqResult = parseSequence(buffer, valueStart, ctx, emit, seqOpts);
+        seqResult = parseSequence(buffer, valueStart, ctx, emit, mode.undefinedLengthSequence);
       } else {
         const seqOpts: ParseSequenceOptions = {
           explicitLength: length,
@@ -245,13 +240,7 @@ export function _parseExplicit(
     // Encapsulated pixel data branch: (7FE0,0010) OB undefined-length.
     if (tag === "7FE00010" && vr === "OB" && length === UNDEFINED_LENGTH) {
       const valueStart = cursor.position;
-      const seqOpts: ParseSequenceOptions = {
-        explicitLength: undefined,
-        littleEndian: mode.littleEndian,
-        innerStrategy: mode.innerStrategy,
-        encapsulatedPixelData: true,
-      };
-      const result = parseSequence(buffer, valueStart, ctx, emit, seqOpts);
+      const result = parseSequence(buffer, valueStart, ctx, emit, mode.pixelDataSequence);
       if (!result.delimited) {
         // The stream ran out after its last whole Item with no (FFFE,E0DD), so
         // the fragment list may be short. Declared, never fatal: the metadata
@@ -433,12 +422,40 @@ export function parseExplicitLE(
   emit: (w: DicomParseWarning) => void,
   opts: { stopOnItemDelim?: boolean } = {},
 ): ParsedDataSet {
-  return _parseExplicit(
-    buffer,
-    datasetStart,
-    ctx,
-    emit,
-    { littleEndian: true, innerStrategy: parseExplicitLE },
-    opts,
-  );
+  return _parseExplicit(buffer, datasetStart, ctx, emit, LE_MODE, opts);
 }
+
+/**
+ * What one Explicit VR transfer syntax reads with: its byte order, the reader its Items are read
+ * with, and the options of its undefined-length Sequences and its encapsulated Pixel Data, made once
+ * rather than for every Sequence.
+ *
+ * @internal
+ */
+export interface ExplicitMode {
+  readonly littleEndian: boolean;
+  readonly innerStrategy: InnerParser;
+  readonly undefinedLengthSequence: ParseSequenceOptions;
+  readonly pixelDataSequence: ParseSequenceOptions;
+}
+
+/**
+ * The {@link ExplicitMode} of a byte order and its Item reader.
+ *
+ * @internal
+ */
+export function explicitMode(littleEndian: boolean, innerStrategy: InnerParser): ExplicitMode {
+  return {
+    littleEndian,
+    innerStrategy,
+    undefinedLengthSequence: { explicitLength: undefined, littleEndian, innerStrategy },
+    pixelDataSequence: {
+      explicitLength: undefined,
+      littleEndian,
+      innerStrategy,
+      encapsulatedPixelData: true,
+    },
+  };
+}
+
+const LE_MODE = explicitMode(true, parseExplicitLE);

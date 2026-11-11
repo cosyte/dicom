@@ -240,10 +240,12 @@ export interface ParseOptions {
    */
   readonly onWarning?: OnWarningCallback;
   /**
-   * When `true`, every `Element.rawBytes` is `Buffer.from(slice)` - copying
-   * each value out so the source buffer can be released. When `false` (the
-   * default), `Element.rawBytes` is `Buffer.subarray(slice)` - a zero-copy
-   * view that pins the source ArrayBuffer until every Element is GC'd.
+   * When `true`, nothing parsed holds the source buffer, so it can be
+   * released: the Dataset reads from one copy of it made by the parse, and
+   * every `Element.rawBytes` is a standalone copy of its own value, made the
+   * first time that Element is built. When `false` (the default),
+   * `Element.rawBytes` is a zero-copy `Buffer.subarray` view, and the Dataset
+   * and every Element pin the source ArrayBuffer until they are collected.
    *
    * Omit to use the default.
    */

@@ -105,6 +105,11 @@ type Words = Uint32Array | Float64Array;
 export interface SetWriter {
   /** The scratch row this Data Set's first row is at. */
   readonly mark: number;
+  /** Set when the Data Set closes: see {@link ParsedDataSet}. */
+  first: number;
+  count: number;
+  delta: number;
+  endOffset: number;
   /** The largest tag so far, while the tags ascend. */
   last: number;
   /** `true` while every tag has been larger than the one before it. */
@@ -210,14 +215,14 @@ export class CompactTable {
     if (this.source !== undefined) return;
     this.source = buffer;
     // Positions fit in 32 bits unless the source is 4 GiB or more.
-    const wide = buffer.length + 0x10000 > 0xffffffff;
+    const like: Words =
+      buffer.length + 0x10000 > 0xffffffff ? new Float64Array(0) : new Uint32Array(0);
     const rows = Math.min(Math.max(16, Math.ceil(buffer.length / 24)), 1024);
-    const make = (n: number): Words => (wide ? new Float64Array(n) : new Uint32Array(n));
-    this.rows = make(rows * W);
-    this.scratch = make(rows * W);
-    this.seqs = make(16 * S);
-    this.sets = make(16 * D);
-    this.setScratch = make(16 * D);
+    this.rows = wordsLike(like, rows * W);
+    this.scratch = wordsLike(like, rows * W);
+    this.seqs = wordsLike(like, 16 * S);
+    this.sets = wordsLike(like, 16 * D);
+    this.setScratch = wordsLike(like, 16 * D);
   }
 
   /** Where `buffer`'s byte 0 is in the source. */
@@ -227,7 +232,16 @@ export class CompactTable {
 
   /** Start a Data Set. */
   public openSet(): SetWriter {
-    return { mark: this.top, last: -1, sorted: true, index: undefined };
+    return {
+      mark: this.top,
+      first: 0,
+      count: 0,
+      delta: 0,
+      endOffset: 0,
+      last: -1,
+      sorted: true,
+      index: undefined,
+    };
   }
 
   /** The VR's index, interned in this table when it is not one of the 34. */
@@ -330,7 +344,13 @@ export class CompactTable {
     copyWords(this.scratch, set.mark * W, this.top * W, this.rows, first * W);
     this.rowCount = first + count;
     this.top = set.mark;
-    return { first, count, sorted: set.sorted, delta, endOffset };
+    // The writer becomes the result, so a Data Set costs one object.
+    set.first = first;
+    set.count = count;
+    set.delta = delta;
+    set.endOffset = endOffset;
+    set.index = undefined;
+    return set;
   }
 
   /** Where the Item records of a Sequence about to be read start. */

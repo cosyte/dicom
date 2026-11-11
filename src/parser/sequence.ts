@@ -97,6 +97,9 @@ const SEQ_DELIM_ELEMENT = 0xe0dd;
 
 const UNDEFINED_LENGTH = 0xffffffff;
 
+/** The options an undefined-length Item's Data Set is read with: one object for every Item. */
+const TO_ITEM_DELIMITER = Object.freeze({ stopOnItemDelim: true });
+
 /**
  * Hard cap on SQ nesting depth. Exceeding this throws
  * `DicomParseError(INVALID_FILE_META, 'SQ nesting depth exceeds 64', ...)`.
@@ -308,9 +311,7 @@ export function parseSequence(
       if (itemLength === UNDEFINED_LENGTH) {
         // Undefined-length item - call innerStrategy with stopOnItemDelim;
         // it returns the post-ItemDelim offset.
-        const inner = opts.innerStrategy(buffer, cursor.position, ctx, emit, {
-          stopOnItemDelim: true,
-        });
+        const inner = opts.innerStrategy(buffer, cursor.position, ctx, emit, TO_ITEM_DELIMITER);
         table.addItem(inner, fileOffset);
         cursor.position = inner.endOffset;
       } else {
