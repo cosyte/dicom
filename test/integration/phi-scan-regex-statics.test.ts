@@ -34,7 +34,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, copyFileSy
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { runRepoScript } from "../helpers/run-script.js";
+import { UNDER_DENO, runRepoScript } from "../helpers/run-script.js";
 
 const REPO_ROOT = join(import.meta.dirname, "..", "..");
 const CARET = String.fromCharCode(0x5e);
@@ -131,108 +131,113 @@ function makeCorpus(): { root: string; target: string } {
   return { root, target };
 }
 
-describe("the PHI gate leaves no scan target in V8's legacy RegExp statics", () => {
-  it("reports the token when a regex has matched it, or nothing below is evidence", () => {
-    const dir = mkdtempSync(join(tmpdir(), "dicom-regex-statics-pos-"));
-    roots.push(dir);
-    const report = join(dir, "samples.json");
-    writeFileSync(report, "[]", "utf8");
-    const observer = writeObserver(dir, report);
-    const script = join(dir, "match.cjs");
-    writeFileSync(
-      script,
-      [
-        `const token = ${JSON.stringify(NAME)};`,
-        'const body = "filler ".repeat(1000) + token;',
-        // The caret is escaped: unescaped it is an anchor, the control never matches, and a
-        // control that cannot fire would make every clean reading below meaningless.
-        'const re = new RegExp("[A-Z][A-Za-z]+\\\\" + String.fromCharCode(0x5e) + "[A-Z][A-Za-z]+", "g");',
-        'if (re.exec(body) === null) throw new Error("the positive control did not match");',
-        "",
-      ].join("\n"),
-      "utf8",
-    );
-    const r = spawnSync(process.execPath, ["--require", observer, script], {
-      shell: false,
-      encoding: "utf8",
-    });
-    expect(r.status).toBe(0);
-    const atExit = samplesFrom(report).at(-1) as Sample;
-    expect(atExit.carriers).toContain("input");
-    expect(atExit.carriers).toContain("lastMatch");
-    // The control for the OTHER reading this file takes. `inputLength` is what says whether the
-    // process still holds a subject at all, and a zero from a detector that cannot report a
-    // non-zero would be a gap rather than a clearance.
-    expect(atExit.inputLength).toBeGreaterThan(0);
-  });
-
-  it("leaves no carrier after scanning a target that carries a name and two dates", () => {
-    const { root, target } = makeCorpus();
-    const dir = mkdtempSync(join(tmpdir(), "dicom-regex-statics-run-"));
-    roots.push(dir);
-    const report = join(dir, "samples.json");
-    writeFileSync(report, "[]", "utf8");
-    const observer = writeObserver(dir, report);
-    const r = runRepoScript("phi-scan.ts", ["--max-hit-lines", "0", target], {
-      cwd: root,
-      nodeArgs: ["--require", observer],
-    });
-
-    // Non-vacuity: the scan has to have FOUND the tokens, or it left nothing behind because it
-    // did nothing. Three hits, one per token.
-    expect(r.code).toBe(1);
-    const hitLines = r.stderr.split("\n").filter((l) => l.startsWith("  tag="));
-    expect(hitLines).toHaveLength(3);
-
-    const samples = samplesFrom(report);
-    expect(samples.length).toBeGreaterThan(1);
-    for (const sample of samples) {
-      expect(sample.carriers).toEqual([]);
-    }
-  });
-
-  /**
-   * 🛑 A CLEAN `carriers` COLUMN WAS ALREADY TRUE BEFORE THIS PASS, AND THAT IS WHY THIS CASE READS
-   * `inputLength` INSTEAD.
-   *
-   * The scan route stopped handing target bytes to a pattern one slice earlier, so no PLANTED token
-   * has been reachable from a static since. What stayed reachable was the gate's own configuration,
-   * and the only trace of it in the readings above was a number: every clean column read
-   * `input 3772`, the code-unit length of `scripts/phi-allow-list.txt`. A residual disclosed as a
-   * figure is closed by pinning that figure, so this case asserts the process holds NO subject at
-   * all - on every route that parses a different config file, because they are four different
-   * parsers and closing three of them would still read clean on a fourth.
-   */
-  it("holds no RegExp subject at all, on every route that parses a config file", () => {
-    const { root } = makeCorpus();
-    copyFileSync(join(REPO_ROOT, "phi-scan-overrides.md"), join(root, "phi-scan-overrides.md"));
-    spawnSync("git", ["init", "-q", "."], { cwd: root, shell: false });
-    spawnSync("git", ["add", "-A", "."], { cwd: root, shell: false });
-
-    const routes: { name: string; args: string[]; code: number }[] = [
-      { name: "the allow-list, on a plain run", args: [], code: 1 },
-      { name: "process.argv", args: ["--max-hit-lines", "banana"], code: 2 },
-      { name: "the override log", args: ["--allow-fixture", "test/fixtures/page.txt"], code: 2 },
-      { name: "git's raw records", args: ["--staged"], code: 1 },
-    ];
-
-    for (const route of routes) {
-      const dir = mkdtempSync(join(tmpdir(), "dicom-regex-statics-cfg-"));
+// Skipped under Deno: the observer is preloaded with Node's `--require`, which a Deno child does not
+// take. See `UNDER_DENO` in `test/helpers/run-script.ts`.
+describe.skipIf(UNDER_DENO)(
+  "the PHI gate leaves no scan target in V8's legacy RegExp statics",
+  () => {
+    it("reports the token when a regex has matched it, or nothing below is evidence", () => {
+      const dir = mkdtempSync(join(tmpdir(), "dicom-regex-statics-pos-"));
       roots.push(dir);
       const report = join(dir, "samples.json");
       writeFileSync(report, "[]", "utf8");
       const observer = writeObserver(dir, report);
-      const r = runRepoScript("phi-scan.ts", route.args, {
+      const script = join(dir, "match.cjs");
+      writeFileSync(
+        script,
+        [
+          `const token = ${JSON.stringify(NAME)};`,
+          'const body = "filler ".repeat(1000) + token;',
+          // The caret is escaped: unescaped it is an anchor, the control never matches, and a
+          // control that cannot fire would make every clean reading below meaningless.
+          'const re = new RegExp("[A-Z][A-Za-z]+\\\\" + String.fromCharCode(0x5e) + "[A-Z][A-Za-z]+", "g");',
+          'if (re.exec(body) === null) throw new Error("the positive control did not match");',
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+      const r = spawnSync(process.execPath, ["--require", observer, script], {
+        shell: false,
+        encoding: "utf8",
+      });
+      expect(r.status).toBe(0);
+      const atExit = samplesFrom(report).at(-1) as Sample;
+      expect(atExit.carriers).toContain("input");
+      expect(atExit.carriers).toContain("lastMatch");
+      // The control for the OTHER reading this file takes. `inputLength` is what says whether the
+      // process still holds a subject at all, and a zero from a detector that cannot report a
+      // non-zero would be a gap rather than a clearance.
+      expect(atExit.inputLength).toBeGreaterThan(0);
+    });
+
+    it("leaves no carrier after scanning a target that carries a name and two dates", () => {
+      const { root, target } = makeCorpus();
+      const dir = mkdtempSync(join(tmpdir(), "dicom-regex-statics-run-"));
+      roots.push(dir);
+      const report = join(dir, "samples.json");
+      writeFileSync(report, "[]", "utf8");
+      const observer = writeObserver(dir, report);
+      const r = runRepoScript("phi-scan.ts", ["--max-hit-lines", "0", target], {
         cwd: root,
         nodeArgs: ["--require", observer],
       });
-      // Non-vacuity per route: a run that refused for the wrong reason, or never reached the
-      // parser this route is named for, would leave nothing behind and read as a perfect result.
-      expect(r.code, `${route.name}: ${r.stderr}`).toBe(route.code);
-      for (const sample of samplesFrom(report)) {
-        expect(sample.inputLength, `${route.name} at ${sample.where}`).toBe(0);
-        expect(sample.carriers, route.name).toEqual([]);
+
+      // Non-vacuity: the scan has to have FOUND the tokens, or it left nothing behind because it
+      // did nothing. Three hits, one per token.
+      expect(r.code).toBe(1);
+      const hitLines = r.stderr.split("\n").filter((l) => l.startsWith("  tag="));
+      expect(hitLines).toHaveLength(3);
+
+      const samples = samplesFrom(report);
+      expect(samples.length).toBeGreaterThan(1);
+      for (const sample of samples) {
+        expect(sample.carriers).toEqual([]);
       }
-    }
-  });
-});
+    });
+
+    /**
+     * 🛑 A CLEAN `carriers` COLUMN WAS ALREADY TRUE BEFORE THIS PASS, AND THAT IS WHY THIS CASE READS
+     * `inputLength` INSTEAD.
+     *
+     * The scan route stopped handing target bytes to a pattern one slice earlier, so no PLANTED token
+     * has been reachable from a static since. What stayed reachable was the gate's own configuration,
+     * and the only trace of it in the readings above was a number: every clean column read
+     * `input 3772`, the code-unit length of `scripts/phi-allow-list.txt`. A residual disclosed as a
+     * figure is closed by pinning that figure, so this case asserts the process holds NO subject at
+     * all - on every route that parses a different config file, because they are four different
+     * parsers and closing three of them would still read clean on a fourth.
+     */
+    it("holds no RegExp subject at all, on every route that parses a config file", () => {
+      const { root } = makeCorpus();
+      copyFileSync(join(REPO_ROOT, "phi-scan-overrides.md"), join(root, "phi-scan-overrides.md"));
+      spawnSync("git", ["init", "-q", "."], { cwd: root, shell: false });
+      spawnSync("git", ["add", "-A", "."], { cwd: root, shell: false });
+
+      const routes: { name: string; args: string[]; code: number }[] = [
+        { name: "the allow-list, on a plain run", args: [], code: 1 },
+        { name: "process.argv", args: ["--max-hit-lines", "banana"], code: 2 },
+        { name: "the override log", args: ["--allow-fixture", "test/fixtures/page.txt"], code: 2 },
+        { name: "git's raw records", args: ["--staged"], code: 1 },
+      ];
+
+      for (const route of routes) {
+        const dir = mkdtempSync(join(tmpdir(), "dicom-regex-statics-cfg-"));
+        roots.push(dir);
+        const report = join(dir, "samples.json");
+        writeFileSync(report, "[]", "utf8");
+        const observer = writeObserver(dir, report);
+        const r = runRepoScript("phi-scan.ts", route.args, {
+          cwd: root,
+          nodeArgs: ["--require", observer],
+        });
+        // Non-vacuity per route: a run that refused for the wrong reason, or never reached the
+        // parser this route is named for, would leave nothing behind and read as a perfect result.
+        expect(r.code, `${route.name}: ${r.stderr}`).toBe(route.code);
+        for (const sample of samplesFrom(report)) {
+          expect(sample.inputLength, `${route.name} at ${sample.where}`).toBe(0);
+          expect(sample.carriers, route.name).toEqual([]);
+        }
+      }
+    });
+  },
+);

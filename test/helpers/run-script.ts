@@ -44,6 +44,18 @@
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 
+/**
+ * `true` when this suite runs under Deno, as CI's `deno` job runs it.
+ *
+ * There, `process.execPath` is Deno and no `node` is on PATH, so a child started by
+ * {@link runRepoScript} is Deno too: it does not load `tsx`'s resolver, so
+ * `scripts/generate-annex-e.ts` cannot resolve its `.js` specifier, and it does not take
+ * Node's `--require` or `--expose-gc`, so a preloaded observer never runs. The suites that
+ * depend on either skip under Deno by this flag and run on every Node in the `verify` jobs.
+ * They test this repository's own scripts, not the published package.
+ */
+export const UNDER_DENO = "Deno" in globalThis;
+
 /** `node` strips types natively; `tsx` is for the one script Node cannot resolve. */
 export type ScriptRunner = "node" | "tsx";
 
