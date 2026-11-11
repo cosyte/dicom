@@ -448,15 +448,13 @@ function agrees(buf: Buffer, span: ElementSpan, encoding: BodyEncoding): boolean
   const from = valueOnly ? span.valueStart : span.start;
   const length = span.end - from;
   // The model's bytes, compared with `equals` over views: `compare` with a source range throws
-  // a RangeError under Deno's `node:buffer` on arguments Node accepts. A model whose bytes are a
-  // whole Buffer of their own is compared without a view of it.
+  // a RangeError under Deno's `node:buffer` on arguments Node accepts.
   const src = elementValueSource(model);
   const start = elementValueStart(model);
   const end = elementValueEnd(model);
   if (span.descended) return end - start === length;
-  if (end - start === length) {
-    const own = start === 0 && end === src.length ? src : src.subarray(start, end);
-    if (own.equals(buf.subarray(from, span.end))) return true;
+  if (end - start === length && src.subarray(start, end).equals(buf.subarray(from, span.end))) {
+    return true;
   }
   return (
     valueOnly &&
