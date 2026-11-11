@@ -71,10 +71,22 @@ Buffer.isBuffer(serializeDicom(dataset)); // => true
 | `DeidentifyResult<T>` | What the call returns: `{ dataset, report }`, generic in the dataset type so the parsed type flows through.                                                                          |
 | `AppliedAction`       | What actually happened to one attribute: `removed` (`X`), `emptied` (`Z`), `dummied` (`D`), `uid-remapped` (`U`), `cleaned` (`C`), or `kept`. The resolved outcome, not the table's code. |
 
-`cleaned` is a conservative blank: a zero-length value, or, for a Sequence the Clean Descriptors Option cleans, the
-attribute kept with no Items. So a coded list that Option cleans, such as `(0008,1084)` Admitting Diagnoses Code Sequence,
-keeps no Code Value and no Code Meaning `(0008,0104)`. A Sequence the Clean Structured Content or Clean Graphics Option
-cleans is kept and its Items walked.
+`cleaned` is a conservative blank: a zero-length value, or, for a Sequence, the attribute kept with no Items, at every
+depth. Table E.1-1 gives a Sequence a `C` under three Options, and each of those Sequences is emptied:
+
+- Clean Descriptors: the coded lists, such as `(0008,1084)` Admitting Diagnoses Code Sequence.
+- Clean Structured Content: `(0040,A730)` Content Sequence, `(0040,0555)` Acquisition Context Sequence, `(0040,0610)`
+  Specimen Preparation Sequence and `(0040,B020)` Waveform Annotation Sequence.
+- Clean Graphics: `(0070,0001)` Graphic Annotation Sequence.
+
+So none of them keeps a Code Value, a Code Meaning `(0008,0104)`, a Text Value `(0040,A160)`, or any nested Content Item.
+PS3.15 2026d §E.3.4 asks that "any information encoded in SR Content Items or Acquisition Context or Specimen Preparation
+Sequence Items corresponding to the Attribute information specified to be removed by the Profile and any other Options
+specified shall also be removed", and PS3.15 2026d §E.3.3 asks the same of "any information encoded in graphics, text
+annotations or overlays". Telling an identifying Content Item from a safe one needs the content, and this layer does not
+read it, so it keeps none of them. What the two Options keep that the Basic Profile does not is the Sequence attribute
+itself, with no Items; a structured report or a graphic annotation that must survive de-identification needs a
+de-identifier that reads its content.
 
 An Option is opt-in and each one keeps a class of attribute the Basic Profile would otherwise strip:
 
@@ -330,6 +342,12 @@ These are boundaries, not defects; the full list is on [Known limitations](./lim
   no row in this build's PS3.6 registry and none in Table E.1-1 is removed and recorded without its
   tag (see [Attributes neither table carries](#attributes-neither-table-carries)), so an object from
   a later edition loses its new attributes. There is no switch to keep them in this release.
+- **Clean Structured Content and Clean Graphics keep no content.** Each Sequence those Options
+  clean, `(0040,A730)` Content Sequence, `(0040,0555)` Acquisition Context Sequence, `(0040,0610)`
+  Specimen Preparation Sequence, `(0040,B020)` Waveform Annotation Sequence and `(0070,0001)`
+  Graphic Annotation Sequence, is kept with no Items wherever it sits, and the report says
+  `cleaned`. Not one Content Item, Text Value, Code Meaning or text annotation inside them is kept.
+  The overlay and curve attributes Clean Graphics cleans are kept at zero length.
 - **Conditional Annex E codes collapse to their most protective branch.** There is no IOD Type-1
   analysis here, so where the table's action depends on the object's IOD this run takes the branch
   that removes rather than the one that keeps.

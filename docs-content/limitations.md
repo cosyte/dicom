@@ -284,6 +284,18 @@ structural fact about DICOM that no reader can resolve from the wire.
   is still kept as the source wrote it. Detail:
   [Attributes neither table carries](./deidentification#attributes-neither-table-carries).
 
+- **A Sequence an Option cleans keeps no Items, so Clean Structured Content and Clean Graphics keep
+  no content.** What is kept is exactly this: the Sequence attribute, with no Items, at every depth,
+  reported `cleaned`. That holds for the coded lists Clean Descriptors cleans, for `(0040,A730)`
+  Content Sequence, `(0040,0555)` Acquisition Context Sequence, `(0040,0610)` Specimen Preparation
+  Sequence and `(0040,B020)` Waveform Annotation Sequence under Clean Structured Content, and for
+  `(0070,0001)` Graphic Annotation Sequence under Clean Graphics. No Content Item, Text Value
+  `(0040,A160)`, Code Value or Code Meaning `(0008,0104)` inside them is kept. The cost is that a
+  structured report's content tree and a graphic annotation do not survive, under these Options or
+  without them. Earlier releases walked these lists and kept every attribute in them with no row of
+  its own, Text Value and Code Meaning among them, while the report said `cleaned`. Detail:
+  [The options surface](./deidentification#the-options-surface).
+
 - **A de-identified DICOMDIR is NOT File-set conformant, and the run says so rather than implying
   otherwise.** PS3.15 §E.1.1's group-0004 bullet removes `(0004,xxxx)` from everything that is not a
   DICOMDIR, and this package does that; for an object whose `(0002,0002)` is `1.2.840.10008.1.3.10`

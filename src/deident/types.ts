@@ -77,10 +77,12 @@ export const DEIDENTIFY_OPTIONS: readonly DeidentifyOption[] = Object.freeze([
  * - `uid-remapped` - UID(s) replaced with internally-consistent UIDs (`U`).
  * - `cleaned` - conservatively blanked because a safe similar-meaning value
  *   cannot be synthesised at the metadata layer (`C`; see known limitations):
- *   a zero-length value, or, for a Sequence the Clean Descriptors Option
- *   cleans, the Sequence kept with no Items, so no Code Value or Code Meaning
- *   in those coded lists is kept. A Sequence another Option cleans is kept and
- *   its Items walked.
+ *   a zero-length value, or, for a Sequence, the Sequence kept with no Items,
+ *   at every depth. That covers the coded lists Clean Descriptors cleans, the
+ *   Content, Acquisition Context, Specimen Preparation and Waveform Annotation
+ *   Sequences Clean Structured Content cleans, and the Graphic Annotation
+ *   Sequence Clean Graphics cleans, so no Text Value, Code Value, Code Meaning
+ *   or nested Content Item inside any of them is kept.
  * - `kept` - retained, either by an active Retain option or because the SQ was
  *   kept and its items cleaned recursively.
  *

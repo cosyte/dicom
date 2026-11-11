@@ -210,6 +210,19 @@ const LOAD_BEARING: readonly { part: VendoredPart; clause: string; sentence: str
     clause: "E.3.6",
     sentence: 'shall be added to the Data Set with a Value of "UNMODIFIED"',
   },
+  {
+    // The docs quote this to say why a Sequence Clean Graphics cleans keeps no Item.
+    part: "PS3.15",
+    clause: "E.3.3",
+    sentence: "any information encoded in graphics, text annotations or overlays",
+  },
+  {
+    // The docs quote this to say why a Sequence Clean Structured Content cleans keeps no Item.
+    part: "PS3.15",
+    clause: "E.3.4",
+    sentence:
+      "any information encoded in SR Content Items or Acquisition Context or Specimen Preparation Sequence Items",
+  },
 ];
 
 /** Markdown the gate covers: the npm-visible README plus everything the docs site ships. */
