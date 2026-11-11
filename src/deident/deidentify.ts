@@ -2190,8 +2190,8 @@ function declaredPrivateVr(
  * included. That is over-redaction and it is
  * deliberate here, because the alternative is retaining a value under
  * PS3.15 §E.3.10's "known ... to be safe" that nothing established as safe.
- * **It is NOT the binary-carrier over-declare trade, which was accepted on
- * 2026-08-05** - that decision priced a measured over-declare swallow; this is
+ * **It is NOT the binary-carrier over-declare trade, which was accepted
+ * earlier** - that decision priced a measured over-declare swallow; this is
  * an honest length reached through `RetainSafePrivate`. Returning any of those
  * values to the output needs the content test that separates a nested Data Set
  * from a legitimate binary blob, which is the open question and not a flag.
