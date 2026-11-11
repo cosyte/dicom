@@ -1,22 +1,36 @@
 name: Bench floor
 
-# Records bench/floor.json, the floor the Budgets workflow holds every pull request to: seven
+# Records bench/floor.json, the floor the Budgets workflow holds every pull request to: 21
 # readings of one commit (an A/A set), each of the whole suite on its own GitHub-hosted runner at the
 # lowest Node line the package supports, then `cosyte-bench floor` over them. For each measure the
-# floor keeps the highest of the seven and their spread; a later reading above the highest plus three
-# spreads is a regression.
+# floor keeps the highest of the set and their spread; a later reading above the highest plus three
+# spreads is a regression. 21 rather than the tool's least of seven: the bytes an operation
+# allocates fall on two levels about 3.4% apart, set by which code V8's optimizing compiler, working
+# on a background thread, happened to produce in that process (AGENTS.md, under Benchmarks), and the
+# rarer level came up in 2 of the first 14 readings of one case: at that rate seven readings miss it
+# about a third of the time, and 21 about one time in 25.
 #
-# With a bench/floor.json already on the branch it records with `--from`, so a measure moves only
-# when the new set's whole limit is below the old set's lowest reading: the floor only improves, and
-# not on a lucky set. The new file is printed in the job summary and kept as the `bench-floor`
-# artifact; a person copies it to bench/floor.json in a pull request, and the Budgets workflow
-# judges that pull request against the base branch's floor.
+# With a floor on the base branch (on demand, the branch's own) it records with `--from`, so a
+# measure moves only when the new set's whole limit is below the old set's lowest reading: the floor
+# only improves, and not on a lucky set. The base branch's floor is read from the base commit, never
+# from the pull request's tree. The new file is printed in the job summary and kept as the
+# `bench-floor` artifact; a person copies it to bench/floor.json in a pull request, and the Budgets
+# workflow judges that pull request against the base branch's floor.
+#
+# The gzipped bytes the import loads have no noise, so the floor holds them exactly and `--from`
+# never takes a larger size. A pull request that adds code on purpose records the floor with the
+# `size` input set: every other measure still only improves, and the size is the new set's.
 #
 # On demand, and on a pull request that changes this file. It never judges a number and is never a
 # required check.
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      size:
+        description: Take the gzipped import size from this set, for a change that adds code on purpose
+        type: boolean
+        default: false
   pull_request:
     branches: [main]
     paths:
@@ -37,8 +51,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Seven: the fewest readings `cosyte-bench floor` records from.
-        reading: [1, 2, 3, 4, 5, 6, 7]
+        # 21, so the rarer of the two allocation levels is in the set (see the top of this file).
+        reading: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -93,6 +107,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The base branch's bench/ only, at the base commit: the floor this set may only improve on.
+      - if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          sparse-checkout: bench
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -106,16 +128,33 @@ jobs:
           merge-multiple: true
       - name: Record the floor
         env:
+          EVENT: ${{ github.event_name }}
+          SIZE: ${{ inputs.size }}
           READINGS: ${{ runner.temp }}/readings
           OUT: ${{ runner.temp }}/floor/floor.json
+          FRESH: ${{ runner.temp }}/fresh/floor.json
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$(dirname "${OUT}")"
+          mkdir -p "$(dirname "${OUT}")" "$(dirname "${FRESH}")"
           readings=("${READINGS}"/reading-*.json)
+          prior=bench/floor.json
+          if [ "${EVENT}" = "pull_request" ]; then prior=base/bench/floor.json; fi
           from=()
-          if [ -f bench/floor.json ]; then from=(--from bench/floor.json); fi
+          if [ -f "${prior}" ]; then from=(--from "${prior}"); fi
           pnpm exec cosyte-bench floor "${readings[@]}" --out "${OUT}" "${from[@]}"
+          # A change that adds code on purpose: the gzipped size is the new set's, recorded afresh;
+          # every other measure is the one `--from` kept.
+          if [ "${SIZE}" = "true" ] && [ "${#from[@]}" -gt 0 ]; then
+            pnpm exec cosyte-bench floor "${readings[@]}" --out "${FRESH}"
+            node -e '
+              const fs = require("node:fs");
+              const [out, fresh] = process.argv.slice(1);
+              const floor = JSON.parse(fs.readFileSync(out, "utf8"));
+              floor.import.gzipBytes = JSON.parse(fs.readFileSync(fresh, "utf8")).import.gzipBytes;
+              fs.writeFileSync(out, `${JSON.stringify(floor, null, 2)}\n`);
+            ' "${OUT}" "${FRESH}"
+          fi
           cat "${OUT}"
           {
             echo "### The recorded floor"
