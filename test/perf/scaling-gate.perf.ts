@@ -24,6 +24,7 @@ import { Buffer } from "node:buffer";
 
 import {
   assertScalingGateFires,
+  PERF_CONTRACT,
   scalingGate,
   type ScalingGateOptions,
 } from "@cosyte/test-utils/perf";
@@ -33,16 +34,21 @@ import { readTags } from "../../bench/dicom.bench.mjs";
 import { srDocument, worklistItem } from "../../bench/shapes.mjs";
 import { parseDicom, serializeDicom, type Dataset } from "../../src/index.js";
 
-/** Worklist entries in the count axis's base phase: about 25 ms of reading on a developer machine. */
-const COUNT = 500;
+/**
+ * Worklist entries in the count axis's base phase. Five hundred read in 8.3 ms on a developer
+ * machine, near the twice-the-minimum margin below and under it on a faster runner, so three times
+ * as many.
+ */
+const COUNT = 1_500;
 /** Measurements in the size axis's base SR, about 128 KiB; the scaled phase has 4 times as many. */
 const MEASUREMENTS = 250;
 /**
- * SR documents in each size-axis phase. Four, so the faster reader's base phase stays clear of the
- * contract's 4 ms minimum on a hosted runner, where two came to 3.9 ms; the documents are the same
- * size either way, so the self-check's per-document regression is unchanged.
+ * SR documents in each size-axis phase. Twelve, so every base phase stays well clear of the
+ * contract's 4 ms minimum on the fastest hosted runner: there four documents came to 3.86 ms for the
+ * read and 3.94 ms for the write, so twelve come to about 11.6 ms, near three times the minimum. The
+ * documents are the same size either way, so the self-check's per-document regression is unchanged.
  */
-const DOCUMENTS = 4;
+const DOCUMENTS = 12;
 /** The chunk the regressed copy appends at a time. */
 const CHUNK = 16;
 
@@ -104,6 +110,20 @@ function writeOptions(): ScalingGateOptions<Dataset, Buffer> {
   };
 }
 
+/**
+ * How far over the contract's 4 ms minimum each clean base phase must read. A fixture just over the
+ * minimum on one runner skips on a faster one (four documents read in 3.86 ms on a hosted runner),
+ * so each must hold twice the minimum on the machine it runs on.
+ */
+const PHASE_MARGIN = 2;
+
+/** Both clean base phases, held clear of the minimum with room for a faster runner. */
+function expectRoom(report: ReturnType<typeof assertScalingGateFires>): void {
+  const least = PHASE_MARGIN * PERF_CONTRACT.MIN_PHASE_MS;
+  expect(report.cleanBaseMinMs.count, report.diagnostic).toBeGreaterThanOrEqual(least);
+  expect(report.cleanBaseMinMs.size, report.diagnostic).toBeGreaterThanOrEqual(least);
+}
+
 /** A skip is not a pass: a gate that could not measure says so here, rather than reading green. */
 function expectMeasured(report: ReturnType<typeof scalingGate>): void {
   expect(report.count.status, report.count.diagnostic).toBe("measured");
@@ -121,6 +141,7 @@ describe("the scaling gate: parseDicom", () => {
       equals: sameDataset,
     });
     expect(report.margin).toBeGreaterThan(1);
+    expectRoom(report);
   });
 });
 
@@ -134,6 +155,7 @@ describe("the scaling gate: parseDicom, then read tags", () => {
       regressedParse: (bytes) => readTags(parseDicom(assembleQuadratically(bytes))),
     });
     expect(report.margin).toBeGreaterThan(1);
+    expectRoom(report);
   });
 });
 
@@ -148,5 +170,6 @@ describe("the scaling gate: serializeDicom", () => {
       equals: (a, b) => a.equals(b),
     });
     expect(report.margin).toBeGreaterThan(1);
+    expectRoom(report);
   });
 });
