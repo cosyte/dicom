@@ -75,7 +75,12 @@ const REGISTERED_UNLISTED: Tag = "20000050";
 const UNLISTED_SQ: Tag = "300C0002";
 /** `(0008,1110)` Referenced Study Sequence: listed, `K` under `RetainUIDs`. */
 const LISTED_KEEP_SQ: Tag = "00081110";
-/** `(0040,A730)` Content Sequence: listed, `C` under `CleanStructuredContent`. */
+/** `(0018,100A)` UDI Sequence: listed, `K` under `RetainDeviceIdentity`. */
+const LISTED_OPTION_KEEP_SQ: Tag = "0018100A";
+/**
+ * `(0040,A730)` Content Sequence: listed, `C` under `CleanStructuredContent`. A
+ * `C` keeps a Sequence with no Items, so this one is never descended.
+ */
 const LISTED_CLEAN_SQ: Tag = "0040A730";
 /** A private `SQ` the profile below vouches for, and the creator that reserves its block. */
 const PRIVATE_SQ: Tag = "00091001";
@@ -254,7 +259,7 @@ interface Container {
   readonly tag: Tag;
   readonly retain: readonly DeidentifyOption[];
   /** The Table E.1-1 action the active Option resolves the container to, when it is listed. */
-  readonly listedAs?: "K" | "C";
+  readonly listedAs?: "K";
   readonly privateCarrier: boolean;
 }
 
@@ -273,10 +278,12 @@ const CONTAINERS: readonly Container[] = [
     privateCarrier: false,
   },
   {
-    label: "a listed SQ cleaned under CleanStructuredContent",
-    tag: LISTED_CLEAN_SQ,
-    retain: ["CleanStructuredContent"],
-    listedAs: "C",
+    // The listed SQ another Option keeps. A listed SQ an Option cleans (`C`) used to be this
+    // carrier, until a `C` stopped walking a Sequence's Items; that case is the next `describe`.
+    label: "a listed SQ kept under RetainDeviceIdentity",
+    tag: LISTED_OPTION_KEEP_SQ,
+    retain: ["RetainDeviceIdentity"],
+    listedAs: "K",
     privateCarrier: false,
   },
   {
@@ -336,6 +343,34 @@ describe("AC-2: one and two Sequence Items down", () => {
       const out = serializeDicom(dataset);
       for (const part of NAME_PARTS) expect(carries(out, part), `${c.label}: ${part}`).toBe(true);
     }
+  });
+});
+
+describe("AC-2: inside a listed SQ cleaned under CleanStructuredContent", () => {
+  it("AC-2: omits it at both depths, because the cleaned Sequence keeps no Item at all", () => {
+    expect(annexE(LISTED_CLEAN_SQ)?.optionSet.CleanStructuredContent).toBe("C");
+    const parsed = parseDicom(build(nestedIn(LISTED_CLEAN_SQ, false)));
+    expect(holders(parsed, UNREGISTERED)).toHaveLength(2);
+
+    const { dataset, report } = deidentify(parsed, { retain: ["CleanStructuredContent"] });
+    // The Sequence stays with no Items, so nothing inside it reaches this rule or the output.
+    expect(dataset.get(LISTED_CLEAN_SQ)?.items).toEqual([]);
+    expect(report.attributes.find((a) => a.tag === LISTED_CLEAN_SQ)?.applied).toBe("cleaned");
+    expect(holders(dataset, UNREGISTERED)).toEqual([]);
+    expect(report.unregisteredElementRemovalCount).toBe(0);
+
+    const out = serializeDicom(dataset);
+    expect(holders(parseDicom(out), UNREGISTERED)).toEqual([]);
+    for (const part of NAME_PARTS) expect(carries(out, part), part).toBe(false);
+  });
+
+  it("AC-2: and a registered unlisted attribute in the same place, which a walk would keep, is gone too", () => {
+    const raw = build(containing(LISTED_CLEAN_SQ, false, [leaf(REGISTERED_UNLISTED, "LO")], true));
+    // The control: the payload is in the input's bytes.
+    for (const part of NAME_PARTS) expect(carries(raw, part), part).toBe(true);
+    const { dataset } = deidentify(parseDicom(raw), { retain: ["CleanStructuredContent"] });
+    const out = serializeDicom(dataset);
+    for (const part of NAME_PARTS) expect(carries(out, part), part).toBe(false);
   });
 });
 

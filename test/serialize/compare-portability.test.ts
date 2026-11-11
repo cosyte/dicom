@@ -20,7 +20,7 @@ import { Buffer } from "node:buffer";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { parseDicom, serializeDicom } from "../../src/index.js";
+import { Dataset, Element, parseDicom, serializeDicom } from "../../src/index.js";
 import { buildDicom } from "../helpers/build-dicom.js";
 
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
@@ -114,4 +114,101 @@ describe("serializeDicom without compare over a source range", () => {
       expect(out.equals(expected)).toBe(true);
     });
   }
+});
+
+/**
+ * The comparison covers the whole value, its first byte and its last.
+ *
+ * The writer re-orders the Data Elements inside an Item only when every element's bytes on the
+ * wire are the bytes the model read. Here the model is the reading of one file and the Sequence's
+ * bytes are the same file with exactly one value byte changed, so a comparison whose range starts
+ * one byte late or ends one byte early would call them equal and re-order the Item. It must instead
+ * write the Sequence exactly as given.
+ */
+describe("serializeDicom compares an element's value from its first byte to its last", () => {
+  /** `(0008,1115)` Referenced Series Sequence, and two Code attributes written out of order. */
+  const SEQUENCE = "00081115";
+  const LATER = "00080104";
+  const EARLIER = "00080100";
+  const MEANING = "SYNTHETIC MEANING ";
+
+  function outOfOrder(): Buffer {
+    return buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      elements: [
+        {
+          tag: SEQUENCE,
+          items: [
+            {
+              elements: [
+                { tag: LATER, vr: "LO", value: pad(MEANING) },
+                { tag: EARLIER, vr: "SH", value: pad("C1") },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+  }
+
+  /** Write a Data Set whose Sequence is the file's, with `edit` applied to its bytes alone. */
+  function writeWith(edit: (raw: Buffer, valueAt: number) => void): {
+    given: Buffer;
+    out: Buffer;
+  } {
+    const parsed = parseDicom(outOfOrder());
+    const sq = parsed.get(SEQUENCE);
+    if (sq?.items === undefined) throw new Error("fixture has no Sequence");
+    const raw = Buffer.from(sq.rawBytes);
+    const valueAt = raw.indexOf(Buffer.from(MEANING, "latin1"));
+    expect(valueAt).toBeGreaterThan(0);
+    edit(raw, valueAt);
+    const element = new Element({
+      tag: SEQUENCE,
+      vr: "SQ",
+      vm: sq.items.length,
+      length: raw.length,
+      rawBytes: raw,
+      byteOffset: 0,
+      littleEndian: true,
+      items: sq.items,
+    });
+    const ds = new Dataset({
+      ...(parsed.fileMeta !== undefined ? { fileMeta: parsed.fileMeta } : {}),
+      warnings: [],
+      elements: new Map([[SEQUENCE, element]]),
+    });
+    const written = serializeDicom(ds);
+    // The Sequence is the last thing written.
+    return { given: raw, out: written.subarray(written.length - raw.length) };
+  }
+
+  /** The tags of the one Item in the written Sequence, in written order. */
+  function itemTags(sequenceBytes: Buffer): string[] {
+    const laterAt = sequenceBytes.indexOf(Buffer.from([0x08, 0x00, 0x04, 0x01]));
+    const earlierAt = sequenceBytes.indexOf(Buffer.from([0x08, 0x00, 0x00, 0x01]));
+    expect(laterAt).toBeGreaterThan(0);
+    expect(earlierAt).toBeGreaterThan(0);
+    return laterAt < earlierAt ? [LATER, EARLIER] : [EARLIER, LATER];
+  }
+
+  it("the control: bytes that agree with the model are re-ordered", () => {
+    expect(itemTags(writeWith(() => undefined).out)).toEqual([EARLIER, LATER]);
+  });
+
+  it("sees a change to the value's first byte, and writes the Sequence as given", () => {
+    const { given, out } = writeWith((raw, at) => {
+      raw[at] = 0x58; // "S" becomes "X"
+    });
+    expect(out.equals(given)).toBe(true);
+    expect(itemTags(out)).toEqual([LATER, EARLIER]);
+  });
+
+  it("sees a change to the value's last byte, and writes the Sequence as given", () => {
+    const { given, out } = writeWith((raw, at) => {
+      raw[at + MEANING.length - 1] = 0x58; // the trailing space becomes "X"
+    });
+    expect(out.equals(given)).toBe(true);
+    expect(itemTags(out)).toEqual([LATER, EARLIER]);
+  });
 });
