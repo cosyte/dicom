@@ -7,13 +7,14 @@
 //   pnpm bench:reading --only "parseDicom: CT"
 // A base against head comparison, the base built in another checkout:
 //   pnpm bench:compare --base <base checkout>/dist/index.mjs --head dist/index.mjs
-// The budgets, and the peak memory and single-call time of every size with Pixel Data counted (the
-// reading's peak heap is the V8 heap only, and a Buffer's bytes live outside it):
+// What the budgets read, and the peak memory and single-call time of every size with Pixel Data
+// counted (the reading's peak heap is the V8 heap only, and a Buffer's bytes live outside it):
 //   node bench/budgets.mjs bench-results/reading.json
 //   pnpm bench:profile --out bench-results/profile
-// On a pull request CI runs the comparison in its bench-compare job, and the Bench workflow takes a
-// reading and a profile on a GitHub-hosted runner. Both are advisory: they post their numbers and
-// fail nothing.
+// On every pull request the Budgets workflow takes a reading on a GitHub-hosted runner and judges it
+// against bench/budgets.json and bench/floor.json with `cosyte-bench gate`, and fails on a miss.
+// CI's bench-compare job and the Bench workflow's per-shape readings and profile are advisory: they
+// post their numbers and fail nothing.
 //
 // The suite is handed the module under test rather than importing it, so one file measures both
 // builds. Every input is synthetic and built in code by bench/shapes.mjs: no file is read.

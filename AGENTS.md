@@ -67,13 +67,119 @@ pnpm bench:profile --out bench-results/profile
 A reading reports throughput, latency p50/p95/p99, allocations, peak heap, a long run for leaks,
 and the cold import with its gzip size. Its peak heap is the V8 heap only, so Pixel Data, a Buffer,
 is not in it: `pnpm bench:profile` measures each large size's peak resident memory and single-call
-time in a fresh process, then profiles the hottest paths. `bench/budgets.mjs` judges a dense shape
-on the peak `budgetPeakBytes` from `@cosyte/bench` gives: the highest call's heap and external
-memory, or, for an input under 64 KiB, the median call's above the empty-call floor the reading
-measures, since the probe's own highest call can cost more than 20 times a 1 KiB input. On a
-pull request CI compares the base build with the head at each shape's first size, and
-`.github/workflows/bench.yml` takes a reading and a profile on a hosted runner when `bench/`
-changes. Both are advisory.
+time in a fresh process, then profiles the hottest paths.
+
+### Budgets and the floor
+
+On every pull request `.github/workflows/budgets.yml` takes a reading of the whole suite on a
+GitHub-hosted runner at Node 22 and runs `cosyte-bench gate` against two files, and fails on a miss.
+The `budgets` check is advisory: it is not a required check, and making it one is the owner's
+decision.
+
+- `bench/budgets.json`, the limits we commit to: a peak (`budgetPeakBytes`, heap and external
+  memory, or for an input under 64 KiB the median call above the empty-call floor) under 20 times one
+  input for the worklist item and the SR, and under 3 times for the CT shapes; bytes allocated an
+  operation; bytes a second; a median cold import under 15 ms; and the gzipped bytes the import
+  loads. A change to it is the owner's to approve.
+- `bench/floor.json`, what main measured: 21 readings of one commit by
+  `.github/workflows/bench-floor.yml`, each on its own runner, each case's highest reading and
+  spread. A reading above the highest plus three spreads fails, and so does a floor file looser than
+  the base branch's. To move it, run that workflow and copy its `bench-floor` artifact here; it only
+  improves.
+
+#### Allocation: two levels, and what a budget with room hides
+
+The bytes one operation allocates fall on two levels about 3.4% apart. We have 56 floor readings of
+one source tree, from four A/A sets (Bench floor runs 43109166865, 43110461726, 43113425128 and
+43114865620; no file under `src/` and no benchmark differs between their commits). For
+`serializeDicom: SR, header only`, 1,000 measurements, 54 of them sit at 6,561,124 to 6,572,292
+bytes and two at 6,788,202 and 6,792,222, and 2 of 4 Budgets readings read 6,792,222 (Budgets runs
+43110461576 and 43114865841, its second attempt). At 10,000 measurements 52 sit at 65,571,990 to
+65,588,514 bytes, three at 67,831,014 to 67,845,666, and one at 66,535,250. The gap is about 225
+bytes for every measurement at both sizes.
+
+It is neither a collection inside the measured window nor a buffer growing a step: the reading at
+the higher level measured with no collection in either window, and its external bytes, where the
+written Buffer lives, were the same as at the lower level. It is V8's optimizing compiler. It
+compiles on a background thread, and which code it produces for the writer depends on when that
+compile finishes. Once compiled, a process stays on its level. Measured on a developer machine
+(Node 26), eight processes running the same 100 calls before the same measurement put two at the
+lower level and six at the higher, about 227 KB an operation apart; with
+`--no-concurrent-recompilation` all eight read the same. The tier matters this much: with only the
+mid-tier compiler (`--no-opt`) the same write allocates 7.2 MB, and with no optimizing compiler at
+all 24 MB, so the level is set by the compiled code, not by the writer's own work.
+
+The floor holds the 21 readings of Bench floor run 43113425128 (commit 73c387f), and the higher
+level came up in none of them, at either size. So the floor, recorded at the lower level with a
+spread of about 0.1%, fails a pull request that lands on the higher level, unchanged code included.
+Read such a failure in the job summary: a figure about 3.4% over the floor on a SR write, with
+nothing else over, is this level, not a regression.
+
+Each allocation budget is 1.25 times the highest of the floor's 21 readings, rounded up to three
+significant figures, so the higher level never breaks a budget. The cost is plain: **a real
+allocation regression of 3%, or of anything up to about 25%, passes every allocation budget.** The
+floor still sees one where its spread is small, as it is for most cases, but there a 3% regression
+and the compiler's higher level read the same. Where the floor's spread is large it sees nothing
+either: in one of the 21 readings `parseDicom, then read tags: SR, header only @ 1,000
+measurements, 503 KiB` measured a negative allocation, so that measure's floor spread is 28,349,744
+bytes and only its budget holds it. A small allocation regression is the base against head
+comparison's to find, not the budgets'.
+
+#### How often unchanged code fails
+
+Judged by `cosyte-bench gate` against these two files, 12 of the 38 readings of the same source
+that the floor was not recorded from fail (the 35 of the other three A/A sets and 3 Budgets
+readings). 8 fail on an allocation over the floor: the higher compiler level, and once
+`serializeDicom: SR, header only @ 50 measurements, 26 KiB` at 353,669 bytes against the floor's limit
+of 340,510. 6 fail on a peak over a floor whose spread was 0 to 1,280 bytes, such as
+`parseDicom: CT @ single frame, 514 KiB` at 74,880 bytes against 74,616 in all 21 of the floor's
+readings. A floor recorded from the other 21-reading set (Bench floor run 43114865620) fails the
+same share of the 38 readings it was not recorded from, 12. The floor's limit, the highest reading plus three spreads, comes from
+`@cosyte/bench`; this repository does not change it. Until it does, about one `budgets` run in three
+fails on unchanged code, which is one more reason the check stays advisory.
+
+#### Code size
+
+The gzipped bytes the import loads have no noise, so the floor holds them exactly: 169,927 bytes in
+all 21 readings, against a budget of 170,000. A pull request that adds code on purpose fails the
+`budgets` job on its size. It records the floor again with one command, run by a maintainer on its
+branch:
+
+```sh
+gh workflow run bench-floor.yml --ref <branch> -f size=true
+```
+
+That set takes the gzipped size afresh; every other measure moves only on an improvement, as
+always. Copy the
+`bench-floor` artifact the run keeps to `bench/floor.json`. The job still reports the larger size,
+as a floor raised over the base branch's, and the pull request must say why the size grew. A size
+over the 170,000-byte budget is a budget change, the owner's to approve.
+
+#### What we still miss
+
+The cases still over their peak multiple have no peak limit until they meet it, rather than a
+looser one. Each is the budget figure as a multiple of one input, the lowest to the highest of the
+floor's 21 readings:
+
+| Case                                                                      | Input     | Peak multiple    | Budget |
+| ------------------------------------------------------------------------- | --------- | ---------------- | ------ |
+| parseDicom, then read tags: worklist item @ 1 KiB                         | 1,070 B   | 34.07x to 34.09x | 20x    |
+| parseDicom, then read tags: SR, header only @ 50 measurements, 26 KiB     | 26,586 B  | 34.13x to 36.51x | 20x    |
+| parseDicom, then read tags: SR, header only @ 1,000 measurements, 503 KiB | 515,546 B | 30.59x to 33.39x | 20x    |
+
+The median cold import was 8.587 to 15.469 ms across the 21 readings, and 2 of them were over the
+15 ms budget, by 0.12 and 0.469 ms: the slowest runners still miss it, and the `budgets` job fails
+when one reads it. The budget stays at 15 ms.
+
+`serializeDicom: CT` at a single frame and at 20 frames has no throughput limit: a reading of the
+floor's set skipped each one's throughput (`warmup-unstable`), so the floor keeps no time for it.
+`test/perf/budgets-file.test.ts` holds the two files to the suite and to these lists. `node
+bench/budgets.mjs <reading.json>` prints what the budgets read, every case's multiple beside its raw
+V8 heap; it judges nothing.
+
+On a pull request CI also compares the base build with the head at each shape's first size, and
+`.github/workflows/bench.yml` takes a per-shape reading and a profile when `bench/` changes. Both
+are advisory.
 
 ## Data
 

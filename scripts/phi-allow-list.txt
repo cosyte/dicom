@@ -101,6 +101,12 @@ DATE:70011003
 # identifier has the `YYYYMMDD` shape and the compact-date pass matches it.
 DATE:20170914
 
+# NOT A DATE. `89000912` is a byte count: the peak in bytes of
+# `parseDicom, then read tags: SR, header only @ 10,000 measurements, 4.9 MiB` in bench/floor.json,
+# a measurement of synthetic files on a GitHub-hosted runner. It has the `YYYYMMDD` shape, so the
+# compact-date pass matches it.
+DATE:89000912
+
 # --- Notes ---
 # To add a new synthetic identifier: append a line above and commit.
 # To bypass for one fixture without listing it here: run `pnpm phi-scan -- --allow-fixture <path>`

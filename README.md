@@ -162,6 +162,8 @@ Vendor-quirk fixtures (synthetic or properly de-identified), profile improvement
 
 A contribution has to clear the same gates CI runs: `pnpm lint`, `pnpm typecheck`, `pnpm test` (per-directory coverage floors included), `pnpm run format:check`, `pnpm run check:no-emdash`, and `pnpm phi-scan`. Never open a PR carrying real patient data: every fixture in this repository is synthetic and built in a `.ts` source file, and the PHI scanner reads this README too.
 
+Every pull request is also held to our performance budgets and to the floor `main` measured, by the `budgets` job; [AGENTS.md](https://github.com/cosyte/dicom/blob/main/AGENTS.md#budgets-and-the-floor) says how. The floor holds the gzipped bytes the package loads exactly, so a pull request that adds code on purpose fails that job on its size. It records the floor again, with the new size, by one command a maintainer runs on its branch, `gh workflow run bench-floor.yml --ref <branch> -f size=true`, then copies the `bench-floor` artifact that run keeps to `bench/floor.json`. The job still reports the larger size, as a floor raised over `main`'s, and the pull request says why the size grew.
+
 ## License
 
 [MIT](https://github.com/cosyte/dicom/blob/main/LICENSE), copyright Cosyte LLC. SPDX identifier `MIT`.

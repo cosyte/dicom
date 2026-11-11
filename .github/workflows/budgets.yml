@@ -1,0 +1,110 @@
+name: Budgets
+
+# The performance budgets, enforced: a reading of the pull request's build, judged by
+# `cosyte-bench gate` against bench/budgets.json (the limits we commit to) and bench/floor.json (what
+# the default branch measured, which only improves). The job fails on exit 1, a case over a budget,
+# a measure above the floor's limit, or a floor file looser than the base branch's, and on exit 2,
+# anything a limit names that the reading did not measure: a skip is not a pass.
+#
+# The reading is taken here, in the same job that judges it, on a GitHub-hosted runner at the lowest
+# Node line the package supports: `gate` reads only a GitHub-hosted reading, and trusts what a
+# reading says about its runner only when the job watched it being taken. No reading file comes from
+# the pull request. The base branch's floor is read from the base commit, never from the pull
+# request's tree, which the pull request can change.
+#
+# On every pull request onto main, with no path filter, so it can be a required check (a skipped job
+# satisfies a required check), and on demand. bench/floor.json is recorded by bench-floor.yml.
+# bench.yml's per-shape readings and profile stay advisory.
+
+on:
+  workflow_dispatch: {}
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  budgets:
+    name: budgets
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The base branch's bench/ only, at the base commit, to hold the floor file to it.
+      - if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          sparse-checkout: bench
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      # The lowest Node line the package supports, the one bench-floor.yml recorded the floor on.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Read the whole suite
+        env:
+          COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p bench-results
+          status=0
+          pnpm exec cosyte-bench run --suite bench/dicom.bench.mjs --target dist/index.mjs \
+            --commit "${COMMIT}" \
+            --out bench-results/reading.json \
+            --summary bench-results/reading.md || status=$?
+          # Exit 2 with a results file is a measure the reading skipped, named in it with its typed
+          # reason; the gate below fails on it when a limit names that measure. Anything else is a
+          # reading that failed.
+          if [ "${status}" -eq 2 ] && [ -f bench-results/reading.json ]; then
+            echo "::notice::bench reading: a measure was skipped; its reason is in the results"
+          elif [ "${status}" -ne 0 ]; then
+            exit "${status}"
+          fi
+          pnpm exec cosyte-bench check bench-results/reading.json
+      - name: Judge the reading against the budgets and the floor
+        env:
+          EVENT: ${{ github.event_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=(--no-base-floor)
+          if [ "${EVENT}" = "pull_request" ] && [ -f base/bench/floor.json ]; then
+            base=(--base-floor base/bench/floor.json)
+          fi
+          status=0
+          pnpm exec cosyte-bench gate bench-results/reading.json \
+            --budgets bench/budgets.json --floor bench/floor.json "${base[@]}" \
+            --summary bench-results/gate.md || status=$?
+          if [ -f bench-results/gate.md ]; then cat bench-results/gate.md >> "${GITHUB_STEP_SUMMARY}"; fi
+          exit "${status}"
+      # What the budgets read, every case's multiple of its input beside its raw V8 heap, for a
+      # person; it judges nothing.
+      - name: Summary
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f bench-results/reading.json ]; then exit 0; fi
+          node bench/budgets.mjs bench-results/reading.json --summary bench-results/summary.md
+          { echo; cat bench-results/summary.md; echo; cat bench-results/reading.md; } >> "${GITHUB_STEP_SUMMARY}"
+      - name: Keep the reading
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: budgets-reading
+          path: bench-results/
+          if-no-files-found: warn
+          retention-days: 30

@@ -1,44 +1,22 @@
-// The performance budgets, read from a reading that `pnpm bench:reading --out <file>` wrote:
+// What the performance budgets read, from a reading that `pnpm bench:reading --out <file>` wrote:
 //   node bench/budgets.mjs bench-results/reading.json [--summary <file.md>]
 //
-// Four budgets, each a proposal until the package's numbers show it can be held:
-// - peak memory under 20 times the input for a dense shape (the worklist item and the SR: many small
-//   elements, no Pixel Data), read as @cosyte/bench's `budgetPeakBytes` gives it: the highest call's
-//   heap and external memory together, or, for an input under `BENCH_CONTRACT.FLOOR_INPUT_BYTES`
-//   (64 KiB), the median call's above the empty-call floor, since the probe's own highest call can
-//   cost more than 20 times a 1 KiB input;
-// - peak memory under 3 times the input for a large opaque payload (the CT shapes, whose bytes are
-//   almost all Pixel Data);
-// - a cold import under 15 ms;
-// - throughput, in bytes a second, not falling by more than half from a shape's smallest size to its
-//   largest.
+// It judges nothing. The budgets are bench/budgets.json and the floor is bench/floor.json, and
+// `cosyte-bench gate` judges a reading against both (the Budgets workflow, on every pull request).
+// This prints, for a person, the figures behind them:
+// - every case's peak as a multiple of one input: the raw V8 heap peak, and the figure a peak budget
+//   reads, @cosyte/bench's `budgetPeakBytes` (the highest call's heap and external memory together,
+//   or, for an input under `BENCH_CONTRACT.FLOOR_INPUT_BYTES` (64 KiB), the median call's above the
+//   empty-call floor, since the probe's own highest call can cost more than 20 times a 1 KiB input);
+// - throughput, in bytes a second, from a shape's smallest size to its largest, and how much of it
+//   the largest keeps;
+// - the cold import and the gzipped bytes it loads.
 //
-// The reading's peak heap is the V8 heap only. Pixel Data is a Buffer, outside it, so for the CT
-// shapes the heap row is the header's cost alone, and the opaque budget is read from the resident
-// peak in `pnpm bench:profile`, which counts every byte. Each row also gives the raw peak heap, as
-// a multiple of the input, beside the figure the budget reads.
-//
-// It prints a Markdown table and always exits 0 when it could read the reading: the budgets are
-// advisory, and a finding is a number to act on, not a red check. It exits 2 when it cannot read it.
+// It exits 0 when it could read the reading and 2 when it cannot.
 
 import { readFileSync, writeFileSync } from "node:fs";
 
 import { BENCH_CONTRACT, budgetPeakBytes, readResults } from "@cosyte/bench";
-
-const DENSE_PEAK_MULTIPLE = 20;
-const OPAQUE_PEAK_MULTIPLE = 3;
-const COLD_IMPORT_MS = 15;
-const THROUGHPUT_KEPT = 0.5;
-
-/** The shape a benchmark measures: the text after the operation's name. */
-function shapeOf(benchmark) {
-  const at = benchmark.lastIndexOf(": ");
-  return at === -1 ? benchmark : benchmark.slice(at + 2);
-}
-
-function isOpaque(benchmark) {
-  return shapeOf(benchmark) === "CT";
-}
 
 /** A case's bytes a second, or why there is none. */
 function bytesPerSecond(c) {
@@ -83,39 +61,36 @@ function main(argv) {
   }
   const { cases, importCost } = doc.reading;
   const lines = [
-    "### Budgets",
+    "### What the budgets read",
     "",
-    `Peak heap is the highest call's peak above the settled heap, V8 heap only, over one input's bytes. The budget reads \`budgetPeakBytes\`: the highest call's heap and external memory together, or, for an input under ${mib(BENCH_CONTRACT.FLOOR_INPUT_BYTES)}, the median call's above the empty-call floor (median ${floorMedian(doc.reading)}); it is ${String(DENSE_PEAK_MULTIPLE)} times for a dense shape. The CT rows show the header's heap cost alone: their ${String(OPAQUE_PEAK_MULTIPLE)} times budget counts Pixel Data, and is read from the resident peak in the profile.`,
+    `Peak heap is the highest call's peak above the settled heap, V8 heap only, over one input's bytes. A peak budget reads \`budgetPeakBytes\`: the highest call's heap and external memory together, or, for an input under ${mib(BENCH_CONTRACT.FLOOR_INPUT_BYTES)}, the median call's above the empty-call floor (median ${floorMedian(doc.reading)}). The limits are in bench/budgets.json, and \`cosyte-bench gate\` judges them.`,
     "",
-    "| Benchmark | Size | Input | Peak heap | Heap multiple | Budget figure | Multiple | Budget | Within |",
-    "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    "| Benchmark | Size | Input | Peak heap | Heap multiple | Budget figure | Multiple |",
+    "| --- | --- | --- | --- | --- | --- | --- |",
   ];
   for (const c of cases) {
     if (c.peak === null || c.bytesPerPass === null) continue;
     const perInput = c.bytesPerPass / c.inputsPerPass;
     if (c.peak.status !== "measured") {
       lines.push(
-        `| ${c.benchmark} | ${c.size} | ${mib(perInput)} | skipped (${c.peak.reason}) | n/a | n/a | n/a | | not measured |`,
+        `| ${c.benchmark} | ${c.size} | ${mib(perInput)} | skipped (${c.peak.reason}) | n/a | n/a | n/a |`,
       );
       continue;
     }
     const heapMultiple = c.peak.peakHeapBytes / perInput;
     const figure = budgetPeakBytes(c) ?? c.peak.peakHeapBytes;
     const multiple = figure / perInput;
-    const opaque = isOpaque(c.benchmark);
-    const budget = opaque ? "see profile" : `${String(DENSE_PEAK_MULTIPLE)}x`;
-    const within = opaque ? "n/a" : multiple < DENSE_PEAK_MULTIPLE ? "yes" : "**no**";
     lines.push(
-      `| ${c.benchmark} | ${c.size} | ${mib(perInput)} | ${mib(c.peak.peakHeapBytes)} | ${heapMultiple.toFixed(2)}x | ${mib(figure)} | ${multiple.toFixed(2)}x | ${budget} | ${within} |`,
+      `| ${c.benchmark} | ${c.size} | ${mib(perInput)} | ${mib(c.peak.peakHeapBytes)} | ${heapMultiple.toFixed(2)}x | ${mib(figure)} | ${multiple.toFixed(2)}x |`,
     );
   }
 
   lines.push(
     "",
-    `Throughput from a shape's smallest size to its largest; the budget keeps at least ${String(THROUGHPUT_KEPT * 100)}% of it.`,
+    "Throughput from a shape's smallest size to its largest, and how much of it the largest keeps.",
     "",
-    "| Benchmark | Smallest | Largest | Bytes/s, smallest | Bytes/s, largest | Kept | Within |",
-    "| --- | --- | --- | --- | --- | --- | --- |",
+    "| Benchmark | Smallest | Largest | Bytes/s, smallest | Bytes/s, largest | Kept |",
+    "| --- | --- | --- | --- | --- | --- |",
   );
   const byBenchmark = new Map();
   for (const c of cases) {
@@ -133,13 +108,13 @@ function main(argv) {
       // A skip is not a pass: the row says what could not be measured.
       const cell = (v) => (typeof v === "string" ? v : `${mib(v)}/s`);
       lines.push(
-        `| ${benchmark} | ${first.size} | ${last.size} | ${cell(small)} | ${cell(large)} | n/a | not measured |`,
+        `| ${benchmark} | ${first.size} | ${last.size} | ${cell(small)} | ${cell(large)} | not measured |`,
       );
       continue;
     }
     const kept = large / small;
     lines.push(
-      `| ${benchmark} | ${first.size} | ${last.size} | ${mib(small)}/s | ${mib(large)}/s | ${(kept * 100).toFixed(0)}% | ${kept >= THROUGHPUT_KEPT ? "yes" : "**no**"} |`,
+      `| ${benchmark} | ${first.size} | ${last.size} | ${mib(small)}/s | ${mib(large)}/s | ${(kept * 100).toFixed(0)}% |`,
     );
   }
 
@@ -147,7 +122,7 @@ function main(argv) {
     const own = importCost.medianMs - importCost.emptyMedianMs;
     lines.push(
       "",
-      `Cold import: median ${importCost.medianMs.toFixed(2)} ms, ${own.toFixed(2)} ms above an empty module's ${importCost.emptyMedianMs.toFixed(2)} ms; budget ${String(COLD_IMPORT_MS)} ms: ${importCost.medianMs < COLD_IMPORT_MS ? "within" : "**over**"}. Loaded ${String(importCost.files.length)} file(s), ${mib(importCost.totalBytes)}, ${mib(importCost.totalGzipBytes)} gzipped.`,
+      `Cold import: median ${importCost.medianMs.toFixed(2)} ms, ${own.toFixed(2)} ms above an empty module's ${importCost.emptyMedianMs.toFixed(2)} ms. Loaded ${String(importCost.files.length)} file(s), ${mib(importCost.totalBytes)}, ${mib(importCost.totalGzipBytes)} gzipped.`,
     );
   }
   const text = `${lines.join("\n")}\n`;

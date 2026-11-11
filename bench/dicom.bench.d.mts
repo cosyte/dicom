@@ -8,3 +8,13 @@ import type { Dataset } from "../src/index.js";
  * every depth. Returns how many values it read.
  */
 export declare function readTags(ds: Dataset): number;
+
+/** The suite: every benchmark by its exact name, and every size by its exact label. */
+declare const suite: {
+  readonly name: string;
+  readonly benchmarks: readonly {
+    readonly name: string;
+    readonly sizes: readonly { readonly label: string }[];
+  }[];
+};
+export default suite;

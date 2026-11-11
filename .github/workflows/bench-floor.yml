@@ -1,0 +1,175 @@
+name: Bench floor
+
+# Records bench/floor.json, the floor the Budgets workflow holds every pull request to: 21
+# readings of one commit (an A/A set), each of the whole suite on its own GitHub-hosted runner at the
+# lowest Node line the package supports, then `cosyte-bench floor` over them. For each measure the
+# floor keeps the highest of the set and their spread; a later reading above the highest plus three
+# spreads is a regression. 21 rather than the tool's least of seven: the bytes an operation
+# allocates fall on two levels about 3.4% apart, set by which code V8's optimizing compiler, working
+# on a background thread, happened to produce in that process (AGENTS.md, under Benchmarks), and the
+# readings of the two large SR writes were off the lower level 6 times in 112, so seven readings
+# usually miss the rarer level. 21 can miss it too, as the set bench/floor.json holds did: AGENTS.md
+# says what that costs.
+#
+# With a floor on the base branch (on demand, the branch's own) it records with `--from`, so a
+# measure moves only when the new set's whole limit is below the old set's lowest reading: the floor
+# only improves, and not on a lucky set. The base branch's floor is read from the base commit, never
+# from the pull request's tree. The new file is printed in the job summary and kept as the
+# `bench-floor` artifact; a person copies it to bench/floor.json in a pull request, and the Budgets
+# workflow judges that pull request against the base branch's floor.
+#
+# The gzipped bytes the import loads have no noise, so the floor holds them exactly and `--from`
+# never takes a larger size. A pull request that adds code on purpose records the floor with the
+# `size` input set: every other measure still only improves, and the size is the new set's.
+#
+# On demand, and on a pull request that changes this file. It never judges a number and is never a
+# required check.
+
+on:
+  workflow_dispatch:
+    inputs:
+      size:
+        description: Take the gzipped import size from this set, for a change that adds code on purpose
+        type: boolean
+        default: false
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/bench-floor.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  reading:
+    name: reading ${{ matrix.reading }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # 21, so the rarer of the two allocation levels is in the set (see the top of this file).
+        reading: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      # The lowest Node line the package supports, the one the Budgets workflow reads on: a floor is
+      # compared only within its Node line and runner class.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Read the whole suite
+        env:
+          READING: ${{ matrix.reading }}
+          # Every reading of the set names the same commit: a floor is recorded from one.
+          COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p bench-results
+          status=0
+          pnpm exec cosyte-bench run --suite bench/dicom.bench.mjs --target dist/index.mjs \
+            --commit "${COMMIT}" \
+            --out "bench-results/reading-${READING}.json" \
+            --summary "bench-results/reading-${READING}.md" || status=$?
+          if [ -f "bench-results/reading-${READING}.md" ]; then
+            cat "bench-results/reading-${READING}.md" >> "${GITHUB_STEP_SUMMARY}"
+          fi
+          # Exit 2 with a results file is a measure the reading skipped, named in it with its typed
+          # reason. The floor keeps no limit for a measure any reading of the set skipped.
+          if [ "${status}" -eq 2 ] && [ -f "bench-results/reading-${READING}.json" ]; then
+            echo "::notice::bench reading ${READING}: a measure was skipped; its reason is in the results"
+          elif [ "${status}" -ne 0 ]; then
+            exit "${status}"
+          fi
+          pnpm exec cosyte-bench check "bench-results/reading-${READING}.json"
+      - name: Keep the reading
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bench-floor-reading-${{ matrix.reading }}
+          path: bench-results/
+          if-no-files-found: error
+          retention-days: 30
+
+  floor:
+    needs: reading
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The base branch's bench/ only, at the base commit: the floor this set may only improve on.
+      - if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          sparse-checkout: bench
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: bench-floor-reading-*
+          path: ${{ runner.temp }}/readings
+          merge-multiple: true
+      - name: Record the floor
+        env:
+          EVENT: ${{ github.event_name }}
+          SIZE: ${{ inputs.size }}
+          READINGS: ${{ runner.temp }}/readings
+          OUT: ${{ runner.temp }}/floor/floor.json
+          FRESH: ${{ runner.temp }}/fresh/floor.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$(dirname "${OUT}")" "$(dirname "${FRESH}")"
+          readings=("${READINGS}"/reading-*.json)
+          prior=bench/floor.json
+          if [ "${EVENT}" = "pull_request" ]; then prior=base/bench/floor.json; fi
+          from=()
+          if [ -f "${prior}" ]; then from=(--from "${prior}"); fi
+          pnpm exec cosyte-bench floor "${readings[@]}" --out "${OUT}" "${from[@]}"
+          # A change that adds code on purpose: the gzipped size is the new set's, recorded afresh;
+          # every other measure is the one `--from` kept.
+          if [ "${SIZE}" = "true" ] && [ "${#from[@]}" -gt 0 ]; then
+            pnpm exec cosyte-bench floor "${readings[@]}" --out "${FRESH}"
+            node -e '
+              const fs = require("node:fs");
+              const [out, fresh] = process.argv.slice(1);
+              const floor = JSON.parse(fs.readFileSync(out, "utf8"));
+              floor.import.gzipBytes = JSON.parse(fs.readFileSync(fresh, "utf8")).import.gzipBytes;
+              fs.writeFileSync(out, JSON.stringify(floor, null, 2) + "\n");
+            ' "${OUT}" "${FRESH}"
+          fi
+          cat "${OUT}"
+          {
+            echo "### The recorded floor"
+            echo
+            echo "From ${#readings[@]} readings of one commit. Copy it to bench/floor.json in a pull request."
+            echo
+            echo '```json'
+            cat "${OUT}"
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+      - name: Keep the floor
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bench-floor
+          path: ${{ runner.temp }}/floor/
+          if-no-files-found: error
+          retention-days: 30
