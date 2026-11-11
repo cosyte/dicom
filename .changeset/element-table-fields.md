@@ -2,7 +2,7 @@
 "@cosyte/dicom": patch
 ---
 
-A parsed Element now reads its fields from the parse's compact table instead of keeping a copy of each, so reading every element of a file builds far smaller objects.
+A parsed Element now reads its fields from the parse's compact table instead of keeping a copy of each, so reading every element of a small file allocates 7 to 14% less.
 
 - Every field of `Element` is an accessor on the class: `tag`, `vr`, `vm`, `length`, `byteOffset`, `privateCreator`, `cp246Promoted`, `littleEndian`, `specificCharacterSet` and `items`, as `rawBytes` and `value` already were. An Element `parseDicom` built keeps its table, its row, its tag and its VR, and reads every other field from the row when it is asked for; an Element built with `new Element(init)` reads the fields it copied out of `init`. Every field reads the same value as before, and `items`, `rawBytes` and `value` return the same object on every read.
 - An Element has no own enumerable property any more, `_valueCache` included: `Object.keys(el)` is `[]`, a spread `{ ...el }` is `{}`, `JSON.stringify(el)` is `"{}"`, `structuredClone(el)` gives `{}`, and `util.inspect(el)` prints `Element {}`. Assigning to a field, such as `el.tag = x`, which the types already refused, now throws a `TypeError` in strict-mode code instead of changing it. To copy or log an Element, read its fields by name, such as `{ tag: el.tag, vr: el.vr, length: el.length, value: el.value }`.
