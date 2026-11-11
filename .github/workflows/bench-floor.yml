@@ -7,8 +7,9 @@ name: Bench floor
 # spreads is a regression. 21 rather than the tool's least of seven: the bytes an operation
 # allocates fall on two levels about 3.4% apart, set by which code V8's optimizing compiler, working
 # on a background thread, happened to produce in that process (AGENTS.md, under Benchmarks), and the
-# rarer level came up in 2 of the first 14 readings of one case: at that rate seven readings miss it
-# about a third of the time, and 21 about one time in 25.
+# readings of the two large SR writes were off the lower level 6 times in 112, so seven readings
+# usually miss the rarer level. 21 can miss it too, as the set bench/floor.json holds did: AGENTS.md
+# says what that costs.
 #
 # With a floor on the base branch (on demand, the branch's own) it records with `--from`, so a
 # measure moves only when the new set's whole limit is below the old set's lowest reading: the floor

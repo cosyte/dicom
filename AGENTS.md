@@ -89,11 +89,14 @@ decision.
 
 #### Allocation: two levels, and what a budget with room hides
 
-The bytes one operation allocates fall on two levels about 3.4% apart. For
-`serializeDicom: SR, header only`, 1,000 measurements, the 35 readings of three A/A sets (Bench
-floor runs 43109166865, 43110461726 and 43113425128) sit at 6,563,325 to 6,572,292 bytes, and one Budgets reading of unchanged code read 6,792,222 (Budgets run 43110461576,
-commit 40130a3); at 10,000 measurements the same 35 readings sit at 65,571,990 to 65,586,938 bytes,
-but for two at 67,831,014 and 67,845,666. The gap is about 225 bytes for every measurement at both sizes.
+The bytes one operation allocates fall on two levels about 3.4% apart. We have 56 floor readings of
+one source tree, from four A/A sets (Bench floor runs 43109166865, 43110461726, 43113425128 and
+43114865620; no file under `src/` and no benchmark differs between their commits). For
+`serializeDicom: SR, header only`, 1,000 measurements, 54 of them sit at 6,561,124 to 6,572,292
+bytes and two at 6,788,202 and 6,792,222, and 2 of 4 Budgets readings read 6,792,222 (Budgets runs
+43110461576 and 43114865841, its second attempt). At 10,000 measurements 52 sit at 65,571,990 to
+65,588,514 bytes, three at 67,831,014 to 67,845,666, and one at 66,535,250. The gap is about 225
+bytes for every measurement at both sizes.
 
 It is neither a collection inside the measured window nor a buffer growing a step: the reading at
 the higher level measured with no collection in either window, and its external bytes, where the
@@ -106,12 +109,11 @@ lower level and six at the higher, about 227 KB an operation apart; with
 mid-tier compiler (`--no-opt`) the same write allocates 7.2 MB, and with no optimizing compiler at
 all 24 MB, so the level is set by the compiled code, not by the writer's own work.
 
-The higher level came up in 2 of the first 14 floor readings at 10,000 measurements, in none of the
-21 the floor now holds (Bench floor run 43113425128, commit 73c387f) at either size, and in 1 of the
-first 2 Budgets readings at 1,000. So the floor, recorded at the lower level with a spread of about
-0.1%, fails a pull request that lands on the higher level, unchanged code included. Read such a
-failure in the job summary: a figure about 3.4% over the floor on a SR write, with nothing else
-over, is this level, not a regression.
+The floor holds the 21 readings of Bench floor run 43113425128 (commit 73c387f), and the higher
+level came up in none of them, at either size. So the floor, recorded at the lower level with a
+spread of about 0.1%, fails a pull request that lands on the higher level, unchanged code included.
+Read such a failure in the job summary: a figure about 3.4% over the floor on a SR write, with
+nothing else over, is this level, not a regression.
 
 Each allocation budget is 1.25 times the highest of the floor's 21 readings, rounded up to three
 significant figures, so the higher level never breaks a budget. The cost is plain: **a real
@@ -122,6 +124,19 @@ either: in one of the 21 readings `parseDicom, then read tags: SR, header only @
 measurements, 503 KiB` measured a negative allocation, so that measure's floor spread is 28,349,744
 bytes and only its budget holds it. A small allocation regression is the base against head
 comparison's to find, not the budgets'.
+
+#### How often unchanged code fails
+
+Judged by `cosyte-bench gate` against these two files, 12 of the 38 readings of the same source
+that the floor was not recorded from fail (the 35 of the other three A/A sets and 3 Budgets
+readings). 8 fail on an allocation over the floor: the higher compiler level, and once
+`serializeDicom: SR, header only @ 50 measurements, 26 KiB` at 353,669 bytes against the floor's limit
+of 340,510. 6 fail on a peak over a floor whose spread was 0 to 1,280 bytes, such as
+`parseDicom: CT @ single frame, 514 KiB` at 74,880 bytes against 74,616 in all 21 of the floor's
+readings. A floor recorded from the other 21-reading set (Bench floor run 43114865620) fails the
+same share of the 38 readings it was not recorded from, 12. The floor's limit, the highest reading plus three spreads, comes from
+`@cosyte/bench`; this repository does not change it. Until it does, about one `budgets` run in three
+fails on unchanged code, which is one more reason the check stays advisory.
 
 #### Code size
 
