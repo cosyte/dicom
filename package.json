@@ -17,7 +17,9 @@
     "interoperability",
     "parser",
     "serializer",
-    "typescript"
+    "typescript",
+    "dicom-parser",
+    "dcm"
   ],
   "homepage": "https://docs.cosyte.com/dicom",
   "bugs": {
