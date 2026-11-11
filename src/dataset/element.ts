@@ -91,10 +91,8 @@ export interface ElementRows {
   rowSpecificCharacterSet(row: number): readonly string[] | undefined;
   /** The row's Items, built anew on every call, or `undefined` when it has none. */
   rowItems(row: number): Item[] | undefined;
-  /** Where the row's value starts in `source`, for a Data Set `delta` bytes into it. */
-  rowValueStart(row: number, delta: number): number;
-  /** Where the row's value ends in `source`, for a Data Set `delta` bytes into it. */
-  rowValueEnd(row: number, delta: number): number;
+  /** Where the row's value ends in `source`, given `start`, where it starts. */
+  rowValueEnd(row: number, start: number): number;
 }
 
 /** The fields of an Element built by hand, copied out of its init, less the tag and VR. */
@@ -119,7 +117,7 @@ const OVER_TABLE = OVER_TABLE_MARK as ElementInit;
 let overTable: (
   rows: ElementRows,
   row: number,
-  delta: number,
+  start: number,
   bytes: Buffer | undefined,
 ) => Element;
 let rangeSource: (el: Element) => Buffer;
@@ -173,8 +171,8 @@ export class Element {
   #of: ElementRows | Fields;
   /** The table row, or -1 for an Element built by hand. */
   #row: number;
-  /** Where the Data Set this Element was read in starts in the table's source. */
-  #delta: number;
+  /** Where the value starts in the table's source. */
+  #start: number;
   /** The decoded value, once read. */
   #value: DicomValue | undefined;
   /** The value's bytes once made: given at construction, or made the first time they are read. */
@@ -183,22 +181,21 @@ export class Element {
   #items: readonly Item[] | undefined;
 
   static {
-    overTable = (rows, row, delta, bytes): Element => {
+    overTable = (rows, row, start, bytes): Element => {
       const el = new Element(OVER_TABLE);
       el.#tag = rows.rowTag(row);
       el.#vr = rows.rowVr(row);
       el.#of = rows;
       el.#row = row;
-      el.#delta = delta;
+      el.#start = start;
       el.#rawBytes = bytes;
       return el;
     };
     rangeSource = (el) => el.#rawBytes ?? ((el.#of as ElementRows).source as Buffer);
-    rangeStart = (el) =>
-      el.#rawBytes === undefined ? (el.#of as ElementRows).rowValueStart(el.#row, el.#delta) : 0;
+    rangeStart = (el) => (el.#rawBytes === undefined ? el.#start : 0);
     rangeEnd = (el) =>
       el.#rawBytes === undefined
-        ? (el.#of as ElementRows).rowValueEnd(el.#row, el.#delta)
+        ? (el.#of as ElementRows).rowValueEnd(el.#row, el.#start)
         : el.#rawBytes.length;
   }
 
@@ -214,7 +211,7 @@ export class Element {
     this.#tag = init.tag;
     this.#vr = init.vr;
     this.#row = -1;
-    this.#delta = 0;
+    this.#start = 0;
     this.#value = undefined;
     if (init === OVER_TABLE) {
       this.#of = init as unknown as Fields;
@@ -328,8 +325,8 @@ export class Element {
     if (bytes === undefined) {
       const rows = this.#of as ElementRows;
       bytes = (rows.source as Buffer).subarray(
-        rows.rowValueStart(this.#row, this.#delta),
-        rows.rowValueEnd(this.#row, this.#delta),
+        this.#start,
+        rows.rowValueEnd(this.#row, this.#start),
       );
       this.#rawBytes = bytes;
     }
@@ -357,19 +354,19 @@ export class Element {
 }
 
 /**
- * Build an Element that reads its fields from row `row` of `rows`, read in a Data Set `delta`
- * bytes into the table's source. `bytes`, when given, is its `rawBytes`; otherwise `rawBytes` is
- * the row's range of the source, made into a view the first time it is read.
+ * Build an Element that reads its fields from row `row` of `rows`, its value starting at `start`
+ * in the table's source. `bytes`, when given, is its `rawBytes`; otherwise `rawBytes` is the
+ * row's range of the source, made into a view the first time it is read.
  *
  * @internal
  */
 export function elementOverTable(
   rows: ElementRows,
   row: number,
-  delta: number,
+  start: number,
   bytes: Buffer | undefined,
 ): Element {
-  return overTable(rows, row, delta, bytes);
+  return overTable(rows, row, start, bytes);
 }
 
 /**

@@ -472,16 +472,16 @@ export class CompactTable implements ElementRows {
   public element(set: number, i: number): Element {
     const d = set * D;
     const row = (this.sets[d] as number) + i;
-    const delta = this.sets[d + 2] as number;
+    const o = row * W;
+    const meta = this.rows[o + R_META] as number;
+    const start =
+      (this.rows[o + R_OFFSET] as number) +
+      (this.sets[d + 2] as number) +
+      (START_BYTES[(meta & START_MASK) >> START_SHIFT] as number);
     const bytes = this.copyValues
-      ? copyValueBytes(
-          (this.source as Buffer).subarray(
-            this.rowValueStart(row, delta),
-            this.rowValueEnd(row, delta),
-          ),
-        )
+      ? copyValueBytes((this.source as Buffer).subarray(start, this.rowValueEnd(row, start)))
       : undefined;
-    return elementOverTable(this, row, delta, bytes);
+    return elementOverTable(this, row, start, bytes);
   }
 
   /** The tag of row `row`. */
@@ -548,24 +548,13 @@ export class CompactTable implements ElementRows {
     return this.items(this.seqs[s + 1] as number, this.seqs[s + 2] as number);
   }
 
-  /** Where row `row`'s value starts in the source, for a Data Set `delta` bytes into it. */
-  public rowValueStart(row: number, delta: number): number {
-    const o = row * W;
-    const meta = this.rows[o + R_META] as number;
-    return (
-      (this.rows[o + R_OFFSET] as number) +
-      delta +
-      (START_BYTES[(meta & START_MASK) >> START_SHIFT] as number)
-    );
-  }
-
-  /** Where row `row`'s value ends in the source, for a Data Set `delta` bytes into it. */
-  public rowValueEnd(row: number, delta: number): number {
+  /** Where row `row`'s value ends in the source, given `start`, where it starts. */
+  public rowValueEnd(row: number, start: number): number {
     const o = row * W;
     if (((this.rows[o + R_META] as number) & F_COMPLEX) !== 0) {
       return this.seqs[(this.rows[o + R_AUX] as number) * S] as number;
     }
-    return this.rowValueStart(row, delta) + (this.rows[o + R_LENGTH] as number);
+    return start + (this.rows[o + R_LENGTH] as number);
   }
 
   /** The `count` Items whose Data Set records start at `first`. */
