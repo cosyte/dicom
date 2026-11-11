@@ -191,7 +191,7 @@ fields you care about, such as `{ tag: el.tag, vr: el.vr, value: el.value }`, or
 Reading the fields from the table is what keeps a parsed file small, and it costs time. Measured on
 GitHub runners against the release before it, reading every element of a parsed file allocates 6 to
 14% less on the small shapes, and takes 4.1 to 8.2% longer on a 26 KiB structured report. Writing a
-small file with `serializeDicom` takes 3.1 to 5.4% longer.
+small file with `serializeDicom` takes 3.1 to 5.8% longer.
 
 The same holds for the elements of a parsed `Dataset` or `Item`: they are not own properties, so a
 spread, `JSON.stringify`, `structuredClone` or `util.inspect` of one shows no element. Walk them with
