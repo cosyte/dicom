@@ -845,11 +845,25 @@ interface BuiltEntry {
 
 /**
  * The separators of a `TAG_ROWS` row: fields by `|`, and a row's VRs by `/`. No field may carry a
- * `|`, a line break, or anything that would end or escape the template literal the rows are
- * emitted in, and no VR may carry a `/`. The generator refuses such a field rather than escaping
- * it, so the runtime reader in `src/dictionary/registry.ts` splits rows with no unescaping at all.
+ * `|`, a line break, or anything that would end or escape the string literal the rows are emitted
+ * in, and no VR may carry a `/`. The generator refuses such a field rather than escaping it, so
+ * the runtime reader in `src/dictionary/registry.ts` splits rows with no unescaping at all.
  */
-const ROW_FORBIDDEN = /[|\n\r`\\]|\$\{/u;
+const ROW_FORBIDDEN = /[|\n\r`"\\]|\$\{/u;
+
+/**
+ * A row as it sits in the emitted string literal: every character outside ASCII written as a
+ * `\uXXXX` escape, so the generated module, and the package built from it, is ASCII throughout.
+ * A module with a single character outside ASCII is read by V8 as two-byte text from end to end,
+ * which costs every import; the string's value is the same either way.
+ */
+function asciiRow(row: string): string {
+  return row.replace(/[^\u0000-\u007f]/gu, (c) => {
+    let out = "";
+    for (let k = 0; k < c.length; k++) out += `\\u${c.charCodeAt(k).toString(16).padStart(4, "0")}`;
+    return out;
+  });
+}
 
 function rowField(value: string, what: string, tag: string): string {
   if (ROW_FORBIDDEN.test(value) || (what === "VR" && value.includes("/"))) {
@@ -1010,11 +1024,12 @@ function buildTagsTs(
     ` * \`/\`, VM, \`R\` when retired, and \`x\` for a repeating-group row; fields joined by \`|\`. One\n` +
     ` * string rather than an object literal, so loading the package does not build\n` +
     ` * ${String(entries.length)} objects: \`src/dictionary/registry.ts\` reads a row the first time its\n` +
-    ` * tag is asked for.\n` +
+    ` * tag is asked for. A string literal, one row a line with each line continued, because V8\n` +
+    ` * reads one in about half the time it takes over the same text as a template literal.\n` +
     ` */\n` +
-    `export const TAG_ROWS: string = \`\n` +
-    entries.map((e) => `${e.row}\n`).join("") +
-    `\`;\n`;
+    `export const TAG_ROWS: string =\n  "\\n\\\n` +
+    entries.map((e) => `${asciiRow(e.row)}\\n\\\n`).join("") +
+    `";\n`;
 
   return { ts: tagsTs, tagCount: entries.length, keywordCount: keywordPairs.length, stats };
 }
