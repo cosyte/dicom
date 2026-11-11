@@ -541,11 +541,9 @@ export class CompactTable implements ElementRows {
     return aux === 0 ? undefined : this.charsets[aux - 1];
   }
 
-  /** The Items of row `row`, built anew, or `undefined` when it carries none. */
-  public rowItems(row: number): Item[] | undefined {
-    const o = row * W;
-    if (((this.rows[o + R_META] as number) & F_ITEMS) === 0) return undefined;
-    const s = (this.rows[o + R_AUX] as number) * S;
+  /** The Items of row `row`, built anew. Only a row that carries Items is asked. */
+  public rowItems(row: number): Item[] {
+    const s = (this.rows[row * W + R_AUX] as number) * S;
     return this.items(this.seqs[s + 1] as number, this.seqs[s + 2] as number);
   }
 

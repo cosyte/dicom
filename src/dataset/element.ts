@@ -89,8 +89,8 @@ export interface ElementRows {
   rowCp246Promoted(row: number): true | undefined;
   rowLittleEndian(row: number): boolean;
   rowSpecificCharacterSet(row: number): readonly string[] | undefined;
-  /** The row's Items, built anew on every call, or `undefined` when it has none. */
-  rowItems(row: number): Item[] | undefined;
+  /** The row's Items, built anew on every call. Asked only of a row that carries Items. */
+  rowItems(row: number): Item[];
 }
 
 /** The fields of an Element built by hand, copied out of its init, less the tag and VR. */
