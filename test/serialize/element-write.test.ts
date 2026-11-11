@@ -169,9 +169,9 @@ describe("writeDatasetElement", () => {
 
   it("writes in place of the element's own bytes the bytes it is handed", () => {
     const el = element("00100010", "PN", Buffer.from("DOE^JANE", "latin1"));
-    const other = Buffer.from("ROE^JOHN", "latin1");
+    const other = Buffer.from("DOE^JOHN", "latin1");
     expect(encodeDatasetElement(el, "explicitLE", other).toString("latin1")).toBe(
-      "\u0010\u0000\u0010\u0000PN\u0008\u0000ROE^JOHN",
+      "\u0010\u0000\u0010\u0000PN\u0008\u0000DOE^JOHN",
     );
   });
 
