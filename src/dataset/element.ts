@@ -2,9 +2,9 @@
  * The structural `Element` - leaf wrapper over an on-wire DICOM
  * Data Element.
  *
- * An Element `parseDicom` built reads every field from its row of the parse's compact table
- * (`./compact.ts`), so it holds a reference to that table, its row and little else: each field is
- * an accessor on the class, and an Element has no own enumerable property. An Element built by
+ * An Element `parseDicom` built reads its fields from its row of the parse's compact table
+ * (`./compact.ts`), so it holds that table, its row, its tag and its VR and little else: each field
+ * is an accessor on the class, and an Element has no own enumerable property. An Element built by
  * hand reads the fields it was built with.
  *
  * `rawBytes` is a `Buffer.subarray()` view over the source buffer by default
@@ -97,10 +97,8 @@ export interface ElementRows {
   rowValueEnd(row: number, delta: number): number;
 }
 
-/** The fields of an Element built by hand, copied out of its init. */
+/** The fields of an Element built by hand, copied out of its init, less the tag and VR. */
 interface Fields {
-  readonly tag: Tag;
-  readonly vr: VR;
   readonly vm: number;
   readonly length: number;
   readonly byteOffset: number;
@@ -165,6 +163,12 @@ let rangeEnd: (el: Element) => number;
  * ```
  */
 export class Element {
+  /**
+   * The tag and the VR, kept in the Element rather than read from the row: the decoders and the
+   * writer read them on nearly every step, and keeping them costs 16 bytes an Element.
+   */
+  #tag: Tag;
+  #vr: VR;
   /** The table this Element reads from, or the fields it was built with when `#row` is -1. */
   #of: ElementRows | Fields;
   /** The table row, or -1 for an Element built by hand. */
@@ -181,6 +185,8 @@ export class Element {
   static {
     overTable = (rows, row, delta, bytes): Element => {
       const el = new Element(OVER_TABLE);
+      el.#tag = rows.rowTag(row);
+      el.#vr = rows.rowVr(row);
       el.#of = rows;
       el.#row = row;
       el.#delta = delta;
@@ -205,6 +211,8 @@ export class Element {
    * @internal
    */
   public constructor(init: ElementInit) {
+    this.#tag = init.tag;
+    this.#vr = init.vr;
     this.#row = -1;
     this.#delta = 0;
     this.#value = undefined;
@@ -215,8 +223,6 @@ export class Element {
       return;
     }
     this.#of = {
-      tag: init.tag,
-      vr: init.vr,
       vm: init.vm,
       length: init.length,
       byteOffset: init.byteOffset,
@@ -231,14 +237,12 @@ export class Element {
 
   /** The tag, as 8 uppercase hex digits. */
   public get tag(): Tag {
-    const row = this.#row;
-    return row === -1 ? (this.#of as Fields).tag : (this.#of as ElementRows).rowTag(row);
+    return this.#tag;
   }
 
   /** The VR: as written under Explicit VR, from the dictionary under Implicit VR. */
   public get vr(): VR {
-    const row = this.#row;
-    return row === -1 ? (this.#of as Fields).vr : (this.#of as ElementRows).rowVr(row);
+    return this.#vr;
   }
 
   /** The Value Multiplicity as parsed: 1, the Item count of an `SQ`, or 0. */

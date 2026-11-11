@@ -15,8 +15,8 @@
  * records. The rows sit in typed arrays, outside the V8 heap, at 24 bytes an element.
  *
  * `Dataset.get`, `has`, `elements` and `getAll` read the table and build the `Element` the first
- * time each is asked for, then hand back that same object every time. The Element holds the table
- * and its row number, and reads each field from the row when it is asked for; an `SQ` Element
+ * time each is asked for, then hand back that same object every time. The Element holds the table,
+ * its row number, its tag and its VR, and reads each other field from the row when it is asked for; an `SQ` Element
  * builds its `Item`s the first time they are read, and each `Item` builds its own Elements the
  * same way. What a caller reads is what the eager parse gave: the same tag, VR, VM, length, bytes, byte offset, Private
  * Creator, character set and Items, in the same order, with the same duplicate-tag rule (the
