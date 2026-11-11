@@ -179,8 +179,11 @@ function gb2312Assigned(row: number, cell: number): boolean {
  * supersets, so each set is bounded to the rows and cells its own standard
  * assigns: JIS X 0208 has no row 9 to 15 or 85 to 94 (the `euc-jp` index puts
  * NEC and IBM extensions there), JIS X 0212 ends at row 77, and GB 2312's
- * partial rows are cut by {@link gb2312Assigned}. KS X 1001's unassigned cells
- * decode to U+FFFD or the Private Use Area already.
+ * partial rows are cut by {@link gb2312Assigned}. KS X 1001's row 2 ends at cell
+ * 69 in the edition ISO-IR 149 registers; the WHATWG `euc-kr` index, which Deno
+ * decodes with, goes on past it with characters later editions added, so the row is
+ * cut there. Its other unassigned cells decode to U+FFFD or the Private Use Area
+ * already.
  */
 const DOUBLE_BYTE_SETS: ReadonlyMap<number, DoubleByteSet> = new Map<number, DoubleByteSet>([
   [
@@ -192,7 +195,7 @@ const DOUBLE_BYTE_SETS: ReadonlyMap<number, DoubleByteSet> = new Map<number, Dou
     },
   ],
   [159, { label: "euc-jp", prefix: [0x8f], assigned: (row) => row <= 77 }],
-  [149, { label: "euc-kr", prefix: [], assigned: () => true }],
+  [149, { label: "euc-kr", prefix: [], assigned: (row, cell) => row !== 2 || cell <= 69 }],
   [58, { label: "gb18030", prefix: [], assigned: gb2312Assigned }],
 ]);
 

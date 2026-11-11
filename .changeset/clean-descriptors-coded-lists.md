@@ -18,3 +18,6 @@ The Clean Descriptors Option now empties each coded list it cleans, and `seriali
 of range` from `Buffer.prototype.compare`, which it called with a source range to check an
   element against its source bytes. It now makes that check with `equals`, and CI runs the whole
   test suite under Deno.
+- **ISO-IR 149 under Deno.** KS X 1001's row 2 now ends at cell 69 on every runtime. Deno's
+  `euc-kr` decoder reads characters a later edition added past that cell, so the same bytes
+  decoded to a character under Deno and to U+FFFD under Node; both now give U+FFFD.
