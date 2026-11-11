@@ -37,6 +37,10 @@ jobs:
   #   head build, interleaved on one runner, at each shape's first size. Advisory: it never fails,
   #   so never require it. The large sizes are measured by bench.yml's reading instead.
   #
+  # The `deno` job runs the `test` script under Deno, with Node off PATH, so `serializeDicom` and
+  # the rest of the suite are held to running there. A skipped job satisfies a required check, so
+  # require `ci / deno` only while `run-deno` below stays on.
+  #
   # This caller alone is one release ahead of the others: the release of commit 0be6757a7738 is the
   # first with those two jobs. Its name carries its date, which a PHI scan of a changed file reads
   # as a date of service, so the comment names its commit instead. The other callers move to it
@@ -48,6 +52,7 @@ jobs:
       run-scaling-gate: true
       run-bench-compare: true
       bench-suites: bench/dicom.bench.mjs
+      run-deno: true
 
   # The runnable examples under examples/, checked the way a consumer meets them: each imports
   # `@cosyte/dicom` by name, which resolves through package.json `exports` to the BUILT dist/, so

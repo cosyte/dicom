@@ -65,7 +65,9 @@
  *   most-protective leftmost branch - a Type-1 attribute that strictly needed a
  *   dummy is instead removed/emptied.
  * - `C` (clean) is a conservative blank, not a meaning-preserving structured
- *   replacement (which needs domain context the metadata layer lacks).
+ *   replacement (which needs domain context the metadata layer lacks). On a
+ *   Sequence the Clean Descriptors Option cleans, it keeps the attribute with no
+ *   Items; on a Sequence another Option cleans, it walks the Items.
  * - **A conformant attribute from a PS3.6 edition newer than this build's pin is
  *   removed**, because it has no registry row here and nothing separates it from
  *   an invented one. Over-redaction, deliberate, with no caller switch in this
@@ -238,6 +240,7 @@ import {
 import {
   dummyBytes,
   effectiveCode,
+  effectiveOption,
   remapUidBytes,
   resolveAction,
   uidValueMultiplicity,
@@ -2556,8 +2559,10 @@ function descendSequence(
 /**
  * Apply a resolved action to an `SQ` element (X remove · Z/D empty · else recurse).
  *
- * `C`, `U` and `K` all mean "keep this sequence and clean what is inside it",
- * which is only answerable when the items exist. When they do not, the branch is
+ * A `C` the Clean Descriptors Option resolves keeps the sequence with no items,
+ * and the audit says `cleaned`. Any other `C`, and `U` and `K`, mean "keep this
+ * sequence and clean what is inside it", which is only answerable when the
+ * items exist. When they do not, the branch is
  * the same fail-safe empty as the unlisted case - and, just as importantly, the
  * audit says `emptied`. It used to say `kept` while `descendSequence` quietly
  * rebuilt the element from `el.items ?? []` and produced a zero-item sequence: a
@@ -2583,10 +2588,18 @@ function applySequenceAction(
       out.elements.set(el.tag, rebuildSequence(el, [], ctx.encoding));
       applied = "emptied";
       break;
+    // A `C` from the Clean Descriptors Option is the same conservative blank it is on any other
+    // attribute: the Sequence stays, with no Items. Those Sequences are coded lists, and walking
+    // their Items would keep every attribute in them that has no row of its own, the Code Value
+    // and the free-text Code Meaning `(0008,0104)` among them, under a report that says `cleaned`.
+    // A `C` from another Option still walks the Items.
     case "C":
       if (isUnauditableSequence(el)) {
         emptyUnauditableSequence(el, ctx, contextPath, out);
         applied = "emptied";
+      } else if (effectiveOption(action, ctx.active) === "CleanDescriptors") {
+        out.elements.set(el.tag, rebuildSequence(el, [], ctx.encoding));
+        applied = "cleaned";
       } else {
         out.elements.set(el.tag, descendSequence(el, ctx, contextPath, out, reservationsUsable));
         applied = "cleaned";

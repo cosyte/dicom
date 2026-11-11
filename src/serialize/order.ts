@@ -447,12 +447,17 @@ function agrees(buf: Buffer, span: ElementSpan, encoding: BodyEncoding): boolean
   const valueOnly = !isFullSpanElement(model, encoding);
   const from = valueOnly ? span.valueStart : span.start;
   const length = span.end - from;
-  // The model's bytes, compared where they sit: no view of either is made.
+  // The model's bytes, compared with `equals` over views: `compare` with a source range throws
+  // a RangeError under Deno's `node:buffer` on arguments Node accepts. A model whose bytes are a
+  // whole Buffer of their own is compared without a view of it.
   const src = elementValueSource(model);
   const start = elementValueStart(model);
   const end = elementValueEnd(model);
   if (span.descended) return end - start === length;
-  if (end - start === length && src.compare(buf, from, span.end, start, end) === 0) return true;
+  if (end - start === length) {
+    const own = start === 0 && end === src.length ? src : src.subarray(start, end);
+    if (own.equals(buf.subarray(from, span.end))) return true;
+  }
   return (
     valueOnly &&
     length === end - start + 1 &&

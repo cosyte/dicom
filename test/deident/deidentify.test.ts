@@ -614,15 +614,15 @@ describe("deidentify - sequence actions", () => {
     expect(audit).toMatchObject({ action: "D", applied: "emptied" });
   });
 
-  it("cleans a sequence (C) by recursing, not emptying it", () => {
+  it("cleans a sequence (C) by emptying it: the tag stays, with no items", () => {
     // (0040,0275) Request Attributes Sequence - CleanDescriptors overrides X→C.
     const { dataset, report } = deidentify(seqDataset("00400275"), {
       retain: ["CleanDescriptors"],
     });
-    const item = dataset.get("00400275")?.items?.[0];
-    expect(item).toBeDefined();
-    expect(item?.get("00100010")?.rawBytes.length).toBe(0); // nested PHI de-identified
+    expect(dataset.has("00400275")).toBe(true);
+    expect(dataset.get("00400275")?.items).toEqual([]);
     expect(report.attributes.find((a) => a.tag === "00400275")?.applied).toBe("cleaned");
+    expect(serializeDicom(dataset).includes(Buffer.from("NESTED^PATIENT", "latin1"))).toBe(false);
   });
 
   it("keeps a K-coded sequence but still de-identifies its contents", () => {
