@@ -1,0 +1,27 @@
+{
+  "$schema": "../node_modules/@cosyte/bench/schema/budgets-v1.schema.json",
+  "schemaVersion": 1,
+  "kind": "budgets",
+  "description": "The limits @cosyte/dicom holds its build to, judged by cosyte-bench gate in the Budgets workflow. Peak: 20 times one input for a dense shape (the worklist item and the SR), 3 times for the CT shapes, whose bytes are almost all Pixel Data. The cases still over 20 times are listed with their gap in AGENTS.md, under Benchmarks, and have no peak budget until they meet it.",
+  "rules": [
+    { "benchmark": "parseDicom: worklist item", "peakMultiple": { "small": 20 } },
+    { "benchmark": "serializeDicom: worklist item", "peakMultiple": { "small": 20 } },
+    {
+      "benchmark": "parseDicom: SR, header only",
+      "peakMultiple": { "small": 20, "medium": 20, "large": 20 }
+    },
+    {
+      "benchmark": "parseDicom, then read tags: SR, header only",
+      "size": "10,000 measurements, 4.9 MiB",
+      "peakMultiple": { "large": 20 }
+    },
+    {
+      "benchmark": "serializeDicom: SR, header only",
+      "peakMultiple": { "small": 20, "medium": 20, "large": 20 }
+    },
+    { "benchmark": "parseDicom: CT", "peakMultiple": { "medium": 3, "large": 3 } },
+    { "benchmark": "parseDicom, then read tags: CT", "peakMultiple": { "medium": 3, "large": 3 } },
+    { "benchmark": "serializeDicom: CT", "peakMultiple": { "medium": 3, "large": 3 } }
+  ],
+  "import": { "maxColdImportMs": 15 }
+}
