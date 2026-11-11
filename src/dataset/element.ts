@@ -2,11 +2,15 @@
  * The structural `Element` - leaf wrapper over an on-wire DICOM
  * Data Element.
  *
+ * An Element `parseDicom` built reads every field from its row of the parse's compact table
+ * (`./compact.ts`), so it holds a reference to that table, its row and little else: each field is
+ * an accessor on the class, and an Element has no own enumerable property. An Element built by
+ * hand reads the fields it was built with.
+ *
  * `rawBytes` is a `Buffer.subarray()` view over the source buffer by default
  * (zero-copy), pinning the source ArrayBuffer until every Element is GC'd.
- * The `parseDicom` `{ copyValues: true }` option flips production to
- * `Buffer.from(slice)` so the source can be released; every producer in the
- * parser honours it.
+ * The `parseDicom` `{ copyValues: true }` option makes each `rawBytes` a
+ * standalone copy, so the caller's input can be released.
  *
  * @module
  */
@@ -67,10 +71,59 @@ export interface ElementInit {
 }
 
 /**
- * Hands the parser and the value decoders a way into an Element's private value
- * range, set once by the class's static block. Not exported from the package.
+ * What an Element over a table reads its fields from: one row of the parse's compact table, by
+ * row number. `CompactTable` is the one implementation; it is named here so this module needs no
+ * value from `./compact.ts`.
+ *
+ * @internal
  */
-let setRange: (el: Element, source: Buffer, start: number, end: number) => void;
+export interface ElementRows {
+  /** The buffer every value of the table is a range of. */
+  readonly source: Buffer | undefined;
+  rowTag(row: number): Tag;
+  rowVr(row: number): VR;
+  rowVm(row: number): number;
+  rowLength(row: number): number;
+  rowByteOffset(row: number): number;
+  rowPrivateCreator(row: number): string | undefined;
+  rowCp246Promoted(row: number): true | undefined;
+  rowLittleEndian(row: number): boolean;
+  rowSpecificCharacterSet(row: number): readonly string[] | undefined;
+  /** The row's Items, built anew on every call, or `undefined` when it has none. */
+  rowItems(row: number): Item[] | undefined;
+  /** Where the row's value starts in `source`, for a Data Set `delta` bytes into it. */
+  rowValueStart(row: number, delta: number): number;
+  /** Where the row's value ends in `source`, for a Data Set `delta` bytes into it. */
+  rowValueEnd(row: number, delta: number): number;
+}
+
+/** The fields of an Element built by hand, copied out of its init. */
+interface Fields {
+  readonly tag: Tag;
+  readonly vr: VR;
+  readonly vm: number;
+  readonly length: number;
+  readonly byteOffset: number;
+  readonly privateCreator: string | undefined;
+  readonly cp246Promoted: boolean | undefined;
+  readonly littleEndian: boolean;
+  readonly specificCharacterSet: readonly string[] | undefined;
+}
+
+/** The init the table's factory passes the constructor: it tells it to copy nothing. */
+const OVER_TABLE_MARK: object = {};
+const OVER_TABLE = OVER_TABLE_MARK as ElementInit;
+
+/**
+ * Hands the parser and the value decoders a way into an Element's private state, set once by the
+ * class's static block. Not exported from the package.
+ */
+let overTable: (
+  rows: ElementRows,
+  row: number,
+  delta: number,
+  bytes: Buffer | undefined,
+) => Element;
 let rangeSource: (el: Element) => Buffer;
 let rangeStart: (el: Element) => number;
 let rangeEnd: (el: Element) => number;
@@ -79,12 +132,19 @@ let rangeEnd: (el: Element) => number;
  * One DICOM Data Element as parsed.
  *
  * Structural surface: `tag`, `vr`, `vm`, `length`, `rawBytes`,
- * `byteOffset`, `privateCreator`. On top of it sits a lazy, memoized
- * `.value` getter backed by the VR-aware decoders under `src/dataset/vr/`.
+ * `byteOffset`, `privateCreator`, `littleEndian`, `specificCharacterSet`
+ * and `items`. On top of it sits a lazy, memoized `.value` getter backed by
+ * the VR-aware decoders under `src/dataset/vr/`.
+ *
+ * Every field is an accessor: an Element `parseDicom` built reads it from
+ * the parse's compact table, and one built by hand reads what it was built
+ * with. So an Element has no own enumerable property: `Object.keys`, a
+ * spread, `JSON.stringify` and `structuredClone` of one see no field. Read
+ * the fields by name, such as `{ tag: el.tag, vr: el.vr }`, to copy them.
  *
  * `rawBytes` retention behaviour: zero-copy `Buffer.subarray` view by
  * default (pins source ArrayBuffer); pass `{ copyValues: true }` to
- * `parseDicom` for `Buffer.from(slice)` per element when the source
+ * `parseDicom` for a standalone copy per element when the source
  * needs to be released.
  *
  * @example
@@ -105,12 +165,110 @@ let rangeEnd: (el: Element) => number;
  * ```
  */
 export class Element {
-  public readonly tag: Tag;
-  public readonly vr: VR;
-  public readonly vm: number;
-  public readonly length: number;
-  public readonly byteOffset: number;
-  public readonly privateCreator: string | undefined;
+  /** The table this Element reads from, or the fields it was built with when `#row` is -1. */
+  #of: ElementRows | Fields;
+  /** The table row, or -1 for an Element built by hand. */
+  #row: number;
+  /** Where the Data Set this Element was read in starts in the table's source. */
+  #delta: number;
+  /** The decoded value, once read. */
+  #value: DicomValue | undefined;
+  /** The value's bytes once made: given at construction, or made the first time they are read. */
+  #rawBytes: Buffer | undefined;
+  /** The Items: given at construction, or built the first time they are read. */
+  #items: readonly Item[] | undefined;
+
+  static {
+    overTable = (rows, row, delta, bytes): Element => {
+      const el = new Element(OVER_TABLE);
+      el.#of = rows;
+      el.#row = row;
+      el.#delta = delta;
+      el.#rawBytes = bytes;
+      return el;
+    };
+    rangeSource = (el) => el.#rawBytes ?? ((el.#of as ElementRows).source as Buffer);
+    rangeStart = (el) =>
+      el.#rawBytes === undefined ? (el.#of as ElementRows).rowValueStart(el.#row, el.#delta) : 0;
+    rangeEnd = (el) =>
+      el.#rawBytes === undefined
+        ? (el.#of as ElementRows).rowValueEnd(el.#row, el.#delta)
+        : el.#rawBytes.length;
+  }
+
+  /**
+   * Construct a new structural `Element`. The parser builds these directly
+   * from on-wire bytes; consumers receive them via `Dataset` after
+   * `parseDicom`. The fields are copied out of `init`, so a later change to
+   * it is not seen.
+   *
+   * @internal
+   */
+  public constructor(init: ElementInit) {
+    this.#row = -1;
+    this.#delta = 0;
+    this.#value = undefined;
+    if (init === OVER_TABLE) {
+      this.#of = init as unknown as Fields;
+      this.#rawBytes = undefined;
+      this.#items = undefined;
+      return;
+    }
+    this.#of = {
+      tag: init.tag,
+      vr: init.vr,
+      vm: init.vm,
+      length: init.length,
+      byteOffset: init.byteOffset,
+      privateCreator: init.privateCreator,
+      cp246Promoted: init.cp246Promoted,
+      littleEndian: init.littleEndian,
+      specificCharacterSet: init.specificCharacterSet,
+    };
+    this.#rawBytes = init.rawBytes;
+    this.#items = init.items;
+  }
+
+  /** The tag, as 8 uppercase hex digits. */
+  public get tag(): Tag {
+    const row = this.#row;
+    return row === -1 ? (this.#of as Fields).tag : (this.#of as ElementRows).rowTag(row);
+  }
+
+  /** The VR: as written under Explicit VR, from the dictionary under Implicit VR. */
+  public get vr(): VR {
+    const row = this.#row;
+    return row === -1 ? (this.#of as Fields).vr : (this.#of as ElementRows).rowVr(row);
+  }
+
+  /** The Value Multiplicity as parsed: 1, the Item count of an `SQ`, or 0. */
+  public get vm(): number {
+    const row = this.#row;
+    return row === -1 ? (this.#of as Fields).vm : (this.#of as ElementRows).rowVm(row);
+  }
+
+  /** The declared Value Length, `0xFFFFFFFF` for undefined length. */
+  public get length(): number {
+    const row = this.#row;
+    return row === -1 ? (this.#of as Fields).length : (this.#of as ElementRows).rowLength(row);
+  }
+
+  /** Where the element's header starts, in the Data Set it was read in. */
+  public get byteOffset(): number {
+    const row = this.#row;
+    return row === -1
+      ? (this.#of as Fields).byteOffset
+      : (this.#of as ElementRows).rowByteOffset(row);
+  }
+
+  /** The Private Creator that reserved this private element's block, or `undefined`. */
+  public get privateCreator(): string | undefined {
+    const row = this.#row;
+    return row === -1
+      ? (this.#of as Fields).privateCreator
+      : (this.#of as ElementRows).rowPrivateCreator(row);
+  }
+
   /**
    * Hint for the lazy SQ decoder. `true` when this Element was promoted
    * from `VR=UN` with undefined length to `VR=SQ` via the CP-246 fallback,
@@ -119,59 +277,40 @@ export class Element {
    *
    * @internal
    */
-  public readonly cp246Promoted: boolean | undefined;
+  public get cp246Promoted(): boolean | undefined {
+    const row = this.#row;
+    return row === -1
+      ? (this.#of as Fields).cp246Promoted
+      : (this.#of as ElementRows).rowCp246Promoted(row);
+  }
+
   /** Value byte order (per transfer syntax). See {@link ElementInit.littleEndian}. */
-  public readonly littleEndian: boolean;
+  public get littleEndian(): boolean {
+    const row = this.#row;
+    return row === -1
+      ? (this.#of as Fields).littleEndian
+      : (this.#of as ElementRows).rowLittleEndian(row);
+  }
+
   /** In-effect `(0008,0005)` terms, or `undefined` for the Default Repertoire. */
-  public readonly specificCharacterSet: readonly string[] | undefined;
-  /** Parsed items for an `SQ` element; `undefined` otherwise. */
-  public readonly items: readonly Item[] | undefined;
-
-  /** Lazily-decoded, memoized {@link DicomValue}. */
-  private _valueCache: DicomValue | undefined;
-
-  /**
-   * The value's bytes once made: given at construction, or the view of
-   * `#source` made the first time `rawBytes` is read. ECMAScript private, so
-   * the source buffer never shows in `Object.keys`, a spread or a JSON dump.
-   */
-  #rawBytes: Buffer | undefined;
-  /** The buffer the value is a range of, until `rawBytes` makes its view. */
-  #source: Buffer | undefined;
-  #start = 0;
-  #end = 0;
-
-  static {
-    setRange = (el, source, start, end): void => {
-      el.#rawBytes = undefined;
-      el.#source = source;
-      el.#start = start;
-      el.#end = end;
-    };
-    rangeSource = (el) => el.#rawBytes ?? (el.#source as Buffer);
-    rangeStart = (el) => (el.#rawBytes === undefined ? el.#start : 0);
-    rangeEnd = (el) => (el.#rawBytes === undefined ? el.#end : el.#rawBytes.length);
+  public get specificCharacterSet(): readonly string[] | undefined {
+    const row = this.#row;
+    return row === -1
+      ? (this.#of as Fields).specificCharacterSet
+      : (this.#of as ElementRows).rowSpecificCharacterSet(row);
   }
 
   /**
-   * Construct a new structural `Element`. The parser builds these directly
-   * from on-wire bytes; consumers receive them via `Dataset` after
-   * `parseDicom`.
-   *
-   * @internal
+   * Parsed items for an `SQ` element; `undefined` otherwise. Built the first
+   * time they are read, and the same array of the same Items every time after.
    */
-  public constructor(init: ElementInit) {
-    this.tag = init.tag;
-    this.vr = init.vr;
-    this.vm = init.vm;
-    this.length = init.length;
-    this.#rawBytes = init.rawBytes;
-    this.byteOffset = init.byteOffset;
-    this.privateCreator = init.privateCreator;
-    this.cp246Promoted = init.cp246Promoted;
-    this.littleEndian = init.littleEndian;
-    this.specificCharacterSet = init.specificCharacterSet;
-    this.items = init.items;
+  public get items(): readonly Item[] | undefined {
+    let items = this.#items;
+    if (items === undefined && this.#row !== -1) {
+      items = (this.#of as ElementRows).rowItems(this.#row);
+      this.#items = items;
+    }
+    return items;
   }
 
   /**
@@ -183,9 +322,12 @@ export class Element {
   public get rawBytes(): Buffer {
     let bytes = this.#rawBytes;
     if (bytes === undefined) {
-      bytes = (this.#source as Buffer).subarray(this.#start, this.#end);
+      const rows = this.#of as ElementRows;
+      bytes = (rows.source as Buffer).subarray(
+        rows.rowValueStart(this.#row, this.#delta),
+        rows.rowValueEnd(this.#row, this.#delta),
+      );
       this.#rawBytes = bytes;
-      this.#source = undefined;
     }
     return bytes;
   }
@@ -206,32 +348,28 @@ export class Element {
    * ```
    */
   public get value(): DicomValue {
-    return (this._valueCache ??= decodeElementValue(this));
+    return (this.#value ??= decodeElementValue(this));
   }
 }
 
 /**
- * Build an Element whose `rawBytes` is the range `start` to `end` of `source`,
- * made into a view only when it is first read. `init.rawBytes` is ignored, and
- * may be absent.
- * What a caller reads is exactly what an Element built with
- * `rawBytes: source.subarray(start, end)` gives.
+ * Build an Element that reads its fields from row `row` of `rows`, read in a Data Set `delta`
+ * bytes into the table's source. `bytes`, when given, is its `rawBytes`; otherwise `rawBytes` is
+ * the row's range of the source, made into a view the first time it is read.
  *
  * @internal
  */
-export function elementOverRange(
-  init: ElementInit,
-  source: Buffer,
-  start: number,
-  end: number,
+export function elementOverTable(
+  rows: ElementRows,
+  row: number,
+  delta: number,
+  bytes: Buffer | undefined,
 ): Element {
-  const el = new Element(init);
-  setRange(el, source, start, end);
-  return el;
+  return overTable(rows, row, delta, bytes);
 }
 
 /**
- * The buffer an Element's value bytes sit in: the source until `rawBytes` is
+ * The buffer an Element's value bytes sit in: the table's source until `rawBytes` is
  * read, then `rawBytes` itself. Read the value from
  * {@link elementValueStart} to {@link elementValueEnd} of it.
  *
@@ -257,29 +395,29 @@ export function elementValueEnd(el: Element): number {
  * A hidden class past an object's first field is reachable only from the objects that use it, so
  * once a collection finds no live instance it drops the chain, and the next instance built pays to
  * make every one of them again: 1 to 2 KiB a field, measured, which after a collection
- * outweighs the parse of a small file. These instances hold the chain. They are built with the
- * field kinds a parse stores (a number or nothing, a string or nothing, an object or nothing), so
- * later instances share their hidden classes rather than branching from them.
+ * outweighs the parse of a small file. These instances hold the chain, and that of the fields
+ * object an Element built by hand keeps. They are built with the field kinds a build stores (a
+ * number or nothing, a string or nothing, an object or nothing), so later instances share their
+ * hidden classes rather than branching from them. An Element over a table is kept beside the
+ * table's own, in `TABLE_SHAPES` in `./compact.ts`.
  */
 export const ELEMENT_SHAPES: readonly Element[] = (() => {
   const empty = Buffer.alloc(0);
-  const blank = {
+  const blank: ElementInit = {
     tag: "",
     vr: "UN",
-    vm: undefined,
-    length: undefined,
-    rawBytes: undefined,
-    byteOffset: undefined,
-    privateCreator: undefined,
-    cp246Promoted: undefined,
+    vm: 0,
+    length: 0,
+    rawBytes: empty,
+    byteOffset: 0,
     littleEndian: true,
-    specificCharacterSet: undefined,
-    items: undefined,
-  } as unknown as ElementInit;
-  const set = { ...blank, vm: 0, length: 0, byteOffset: 0, privateCreator: "", items: [] };
-  const a = elementOverRange(blank, empty, 0, 0);
-  const b = elementOverRange(set, empty, 0, 0);
-  const c = new Element({ ...set, rawBytes: empty, cp246Promoted: true, specificCharacterSet: [] });
-  void a.rawBytes;
-  return [a, b, c];
+  };
+  const full: ElementInit = {
+    ...blank,
+    privateCreator: "",
+    cp246Promoted: true,
+    specificCharacterSet: [],
+    items: [],
+  };
+  return [new Element(blank), new Element(full)];
 })();

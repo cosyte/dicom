@@ -15,9 +15,10 @@
  * records. The rows sit in typed arrays, outside the V8 heap, at 24 bytes an element.
  *
  * `Dataset.get`, `has`, `elements` and `getAll` read the table and build the `Element` the first
- * time each is asked for, then hand back that same object every time; an `SQ` Element builds its
- * `Item`s when it is built, and each `Item` builds its own Elements the same way. What a caller
- * reads is what the eager parse gave: the same tag, VR, VM, length, bytes, byte offset, Private
+ * time each is asked for, then hand back that same object every time. The Element holds the table
+ * and its row number, and reads each field from the row when it is asked for; an `SQ` Element
+ * builds its `Item`s the first time they are read, and each `Item` builds its own Elements the
+ * same way. What a caller reads is what the eager parse gave: the same tag, VR, VM, length, bytes, byte offset, Private
  * Creator, character set and Items, in the same order, with the same duplicate-tag rule (the
  * first position, the last value).
  *
@@ -33,7 +34,7 @@ import { KNOWN_VRS } from "../parser/endian.js";
 import type { ParseContext } from "../parser/types.js";
 import { tagOf } from "../parser/wire-tokens.js";
 import { DATASET_SHAPES, datasetOverTable } from "./dataset.js";
-import { Element, elementOverRange, type ElementInit } from "./element.js";
+import { type Element, elementOverTable, type ElementRows } from "./element.js";
 import { ITEM_SHAPES, Item } from "./item.js";
 
 /** Words in one element row. */
@@ -164,7 +165,7 @@ function copyWords(src: Words, from: number, to: number, dst: Words, at: number)
  *
  * @internal
  */
-export class CompactTable {
+export class CompactTable implements ElementRows {
   /** The buffer every value is a range of: the input, the inflated Data Set, or a private copy. */
   public source: Buffer | undefined;
   /** `true` when every `rawBytes` is a copy (`{ copyValues: true }`). */
@@ -464,65 +465,107 @@ export class CompactTable {
     );
   }
 
-  /** Build element `i` of Data Set `set`. */
+  /**
+   * Build element `i` of Data Set `set`: an Element that reads its fields from the row. Under
+   * `{ copyValues: true }` its `rawBytes` is a copy made now.
+   */
   public element(set: number, i: number): Element {
     const d = set * D;
     const row = (this.sets[d] as number) + i;
     const delta = this.sets[d + 2] as number;
-    const rows = this.rows;
+    const bytes = this.copyValues
+      ? copyValueBytes(
+          (this.source as Buffer).subarray(
+            this.rowValueStart(row, delta),
+            this.rowValueEnd(row, delta),
+          ),
+        )
+      : undefined;
+    return elementOverTable(this, row, delta, bytes);
+  }
+
+  /** The tag of row `row`. */
+  public rowTag(row: number): Tag {
+    const tag = this.rows[row * W + R_TAG] as number;
+    return tagOf(tag >>> 16, tag & 0xffff);
+  }
+
+  /** The VR of row `row`. */
+  public rowVr(row: number): VR {
+    const at = (this.rows[row * W + R_META] as number) & VR_MASK;
+    return at < EXTRA_VR_BASE
+      ? (KNOWN_VR_LIST[at] as VR)
+      : (this.extraVrs[at - EXTRA_VR_BASE] as VR);
+  }
+
+  /** The VM of row `row`: 1 for a plain element, its Item count for one with Items, else 0. */
+  public rowVm(row: number): number {
+    const meta = this.rows[row * W + R_META] as number;
+    if ((meta & F_COMPLEX) === 0) return 1;
+    if ((meta & F_ITEMS) === 0) return 0;
+    return this.seqs[(this.rows[row * W + R_AUX] as number) * S + 2] as number;
+  }
+
+  /** The declared Value Length of row `row`. */
+  public rowLength(row: number): number {
+    return this.rows[row * W + R_LENGTH] as number;
+  }
+
+  /** The byte offset of row `row`, in the frame its Data Set was read in. */
+  public rowByteOffset(row: number): number {
+    return this.rows[row * W + R_OFFSET] as number;
+  }
+
+  /** The Private Creator of row `row`, or `undefined`. */
+  public rowPrivateCreator(row: number): string | undefined {
+    const creator = this.rows[row * W + R_CREATOR] as number;
+    return creator === 0 ? undefined : this.creators[creator - 1];
+  }
+
+  /** `true` when row `row` was promoted from `UN` to `SQ` (CP-246), else `undefined`. */
+  public rowCp246Promoted(row: number): true | undefined {
+    return ((this.rows[row * W + R_META] as number) & F_CP246) !== 0 ? true : undefined;
+  }
+
+  /** `true` when row `row`'s value bytes are little endian. */
+  public rowLittleEndian(row: number): boolean {
+    return ((this.rows[row * W + R_META] as number) & F_LITTLE_ENDIAN) !== 0;
+  }
+
+  /** The Specific Character Set terms in effect for row `row`, the very list the parse held. */
+  public rowSpecificCharacterSet(row: number): readonly string[] | undefined {
     const o = row * W;
-    const tagNumber = rows[o + R_TAG] as number;
-    const length = rows[o + R_LENGTH] as number;
-    const byteOffset = rows[o + R_OFFSET] as number;
-    const meta = rows[o + R_META] as number;
-    const aux = rows[o + R_AUX] as number;
-    const creator = rows[o + R_CREATOR] as number;
+    if (((this.rows[o + R_META] as number) & F_COMPLEX) !== 0) return undefined;
+    const aux = this.rows[o + R_AUX] as number;
+    return aux === 0 ? undefined : this.charsets[aux - 1];
+  }
 
-    const vrAt = meta & VR_MASK;
-    const vr =
-      vrAt < EXTRA_VR_BASE
-        ? (KNOWN_VR_LIST[vrAt] as VR)
-        : (this.extraVrs[vrAt - EXTRA_VR_BASE] as VR);
-    const start = byteOffset + delta + (START_BYTES[(meta & START_MASK) >> START_SHIFT] as number);
-    let end: number;
-    let vm: number;
-    let items: Item[] | undefined;
-    let charset: readonly string[] | undefined;
-    if ((meta & F_COMPLEX) !== 0) {
-      const s = aux * S;
-      end = this.seqs[s] as number;
-      if ((meta & F_ITEMS) !== 0) {
-        const itemFirst = this.seqs[s + 1] as number;
-        const itemCount = this.seqs[s + 2] as number;
-        items = this.items(itemFirst, itemCount);
-        vm = itemCount;
-      } else {
-        vm = 0;
-      }
-    } else {
-      end = start + length;
-      vm = 1;
-      charset = aux === 0 ? undefined : this.charsets[aux - 1];
-    }
+  /** The Items of row `row`, built anew, or `undefined` when it carries none. */
+  public rowItems(row: number): Item[] | undefined {
+    const o = row * W;
+    if (((this.rows[o + R_META] as number) & F_ITEMS) === 0) return undefined;
+    const s = (this.rows[o + R_AUX] as number) * S;
+    return this.items(this.seqs[s + 1] as number, this.seqs[s + 2] as number);
+  }
 
-    INIT.tag = tagOf(tagNumber >>> 16, tagNumber & 0xffff);
-    INIT.vr = vr;
-    INIT.vm = vm;
-    INIT.length = length;
-    INIT.byteOffset = byteOffset;
-    INIT.privateCreator = creator === 0 ? undefined : this.creators[creator - 1];
-    INIT.cp246Promoted = (meta & F_CP246) !== 0 ? true : undefined;
-    INIT.littleEndian = (meta & F_LITTLE_ENDIAN) !== 0;
-    INIT.specificCharacterSet = charset;
-    INIT.items = items;
-    const source = this.source as Buffer;
-    if (this.copyValues) {
-      INIT.rawBytes = copyValueBytes(source.subarray(start, end));
-      const el = new Element(INIT as ElementInit);
-      INIT.rawBytes = undefined;
-      return el;
+  /** Where row `row`'s value starts in the source, for a Data Set `delta` bytes into it. */
+  public rowValueStart(row: number, delta: number): number {
+    const o = row * W;
+    const meta = this.rows[o + R_META] as number;
+    return (
+      (this.rows[o + R_OFFSET] as number) +
+      delta +
+      (START_BYTES[(meta & START_MASK) >> START_SHIFT] as number)
+    );
+  }
+
+  /** Where row `row`'s value ends in the source, for a Data Set `delta` bytes into it. */
+  public rowValueEnd(row: number, delta: number): number {
+    const o = row * W;
+    if (((this.rows[o + R_META] as number) & F_COMPLEX) !== 0) {
+      return this.seqs[(this.rows[o + R_AUX] as number) * S] as number;
     }
-    return elementOverRange(INIT as ElementInit, source, start, end);
+    return this.rowValueStart(row, delta) + (this.rows[o + R_LENGTH] as number);
   }
 
   /** The `count` Items whose Data Set records start at `first`. */
@@ -547,24 +590,6 @@ export class CompactTable {
     return out;
   }
 }
-
-/**
- * The one init every Element of a table is built from, filled in place, as the eager parse did.
- * The constructor copies every field out of it, so it is free again once the Element exists.
- */
-const INIT: { -readonly [K in keyof ElementInit]: ElementInit[K] | undefined } = {
-  tag: "",
-  vr: "UN",
-  vm: 0,
-  length: 0,
-  rawBytes: undefined,
-  byteOffset: 0,
-  privateCreator: undefined,
-  cp246Promoted: undefined,
-  littleEndian: true,
-  specificCharacterSet: undefined,
-  items: undefined,
-};
 
 /**
  * A row's META word.
@@ -612,3 +637,14 @@ export const TABLE_SHAPES: readonly CompactTable[] = (() => {
   for (const item of ITEM_SHAPES) datasetOverTable(item, narrow, 0);
   return [narrow, copying];
 })();
+
+/**
+ * Elements over a table, kept for their hidden classes as `ELEMENT_SHAPES` in `./element.ts` is:
+ * one whose bytes are made when read, and one given its bytes, as `{ copyValues: true }` does.
+ *
+ * @internal
+ */
+export const OVER_TABLE_SHAPES: readonly Element[] = [
+  elementOverTable(TABLE_SHAPES[0] as CompactTable, 0, 0, undefined),
+  elementOverTable(TABLE_SHAPES[0] as CompactTable, 0, 0, Buffer.alloc(0)),
+];

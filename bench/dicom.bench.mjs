@@ -133,7 +133,9 @@ for (const shape of SHAPES) {
       weigh: (ds) => ds.warnings.length + 1,
     }),
     defineBenchmark({
-      // Parse, then read every tag: what an application that looks at the file pays.
+      // Parse, then read every tag: what an application that looks at the file pays. It builds
+      // every Element and Item, each Element a reference to its table row whose fields are read
+      // from the row, and decodes every value.
       name: `parseDicom, then read tags: ${shape.name}`,
       sizes: sizes(shape),
       bind: (dicom) => (x) => readTags(dicom.parseDicom(x.bytes)),

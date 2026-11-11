@@ -171,6 +171,22 @@ exposed for mutation. Edits go through explicit methods (`setElement`, `addEleme
 and the sequence-item equivalents), each returning results rather than mutating shared parser output.
 This is the same discipline the serializer relies on. See [Re-serializing](./cookbook).
 
+An `Element`'s fields (`tag`, `vr`, `vm`, `length`, `byteOffset`, `privateCreator`, `littleEndian`,
+`specificCharacterSet`, `items`, `rawBytes` and `value`) are accessors on the class, not own
+properties: an Element `parseDicom` built reads each one from the parse's compact table when you ask
+for it, and an Element built by hand reads what it was built with. So `Object.keys`, a spread,
+`JSON.stringify` and `structuredClone` of an Element see none of them, and `util.inspect` prints
+`Element {}`. When you need a plain object, copy the fields by name:
+
+```ts
+const el = ds.get("00100010");
+const plain = el && { tag: el.tag, vr: el.vr, length: el.length, value: el.value };
+```
+
+The same holds for the elements of a parsed `Dataset` or `Item`: they are not own properties, so a
+spread, `JSON.stringify`, `structuredClone` or `util.inspect` of one shows no element. Walk them with
+`elements()`.
+
 ## Where values come from
 
 `ds.get(tag)` gives you the raw `Element`; its `.value` decodes the bytes into a typed

@@ -4,7 +4,8 @@
  *
  * Two kinds of claim live here. The model's shape: a parsed Dataset and Item no longer carry the
  * element map as an own property (so `Object.keys`, a spread and `JSON.stringify` no longer list
- * every element), while an Element keeps exactly the own keys it had. And the lookups: whatever
+ * every element), and an Element has no own keys at all: its fields are accessors that read the
+ * table row, or the init of an Element built by hand. And the lookups: whatever
  * order the tags come in, however many, and however often one repeats, `get`, `has`, `getAll` and
  * `elements` answer as the `Map` keyed by tag did, with the earlier position and the later value
  * for a repeated tag, and the same object every time.
@@ -84,21 +85,60 @@ describe("the model's shape", () => {
     expect(JSON.stringify(ds)).not.toContain("SYNTHETIC");
   });
 
-  it("keeps every own key an Element had", () => {
+  it("reads every field of a parsed Element from the table, with no own key", () => {
     const el = ds.get("00100010");
-    expect(Object.keys(el ?? {})).toEqual([
-      "tag",
-      "vr",
-      "vm",
-      "length",
-      "byteOffset",
-      "privateCreator",
-      "cp246Promoted",
-      "littleEndian",
-      "specificCharacterSet",
-      "items",
-      "_valueCache",
-    ]);
+    expect(el).toBeInstanceOf(Element);
+    expect(Object.keys(el ?? {})).toEqual([]);
+    expect(JSON.stringify(el)).toBe("{}");
+    expect({ ...el }).toEqual({});
+    expect(el?.tag).toBe("00100010");
+    expect(el?.vr).toBe("PN");
+    expect(el?.vm).toBe(1);
+    expect(el?.length).toBe(18);
+    expect(el?.privateCreator).toBeUndefined();
+    expect(el?.cp246Promoted).toBeUndefined();
+    expect(el?.littleEndian).toBe(true);
+    expect(el?.specificCharacterSet).toBeUndefined();
+    expect(el?.items).toBeUndefined();
+    expect(el?.rawBytes.toString("latin1")).toBe("SYNTHETIC^PATIENT ");
+    const sq = ds.get("0040A730");
+    expect(Object.keys(sq ?? {})).toEqual([]);
+    expect(sq?.vm).toBe(1);
+    expect(sq?.items).toBe(sq?.items);
+    expect(sq?.items?.[0]?.get("0040A040")?.vr).toBe("CS");
+  });
+
+  it("gives an Element built by hand the fields it was built with, and no own key", () => {
+    const init = {
+      tag: "00091010",
+      vr: "LO" as const,
+      vm: 1,
+      length: 18,
+      rawBytes: text("SYNTHETIC^PATIENT"),
+      byteOffset: 7,
+      privateCreator: "SYNTHETIC CREATOR",
+      cp246Promoted: true,
+      littleEndian: false,
+      specificCharacterSet: ["ISO_IR 100"],
+      items: [],
+    };
+    const el = new Element(init);
+    expect(Object.keys(el)).toEqual([]);
+    expect(JSON.stringify(el)).toBe("{}");
+    expect(el.tag).toBe("00091010");
+    expect(el.vr).toBe("LO");
+    expect(el.vm).toBe(1);
+    expect(el.length).toBe(18);
+    expect(el.byteOffset).toBe(7);
+    expect(el.privateCreator).toBe("SYNTHETIC CREATOR");
+    expect(el.cp246Promoted).toBe(true);
+    expect(el.littleEndian).toBe(false);
+    expect(el.specificCharacterSet).toBe(init.specificCharacterSet);
+    expect(el.items).toBe(init.items);
+    expect(el.rawBytes).toBe(init.rawBytes);
+    // The constructor copies the init, as it always did: a later change to it is not seen.
+    (init as { tag: string }).tag = "00100020";
+    expect(el.tag).toBe("00091010");
   });
 
   it("keeps the element map of a Dataset built by hand", () => {
