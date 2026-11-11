@@ -1,0 +1,354 @@
+{
+  "schemaVersion": 1,
+  "kind": "floor",
+  "suite": "@cosyte/dicom",
+  "runnerClass": "github-actions-github-hosted-ubuntu26-x64",
+  "nodeMajor": 22,
+  "commit": "2d7fc322c4c84d2407a401851f7428cdac77257e",
+  "readings": 7,
+  "cases": [
+    {
+      "benchmark": "parseDicom: worklist item",
+      "size": "1 KiB",
+      "msPerOp": {
+        "value": 0.012714262348790297,
+        "noise": 0.005645
+      },
+      "peakBytes": {
+        "value": 13912,
+        "noise": 0
+      },
+      "allocBytesPerOp": {
+        "value": 11153.900000000001,
+        "noise": 186.5
+      }
+    },
+    {
+      "benchmark": "parseDicom, then read tags: worklist item",
+      "size": "1 KiB",
+      "msPerOp": {
+        "value": 0.03308154947916667,
+        "noise": 0.016532
+      },
+      "peakBytes": {
+        "value": 36472,
+        "noise": 16
+      },
+      "allocBytesPerOp": {
+        "value": 26088.399999999998,
+        "noise": 3941.8
+      }
+    },
+    {
+      "benchmark": "serializeDicom: worklist item",
+      "size": "1 KiB",
+      "msPerOp": {
+        "value": 0.01113961025528171,
+        "noise": 0.005378
+      },
+      "peakBytes": {
+        "value": 11356,
+        "noise": 1416
+      },
+      "allocBytesPerOp": {
+        "value": 10980.599999999999,
+        "noise": 116.2
+      }
+    },
+    {
+      "benchmark": "parseDicom: CT",
+      "size": "single frame, 514 KiB",
+      "msPerOp": {
+        "value": 0.024676525147928993,
+        "noise": 0.012643
+      },
+      "peakBytes": {
+        "value": 74880,
+        "noise": 264
+      },
+      "allocBytesPerOp": {
+        "value": 59935.5,
+        "noise": 557.9
+      }
+    },
+    {
+      "benchmark": "parseDicom: CT",
+      "size": "20 frames, 10 MiB",
+      "msPerOp": {
+        "value": 0.08273461652892561,
+        "noise": 0.045418
+      },
+      "peakBytes": {
+        "value": 158848,
+        "noise": 1872
+      },
+      "allocBytesPerOp": {
+        "value": 119824.20000000001,
+        "noise": 1401.1
+      }
+    },
+    {
+      "benchmark": "parseDicom: CT",
+      "size": "200 frames, 100 MiB",
+      "msPerOp": {
+        "value": 0.6360880886075959,
+        "noise": 0.359792
+      },
+      "peakBytes": {
+        "value": 710928,
+        "noise": 4632
+      },
+      "allocBytesPerOp": {
+        "value": 644596.3,
+        "noise": 2178.5
+      }
+    },
+    {
+      "benchmark": "parseDicom, then read tags: CT",
+      "size": "single frame, 514 KiB",
+      "msPerOp": {
+        "value": 0.06859397814207646,
+        "noise": 0.036352
+      },
+      "peakBytes": {
+        "value": 125160,
+        "noise": 2472
+      },
+      "allocBytesPerOp": {
+        "value": 92565.1,
+        "noise": 1930.7
+      }
+    },
+    {
+      "benchmark": "parseDicom, then read tags: CT",
+      "size": "20 frames, 10 MiB",
+      "msPerOp": {
+        "value": 0.2351653896713616,
+        "noise": 0.127707
+      },
+      "peakBytes": {
+        "value": 340448,
+        "noise": 17664
+      },
+      "allocBytesPerOp": {
+        "value": 249255.2,
+        "noise": 5825.5
+      }
+    },
+    {
+      "benchmark": "parseDicom, then read tags: CT",
+      "size": "200 frames, 100 MiB",
+      "msPerOp": {
+        "value": 1.880174111111109,
+        "noise": 0.981721
+      },
+      "peakBytes": {
+        "value": 2180736,
+        "noise": 19408
+      },
+      "allocBytesPerOp": {
+        "value": 1777830.3,
+        "noise": 34034.9
+      }
+    },
+    {
+      "benchmark": "serializeDicom: CT",
+      "size": "single frame, 514 KiB",
+      "msPerOp": {
+        "value": 0.24491250480769258,
+        "noise": 0.181019
+      },
+      "peakBytes": {
+        "value": 562726,
+        "noise": 8416
+      },
+      "allocBytesPerOp": {
+        "value": 542370.3,
+        "noise": 615.3
+      }
+    },
+    {
+      "benchmark": "serializeDicom: CT",
+      "size": "20 frames, 10 MiB",
+      "msPerOp": null,
+      "peakBytes": {
+        "value": 10589418,
+        "noise": 1920
+      },
+      "allocBytesPerOp": {
+        "value": 10560166,
+        "noise": 8440
+      }
+    },
+    {
+      "benchmark": "serializeDicom: CT",
+      "size": "200 frames, 100 MiB",
+      "msPerOp": {
+        "value": 64.94243199999994,
+        "noise": 18.97295
+      },
+      "peakBytes": {
+        "value": 105480164,
+        "noise": 536
+      },
+      "allocBytesPerOp": {
+        "value": 105482924,
+        "noise": 25032
+      }
+    },
+    {
+      "benchmark": "parseDicom: SR, header only",
+      "size": "50 measurements, 26 KiB",
+      "msPerOp": {
+        "value": 0.3355002828947375,
+        "noise": 0.194007
+      },
+      "peakBytes": {
+        "value": 357168,
+        "noise": 6152
+      },
+      "allocBytesPerOp": {
+        "value": 278367.4,
+        "noise": 17309.5
+      }
+    },
+    {
+      "benchmark": "parseDicom: SR, header only",
+      "size": "1,000 measurements, 503 KiB",
+      "msPerOp": {
+        "value": 5.732947222222227,
+        "noise": 3.329285
+      },
+      "peakBytes": {
+        "value": 6583440,
+        "noise": 343624
+      },
+      "allocBytesPerOp": {
+        "value": 4881729.6,
+        "noise": 233966.9
+      }
+    },
+    {
+      "benchmark": "parseDicom: SR, header only",
+      "size": "10,000 measurements, 4.9 MiB",
+      "msPerOp": {
+        "value": 57.07138100000009,
+        "noise": 31.94547
+      },
+      "peakBytes": {
+        "value": 33696976,
+        "noise": 12500304
+      },
+      "allocBytesPerOp": {
+        "value": 41345824,
+        "noise": 669960
+      }
+    },
+    {
+      "benchmark": "parseDicom, then read tags: SR, header only",
+      "size": "50 measurements, 26 KiB",
+      "msPerOp": {
+        "value": 0.848396466666666,
+        "noise": 0.458832
+      },
+      "peakBytes": {
+        "value": 963816,
+        "noise": 23952
+      },
+      "allocBytesPerOp": {
+        "value": 724105.9,
+        "noise": 29065.1
+      }
+    },
+    {
+      "benchmark": "parseDicom, then read tags: SR, header only",
+      "size": "1,000 measurements, 503 KiB",
+      "msPerOp": {
+        "value": 16.847746666666655,
+        "noise": 8.4803
+      },
+      "peakBytes": {
+        "value": 16657856,
+        "noise": 844800
+      },
+      "allocBytesPerOp": {
+        "value": 13537402.7,
+        "noise": 221880
+      }
+    },
+    {
+      "benchmark": "parseDicom, then read tags: SR, header only",
+      "size": "10,000 measurements, 4.9 MiB",
+      "msPerOp": {
+        "value": 207.65378599999985,
+        "noise": 103.574325
+      },
+      "peakBytes": {
+        "value": 88895320,
+        "noise": 42104
+      },
+      "allocBytesPerOp": {
+        "value": 127798752,
+        "noise": 1873664
+      }
+    },
+    {
+      "benchmark": "serializeDicom: SR, header only",
+      "size": "50 measurements, 26 KiB",
+      "msPerOp": {
+        "value": 0.2753557771739133,
+        "noise": 0.150352
+      },
+      "peakBytes": {
+        "value": 337766,
+        "noise": 60
+      },
+      "allocBytesPerOp": {
+        "value": 353668.8,
+        "noise": 16042.9
+      }
+    },
+    {
+      "benchmark": "serializeDicom: SR, header only",
+      "size": "1,000 measurements, 503 KiB",
+      "msPerOp": {
+        "value": 5.6001046999999975,
+        "noise": 3.303983
+      },
+      "peakBytes": {
+        "value": 6820674,
+        "noise": 225376
+      },
+      "allocBytesPerOp": {
+        "value": 6572291.6,
+        "noise": 6363.6
+      }
+    },
+    {
+      "benchmark": "serializeDicom: SR, header only",
+      "size": "10,000 measurements, 4.9 MiB",
+      "msPerOp": {
+        "value": 60.794178999999986,
+        "noise": 27.012977
+      },
+      "peakBytes": {
+        "value": 18382378,
+        "noise": 1878834
+      },
+      "allocBytesPerOp": {
+        "value": 67845666,
+        "noise": 2272170.7
+      }
+    }
+  ],
+  "import": {
+    "medianMs": {
+      "value": 14.718,
+      "noise": 6.423
+    },
+    "gzipBytes": {
+      "value": 169927,
+      "noise": 0
+    }
+  }
+}

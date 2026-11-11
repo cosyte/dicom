@@ -9,7 +9,9 @@
  * - every case has a peak budget at the standard's multiple (20 times one input for a dense shape, 3
  *   times for the CT shapes), or is listed below as a case still over it, with the gap AGENTS.md
  *   gives: a case we miss is written down, never given a looser budget;
- * - every case has an allocation and a throughput budget, and the import a time and a size budget;
+ * - every case has an allocation and a throughput budget, but the one case whose throughput the
+ *   floor's readings did not all measure (a throughput limit there would fail on every reading that
+ *   skips it), and the import a time and a size budget;
  * - the floor is a recorded one: seven or more GitHub-hosted readings on the Node line the Budgets
  *   workflow reads on, keeping every case of the suite and the import.
  */
@@ -40,6 +42,12 @@ const STILL_OVER = [
   { benchmark: "parseDicom, then read tags: SR, header only", size: "50 measurements, 26 KiB" },
   { benchmark: "parseDicom, then read tags: SR, header only", size: "1,000 measurements, 503 KiB" },
 ] as const;
+
+/**
+ * The case with no throughput budget: one reading of the floor's set skipped its throughput, so the
+ * floor keeps no time for it, and a limit on it would fail every reading that skips it.
+ */
+const NO_THROUGHPUT = [{ benchmark: "serializeDicom: CT", size: "20 frames, 10 MiB" }] as const;
 
 const cases = suite.benchmarks.flatMap((b) =>
   b.sizes.map((s) => ({ benchmark: b.name, size: s.label })),
@@ -84,6 +92,7 @@ describe("bench/budgets.json", () => {
   });
 
   it("holds every case to an allocation and a throughput budget", () => {
+    const untimed = new Set(NO_THROUGHPUT.map(name));
     for (const c of cases) {
       const rules = rulesFor(c);
       expect(
@@ -93,7 +102,7 @@ describe("bench/budgets.json", () => {
       expect(
         rules.some((r) => r.minBytesPerSecond !== undefined),
         name(c),
-      ).toBe(true);
+      ).toBe(!untimed.has(name(c)));
     }
   });
 
@@ -116,6 +125,9 @@ describe("bench/floor.json", () => {
 
   it("keeps every case of the suite and the import", () => {
     expect(floor.cases.map(name).sort()).toEqual(cases.map(name).sort());
+    for (const c of floor.cases) {
+      expect(c.msPerOp === null, name(c)).toBe(NO_THROUGHPUT.map(name).includes(name(c)));
+    }
     expect(floor.import).not.toBeNull();
   });
 });

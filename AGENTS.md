@@ -67,13 +67,41 @@ pnpm bench:profile --out bench-results/profile
 A reading reports throughput, latency p50/p95/p99, allocations, peak heap, a long run for leaks,
 and the cold import with its gzip size. Its peak heap is the V8 heap only, so Pixel Data, a Buffer,
 is not in it: `pnpm bench:profile` measures each large size's peak resident memory and single-call
-time in a fresh process, then profiles the hottest paths. `bench/budgets.mjs` judges a dense shape
-on the peak `budgetPeakBytes` from `@cosyte/bench` gives: the highest call's heap and external
-memory, or, for an input under 64 KiB, the median call's above the empty-call floor the reading
-measures, since the probe's own highest call can cost more than 20 times a 1 KiB input. On a
-pull request CI compares the base build with the head at each shape's first size, and
-`.github/workflows/bench.yml` takes a reading and a profile on a hosted runner when `bench/`
-changes. Both are advisory.
+time in a fresh process, then profiles the hottest paths.
+
+### Budgets and the floor
+
+On every pull request `.github/workflows/budgets.yml` takes a reading of the whole suite on a
+GitHub-hosted runner at Node 22 and runs `cosyte-bench gate` against two files, and fails on a miss:
+
+- `bench/budgets.json`, the limits we commit to: a peak (`budgetPeakBytes`, heap and external
+  memory, or for an input under 64 KiB the median call above the empty-call floor) under 20 times one
+  input for the worklist item and the SR, and under 3 times for the CT shapes; bytes allocated an
+  operation; bytes a second; a median cold import under 15 ms; and the gzipped bytes the import
+  loads. A change to it is the owner's to approve.
+- `bench/floor.json`, what main measured: seven readings of one commit by
+  `.github/workflows/bench-floor.yml`, each case's highest reading and spread. A reading above the
+  highest plus three spreads fails, and so does a floor file looser than the base branch's. To move
+  it, run that workflow and copy its `bench-floor` artifact here; it only improves.
+
+The cases still over their peak multiple have no peak limit until they meet it, rather than a looser
+one. Each is the budget figure as a multiple of one input, the lowest to the highest of the floor's
+seven readings:
+
+| Case                                                                      | Input     | Peak multiple    | Budget |
+| ------------------------------------------------------------------------- | --------- | ---------------- | ------ |
+| parseDicom, then read tags: worklist item @ 1 KiB                         | 1,070 B   | 34.07x to 34.09x | 20x    |
+| parseDicom, then read tags: SR, header only @ 50 measurements, 26 KiB     | 26,586 B  | 35.35x to 36.25x | 20x    |
+| parseDicom, then read tags: SR, header only @ 1,000 measurements, 503 KiB | 515,546 B | 30.67x to 32.31x | 20x    |
+
+`serializeDicom: CT @ 20 frames, 10 MiB` has no throughput limit: one reading of the floor's set
+skipped its throughput, so the floor keeps no time for it. `test/perf/budgets-file.test.ts` holds
+the two files to the suite and to these lists. `node bench/budgets.mjs <reading.json>` prints what
+the budgets read, every case's multiple beside its raw V8 heap; it judges nothing.
+
+On a pull request CI also compares the base build with the head at each shape's first size, and
+`.github/workflows/bench.yml` takes a per-shape reading and a profile when `bench/` changes. Both
+are advisory.
 
 ## Data
 
