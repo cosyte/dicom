@@ -152,7 +152,7 @@ jobs:
               const [out, fresh] = process.argv.slice(1);
               const floor = JSON.parse(fs.readFileSync(out, "utf8"));
               floor.import.gzipBytes = JSON.parse(fs.readFileSync(fresh, "utf8")).import.gzipBytes;
-              fs.writeFileSync(out, `${JSON.stringify(floor, null, 2)}\n`);
+              fs.writeFileSync(out, JSON.stringify(floor, null, 2) + "\n");
             ' "${OUT}" "${FRESH}"
           fi
           cat "${OUT}"
