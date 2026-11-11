@@ -2,8 +2,8 @@ name: Bench
 
 # A reading of this build on a GitHub-hosted runner: throughput, latency p50/p95/p99, allocations
 # per operation, peak heap, a long run for leaks, and the cold import with every file it loads and
-# its gzip size, for every case of bench/dicom.bench.mjs, the large sizes included, with the budgets
-# read from it (bench/budgets.mjs). Then the profile (bench/profile.mjs): peak memory with Pixel
+# its gzip size, for every case of bench/dicom.bench.mjs, the large sizes included, with what the
+# budgets read from it (bench/budgets.mjs, which judges nothing). Then the profile (bench/profile.mjs): peak memory with Pixel
 # Data counted and the single-call time of every large size, throughput from each shape's smallest
 # size to its largest, and a CPU and a sampled heap profile of the hottest paths.
 #
@@ -11,7 +11,7 @@ name: Bench
 # measured is measured where it will be read. ADVISORY: it fails only when it cannot measure (a
 # suite that does not load, a process that dies, a results file that does not match the schema),
 # never on a number, and it is never a required check. The numbers are kept as artifacts and shown
-# in each job's summary.
+# in each job's summary. The budgets and the floor are enforced by budgets.yml, on every pull request.
 #
 # One job per shape, side by side, so the reading finishes inside a pull request's wait: each job
 # runs its shape's three benchmarks (parse, parse then read tags, write) at every size. Jobs on
@@ -88,7 +88,7 @@ jobs:
             exit "${status}"
           fi
           pnpm exec cosyte-bench check "bench-results/reading-${SLUG}.json"
-      - name: Budgets
+      - name: What the budgets read
         env:
           SLUG: ${{ matrix.slug }}
         shell: bash
