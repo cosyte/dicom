@@ -21,9 +21,8 @@
 
 import type { Buffer } from "node:buffer";
 
-import type { Element } from "../dataset/element.js";
-import type { Tag } from "../dictionary/types.js";
-import { _parseExplicit } from "./explicit-le.js";
+import type { ParsedDataSet } from "../dataset/compact.js";
+import { _parseExplicit, explicitMode } from "./explicit-le.js";
 import type { ParseContext } from "./types.js";
 import type { DicomParseWarning } from "./warnings.js";
 
@@ -42,13 +41,8 @@ export function parseExplicitBE(
   ctx: ParseContext,
   emit: (w: DicomParseWarning) => void,
   opts: { stopOnItemDelim?: boolean } = {},
-): { elements: ReadonlyMap<Tag, Element>; endOffset: number } {
-  return _parseExplicit(
-    buffer,
-    datasetStart,
-    ctx,
-    emit,
-    { littleEndian: false, innerStrategy: parseExplicitBE },
-    opts,
-  );
+): ParsedDataSet {
+  return _parseExplicit(buffer, datasetStart, ctx, emit, BE_MODE, opts);
 }
+
+const BE_MODE = explicitMode(false, parseExplicitBE);

@@ -91,3 +91,31 @@ export function isPrivateTag(tag: Tag): boolean {
 export function isFileMetaTag(tag: Tag): boolean {
   return splitTag(tag).group === 0x0002;
 }
+
+/**
+ * The tag a caller names, as `group * 0x10000 + element`, or -1 when it names none: exactly the
+ * tags `Map.get(tag.toUpperCase())` would find in a map keyed by eight upper-case hex digits.
+ *
+ * @internal
+ */
+export function tagNumber(tag: Tag): number {
+  if (typeof tag === "string" && tag.length === 8) {
+    let n = 0;
+    let i = 0;
+    for (; i < 8; i++) {
+      const c = tag.charCodeAt(i);
+      let v: number;
+      if (c >= 0x30 && c <= 0x39) v = c - 0x30;
+      else if (c >= 0x41 && c <= 0x46) v = c - 0x37;
+      else if (c >= 0x61 && c <= 0x66) v = c - 0x57;
+      else break;
+      n = n * 16 + v;
+    }
+    if (i === 8) return n;
+  }
+  // Anything else goes the way it always went: upper-cased (which throws for a non-string, as it
+  // did), then matched only when that is eight upper-case hex digits.
+  const upper = tag.toUpperCase();
+  if (!/^[0-9A-F]{8}$/u.test(upper)) return -1;
+  return Number.parseInt(upper, 16);
+}

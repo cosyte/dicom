@@ -46,10 +46,10 @@
 
 import type { Buffer } from "node:buffer";
 
-import { Element } from "../dataset/element.js";
+import { tableOf, type ParsedDataSet } from "../dataset/compact.js";
 import type { Tag } from "../dictionary/types.js";
-import { ByteCursor, copyValueBytes } from "./byte-cursor.js";
-import { defineElement, parsedElement } from "./data-set-map.js";
+import { ByteCursor } from "./byte-cursor.js";
+import { defineRow } from "./data-set-map.js";
 import {
   applySpecificCharacterSet,
   registerPrivateCreator,
@@ -91,9 +91,12 @@ export function parseImplicitLE(
   ctx: ParseContext,
   emit: (w: DicomParseWarning) => void,
   opts: { stopOnItemDelim?: boolean } = {},
-): { elements: ReadonlyMap<Tag, Element>; endOffset: number } {
+): ParsedDataSet {
   const cursor = new ByteCursor(buffer, true, datasetStart);
-  const elements = new Map<Tag, Element>();
+  const table = tableOf(ctx);
+  table.begin(buffer);
+  const delta = table.deltaOf(buffer);
+  const set = table.openSet();
 
   while (cursor.position < buffer.length) {
     const headerStart = cursor.position;
@@ -125,7 +128,7 @@ export function parseImplicitLE(
       if (opts.stopOnItemDelim === true && tag === "FFFEE00D") {
         // Length field was already consumed (always 0 for ItemDelim);
         // cursor is now past the 8-byte ItemDelim marker.
-        return { elements, endOffset: cursor.position };
+        return table.closeSet(set, delta, cursor.position);
       }
       throw unexpectedFffeAtDatasetRoot(ctx.frame, headerStart);
     }
@@ -144,27 +147,26 @@ export function parseImplicitLE(
           littleEndian: true,
           innerStrategy: parseImplicitLE,
         });
-        const valueRawStart = headerStart;
         cursor.position = seq.endOffset;
         const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
-        defineElement(
-          elements,
-          parsedElement(
-            ctx,
-            buffer,
-            valueRawStart,
-            cursor.position,
-            tag,
-            vr,
-            seq.items.length,
-            0xffffffff,
-            headerStart,
-            true,
-            undefined,
-            privateCreator,
-            seq.items,
-          ),
+        // The span starts at the header, not at the value.
+        defineRow(
+          table,
+          set,
           emit,
+          group,
+          element,
+          vr,
+          0xffffffff,
+          headerStart,
+          true,
+          0,
+          undefined,
+          privateCreator,
+          delta + cursor.position,
+          seq.itemFirst,
+          seq.itemCount,
+          false,
         );
         continue;
       }
@@ -193,27 +195,26 @@ export function parseImplicitLE(
           tag,
         );
         if (cp246.success) {
-          const valueRawStart = headerStart;
           cursor.position = cp246.endOffset;
-          const rawBytes = ctx.copyValues
-            ? copyValueBytes(buffer.subarray(valueRawStart, cursor.position))
-            : buffer.subarray(valueRawStart, cursor.position);
           const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
-          defineElement(
-            elements,
-            new Element({
-              tag,
-              vr: "SQ", // Promoted, exactly as the Explicit-VR path promotes it.
-              vm: cp246.items.length,
-              length: 0xffffffff,
-              rawBytes,
-              byteOffset: headerStart,
-              cp246Promoted: true,
-              littleEndian: true,
-              items: cp246.items,
-              ...(privateCreator !== undefined ? { privateCreator } : {}),
-            }),
+          // The span starts at the header, as the undefined-length SQ's does.
+          defineRow(
+            table,
+            set,
             emit,
+            group,
+            element,
+            "SQ", // Promoted, exactly as the Explicit-VR path promotes it.
+            0xffffffff,
+            headerStart,
+            true,
+            0,
+            undefined,
+            privateCreator,
+            delta + cursor.position,
+            cp246.itemFirst,
+            cp246.itemCount,
+            true,
           );
           continue;
         }
@@ -264,24 +265,23 @@ export function parseImplicitLE(
       );
       if (seq.success) {
         const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
-        defineElement(
-          elements,
-          parsedElement(
-            ctx,
-            buffer,
-            valueStart,
-            valueEnd,
-            tag,
-            vr,
-            seq.items.length,
-            length,
-            headerStart,
-            true,
-            undefined,
-            privateCreator,
-            seq.items,
-          ),
+        defineRow(
+          table,
+          set,
           emit,
+          group,
+          element,
+          vr,
+          length,
+          headerStart,
+          true,
+          8,
+          undefined,
+          privateCreator,
+          delta + valueEnd,
+          seq.itemFirst,
+          seq.itemCount,
+          false,
         );
         continue;
       }
@@ -307,26 +307,25 @@ export function parseImplicitLE(
     }
 
     const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
-    defineElement(
-      elements,
-      parsedElement(
-        ctx,
-        buffer,
-        valueStart,
-        valueEnd,
-        tag,
-        vr,
-        1,
-        length,
-        headerStart,
-        true,
-        ctx.currentCharset,
-        privateCreator,
-        undefined,
-      ),
+    defineRow(
+      table,
+      set,
       emit,
+      group,
+      element,
+      vr,
+      length,
+      headerStart,
+      true,
+      8,
+      ctx.currentCharset,
+      privateCreator,
+      -1,
+      0,
+      -1,
+      false,
     );
   }
 
-  return { elements, endOffset: cursor.position };
+  return table.closeSet(set, delta, cursor.position);
 }

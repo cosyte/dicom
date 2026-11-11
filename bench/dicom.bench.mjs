@@ -122,7 +122,9 @@ const benchmarks = [];
 for (const shape of SHAPES) {
   benchmarks.push(
     defineBenchmark({
-      // The lenient read every caller starts with: bytes to the Dataset, values left undecoded.
+      // The lenient read every caller starts with: bytes to the Dataset, each Data Set kept as rows
+      // of the parse's compact table, with no Element or Item built and no value decoded until a
+      // caller asks for one. The next benchmark asks for all of them.
       name: `parseDicom: ${shape.name}`,
       sizes: sizes(shape),
       bind: (dicom) => (x) => dicom.parseDicom(x.bytes),

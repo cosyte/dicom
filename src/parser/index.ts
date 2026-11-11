@@ -26,7 +26,11 @@
 
 import { Buffer } from "node:buffer";
 
-import { Dataset } from "../dataset/dataset.js";
+import { CompactTable } from "../dataset/compact.js";
+import { Dataset, datasetOverTable, setDatasetWarnings } from "../dataset/dataset.js";
+import type { Element } from "../dataset/element.js";
+import type { Tag } from "../dictionary/types.js";
+import { copyValueBytes } from "./byte-cursor.js";
 import { emitDirectoryFindings } from "./directory.js";
 import { makeEmitter } from "./emit.js";
 import { OFFSET_FRAMES } from "./errors.js";
@@ -162,19 +166,31 @@ export function parseDicom(
     throw unsupportedTransferSyntax(ctx.frame, fileMetaEnd, tsUid);
   }
 
-  // Step 4: Parse the dataset with the chosen strategy.
-  const { elements } = strategy(buffer, fileMetaEnd, ctx, emit);
+  // Step 4: Parse the dataset with the chosen strategy, into the parse's compact table.
+  const table = ctx.table as CompactTable;
+  const root = table.addRoot(strategy(buffer, fileMetaEnd, ctx, emit));
+  table.finish();
+  // Under `{ copyValues: true }` no value may stay a view of the caller's buffer, so the table
+  // reads from a copy of it instead; an inflated Data Set is the parse's own already.
+  if (ctx.copyValues && table.source === buffer) table.source = copyValueBytes(buffer);
+  const ds = new Dataset({ fileMeta, warnings: NO_WARNINGS, elements: NO_ELEMENTS });
+  datasetOverTable(ds, table, root);
 
   // Step 5: a DICOMDIR's Directory Record offsets, resolved once here so every
   // one that names no record reaches `ds.warnings` and `onWarning`.
   emitDirectoryFindings(
-    { fileMeta, get: (tag) => elements.get(tag) },
+    ds,
     { origin: hadPreamble ? 0 : PREAMBLE_AND_PREFIX_LENGTH, fileMetaEnd },
     emit,
   );
 
-  return new Dataset({ fileMeta, warnings: ctx.warnings, elements });
+  setDatasetWarnings(ds, ctx.warnings);
+  return ds;
 }
+
+/** The warnings and elements the root is built with, before the table and the warnings are set. */
+const NO_WARNINGS: readonly DicomParseWarning[] = [];
+const NO_ELEMENTS: ReadonlyMap<Tag, Element> = new Map();
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -209,6 +225,7 @@ function buildContext(
     encodingContextStack: ["Root"],
     nestingDepth: 0,
     copyValues: options.copyValues === true,
+    table: new CompactTable(options.copyValues === true),
   };
   // Thread the source/vendor profile through when supplied; omit the key
   // entirely otherwise (exactOptionalPropertyTypes).

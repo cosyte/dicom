@@ -16,6 +16,7 @@
  * @module
  */
 
+import type { CompactTable } from "../dataset/compact.js";
 import type { VR } from "../dictionary/types.js";
 import type { ParseFrame } from "./errors.js";
 import type { DicomParseWarning, WarningCode } from "./warnings.js";
@@ -239,10 +240,12 @@ export interface ParseOptions {
    */
   readonly onWarning?: OnWarningCallback;
   /**
-   * When `true`, every `Element.rawBytes` is `Buffer.from(slice)` - copying
-   * each value out so the source buffer can be released. When `false` (the
-   * default), `Element.rawBytes` is `Buffer.subarray(slice)` - a zero-copy
-   * view that pins the source ArrayBuffer until every Element is GC'd.
+   * When `true`, nothing parsed holds the source buffer, so it can be
+   * released: the Dataset reads from one copy of it made by the parse, and
+   * every `Element.rawBytes` is a standalone copy of its own value, made the
+   * first time that Element is built. When `false` (the default),
+   * `Element.rawBytes` is a zero-copy `Buffer.subarray` view, and the Dataset
+   * and every Element pin the source ArrayBuffer until they are collected.
    *
    * Omit to use the default.
    */
@@ -364,4 +367,9 @@ export interface ParseContext {
    * `false` (default), `Buffer.subarray(slice)` (view).
    */
   readonly copyValues: boolean;
+  /**
+   * The parse's compact table, which every Data Set read writes its rows into (see
+   * `../dataset/compact.ts`). Made by `parseDicom`, or by the first read that finds none.
+   */
+  table?: CompactTable;
 }
