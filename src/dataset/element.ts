@@ -3,7 +3,7 @@
  * Data Element.
  *
  * An Element `parseDicom` built reads its fields from its row of the parse's compact table
- * (`./compact.ts`), so it holds that table, its row, its tag and its VR and little else: each field
+ * (`./compact.ts`), so it holds that table, its row, its tag, its VR and its value's range and little else: each field
  * is an accessor on the class, and an Element has no own enumerable property. An Element built by
  * hand reads the fields it was built with.
  *
@@ -91,8 +91,6 @@ export interface ElementRows {
   rowSpecificCharacterSet(row: number): readonly string[] | undefined;
   /** The row's Items, built anew on every call, or `undefined` when it has none. */
   rowItems(row: number): Item[] | undefined;
-  /** Where the row's value ends in `source`, given `start`, where it starts. */
-  rowValueEnd(row: number, start: number): number;
 }
 
 /** The fields of an Element built by hand, copied out of its init, less the tag and VR. */
@@ -118,8 +116,13 @@ let overTable: (
   rows: ElementRows,
   row: number,
   start: number,
+  end: number,
+  hasItems: boolean,
   bytes: Buffer | undefined,
 ) => Element;
+
+/** What `#items` holds once an Element over a table is known to carry no Items. */
+const NO_ITEMS: readonly Item[] = Object.freeze([]);
 let rangeSource: (el: Element) => Buffer;
 let rangeStart: (el: Element) => number;
 let rangeEnd: (el: Element) => number;
@@ -171,32 +174,38 @@ export class Element {
   #of: ElementRows | Fields;
   /** The table row, or -1 for an Element built by hand. */
   #row: number;
-  /** Where the value starts in the table's source. */
+  /**
+   * Where the value starts and ends in the table's source. Kept in the Element, at 8 bytes, because
+   * the decoders and the writer read the value's range of every element they touch.
+   */
   #start: number;
+  #end: number;
   /** The decoded value, once read. */
   #value: DicomValue | undefined;
   /** The value's bytes once made: given at construction, or made the first time they are read. */
   #rawBytes: Buffer | undefined;
-  /** The Items: given at construction, or built the first time they are read. */
+  /**
+   * The Items: given at construction, or built the first time they are read. `NO_ITEMS` for an
+   * Element over a table whose row carries none, so reading `items` needs no table read.
+   */
   #items: readonly Item[] | undefined;
 
   static {
-    overTable = (rows, row, start, bytes): Element => {
+    overTable = (rows, row, start, end, hasItems, bytes): Element => {
       const el = new Element(OVER_TABLE);
       el.#tag = rows.rowTag(row);
       el.#vr = rows.rowVr(row);
       el.#of = rows;
       el.#row = row;
       el.#start = start;
+      el.#end = end;
       el.#rawBytes = bytes;
+      if (!hasItems) el.#items = NO_ITEMS;
       return el;
     };
     rangeSource = (el) => el.#rawBytes ?? ((el.#of as ElementRows).source as Buffer);
     rangeStart = (el) => (el.#rawBytes === undefined ? el.#start : 0);
-    rangeEnd = (el) =>
-      el.#rawBytes === undefined
-        ? (el.#of as ElementRows).rowValueEnd(el.#row, el.#start)
-        : el.#rawBytes.length;
+    rangeEnd = (el) => (el.#rawBytes === undefined ? el.#end : el.#rawBytes.length);
   }
 
   /**
@@ -212,6 +221,7 @@ export class Element {
     this.#vr = init.vr;
     this.#row = -1;
     this.#start = 0;
+    this.#end = 0;
     this.#value = undefined;
     if (init === OVER_TABLE) {
       this.#of = init as unknown as Fields;
@@ -306,12 +316,12 @@ export class Element {
    * time they are read, and the same array of the same Items every time after.
    */
   public get items(): readonly Item[] | undefined {
-    let items = this.#items;
-    if (items === undefined && this.#row !== -1) {
-      items = (this.#of as ElementRows).rowItems(this.#row);
-      this.#items = items;
-    }
-    return items;
+    const items = this.#items;
+    if (items !== undefined) return items === NO_ITEMS ? undefined : items;
+    if (this.#row === -1) return undefined;
+    const built = (this.#of as ElementRows).rowItems(this.#row);
+    this.#items = built;
+    return built;
   }
 
   /**
@@ -323,11 +333,7 @@ export class Element {
   public get rawBytes(): Buffer {
     let bytes = this.#rawBytes;
     if (bytes === undefined) {
-      const rows = this.#of as ElementRows;
-      bytes = (rows.source as Buffer).subarray(
-        this.#start,
-        rows.rowValueEnd(this.#row, this.#start),
-      );
+      bytes = ((this.#of as ElementRows).source as Buffer).subarray(this.#start, this.#end);
       this.#rawBytes = bytes;
     }
     return bytes;
@@ -354,8 +360,8 @@ export class Element {
 }
 
 /**
- * Build an Element that reads its fields from row `row` of `rows`, its value starting at `start`
- * in the table's source. `bytes`, when given, is its `rawBytes`; otherwise `rawBytes` is the
+ * Build an Element that reads its fields from row `row` of `rows`, its value the range `start` to
+ * `end` of the table's source, with Items when `hasItems`. `bytes`, when given, is its `rawBytes`; otherwise `rawBytes` is the
  * row's range of the source, made into a view the first time it is read.
  *
  * @internal
@@ -364,9 +370,11 @@ export function elementOverTable(
   rows: ElementRows,
   row: number,
   start: number,
+  end: number,
+  hasItems: boolean,
   bytes: Buffer | undefined,
 ): Element {
-  return overTable(rows, row, start, bytes);
+  return overTable(rows, row, start, end, hasItems, bytes);
 }
 
 /**

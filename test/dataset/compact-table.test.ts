@@ -239,3 +239,75 @@ describe("lookups over the compact table", () => {
     expect(() => ds.get(7 as unknown as string)).toThrow(TypeError);
   });
 });
+
+describe("an Element kept apart from its Dataset", () => {
+  /** A worklist-shaped file: a name, a code, and a Sequence with one Item. */
+  function fileOf(name: string, code: string): Buffer {
+    return buildDicom({
+      transferSyntax: TS_EXPLICIT_LE,
+      elements: [
+        { tag: "00100010", vr: "PN", value: text(name) },
+        { tag: "00100020", vr: "LO", value: text(code) },
+        {
+          tag: "0040A730",
+          items: [{ elements: [{ tag: "0040A160", vr: "UT", value: text(`${code} NOTE`) }] }],
+        },
+      ],
+    });
+  }
+
+  /** The Elements of one parse, with the Dataset itself dropped once they are taken. */
+  function keep(bytes: Buffer, copyValues: boolean): (Element | undefined)[] {
+    const ds = parseDicom(bytes, { copyValues });
+    return [ds.get("00100010"), ds.get("00100020"), ds.get("0040A730")];
+  }
+
+  function readBack(el: Element | undefined): unknown {
+    return {
+      tag: el?.tag,
+      vr: el?.vr,
+      vm: el?.vm,
+      length: el?.length,
+      byteOffset: el?.byteOffset,
+      bytes: el?.rawBytes.toString("latin1"),
+      value: el?.value,
+      inner: el?.items?.[0]?.get("0040A160")?.value,
+    };
+  }
+
+  for (const copyValues of [false, true]) {
+    it(`reads its own values after its Dataset is dropped and another file is parsed (copyValues: ${String(copyValues)})`, () => {
+      const first = fileOf("SYNTHETIC^FIRST", "SYN-0001");
+      const kept = keep(first, copyValues);
+      // Read nothing yet: every field and value is read from the table after the second parse.
+      const second = parseDicom(fileOf("SYNTHETIC^SECONDNAME", "SYN-0000002"), { copyValues });
+      expect(second.get("00100010")?.rawBytes.toString("latin1")).toBe("SYNTHETIC^SECONDNAME");
+      const fresh = keep(first, copyValues);
+      expect(kept.map(readBack)).toEqual(fresh.map(readBack));
+      expect(kept[0]?.rawBytes.toString("latin1")).toBe("SYNTHETIC^FIRST ");
+      expect(kept[1]?.value).toEqual({ kind: "strings", values: ["SYN-0001"] });
+      expect(kept[2]?.items?.[0]?.get("0040A160")?.rawBytes.toString("latin1")).toBe(
+        "SYN-0001 NOTE ",
+      );
+    });
+  }
+});
+
+describe("deep equality of Elements", () => {
+  it("sees no field, so two different Elements compare equal and their fields must be compared", () => {
+    const ds = parseDicom(
+      buildDicom({
+        transferSyntax: TS_EXPLICIT_LE,
+        elements: [
+          { tag: "00100010", vr: "PN", value: text("SYNTHETIC^PATIENT") },
+          { tag: "00100020", vr: "LO", value: text("SYN-0001") },
+        ],
+      }),
+    );
+    const name = ds.get("00100010");
+    const id = ds.get("00100020");
+    expect(name).toEqual(id);
+    expect(name).toStrictEqual(id);
+    expect({ tag: name?.tag, value: name?.value }).not.toEqual({ tag: id?.tag, value: id?.value });
+  });
+});

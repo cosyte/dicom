@@ -16,7 +16,7 @@
  *
  * `Dataset.get`, `has`, `elements` and `getAll` read the table and build the `Element` the first
  * time each is asked for, then hand back that same object every time. The Element holds the table,
- * its row number, its tag and its VR, and reads each other field from the row when it is asked for; an `SQ` Element
+ * its row number, its tag, its VR and its value's range, and reads each other field from the row when it is asked for; an `SQ` Element
  * builds its `Item`s the first time they are read, and each `Item` builds its own Elements the
  * same way. What a caller reads is what the eager parse gave: the same tag, VR, VM, length, bytes, byte offset, Private
  * Creator, character set and Items, in the same order, with the same duplicate-tag rule (the
@@ -478,10 +478,11 @@ export class CompactTable implements ElementRows {
       (this.rows[o + R_OFFSET] as number) +
       (this.sets[d + 2] as number) +
       (START_BYTES[(meta & START_MASK) >> START_SHIFT] as number);
+    const end = this.rowValueEnd(row, start);
     const bytes = this.copyValues
-      ? copyValueBytes((this.source as Buffer).subarray(start, this.rowValueEnd(row, start)))
+      ? copyValueBytes((this.source as Buffer).subarray(start, end))
       : undefined;
-    return elementOverTable(this, row, start, bytes);
+    return elementOverTable(this, row, start, end, (meta & F_ITEMS) !== 0, bytes);
   }
 
   /** The tag of row `row`. */
@@ -634,6 +635,6 @@ export const TABLE_SHAPES: readonly CompactTable[] = (() => {
  * @internal
  */
 export const OVER_TABLE_SHAPES: readonly Element[] = [
-  elementOverTable(TABLE_SHAPES[0] as CompactTable, 0, 0, undefined),
-  elementOverTable(TABLE_SHAPES[0] as CompactTable, 0, 0, Buffer.alloc(0)),
+  elementOverTable(TABLE_SHAPES[0] as CompactTable, 0, 0, 0, false, undefined),
+  elementOverTable(TABLE_SHAPES[0] as CompactTable, 0, 0, 0, true, Buffer.alloc(0)),
 ];
