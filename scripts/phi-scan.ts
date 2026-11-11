@@ -38,7 +38,7 @@
  * all-mode does not open. Both numbers are stated so neither can be quoted as the other.)
  *
  * 🛑 AND ENUMERATING THEM BUYS THE PN/DATE FLOOR AND NOTHING ELSE. The recognizers here look
- * for `FAMILY^GIVEN`, `YYYY-MM-DD`, a standalone `YYYYMMDD`, and PN/DA/DT values under a
+ * for `family^given`, `YYYY-MM-DD`, a standalone `YYYYMMDD`, and PN/DA/DT values under a
  * hardcoded tag table. They do NOT look for an MRN, an accession number, an institution
  * name, a phone number, an email address, an SSN, or a vendor UID root. The tracked files
  * this change opens carry all of those shapes (synthetic ones: `MRN-11111`, `ACC0099`,
@@ -2669,7 +2669,7 @@ function scanText(
     }
   }
 
-  // FAMILY^GIVEN PN-shaped tokens
+  // family^given PN-shaped tokens
   for (const [start, end] of pnRuns(content)) {
     const value = content.slice(start, end);
     if (!isPnAllowed(value, allow)) {
@@ -2695,7 +2695,7 @@ function scanText(
  *
  * THIS IS THE DOC-FIXTURE ROUTE, AND WITHOUT IT THE DOC CORPUS SCANS CLEAN BY CONSTRUCTION.
  * A doc fixture is a Part 10 object encoded as base64 and pasted inline, so to the text scanner it
- * is one long alphanumeric token: no `FAMILY^GIVEN`, no `YYYYMMDD`, nothing to match. The values
+ * is one long alphanumeric token: no `family^given`, no `YYYYMMDD`, nothing to match. The values
  * inside it are exactly as identifying as the ones in a `.dcm` under `test/fixtures/`.
  *
  * A run that does not decode to a DICOM stream is dropped in silence rather than reported. There is
@@ -2750,7 +2750,7 @@ function scanEmbeddedObjects(
  * object on disk to `scanText` instead, so the DICOM-aware sweep - the tag table, the transfer-syntax
  * dispatch, the per-VR value decode - never ran on one, and the gate printed `OK - no hits` over it.
  * That is not a narrower scan; it is a DIFFERENT one, and it cannot see what the tag table sees: a
- * single-component `(0010,0010)` carries no `FAMILY^GIVEN` caret, so the text sweep's PN regex has
+ * single-component `(0010,0010)` carries no `family^given` caret, so the text sweep's PN regex has
  * nothing to match, and a `DT` value's `YYYYMMDD` head is not a standalone 8-digit token either.
  * `scanDicom` already called `fileMetaStart`, so the two shapes disagreed only at this gate, and only
  * for an object ON DISK - the doc-corpus route reached `scanDicom` through `scanEmbeddedObjects`,
