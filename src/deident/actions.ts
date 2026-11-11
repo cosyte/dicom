@@ -49,13 +49,32 @@ export function effectiveCode(
   action: AnnexEAction,
   active: ReadonlySet<DeidentifyOption>,
 ): AnnexEActionCode {
+  const option = effectiveOption(action, active);
+  return option === undefined
+    ? action.basicProfile
+    : (action.optionSet[option] as AnnexEActionCode);
+}
+
+/**
+ * The Option whose column {@link effectiveCode} reads for this attribute, or
+ * `undefined` when it reads the Basic Profile.
+ *
+ * @example
+ * ```ts
+ * import { annexE } from "../dictionary/annex-e.js";
+ * const row = annexE("00081084"); // Admitting Diagnoses Code Sequence
+ * effectiveOption(row!, new Set(["CleanDescriptors"])); // "CleanDescriptors"
+ * effectiveOption(row!, new Set()); // undefined
+ * ```
+ */
+export function effectiveOption(
+  action: AnnexEAction,
+  active: ReadonlySet<DeidentifyOption>,
+): DeidentifyOption | undefined {
   for (const opt of DEIDENTIFY_OPTIONS) {
-    if (active.has(opt)) {
-      const override = action.optionSet[opt];
-      if (override !== undefined) return override;
-    }
+    if (active.has(opt) && action.optionSet[opt] !== undefined) return opt;
   }
-  return action.basicProfile;
+  return undefined;
 }
 
 /**

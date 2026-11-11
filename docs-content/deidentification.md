@@ -71,6 +71,11 @@ Buffer.isBuffer(serializeDicom(dataset)); // => true
 | `DeidentifyResult<T>` | What the call returns: `{ dataset, report }`, generic in the dataset type so the parsed type flows through.                                                                          |
 | `AppliedAction`       | What actually happened to one attribute: `removed` (`X`), `emptied` (`Z`), `dummied` (`D`), `uid-remapped` (`U`), `cleaned` (`C`), or `kept`. The resolved outcome, not the table's code. |
 
+`cleaned` is a conservative blank: a zero-length value, or, for a Sequence the Clean Descriptors Option cleans, the
+attribute kept with no Items. So a coded list that Option cleans, such as `(0008,1084)` Admitting Diagnoses Code Sequence,
+keeps no Code Value and no Code Meaning `(0008,0104)`. A Sequence the Clean Structured Content or Clean Graphics Option
+cleans is kept and its Items walked.
+
 An Option is opt-in and each one keeps a class of attribute the Basic Profile would otherwise strip:
 
 ```ts runnable

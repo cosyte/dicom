@@ -76,7 +76,11 @@ export const DEIDENTIFY_OPTIONS: readonly DeidentifyOption[] = Object.freeze([
  * - `dummied` - replaced with a non-identifying dummy of compatible VR (`D`).
  * - `uid-remapped` - UID(s) replaced with internally-consistent UIDs (`U`).
  * - `cleaned` - conservatively blanked because a safe similar-meaning value
- *   cannot be synthesised at the metadata layer (`C`; see known limitations).
+ *   cannot be synthesised at the metadata layer (`C`; see known limitations):
+ *   a zero-length value, or, for a Sequence the Clean Descriptors Option
+ *   cleans, the Sequence kept with no Items, so no Code Value or Code Meaning
+ *   in those coded lists is kept. A Sequence another Option cleans is kept and
+ *   its Items walked.
  * - `kept` - retained, either by an active Retain option or because the SQ was
  *   kept and its items cleaned recursively.
  *

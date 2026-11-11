@@ -429,6 +429,9 @@ describe("AC-6: bytes no designated set decodes are U+FFFD, never another set's 
     ["ISO-IR 159 row 83", "\\ISO 2022 IR 159", "1B 24 28 44 73 21 1B 28 42", undefined],
     // A2A1 is GBK's small roman numeral one, not a GB 2312 character.
     ["ISO-IR 58 A2 A1 (a GBK addition)", "\\ISO 2022 IR 58", "1B 24 29 41 A2 A1", undefined],
+    // A2 E6 is past the end of KS X 1001's row 2 in the edition ISO-IR 149 registers; the
+    // WHATWG euc-kr index has a later edition's character there.
+    ["ISO-IR 149 A2 E6 (past row 2)", "\\ISO 2022 IR 149", "1B 24 29 43 A2 E6", undefined],
     // C9 A1 is in KS X 1001's user-defined row.
     ["ISO-IR 149 C9 A1 (user-defined)", "\\ISO 2022 IR 149", "1B 24 29 43 C9 A1", undefined],
     // ISO 8859-3 leaves A5 unassigned.

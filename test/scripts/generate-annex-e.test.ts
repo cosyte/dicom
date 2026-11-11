@@ -35,7 +35,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { createGeneratorSandbox, REPO_ROOT, type Sandbox } from "../helpers/generator-sandbox.js";
-import { runRepoScript, type ScriptResult } from "../helpers/run-script.js";
+import { UNDER_DENO, runRepoScript, type ScriptResult } from "../helpers/run-script.js";
 
 /** The committed artifact, in the real tree. READ ONLY: this is the regen gate's answer. */
 const COMMITTED_ARTIFACT = join(REPO_ROOT, "src", "dictionary", "generated", "annex-e.ts");
@@ -145,7 +145,9 @@ const FULL_DATES_COLUMN = 10;
 /** Index of `Rtn. Long. Modif. Dates Opt.`, the column this slice carries. */
 const MODIFIED_DATES_COLUMN = 11;
 
-describe("generate-annex-e", () => {
+// Skipped under Deno: the generator runs through `tsx`, which a Deno child does not load. See
+// `UNDER_DENO` in `test/helpers/run-script.ts`.
+describe.skipIf(UNDER_DENO)("generate-annex-e", () => {
   // One happy-path invocation, asserted from many angles. The generator reads a
   // 3.5 MB DocBook, so re-spawning it per assertion is real wall-clock spent on
   // nothing: the run is deterministic, so one capture answers every question
