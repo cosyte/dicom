@@ -2,8 +2,11 @@
 //   node bench/budgets.mjs bench-results/reading.json [--summary <file.md>]
 //
 // Four budgets, each a proposal until the package's numbers show it can be held:
-// - peak heap under 20 times the input for a dense shape (the worklist item and the SR: many small
-//   elements, no Pixel Data);
+// - peak memory under 20 times the input for a dense shape (the worklist item and the SR: many small
+//   elements, no Pixel Data), read as @cosyte/bench's `budgetPeakBytes` gives it: the highest call's
+//   heap and external memory together, or, for an input under `BENCH_CONTRACT.FLOOR_INPUT_BYTES`
+//   (64 KiB), the median call's above the empty-call floor, since the probe's own highest call can
+//   cost more than 20 times a 1 KiB input;
 // - peak memory under 3 times the input for a large opaque payload (the CT shapes, whose bytes are
 //   almost all Pixel Data);
 // - a cold import under 15 ms;
@@ -12,14 +15,15 @@
 //
 // The reading's peak heap is the V8 heap only. Pixel Data is a Buffer, outside it, so for the CT
 // shapes the heap row is the header's cost alone, and the opaque budget is read from the resident
-// peak in `pnpm bench:profile`, which counts every byte.
+// peak in `pnpm bench:profile`, which counts every byte. Each row also gives the raw peak heap, as
+// a multiple of the input, beside the figure the budget reads.
 //
 // It prints a Markdown table and always exits 0 when it could read the reading: the budgets are
 // advisory, and a finding is a number to act on, not a red check. It exits 2 when it cannot read it.
 
 import { readFileSync, writeFileSync } from "node:fs";
 
-import { readResults } from "@cosyte/bench";
+import { BENCH_CONTRACT, budgetPeakBytes, readResults } from "@cosyte/bench";
 
 const DENSE_PEAK_MULTIPLE = 20;
 const OPAQUE_PEAK_MULTIPLE = 3;
@@ -47,6 +51,15 @@ function mib(bytes) {
   return `${(bytes / 1024).toFixed(1)} KiB`;
 }
 
+/** The empty-call floor's median, or why there is none. */
+function floorMedian(reading) {
+  const floor = reading.memoryFloor;
+  if (floor === undefined || floor === null) return "not measured";
+  if (floor.status !== undefined && floor.status !== "measured") return `skipped (${floor.reason})`;
+  const median = floor.medianPeakTotalBytes ?? floor.medianPeakHeapBytes;
+  return median === undefined ? "not measured" : mib(median);
+}
+
 function main(argv) {
   const file = argv[0];
   if (file === undefined) {
@@ -72,26 +85,28 @@ function main(argv) {
   const lines = [
     "### Budgets",
     "",
-    `Peak heap is one call's peak above the settled heap, V8 heap only, over one input's bytes; the budget is ${String(DENSE_PEAK_MULTIPLE)} times for a dense shape. The CT rows show the header's heap cost alone: their ${String(OPAQUE_PEAK_MULTIPLE)} times budget counts Pixel Data, and is read from the resident peak in the profile.`,
+    `Peak heap is the highest call's peak above the settled heap, V8 heap only, over one input's bytes. The budget reads \`budgetPeakBytes\`: the highest call's heap and external memory together, or, for an input under ${mib(BENCH_CONTRACT.FLOOR_INPUT_BYTES)}, the median call's above the empty-call floor (median ${floorMedian(doc.reading)}); it is ${String(DENSE_PEAK_MULTIPLE)} times for a dense shape. The CT rows show the header's heap cost alone: their ${String(OPAQUE_PEAK_MULTIPLE)} times budget counts Pixel Data, and is read from the resident peak in the profile.`,
     "",
-    "| Benchmark | Size | Input | Peak heap | Multiple | Budget | Within |",
-    "| --- | --- | --- | --- | --- | --- | --- |",
+    "| Benchmark | Size | Input | Peak heap | Heap multiple | Budget figure | Multiple | Budget | Within |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
   ];
   for (const c of cases) {
     if (c.peak === null || c.bytesPerPass === null) continue;
     const perInput = c.bytesPerPass / c.inputsPerPass;
     if (c.peak.status !== "measured") {
       lines.push(
-        `| ${c.benchmark} | ${c.size} | ${mib(perInput)} | skipped (${c.peak.reason}) | n/a | | not measured |`,
+        `| ${c.benchmark} | ${c.size} | ${mib(perInput)} | skipped (${c.peak.reason}) | n/a | n/a | n/a | | not measured |`,
       );
       continue;
     }
-    const multiple = c.peak.peakHeapBytes / perInput;
+    const heapMultiple = c.peak.peakHeapBytes / perInput;
+    const figure = budgetPeakBytes(c) ?? c.peak.peakHeapBytes;
+    const multiple = figure / perInput;
     const opaque = isOpaque(c.benchmark);
     const budget = opaque ? "see profile" : `${String(DENSE_PEAK_MULTIPLE)}x`;
     const within = opaque ? "n/a" : multiple < DENSE_PEAK_MULTIPLE ? "yes" : "**no**";
     lines.push(
-      `| ${c.benchmark} | ${c.size} | ${mib(perInput)} | ${mib(c.peak.peakHeapBytes)} | ${multiple.toFixed(2)}x | ${budget} | ${within} |`,
+      `| ${c.benchmark} | ${c.size} | ${mib(perInput)} | ${mib(c.peak.peakHeapBytes)} | ${heapMultiple.toFixed(2)}x | ${mib(figure)} | ${multiple.toFixed(2)}x | ${budget} | ${within} |`,
     );
   }
 

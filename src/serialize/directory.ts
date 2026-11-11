@@ -60,7 +60,7 @@ export interface PlacedElement {
   readonly placements: readonly ItemPlacement[] | undefined;
 }
 
-/** The root tags the rewrite reads, and the only ones `encodeBody` records. */
+/** The root tags the rewrite reads, and the only ones `planBody` records. */
 export const PLACED_TAGS: ReadonlySet<Tag> = new Set<Tag>([
   DIRECTORY_TAGS.FIRST_ROOT_RECORD,
   DIRECTORY_TAGS.LAST_ROOT_RECORD,

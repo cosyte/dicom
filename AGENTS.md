@@ -67,9 +67,13 @@ pnpm bench:profile --out bench-results/profile
 A reading reports throughput, latency p50/p95/p99, allocations, peak heap, a long run for leaks,
 and the cold import with its gzip size. Its peak heap is the V8 heap only, so Pixel Data, a Buffer,
 is not in it: `pnpm bench:profile` measures each large size's peak resident memory and single-call
-time in a fresh process, then profiles the hottest paths. On a pull request CI compares the base
-build with the head at each shape's first size, and `.github/workflows/bench.yml` takes a reading
-and a profile on a hosted runner when `bench/` changes. Both are advisory.
+time in a fresh process, then profiles the hottest paths. `bench/budgets.mjs` judges a dense shape
+on the peak `budgetPeakBytes` from `@cosyte/bench` gives: the highest call's heap and external
+memory, or, for an input under 64 KiB, the median call's above the empty-call floor the reading
+measures, since the probe's own highest call can cost more than 20 times a 1 KiB input. On a
+pull request CI compares the base build with the head at each shape's first size, and
+`.github/workflows/bench.yml` takes a reading and a profile on a hosted runner when `bench/`
+changes. Both are advisory.
 
 ## Data
 

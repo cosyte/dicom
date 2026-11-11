@@ -53,11 +53,10 @@ import { zlibModule } from "../builtins.js";
 import type { Dataset } from "../dataset/dataset.js";
 import { DIRECTORY_TAGS, isDicomdir } from "../dataset/directory.js";
 import type { Element } from "../dataset/element.js";
-import { splitTag } from "../dataset/tag.js";
 import { ENCAPSULATED_TRANSFER_SYNTAX_UIDS } from "../dictionary/generated/encapsulated-transfer-syntaxes.js";
 import type { Tag } from "../dictionary/types.js";
 import { PLACED_TAGS, rewriteDirectoryOffsets, type PlacedElement } from "./directory.js";
-import { type BodyEncoding, encodeDatasetElementParts } from "./element.js";
+import { type BodyEncoding, tagParts, writeDatasetElement } from "./element.js";
 import { encapsulatedPixelData, PIXEL_DATA } from "./encapsulated.js";
 import { DicomSerializeError, SERIALIZE_ERROR_CODES } from "./errors.js";
 import { encodeFileMeta } from "./file-meta.js";
@@ -97,66 +96,91 @@ function writePreamble(out: Buffer): void {
   out.write("DICM", 128, "ascii");
 }
 
-/** A Data Set body as the parts to write in order, uncopied, and their total length. */
-interface BodyParts {
-  readonly parts: readonly Buffer[];
+/** One root Data Element as the body writes it. */
+interface Planned {
+  readonly tag: number;
+  readonly el: Element;
+  /** The bytes that stand in for `el.rawBytes`, in the same representation; unset for `pixelData`. */
+  readonly rawBytes: Buffer | undefined;
+  /** The whole on-wire top-level Pixel Data a section A.4 syntax writes, in place of the element. */
+  readonly pixelData: readonly Buffer[] | undefined;
+  /** How many bytes the element is written as. */
+  readonly length: number;
+  readonly placements?: ElementEmission["placements"];
+}
+
+/** A Data Set body as the elements to write in order, and their total length. */
+interface BodyPlan {
+  readonly elements: readonly Planned[];
   readonly length: number;
 }
 
+/** `true` when `planned` is in non-descending Tag order, so a stable sort would leave it as it is. */
+function ascending(planned: readonly Planned[]): boolean {
+  for (let i = 1; i < planned.length; i++) {
+    if ((planned[i] as Planned).tag < (planned[i - 1] as Planned).tag) return false;
+  }
+  return true;
+}
+
 /**
- * Encode the dataset body (every element except retired group lengths) under
+ * Plan the dataset body (every element except retired group lengths) under
  * `encoding`, in ascending tag order (PS3.5 2026c §7.1), whatever order the
  * `Dataset` holds them in. Each `SQ` has the Data Sets of the Items it can walk
  * ordered the same way (see {@link emissionOf}). An element whose own bytes do
  * not show where a reader ends it follows the ascending rest, in the
  * `Dataset`'s order. The input `Dataset` is read, never changed.
  *
- * The body comes back as parts, not bytes: a value is a view of the `Dataset`'s
- * own bytes, so the one copy of it is the one into the output.
+ * The plan is measured, not written: {@link writeBody} writes it into the one
+ * output buffer, so a value is copied once, from the `Dataset`'s own bytes into
+ * the output. Everything that refuses an element throws here, before any
+ * output exists.
  *
  * `pixelData`, when given, is the whole on-wire top-level Pixel Data element a
  * section A.4 syntax writes (see {@link encapsulatedPixelData}); it ends on its
  * own Sequence Delimitation Item, so it is placed by its tag like any other.
  */
-function encodeBody(
+function planBody(
   ds: Dataset,
   encoding: BodyEncoding,
   pixelData?: readonly Buffer[],
   placed?: Map<Tag, PlacedElement>,
-): BodyParts {
+): BodyPlan {
   // PS3.5 §7.2: omit retired (gggg,0000) group-length elements on write.
   // (File Meta group lengths are handled separately and never appear in the
   // dataset element map.)
-  const kept = ds.elements().filter((el) => splitTag(el.tag).element !== 0x0000);
-  interface Encoded {
-    readonly tag: number;
-    readonly parts: readonly Buffer[];
-    readonly length: number;
-    readonly el: Element;
-    readonly placements?: ElementEmission["placements"];
-  }
-  const closed: Encoded[] = [];
-  const open: Encoded[] = [];
-  for (const el of kept) {
+  const kept = ds.elements().filter((el) => tagParts(el.tag).element !== 0x0000);
+  const closed: Planned[] = [];
+  let open: Planned[] | undefined;
+  for (let i = 0; i < kept.length; i++) {
+    const el = kept[i] as Element;
     if (pixelData !== undefined && el.tag === PIXEL_DATA) {
       const length = pixelData.reduce((n, part) => n + part.length, 0);
-      closed.push({ tag: tagNumber(el.tag), parts: pixelData, length, el });
+      closed.push({ tag: tagNumber(el.tag), el, rawBytes: undefined, pixelData, length });
       continue;
     }
     // Only a DICOMDIR's Directory Record Sequence is asked where its Items land.
     const emission = emissionOf(el, encoding, placed !== undefined && el.tag === RECORD_SEQUENCE);
-    const parts: Buffer[] = [];
-    const length = encodeDatasetElementParts(el, encoding, parts, emission.rawBytes);
-    const entry = { tag: tagNumber(el.tag), parts, length, el, placements: emission.placements };
+    const rawBytes = emission.rawBytes ?? el.rawBytes;
+    const length = writeDatasetElement(el, encoding, rawBytes, undefined, 0);
+    const entry: Planned = {
+      tag: tagNumber(el.tag),
+      el,
+      rawBytes,
+      pixelData: undefined,
+      length,
+      placements: emission.placements,
+    };
     if (emission.closed) closed.push(entry);
-    else open.push(entry);
+    else (open ??= []).push(entry);
   }
-  // Stable, so two model elements with one tag keep their relative order.
-  closed.sort((a, b) => a.tag - b.tag);
-  const ordered = [...closed, ...open];
-  const parts: Buffer[] = [];
+  // Stable, so two model elements with one tag keep their relative order; an
+  // already ascending run is left as it is, which is what the sort would do.
+  if (!ascending(closed)) closed.sort((a, b) => a.tag - b.tag);
+  const elements = open === undefined ? closed : [...closed, ...open];
   let start = 0;
-  for (const entry of ordered) {
+  for (let i = 0; i < elements.length; i++) {
+    const entry = elements[i] as Planned;
     if (placed !== undefined && PLACED_TAGS.has(entry.el.tag)) {
       placed.set(entry.el.tag, {
         el: entry.el,
@@ -165,18 +189,26 @@ function encodeBody(
         placements: entry.placements,
       });
     }
-    for (const part of entry.parts) parts.push(part);
     start += entry.length;
   }
-  return { parts, length: start };
+  return { elements, length: start };
 }
 
-/** Copy `parts` into `out` from `at`, in order. */
-function copyParts(out: Buffer, parts: readonly Buffer[], at: number): void {
+/** Write a planned body into `out` from `at`, in order. */
+function writeBody(out: Buffer, plan: BodyPlan, encoding: BodyEncoding, at: number): void {
   let p = at;
-  for (const part of parts) {
-    part.copy(out, p);
-    p += part.length;
+  const elements = plan.elements;
+  for (let i = 0; i < elements.length; i++) {
+    const entry = elements[i] as Planned;
+    if (entry.pixelData !== undefined) {
+      for (const part of entry.pixelData) {
+        part.copy(out, p);
+        p += part.length;
+      }
+    } else {
+      writeDatasetElement(entry.el, encoding, entry.rawBytes as Buffer, out, p);
+      p += entry.length;
+    }
   }
 }
 
@@ -306,11 +338,11 @@ export function serializeDicom(ds: Dataset): Buffer {
   // A DICOMDIR: every offset is rewritten to where its record lands in these
   // bytes, or the whole write is refused before anything is returned.
   const placed = isDicomdir(ds.fileMeta) ? new Map<Tag, PlacedElement>() : undefined;
-  const body = encodeBody(ds, encoding, pixelData, placed);
+  const body = planBody(ds, encoding, pixelData, placed);
   const bodyFileOffset = PREAMBLE_LENGTH + fileMeta.length;
   if (deflated) {
     const plain = Buffer.allocUnsafe(body.length);
-    copyParts(plain, body.parts, 0);
+    writeBody(plain, body, encoding, 0);
     if (placed !== undefined) {
       rewriteDirectoryOffsets(ds, plain, placed, encoding, bodyFileOffset, true);
     }
@@ -321,12 +353,12 @@ export function serializeDicom(ds: Dataset): Buffer {
     deflatedBody.copy(out, bodyFileOffset);
     return out;
   }
-  // One allocation and one copy of every byte, Pixel Data included: the parts
-  // are views of the Dataset's own bytes until they land here.
+  // One allocation and one copy of every byte, Pixel Data included: the values
+  // are read from the Dataset's own bytes straight into the output.
   const out = Buffer.allocUnsafe(bodyFileOffset + body.length);
   writePreamble(out);
   fileMeta.copy(out, PREAMBLE_LENGTH);
-  copyParts(out, body.parts, bodyFileOffset);
+  writeBody(out, body, encoding, bodyFileOffset);
   if (placed !== undefined) {
     rewriteDirectoryOffsets(
       ds,

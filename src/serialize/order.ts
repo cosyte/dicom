@@ -9,7 +9,7 @@
  * the model keeps parse order, so the order is normalized here, at the emit
  * boundary, and nowhere else.
  *
- * The root Data Set is ordered by `serializeDicom`'s `encodeBody`, from
+ * The root Data Set is ordered by `serializeDicom`'s `planBody`, from
  * {@link emissionOf}. This module also orders the Data Sets inside a Sequence,
  * which the model cannot do: an `SQ` element's `items` are the parser's
  * reading, while the bytes the writer emits are the element's `rawBytes`. So
@@ -217,12 +217,30 @@ export interface ElementEmission {
   readonly placements?: readonly ItemPlacement[];
 }
 
+// The reads take the bytes straight from the buffer when they are all inside it, which is what
+// `Buffer.readUInt16LE` and its kin return, without the argument list Node's offset check builds on
+// every call. A read that reaches past either end goes to the Buffer method, so it throws as it did.
+
 function readUint16(buf: Buffer, offset: number, littleEndian: boolean): number {
-  return littleEndian ? buf.readUInt16LE(offset) : buf.readUInt16BE(offset);
+  if (offset < 0 || offset + 2 > buf.length) {
+    return littleEndian ? buf.readUInt16LE(offset) : buf.readUInt16BE(offset);
+  }
+  const a = buf[offset] as number;
+  const b = buf[offset + 1] as number;
+  return littleEndian ? a | (b << 8) : (a << 8) | b;
 }
 
 function readUint32(buf: Buffer, offset: number, littleEndian: boolean): number {
-  return littleEndian ? buf.readUInt32LE(offset) : buf.readUInt32BE(offset);
+  if (offset < 0 || offset + 4 > buf.length) {
+    return littleEndian ? buf.readUInt32LE(offset) : buf.readUInt32BE(offset);
+  }
+  const a = buf[offset] as number;
+  const b = buf[offset + 1] as number;
+  const c = buf[offset + 2] as number;
+  const d = buf[offset + 3] as number;
+  return littleEndian
+    ? a + b * 0x100 + c * 0x10000 + d * 0x1000000
+    : a * 0x1000000 + b * 0x10000 + c * 0x100 + d;
 }
 
 /** The Tag Number at `offset`: unsigned Group Number, then unsigned Element Number. */
@@ -292,19 +310,26 @@ function isImplicitSequence(tagNumberValue: number): boolean {
 
 /** A Data Element header read off the wire. */
 interface ElementHeader {
-  readonly tag: number;
-  readonly headerLength: number;
-  readonly length: number;
+  tag: number;
+  headerLength: number;
+  length: number;
   /** The on-wire VR; `undefined` under Implicit VR. */
-  readonly vr: string | undefined;
+  vr: string | undefined;
 }
 
 /**
- * Read the Data Element (or delimiter) header at `p`, or `undefined` when it
- * does not fit inside `stop`. The Explicit VR layout is decided exactly as the
- * parser's `readExplicitElementHeader` decides it: long form for
- * `LONG_FORM_VRS` and for any VR PS3.5 2026c does not define (section 6.2).
- * A `(FFFE,xxxx)` marker has no VR on the wire in either syntax.
+ * The one header {@link readElementHeader} fills. A walk reads a header for every Data Element at
+ * every depth, so one record is reused rather than one built per element; a caller copies what it
+ * needs out of it before it reads the next header.
+ */
+const HEADER: ElementHeader = { tag: 0, headerLength: 0, length: 0, vr: undefined };
+
+/**
+ * Read the Data Element (or delimiter) header at `p` into {@link HEADER}, or
+ * return `undefined` when it does not fit inside `stop`. The Explicit VR layout
+ * is decided exactly as the parser's `readExplicitElementHeader` decides it:
+ * long form for `LONG_FORM_VRS` and for any VR PS3.5 2026c does not define
+ * (section 6.2). A `(FFFE,xxxx)` marker has no VR on the wire in either syntax.
  */
 function readElementHeader(
   buf: Buffer,
@@ -314,16 +339,26 @@ function readElementHeader(
 ): ElementHeader | undefined {
   if (p + MARKER_LENGTH > stop) return undefined;
   const le = syntax.littleEndian;
-  const tag = readTagNumber(buf, p, le);
-  if (!syntax.explicitVr || isMarker(tag)) {
-    return { tag, headerLength: MARKER_LENGTH, length: readUint32(buf, p + 4, le), vr: undefined };
+  const header = HEADER;
+  header.tag = readTagNumber(buf, p, le);
+  if (!syntax.explicitVr || isMarker(header.tag)) {
+    header.headerLength = MARKER_LENGTH;
+    header.length = readUint32(buf, p + 4, le);
+    header.vr = undefined;
+    return header;
   }
   const vr = vrAt(buf, p + 4);
   if (LONG_FORM_VRS.has(vr) || !isRecognizedVr(vr)) {
     if (p + 12 > stop) return undefined;
-    return { tag, headerLength: 12, length: readUint32(buf, p + 8, le), vr };
+    header.headerLength = 12;
+    header.length = readUint32(buf, p + 8, le);
+    header.vr = vr;
+    return header;
   }
-  return { tag, headerLength: MARKER_LENGTH, length: readUint16(buf, p + 6, le), vr };
+  header.headerLength = MARKER_LENGTH;
+  header.length = readUint16(buf, p + 6, le);
+  header.vr = vr;
+  return header;
 }
 
 /** `true` when this header opens a Sequence the ordering walk may descend. */
@@ -393,29 +428,40 @@ function walkElement(
 ): ElementSpan | undefined {
   const header = readElementHeader(buf, p, stop, syntax);
   if (header === undefined) return undefined;
-  const model = item.get(tagOfNumber(header.tag));
-  if (model === undefined) return undefined;
+  // Copied out first: the walk below reads the headers inside this element into the same record.
+  const tag = header.tag;
   const valueStart = p + header.headerLength;
-  const undefinedLength = header.length === UNDEFINED_LENGTH;
+  const declared = header.length;
+  const sequence = isSequence(header, syntax);
+  const model = item.get(tagOfNumber(tag));
+  if (model === undefined) return undefined;
+  const undefinedLength = declared === UNDEFINED_LENGTH;
   const items =
-    depth < NESTING_DEPTH_LIMIT && isSequence(header, syntax) && model.vr === "SQ"
-      ? model.items
-      : undefined;
+    depth < NESTING_DEPTH_LIMIT && sequence && model.vr === "SQ" ? model.items : undefined;
 
-  let walked: Walked | undefined;
-  if (items !== undefined) {
-    const definedEnd = undefinedLength ? undefined : valueStart + header.length;
-    walked =
-      definedEnd !== undefined && definedEnd > stop
-        ? undefined
-        : walkItems(buf, valueStart, definedEnd, stop, syntax, depth + 1, items);
-  } else {
+  if (items === undefined) {
     // Not descended. A defined length frames it; an undefined-length one ends
     // where the source's read of it ended (its `rawBytes` are the whole span),
     // and `agrees` compares those bytes once the Item has been walked.
-    const end = undefinedLength ? p + model.rawBytes.length : valueStart + header.length;
-    walked = end < valueStart || end > stop ? undefined : verbatim(valueStart, end);
+    const end = undefinedLength ? p + elementValueLength(model) : valueStart + declared;
+    if (end < valueStart || end > stop) return undefined;
+    return {
+      tag,
+      start: p,
+      valueStart,
+      undefinedLength,
+      descended: false,
+      model,
+      parts: undefined,
+      changed: false,
+      end,
+    };
   }
+  const definedEnd = undefinedLength ? undefined : valueStart + declared;
+  const walked =
+    definedEnd !== undefined && definedEnd > stop
+      ? undefined
+      : walkItems(buf, valueStart, definedEnd, stop, syntax, depth + 1, items);
   if (walked === undefined) return undefined;
   let parts: Buffer[] | undefined;
   if (walked.changed) {
@@ -423,16 +469,37 @@ function walkElement(
     pushParts(parts, buf, walked);
   }
   return {
-    tag: header.tag,
+    tag,
     start: p,
     valueStart,
     undefinedLength,
-    descended: items !== undefined,
+    descended: true,
     model,
     parts,
     changed: walked.changed,
     end: walked.end,
   };
+}
+
+/** The length of an Element's `rawBytes`, read without making the view. */
+function elementValueLength(el: Element): number {
+  return elementValueEnd(el) - elementValueStart(el);
+}
+
+/** Values up to this long are compared byte by byte, with no view made of either side. */
+const COMPARE_IN_PLACE_BYTES = 64;
+
+/** `true` when `length` bytes of `a` from `aStart` are the bytes of `b` from `bStart`. */
+function sameBytes(a: Buffer, aStart: number, b: Buffer, bStart: number, length: number): boolean {
+  if (length > COMPARE_IN_PLACE_BYTES) {
+    // `equals` over views: `compare` with a source range throws a RangeError under Deno's
+    // `node:buffer` on arguments Node accepts.
+    return a.subarray(aStart, aStart + length).equals(b.subarray(bStart, bStart + length));
+  }
+  for (let i = 0; i < length; i++) {
+    if (a[aStart + i] !== b[bStart + i]) return false;
+  }
+  return true;
 }
 
 /**
@@ -447,15 +514,11 @@ function agrees(buf: Buffer, span: ElementSpan, encoding: BodyEncoding): boolean
   const valueOnly = !isFullSpanElement(model, encoding);
   const from = valueOnly ? span.valueStart : span.start;
   const length = span.end - from;
-  // The model's bytes, compared with `equals` over views: `compare` with a source range throws
-  // a RangeError under Deno's `node:buffer` on arguments Node accepts.
   const src = elementValueSource(model);
   const start = elementValueStart(model);
   const end = elementValueEnd(model);
   if (span.descended) return end - start === length;
-  if (end - start === length && src.subarray(start, end).equals(buf.subarray(from, span.end))) {
-    return true;
-  }
+  if (end - start === length && sameBytes(src, start, buf, from, length)) return true;
   return (
     valueOnly &&
     length === end - start + 1 &&
@@ -464,40 +527,88 @@ function agrees(buf: Buffer, span: ElementSpan, encoding: BodyEncoding): boolean
 }
 
 /**
- * Walk the Data Set one Item carries and emit its elements in ascending Tag
- * order, closed elements first. `definedEnd` is the end an Explicit Length Item
- * declares; `undefined` means the Item runs to its Item Delimitation Item,
- * which must come before `limit`. `model` is the reader's Item for it.
+ * `true` when an Item's Data Set, whose spans carry `count` distinct Tag
+ * Numbers in ascending order, has a span for every element the reader found
+ * (bar a group length, which the writer itself leaves out of an Item it
+ * encodes). Every span's tag is one of the model's, so equal counts mean the
+ * same tags.
  */
-function walkDataSet(
+function coversAscending(model: Item, spans: readonly ElementSpan[]): boolean {
+  const elements = model.elements();
+  if (elements.length === spans.length) return true;
+  for (const el of elements) {
+    if (splitTag(el.tag).element !== 0x0000 && !hasSpan(spans, tagNumber(el.tag))) return false;
+  }
+  return true;
+}
+
+/** `true` when `spans`, in ascending Tag Number order, hold one with Tag Number `tag`. */
+function hasSpan(spans: readonly ElementSpan[], tag: number): boolean {
+  let low = 0;
+  let high = spans.length - 1;
+  while (low <= high) {
+    const mid = (low + high) >>> 1;
+    const at = (spans[mid] as ElementSpan).tag;
+    if (at === tag) return true;
+    if (at < tag) low = mid + 1;
+    else high = mid - 1;
+  }
+  return false;
+}
+
+/** Whether a span that agrees with its model shows where a reader ends it. */
+function spanCloses(span: ElementSpan, syntax: WireSyntax, depth: number): boolean {
+  return (
+    span.descended ||
+    !isFullSpanElement(span.model, syntax.encoding) ||
+    closesItself(span.model, syntax, depth + 1)
+  );
+}
+
+/**
+ * The spans of an Item's Data Set in the order they are written, when they
+ * were read in strictly ascending Tag order, or `undefined` when the Item
+ * cannot be ordered. No tag repeats, so every span is the model's last copy;
+ * the closed spans keep their order, already ascending, and the open ones
+ * follow. That is what {@link orderedAnyOrder} returns for the same spans,
+ * without the sort and with no array made when nothing moves.
+ */
+function orderedAscending(
   buf: Buffer,
-  start: number,
-  definedEnd: number | undefined,
-  limit: number,
+  spans: ElementSpan[],
   syntax: WireSyntax,
   depth: number,
   model: Item,
-  placed?: PlacedSpan[],
-): Walked | undefined {
-  const stop = definedEnd ?? limit;
-  const spans: ElementSpan[] = [];
-  let delimiterAt: number | undefined;
-  let p = start;
-  while (definedEnd === undefined || p < definedEnd) {
-    if (p + MARKER_LENGTH > stop) return undefined;
-    const tag = readTagNumber(buf, p, syntax.littleEndian);
-    if (isMarker(tag)) {
-      if (definedEnd !== undefined || tag !== ITEM_DELIMITATION) return undefined;
-      delimiterAt = p;
-      p += MARKER_LENGTH;
-      break;
+): readonly Emitted[] | undefined {
+  if (!coversAscending(model, spans)) return undefined;
+  let closed: Emitted[] | undefined;
+  let open: Emitted[] | undefined;
+  for (let i = 0; i < spans.length; i++) {
+    const span = spans[i] as ElementSpan;
+    if (!agrees(buf, span, syntax.encoding)) return undefined;
+    const closes = spanCloses(span, syntax, depth);
+    if (open === undefined) {
+      if (closes) continue;
+      // The first open span: every span before it is closed, in order.
+      closed = spans.slice(0, i);
+      open = [];
     }
-    const span = walkElement(buf, p, stop, syntax, depth, model);
-    if (span === undefined) return undefined;
-    spans.push(span);
-    p = span.end;
+    (closes ? (closed as Emitted[]) : open).push(span);
   }
+  return open === undefined ? spans : [...(closed as Emitted[]), ...open];
+}
 
+/**
+ * The spans of an Item's Data Set in the order they are written, in any order
+ * they were read, or `undefined` when the Item cannot be ordered.
+ */
+function orderedAnyOrder(
+  buf: Buffer,
+  spans: readonly ElementSpan[],
+  syntax: WireSyntax,
+  depth: number,
+  model: Item,
+): readonly Emitted[] | undefined {
   const last = new Map<number, ElementSpan>();
   for (const span of spans) last.set(span.tag, span);
   // Every element the reader found has its span (bar a group length, which the
@@ -522,11 +633,7 @@ function walkDataSet(
       });
     } else if (!agrees(buf, span, syntax.encoding)) {
       return undefined;
-    } else if (
-      span.descended ||
-      !isFullSpanElement(span.model, syntax.encoding) ||
-      closesItself(span.model, syntax, depth + 1)
-    ) {
+    } else if (spanCloses(span, syntax, depth)) {
       closed.push(span);
     } else {
       open.push(span);
@@ -534,7 +641,52 @@ function walkDataSet(
   }
   // Array.prototype.sort is stable (ES2019), so a repeated tag keeps its copies
   // in source relative order.
-  const ordered = [...closed.sort((a, b) => a.tag - b.tag), ...open];
+  return [...closed.sort((a, b) => a.tag - b.tag), ...open];
+}
+
+/**
+ * Walk the Data Set one Item carries and emit its elements in ascending Tag
+ * order, closed elements first. `definedEnd` is the end an Explicit Length Item
+ * declares; `undefined` means the Item runs to its Item Delimitation Item,
+ * which must come before `limit`. `model` is the reader's Item for it.
+ */
+function walkDataSet(
+  buf: Buffer,
+  start: number,
+  definedEnd: number | undefined,
+  limit: number,
+  syntax: WireSyntax,
+  depth: number,
+  model: Item,
+  placed?: PlacedSpan[],
+): Walked | undefined {
+  const stop = definedEnd ?? limit;
+  const spans: ElementSpan[] = [];
+  let delimiterAt: number | undefined;
+  let ascending = true;
+  let previous = -1;
+  let p = start;
+  while (definedEnd === undefined || p < definedEnd) {
+    if (p + MARKER_LENGTH > stop) return undefined;
+    const tag = readTagNumber(buf, p, syntax.littleEndian);
+    if (isMarker(tag)) {
+      if (definedEnd !== undefined || tag !== ITEM_DELIMITATION) return undefined;
+      delimiterAt = p;
+      p += MARKER_LENGTH;
+      break;
+    }
+    const span = walkElement(buf, p, stop, syntax, depth, model);
+    if (span === undefined) return undefined;
+    if (span.tag <= previous) ascending = false;
+    previous = span.tag;
+    spans.push(span);
+    p = span.end;
+  }
+
+  const ordered = ascending
+    ? orderedAscending(buf, spans, syntax, depth, model)
+    : orderedAnyOrder(buf, spans, syntax, depth, model);
+  if (ordered === undefined) return undefined;
   if (placed !== undefined) {
     // Each span is written whole and at its own length, so where it lands is
     // the Item body's start plus the spans written before it.
@@ -550,12 +702,20 @@ function walkDataSet(
       at += length;
     }
   }
-  const moved = ordered.some((span, i) => span.start !== spans[i]?.start);
-  if (!moved && !ordered.some((span) => span.changed)) return verbatim(start, p);
+  if (!movedOrChanged(ordered, spans)) return verbatim(start, p);
   const parts: Buffer[] = [];
   for (const span of ordered) pushParts(parts, buf, span);
   if (delimiterAt !== undefined) parts.push(buf.subarray(delimiterAt, delimiterAt + MARKER_LENGTH));
   return { parts, changed: true, start, end: p };
+}
+
+/** `true` when a span of `ordered` sits elsewhere than in `spans`, or was itself re-ordered. */
+function movedOrChanged(ordered: readonly Emitted[], spans: readonly ElementSpan[]): boolean {
+  for (let i = 0; i < ordered.length; i++) {
+    const span = ordered[i] as Emitted;
+    if (span.changed || span.start !== spans[i]?.start) return true;
+  }
+  return false;
 }
 
 /**
@@ -579,10 +739,11 @@ function walkItems(
   if (items === undefined) return undefined;
   const stop = definedEnd ?? limit;
   const le = syntax.littleEndian;
-  // Each Item's walk, kept until the end decides whether any view is needed.
-  const walkedItems: Walked[] = [];
+  // Each Item's walk from the first one that changed, kept until the end decides whether any view
+  // is needed. Every Item before it was written as read, so those Items are one run of bytes.
+  let walkedItems: Walked[] | undefined;
+  let unchangedEnd = start;
   let delimiterAt: number | undefined;
-  let changed = false;
   let index = 0;
   let p = start;
   while (definedEnd === undefined || p < definedEnd) {
@@ -608,22 +769,24 @@ function walkItems(
     if (placements !== undefined && collect !== undefined) {
       placements.push({ itemStart: p, elements: collect });
     }
-    walkedItems.push(item);
-    changed ||= item.changed;
+    if (walkedItems !== undefined) walkedItems.push(item);
+    else if (item.changed) walkedItems = [item];
+    else unchangedEnd = item.end;
     p = item.end;
     index += 1;
   }
   if (index !== items.length) return undefined;
-  if (!changed) return verbatim(start, p);
+  if (walkedItems === undefined) return verbatim(start, p);
   // Every Item keeps its place, so each one's Item header is the 8 bytes before
   // its body, and its body is its walk.
   const parts: Buffer[] = [];
+  if (unchangedEnd > start) parts.push(buf.subarray(start, unchangedEnd));
   for (const item of walkedItems) {
     parts.push(buf.subarray(item.start - MARKER_LENGTH, item.start));
     pushParts(parts, buf, item);
   }
   if (delimiterAt !== undefined) parts.push(buf.subarray(delimiterAt, delimiterAt + MARKER_LENGTH));
-  return { parts, changed, start, end: p };
+  return { parts, changed: true, start, end: p };
 }
 
 /**
