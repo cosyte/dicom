@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@cosyte/bench/schema/budgets-v1.schema.json",
   "schemaVersion": 1,
   "kind": "budgets",
-  "description": "The limits @cosyte/dicom holds its build to, judged by cosyte-bench gate in the Budgets workflow on every pull request. Peak: 20 times one input for a dense shape (the worklist item and the SR), 3 times for the CT shapes, whose bytes are almost all Pixel Data; a case still over its multiple has no peak limit and is listed with its gap in AGENTS.md, under Benchmarks. Allocation and throughput: the first floor's limits (its highest A/A reading plus three spreads), rounded to two significant figures, allocation up and throughput down; at a benchmark's largest size the throughput is also held to half its smallest size's slowest A/A reading. serializeDicom: CT @ 20 frames, 10 MiB has no throughput limit: one A/A reading skipped its throughput. Import: a median cold import of at most 15 ms, and the first floor's gzipped bytes rounded up to two significant figures.",
+  "description": "The limits @cosyte/dicom holds its build to, judged by cosyte-bench gate in the Budgets workflow on every pull request. Peak: 20 times one input for a dense shape (the worklist item and the SR), 3 times for the CT shapes, whose bytes are almost all Pixel Data; a case still over its multiple has no peak limit and is listed with its gap in AGENTS.md, under Benchmarks. Allocation: 1.25 times the highest of the floor's 21 readings, rounded up to three significant figures. The readings of one case fall on two levels about 3.4% apart, set by the code V8's background optimizing compiler produced in that process, so a limit at the floor's own spread failed unchanged code; with this room a real allocation regression under about 25% passes the budget, and AGENTS.md says which check sees a smaller one. Throughput: the first floor's limits (its highest A/A reading plus three spreads), rounded down to two significant figures; at a benchmark's largest size it is also held to half its smallest size's slowest A/A reading. serializeDicom: CT at a single frame and at 20 frames has no throughput limit: a reading of the floor's set skipped its throughput (warmup-unstable), and a limit there would fail every reading that skips it. Import: a median cold import of at most 15 ms, which the slowest runners still miss (AGENTS.md gives the gap), and the first floor's gzipped bytes rounded up to two significant figures.",
   "rules": [
     {
       "benchmark": "parseDicom: worklist item",
@@ -10,13 +10,13 @@
       "peakMultiple": {
         "small": 20
       },
-      "allocBytesPerOp": 12000,
+      "allocBytesPerOp": 14100,
       "minBytesPerSecond": 36000000
     },
     {
       "benchmark": "parseDicom, then read tags: worklist item",
       "size": "1 KiB",
-      "allocBytesPerOp": 38000,
+      "allocBytesPerOp": 33300,
       "minBytesPerSecond": 12000000
     },
     {
@@ -25,7 +25,7 @@
       "peakMultiple": {
         "small": 20
       },
-      "allocBytesPerOp": 12000,
+      "allocBytesPerOp": 13900,
       "minBytesPerSecond": 39000000
     },
     {
@@ -34,7 +34,7 @@
       "peakMultiple": {
         "medium": 3
       },
-      "allocBytesPerOp": 62000,
+      "allocBytesPerOp": 75000,
       "minBytesPerSecond": 8400000000
     },
     {
@@ -43,7 +43,7 @@
       "peakMultiple": {
         "large": 3
       },
-      "allocBytesPerOp": 130000,
+      "allocBytesPerOp": 150000,
       "minBytesPerSecond": 47000000000
     },
     {
@@ -52,7 +52,7 @@
       "peakMultiple": {
         "large": 3
       },
-      "allocBytesPerOp": 660000,
+      "allocBytesPerOp": 807000,
       "minBytesPerSecond": 61000000000
     },
     {
@@ -61,7 +61,7 @@
       "peakMultiple": {
         "medium": 3
       },
-      "allocBytesPerOp": 99000,
+      "allocBytesPerOp": 116000,
       "minBytesPerSecond": 2900000000
     },
     {
@@ -70,7 +70,7 @@
       "peakMultiple": {
         "large": 3
       },
-      "allocBytesPerOp": 270000,
+      "allocBytesPerOp": 314000,
       "minBytesPerSecond": 16000000000
     },
     {
@@ -79,7 +79,7 @@
       "peakMultiple": {
         "large": 3
       },
-      "allocBytesPerOp": 1900000,
+      "allocBytesPerOp": 2240000,
       "minBytesPerSecond": 21000000000
     },
     {
@@ -88,8 +88,7 @@
       "peakMultiple": {
         "medium": 3
       },
-      "allocBytesPerOp": 550000,
-      "minBytesPerSecond": 660000000
+      "allocBytesPerOp": 679000
     },
     {
       "benchmark": "serializeDicom: CT",
@@ -97,7 +96,7 @@
       "peakMultiple": {
         "large": 3
       },
-      "allocBytesPerOp": 11000000
+      "allocBytesPerOp": 13300000
     },
     {
       "benchmark": "serializeDicom: CT",
@@ -105,7 +104,7 @@
       "peakMultiple": {
         "large": 3
       },
-      "allocBytesPerOp": 110000000,
+      "allocBytesPerOp": 132000000,
       "minBytesPerSecond": 1000000000
     },
     {
@@ -114,7 +113,7 @@
       "peakMultiple": {
         "small": 20
       },
-      "allocBytesPerOp": 340000,
+      "allocBytesPerOp": 348000,
       "minBytesPerSecond": 28000000
     },
     {
@@ -123,7 +122,7 @@
       "peakMultiple": {
         "medium": 20
       },
-      "allocBytesPerOp": 5600000,
+      "allocBytesPerOp": 5980000,
       "minBytesPerSecond": 32000000
     },
     {
@@ -132,19 +131,19 @@
       "peakMultiple": {
         "large": 20
       },
-      "allocBytesPerOp": 44000000,
+      "allocBytesPerOp": 52000000,
       "minBytesPerSecond": 39000000
     },
     {
       "benchmark": "parseDicom, then read tags: SR, header only",
       "size": "50 measurements, 26 KiB",
-      "allocBytesPerOp": 820000,
+      "allocBytesPerOp": 905000,
       "minBytesPerSecond": 11000000
     },
     {
       "benchmark": "parseDicom, then read tags: SR, header only",
       "size": "1,000 measurements, 503 KiB",
-      "allocBytesPerOp": 15000000,
+      "allocBytesPerOp": 17900000,
       "minBytesPerSecond": 12000000
     },
     {
@@ -153,7 +152,7 @@
       "peakMultiple": {
         "large": 20
       },
-      "allocBytesPerOp": 140000000,
+      "allocBytesPerOp": 160000000,
       "minBytesPerSecond": 15000000
     },
     {
@@ -162,7 +161,7 @@
       "peakMultiple": {
         "small": 20
       },
-      "allocBytesPerOp": 410000,
+      "allocBytesPerOp": 423000,
       "minBytesPerSecond": 36000000
     },
     {
@@ -171,7 +170,7 @@
       "peakMultiple": {
         "medium": 20
       },
-      "allocBytesPerOp": 6600000,
+      "allocBytesPerOp": 8220000,
       "minBytesPerSecond": 33000000
     },
     {
@@ -180,7 +179,7 @@
       "peakMultiple": {
         "large": 20
       },
-      "allocBytesPerOp": 75000000,
+      "allocBytesPerOp": 82000000,
       "minBytesPerSecond": 48000000
     }
   ],

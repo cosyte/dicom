@@ -9,11 +9,14 @@
  * - every case has a peak budget at the standard's multiple (20 times one input for a dense shape, 3
  *   times for the CT shapes), or is listed below as a case still over it, with the gap AGENTS.md
  *   gives: a case we miss is written down, never given a looser budget;
- * - every case has an allocation and a throughput budget, but the one case whose throughput the
+ * - every case has an allocation and a throughput budget, but the cases whose throughput the
  *   floor's readings did not all measure (a throughput limit there would fail on every reading that
  *   skips it), and the import a time and a size budget;
- * - the floor is a recorded one: seven or more GitHub-hosted readings on the Node line the Budgets
- *   workflow reads on, keeping every case of the suite and the import.
+ * - every allocation budget is 1.25 times the highest of the floor's readings, rounded up to three
+ *   significant figures: the readings fall on two levels about 3.4% apart (AGENTS.md says why), so a
+ *   budget at the floor's own limit failed unchanged code;
+ * - the floor is a recorded one: 21 GitHub-hosted readings on the Node line the Budgets workflow
+ *   reads on, as many as bench-floor.yml takes, keeping every case of the suite and the import.
  */
 
 import { readFileSync } from "node:fs";
@@ -27,6 +30,18 @@ import suite from "../../bench/dicom.bench.mjs";
 const root = (path: string) => fileURLToPath(new URL(`../../${path}`, import.meta.url));
 const budgets = readBudgets(readFileSync(root("bench/budgets.json"), "utf8"));
 const floor = readFloor(readFileSync(root("bench/floor.json"), "utf8"));
+
+/** The readings bench-floor.yml records the floor from. */
+const FLOOR_READINGS = 21;
+
+/** Each allocation budget over the highest of the floor's readings. */
+const ALLOC_ROOM = 1.25;
+
+/** `n` rounded up to three significant figures. */
+const upToThreeFigures = (n: number) => {
+  const step = 10 ** Math.max(0, Math.floor(Math.log10(n)) - 2);
+  return Math.ceil(n / step) * step;
+};
 
 /** The peak multiple each shape is held to: the CT shapes are almost all Pixel Data. */
 const PEAK_MULTIPLE = { dense: 20, opaque: 3 } as const;
@@ -44,10 +59,14 @@ const STILL_OVER = [
 ] as const;
 
 /**
- * The case with no throughput budget: one reading of the floor's set skipped its throughput, so the
- * floor keeps no time for it, and a limit on it would fail every reading that skips it.
+ * The cases with no throughput budget: a reading of the floor's set skipped each one's throughput
+ * (`warmup-unstable`), so the floor keeps no time for it, and a limit on it would fail every reading
+ * that skips it.
  */
-const NO_THROUGHPUT = [{ benchmark: "serializeDicom: CT", size: "20 frames, 10 MiB" }] as const;
+const NO_THROUGHPUT = [
+  { benchmark: "serializeDicom: CT", size: "single frame, 514 KiB" },
+  { benchmark: "serializeDicom: CT", size: "20 frames, 10 MiB" },
+] as const;
 
 const cases = suite.benchmarks.flatMap((b) =>
   b.sizes.map((s) => ({ benchmark: b.name, size: s.label })),
@@ -106,6 +125,17 @@ describe("bench/budgets.json", () => {
     }
   });
 
+  it("holds every allocation to 1.25 times the floor's highest reading", () => {
+    for (const c of floor.cases) {
+      const highest = c.allocBytesPerOp?.value;
+      expect(highest, name(c)).toBeDefined();
+      const limits = rulesFor(c).flatMap((r) =>
+        r.allocBytesPerOp === undefined ? [] : [r.allocBytesPerOp],
+      );
+      expect(limits, name(c)).toEqual([upToThreeFigures(ALLOC_ROOM * (highest ?? 0))]);
+    }
+  });
+
   it("holds the import to a cold import time and a gzipped size", () => {
     expect(budgets.import?.maxColdImportMs).toBe(15);
     expect(budgets.import?.maxGzipBytes).toBeGreaterThan(0);
@@ -118,9 +148,14 @@ describe("bench/floor.json", () => {
     expect(floor.runnerClass).toMatch(/^github-actions-github-hosted-/);
     expect(floor.nodeMajor).toBe(22);
     expect(floor.readings).toBeGreaterThanOrEqual(BENCH_CONTRACT.FLOOR_MIN_READINGS);
+    expect(floor.readings).toBe(FLOOR_READINGS);
     expect(readFileSync(root(".github/workflows/budgets.yml"), "utf8")).toContain(
       'node-version: "22"',
     );
+    const matrix = /^\s+reading:\s*\[([^\]]*)\]/m.exec(
+      readFileSync(root(".github/workflows/bench-floor.yml"), "utf8"),
+    );
+    expect(matrix?.[1]?.split(",").length).toBe(FLOOR_READINGS);
   });
 
   it("keeps every case of the suite and the import", () => {
