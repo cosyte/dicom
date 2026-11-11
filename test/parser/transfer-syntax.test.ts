@@ -150,19 +150,19 @@ describe("TRANSFER_SYNTAX_PARSERS dispatch table", () => {
     it("parseImplicitLE returns empty elements on empty buffer", () => {
       const ctx = makeCtx(emptyBuf);
       const result = parseImplicitLE(emptyBuf, 0, ctx, () => undefined);
-      expect(result.elements.size).toBe(0);
+      expect(result.count).toBe(0);
     });
 
     it("parseExplicitLE returns empty elements on empty buffer", () => {
       const ctx = makeCtx(emptyBuf);
       const result = parseExplicitLE(emptyBuf, 0, ctx, () => undefined);
-      expect(result.elements.size).toBe(0);
+      expect(result.count).toBe(0);
     });
 
     it("parseExplicitBE returns empty elements on empty buffer", () => {
       const ctx = makeCtx(emptyBuf);
       const result = parseExplicitBE(emptyBuf, 0, ctx, () => undefined);
-      expect(result.elements.size).toBe(0);
+      expect(result.count).toBe(0);
     });
 
     it("parseDeflatedLE inflates an empty raw-deflate stream and parses to empty elements", () => {
@@ -173,7 +173,7 @@ describe("TRANSFER_SYNTAX_PARSERS dispatch table", () => {
       const emptyDeflateStream = deflateRawSync(emptyBuf);
       const ctx = makeCtx(emptyDeflateStream);
       const result = parseDeflatedLE(emptyDeflateStream, 0, ctx, () => undefined);
-      expect(result.elements.size).toBe(0);
+      expect(result.count).toBe(0);
     });
   });
 });

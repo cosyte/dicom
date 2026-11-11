@@ -72,3 +72,18 @@ export class Item extends Dataset {
     this.fileOffset = init.fileOffset;
   }
 }
+
+/**
+ * Instances kept for the life of the process so V8 keeps the Item class's hidden classes.
+ *
+ * A hidden class past an object's first field is reachable only from the objects that use it, so
+ * once a collection finds no live instance it drops the chain, and the next instance built pays to
+ * make every one of them again: 1 to 2 KiB a field, measured, which after a collection
+ * outweighs the parse of a small file. These instances hold the chain. They are built with the
+ * field kinds a parse stores (a number or nothing, a string or nothing, an object or nothing), so
+ * later instances share their hidden classes rather than branching from them.
+ */
+export const ITEM_SHAPES: readonly Item[] = [
+  new Item({ warnings: [], elements: new Map(), index: 0 }),
+  new Item({ warnings: [], elements: new Map(), index: 0, fileOffset: 0 }),
+];

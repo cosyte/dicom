@@ -16,6 +16,7 @@
  * @module
  */
 
+import type { CompactTable } from "../dataset/compact.js";
 import type { VR } from "../dictionary/types.js";
 import type { ParseFrame } from "./errors.js";
 import type { DicomParseWarning, WarningCode } from "./warnings.js";
@@ -364,4 +365,9 @@ export interface ParseContext {
    * `false` (default), `Buffer.subarray(slice)` (view).
    */
   readonly copyValues: boolean;
+  /**
+   * The parse's compact table, which every Data Set read writes its rows into (see
+   * `../dataset/compact.ts`). Made by `parseDicom`, or by the first read that finds none.
+   */
+  table?: CompactTable;
 }

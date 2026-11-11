@@ -104,7 +104,7 @@ describe("parseSequence - defined-length item (D-28)", () => {
       innerStrategy: parseImplicitLE,
     };
     const result = parseSequence(item, 0, ctx, emit, opts);
-    expect(result.items.length).toBe(1);
+    expect(result.itemCount).toBe(1);
     expect(result.endOffset).toBe(item.length);
   });
 });
@@ -124,7 +124,7 @@ describe("parseSequence - undefined-length SQ + SeqDelim (D-25 + D-29)", () => {
       innerStrategy: parseImplicitLE,
     };
     const result = parseSequence(buffer, 0, ctx, emit, opts);
-    expect(result.items.length).toBe(2);
+    expect(result.itemCount).toBe(2);
     expect(result.endOffset).toBe(buffer.length);
   });
 });
@@ -140,7 +140,7 @@ describe("parseSequence - empty item tolerance (D-28)", () => {
       innerStrategy: parseImplicitLE,
     };
     const result = parseSequence(buffer, 0, ctx, emit, opts);
-    expect(result.items.length).toBe(1);
+    expect(result.itemCount).toBe(1);
     expect(ctx.warnings.some((w) => w.code === WARNING_CODES.DICOM_EMPTY_ITEM_IN_SEQUENCE)).toBe(
       true,
     );
@@ -203,14 +203,20 @@ describe("parseSequence - FFFE under BE (D-25 + PITFALLS §2.3)", () => {
     const ctx = makeContext(buffer);
     const emit = makeEmit(ctx);
     // Mock InnerParser - returns empty elements + endOffset = startOffset.
-    const innerStub: InnerParser = (_buf, start) => ({ elements: new Map(), endOffset: start });
+    const innerStub: InnerParser = (_buf, start) => ({
+      first: 0,
+      count: 0,
+      sorted: true,
+      delta: 0,
+      endOffset: start,
+    });
     const opts: ParseSequenceOptions = {
       explicitLength: undefined,
       littleEndian: false,
       innerStrategy: innerStub,
     };
     const result = parseSequence(buffer, 0, ctx, emit, opts);
-    expect(result.items.length).toBe(1);
+    expect(result.itemCount).toBe(1);
     expect(result.endOffset).toBe(buffer.length);
   });
 });
@@ -249,7 +255,7 @@ describe("tryParseUnAsSQ - CP-246 fallback (D-30)", () => {
       "00091000",
     );
     expect(result.success).toBe(false);
-    expect(result.items.length).toBe(0);
+    expect(result.itemCount).toBe(0);
     // No warning emitted on the failure path.
     expect(ctx.warnings.length).toBe(before);
     // State preserved: nestingDepth restored to 0.
@@ -286,7 +292,7 @@ describe("tryParseUnAsSQ - CP-246 fallback (D-30)", () => {
     const value = Buffer.concat([buildItemHeader(8, true), Buffer.alloc(8), buildSeqDelim(true)]);
     const ctx = makeContext(value);
     const result = tryParseUnAsSQ(value, 0, 0xffffffff, ctx, makeEmit(ctx), failing, "00091000");
-    expect(result).toEqual({ success: false, items: [], endOffset: 0 });
+    expect(result).toEqual({ success: false, itemFirst: 0, itemCount: 0, endOffset: 0 });
     expect(ctx.warnings).toEqual([]);
     expect(ctx.nestingDepth).toBe(0);
   });
@@ -312,7 +318,13 @@ describe("parseSequence - encapsulated pixel data (D-31)", () => {
     ]);
     const ctx = makeContext(buffer);
     const emit = makeEmit(ctx);
-    const innerStub: InnerParser = (_buf, start) => ({ elements: new Map(), endOffset: start });
+    const innerStub: InnerParser = (_buf, start) => ({
+      first: 0,
+      count: 0,
+      sorted: true,
+      delta: 0,
+      endOffset: start,
+    });
     const opts: ParseSequenceOptions = {
       explicitLength: undefined,
       littleEndian: true,
@@ -321,7 +333,7 @@ describe("parseSequence - encapsulated pixel data (D-31)", () => {
     };
     const result = parseSequence(buffer, 0, ctx, emit, opts);
     // 4 items: BOT + 3 fragments.
-    expect(result.items.length).toBe(4);
+    expect(result.itemCount).toBe(4);
   });
 
   it("AC-10: an empty Basic Offset Table raises nothing; a later empty fragment still raises DICOM_EMPTY_ITEM_IN_SEQUENCE", () => {
@@ -340,12 +352,18 @@ describe("parseSequence - encapsulated pixel data (D-31)", () => {
     const opts: ParseSequenceOptions = {
       explicitLength: undefined,
       littleEndian: true,
-      innerStrategy: (_buf, start) => ({ elements: new Map(), endOffset: start }),
+      innerStrategy: (_buf, start) => ({
+        first: 0,
+        count: 0,
+        sorted: true,
+        delta: 0,
+        endOffset: start,
+      }),
       encapsulatedPixelData: true,
     };
     const ctx = makeContext(buffer);
     const result = parseSequence(buffer, 0, ctx, makeEmit(ctx), opts);
-    expect(result.items).toHaveLength(3);
+    expect(result.itemCount).toBe(3);
     const empties = ctx.warnings.filter(
       (w) => w.code === WARNING_CODES.DICOM_EMPTY_ITEM_IN_SEQUENCE,
     );
@@ -384,7 +402,13 @@ describe("parseSequence - encapsulated pixel data (D-31)", () => {
     ]);
     const ctx = makeContext(buffer);
     const emit = makeEmit(ctx);
-    const innerStub: InnerParser = (_buf, start) => ({ elements: new Map(), endOffset: start });
+    const innerStub: InnerParser = (_buf, start) => ({
+      first: 0,
+      count: 0,
+      sorted: true,
+      delta: 0,
+      endOffset: start,
+    });
     const opts: ParseSequenceOptions = {
       explicitLength: undefined,
       littleEndian: true,

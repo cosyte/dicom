@@ -40,11 +40,11 @@
 
 import type { Buffer } from "node:buffer";
 
-import { Element } from "../dataset/element.js";
+import { tableOf, type ParsedDataSet } from "../dataset/compact.js";
 import { tagEntry } from "../dictionary/registry.js";
-import type { Tag, VR } from "../dictionary/types.js";
-import { ByteCursor, copyValueBytes } from "./byte-cursor.js";
-import { defineElement, parsedElement } from "./data-set-map.js";
+import type { Tag } from "../dictionary/types.js";
+import { ByteCursor } from "./byte-cursor.js";
+import { defineRow } from "./data-set-map.js";
 import {
   applySpecificCharacterSet,
   emptyExplicitElementHeader,
@@ -106,9 +106,12 @@ export function _parseExplicit(
   emit: (w: DicomParseWarning) => void,
   mode: { littleEndian: boolean; innerStrategy: InnerParser },
   opts: { stopOnItemDelim?: boolean } = {},
-): { elements: ReadonlyMap<Tag, Element>; endOffset: number } {
+): ParsedDataSet {
   const cursor = new ByteCursor(buffer, mode.littleEndian, datasetStart);
-  const elements = new Map<Tag, Element>();
+  const table = tableOf(ctx);
+  table.begin(buffer);
+  const delta = table.deltaOf(buffer);
+  const set = table.openSet();
 
   while (cursor.position < buffer.length) {
     const headerStart = cursor.position;
@@ -150,7 +153,7 @@ export function _parseExplicit(
       // `(FFFE,E00D)` Item Delimitation Item, compared as numbers.
       if (opts.stopOnItemDelim === true && grp === 0xfffe && ele === 0xe00d) {
         // ItemDelim - cursor consumed past the 8-byte marker.
-        return { elements, endOffset: cursor.position };
+        return table.closeSet(set, delta, cursor.position);
       }
       throw unexpectedFffeAtDatasetLevel(ctx.frame, headerStart);
     }
@@ -167,7 +170,7 @@ export function _parseExplicit(
     }
     // Every field is taken out of the shared record here, before anything below
     // can read another header into it.
-    const { tag, vr, length, group: groupNum, element: elementNum } = header;
+    const { tag, vr, length, group: groupNum, element: elementNum, headerLength } = header;
 
     // One position per element, made the first time a warning needs it, and
     // shared by every warning raised for the element.
@@ -218,24 +221,23 @@ export function _parseExplicit(
         ? safeModelCreator(resolvePrivateCreator(tag, ctx), ctx)
         : undefined;
       // `rawBytes` is the whole on-wire span, header included.
-      defineElement(
-        elements,
-        parsedElement(
-          ctx,
-          buffer,
-          headerStart,
-          cursor.position,
-          tag,
-          "SQ",
-          seqResult.items.length,
-          length,
-          headerStart,
-          mode.littleEndian,
-          undefined,
-          privateCreator,
-          seqResult.items,
-        ),
+      defineRow(
+        table,
+        set,
         emit,
+        groupNum,
+        elementNum,
+        "SQ",
+        length,
+        headerStart,
+        mode.littleEndian,
+        0,
+        undefined,
+        privateCreator,
+        delta + cursor.position,
+        seqResult.itemFirst,
+        seqResult.itemCount,
+        false,
       );
       continue;
     }
@@ -257,25 +259,26 @@ export function _parseExplicit(
         emit(pixelDataFragmentsNotDelimited((position ??= { byteOffset: headerStart })));
       }
       cursor.position = result.endOffset;
-      const rawBytes = ctx.copyValues
-        ? copyValueBytes(buffer.subarray(headerStart, cursor.position))
-        : buffer.subarray(headerStart, cursor.position);
-      defineElement(
-        elements,
-        new Element({
-          tag,
-          // NOT promoted: the value stays `binary` over the whole on-wire span.
-          // `readPixelDataFragments` walks that span for the Basic Offset Table
-          // and the fragments.
-          vr: "OB",
-          vm: result.items.length,
-          length: UNDEFINED_LENGTH,
-          rawBytes,
-          byteOffset: headerStart,
-          littleEndian: mode.littleEndian,
-          items: result.items,
-        }),
+      defineRow(
+        table,
+        set,
         emit,
+        groupNum,
+        elementNum,
+        // NOT promoted: the value stays `binary` over the whole on-wire span.
+        // `readPixelDataFragments` walks that span for the Basic Offset Table
+        // and the fragments.
+        "OB",
+        UNDEFINED_LENGTH,
+        headerStart,
+        mode.littleEndian,
+        0,
+        undefined,
+        undefined,
+        delta + cursor.position,
+        result.itemFirst,
+        result.itemCount,
+        false,
       );
       continue;
     }
@@ -294,25 +297,24 @@ export function _parseExplicit(
       );
       if (cp246.success) {
         cursor.position = cp246.endOffset;
-        const rawBytes = ctx.copyValues
-          ? copyValueBytes(buffer.subarray(headerStart, cursor.position))
-          : buffer.subarray(headerStart, cursor.position);
         const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
-        defineElement(
-          elements,
-          new Element({
-            tag,
-            vr: "SQ", // Promoted.
-            vm: cp246.items.length,
-            length: UNDEFINED_LENGTH,
-            rawBytes,
-            byteOffset: headerStart,
-            cp246Promoted: true,
-            littleEndian: mode.littleEndian,
-            items: cp246.items,
-            ...(privateCreator !== undefined ? { privateCreator } : {}),
-          }),
+        defineRow(
+          table,
+          set,
           emit,
+          groupNum,
+          elementNum,
+          "SQ", // Promoted.
+          UNDEFINED_LENGTH,
+          headerStart,
+          mode.littleEndian,
+          0,
+          undefined,
+          privateCreator,
+          delta + cursor.position,
+          cp246.itemFirst,
+          cp246.itemCount,
+          true,
         );
         continue;
       }
@@ -324,22 +326,23 @@ export function _parseExplicit(
       // dataset loop terminates cleanly.
       const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
       const fallbackEnd = buffer.length;
-      const fallbackBytes = ctx.copyValues
-        ? copyValueBytes(buffer.subarray(headerStart, fallbackEnd))
-        : buffer.subarray(headerStart, fallbackEnd);
-      defineElement(
-        elements,
-        new Element({
-          tag,
-          vr: "UN",
-          vm: 0,
-          length: UNDEFINED_LENGTH,
-          rawBytes: fallbackBytes,
-          byteOffset: headerStart,
-          littleEndian: mode.littleEndian,
-          ...(privateCreator !== undefined ? { privateCreator } : {}),
-        }),
+      defineRow(
+        table,
+        set,
         emit,
+        groupNum,
+        elementNum,
+        "UN",
+        UNDEFINED_LENGTH,
+        headerStart,
+        mode.littleEndian,
+        0,
+        undefined,
+        privateCreator,
+        delta + fallbackEnd,
+        0,
+        -1,
+        false,
       );
       cursor.position = fallbackEnd;
       continue;
@@ -391,32 +394,29 @@ export function _parseExplicit(
     const privateCreator = isPrivate
       ? safeModelCreator(resolvePrivateCreator(tag, ctx), ctx)
       : undefined;
-    const finalVr: VR = vr; // Postel: trust on-wire VR (warning already emitted on mismatch).
-    // Every field named, none spread in: the constructor reads an `undefined`
-    // field exactly as an omitted one.
-    defineElement(
-      elements,
-      parsedElement(
-        ctx,
-        buffer,
-        valueStart,
-        valueEnd,
-        tag,
-        finalVr,
-        // Placeholder - the value decoders derive VM from VR + value layout.
-        1,
-        length,
-        headerStart,
-        mode.littleEndian,
-        ctx.currentCharset,
-        privateCreator,
-        undefined,
-      ),
+    // Postel: trust on-wire VR (warning already emitted on mismatch). VM is 1, a placeholder:
+    // the value decoders derive it from VR + value layout.
+    defineRow(
+      table,
+      set,
       emit,
+      groupNum,
+      elementNum,
+      vr,
+      length,
+      headerStart,
+      mode.littleEndian,
+      headerLength,
+      ctx.currentCharset,
+      privateCreator,
+      -1,
+      0,
+      -1,
+      false,
     );
   }
 
-  return { elements, endOffset: cursor.position };
+  return table.closeSet(set, delta, cursor.position);
 }
 
 /**
@@ -432,7 +432,7 @@ export function parseExplicitLE(
   ctx: ParseContext,
   emit: (w: DicomParseWarning) => void,
   opts: { stopOnItemDelim?: boolean } = {},
-): { elements: ReadonlyMap<Tag, Element>; endOffset: number } {
+): ParsedDataSet {
   return _parseExplicit(
     buffer,
     datasetStart,

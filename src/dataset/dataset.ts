@@ -16,6 +16,7 @@
 
 import type { Tag } from "../dictionary/types.js";
 import type { DicomParseWarning } from "../parser/warnings.js";
+import type { CompactTable } from "./compact.js";
 import { analyzeDirectory, type DicomDirectory } from "./directory.js";
 import type { Element } from "./element.js";
 import type { FileMeta } from "./file-meta.js";
@@ -23,6 +24,7 @@ import { buildImage } from "./helpers/image.js";
 import { buildPatient } from "./helpers/patient.js";
 import { buildSeries } from "./helpers/series.js";
 import { buildStudy } from "./helpers/study.js";
+import { tagNumber } from "./tag.js";
 import type { ImageView, PatientView, SeriesView, StudyView } from "./helpers/types.js";
 
 /**
@@ -41,11 +43,21 @@ export interface DatasetInit {
 }
 
 /**
+ * Hands the parser a way to back a Dataset with its compact table, and to set the warnings of the
+ * root once the parse has raised them all. Set once by the class's static block; not exported
+ * from the package.
+ */
+let setTable: (ds: Dataset, table: CompactTable, set: number) => void;
+let setWarnings: (ds: Dataset, warnings: readonly DicomParseWarning[]) => void;
+
+/**
  * One parsed DICOM dataset - the structural shell.
  *
- * Public data: `fileMeta`, `warnings`. The internal element map is stored
- * on `_elements` (protected) and reached through the public
- * `get` / `has` / `elements` / `getAll` navigation API.
+ * Public data: `fileMeta`, `warnings`. The elements are held internally and
+ * reached through the public `get` / `has` / `elements` / `getAll`
+ * navigation API. A Dataset `parseDicom` returns, and each of its Items,
+ * reads them from the parse's compact table and builds each `Element` the
+ * first time it is asked for, then returns that same Element every time.
  *
  * @example
  * ```ts
@@ -60,14 +72,17 @@ export interface DatasetInit {
 export class Dataset {
   public readonly fileMeta: FileMeta | undefined;
   public readonly warnings: readonly DicomParseWarning[];
-  /**
-   * Element map, keyed by uppercase 8-hex tag. Reached publicly through the
-   * navigation surface; kept `protected` here so only subclasses (`Item`, and
-   * any later extension) can introspect it directly.
-   *
-   * @internal
-   */
-  protected readonly _elements: ReadonlyMap<Tag, Element>;
+  /** The elements of a Dataset built by hand, keyed by uppercase 8-hex tag. */
+  #map: ReadonlyMap<Tag, Element>;
+  /** The parse's table, for a Dataset `parseDicom` built; `#set` is this Data Set in it. */
+  #table: CompactTable | undefined;
+  #set = 0;
+  /** The Elements built so far from the table, by position. */
+  #built: (Element | undefined)[] | undefined;
+  /** Tag to position, for a long Data Set whose tags do not ascend. */
+  #positions: Map<number, number> | undefined;
+  /** `_elements`, once a subclass has asked for it. */
+  #elementMap: ReadonlyMap<Tag, Element> | undefined;
 
   /** Memoised domain views (built once, on first access). */
   private _patient?: PatientView;
@@ -86,7 +101,60 @@ export class Dataset {
   public constructor(init: DatasetInit) {
     this.fileMeta = init.fileMeta;
     this.warnings = Object.freeze([...init.warnings]);
-    this._elements = init.elements;
+    this.#map = init.elements;
+    this.#table = undefined;
+  }
+
+  static {
+    setTable = (ds, table, set): void => {
+      ds.#table = table;
+      ds.#set = set;
+    };
+    setWarnings = (ds, warnings): void => {
+      (ds as { warnings: readonly DicomParseWarning[] }).warnings = Object.freeze([...warnings]);
+    };
+  }
+
+  /**
+   * The elements as a map keyed by uppercase 8-hex tag, in parse order, for a subclass that reads
+   * them that way. A Dataset built by hand returns the map it was built with; a parsed one builds
+   * the map, and every Element, the first time this is read.
+   *
+   * @internal
+   */
+  protected get _elements(): ReadonlyMap<Tag, Element> {
+    if (this.#table === undefined) return this.#map;
+    if (this.#elementMap === undefined) {
+      const map = new Map<Tag, Element>();
+      for (const el of this.elements()) map.set(el.tag, el);
+      this.#elementMap = map;
+    }
+    return this.#elementMap;
+  }
+
+  /** The Element at `i` of the table's Data Set, built the first time. */
+  #at(table: CompactTable, i: number): Element {
+    const built = (this.#built ??= new Array<Element | undefined>(table.size(this.#set)));
+    let el = built[i];
+    if (el === undefined) {
+      el = table.element(this.#set, i);
+      built[i] = el;
+    }
+    return el;
+  }
+
+  /** The position of `tag` in the table's Data Set, or -1. */
+  #find(table: CompactTable, tag: Tag): number {
+    const n = tagNumber(tag);
+    if (n === -1) return -1;
+    const set = this.#set;
+    if (this.#positions === undefined && table.wantsIndex(set)) {
+      const positions = new Map<number, number>();
+      const size = table.size(set);
+      for (let i = 0; i < size; i++) positions.set(table.tagAt(set, i), i);
+      this.#positions = positions;
+    }
+    return table.indexOf(set, n, this.#positions);
   }
 
   /**
@@ -103,7 +171,10 @@ export class Dataset {
    * ```
    */
   public get(tag: Tag): Element | undefined {
-    return this._elements.get(tag.toUpperCase());
+    const table = this.#table;
+    if (table === undefined) return this.#map.get(tag.toUpperCase());
+    const i = this.#find(table, tag);
+    return i === -1 ? undefined : this.#at(table, i);
   }
 
   /**
@@ -117,7 +188,9 @@ export class Dataset {
    * ```
    */
   public has(tag: Tag): boolean {
-    return this._elements.has(tag.toUpperCase());
+    const table = this.#table;
+    if (table === undefined) return this.#map.has(tag.toUpperCase());
+    return this.#find(table, tag) !== -1;
   }
 
   /**
@@ -131,12 +204,20 @@ export class Dataset {
    * ```
    */
   public elements(): readonly Element[] {
+    const table = this.#table;
+    if (table !== undefined) {
+      const size = table.size(this.#set);
+      const out = new Array<Element>(size);
+      for (let i = 0; i < size; i++) out[i] = this.#at(table, i);
+      return out;
+    }
     // An array of exactly the map's size, filled in insertion order: the same
     // elements a spread of `values()` gives, without growing an array to fit or
     // stepping an iterator.
-    const out = new Array<Element>(this._elements.size);
+    const map = this.#map;
+    const out = new Array<Element>(map.size);
     let i = 0;
-    this._elements.forEach((el) => {
+    map.forEach((el) => {
       out[i++] = el;
     });
     return out;
@@ -156,7 +237,7 @@ export class Dataset {
    * ```
    */
   public getAll(tag: Tag): readonly Element[] {
-    const el = this._elements.get(tag.toUpperCase());
+    const el = this.get(tag);
     return el !== undefined ? [el] : [];
   }
 
@@ -260,3 +341,36 @@ export class Dataset {
     return this._directory.value;
   }
 }
+
+/**
+ * Back `ds` with Data Set `set` of the parse's compact table.
+ *
+ * @internal
+ */
+export function datasetOverTable(ds: Dataset, table: CompactTable, set: number): void {
+  setTable(ds, table, set);
+}
+
+/**
+ * Set the root Dataset's warnings, frozen, once the parse has raised the last of them.
+ *
+ * @internal
+ */
+export function setDatasetWarnings(ds: Dataset, warnings: readonly DicomParseWarning[]): void {
+  setWarnings(ds, warnings);
+}
+
+/**
+ * Instances kept for the life of the process so V8 keeps the Dataset class's hidden classes.
+ *
+ * A hidden class past an object's first field is reachable only from the objects that use it, so
+ * once a collection finds no live instance it drops the chain, and the next instance built pays to
+ * make every one of them again: 1 to 2 KiB a field, measured, which after a collection
+ * outweighs the parse of a small file. These instances hold the chain. They are built with the
+ * field kinds a parse stores (a number or nothing, a string or nothing, an object or nothing), so
+ * later instances share their hidden classes rather than branching from them.
+ */
+export const DATASET_SHAPES: readonly Dataset[] = [
+  new Dataset({ warnings: [], elements: new Map() }),
+  new Dataset({ fileMeta: { transferSyntaxUID: "" }, warnings: [], elements: new Map() }),
+];

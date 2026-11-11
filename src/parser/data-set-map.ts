@@ -1,5 +1,6 @@
 /**
- * The one place a Data Set's `Map<Tag, Element>` is written during a parse.
+ * The one place a Data Set's elements are written during a parse: one row each in the parse's
+ * compact table (`../dataset/compact.ts`), which keeps them as a `Map<Tag, Element>` would.
  *
  * A parsed Data Set is keyed by tag, so `Map.set` on a tag the map already
  * holds overwrites in place: the earlier element's value leaves the object,
@@ -12,7 +13,7 @@
  *
  * The two dataset element loops (`_parseExplicit` and `parseImplicitLE`, which
  * are also the per-item parsers, so this covers every Data Set at every depth)
- * route their inserts through {@link defineElement} so the replacement is
+ * route their inserts through {@link defineRow} so the replacement is
  * disclosed at the site that performs it. Nothing else changes: the last element
  * read still wins, no value is guessed for the one that lost, and no reading
  * moves.
@@ -20,93 +21,66 @@
  * @module
  */
 
-import type { Buffer } from "node:buffer";
-
-import { Element, elementOverRange, type ElementInit } from "../dataset/element.js";
-import type { Item } from "../dataset/item.js";
-import type { Tag, VR } from "../dictionary/types.js";
-import { copyValueBytes } from "./byte-cursor.js";
-import type { ParseContext } from "./types.js";
+import type { CompactTable, ParsedDataSet, SetWriter } from "../dataset/compact.js";
+import type { VR } from "../dictionary/types.js";
+import { rowMeta } from "../dataset/compact.js";
 import { duplicateTagInDataSet, type DicomParseWarning } from "./warnings.js";
 
 /**
- * The one init every parsed Element is built from, filled in place for each
- * element. The constructor copies every field out of it, so it is free again as
- * soon as the Element exists, and a parse builds no init object per element.
- * `rawBytes` is never set on it: a range stands in (see {@link parsedElement}).
- */
-const INIT: { -readonly [K in keyof ElementInit]: ElementInit[K] | undefined } = {
-  tag: "",
-  vr: "UN",
-  vm: 0,
-  length: 0,
-  rawBytes: undefined,
-  byteOffset: 0,
-  privateCreator: undefined,
-  cp246Promoted: undefined,
-  littleEndian: true,
-  specificCharacterSet: undefined,
-  items: undefined,
-};
-
-/**
- * The Element the parser reads at `start` to `end` of `buffer`. Under
- * `{ copyValues: true }` its `rawBytes` is a standalone copy, made now, as it
- * always was; otherwise the view of that range is made the first time
- * `rawBytes` is read, so an element nobody reads costs no Buffer. Either way a
- * caller reads the same bytes. An `undefined` field is read by the constructor
- * exactly as an omitted one.
+ * Write one element of Data Set `set` into the table, emitting
+ * `DICOM_DUPLICATE_TAG_IN_DATA_SET` when its tag is already there. As a `Map` keyed by tag does,
+ * the element takes the earlier one's place and the earlier one is gone.
+ *
+ * The check costs nothing that follows an attacker-chosen length: while a Data Set's tags ascend
+ * it is one comparison, and once they do not, a scan of at most 16 rows or one map lookup. It is
+ * complete for the Data Set by construction: this is its only writer.
+ *
+ * `end` is -1 for an element whose value is `length` bytes from its start; anything else is a
+ * Sequence-like span with its own end, and its Items when `itemCount` is not -1.
  *
  * @internal
  */
-export function parsedElement(
-  ctx: ParseContext,
-  buffer: Buffer,
-  start: number,
-  end: number,
-  tag: Tag,
+export function defineRow(
+  table: CompactTable,
+  set: SetWriter,
+  emit: (w: DicomParseWarning) => void,
+  group: number,
+  element: number,
   vr: VR,
-  vm: number,
   length: number,
   byteOffset: number,
   littleEndian: boolean,
-  specificCharacterSet: readonly string[] | undefined,
+  startBytes: 0 | 8 | 12,
+  charset: readonly string[] | undefined,
   privateCreator: string | undefined,
-  items: readonly Item[] | undefined,
-): Element {
-  INIT.tag = tag;
-  INIT.vr = vr;
-  INIT.vm = vm;
-  INIT.length = length;
-  INIT.byteOffset = byteOffset;
-  INIT.privateCreator = privateCreator;
-  INIT.littleEndian = littleEndian;
-  INIT.specificCharacterSet = specificCharacterSet;
-  INIT.items = items;
-  if (ctx.copyValues) {
-    const copied = { ...INIT, rawBytes: copyValueBytes(buffer.subarray(start, end)) };
-    return new Element(copied as ElementInit);
-  }
-  return elementOverRange(INIT as ElementInit, buffer, start, end);
+  end: number,
+  itemFirst: number,
+  itemCount: number,
+  cp246: boolean,
+): void {
+  const complex = end !== -1;
+  const meta = rowMeta(
+    table.vrIndex(vr),
+    littleEndian,
+    startBytes,
+    complex,
+    itemCount !== -1,
+    cp246,
+  );
+  const aux = complex
+    ? table.addSeq(end, itemFirst, itemCount === -1 ? 0 : itemCount)
+    : table.charsetIndex(charset);
+  const duplicate = table.addRow(
+    set,
+    group * 0x10000 + element,
+    length,
+    byteOffset,
+    meta,
+    aux,
+    table.creatorIndex(privateCreator),
+  );
+  if (duplicate) emit(duplicateTagInDataSet({ byteOffset }));
 }
 
-/**
- * Insert `element` into the Data Set map under its own tag, emitting
- * `DICOM_DUPLICATE_TAG_IN_DATA_SET` first when that tag is already present.
- *
- * The check is one `Map.has` per element, so it costs nothing that follows an
- * attacker-chosen length, and it is complete for this map by construction: it is
- * the only writer.
- *
- * @internal
- */
-export function defineElement(
-  elements: Map<Tag, Element>,
-  element: Element,
-  emit: (w: DicomParseWarning) => void,
-): void {
-  if (elements.has(element.tag)) {
-    emit(duplicateTagInDataSet({ byteOffset: element.byteOffset }));
-  }
-  elements.set(element.tag, element);
-}
+/** @internal */
+export type { ParsedDataSet };

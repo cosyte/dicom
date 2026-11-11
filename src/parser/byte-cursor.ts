@@ -35,6 +35,36 @@ export function copyValueBytes(src: Buffer): Buffer {
 }
 
 /**
+ * The unsigned 16-bit integer at `at`, from its two bytes, which the caller has bounds-checked.
+ * The same number `readUInt16LE` / `readUInt16BE` gives, read from the bytes directly: Node's
+ * readers are functions of their own that allocate on every call until they are optimized again,
+ * which after a collection is every read of a small file.
+ *
+ * @internal
+ */
+export function uint16At(buffer: Buffer, at: number, littleEndian: boolean): number {
+  const a = buffer[at] as number;
+  const b = buffer[at + 1] as number;
+  return littleEndian ? a | (b << 8) : (a << 8) | b;
+}
+
+/**
+ * The unsigned 32-bit integer at `at`, from its four bytes, which the caller has bounds-checked:
+ * what `readUInt32LE` / `readUInt32BE` gives.
+ *
+ * @internal
+ */
+export function uint32At(buffer: Buffer, at: number, littleEndian: boolean): number {
+  const a = buffer[at] as number;
+  const b = buffer[at + 1] as number;
+  const c = buffer[at + 2] as number;
+  const d = buffer[at + 3] as number;
+  return littleEndian
+    ? (a | (b << 8) | (c << 16)) + d * 0x1000000
+    : a * 0x1000000 + ((b << 16) | (c << 8) | d);
+}
+
+/**
  * Endian-aware Buffer cursor used by every parser strategy.
  *
  * The cursor carries a mutable `position` and an immutable `littleEndian`
@@ -72,9 +102,7 @@ export class ByteCursor {
     if (this.position + 2 > this.buffer.length) {
       throw new RangeError("ByteCursor: read past end of buffer");
     }
-    const v = this.littleEndian
-      ? this.buffer.readUInt16LE(this.position)
-      : this.buffer.readUInt16BE(this.position);
+    const v = uint16At(this.buffer, this.position, this.littleEndian);
     this.position += 2;
     return v;
   }
@@ -84,9 +112,7 @@ export class ByteCursor {
     if (this.position + 4 > this.buffer.length) {
       throw new RangeError("ByteCursor: read past end of buffer");
     }
-    const v = this.littleEndian
-      ? this.buffer.readUInt32LE(this.position)
-      : this.buffer.readUInt32BE(this.position);
+    const v = uint32At(this.buffer, this.position, this.littleEndian);
     this.position += 4;
     return v;
   }
@@ -96,7 +122,7 @@ export class ByteCursor {
     if (offset < 0 || offset + 2 > this.buffer.length) {
       throw new RangeError("ByteCursor: read past end of buffer");
     }
-    return this.littleEndian ? this.buffer.readUInt16LE(offset) : this.buffer.readUInt16BE(offset);
+    return uint16At(this.buffer, offset, this.littleEndian);
   }
 
   /** Read a 32-bit unsigned integer at an explicit offset; cursor unchanged. */
@@ -104,7 +130,7 @@ export class ByteCursor {
     if (offset < 0 || offset + 4 > this.buffer.length) {
       throw new RangeError("ByteCursor: read past end of buffer");
     }
-    return this.littleEndian ? this.buffer.readUInt32LE(offset) : this.buffer.readUInt32BE(offset);
+    return uint32At(this.buffer, offset, this.littleEndian);
   }
 
   /**
@@ -126,3 +152,18 @@ export class ByteCursor {
     return this.buffer.length - this.position;
   }
 }
+
+/**
+ * Instances kept for the life of the process so V8 keeps this class's hidden classes.
+ *
+ * A hidden class past an object's first field is reachable only from the objects that use it, so
+ * once a collection finds no live instance it drops the chain, and the next instance built pays to
+ * make every one of them again: 1 to 2 KiB a field, measured, which after a collection
+ * outweighs the parse of a small file. These instances hold the chain. They are built with the
+ * field kinds a parse stores (a number or nothing, a string or nothing, an object or nothing), so
+ * later instances share their hidden classes rather than branching from them.
+ */
+export const BYTE_CURSOR_SHAPES: readonly ByteCursor[] = [
+  new ByteCursor(Buffer.alloc(0), true, 0),
+  new ByteCursor(Buffer.alloc(0), false),
+];

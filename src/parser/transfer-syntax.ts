@@ -27,9 +27,8 @@
 
 import type { Buffer } from "node:buffer";
 
-import type { Element } from "../dataset/element.js";
+import type { ParsedDataSet } from "../dataset/compact.js";
 import { ENCAPSULATED_TRANSFER_SYNTAX_UIDS } from "../dictionary/generated/encapsulated-transfer-syntaxes.js";
-import type { Tag } from "../dictionary/types.js";
 import { parseDeflatedLE } from "./deflated-le.js";
 import { parseExplicitBE } from "./explicit-be.js";
 import { parseExplicitLE } from "./explicit-le.js";
@@ -56,7 +55,7 @@ export type ParserStrategy = (
   datasetStart: number,
   ctx: ParseContext,
   emit: (w: DicomParseWarning) => void,
-) => { elements: ReadonlyMap<Tag, Element>; endOffset?: number };
+) => ParsedDataSet;
 
 /** One `[uid, strategy]` entry per UID in `uids`. */
 function entriesFor(uids: readonly string[], strategy: ParserStrategy): [string, ParserStrategy][] {

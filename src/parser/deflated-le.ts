@@ -42,8 +42,7 @@
 import type { Buffer } from "node:buffer";
 import { zlibModule } from "../builtins.js";
 
-import type { Element } from "../dataset/element.js";
-import type { Tag } from "../dictionary/types.js";
+import type { ParsedDataSet } from "../dataset/compact.js";
 import { makeEmitter } from "./emit.js";
 import { OFFSET_FRAMES } from "./errors.js";
 import { inflateFailed, inflatedPayloadExceedsCap } from "./fatals.js";
@@ -86,7 +85,7 @@ export function parseDeflatedLE(
   datasetStart: number,
   ctx: ParseContext,
   emit: (w: DicomParseWarning) => void,
-): { elements: ReadonlyMap<Tag, Element>; endOffset: number } {
+): ParsedDataSet {
   return parseDeflatedLEWithCap(buffer, datasetStart, ctx, emit, DEFAULT_MAX_INFLATED_BYTES);
 }
 
@@ -103,7 +102,7 @@ export function parseDeflatedLEWithCap(
   ctx: ParseContext,
   emit: (w: DicomParseWarning) => void,
   maxInflatedBytes: number,
-): { elements: ReadonlyMap<Tag, Element>; endOffset: number } {
+): ParsedDataSet {
   const compressed = buffer.subarray(datasetStart);
 
   let inflated: Buffer;
@@ -164,5 +163,5 @@ export function parseDeflatedLEWithCap(
 
   // The on-disk endOffset is the end of the source buffer - once the
   // deflate body starts, all remaining bytes belong to it.
-  return { elements: result.elements, endOffset: buffer.length };
+  return { ...result, endOffset: buffer.length };
 }

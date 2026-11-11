@@ -11,7 +11,7 @@
  * @module
  */
 
-import type { Buffer } from "node:buffer";
+import { Buffer } from "node:buffer";
 
 import type { Tag, VR } from "../dictionary/types.js";
 import type { Item } from "./item.js";
@@ -250,3 +250,36 @@ export function elementValueStart(el: Element): number {
 export function elementValueEnd(el: Element): number {
   return rangeEnd(el);
 }
+
+/**
+ * Instances kept for the life of the process so V8 keeps this class's hidden classes.
+ *
+ * A hidden class past an object's first field is reachable only from the objects that use it, so
+ * once a collection finds no live instance it drops the chain, and the next instance built pays to
+ * make every one of them again: 1 to 2 KiB a field, measured, which after a collection
+ * outweighs the parse of a small file. These instances hold the chain. They are built with the
+ * field kinds a parse stores (a number or nothing, a string or nothing, an object or nothing), so
+ * later instances share their hidden classes rather than branching from them.
+ */
+export const ELEMENT_SHAPES: readonly Element[] = (() => {
+  const empty = Buffer.alloc(0);
+  const blank = {
+    tag: "",
+    vr: "UN",
+    vm: undefined,
+    length: undefined,
+    rawBytes: undefined,
+    byteOffset: undefined,
+    privateCreator: undefined,
+    cp246Promoted: undefined,
+    littleEndian: true,
+    specificCharacterSet: undefined,
+    items: undefined,
+  } as unknown as ElementInit;
+  const set = { ...blank, vm: 0, length: 0, byteOffset: 0, privateCreator: "", items: [] };
+  const a = elementOverRange(blank, empty, 0, 0);
+  const b = elementOverRange(set, empty, 0, 0);
+  const c = new Element({ ...set, rawBytes: empty, cp246Promoted: true, specificCharacterSet: [] });
+  void a.rawBytes;
+  return [a, b, c];
+})();

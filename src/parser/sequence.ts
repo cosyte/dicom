@@ -65,8 +65,7 @@
 
 import type { Buffer } from "node:buffer";
 
-import type { Element } from "../dataset/element.js";
-import { Item } from "../dataset/item.js";
+import { tableOf, type ParsedDataSet } from "../dataset/compact.js";
 import type { Tag } from "../dictionary/types.js";
 import { ByteCursor } from "./byte-cursor.js";
 import { NO_PRIVATE_CREATORS } from "./element-header.js";
@@ -96,19 +95,6 @@ const ITEM_TAG: Tag = "FFFEE000";
 const ITEM_ELEMENT = 0xe000;
 const SEQ_DELIM_ELEMENT = 0xe0dd;
 
-/** The warnings an Item is built with: none. The Dataset copies it, so sharing it is safe. */
-const NO_WARNINGS: readonly DicomParseWarning[] = [];
-
-/** An Item, with `fileOffset` only when the frame gave it one. */
-function makeItem(
-  elements: ReadonlyMap<Tag, Element>,
-  index: number,
-  fileOffset: number | undefined,
-): Item {
-  return fileOffset === undefined
-    ? new Item({ warnings: NO_WARNINGS, elements, index })
-    : new Item({ warnings: NO_WARNINGS, elements, index, fileOffset });
-}
 const UNDEFINED_LENGTH = 0xffffffff;
 
 /**
@@ -132,7 +118,7 @@ export type InnerParser = (
   ctx: ParseContext,
   emit: (w: DicomParseWarning) => void,
   opts?: { stopOnItemDelim?: boolean },
-) => { elements: ReadonlyMap<Tag, Element>; endOffset: number };
+) => ParsedDataSet;
 
 /**
  * Options accepted by {@link parseSequence}. Caller-supplied `innerStrategy`
@@ -161,7 +147,10 @@ export interface ParseSequenceOptions {
 
 /** Result shape returned by {@link parseSequence}. */
 export interface ParseSequenceResult {
-  readonly items: readonly Item[];
+  /** The Data Set record of the first Item in the parse's compact table. */
+  readonly itemFirst: number;
+  /** How many Items the Sequence holds. */
+  readonly itemCount: number;
   /** Offset just past the last byte consumed (after SeqDelim, or at +explicitLength). */
   readonly endOffset: number;
   /**
@@ -235,9 +224,12 @@ export function parseSequence(
   // Item claims a block, so an Item that claims none costs no map.
   const parentCreators = ctx.creators;
 
+  // Each Item's Data Set record, in order, contiguous in the table once the Sequence closes.
+  const table = tableOf(ctx);
+  table.begin(buffer);
+  const itemsMark = table.openItems();
   try {
     const cursor = new ByteCursor(buffer, opts.littleEndian, valueStart);
-    const items: Item[] = [];
     const endLimit =
       opts.explicitLength !== undefined ? valueStart + opts.explicitLength : buffer.length;
 
@@ -267,7 +259,8 @@ export function parseSequence(
       // `(FFFE,E0DD)` and `(FFFE,E000)` are compared as numbers.
       if (group === 0xfffe && element === SEQ_DELIM_ELEMENT) {
         // SeqDelim - skip the 4-byte length field (already consumed) and exit.
-        return { items, endOffset: cursor.position, delimited: true };
+        const itemFirst = table.closeItems(itemsMark);
+        return { itemFirst, itemCount: itemIndex, endOffset: cursor.position, delimited: true };
       }
       if (group !== 0xfffe || element !== ITEM_ELEMENT) {
         throw unexpectedTagInsideSequence(ctx.frame, itemHeaderStart);
@@ -286,7 +279,7 @@ export function parseSequence(
         if (!emptyBasicOffsetTable) {
           emit(emptyItemInSequence({ byteOffset: itemHeaderStart }, ITEM_TAG));
         }
-        items.push(makeItem(new Map(), itemIndex, fileOffset));
+        table.addItem(undefined, fileOffset);
         itemIndex += 1;
         continue;
       }
@@ -302,7 +295,7 @@ export function parseSequence(
           throw encapsulatedFragmentExceedsBuffer(ctx.frame, itemHeaderStart);
         }
         cursor.position += itemLength;
-        items.push(makeItem(new Map(), itemIndex, fileOffset));
+        table.addItem(undefined, fileOffset);
         itemIndex += 1;
         continue;
       }
@@ -318,7 +311,7 @@ export function parseSequence(
         const inner = opts.innerStrategy(buffer, cursor.position, ctx, emit, {
           stopOnItemDelim: true,
         });
-        items.push(makeItem(inner.elements, itemIndex, fileOffset));
+        table.addItem(inner, fileOffset);
         cursor.position = inner.endOffset;
       } else {
         // Defined-length item - slice and parse exactly `itemLength` bytes.
@@ -397,13 +390,14 @@ export function parseSequence(
         } finally {
           ctx.frame = enclosingFrame;
         }
-        items.push(makeItem(inner.elements, itemIndex, fileOffset));
+        table.addItem(inner, fileOffset);
         cursor.position += itemLength;
       }
       itemIndex += 1;
     }
 
-    return { items, endOffset: cursor.position, delimited: false };
+    const itemFirst = table.closeItems(itemsMark);
+    return { itemFirst, itemCount: itemIndex, endOffset: cursor.position, delimited: false };
   } finally {
     ctx.nestingDepth -= 1;
     ctx.encodingContextStack.pop();
@@ -491,10 +485,13 @@ export function tryParseDefinedLengthSQ(
   emit: (w: DicomParseWarning) => void,
   implicitLeInner: InnerParser,
   tag: Tag,
-): { success: boolean; items: readonly Item[] } {
+): { success: boolean; itemFirst: number; itemCount: number } {
   const savedDepth = ctx.nestingDepth;
   const savedStackLen = ctx.encodingContextStack.length;
   const savedWarningsLen = ctx.warnings.length;
+  const table = tableOf(ctx);
+  table.begin(buffer);
+  const savedTable = table.mark();
 
   try {
     // The slice is the bound: nothing in the descent may read past the declared
@@ -515,7 +512,7 @@ export function tryParseDefinedLengthSQ(
     } finally {
       ctx.frame = enclosingFrame;
     }
-    return { success: true, items: result.items };
+    return { success: true, itemFirst: result.itemFirst, itemCount: result.itemCount };
   } catch (err) {
     if (isStrictEscalation(err)) throw err;
     ctx.nestingDepth = savedDepth;
@@ -527,11 +524,12 @@ export function tryParseDefinedLengthSQ(
     while (ctx.warnings.length > savedWarningsLen) {
       ctx.warnings.pop();
     }
+    table.rollBack(savedTable);
     // Emitted AFTER the rollback so it is the one warning that survives, and
     // emitted at all because a silently undescended sequence is invisible to
     // `deidentify()` - which is the defect this whole path exists to close.
     emit(sqNotDescended({ byteOffset: valueStart }, tag));
-    return { success: false, items: [] };
+    return { success: false, itemFirst: 0, itemCount: 0 };
   }
 }
 
@@ -566,11 +564,14 @@ export function tryParseUnAsSQ(
   emit: (w: DicomParseWarning) => void,
   implicitLeInner: InnerParser,
   tag: Tag,
-): { success: boolean; items: readonly Item[]; endOffset: number } {
+): { success: boolean; itemFirst: number; itemCount: number; endOffset: number } {
   // Save state for rollback, which is what keeps a failed descent from retrying.
   const savedDepth = ctx.nestingDepth;
   const savedStackLen = ctx.encodingContextStack.length;
   const savedWarningsLen = ctx.warnings.length;
+  const table = tableOf(ctx);
+  table.begin(buffer);
+  const savedTable = table.mark();
 
   try {
     const slice =
@@ -596,7 +597,8 @@ export function tryParseUnAsSQ(
     emit(unParsedAsSQ({ byteOffset: valueStart }, tag));
     return {
       success: true,
-      items: result.items,
+      itemFirst: result.itemFirst,
+      itemCount: result.itemCount,
       endOffset: valueStart + result.endOffset,
     };
   } catch (err) {
@@ -618,6 +620,7 @@ export function tryParseUnAsSQ(
     while (ctx.warnings.length > savedWarningsLen) {
       ctx.warnings.pop();
     }
-    return { success: false, items: [], endOffset: valueStart };
+    table.rollBack(savedTable);
+    return { success: false, itemFirst: 0, itemCount: 0, endOffset: valueStart };
   }
 }

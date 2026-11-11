@@ -50,6 +50,7 @@ const KNOWN_VR_CODES: ReadonlyMap<number, VR> = new Map(
  * @internal
  */
 export function vrAt(buffer: Buffer, at: number): VR {
-  const known = KNOWN_VR_CODES.get(buffer.readUInt16BE(at));
+  if (at < 0 || at + 2 > buffer.length) throw new RangeError("ByteCursor: read past end of buffer");
+  const known = KNOWN_VR_CODES.get(((buffer[at] as number) << 8) | (buffer[at + 1] as number));
   return known ?? (buffer.toString("ascii", at, at + 2) as VR);
 }
