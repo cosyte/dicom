@@ -35,11 +35,16 @@
 import { Buffer } from "node:buffer";
 
 import type { FileMeta } from "../dataset/file-meta.js";
-import { splitTag } from "../dataset/tag.js";
 import type { Tag, VR } from "../dictionary/types.js";
 import { LONG_FORM_VRS } from "../parser/element-header.js";
 import { isRecognizedVr } from "../parser/endian.js";
-import { MAX_SHORT_FORM_LENGTH, padValue, refuseTooLongForVr } from "./element.js";
+import {
+  MAX_SHORT_FORM_LENGTH,
+  refuseTooLongForVr,
+  tagParts,
+  vrBytes,
+  writePadded,
+} from "./element.js";
 
 /**
  * cosyte's Implementation Class UID, emitted as `(0002,0012)` when the source
@@ -85,42 +90,60 @@ export const COSYTE_IMPLEMENTATION_VERSION_NAME = "COSYTE_DICOM";
 /** Default File Meta Information Version value - `0x0001` (PS3.10 §7.1). */
 const DEFAULT_FILE_META_VERSION = Buffer.from([0x00, 0x01]);
 
-const TAG_GROUP_LENGTH: Tag = "00020000";
+/**
+ * The 4-byte scratch a header's Group and Element Numbers are measured into when nothing is being
+ * written, so a measure throws exactly where a write would.
+ */
+const SCRATCH = Buffer.alloc(4);
 
-/** Encode one File Meta element as Explicit VR LE (short or long form). */
-function encodeMetaElement(tag: Tag, vr: VR, rawValue: Buffer): Buffer {
-  const { group, element } = splitTag(tag);
-  const value = padValue(rawValue, vr);
-  const groupBuf = Buffer.alloc(2);
-  groupBuf.writeUInt16LE(group, 0);
-  const elementBuf = Buffer.alloc(2);
-  elementBuf.writeUInt16LE(element, 0);
-  const vrBuf = Buffer.from(vr, "ascii");
+/**
+ * Write one File Meta element as Explicit VR LE (short or long form) into `out` at `at`, and return
+ * how many bytes it is. With `out` undefined nothing is written and only the length comes back.
+ */
+function writeMetaElement(
+  out: Buffer | undefined,
+  at: number,
+  tag: Tag,
+  vr: VR,
+  rawValue: Buffer,
+): number {
+  const { group, element } = tagParts(tag);
+  const valueLength = rawValue.length + (rawValue.length % 2);
+  const header = out ?? SCRATCH;
+  const h = out === undefined ? 0 : at;
+  header.writeUInt16LE(group, h);
+  header.writeUInt16LE(element, h + 2);
+  const vrBuf = vrBytes(vr);
   // Same PS3.5 2026c section 6.2 rule the dataset writer applies: an
   // unrecognized VR is long-form. `FileMetaRawElement.vr` carries whatever the
   // source file wrote, so this branch is reachable from a real input.
+  let headerLength: number;
   if (LONG_FORM_VRS.has(vr) || !isRecognizedVr(vr)) {
-    const lengthBuf = Buffer.alloc(4);
-    lengthBuf.writeUInt32LE(value.length, 0);
-    return Buffer.concat([
-      groupBuf,
-      elementBuf,
-      vrBuf,
-      Buffer.from([0x00, 0x00]),
-      lengthBuf,
-      value,
-    ]);
+    headerLength = 4 + vrBuf.length + 6;
+    if (out !== undefined) {
+      vrBuf.copy(out, at + 4);
+      out.writeUInt16LE(0, at + 4 + vrBuf.length);
+      out.writeUInt32LE(valueLength, at + 6 + vrBuf.length);
+    }
+  } else {
+    // PS3.5 2026c section 6.2.2 would write a value past 65,534 bytes in a 16-bit-length VR as UN,
+    // and says the UN VR "shall not be used" for a File Meta Information element, so such a value
+    // has no encoding. Refused with a typed error rather than left to the 16-bit write, which threw
+    // a RangeError: a `(0002,xxxx)` the reader took at the odd length FFFFH pads to 65,536 bytes,
+    // and `deidentify` grows a multi-valued `(0002,0003)` past 65,534 bytes when it remaps each UID.
+    if (valueLength > MAX_SHORT_FORM_LENGTH) refuseTooLongForVr("fileMeta");
+    headerLength = 4 + vrBuf.length + 2;
+    if (out !== undefined) {
+      vrBuf.copy(out, at + 4);
+      out.writeUInt16LE(valueLength, at + 4 + vrBuf.length);
+    }
   }
-  // PS3.5 2026c section 6.2.2 would write a value past 65,534 bytes in a 16-bit-length VR as UN,
-  // and says the UN VR "shall not be used" for a File Meta Information element, so such a value
-  // has no encoding. Refused with a typed error rather than left to the 16-bit write, which threw
-  // a RangeError: a `(0002,xxxx)` the reader took at the odd length FFFFH pads to 65,536 bytes,
-  // and `deidentify` grows a multi-valued `(0002,0003)` past 65,534 bytes when it remaps each UID.
-  if (value.length > MAX_SHORT_FORM_LENGTH) refuseTooLongForVr("fileMeta");
-  const lengthBuf = Buffer.alloc(2);
-  lengthBuf.writeUInt16LE(value.length, 0);
-  return Buffer.concat([groupBuf, elementBuf, vrBuf, lengthBuf, value]);
+  if (out !== undefined) writePadded(out, at + headerLength, rawValue, vr);
+  return headerLength + valueLength;
 }
+
+/** `(0002,0000)` File Meta Information Group Length, `UL`, a 4-byte value: 12 bytes in all. */
+const GROUP_LENGTH_ELEMENT_LENGTH = 12;
 
 /**
  * UI/AE/SH text → bytes (padding to even length is handled on encode). Uses
@@ -179,10 +202,15 @@ export function encodeFileMeta(fileMeta: FileMeta): Buffer {
   // 8-char uppercase hex tags sort lexicographically in ascending numeric order.
   entries.sort((a, b) => (a.tag < b.tag ? -1 : a.tag > b.tag ? 1 : 0));
 
-  const bodyBytes = Buffer.concat(entries.map((e) => encodeMetaElement(e.tag, e.vr, e.value)));
-  const groupLengthValue = Buffer.alloc(4);
-  groupLengthValue.writeUInt32LE(bodyBytes.length, 0);
-  const groupLength = encodeMetaElement(TAG_GROUP_LENGTH, "UL", groupLengthValue);
-
-  return Buffer.concat([groupLength, bodyBytes]);
+  let bodyLength = 0;
+  for (const e of entries) bodyLength += writeMetaElement(undefined, 0, e.tag, e.vr, e.value);
+  const out = Buffer.allocUnsafe(GROUP_LENGTH_ELEMENT_LENGTH + bodyLength);
+  out.writeUInt16LE(0x0002, 0);
+  out.writeUInt16LE(0x0000, 2);
+  out.write("UL", 4, "ascii");
+  out.writeUInt16LE(4, 6);
+  out.writeUInt32LE(bodyLength, 8);
+  let p = GROUP_LENGTH_ELEMENT_LENGTH;
+  for (const e of entries) p += writeMetaElement(out, p, e.tag, e.vr, e.value);
+  return out;
 }

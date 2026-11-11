@@ -103,29 +103,49 @@ const NULL_PAD_VRS: ReadonlySet<VR> = new Set<VR>(["UI", "OB", "OW", "OF", "OD",
  */
 export function padValue(value: Buffer, vr: VR): Buffer {
   if (value.length % 2 === 0) return Buffer.from(value);
-  const pad = NULL_PAD_VRS.has(vr) ? 0x00 : 0x20;
-  return Buffer.concat([value, Buffer.from([pad])]);
+  return Buffer.concat([value, Buffer.from([padByte(vr)])]);
 }
 
-/** The one-byte pads, shared: a part is only ever copied out of, never written to. */
-const NULL_PAD = Buffer.from([0x00]);
-const SPACE_PAD = Buffer.from([0x20]);
+/** The pad byte PS3.5 section 6.2 gives a VR's odd-length value: NULL, or SPACE. */
+function padByte(vr: VR): number {
+  return NULL_PAD_VRS.has(vr) ? 0x00 : 0x20;
+}
 
 /**
- * Push `value` and, when its length is odd, its pad byte onto `parts`, per PS3.5 §6.2: the same
- * bytes {@link padValue} returns, without copying the value. Returns the padded length.
+ * Copy `value` and, when its length is odd, its pad byte into `out` at `at`, per PS3.5 section
+ * 6.2: the same bytes {@link padValue} returns, without a copy of the value in between. Returns the
+ * padded length.
+ *
+ * @internal
  */
-function pushPadded(parts: Buffer[], value: Buffer, vr: VR): number {
-  parts.push(value);
+export function writePadded(out: Buffer, at: number, value: Buffer, vr: VR): number {
+  out.set(value, at);
   if (value.length % 2 === 0) return value.length;
-  parts.push(NULL_PAD_VRS.has(vr) ? NULL_PAD : SPACE_PAD);
+  out[at + value.length] = padByte(vr);
   return value.length + 1;
+}
+
+/**
+ * The buffer a header is measured into when nothing is being written: the writes run all the same,
+ * so a measure throws exactly where a write would, and the bytes are thrown away.
+ */
+let scratch = Buffer.alloc(16);
+
+/** {@link scratch}, grown to hold `length` bytes. Only a hand-built VR longer than two needs more. */
+function scratchOf(length: number): Buffer {
+  if (scratch.length < length) scratch = Buffer.alloc(length);
+  return scratch;
 }
 
 /** A VR's two ASCII bytes, as `Buffer.from(vr, "ascii")` writes them, kept per VR string. */
 const VR_BYTES = new Map<string, Buffer>();
 
-function vrBytes(vr: string): Buffer {
+/**
+ * A VR's bytes as `Buffer.from(vr, "ascii")` writes them, made once per VR string.
+ *
+ * @internal
+ */
+export function vrBytes(vr: string): Buffer {
   let bytes = VR_BYTES.get(vr);
   if (bytes === undefined) {
     bytes = Buffer.from(vr, "ascii");
@@ -134,6 +154,25 @@ function vrBytes(vr: string): Buffer {
     if (vr.length === 2) VR_BYTES.set(vr, bytes);
   }
   return bytes;
+}
+
+/** A tag's Group and Element Numbers, by tag; bounded, as a hand-built tag can be any string. */
+const TAG_PARTS = new Map<string, { readonly group: number; readonly element: number }>();
+const TAG_PARTS_LIMIT = 16_384;
+
+/**
+ * `splitTag(tag)`, worked out once per tag: the writer asks for every element it writes, and the
+ * answer for one tag never changes.
+ *
+ * @internal
+ */
+export function tagParts(tag: string): { readonly group: number; readonly element: number } {
+  let parts = TAG_PARTS.get(tag);
+  if (parts === undefined) {
+    parts = splitTag(tag);
+    if (TAG_PARTS.size < TAG_PARTS_LIMIT) TAG_PARTS.set(tag, parts);
+  }
+  return parts;
 }
 
 function writeUint16(buf: Buffer, n: number, at: number, littleEndian: boolean): void {
@@ -208,43 +247,47 @@ export function encodeDatasetElement(
   encoding: BodyEncoding,
   rawBytes: Buffer = el.rawBytes,
 ): Buffer {
-  const parts: Buffer[] = [];
-  const length = encodeDatasetElementParts(el, encoding, parts, rawBytes);
-  return Buffer.concat(parts, length);
+  const out = Buffer.allocUnsafe(writeDatasetElement(el, encoding, rawBytes, undefined, 0));
+  writeDatasetElement(el, encoding, rawBytes, out, 0);
+  return out;
 }
 
 /**
- * {@link encodeDatasetElement} without the copy: push the element's on-wire
- * bytes onto `parts`, in order, and return how many bytes they are. The value
- * is pushed as the view it is, so whoever joins the parts copies it once; a
- * part is never written to afterwards, and a header is a Buffer of its own.
+ * Write one dataset {@link Element}'s on-wire bytes under `encoding` into `out`
+ * at `at`, as {@link encodeDatasetElement} returns them, and return how many
+ * bytes they are. With `out` undefined nothing is written and only the length
+ * comes back; the header is still written, to a scratch buffer, so measuring
+ * throws exactly where writing would and the write that follows a measure does
+ * not throw.
  *
  * @internal
  */
-export function encodeDatasetElementParts(
+export function writeDatasetElement(
   el: Element,
   encoding: BodyEncoding,
-  parts: Buffer[],
-  rawBytes: Buffer = el.rawBytes,
+  rawBytes: Buffer,
+  out: Buffer | undefined,
+  at: number,
 ): number {
   if (isFullSpanElement(el, encoding)) {
     // Verbatim passthrough - already in the output transfer syntax (no
-    // transcode). The joined output is a copy, so it never aliases the parsed
+    // transcode). The output is a copy, so it never aliases the parsed
     // dataset.
-    parts.push(rawBytes);
+    if (out !== undefined) rawBytes.copy(out, at);
     return rawBytes.length;
   }
 
-  const { group, element } = splitTag(el.tag);
+  const { group, element } = tagParts(el.tag);
   const valueLength = rawBytes.length + (rawBytes.length % 2);
 
   if (encoding === "implicit") {
-    const header = Buffer.allocUnsafe(8);
-    header.writeUInt16LE(group, 0);
-    header.writeUInt16LE(element, 2);
-    header.writeUInt32LE(valueLength, 4);
-    parts.push(header);
-    return 8 + pushPadded(parts, rawBytes, el.vr);
+    const header = out ?? scratchOf(8);
+    const h = out === undefined ? 0 : at;
+    header.writeUInt16LE(group, h);
+    header.writeUInt16LE(element, h + 2);
+    header.writeUInt32LE(valueLength, h + 4);
+    if (out !== undefined) writePadded(out, at + 8, rawBytes, el.vr);
+    return 8 + valueLength;
   }
 
   const littleEndian = encoding === "explicitLE";
@@ -256,14 +299,16 @@ export function encodeDatasetElementParts(
   // would truncate the declared length to 4,464 silently, and the reader can now
   // produce such a value.
   if (LONG_FORM_VRS.has(el.vr) || !isRecognizedVr(el.vr)) {
-    const header = Buffer.allocUnsafe(4 + vrBuf.length + 6);
-    writeUint16(header, group, 0, littleEndian);
-    writeUint16(header, element, 2, littleEndian);
-    vrBuf.copy(header, 4);
-    header.writeUInt16LE(0, 4 + vrBuf.length); // reserved (PS3.5 §7.1.2)
-    writeUint32(header, valueLength, 6 + vrBuf.length, littleEndian);
-    parts.push(header);
-    return header.length + pushPadded(parts, rawBytes, el.vr);
+    const headerLength = 4 + vrBuf.length + 6;
+    const header = out ?? scratchOf(headerLength);
+    const h = out === undefined ? 0 : at;
+    writeUint16(header, group, h, littleEndian);
+    writeUint16(header, element, h + 2, littleEndian);
+    vrBuf.copy(header, h + 4);
+    header.writeUInt16LE(0, h + 4 + vrBuf.length); // reserved (PS3.5 §7.1.2)
+    writeUint32(header, valueLength, h + 6 + vrBuf.length, littleEndian);
+    if (out !== undefined) writePadded(out, at + headerLength, rawBytes, el.vr);
+    return headerLength + valueLength;
   }
   // PS3.5 2026c section 6.2.2: a Data Element whose VR has a 16-bit Value Length Field under
   // Explicit VR "and whose Value Length exceeds 65534" is encoded with a VR of UN, in the long
@@ -276,22 +321,26 @@ export function encodeDatasetElementParts(
   if (valueLength > MAX_SHORT_FORM_LENGTH) {
     if (isPrivateCreator(group, element)) refuseTooLongForVr("privateCreator");
     if (group === 0x0002) refuseTooLongForVr("fileMeta");
-    const header = Buffer.allocUnsafe(12);
-    writeUint16(header, group, 0, littleEndian);
-    writeUint16(header, element, 2, littleEndian);
-    header.write("UN", 4, "ascii");
-    header.writeUInt16LE(0, 6); // reserved (PS3.5 §7.1.2)
-    writeUint32(header, valueLength, 8, littleEndian);
-    parts.push(header);
+    const header = out ?? scratchOf(12);
+    const h = out === undefined ? 0 : at;
+    writeUint16(header, group, h, littleEndian);
+    writeUint16(header, element, h + 2, littleEndian);
+    header.write("UN", h + 4, "ascii");
+    header.writeUInt16LE(0, h + 6); // reserved (PS3.5 §7.1.2)
+    writeUint32(header, valueLength, h + 8, littleEndian);
     // Swapped as one unit sequence over the padded value, as the copy it always was.
-    parts.push(littleEndianValue(padValue(rawBytes, el.vr), el.vr, littleEndian));
+    if (out !== undefined) {
+      littleEndianValue(padValue(rawBytes, el.vr), el.vr, littleEndian).copy(out, at + 12);
+    }
     return 12 + valueLength;
   }
-  const header = Buffer.allocUnsafe(4 + vrBuf.length + 2);
-  writeUint16(header, group, 0, littleEndian);
-  writeUint16(header, element, 2, littleEndian);
-  vrBuf.copy(header, 4);
-  writeUint16(header, valueLength, 4 + vrBuf.length, littleEndian);
-  parts.push(header);
-  return header.length + pushPadded(parts, rawBytes, el.vr);
+  const headerLength = 4 + vrBuf.length + 2;
+  const header = out ?? scratchOf(headerLength);
+  const h = out === undefined ? 0 : at;
+  writeUint16(header, group, h, littleEndian);
+  writeUint16(header, element, h + 2, littleEndian);
+  vrBuf.copy(header, h + 4);
+  writeUint16(header, valueLength, h + 4 + vrBuf.length, littleEndian);
+  if (out !== undefined) writePadded(out, at + headerLength, rawBytes, el.vr);
+  return headerLength + valueLength;
 }
