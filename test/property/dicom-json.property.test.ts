@@ -110,7 +110,7 @@ function value(
 function attributes(bigEndian: boolean): Record<string, fc.Arbitrary<DicomJsonAttribute>> {
   const out: Record<string, fc.Arbitrary<DicomJsonAttribute>> = {
     "00080008": value("CS", strings(chars(UPPER, 16))),
-    "00080020": value("DA", strings(fc.constantFrom("19000101", "20001231"))),
+    "00080020": value("DA", strings(fc.constantFrom("19000101", "19001231"))),
     "00089459": value(
       "FL",
       numbers(fc.float({ noNaN: true, noDefaultInfinity: true }).filter((n) => !Object.is(n, -0))),
