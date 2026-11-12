@@ -61,11 +61,11 @@ automated staleness gate, for the reasons given under PS3.6.
 Two documents, because the bound is stated across two editions.
 
 - **Source (current):** `https://dicom.nema.org/medical/dicom/current/source/docbook/part05/part05.xml`
-- **Edition:** PS3.5 **2026c** (read from the document's own
-  `<subtitle>DICOM PS3.5 2026c - Data Structures and Encoding</subtitle>`, not asserted here)
-- **Retrieved:** 28 July 2026
-- **SHA-256:** `4dfd7b8cbc7c368b7cf03e9c4b8a0773bed91266fcdb0bbf8ed634b7287cacca` (`part05/SHA.txt`)
-- **Committed at:** `part05/4dfd7b8c.../part05.xml`, 1,021,881 bytes, verbatim
+- **Edition:** PS3.5 **2026d** (read from the document's own
+  `<subtitle>DICOM PS3.5 2026d - Data Structures and Encoding</subtitle>`, not asserted here)
+- **Retrieved:** 11 November 2026
+- **SHA-256:** `05183ea889f097cba51a938bf961a62f308bc6044a12f24d71282f08469de835` (`part05/SHA.txt`)
+- **Committed at:** `part05/05183ea8.../part05.xml`, 1,025,905 bytes, verbatim
 
 <!-- -->
 

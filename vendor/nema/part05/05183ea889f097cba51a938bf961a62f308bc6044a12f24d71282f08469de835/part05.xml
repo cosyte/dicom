@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <book xmlns="http://docbook.org/ns/docbook" xmlns:xhtml="http://www.w3.org/1999/xhtml" xmlns:xl="http://www.w3.org/1999/xlink" label="PS3.5" version="5.0" xml:id="PS3.5">
   <title>PS3.5</title>
-  <subtitle>DICOM PS3.5 2026c - Data Structures and Encoding</subtitle>
+  <subtitle>DICOM PS3.5 2026d - Data Structures and Encoding</subtitle>
   <info>
     <author>
       <orgname>DICOM Standards Committee</orgname>
@@ -5137,57 +5137,127 @@
                     </orderedlist>
                 </note>
                 <para xml:id="para_6572622d-e549-4279-9ff6-b1c29e90d98c">The Value of Planar Configuration (0028,0006) is irrelevant since the manner of encoding components is specified in the MPEG2 Main Profile / Main Level standard, hence it shall be set to 0.</para>
-                <para xml:id="para_c52e14b1-3f92-476c-be1f-21528a35ce09">In summary:</para>
-                <itemizedlist>
-                    <listitem>
-                        <para xml:id="para_08e7f576-d52b-48c5-8b1c-b98d0f33a040">Samples per Pixel (0028,0002) shall be 3</para>
-                    </listitem>
-                    <listitem>
-                        <para xml:id="para_d4dfb074-7f84-49c0-a087-e6076c3985f5">Photometric Interpretation (0028,0004) shall be YBR_PARTIAL_420</para>
-                    </listitem>
-                    <listitem>
-                        <para xml:id="para_d9d8a93a-8456-4796-9b59-4fd175d26ef6">Bits Allocated (0028,0100) shall be 8</para>
-                    </listitem>
-                    <listitem>
-                        <para xml:id="para_f84dcdf0-217a-4004-bb83-eeffd64aa049">Bits Stored (0028,0101) shall be 8</para>
-                    </listitem>
-                    <listitem>
-                        <para xml:id="para_5d0902d5-9c2d-4a80-8131-a35062b83e92">High Bit (0028,0102) shall be 7</para>
-                    </listitem>
-                    <listitem>
-                        <para xml:id="para_89c83e3d-a690-412a-8525-d485f6d3254f">Pixel Representation (0028,0103) shall be 0</para>
-                    </listitem>
-                    <listitem>
-                        <para xml:id="para_79bedcd7-f3d4-43a8-97df-ce86d89600e9">Planar Configuration (0028,0006) shall be 0</para>
-                    </listitem>
-                    <listitem>
-                        <para xml:id="para_9af789da-aa17-43e7-91c3-2a122dd06ad3">Rows (0028,0010), Columns (0028,0011), Cine Rate (0018,0040) and Frame Time (0018,1063) or Frame Time Vector (0018,1065) shall be consistent with the limitations of Main Profile / Main Level, as specified in <xref linkend="table_8-1" xrefstyle="select: label"/>.</para>
-                    </listitem>
-                </itemizedlist>
+                <para xml:id="para_c52e14b1-3f92-476c-be1f-21528a35ce09">The DICOM Attributes shall have the Values defined in <xref linkend="table_8.2.5-1" xrefstyle="select: label"/>.</para>
+                <table frame="box" label="8.2.5-1" rules="all" xml:id="table_8.2.5-1">
+                    <caption>MPEG2 Main Profile / Main Level Attribute Values for Single and Multi-component</caption>
+                    <thead>
+                        <tr valign="top">
+                            <th align="center" colspan="1" rowspan="1">
+                                <para xml:id="para_aa7a3ce5-42be-429c-8568-2544ccda0593">Attribute</para>
+                            </th>
+                            <th align="center" colspan="1" rowspan="1">
+                                <para xml:id="para_65fe7507-17f6-4c50-b6a4-1dd194adc9f2">Multi-component</para>
+                            </th>
+                            <th align="center" colspan="1" rowspan="1">
+                                <para xml:id="para_1d56851d-9514-4954-85d0-8d67cc6c4b52">Single Component</para>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr valign="top">
+                            <td align="left" colspan="1" rowspan="1">
+                                <para xml:id="para_08e7f576-d52b-48c5-8b1c-b98d0f33a040">Samples per Pixel (0028,0002)</para>
+                            </td>
+                            <td align="center" colspan="1" rowspan="1">
+                                <para xml:id="para_206adea2-547e-4951-a4ec-86aded3c65ea">3</para>
+                            </td>
+                            <td align="center" colspan="1" rowspan="1">
+                                <para xml:id="para_a8792a8c-1ea7-4f02-957b-131b94375dda">1</para>
+                            </td>
+                        </tr>
+                        <tr valign="top">
+                            <td align="left" colspan="1" rowspan="1">
+                                <para xml:id="para_d4dfb074-7f84-49c0-a087-e6076c3985f5">Photometric Interpretation (0028,0004)</para>
+                            </td>
+                            <td align="center" colspan="1" rowspan="1">
+                                <para xml:id="para_6778f291-9a55-4b60-8add-f8605f8530a4">YBR_PARTIAL_420</para>
+                            </td>
+                            <td align="center" colspan="1" rowspan="1">
+                                <para xml:id="para_bf1bef3e-7b08-410b-b08b-305914ce7883">MONOCHROME2</para>
+                            </td>
+                        </tr>
+                        <tr valign="top">
+                            <td align="left" colspan="1" rowspan="1">
+                                <para xml:id="para_d9d8a93a-8456-4796-9b59-4fd175d26ef6">Bits Allocated (0028,0100)</para>
+                            </td>
+                            <td align="center" colspan="1" rowspan="1">
+                                <para xml:id="para_0098d57c-7809-4f70-8e42-90238385f07f">8</para>
+                            </td>
+                            <td align="center" colspan="1" rowspan="1">
+                                <para xml:id="para_41e730b6-04fc-4f95-802d-9490ecdc1712">8</para>
+                            </td>
+                        </tr>
+                        <tr valign="top">
+                            <td align="left" colspan="1" rowspan="1">
+                                <para xml:id="para_f84dcdf0-217a-4004-bb83-eeffd64aa049">Bits Stored (0028,0101)</para>
+                            </td>
+                            <td align="center" colspan="1" rowspan="1">
+                                <para xml:id="para_750bb027-892e-4649-a993-7a12d63c21a8">8</para>
+                            </td>
+                            <td align="center" colspan="1" rowspan="1">
+                                <para xml:id="para_900f3eca-32c7-45e4-8a8e-2a8fa2f6fc67">8</para>
+                            </td>
+                        </tr>
+                        <tr valign="top">
+                            <td align="left" colspan="1" rowspan="1">
+                                <para xml:id="para_5d0902d5-9c2d-4a80-8131-a35062b83e92">High Bit (0028,0102)</para>
+                            </td>
+                            <td align="center" colspan="1" rowspan="1">
+                                <para xml:id="para_55ccf5b0-4ab1-47a6-97c4-d48b84e5f877">7</para>
+                            </td>
+                            <td align="center" colspan="1" rowspan="1">
+                                <para xml:id="para_54638ace-323e-4756-a688-179448f94376">7</para>
+                            </td>
+                        </tr>
+                        <tr valign="top">
+                            <td align="left" colspan="1" rowspan="1">
+                                <para xml:id="para_89c83e3d-a690-412a-8525-d485f6d3254f">Pixel Representation (0028,0103)</para>
+                            </td>
+                            <td align="center" colspan="1" rowspan="1">
+                                <para xml:id="para_ea04b5e5-b594-4fbb-9374-d02f41252744">0</para>
+                            </td>
+                            <td align="center" colspan="1" rowspan="1">
+                                <para xml:id="para_9eaff709-2f3b-4037-b1c0-726855befd13">0</para>
+                            </td>
+                        </tr>
+                        <tr valign="top">
+                            <td align="left" colspan="1" rowspan="1">
+                                <para xml:id="para_79bedcd7-f3d4-43a8-97df-ce86d89600e9">Planar Configuration (0028,0006)</para>
+                            </td>
+                            <td align="center" colspan="1" rowspan="1">
+                                <para xml:id="para_e0f47a04-9cd6-4a31-9ab4-6fb5db036c4c">0</para>
+                            </td>
+                            <td align="center" colspan="1" rowspan="1">
+                                <para xml:id="para_eb054996-71e2-4134-8f19-8b2060a01adb">absent</para>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <para xml:id="para_9af789da-aa17-43e7-91c3-2a122dd06ad3">Rows (0028,0010), Columns (0028,0011), Cine Rate (0018,0040) and Frame Time (0018,1063) or Frame Time Vector (0018,1065) shall be consistent with the limitations of Main Profile / Main Level, as specified in <xref linkend="table_8-1" xrefstyle="select: label"/>.</para>
                 <table frame="box" label="8-1" rules="all" xml:id="table_8-1">
                     <caption>MPEG2 Main Profile / Main Level Image Transfer Syntax Rows and Columns Attributes</caption>
                     <thead>
                         <tr valign="top">
-                            <td align="center" colspan="1" rowspan="1">
+                            <th align="center" colspan="1" rowspan="1">
                                 <para xml:id="para_1ef0cebb-2fa0-4896-91db-5cb0bf7c80c8">Video Type</para>
-                            </td>
-                            <td align="center" colspan="1" rowspan="1">
+                            </th>
+                            <th align="center" colspan="1" rowspan="1">
                                 <para xml:id="para_f24b2066-5570-4e98-82ed-c4d32adc6dad">Spatial resolution</para>
-                            </td>
-                            <td align="center" colspan="1" rowspan="1">
+                            </th>
+                            <th align="center" colspan="1" rowspan="1">
                                 <para xml:id="para_4a2c3f2b-8156-4483-a112-3ee86967503c">Frame Rate</para>
                                 <para xml:id="para_e1ce6a70-efb8-4795-96ae-a0e246c36ad5">(see Note 4)</para>
-                            </td>
-                            <td align="center" colspan="1" rowspan="1">
+                            </th>
+                            <th align="center" colspan="1" rowspan="1">
                                 <para xml:id="para_17461efb-7aa4-4328-90c2-a05bc6801867">Frame Time</para>
                                 <para xml:id="para_f5f0393e-8e66-4429-b8bc-8836cdb6110d">(see Note 5)</para>
-                            </td>
-                            <td align="center" colspan="1" rowspan="1">
+                            </th>
+                            <th align="center" colspan="1" rowspan="1">
                                 <para xml:id="para_91087dc1-b91f-4af0-9583-8e7ce7063ec6">Maximum Rows</para>
-                            </td>
-                            <td align="center" colspan="1" rowspan="1">
+                            </th>
+                            <th align="center" colspan="1" rowspan="1">
                                 <para xml:id="para_b671efea-8e62-4fdd-b3bd-c079d4b2662a">Maximum Columns</para>
-                            </td>
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
@@ -5306,35 +5376,13 @@
                     <para xml:id="para_49d5c0fa-e261-4974-8d53-d8428ad857b0">These requirements are specified in terms of consistency with what is encapsulated, rather than in terms of the uncompressed Pixel Data from which the compressed data stream may have been derived.</para>
                 </note>
                 <para xml:id="para_550767c3-9efa-4014-be77-38e3779c1b6b">When decompressing, should the characteristics explicitly specified in the compressed data stream be inconsistent with those specified in the DICOM Data Elements, those explicitly specified in the compressed data stream should be used to control the decompression. The DICOM Data Elements, if inconsistent, can be regarded as suggestions as to the form in which an uncompressed Data Set might be encoded, subject to the general and IOD-specific rules for uncompressed Photometric Interpretation and Planar Configuration, which may require that decompressed data be converted to one of the permitted forms.</para>
+                <para xml:id="para_3ce1f0ee-59c3-4b9f-b0c5-6319d00fe6b3">The MPEG2 Main Profile / High Level bit stream specifies whether or not a reversible or irreversible multi-component (color) transformation, if any, has been applied. If no multi-component transformation has been applied, then the components shall correspond to those specified by the DICOM Attribute Photometric Interpretation (0028,0004). MPEG2 Main Profile / High Level applies an irreversible multi-component transformation, so DICOM Attribute Photometric Interpretation (0028,0004) shall be YBR_PARTIAL_420 in the case of multi-component data, and MONOCHROME2 in the case of single component data (even though the MPEG2 bit stream itself is always encoded as three components, one luminance and two chrominance).</para>
                 <note>
                     <para xml:id="para_893ba67a-05cf-46bd-ad44-72ec2989f1e3">If MPEG2 Compressed Pixel Data is decompressed and re-encoded in Native (uncompressed) form, then the Data Elements that are related to the Pixel Data encoding are updated accordingly. If color components are converted from YBR_PARTIAL_420 to RGB during decompression and Native re-encoding, the Photometric Interpretation will be changed to RGB in the Data Set with the Native encoding.</para>
                 </note>
-                <para xml:id="para_39989b63-b4d8-46ee-ab01-0f10be3905b3">The requirements are:</para>
+                <para xml:id="para_50957842-4ae0-4504-a2b3-1e2eda2bb578">The DICOM Attributes shall have the Values defined in <xref linkend="table_8.2.5-1" xrefstyle="select: label"/> for MPEG2 Main Profile / Main Level.</para>
+                <para xml:id="para_39989b63-b4d8-46ee-ab01-0f10be3905b3">The other requirements are:</para>
                 <itemizedlist>
-                    <listitem>
-                        <para xml:id="para_5901446e-9730-4bab-b6e0-c24def204714">Planar Configuration (0028,0006) shall be 0</para>
-                        <note>
-                            <para xml:id="para_5f4e2958-bb4e-46e7-b3ba-3e5cf5ee3980">The Value of Planar Configuration (0028,0006) is irrelevant since the manner of encoding components is specified in the MPEG2 standard, hence it is set to 0.</para>
-                        </note>
-                    </listitem>
-                    <listitem>
-                        <para xml:id="para_6ec13661-b33d-4064-a74a-a46268699647">Samples per Pixel (0028,0002) shall be 3</para>
-                    </listitem>
-                    <listitem>
-                        <para xml:id="para_fe60ba81-e0d8-4097-a998-470a8a156835">Photometric Interpretation (0028,0004) shall be YBR_PARTIAL_420 or MONOCHROME2</para>
-                    </listitem>
-                    <listitem>
-                        <para xml:id="para_2eab63a8-e0da-4b56-ad07-efa8d8b65ee5">Bits Allocated (0028,0100) shall be 8</para>
-                    </listitem>
-                    <listitem>
-                        <para xml:id="para_5cf26856-81c3-4dc1-8ea7-98157fc23a38">Bits Stored (0028,0101) shall be 8</para>
-                    </listitem>
-                    <listitem>
-                        <para xml:id="para_8084b705-3cb4-4372-8d5f-82624aebd6fa">High Bit (0028,0102) shall be 7</para>
-                    </listitem>
-                    <listitem>
-                        <para xml:id="para_48974a0b-0c63-40eb-9712-c6455bdf7bad">Pixel Representation (0028,0103) shall be 0</para>
-                    </listitem>
                     <listitem>
                         <para xml:id="para_8978cac2-9467-4516-b17a-fa1fa359b009">Rows (0028,0010) shall be either 720 or 1080</para>
                     </listitem>

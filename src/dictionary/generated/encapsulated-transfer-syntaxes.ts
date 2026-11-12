@@ -3,15 +3,15 @@
 // Regen: pnpm gen:encapsulated-transfer-syntaxes
 //
 // Normative source, pinned by SHA-256 and re-hashed before use:
-//   NEMA DICOM PS3.5 2026c DocBook, section A.4 (Transfer Syntaxes for Encapsulation of Encoded Pixel Data).
-//     vendor/nema/part05/<sha>/part05.xml -> 4dfd7b8cbc7c368b7cf03e9c4b8a0773bed91266fcdb0bbf8ed634b7287cacca
+//   NEMA DICOM PS3.5 2026d DocBook, section A.4 (Transfer Syntaxes for Encapsulation of Encoded Pixel Data).
+//     vendor/nema/part05/<sha>/part05.xml -> 05183ea889f097cba51a938bf961a62f308bc6044a12f24d71282f08469de835
 //
 // Every Transfer Syntax UID section A.4 names, each checked against the
 // generated PS3.6 registry (uids.ts) as a non-retired TransferSyntax row.
 // The name beside each UID is that registry's.
 
 /** The PS3.5 edition {@link ENCAPSULATED_TRANSFER_SYNTAX_UIDS} was read from. */
-export const ENCAPSULATED_TRANSFER_SYNTAX_EDITION = "2026c";
+export const ENCAPSULATED_TRANSFER_SYNTAX_EDITION = "2026d";
 
 /**
  * The Transfer Syntax UIDs PS3.5 section A.4 names: the Data Set is Explicit VR

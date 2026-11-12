@@ -64,7 +64,7 @@ SMITH^REF
 SMITHSON^BRAIN
 XOE^JANE
 # `Yamada^Tarou` is PS3.5's own worked example for the three PN component groups; the vendored
-# PS3.5 2026c under `vendor/nema/part05/` carries it as `Yamada^Tarou=<ideographic>=<phonetic>`.
+# PS3.5 2026d under `vendor/nema/part05/` carries it as `Yamada^Tarou=<ideographic>=<phonetic>`.
 # `Yam^Tar` is NOT in the standard: it is the test's ASCII stand-in for the ideographic group,
 # because the fixture is written in ASCII. Only the first is a citation, and a draft of this
 # comment claimed both were.

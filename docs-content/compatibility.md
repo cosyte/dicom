@@ -8,7 +8,7 @@ description: The DICOM editions this package reads, the transfer syntaxes it sup
 
 # Compatibility
 
-The standard this reads is vendored under `vendor/nema/` and SHA-256 pinned, one edition per part: **PS3.6 and PS3.15 2026d**, and **PS3.5 2026c**. The shipped data dictionary and de-identification action table are regenerated from them byte-identically in CI. The four native transfer syntaxes, every PS3.5 2026c section A.4 encapsulation syntax and the four JPIP Referenced syntaxes of its sections A.6, A.7, A.11 and A.12 are read, and every other one is refused rather than half-read; the vendor deviations this parser tolerates, and the ones it deliberately does not, are named below rather than left to silence.
+The standard this reads is vendored under `vendor/nema/` and SHA-256 pinned, one edition for all three parts: **PS3.5, PS3.6 and PS3.15 2026d**. The shipped data dictionary and de-identification action table are regenerated from them byte-identically in CI. The four native transfer syntaxes, every PS3.5 2026d section A.4 encapsulation syntax and the four JPIP Referenced syntaxes of its sections A.6, A.7, A.11 and A.12 are read, and every other one is refused rather than half-read; the vendor deviations this parser tolerates, and the ones it deliberately does not, are named below rather than left to silence.
 
 ## Supported transfer syntaxes
 
