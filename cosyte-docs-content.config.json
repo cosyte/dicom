@@ -1,0 +1,42 @@
+{
+  "examplePrint": {
+    "required": true,
+    "accessors": [
+      "patient.id",
+      "issuerOfId",
+      "otherIds",
+      "study.id",
+      "accessionNumber",
+      "instanceUid",
+      "sopInstanceUid",
+      "frameOfReferenceUid",
+      "mediaStorageSopInstanceUid",
+      "description",
+      "speciesDescription",
+      "breedDescription",
+      "responsiblePerson",
+      "organization",
+      "institutionName",
+      "referringPhysicianName",
+      "uidMap",
+      "snippet",
+      "removedPrivateTags",
+      "contextPath",
+      "referencedFileId",
+      "sourceApplicationEntityTitle"
+    ],
+    "wholeValues": [
+      "ds",
+      "dataset",
+      "item",
+      "items",
+      "element",
+      "elements",
+      "value",
+      "values",
+      "toDicomJson",
+      "stringifyDicomJson",
+      "json"
+    ]
+  }
+}
