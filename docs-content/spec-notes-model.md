@@ -104,7 +104,9 @@ for (const patient of dir?.root ?? []) {
   for (const study of patient.lowerLevel) {
     for (const series of study.lowerLevel) {
       for (const image of series.lowerLevel) {
-        console.log(patient.type, image.referencedFileId?.join("/"));
+        // The record types and how many path components each file ID has; the path itself is
+        // read from the file, so it is not printed.
+        console.log(patient.type, image.type, image.referencedFileId?.length);
       }
     }
   }

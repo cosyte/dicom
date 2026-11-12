@@ -83,7 +83,7 @@ const out = serializeDicom(ds);
 out.subarray(128, 132).toString("ascii"); // => "DICM"
 
 // The data survives the round trip...
-parseDicom(out).patient.id; // => "MRN-42"
+parseDicom(out).patient.id; // => "MRN-42" /* synthetic */
 
 // ...the output no longer carries the deviation...
 parseDicom(out).warnings.length; // => 0
@@ -210,7 +210,7 @@ const ds = parseDicom(buf);
 
 const json = toDicomJson(ds);
 json["00080060"]; // => { vr: "CS", Value: ["CT"] }
-json["00100020"]; // => { vr: "LO", Value: ["MRN-42"] }
+json["00100020"]; // => { vr: "LO", Value: ["MRN-42"] } /* synthetic */
 
 // The JSON Model carries no File Meta, so the source's goes back in.
 const fileMeta = ds.fileMeta ?? { transferSyntaxUID: "1.2.840.10008.1.2.1" };

@@ -42,7 +42,7 @@ const ds = parseDicom(buf);
 
 // It parsed. The data is intact...
 ds.series.modality; // => "CT"
-ds.patient.id; // => "MRN-42"
+ds.patient.id; // => "MRN-42" /* synthetic */
 
 // ...and the deviation is recorded, not hidden.
 ds.warnings.map((w) => w.code); // => ["DICOM_MISSING_PREAMBLE"]

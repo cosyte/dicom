@@ -42,7 +42,7 @@ const ds = parseDicom(buf);
 const { dataset, report } = deidentify(ds);
 
 // Pure: the input is untouched, the copy is scrubbed.
-ds.patient.id; // => "MRN-42"
+ds.patient.id; // => "MRN-42" /* synthetic */
 dataset.patient.id; // => undefined
 
 // Patient's Name is emptied (Annex E action "Z"), not left in place.
@@ -111,7 +111,7 @@ deidentify(ds).dataset.study.date?.raw; // => undefined
 // declaration changes with them.
 const dated = deidentify(ds, { retain: ["RetainLongitudinalTemporal"] }).dataset;
 dated.get("00280303")?.value; // => { kind: "strings", values: ["UNMODIFIED"] }
-dated.study.date?.raw; // => "19000101"
+dated.study.date?.raw; // => "19000101" /* synthetic */
 
 // With the modified-dates Option: the other E.3.6 column, and the third state.
 const shifted = deidentify(ds, {

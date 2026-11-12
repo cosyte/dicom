@@ -38,7 +38,7 @@ rowCount; // => 512
 const name = ds.get("00100010")?.value; // Patient's Name
 name?.kind; // => "personName"
 const family = name?.kind === "personName" ? name.values[0]?.alphabetic?.familyName : undefined;
-family; // => "Doe"
+family; // => "Doe" /* synthetic */
 
 // DA (date) → validated calendar parts, raw preserved
 const date = ds.get("00080020")?.value; // Study Date
@@ -259,16 +259,16 @@ const buf = Buffer.from(
 
 const asDeclared = parseDicom(buf).get("00100010")?.value;
 const declared = asDeclared?.kind === "personName" ? asDeclared.values[0]?.alphabetic : undefined;
-declared?.givenName; // => "JOS�E"
+declared?.givenName; // => "JOS�E" /* synthetic */
 
 const ds = parseDicom(buf, { fallbackCharacterSet: "ISO_IR 100" });
 const name = ds.get("00100010")?.value;
 const assumed = name?.kind === "personName" ? name.values[0]?.alphabetic : undefined;
-assumed?.givenName; // => "JOSÉE"
+assumed?.givenName; // => "JOSÉE" /* synthetic */
 ds.warnings.map((w) => w.code); // => ["DICOM_CHARSET_ASSUMED"]
 
 const json = toDicomJson(parseDicom(buf), { fallbackCharacterSet: "ISO_IR 100" });
-json["00100010"]; // => { vr: "PN", Value: [{ Alphabetic: "DOE^JOSÉE" }] }
+json["00100010"]; // => { vr: "PN", Value: [{ Alphabetic: "DOE^JOSÉE" }] } /* synthetic */
 FALLBACK_CHARACTER_SETS.includes("ISO_IR 100"); // => true
 ```
 

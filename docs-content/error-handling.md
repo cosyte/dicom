@@ -91,3 +91,72 @@ code; // => "INVALID_JSON"
 ## `ProfileDefinitionError` · `DeidentifyError`
 
 `defineProfile()` throws `ProfileDefinitionError` for a structurally invalid profile; `deidentify()` throws `DeidentifyError` (`INVALID_OPTIONS`) for an unknown Retain option or malformed UID root, and `DeidentifyError` (`UNSUPPORTED_TRANSFER_SYNTAX`) for a `Dataset` under one of the four JPIP Referenced syntaxes, whatever the options, because its Pixel Data Provider URL `(0028,7FE0)` has no PS3.15 Table E.1-1 action and would be kept by omission. Both messages carry only structural facts (option names, the UID root) or a fixed string, never a decoded value.
+
+## What is safe to log
+
+A DICOM header is PHI, so a log line takes only what the file cannot put a person into: codes, tags,
+VRs, counts, lengths, offsets and the transfer syntax. This is every field of a parsed data set, a
+warning and each error, and whether it can hold content read from the file. "File content" means
+bytes the sender wrote, which can identify a person or a study: log none of it, and never log a
+`Dataset`, an `Element` or a `toDicomJson` result whole. The bound behind each structural field is
+in [Tolerance](./spec-notes-tolerance.md#the-model-fields-that-are-bounded-and-the-ones-that-are-values),
+and the de-identifier's report in [De-identification](./deidentification.md#the-report-and-what-it-is-not-safe-to-log).
+
+**A parsed data set**, as `parseDicom` and `readDicomHeader` return it:
+
+- `Dataset.patient`: file content. Every field but `issues` is read from the file: the name, the
+  ID and its issuer, the birth date, the sex, the responsible person. `patient.issues[].code` and
+  `.message` are safe to log: the message is built from the code and the tag alone.
+- `Dataset.study`: file content. The Study Instance UID, the Study ID, the accession number, the
+  date, the time and the free-text description identify a study and, through it, a person.
+- `Dataset.series`: `series.modality` and `series.number` are safe to log; `series.instanceUid`,
+  `series.frameOfReferenceUid` and `series.description` are file content.
+- `Dataset.image`: the geometry (`rows`, `columns`, the bit depths, `signed`, the rescale and window
+  numbers, the spacings, `numberOfFrames`) is safe to log; `image.sopInstanceUid` and
+  `image.frameOfReferenceUid` are UIDs read from the file, which is file content.
+- `Dataset.elements()` and `Dataset.get(tag)` return an `Element`. `Element.value` and
+  `Element.rawBytes` are file content. `Element.tag`, `Element.vr`, `Element.vm`, `Element.length`
+  and `Element.byteOffset` are structure, safe to log on a well-formed file; a declared length that
+  lies can make the reader take bytes of a value for a header, and then the tag and the VR are those
+  bytes. `Element.privateCreator` is safe to log: it reads `<withheld>` unless the active profile
+  names the creator.
+- `Dataset.fileMeta`: `FileMeta.transferSyntaxUID` is one of a closed set of syntaxes, safe to log.
+  `FileMeta.mediaStorageSOPInstanceUID` is a UID read from the file, which is file content, and so
+  are `.sourceApplicationEntityTitle`, `.implementationVersionName`, `.implementationClassUID` and
+  `.extraElements`.
+- `Dataset.warnings`: each a `DicomParseWarning`, below.
+- `Dataset.directory`: `DirectoryRecord.type` is the record type a DICOMDIR names (`PATIENT`,
+  `STUDY`); `DirectoryRecord.referencedFileId` is a path read from the file, which is file content.
+
+**A warning**, `DicomParseWarning`, on `ds.warnings`, through `onWarning`, and on a decoded value's
+own `warnings`:
+
+- `DicomParseWarning.code`: safe to log, a member of `WARNING_CODES`.
+- `DicomParseWarning.message`: safe to log. It comes from a frozen registry, and the only things
+  substituted into it are a tag PS3.6 registers, one of the 34 VRs and numbers the parser counted.
+  The one exception is named in the `WARNING_MESSAGES` docblock in
+  [`src/parser/warnings.ts`](https://github.com/cosyte/dicom/blob/main/src/parser/warnings.ts): the
+  File Meta group length a sender declared.
+- `DicomParseWarning.position.byteOffset`: safe to log, an offset the parser counted.
+- `DicomParseWarning.position.contextPath`: safe to log. Only the DICOMDIR record checks set it, to
+  the Directory Record Sequence tag, an Item index and the tag of the offset attribute at fault.
+
+**Each error:**
+
+| Error                    | Safe to log                                                                                                                                   | File content                                                 |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `DicomParseError`        | `DicomParseError.code`, `DicomParseError.message`, `DicomParseError.byteOffset`, `DicomParseError.offsetFrame`, `DicomParseError.contextPath` | `DicomParseError.snippet`: up to 16 bytes of the file as hex |
+| `DicomValueError`        | `DicomValueError.code`, `DicomValueError.message`: a frame index and a frame count                                                            | none                                                         |
+| `DicomSerializeError`    | `DicomSerializeError.code`, `DicomSerializeError.message`: fixed text                                                                         | none                                                         |
+| `DicomJsonError`         | `DicomJsonError.code`, `DicomJsonError.message`, `DicomJsonError.tag`: a tag PS3.6 registers one at a time, else `"<withheld>"`               | none                                                         |
+| `ProfileDefinitionError` | `ProfileDefinitionError.message`, `ProfileDefinitionError.profileName`: what the profile's author wrote, never the file                       | none                                                         |
+| `DeidentifyError`        | `DeidentifyError.code`, `DeidentifyError.message`: the option names and the UID root you passed, or fixed text                                | none                                                         |
+
+`DicomParseError.contextPath` is the warning's own `position.contextPath` when the error is an
+escalated warning, and absent on a fatal. On `UNSUPPORTED_TRANSFER_SYNTAX`, `snippet` holds PS3.6's
+name for the refused syntax when PS3.6 has one, and 16 bytes of the file when it does not.
+
+**The de-identifier's report**, `DeidentifyReport`, is not safe to log whole. `DeidentifyReport.uidMap`
+holds the source UIDs read from the file, which is file content, and the other fields that can hold
+bytes of the file are named on the type and in
+[De-identification](./deidentification.md#the-report-and-what-it-is-not-safe-to-log).

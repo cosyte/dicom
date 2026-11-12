@@ -233,16 +233,17 @@ describe("the README ## Usage example", () => {
   it("CONTROL: a changed input value changes what it prints and is no longer the fixture", () => {
     const code = README_FIRST?.body ?? "";
     const bytes = base64Object(code) ?? Buffer.alloc(0);
-    const at = bytes.indexOf("MRN-42");
+    // The Rescale Intercept, a value the block prints; the patient ID it asserts on and never prints.
+    const at = bytes.indexOf("-1024");
     expect(at).toBeGreaterThan(-1);
     const changed = Buffer.from(bytes);
-    changed.write("MRN-43", at, "ascii");
+    changed.write("-1000", at, "ascii");
     const mutated = code.replace(bytes.toString("base64"), changed.toString("base64"));
     expect(base64Object(mutated)?.equals(FIRST_USE_CT_NO_PREAMBLE)).toBe(false);
     const run = runAsProgram(mutated, "readme-usage-control.mts");
     expect(run.status).toBe(0);
     expect(run.stdout).not.toBe(`${README_USAGE[1]?.body ?? ""}\n`);
-    expect(run.stdout).toContain("patient MRN-43");
+    expect(run.stdout).toContain("intercept -1000");
   }, 60_000);
 
   it("AC-DI3: a changed claimed value turns the run red", async () => {
