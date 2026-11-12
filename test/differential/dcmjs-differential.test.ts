@@ -72,6 +72,7 @@ function differencesOf(doc: DifferentialDocument): Difference[] {
 
 /** `true` when `path` is one of the entry's paths, `[*]` standing for any Item index. */
 function pathMatches(pattern: string, path: string): boolean {
+  if (pattern === "*") return true;
   const source = pattern
     .split("[*]")
     .map((part) => part.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"))

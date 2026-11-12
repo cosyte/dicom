@@ -23,8 +23,8 @@ export interface KnownDifference {
   /** The corpus documents it occurs in; it must occur in every one. */
   readonly documents: readonly string[];
   /**
-   * The paths it occurs at, as `_compare.ts` writes them; `[*]` stands for any Item index, and
-   * `""` is the whole document.
+   * The paths it occurs at, as `_compare.ts` writes them; `[*]` stands for any Item index, `""`
+   * is the whole document, and `*` alone is any path.
    */
   readonly paths: readonly string[];
   /** Why the two readers differ here, and which of them the standard is with. */
@@ -210,8 +210,11 @@ export const KNOWN_DIFFERENCES: readonly KnownDifference[] = [
     id: "dcmjs-jpip-deflate-garbage",
     kind: "only-in-dcmjs",
     documents: ["seed/jpip-referenced-deflate"],
-    paths: ["8E854AC1"],
-    reason: "The element dcmjs makes of the compressed bytes of the same Data Set.",
+    paths: ["*"],
+    reason:
+      "The element dcmjs makes of the compressed bytes of the same Data Set. Its tag is whatever " +
+      "the first compressed bytes are, and those differ between builds of zlib, so any path is " +
+      "accepted here.",
     citation:
       "PS3.5 section A.7: the entire byte stream is then compressed using the Deflate algorithm " +
       "defined in Internet RFC 1951.",
