@@ -141,7 +141,12 @@ top-level tag, Pixel Data by default, so the Pixel Data of a large file is not r
 incremental reader beyond that: what comes after the stop is not read at all, and a file whose read
 cannot stop is held in memory whole. That is a file with no top-level element at or after the stop
 tag, a Deflated Explicit VR Little Endian file, whose whole Data Set is one deflate stream, and a file
-`parseDicom` refuses; `readDicomHeader`'s `maxBytes` bounds it, with no default. Only the top-level
+`parseDicom` refuses; `readDicomHeader`'s `maxBytes` bounds it, with no default. **`maxBytes` bounds
+what the read takes, not what a stream already holds**: a stream's chunks are held as the stream
+makes them, so a stream that delivers the whole file as one chunk has put all of it in memory before
+the read sees it. The read itself takes 64 KiB first and twice as much each time the header turns
+out to be longer; see [Read only the header of a large file](./recipes.md#read-only-the-header-of-a-large-file).
+Only the top-level
 Data Set stops: a Sequence Item is read in full whatever its tags, and a file whose top-level
 elements are out of ascending tag order stops at the first one at or after the stop tag. A parse
 that stops does not check a DICOMDIR's Directory Record offsets, since the records they name may be

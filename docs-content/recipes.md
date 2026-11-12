@@ -153,17 +153,31 @@ holds the whole study in memory to read a few hundred bytes of patient and study
    ```
 
    It stops before the first top-level element whose tag is at or after `stopBeforeTag`, or before
-   Float Pixel Data `(7FE0,0008)` when that is not given. The Dataset is the one `parseDicom`
-   returns on the whole file with the same `stopBeforeTag`, with a last warning,
-   `DICOM_PARSE_STOPPED_BEFORE_TAG`, at the element it stopped before. A handle is read from byte 0
-   and left open; a stream is ended early once the stop is found.
+   Float Pixel Data `(7FE0,0008)` when that is not given, which is also before Double Float Pixel
+   Data and Pixel Data. The Dataset is the one `parseDicom` returns on the whole file with the same
+   `stopBeforeTag`: the same elements, byte for byte, the same warnings, and a last warning,
+   `DICOM_PARSE_STOPPED_BEFORE_TAG`, at the element it stopped before. To find the stop it reads
+   64 KiB of the source first, then twice as much each time the header turns out to be longer, and
+   parses that prefix until one parse reaches the stop. A path is opened and closed for you. A handle
+   is read from byte 0 and left open; a stream is read from where it is and ended early once the
+   stop is found.
 
 2. For a file you do not trust, set `maxBytes`, the one field `ReadDicomHeaderOptions` adds to
-   `ParseOptions`. The read then never holds more than that many bytes
-   of the source, and throws a `RangeError` when the stop is not within them and the file goes on.
-   There is no default, since any number we picked would refuse some legitimate file. Without it,
-   three kinds of file are read to the end: one with no top-level element at or after the stop
-   tag, a Deflated Explicit VR Little Endian one, and one `parseDicom` would refuse.
+   `ParseOptions`. It bounds what the read takes from the source: when the stop is not within that
+   many bytes and the source goes on, the read ends with a `RangeError` instead of reading on. There
+   is no default, since any number we picked would refuse some legitimate file (a large Deflated
+   study, a long structured report). Without it, three kinds of file are read to the end, and so
+   held in memory whole: one with no top-level element at or after the stop tag; a Deflated
+   Explicit VR Little Endian one, whose Data Set, Pixel Data included, is one deflate stream; and
+   one `parseDicom` would refuse, or whose header `{ strict: true }` or a profile escalates a
+   warning in, so the error thrown is the one the whole file gives.
+
+   **`maxBytes` bounds what the read takes, not what a stream already holds.** A stream's chunks
+   are held as the stream makes them, so a stream that delivers the whole file as one chunk has put
+   all of it in memory before the read sees it, whatever `maxBytes` says. A chunk that crosses the
+   limit is cut there, but the stream made the whole chunk. To bound memory for an untrusted
+   upload, pass a path or a file handle, which the read pulls from in its own sizes, or a stream
+   whose chunk size you control (a Node `createReadStream` delivers 64 KiB chunks by default).
 
    ```ts runnable
    import { mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -388,7 +402,7 @@ You need the pixel bytes, to hand to an imaging pipeline, to hash or to forward,
    The buffers are views over the parsed element unless you parse with `{ copyValues: true }`.
 
 What this does not do: no pixel is decompressed, no frame is assembled from fragments, and neither
-offset table is interpreted. `serializeDicom` writes a compressed object back under its own UID,
+the Basic Offset Table nor an Extended Offset Table `(7FE0,0001)` is interpreted. `serializeDicom` writes a compressed object back under its own UID,
 fragments byte for byte, and refuses with `INVALID_ENCAPSULATED_PIXEL_DATA` a stream PS3.5 2026c
 section A.4 does not allow rather than repairing it. A JPIP Referenced object carries a Pixel Data
 Provider URL instead of fragments; we return it as written and never fetch it. The full list of
@@ -466,6 +480,78 @@ was done, and without changing the original.
 
 3. Read the report's warnings before you share. `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED` says the
    pixels may carry text this layer cannot remove; pixel cleaning is out of scope here.
+
+4. Check what the run removed, beyond the attributes you expected. The header stops naming the
+   sending site, the current edition's patient attributes go, and overlay comments go in every
+   overlay group.
+
+   ```ts runnable
+   import { parseDicom, deidentify } from "@cosyte/dicom";
+
+   // The synthetic CT object above, with a Source AE Title and the Media Storage UIDs in its File
+   // Meta group, a Name to Use, a Gender Identity Comment and an Overlay Comments attribute. Every
+   // value is invented.
+   const ds = parseDicom(
+     Buffer.from(
+       "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABESUNNAgAAAFVMBAB0AAAAAgACAFVJGgAxLjIuODQwLjEwMDA4LjUuMS40LjEuMS4yAAIAAwBVSR4AMS4yLjgyNi4wLjEuMzY4MDA0My44LjQ5OC4xMTEAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xAAIAFgBBRQgAU1lOVEhfQUUIABYAVUkaADEuMi44NDAuMTAwMDguNS4xLjQuMS4xLjIACAAYAFVJHgAxLjIuODI2LjAuMS4zNjgwMDQzLjguNDk4LjExMQAIACAAREEIADE5MDAwMTAxCAAwAFRNBgAwOTAwMDAIAFAAU0gIAEFDQy0wMDAxCABgAENTAgBDVBAAEABQTggARG9lXkphbmUQABIATFQWAFNZTlRIRVRJQyBOQU1FIFRPIFVTRSAQACAATE8GAE1STi00MhAAIQBMTwwAU0FNUExFLUhPU1AgEABFAFVUAAASAAAAU1lOVEhFVElDIENPTU1FTlQgIAANAFVJHgAxLjIuODI2LjAuMS4zNjgwMDQzLjguNDk4LjEuMQAgAA4AVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMS4yACAAEQBJUwIAMiAoAAIAVVMCAAEAKAAEAENTDABNT05PQ0hST01FMiAoABAAVVMCAAACKAARAFVTAgAAAigAMABEUwgAMC41XDAuNSAoAAABVVMCABAAKAABAVVTAgAMACgAAgFVUwIACwAoAAMBVVMCAAEAKABSEERTBgAtMTAyNCAoAFMQRFMCADEgAGAAQExUFgBTWU5USEVUSUMgT1ZFUkxBWSBOT1RF",
+       "base64",
+     ),
+   );
+   ds.fileMeta?.sourceApplicationEntityTitle; // => "SYNTH_AE"
+
+   const { dataset, report } = deidentify(ds);
+
+   // The File Meta group is replaced: the sender's AE Title is gone, the implementation identity
+   // is ours, and the Media Storage SOP Instance UID is remapped like the one in the Data Set.
+   dataset.fileMeta?.sourceApplicationEntityTitle; // => undefined
+   dataset.fileMeta?.implementationVersionName; // => "COSYTE_DICOM"
+   dataset.fileMeta?.mediaStorageSOPInstanceUID === dataset.image.sopInstanceUid; // => true
+   dataset.fileMeta?.mediaStorageSOPInstanceUID?.startsWith("2.25."); // => true
+   report.fileMetaElementsDroppedCount; // => 0
+   report.group0004RemovalCount; // => 0
+
+   // Name to Use and Gender Identity Comment are rows of the current edition's table: removed.
+   dataset.has("00100012"); // => false
+   dataset.has("00100045"); // => false
+
+   // Overlay Comments is matched by the repeating-group mask, and the report names the mask.
+   dataset.has("60004000"); // => false
+   const masked = report.attributes.filter((a) => a.repeatingGroup !== undefined);
+   masked.map((a) => `${a.tag} ${a.repeatingGroup ?? ""}`); // => ["60004000 60xx4000"]
+   ```
+
+   - **The File Meta group is replaced, not carried through.** PS3.15 2026c §E.1.1 requires it
+     replaced with a description of the de-identifying application. `(0002,0016)` Source
+     Application Entity Title is gone; `(0002,0012)` Implementation Class UID and `(0002,0013)`
+     Implementation Version Name name `@cosyte/dicom` and hold none of the source's values; and
+     every non-modeled `(0002,xxxx)` element is dropped: Sending and Receiving AE Titles, Private
+     Information and anything a vendor invented. `report.fileMetaElementsDropped` names what went
+     (capped) and `report.fileMetaElementsDroppedCount` counts it, complete at any input size. What
+     survives identifies the object, not the sender: File Meta Information Version, Media Storage
+     SOP Class UID, Transfer Syntax UID, and Media Storage SOP Instance UID, remapped unless you
+     pass `RetainUIDs`. This is why de-identified output does not round-trip its File Meta group
+     byte for byte. The 128-byte preamble is written as zeros on every path, de-identified or not.
+   - **Group `0004` is removed at every depth**, as §E.1.1 requires for any file other than a
+     DICOMDIR. `report.group0004Removals` names them, capped and with a context path for nested
+     ones, and `report.group0004RemovalCount` is the complete total. A DICOMDIR keeps its group
+     `0004`, and the run raises `DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED` for the File-set
+     clauses it does not discharge; [De-identification](./deidentification.md#scope-limits-on-this-pages-subject)
+     has the detail.
+   - **The current edition's patient attributes are removed.** The action table is generated from
+     NEMA's PS3.15 2026d DocBook, the normative publication, and where a third-party mirror of the
+     table disagrees, the DocBook wins. So the `(0010,0011)` to `(0010,0014)` preferred-name and
+     pronoun block, the `(0010,0041)` to `(0010,0047)` gender-identity and sex-parameters
+     attributes, and `(0010,2161)` Ethnic Group Code Sequence and `(0010,2162)` Ethnic Groups are
+     all removed by default. `RetainPatientCharacteristics` keeps the sex-parameters and
+     ethnic-group ones, and cleans the sex-parameters comment; no Option keeps the name-to-use,
+     pronoun or gender-identity ones.
+   - **Curve and overlay rows are matched by mask, within the groups the standard allows.**
+     `(50xx,xxxx)` Curve Data, `(60xx,3000)` Overlay Data and `(60xx,4000)` Overlay Comments are
+     matched across the sixteen even groups PS3.5 bounds each mask to (`6000` to `601E`, `5000` to
+     `501E`), removed, and reported with the mask that matched. The overlay range is in
+     PS3.5 2026c §7.6, and the same clause retires curve encoding and delegates the curve range to
+     PS3.5-2004. Both editions are vendored and pinned by SHA-256, and the generator checks the
+     delegation and that the two agree where they overlap, rather than assuming either.
 
 **The de-identified object says what this run did to its dates.** `deidentify()` writes `(0028,0303)`
 Longitudinal Temporal Information Modified in one of three states: **`REMOVED`** when no Retain
