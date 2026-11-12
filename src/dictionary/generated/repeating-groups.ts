@@ -3,8 +3,8 @@
 // Regen: pnpm gen:repeating-groups
 //
 // Normative sources, both pinned by SHA-256 and re-hashed before use:
-//   NEMA DICOM PS3.5 2026c DocBook, section 7.6 (Repeating Groups).
-//     vendor/nema/part05/<sha>/part05.xml -> 4dfd7b8cbc7c368b7cf03e9c4b8a0773bed91266fcdb0bbf8ed634b7287cacca
+//   NEMA DICOM PS3.5 2026d DocBook, section 7.6 (Repeating Groups).
+//     vendor/nema/part05/<sha>/part05.xml -> 05183ea889f097cba51a938bf961a62f308bc6044a12f24d71282f08469de835
 //   NEMA DICOM PS3.5-2004, section 7.6, the edition the current one's Note
 //   delegates the retired curve bound to.
 //     vendor/nema/part05-2004/<sha>/04_05pu.pdf -> f045aabbbca747afbce425b390109840a89f2a981b7cfeb44d88bc219ad590c7
@@ -35,7 +35,7 @@ export const REPEATING_GROUP_RANGES: Readonly<Record<string, RepeatingGroupRange
   // PS3.5-2004 section 7.6, verbatim: "Repeating Groups shall only be allowed in the even Groups (6000-601E,eeee) and even Groups (5000-501E,eeee) cases."
   // -> 5000-501E even (16 groups)
   "50": Object.freeze({ prefix: 0x50, lowMin: 0x00, lowMax: 0x1e, label: "Curves (retired)" }),
-  // PS3.5 2026c section 7.6, verbatim: "Repeating Groups shall only be allowed in the even numbered Groups 6000-601E."
+  // PS3.5 2026d section 7.6, verbatim: "Repeating Groups shall only be allowed in the even numbered Groups 6000-601E."
   // -> 6000-601E even (16 groups)
   "60": Object.freeze({ prefix: 0x60, lowMin: 0x00, lowMax: 0x1e, label: "Overlay Planes" }),
 });

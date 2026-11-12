@@ -1,13 +1,16 @@
 /**
- * AC-1: the dictionary and Annex E generators read PS3.6 and PS3.15 DocBook of ONE
- * edition, 2026d or later, each re-hashed against its vendored `SHA.txt`.
+ * AC-1: the generators read PS3.5, PS3.6 and PS3.15 DocBook of ONE edition, 2026d or
+ * later, each re-hashed against its vendored `SHA.txt`.
  *
- * The two parts are pinned separately, one directory each under `vendor/nema/`, so
+ * The three parts are pinned separately, one directory each under `vendor/nema/`, so
  * nothing in the layout stops one of them being re-pinned alone. That is the trap this
  * file closes: a de-identifier whose action table lags the dictionary keeps, with a
  * clean report, every attribute the newer dictionary knows and the older table does
- * not list. So the edition is read from each document's own `<subtitle>`, with the
- * generators' own patterns, and the two must agree.
+ * not list, and a PS3.5 left behind answers for repeating groups and encapsulation
+ * syntaxes of an edition nothing else here reads. So the edition is read from each
+ * document's own `<subtitle>`, with the generators' own patterns, and all three must
+ * agree, which is the "move together" rule of `vendor/nema/README.md` ("Edition
+ * cadence"). `part05-2004/` is a frozen archive and is not one of the three.
  *
  * The generated headers are held to the same pin: each names the edition and SHA-256
  * of the document it was generated from, and both must be the vendored ones, or the
@@ -29,7 +32,7 @@ const GENERATED = join(REPO_ROOT, "src", "dictionary", "generated");
 const EDITION_FLOOR = "2026d";
 
 interface Part {
-  readonly dir: "part06" | "part15";
+  readonly dir: "part05" | "part06" | "part15";
   readonly file: string;
   /** The generator's own `<subtitle>` pattern for this part. */
   readonly subtitle: RegExp;
@@ -40,6 +43,14 @@ interface Part {
 }
 
 const PARTS: readonly Part[] = [
+  {
+    dir: "part05",
+    file: "part05.xml",
+    subtitle:
+      /<subtitle>\s*DICOM PS3\.5 ([0-9]{4}[a-z]?) - Data Structures and Encoding\s*<\/subtitle>/,
+    artifacts: ["repeating-groups.ts", "encapsulated-transfer-syntaxes.ts"],
+    label: "PS3.5",
+  },
   {
     dir: "part06",
     file: "part06.xml",
@@ -94,7 +105,7 @@ function headerOf(artifact: string): string {
 
 const vendored = new Map(PARTS.map((part) => [part.dir, readVendored(part)]));
 
-describe("the vendored PS3.6 and PS3.15 DocBook (AC-1)", () => {
+describe("the vendored PS3.5, PS3.6 and PS3.15 DocBook (AC-1)", () => {
   it("AC-1: each document re-hashes to the SHA-256 in its SHA.txt", () => {
     for (const part of PARTS) {
       const v = vendored.get(part.dir);
@@ -103,12 +114,15 @@ describe("the vendored PS3.6 and PS3.15 DocBook (AC-1)", () => {
     }
   });
 
-  it("AC-1: both documents name one edition, and it sorts at or after 2026d", () => {
+  it("AC-1: all three documents name one edition, and it sorts at or after 2026d", () => {
+    const ps35 = vendored.get("part05")?.edition;
     const ps36 = vendored.get("part06")?.edition;
     const ps315 = vendored.get("part15")?.edition;
+    expect(ps35, "part05.xml must identify its edition in <subtitle>").toBeDefined();
     expect(ps36, "part06.xml must identify its edition in <subtitle>").toBeDefined();
     expect(ps315, "part15.xml must identify its edition in <subtitle>").toBeDefined();
     expect(ps315, "PS3.6 and PS3.15 advance together or the gap only widens").toBe(ps36);
+    expect(ps35, "PS3.5 moves with PS3.6 and PS3.15, one edition for all three").toBe(ps36);
     expect(atOrAfter(ps36 ?? "", EDITION_FLOOR), `${String(ps36)} >= ${EDITION_FLOOR}`).toBe(true);
   });
 

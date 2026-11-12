@@ -134,7 +134,7 @@ report. Activate the full-dates Option only when real dates are genuinely requir
 
 ## What the object records about the method
 
-PS3.15 2026c §E.1.1 asks a de-identifier to record how it ran, in codes from CID 7050
+PS3.15 2026d §E.1.1 asks a de-identifier to record how it ran, in codes from CID 7050
 "De-identification Method" "corresponding to the Profile and Options used", which "shall be added to
 De-identification Method Code Sequence (0012,0064), and/or a text string describing the method used
 shall be inserted in or added to De-identification Method (0012,0063)". `deidentify()` writes both,

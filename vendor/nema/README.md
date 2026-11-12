@@ -31,22 +31,47 @@ edition on purpose, it is pinned exactly like the others, and the generator refu
 the current edition still points at it. It is also the only PDF here, because 2004 predates NEMA's
 DocBook sources.
 
+## Edition cadence
+
+NEMA publishes several editions of the standard a year, each named by year and letter (2026c,
+2026d, ...), and every part moves to the new edition at once. Our rule:
+
+1. **Each new edition is re-pinned within six weeks of its publication** on
+   `https://dicom.nema.org/medical/dicom/current/`. The three current-edition parts, `part05/`,
+   `part06/` and `part15/`, move together in one change, by the re-pinning procedure in each part's
+   section below, and the regenerated `src/dictionary/generated/` rides in the same commit.
+   `part05-2004/` is a frozen archive and does not move with the editions.
+2. **The Annex E rows of each edition are read for de-identification changes** before the re-pin
+   merges, whether or not the diff looks small. Read every Table E.1-1 row `pnpm gen:annex-e`
+   reports as added, every action-code override it prints, and every row of the edition's
+   correction proposals that touches PS3.15 Annex E. A changed or new action code changes what
+   `deidentify()` removes, so it gets a test that fails on the previous pin and a changeset that
+   names the edition.
+3. **A new transfer syntax in PS3.5 or PS3.6 Annex A gets a test** that reads a synthetic object in
+   it, in the same change.
+4. The pull request lists every added or changed tag, UID, transfer syntax and Annex E row the
+   generators report, so a reviewer can check the diff against the edition.
+
+The check is the `curl ... | sha256sum` comparison under each part's "Verifying the pin": a hash
+that differs from `SHA.txt` means a new edition is out and the six weeks have started. There is no
+automated staleness gate, for the reasons given under PS3.6.
+
 ## PS3.5, Part 5: repeating-group bound
 
 Two documents, because the bound is stated across two editions.
 
 - **Source (current):** `https://dicom.nema.org/medical/dicom/current/source/docbook/part05/part05.xml`
-- **Edition:** PS3.5 **2026c** (read from the document's own
-  `<subtitle>DICOM PS3.5 2026c - Data Structures and Encoding</subtitle>`, not asserted here)
-- **Retrieved:** 2026-07-28
-- **SHA-256:** `4dfd7b8cbc7c368b7cf03e9c4b8a0773bed91266fcdb0bbf8ed634b7287cacca` (`part05/SHA.txt`)
-- **Committed at:** `part05/4dfd7b8c.../part05.xml`, 1,021,881 bytes, verbatim
+- **Edition:** PS3.5 **2026d** (read from the document's own
+  `<subtitle>DICOM PS3.5 2026d - Data Structures and Encoding</subtitle>`, not asserted here)
+- **Retrieved:** 11 November 2026
+- **SHA-256:** `05183ea889f097cba51a938bf961a62f308bc6044a12f24d71282f08469de835` (`part05/SHA.txt`)
+- **Committed at:** `part05/05183ea8.../part05.xml`, 1,025,905 bytes, verbatim
 
 <!-- -->
 
 - **Source (retired curve bound):** `http://medical.nema.org/MEDICAL/Dicom/2004/printed/04_05pu.pdf`
 - **Edition:** PS3.5-2004, the edition the current section 7.6 Note links by that exact URL
-- **Retrieved:** 2026-07-28
+- **Retrieved:** 28 July 2026
 - **SHA-256:** `f045aabbbca747afbce425b390109840a89f2a981b7cfeb44d88bc219ad590c7` (`part05-2004/SHA.txt`)
 - **Committed at:** `part05-2004/f045aabb.../04_05pu.pdf`, 546,038 bytes, verbatim
 - **Copyright:** NEMA. Both vendored unmodified as build inputs; the generated bound is the derived
@@ -167,7 +192,7 @@ all.
 - **Source:** `https://dicom.nema.org/medical/dicom/current/source/docbook/part06/part06.xml`
 - **Edition:** PS3.6 **2026d** (read from the document's own
   `<subtitle>DICOM PS3.6 2026d - Data Dictionary</subtitle>`, not asserted here)
-- **Retrieved:** 2026-09-24
+- **Retrieved:** 24 September 2026
 - **SHA-256:** `fa9f0f8d67eba692dcf95cfeae0a8f4e071beeb7844215a860bc4b9d5dfaad25` (`part06/SHA.txt`)
 - **Committed at:** `part06/fa9f0f8d.../part06.xml`, 9,666,976 bytes, verbatim
 - **Copyright:** NEMA. Vendored unmodified as a build input, in the same way the standard's tables
@@ -326,7 +351,7 @@ the same names. Inserting a space would be hand-editing a generated table to tas
 - **Edition:** PS3.15 **2026d** (read from the document's own
   `<subtitle>DICOM PS3.15 2026d - Security and System Management Profiles</subtitle>`, not asserted
   here)
-- **Retrieved:** 2026-09-24
+- **Retrieved:** 24 September 2026
 - **SHA-256:** `1eb2a9724822476b3f1f3de23d15ae655a4c7f6e9d32bf16f2d9ef76d7d8437c` (`part15/SHA.txt`)
 - **Committed at:** `part15/1eb2a972.../part15.xml`, 3,555,642 bytes, verbatim
 - **Copyright:** NEMA. Vendored unmodified as a build input; the generated action table is the

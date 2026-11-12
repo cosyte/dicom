@@ -250,7 +250,12 @@ describe("generate-repeating-groups", () => {
     expect(happy.stdout).toContain("2 repeating-group masks covering 32 concrete group numbers");
     // Which document supplied which half is the asymmetry this slice closed.
     expect(happy.stdout).toMatch(/50xx \[Curves \(retired\)\].*from PS3\.5-2004 section 7\.6/);
-    expect(happy.stdout).toMatch(/60xx \[Overlay Planes\].*from PS3\.5 2026c section 7\.6/);
+    // The overlay half comes from the edition the run names, whichever edition is pinned.
+    const edition = /PS3\.5 edition: (\d{4}[a-z]?) /.exec(happy.stdout)?.[1];
+    expect(edition).toBeDefined();
+    expect(happy.stdout).toContain(
+      `60xx [Overlay Planes] 6000-601E even (16 groups), from PS3.5 ${String(edition)} section 7.6`,
+    );
   });
 
   it("prints the cross-check between the two editions", () => {
