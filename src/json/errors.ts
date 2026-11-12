@@ -52,6 +52,9 @@
  *   - `VALUE_TOO_LONG` - a value too long for the Value Length Field its VR is written with.
  *   - `NESTING_TOO_DEEP` - `fromDicomJson` was given Sequences nested more than 64 deep, past
  *     what `parseDicom` reads back.
+ *   - `INVALID_OPTION` - `toDicomJson` was given a `fallbackCharacterSet` that is not a term of
+ *     `FALLBACK_CHARACTER_SETS`, or a `fallbackCharacterSetForUnknown` that is not a boolean or
+ *     comes without a `fallbackCharacterSet`. The value is not echoed, and the tag is withheld.
  *   - `CONVERSION_FAILED` - any other error inside a converter, a callback's own included: no
  *     error but a `DicomJsonError` leaves either one, and the error it replaces is not kept,
  *     since its message could hold a value.
@@ -89,6 +92,7 @@ export const DICOM_JSON_ERROR_CODES = Object.freeze({
   VALUE_TOO_LONG: "VALUE_TOO_LONG",
   VR_MISMATCH: "VR_MISMATCH",
   NESTING_TOO_DEEP: "NESTING_TOO_DEEP",
+  INVALID_OPTION: "INVALID_OPTION",
   CONVERSION_FAILED: "CONVERSION_FAILED",
 } as const);
 
@@ -133,6 +137,8 @@ function messageOf(code: DicomJsonErrorCode): string {
       return "The written Data Set reads back with another VR than the JSON gives: under Implicit VR Little Endian the reader takes the VR PS3.5 and the dictionary give the tag, and UN for a private one.";
     case "NESTING_TOO_DEEP":
       return "Sequences are nested more than 64 deep, past what parseDicom reads.";
+    case "INVALID_OPTION":
+      return "An option is not a value the converter takes: fallbackCharacterSet must be a term of FALLBACK_CHARACTER_SETS, and fallbackCharacterSetForUnknown a boolean given with it.";
     case "CONVERSION_FAILED":
       return "The conversion failed with an error no other code names, such as one a callback threw; that error is not kept, since its message could hold a value.";
   }

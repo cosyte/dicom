@@ -22,7 +22,11 @@
 import { repeatingGroupEntries, tagEntry } from "../dictionary/registry.js";
 import type { Buffer } from "node:buffer";
 
-import { isKnownCharsetTerm, parseSpecificCharacterSet } from "../dataset/vr/charset.js";
+import {
+  fallbackApplies,
+  isKnownCharsetTerm,
+  parseSpecificCharacterSet,
+} from "../dataset/vr/charset.js";
 import type { DictionaryEntry, Tag, VR } from "../dictionary/types.js";
 import type { ByteCursor } from "./byte-cursor.js";
 import { isRecognizedVr } from "./endian.js";
@@ -48,6 +52,8 @@ const SPECIFIC_CHARACTER_SET_TAG: Tag = "00080005";
  * terms and record them on `ctx.currentCharset` so subsequent elements
  * decode their text correctly (PS3.3 §C.12.1.1.2). Unknown terms emit
  * `DICOM_UNSUPPORTED_CHARSET` and decoding falls back to UTF-8 best-effort.
+ * Under `ParseOptions.fallbackCharacterSet` a value that declares no set
+ * records the fallback's terms instead (see `fallbackApplies`).
  *
  * @internal
  */
@@ -67,7 +73,11 @@ export function applySpecificCharacterSet(
   terms.forEach((term, index) => {
     if (!isKnownCharsetTerm(term)) emit(unsupportedCharset(position, index + 1));
   });
-  ctx.currentCharset = terms;
+  // A caller's `fallbackCharacterSet` takes the place of a declaration that names no set, and of
+  // an unknown term only where `fallbackCharacterSetForUnknown` asks.
+  const fallback = ctx.fallback;
+  ctx.currentCharset =
+    fallback !== undefined && fallbackApplies(terms, fallback) ? fallback.terms : terms;
 }
 
 /**

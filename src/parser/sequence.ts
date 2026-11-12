@@ -495,6 +495,9 @@ export function tryParseDefinedLengthSQ(
   const savedDepth = ctx.nestingDepth;
   const savedStackLen = ctx.encodingContextStack.length;
   const savedWarningsLen = ctx.warnings.length;
+  // A `DICOM_CHARSET_ASSUMED` the descent raises is dropped with its other warnings on failure, so
+  // whether it was raised is put back too, and the next text element raises it again.
+  const savedAssumed = ctx.fallback?.warned;
   const table = tableOf(ctx);
   table.begin(buffer);
   const savedTable = table.mark();
@@ -530,6 +533,7 @@ export function tryParseDefinedLengthSQ(
     while (ctx.warnings.length > savedWarningsLen) {
       ctx.warnings.pop();
     }
+    if (ctx.fallback !== undefined) ctx.fallback.warned = savedAssumed === true;
     table.rollBack(savedTable);
     // Emitted AFTER the rollback so it is the one warning that survives, and
     // emitted at all because a silently undescended sequence is invisible to
@@ -575,6 +579,9 @@ export function tryParseUnAsSQ(
   const savedDepth = ctx.nestingDepth;
   const savedStackLen = ctx.encodingContextStack.length;
   const savedWarningsLen = ctx.warnings.length;
+  // A `DICOM_CHARSET_ASSUMED` the descent raises is dropped with its other warnings on failure, so
+  // whether it was raised is put back too, and the next text element raises it again.
+  const savedAssumed = ctx.fallback?.warned;
   const table = tableOf(ctx);
   table.begin(buffer);
   const savedTable = table.mark();
@@ -626,6 +633,7 @@ export function tryParseUnAsSQ(
     while (ctx.warnings.length > savedWarningsLen) {
       ctx.warnings.pop();
     }
+    if (ctx.fallback !== undefined) ctx.fallback.warned = savedAssumed === true;
     table.rollBack(savedTable);
     return { success: false, itemFirst: 0, itemCount: 0, endOffset: valueStart };
   }

@@ -53,7 +53,9 @@ Dictionary
 DirectoryRecord
 Element
 EmbeddedAttributeFinding
+FALLBACK_CHARACTER_SETS
 FATAL_CODES
+FallbackCharacterSet
 FatalCode
 FileMeta
 FileMetaDroppedElement

@@ -244,6 +244,15 @@ which is ISO-IR 6 and has none, and the C1 control characters (U+0080 to U+009F)
 `ISO_IR 100`, which PS3.5 section 6.1.1 says shall not be used. Under `ISO_IR 192` a lone
 surrogate, which UTF-8 cannot encode, is refused too.
 
+**A Data Set that declares no set.** Text with no `(0008,0005)`, or an empty one, is ISO-IR 6, so
+`toDicomJson` refuses a Latin-1 letter there with `MALFORMED_VALUE`. Pass `fallbackCharacterSet`
+(for example `"ISO_IR 100"`) to read that text under a set you name instead, and
+`fallbackCharacterSetForUnknown: true` to read under it also where `(0008,0005)` names a term we
+do not decode; no `(0008,0005)` is added to the JSON. A Data Set `parseDicom` read with the same
+option already carries the set and needs none here. To read the JSON back with `fromDicomJson`,
+give it an `(0008,0005)` of `ISO_IR 100` or `ISO_IR 192`, since the default repertoire holds no
+character past U+007F. See [Character sets](./spec-notes-values.md#character-sets).
+
 **Bulk values are not written inline by default.** The model is for metadata, so Pixel Data
 `(7FE0,0010)`, Float and Double Float Pixel Data `(7FE0,0008)` and `(7FE0,0009)`, Overlay Data
 `(60xx,3000)`, Waveform Data `(5400,1010)`, Spectroscopy Data `(5600,0020)` and Encapsulated
@@ -338,6 +347,7 @@ or one not carried, at any depth, or text `fromDicomJson` cannot encode, which i
 outside 7-bit ASCII under a set other than the default repertoire, `ISO_IR 100` and `ISO_IR 192`.
 `UNSUPPORTED_TRANSFER_SYNTAX`: `fromDicomJson` writes only the three uncompressed syntaxes and
 Deflated Explicit VR LE. `NESTING_TOO_DEEP`: Sequences nested more than 64 deep.
+`INVALID_OPTION`: a `fallbackCharacterSet` that is not a term of `FALLBACK_CHARACTER_SETS`.
 `CONVERSION_FAILED`: any other error. `INVALID_JSON` (another shape, or a delimiter inside one
 value), `BULK_DATA_UNRESOLVED` and `VALUE_TOO_LONG` cover the rest.
 

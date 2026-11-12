@@ -615,6 +615,8 @@ describe("DicomJsonError", () => {
       VR_MISMATCH:
         "The written Data Set reads back with another VR than the JSON gives: under Implicit VR Little Endian the reader takes the VR PS3.5 and the dictionary give the tag, and UN for a private one.",
       NESTING_TOO_DEEP: "Sequences are nested more than 64 deep, past what parseDicom reads.",
+      INVALID_OPTION:
+        "An option is not a value the converter takes: fallbackCharacterSet must be a term of FALLBACK_CHARACTER_SETS, and fallbackCharacterSetForUnknown a boolean given with it.",
       CONVERSION_FAILED:
         "The conversion failed with an error no other code names, such as one a callback threw; that error is not kept, since its message could hold a value.",
     };

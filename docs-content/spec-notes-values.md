@@ -225,6 +225,68 @@ with WHATWG `TextDecoder` labels, which read `0x80` to `0x9F` under the default 
 `ISO_IR 100` as windows-1252 (`0x80` as the euro sign), under `ISO_IR 148` as windows-1254, and
 under `ISO_IR 166` as windows-874, and read `ISO_IR 13` as Shift_JIS.
 
+**A file that declares no set: `fallbackCharacterSet`.** Many files write Latin-1 names with no
+`(0008,0005)`, or an empty one. PS3.5 section 6.1.2.1 makes that text ISO-IR 6, and the reader
+keeps that default, so those letters read as U+FFFD and `toDicomJson` refuses them. When you know
+what a source writes, name the set with the `fallbackCharacterSet` option of `parseDicom`,
+`readDicomHeader` or `toDicomJson`. It takes one term of `FALLBACK_CHARACTER_SETS` (the type
+`FallbackCharacterSet`): `ISO_IR 6`, a single-byte `ISO_IR` set, or `ISO_IR 192`.
+
+- It applies where a Data Set declares no set: no `(0008,0005)`, an empty one, and a Sequence Item
+  that inherits either or declares an empty one of its own. A declared set, `ISO_IR 6` included,
+  is read as declared. A term this build does not decode is replaced only when you also pass
+  `fallbackCharacterSetForUnknown: true`.
+- `SH`, `LO`, `UC`, `ST`, `LT`, `UT` and `PN` then read by the named set's table, and
+  `Element.specificCharacterSet` names it. A byte that set does not define still reads as U+FFFD
+  with `DICOM_CHARSET_BYTES_UNDECODABLE`.
+- The parse adds a `DICOM_CHARSET_ASSUMED` warning to `ds.warnings` once, at the first text
+  element it read under the assumption. The message names that element's tag and no text, and the warning is
+  never escalated by `strict` or a profile.
+- Nothing written changes. `Element.rawBytes` keeps the bytes as read, `serializeDicom` writes them
+  back, and no `(0008,0005)` is added. To declare the set in the output, add the element yourself.
+- A value outside the list is refused before anything is read: `parseDicom` and `readDicomHeader`
+  throw a `TypeError` whose `code` is `"DICOM_INVALID_OPTION"`, and `toDicomJson` throws a
+  `DicomJsonError` with the code `INVALID_OPTION`. Neither message echoes the value.
+
+```ts runnable
+import { FALLBACK_CHARACTER_SETS, parseDicom, toDicomJson } from "@cosyte/dicom";
+
+// A synthetic file with no (0008,0005): Patient's Name holds the Latin-1 byte C9 for "É".
+const buf = Buffer.from(
+  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABESUNNAgAAAFVMBAAcAAAAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xABAAEABQTgoARE9FXkpPU8lFIA==",
+  "base64",
+);
+
+const asDeclared = parseDicom(buf).get("00100010")?.value;
+const declared = asDeclared?.kind === "personName" ? asDeclared.values[0]?.alphabetic : undefined;
+declared?.givenName; // => "JOS�E"
+
+const ds = parseDicom(buf, { fallbackCharacterSet: "ISO_IR 100" });
+const name = ds.get("00100010")?.value;
+const assumed = name?.kind === "personName" ? name.values[0]?.alphabetic : undefined;
+assumed?.givenName; // => "JOSÉE"
+ds.warnings.map((w) => w.code); // => ["DICOM_CHARSET_ASSUMED"]
+
+const json = toDicomJson(parseDicom(buf), { fallbackCharacterSet: "ISO_IR 100" });
+json["00100010"]; // => { vr: "PN", Value: [{ Alphabetic: "DOE^JOSÉE" }] }
+FALLBACK_CHARACTER_SETS.includes("ISO_IR 100"); // => true
+```
+
+**Files in the later Greek and Hebrew editions.** `ISO_IR 126` and `ISO_IR 138` name the editions
+ISO-IR registered as 126 and 138. A file that declares one of them but writes a character only a
+later edition has reads those bytes as U+FFFD with `DICOM_CHARSET_BYTES_UNDECODABLE`: the euro
+sign `0xA4`, the drachma sign `0xA5` or the ypogegrammeni `0xAA` of ISO 8859-7:2003 (registered as
+ISO-IR 227), and the left-to-right and right-to-left marks `0xFD` and `0xFE` of ISO 8859-8:1999
+(registered as ISO-IR 198). `fallbackCharacterSet` does not change that, because the file declares
+its set. If you know your files use the later edition, decode `Element.rawBytes` yourself with the
+WHATWG `TextDecoder` for the part, whose table is the later edition's. It reads `0x80` to `0x9F`
+as C1 controls, which PS3.5 section 6.1.1 says shall not be used, so check for those yourself.
+
+```ts runnable
+new TextDecoder("iso-8859-7").decode(Uint8Array.from([0xa4, 0xa5, 0xaa])); // => "€₯ͺ"
+new TextDecoder("iso-8859-8").decode(Uint8Array.from([0xfd, 0xfe])); // => "‎‏"
+```
+
 **With more than one Value, the code extensions of ISO 2022 are decoded** (PS3.5 2026d section
 6.1.2.5), unless Value 1 is `ISO_IR 192`, `GB18030`, or `GBK`, which take none (section 6.1.2.4):
 

@@ -64,6 +64,7 @@ import {
   unexpectedFffeAtDatasetRoot,
 } from "./fatals.js";
 import { parseSequence, tryParseDefinedLengthSQ, tryParseUnAsSQ } from "./sequence.js";
+import { noteAssumedCharset } from "./fallback.js";
 import { stopsHere } from "./stop.js";
 import type { ParseContext } from "./types.js";
 import { groupLengthInDataset, type DicomParseWarning } from "./warnings.js";
@@ -315,6 +316,9 @@ export function parseImplicitLE(
     if (tag === "00280103") {
       ctx.pixelRepresentation = length === 2 ? buffer.readUInt16LE(valueStart) : undefined;
     }
+
+    // The first text element read under `ParseOptions.fallbackCharacterSet` says so, once.
+    if (ctx.fallback !== undefined) noteAssumedCharset(ctx, emit, position, tag, vr);
 
     const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
     defineRow(
