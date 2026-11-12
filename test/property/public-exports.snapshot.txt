@@ -19,6 +19,7 @@ DEFAULT_UID_ROOT
 DEIDENTIFICATION_METHOD_CODES
 DEIDENTIFY_ERROR_CODES
 DEIDENTIFY_OPTIONS
+DICOM_JSON_ERROR_CODES
 Dataset
 DateParts
 DefineProfileOptions
@@ -35,6 +36,12 @@ DicomDate
 DicomDateTime
 DicomDirectory
 DicomFileHandle
+DicomJsonAttribute
+DicomJsonDataset
+DicomJsonError
+DicomJsonErrorCode
+DicomJsonPersonName
+DicomJsonValue
 DicomParseError
 DicomParseWarning
 DicomPosition
@@ -52,6 +59,7 @@ FileMeta
 FileMetaDroppedElement
 FileMetaRawElement
 FrameFunctionalGroups
+FromDicomJsonOptions
 Group0004Removal
 ImageView
 Item
@@ -80,6 +88,7 @@ SerializeErrorCode
 SeriesView
 StudyView
 ToDateOptions
+ToDicomJsonOptions
 UidRemapper
 UnauditableSequenceFinding
 UndefinedVrFinding
@@ -95,6 +104,7 @@ decodeElementValue
 decodeText
 defineProfile
 deidentify
+fromDicomJson
 isKnownCharsetTerm
 makeUidRemapper
 parseDate
@@ -110,5 +120,6 @@ readPixelDataFragments
 resolveDecoderLabel
 serializeDicom
 toDate
+toDicomJson
 toISO
 toObject

@@ -3,7 +3,7 @@ id: error-handling
 title: Error handling
 sidebar_label: Error handling
 sidebar_position: 17
-description: The five typed errors the package throws, what each one carries, and when a warning becomes a throw.
+description: The six typed errors the package throws, what each one carries, and when a warning becomes a throw.
 ---
 
 # Error handling
@@ -68,6 +68,25 @@ Thrown only by `image.frame(i)`: `FRAME_INDEX_OUT_OF_RANGE` for an index outside
 ## `DicomSerializeError`
 
 Thrown by `serializeDicom` for `MISSING_TRANSFER_SYNTAX` (the dataset names no transfer syntax to write in), `UNSUPPORTED_TRANSFER_SYNTAX`, or `INVALID_ENCAPSULATED_PIXEL_DATA` (a PS3.5 2026c section A.4 object whose top-level Pixel Data is absent, native, beside Float or Double Float Pixel Data, or a fragment stream section A.4 does not allow: undelimited, an odd or undefined Item Length, or an empty fragment), `DIRECTORY_OFFSET_UNRESOLVED` (a DICOMDIR offset the writer cannot tie to a Directory Record the dataset holds, refused rather than written stale or as zero) `DIRECTORY_OFFSET_DEFLATED` (a Deflated DICOMDIR carrying a non-zero record offset), or `VALUE_TOO_LONG_FOR_VR` (a Private Creator or File Meta value past 65,534 bytes in a VR with a 16-bit length, which PS3.5 forbids writing as `UN`). The message is a fixed string.
+
+## `DicomJsonError`
+
+Thrown by `toDicomJson` and `fromDicomJson` when a value cannot cross between Part 10 and the DICOM JSON Model without being changed or guessed at: `UNSUPPORTED_VR`, `UNSUPPORTED_ELEMENT`, `UNSUPPORTED_BYTE_ORDER`, `UNREPRESENTABLE_NUMBER`, `MALFORMED_VALUE`, `INVALID_JSON`, `BULK_DATA_UNRESOLVED`, `BULK_DATA_URI_REQUIRED`, `UNSUPPORTED_CHARACTER_SET`, `UNSUPPORTED_TRANSFER_SYNTAX`, `VALUE_TOO_LONG`, `VR_MISMATCH`, `NESTING_TOO_DEEP` and `CONVERSION_FAILED` (`DICOM_JSON_ERROR_CODES`). No other error leaves either converter: one a callback throws is replaced by `CONVERSION_FAILED`, and not kept. The message is fixed text and `err.tag` is the element's tag only when PS3.6 registers it one at a time, `"<withheld>"` otherwise, so neither carries a value. [Serialization](./serialization.md#the-dicom-json-model) says what each code refuses.
+
+```ts runnable
+import { fromDicomJson, DicomJsonError } from "@cosyte/dicom";
+
+let code: string | undefined;
+try {
+  fromDicomJson(
+    { "00100020": { vr: "LO", Value: [42] } },
+    { fileMeta: { transferSyntaxUID: "1.2.840.10008.1.2.1" } },
+  );
+} catch (err) {
+  if (err instanceof DicomJsonError) code = err.code;
+}
+code; // => "INVALID_JSON"
+```
 
 ## `ProfileDefinitionError` · `DeidentifyError`
 

@@ -1,0 +1,43 @@
+---
+"@cosyte/dicom": patch
+---
+
+New `toDicomJson` and `fromDicomJson` convert a Data Set to the DICOM JSON Model and back, metadata only, refusing by code what the model cannot carry.
+
+- `toDicomJson(ds, options?)` returns one JSON object keyed by tag, each attribute with its `vr`
+  and its `Value`, `InlineBinary` (base64) or `BulkDataURI` (the `bulkDataUri` option chooses
+  which binary values go out by URI). File Meta and retired Group Length are left out. Pixel Data
+  and the other bulk values (Float and Double Float Pixel Data, Overlay Data, Waveform Data,
+  Spectroscopy Data, Encapsulated Document) need a URI, or the `inlineBulkData: true` opt-in, and
+  are refused with `BULK_DATA_URI_REQUIRED` otherwise.
+- `fromDicomJson(json, { fileMeta, sequenceLength?, resolveBulkData? })` writes the JSON under the
+  File Meta it is given and returns the `Dataset` `parseDicom` reads from it, so `serializeDicom`
+  writes it as Part 10. Explicit VR LE, Implicit VR LE, Explicit VR BE and Deflated Explicit VR
+  LE are written.
+- Part 10 to JSON to Part 10 is byte-identical where the source wrote what `fromDicomJson` writes:
+  the JSON Model records no Sequence length form, no `DS` or `IS` text beyond its number and no pad
+  byte, so a source that differs there comes back with the same JSON and different bytes.
+- A value comes back exactly or is refused, never changed, apart from the losses listed above
+  and one more: an odd-length `InlineBinary` or resolved `BulkDataURI` is written with the NUL pad
+  byte Part 10 requires, and comes back with it. Refused with the new `DicomJsonError` (codes in
+  `DICOM_JSON_ERROR_CODES`): `SV` and `UV` values, encapsulated Pixel Data, `OW`, `OF`, `OD`, `OL`
+  and `OV` under Explicit VR Big Endian, numbers JSON or the VR cannot hold (a `DS` no double
+  holds exactly, an `FL` below float32's normal range, an `FL` or `FD` negative zero), a VR
+  Implicit VR would read back as another (`VR_MISMATCH`), a backslash or `=` inside one value, a
+  control character the VR does not allow (ESC among them), a Person Name of more than three
+  groups, text bytes the Specific Character Set does not decode, text it is not encoded under
+  here or that does not read back as itself (`fromDicomJson` reads every text value it writes back
+  through the reader's decoder, which reads the default repertoire and `ISO_IR 100` as
+  windows-1252, so text holding most C1 characters is refused, as is a lone surrogate under
+  `ISO_IR 192`), a tag in group `0001`, `0003`, `0005` or `0007`, Sequences nested more than 64 deep (`NESTING_TOO_DEEP`), and JSON of another shape. Any
+  other error, one a callback throws included, is `CONVERSION_FAILED`: nothing but a
+  `DicomJsonError` leaves either converter. PS3.18 is not vendored here, so the cases we could not
+  confirm against it are among the refusals.
+- Specific Character Sets carried: one value of the default repertoire, a single-byte `ISO_IR` set
+  without code extensions, or `ISO_IR 192`. A Data Set with ISO 2022 code extensions, `GB18030` or
+  `GBK`, at any depth, is refused with `UNSUPPORTED_CHARACTER_SET`, even where `parseDicom` reads
+  it, and text is decoded by the same decoder `element.value` uses.
+- New exports: `toDicomJson`, `fromDicomJson`, `DicomJsonError`, `DICOM_JSON_ERROR_CODES`, and the
+  types `DicomJsonErrorCode`, `DicomJsonDataset`, `DicomJsonAttribute`, `DicomJsonValue`,
+  `DicomJsonPersonName`, `ToDicomJsonOptions` and `FromDicomJsonOptions`. Nothing existing changes,
+  so no caller has to change.
