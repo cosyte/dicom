@@ -104,6 +104,26 @@ export function isBulkTag(tag: string): boolean {
 }
 
 /**
+ * The decimal value a number's text names, as its significant digits and the power of ten they
+ * are scaled by, so that two texts of one value give the same key: `"12.50"` and `"1.25e1"` both
+ * give `"125e-1"`. The sign is left out: a text and the double read from it never differ in sign.
+ *
+ * @example
+ * ```ts
+ * decimalKey("+0012.50"); // "125e-1"
+ * ```
+ */
+export function decimalKey(text: string): string {
+  const match = /^[+-]?(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/u.exec(text) as RegExpExecArray;
+  const [, whole = "", fraction = "", exponent = "0"] = match;
+  const digits = (whole + fraction).replace(/^0+/u, "");
+  if (digits === "") return "0";
+  const significant = digits.replace(/0+$/u, "");
+  const power = Number(exponent) - fraction.length + digits.length - significant.length;
+  return `${significant}e${power}`;
+}
+
+/**
  * `true` for a DS value as PS3.5 section 6.2 gives it, leading and trailing spaces removed.
  *
  * @example

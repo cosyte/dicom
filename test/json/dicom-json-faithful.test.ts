@@ -183,6 +183,13 @@ describe("a number JSON cannot carry exactly is refused", () => {
     }
   });
 
+  it("writes back a DS whose shortest JavaScript text is past 16 characters", () => {
+    const json = toDicomJson(parsed([{ tag: "00101020", vr: "DS", value: latin1("100E14") }]));
+    expect(json["00101020"]).toEqual({ vr: "DS", Value: [1e16] });
+    const back = fromDicomJson(json, LE).get("00101020")?.rawBytes ?? Buffer.alloc(0);
+    expect(Buffer.from(back)).toEqual(latin1("1e16"));
+  });
+
   it("refuses an FL that underflows float32, and keeps one float32 holds or rounds normally", () => {
     for (const n of [1e-50, 1e-45, -1e-42, 4e38]) {
       const json = { "00089459": { vr: "FL", Value: [n] } };

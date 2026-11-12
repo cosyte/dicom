@@ -265,8 +265,10 @@ round trip is byte-identical only where the source already wrote what `fromDicom
   or an undefined length. `fromDicomJson` writes defined lengths, or undefined lengths with
   `sequenceLength: "undefined"`; a source that mixed the two comes back with one of them.
 - **`DS` and `IS` text.** A number is written in JavaScript's shortest text for it, so `1.0`
-  comes back as `1`, `+5` as `5` and `-0` as `0`. The decimal value never changes; a text whose
-  value a JSON number does not hold is refused, as above.
+  comes back as `1`, `+5` as `5` and `-0` as `0`; where that text is past the 16 characters `DS`
+  allows, the value is written as its significant digits and a power of ten, so `100E14` comes
+  back as `1e16`. The decimal value never changes; a text whose value a JSON number does not hold
+  is refused, as above.
 - **Padding.** Values are padded as PS3.5 pads them, `UI` with a NUL and other text with a space,
   so a `UI` a source padded with a space comes back padded with a NUL. Trailing spaces of a value
   are removed in the JSON.

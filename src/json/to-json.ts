@@ -20,6 +20,7 @@ import type {
   ToDicomJsonOptions,
 } from "./types.js";
 import {
+  decimalKey,
   isBinaryVr,
   isBulkTag,
   isCharsetVr,
@@ -83,21 +84,6 @@ function personName(el: Element, text: string): DicomJsonPersonName | null {
   if (ideographic !== "") out.Ideographic = ideographic;
   if (phonetic !== "") out.Phonetic = phonetic;
   return Object.keys(out).length === 0 ? null : out;
-}
-
-/**
- * The decimal value a number's text names, as its significant digits and the power of ten they
- * are scaled by, so that two texts of one value give the same key: `"12.50"` and `"1.25e1"` both
- * give `"125e-1"`. The sign is left out: a text and the double read from it never differ in sign.
- */
-function decimalKey(text: string): string {
-  const match = /^[+-]?(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/u.exec(text) as RegExpExecArray;
-  const [, whole = "", fraction = "", exponent = "0"] = match;
-  const digits = (whole + fraction).replace(/^0+/u, "");
-  if (digits === "") return "0";
-  const significant = digits.replace(/0+$/u, "");
-  const power = Number(exponent) - fraction.length + digits.length - significant.length;
-  return `${significant}e${power}`;
 }
 
 /**

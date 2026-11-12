@@ -24,7 +24,14 @@ import type { VR } from "../dictionary/types.js";
 import { DICOM_JSON_ERROR_CODES, DicomJsonError, type DicomJsonErrorCode } from "./errors.js";
 import { hasValueForm } from "./to-json.js";
 import type { DicomJsonDataset, FromDicomJsonOptions } from "./types.js";
-import { isBinaryVr, isCharsetVr, isSingleStringVr, isSwappedBinaryVr, numberWidth } from "./vr.js";
+import {
+  decimalKey,
+  isBinaryVr,
+  isCharsetVr,
+  isSingleStringVr,
+  isSwappedBinaryVr,
+  numberWidth,
+} from "./vr.js";
 
 /** How a Data Set body is encoded: Implicit or Explicit VR, and its byte order. */
 interface Encoding {
@@ -222,10 +229,15 @@ function numberOf(value: unknown, vr: string, tag: string): number {
 
 function numberText(value: unknown, vr: string, tag: string): string {
   if (value === null) return "";
-  const text = String(numberOf(value, vr, tag));
+  const n = numberOf(value, vr, tag);
+  const text = String(n);
   // A DS value is at most 16 bytes (PS3.5 section 6.2); an IS in range is never longer.
-  if (text.length > 16) refuse(DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER, tag);
-  return text;
+  if (text.length <= 16) return text;
+  // Past 16 characters, the same value in the fewest: its significant digits and a power of ten,
+  // so 1e16, whose shortest text is 17 digits, is written as "1e16".
+  const compact = `${n < 0 ? "-" : ""}${decimalKey(text)}`;
+  if (compact.length > 16) refuse(DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER, tag);
+  return compact;
 }
 
 function binaryNumbers(values: readonly unknown[], vr: string, le: boolean, tag: string): Buffer {
@@ -521,7 +533,8 @@ function refuseChangedVrs(json: Record<string, unknown>, ds: Dataset): void {
  * Each attribute is written from its `vr` and its `Value`, `InlineBinary` or `BulkDataURI`, the
  * inverse of `toDicomJson`: strings joined by backslashes and padded to even length (`UI` with a
  * NUL, the rest with a space), Person Name groups joined by `=`, `DS` and `IS` numbers in
- * JavaScript's shortest text for them, binary numbers and `AT` in the Transfer Syntax's byte
+ * JavaScript's shortest text for them (or, past 16 characters, as significant digits and a power
+ * of ten: `1e16`), binary numbers and `AT` in the Transfer Syntax's byte
  * order, and base64 or resolved bulk data as it is. Data Elements are written in ascending tag
  * order at every depth. Sequences and Items take the `sequenceLength` option, defined lengths by
  * default. Text is encoded under the `(0008,0005)` Specific Character Set of its Data Set.

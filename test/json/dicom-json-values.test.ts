@@ -329,9 +329,14 @@ describe("numbers", () => {
       latin1("-0.0000012345678"),
     );
     expect(valueBytes("00101020", { vr: "DS", Value: [1e21, null] })).toEqual(latin1("1e+21\\"));
-    expect(refusal(() => valueBytes("00101020", { vr: "DS", Value: [-0.00000123456789] }))).toBe(
-      "UNREPRESENTABLE_NUMBER",
+    // Past 16 characters, the same value as significant digits and a power of ten.
+    expect(valueBytes("00101020", { vr: "DS", Value: [-0.00000123456789] })).toEqual(
+      latin1("-123456789e-14"),
     );
+    expect(valueBytes("00101020", { vr: "DS", Value: [1e16] })).toEqual(latin1("1e16"));
+    expect(
+      refusal(() => valueBytes("00101020", { vr: "DS", Value: [-1.234567890123456e-300] })),
+    ).toBe("UNREPRESENTABLE_NUMBER");
   });
 
   it("holds each integer VR and IS to its range, both ends included", () => {
