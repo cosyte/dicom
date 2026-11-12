@@ -1,5 +1,85 @@
 # Changelog
 
+## 0.1.14
+
+### Patch Changes
+
+- f0e3ff7: The Clean Descriptors Option now empties each coded list it cleans, and `serializeDicom` runs under Deno.
+
+  - **Clean Descriptors.** PS3.15 Table E.1-1 gives nine Sequences a `C` under Clean Descriptors:
+    the five diagnosis code lists (Admitting, Principal, Primary, Secondary and Histological), Reason
+    for Visit Code Sequence, Request Attributes Sequence, Reason for Requested Procedure Code Sequence
+    and Prescription Notes Sequence. `deidentify` used to keep each one and walk its Items, and since
+    Code Value `(0008,0100)` and the free-text Code Meaning `(0008,0104)` have no row of their own,
+    both were kept while the report said `cleaned`. Each of these is now kept with no Items, the same
+    conservative blank `C` writes on any other attribute, and the report still says `cleaned`. A
+    Sequence the Clean Structured Content or Clean Graphics Option cleans is unchanged. A caller that
+    read Items out of one of the nine gets none now, and one that needs a code from such a list reads
+    it from the source before de-identifying.
+  - **Deno.** Under Deno 2.9.8, `serializeDicom` threw `RangeError: The value of "sourceEnd" is out
+of range` from `Buffer.prototype.compare`, which it called with a source range to check an
+    element against its source bytes. It now makes that check with `equals`, and CI runs the whole
+    test suite under Deno.
+  - **ISO-IR 149 under Deno.** KS X 1001's row 2 now ends at cell 69 on every runtime. Deno's
+    `euc-kr` decoder reads characters a later edition added past that cell, so the same bytes
+    decoded to a character under Deno and to U+FFFD under Node; both now give U+FFFD.
+
+- 6d8027b: The Clean Structured Content and Clean Graphics Options now empty each Sequence they clean, at every depth.
+
+  - **What changed.** PS3.15 Table E.1-1 gives five Sequences a `C` under these Options: Content
+    Sequence `(0040,A730)`, Acquisition Context Sequence `(0040,0555)`, Specimen Preparation Sequence
+    `(0040,0610)` and Waveform Annotation Sequence `(0040,B020)` under Clean Structured Content, and
+    Graphic Annotation Sequence `(0070,0001)` under Clean Graphics. `deidentify` used to keep each one
+    and walk its Items, and since Text Value `(0040,A160)`, Code Value and Code Meaning `(0008,0104)`
+    have no row of their own, all three were kept while the report said `cleaned`. Each is now kept
+    with no Items, wherever it sits, and the report still says `cleaned`. A `C` on any Sequence now
+    means the same thing, whichever Option resolves it.
+  - **What a caller sees.** Under either Option, these Sequences come back with no Items, so a
+    structured report's content tree or a graphic annotation is not in the output. A caller that read
+    Items out of one of them gets none now; one that needs that content reads it from the source before
+    de-identifying. Nothing changes without these Options: the Basic Profile already removed or emptied
+    all five.
+
+- c4b6507: `serializeDicom` writes a file of many small elements, such as a Modality Worklist entry or a structured report, with far less memory.
+
+  - **One buffer, written in place.** The writer measures every element first, then writes each
+    header and value straight into the one output buffer. It used to build a header Buffer and a
+    list of parts for every element, and a run of Buffers for the File Meta group.
+  - **Items already in order are not sorted.** An Item whose elements were read in ascending tag
+    order, the usual case, is checked and written as read with no sort, no second list and no map.
+    An Item that is out of order is ordered as before.
+  - **Fewer objects per element.** The walk reads each element header into one reused record, and
+    reads tags and lengths from the bytes directly rather than through Node's `readUInt16LE` and its
+    kin, whose offset check allocated on every call in our heap profile. A read past the end of the
+    bytes still goes through them and throws as it did.
+
+  Nothing a caller sees changes: the bytes written are the same, byte for byte, and so is every
+  error, in the same order. No export changes.
+
+- 5e699de: New `readDicomHeader` and `ParseOptions.stopBeforeTag` read a file's header without reading its Pixel Data into memory.
+
+  - **`readDicomHeader(source, options?)`** (new export) reads from a file path, a `file:` URL, a
+    file handle or an async iterable of bytes (a Node stream or a web `ReadableStream`), only as far
+    as the first top-level element at or after the stop tag, Float Pixel Data `(7FE0,0008)` by
+    default, and returns the Dataset `parseDicom` gives on the whole file with that stop. It reads
+    64 KiB first and twice as much each time the header is longer. A Deflated file, a file with
+    nothing at or after the stop tag, and a file the parser refuses are still read whole, unless
+    the new `maxBytes` option is set: then a read that has not found the stop within that many bytes
+    throws a `RangeError` instead of reading on. `maxBytes` has no default. The types
+    `DicomByteSource`, `DicomFileHandle` and `ReadDicomHeaderOptions` are exported with it.
+  - **`ParseOptions.stopBeforeTag`** (new option) stops `parseDicom` before the first top-level
+    element whose tag is at or after the one given, as eight hexadecimal digits. Every element
+    before it is read exactly as a full parse reads it, and nothing after it is read, so a file cut
+    short inside its Pixel Data still parses. Only the top-level Data Set stops; Sequence Items are
+    read whole. A parse that stops does not check a DICOMDIR's Directory Record offsets, whose
+    records may lie past the stop.
+  - **`DICOM_PARSE_STOPPED_BEFORE_TAG`** (new warning code) ends `ds.warnings` when a parse stops,
+    positioned at the element it stopped before. It is never escalated, under `strict` or by a
+    profile. A `switch` over `WarningCode` with a `default` branch needs no change.
+
+  Nothing changes for a caller who passes neither: a parse without `stopBeforeTag` reads exactly as
+  before.
+
 ## 0.1.13
 
 ### Patch Changes
