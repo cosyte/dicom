@@ -125,10 +125,8 @@ function header(tag: string, vr: string, length: number, layout: Layout): Buffer
 /** `value` with each `width`-byte number reversed; a copy, `value` is left as it was. */
 function swap(value: Buffer, width: number): Buffer {
   const out = Buffer.from(value);
-  for (let start = 0; start < out.length; start += width) {
-    out.subarray(start, start + width).reverse();
-  }
-  return out;
+  if (width === 2) return out.swap16();
+  return width === 4 ? out.swap32() : out.swap64();
 }
 
 function leaf(element: LeafElement, layout: Layout): Buffer {
