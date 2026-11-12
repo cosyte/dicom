@@ -265,6 +265,8 @@ describe("Specific Character Set", () => {
     for (const charset of [
       { vr: "CS", Value: "ISO_IR 192" },
       { vr: "CS", Value: [5] },
+      // A term of another shape is refused as one, even beside a valid one.
+      { vr: "CS", Value: ["ISO_IR 100", 5] },
     ]) {
       const json = { "00080005": charset } as unknown as DicomJsonDataset;
       expect(refusal(() => fromDicomJson(json, LE))).toBe("INVALID_JSON");
@@ -635,6 +637,8 @@ describe("DicomJsonError", () => {
     expect(tagOf({ "00100020": { vr: "LO", Value: [1] } })).toBe("00100020");
     expect(tagOf({ "0020000D": { vr: "UI", Value: [1] } })).toBe("0020000D");
     expect(tagOf({ "00080005": { vr: "CS", Value: "ISO_IR 192" } })).toBe("00080005");
+    expect(tagOf({ "00080005": { vr: "CS", Value: [5] } })).toBe("00080005");
+    expect(tagOf({ "00080005": { vr: "CS", Value: ["ISO 2022 IR 100"] } })).toBe("00080005");
     expect(tagOf({ "00091001": { vr: "LO", Value: [1] } })).toBe("<withheld>");
     expect(tagOf({ "0010002": { vr: "LO" } })).toBe("<withheld>");
     expect(tagOf([])).toBe("<withheld>");

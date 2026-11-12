@@ -81,8 +81,9 @@ function textOf(el: Element): string {
   const bom = bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf;
   const body = bom ? bytes.subarray(3) : bytes;
   const text = decodeText(body, terms);
-  // Valid UTF-8, and only that, encodes back to the same bytes: a real U+FFFD is kept.
-  if (!Buffer.from(text, "utf8").equals(body)) refuse(DICOM_JSON_ERROR_CODES.MALFORMED_VALUE, el);
+  // Valid UTF-8, and only that, encodes back (as UTF-8, the default) to the same bytes: a real
+  // U+FFFD is kept.
+  if (!Buffer.from(text).equals(body)) refuse(DICOM_JSON_ERROR_CODES.MALFORMED_VALUE, el);
   return bom ? `${BYTE_ORDER_MARK}${text}` : text;
 }
 

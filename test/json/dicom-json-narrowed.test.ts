@@ -177,6 +177,7 @@ describe("Specific Character Set: one value, no code extensions", () => {
 
   it("decodes every byte of every set it carries as the reader does, or refuses it", () => {
     const bytes = Buffer.from(Array.from({ length: 0xff - 0x20 }, (_, i) => i + 0x21));
+    let refused = 0;
     for (const terms of [
       "ISO_IR 100",
       "ISO_IR 101",
@@ -202,14 +203,18 @@ describe("Specific Character Set: one value, no code extensions", () => {
         const code = refusal(() => {
           json = toDicomJson(ds);
         });
-        if (code !== undefined) {
-          expect(code, `${terms} ${byte}`).toBe(DICOM_JSON_ERROR_CODES.MALFORMED_VALUE);
-          expect(text, `${terms} ${byte}`).toContain("�");
-        } else {
-          expect(json?.["00104000"]?.Value, `${terms} ${byte}`).toEqual([text]);
-        }
+        // Refused exactly where the reader has no character for the byte, and the same text
+        // everywhere else.
+        const lost = text?.includes(String.fromCharCode(0xfffd)) === true;
+        if (lost) refused += 1;
+        expect(code, `${terms} ${byte}`).toBe(
+          lost ? DICOM_JSON_ERROR_CODES.MALFORMED_VALUE : undefined,
+        );
+        if (!lost) expect(json?.["00104000"]?.Value, `${terms} ${byte}`).toEqual([text]);
       }
     }
+    // Single-byte sets with holes (ISO_IR 109, 127, 126, 138, 166) and UTF-8 are among them.
+    expect(refused).toBeGreaterThan(128);
   });
 
   it("sets aside only a whole leading byte order mark under ISO_IR 192, and refuses a second", () => {
