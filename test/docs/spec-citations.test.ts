@@ -179,6 +179,30 @@ const LOAD_BEARING: readonly { part: VendoredPart; clause: string; sentence: str
     sentence: "inserted in or added to",
   },
   {
+    // The VR Implicit VR Little Endian gives Pixel Data, which the docs state.
+    part: "PS3.5",
+    clause: "A.1",
+    sentence: "Pixel Data (7FE0,0010) has the Value Representation OW",
+  },
+  {
+    // The docs quote this to say why Overlay Data is OW under Implicit VR.
+    part: "PS3.5",
+    clause: "8.1.2",
+    sentence: "the VR of OB may not be used for Overlay Data",
+  },
+  {
+    // The docs quote this to say why the channel values follow Waveform Data's VR.
+    part: "PS3.5",
+    clause: "8.3",
+    sentence: "shall be encoded with the same VR as Waveform Data",
+  },
+  {
+    // The docs lean on this to sign the "US or SS" pixel sample values.
+    part: "PS3.5",
+    clause: "8.1.1",
+    sentence: "as specified by the Data Element Pixel Representation (0028,0103)",
+  },
+  {
     // The overlay half of the repeating-group bound, and ONLY the overlay half: this clause retires
     // curve encoding and delegates the `50xx` bound to PS3.5-2004 by URL, which is why that edition
     // is vendored beside the current one. Any text citing this clause for the curve range is wrong.

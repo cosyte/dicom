@@ -138,7 +138,7 @@ export function parseImplicitLE(
     }
 
     const position = { byteOffset: headerStart };
-    const vr = resolveImplicitVR(tag, ctx, emit, position);
+    const vr = resolveImplicitVR(tag, ctx, emit, position, length);
 
     // length === 0xFFFFFFFF - under Implicit VR LE, only valid for SQ
     // (delegate to parseSequence). For non-SQ
@@ -308,6 +308,12 @@ export function parseImplicitLE(
     // (0008,0005) Specific Character Set governs subsequent text decode.
     if (tag === SPECIFIC_CHARACTER_SET_TAG) {
       applySpecificCharacterSet(tag, buffer.subarray(valueStart, valueEnd), ctx, emit, position);
+    }
+
+    // (0028,0103) Pixel Representation signs the "US or SS" pixel sample values that follow it in
+    // this Data Set (PS3.5 section 8.1.1). A value that is not one US is no Pixel Representation.
+    if (tag === "00280103") {
+      ctx.pixelRepresentation = length === 2 ? buffer.readUInt16LE(valueStart) : undefined;
     }
 
     const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
