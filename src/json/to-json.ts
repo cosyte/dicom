@@ -131,16 +131,24 @@ function personName(el: Element, text: string): DicomJsonPersonName | null {
 }
 
 /**
- * A `DS` or `IS` value as the JSON number of the same decimal value, or a refusal: a double that
- * does not hold the text's value exactly (past 2^53, or more digits than a double keeps) is never
- * written in its place. Only the text's form may change: `"1.0"` is written as `1`.
+ * A `DS` or `IS` value as the JSON number of the same decimal value. Only the text's form may
+ * change: `"1.0"` is written as `1`. A double that does not hold the text's value exactly (past
+ * 2^53, more digits than a double keeps, or past its range) is never written in its place: a `DS`
+ * is written as a JSON string of its text, spaces removed, which PS3.18 F.2.3 allows, and an `IS`
+ * is refused: a double holds every `IS` of the 12 bytes PS3.5 allows it, so only a longer one gets
+ * here.
  */
-function numberString(el: Element, text: string, valid: (text: string) => boolean): number | null {
+function numberString(
+  el: Element,
+  text: string,
+  valid: (text: string) => boolean,
+): number | string | null {
   const trimmed = text.trim();
   if (trimmed === "") return null;
   if (!valid(trimmed)) refuse(DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER, el);
   const n = Number(trimmed);
   if (!Number.isFinite(n) || decimalKey(String(n)) !== decimalKey(trimmed)) {
+    if (el.vr === "DS") return trimmed;
     refuse(DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER, el);
   }
   // `-0` is zero, and JSON writes it as `0`.
@@ -196,7 +204,8 @@ function attributeTags(el: Element, bytes: Buffer): string[] {
 
 /**
  * `true` for a VR this module writes as `Value`: every string VR, the binary numbers and `AT`.
- * `SV` and `UV` are not among them; their JSON form is not confirmed against PS3.18.
+ * `SV` and `UV` are not among them: a JSON number holds an integer exactly only up to 2^53, and
+ * we have not read the form PS3.18 gives them in a pinned copy of it.
  *
  * @internal
  * @example
@@ -316,7 +325,9 @@ function datasetOf(
  *
  * How each VR is written: text VRs as JSON strings with their padding removed, `null` for an empty
  * value among several; `PN` as an object of `Alphabetic`, `Ideographic` and `Phonetic` groups;
- * `DS`, `IS`, `US`, `SS`, `UL`, `SL`, `FL` and `FD` as JSON numbers; `AT` as eight hex digits;
+ * `DS`, `IS`, `US`, `SS`, `UL`, `SL`, `FL` and `FD` as JSON numbers, but a `DS` whose value no
+ * JSON number holds exactly as a JSON string of its text, which PS3.18 F.2.3 allows; `AT` as eight
+ * hex digits;
  * `SQ` as an array of nested Data Sets; and `OB`, `OD`, `OF`, `OL`, `OV`, `OW` and `UN` as base64
  * `InlineBinary`, or as a `BulkDataURI` where the `bulkDataUri` option gives one. Pixel Data and
  * the other bulk values are written inline only with the `inlineBulkData` option. Encapsulated
@@ -339,11 +350,11 @@ function datasetOf(
  *   go inline.
  * @returns The Data Set as a DICOM JSON object.
  * @throws {@link DicomJsonError} rather than change or guess a value: `UNSUPPORTED_VR` for `SV`
- *   and `UV`, `UNSUPPORTED_ELEMENT` for encapsulated Pixel Data the `bulkDataUri` option gives no
+ *   and `UV` values, whose form we have not read in a pinned copy of PS3.18, `UNSUPPORTED_ELEMENT` for encapsulated Pixel Data the `bulkDataUri` option gives no
  *   URI, or another undefined-length value that is not a read Sequence, `UNSUPPORTED_BYTE_ORDER` for an `OW`, `OF`, `OD`, `OL` or `OV`
  *   value under Explicit VR Big Endian, `UNREPRESENTABLE_NUMBER` for NaN, an infinity, an `FL` or
- *   `FD` negative zero, or a `DS` or `IS` value that is not a number or that no JSON number holds
- *   exactly, `MALFORMED_VALUE` for a binary value whose length is not a whole number of values, a
+ *   `FD` negative zero, a `DS` or `IS` value that is not a number, or an `IS` that no JSON number
+ *   holds exactly, `MALFORMED_VALUE` for a binary value whose length is not a whole number of values, a
  *   Person Name of more than three groups or text its Specific Character Set does not decode,
  *   `UNSUPPORTED_CHARACTER_SET` for a Specific Character Set of more than one value or one we do
  *   not carry, at any depth, `BULK_DATA_URI_REQUIRED` for a bulk value with no URI and no

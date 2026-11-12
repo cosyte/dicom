@@ -400,7 +400,9 @@ function scalarValue(
     if (value !== undefined || !takesBulkDataUri(vr)) {
       refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, tag);
     }
-    return bulkData(uri, vr, tag, ctx);
+    const bytes = bulkData(uri, vr, tag, ctx);
+    if (isTextVr(vr)) fetchedText(bytes, vr, tag);
+    return bytes;
   }
   if (value === undefined && (vr === "SV" || vr === "UV")) return Buffer.alloc(0);
   if (!hasValueForm(vr)) refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_VR, tag);
@@ -415,6 +417,20 @@ function scalarValue(
 /** `true` for a VR whose `Value` is written as text: every string VR, `PN`, `DS` and `IS`. */
 function isTextVr(vr: string): boolean {
   return hasValueForm(vr) && numberWidth(vr) === undefined && vr !== "AT";
+}
+
+/**
+ * Hold text fetched by URI for a `DS`, `IS`, `LT`, `ST`, `UC` or `UT` to the checks {@link textValue}
+ * holds the same text to when it is given inline, value by value, so each is refused with the same
+ * code: a `DS` or `IS` that is not one or is too long, an `IS` out of range, a control character
+ * its VR does not allow. The bytes are read one to a character: a `DS` or `IS` is in the default
+ * repertoire, and under each set we carry, none of which uses code extensions, a byte below `0x20`
+ * is the control character of that code and no other byte is one. Whether the Specific Character
+ * Set defines each byte is checked when the written Data Set is read back.
+ */
+function fetchedText(bytes: Buffer, vr: string, tag: string): void {
+  const text = bytes.toString("latin1");
+  textValue(isSingleStringVr(vr) ? [text] : text.split("\\"), vr, tag);
 }
 
 /** The text of a text VR's values: joined by backslashes, before it is encoded. */
@@ -619,8 +635,13 @@ function refuseChangedElements(json: Record<string, unknown>, ds: Dataset): void
       });
       continue;
     }
-    // Text fetched by URI is written as the resolver gave it, with no JSON text to compare.
-    if (!isTextVr(read.vr) || fields["BulkDataURI"] !== undefined) continue;
+    if (!isTextVr(read.vr)) continue;
+    if (fields["BulkDataURI"] !== undefined) {
+      // Text fetched by URI has no JSON text to compare, and `fetchedText` has checked its form:
+      // bytes its set does not define are refused as inline text its set does not encode is.
+      textOf(read, DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET);
+      continue;
+    }
     // `writeDataset` has already refused a `Value` that is not an array, and wrote this text.
     const text = textValue((fields["Value"] ?? []) as readonly unknown[], read.vr, tag);
     // Bytes the set does not define are text it does not encode, refused as such.
@@ -646,7 +667,8 @@ function refuseChangedElements(json: Record<string, unknown>, ds: Dataset): void
  * `OF`, `OL`, `OV`, `OW`, `SL`, `SS`, `ST`, `SV`, `UC`, `UL`, `UN`, `US`, `UT`, `UV`) and handed
  * to `resolveBulkData`; the bytes it gives are Little Endian, as PS3.18 section 8.7.3.3.1 serves
  * bulk data, and are swapped value by value under Explicit VR Big Endian. Text fetched so is
- * written as the resolver gives it. Data Elements are written in ascending tag
+ * written as the resolver gives it, and held to the checks the same text given as a `Value` is
+ * held to, refused with the same codes. Data Elements are written in ascending tag
  * order at every depth. Sequences and Items take the `sequenceLength` option, defined lengths by
  * default. Text is encoded under the `(0008,0005)` Specific Character Set of its Data Set.
  *
@@ -656,7 +678,9 @@ function refuseChangedElements(json: Record<string, unknown>, ds: Dataset): void
  * @returns The Data Set, read by `parseDicom`.
  * @throws {@link DicomJsonError} rather than guess: `INVALID_JSON` for an object of another shape,
  *   `UNSUPPORTED_TRANSFER_SYNTAX` for a Transfer Syntax other than the four uncompressed and
- *   Deflated ones, `UNSUPPORTED_VR` for `SV`, `UV` or a VR PS3.5 does not define,
+ *   Deflated ones, `UNSUPPORTED_VR` for an `SV` or `UV` `Value`, whose form we have not read in a
+ *   pinned copy of PS3.18 and which a JSON number does not hold past 2^53, or a VR PS3.5 does not
+ *   define,
  *   `BULK_DATA_UNRESOLVED` for a `BulkDataURI` nothing resolved, `UNSUPPORTED_CHARACTER_SET` for
  *   text its Specific Character Set is not encoded under here or that the written Data Set does
  *   not read back as (a character past U+007F under the default repertoire, which is ISO-IR 6, a
@@ -665,8 +689,8 @@ function refuseChangedElements(json: Record<string, unknown>, ds: Dataset): void
  *   `OW`, `OF`, `OD`, `OL` or `OV` `InlineBinary` under Explicit VR Big Endian, whose byte order
  *   the annex leaves open, `UNREPRESENTABLE_NUMBER` for
  *   a number out of its VR's range (an `IS` string's included) or an `FL` number float32 does not
- *   hold, `MALFORMED_VALUE` for a `DS` or `IS` string that is not one or is longer than its VR
- *   allows, or bulk data that is not a whole number of values of its VR, `VALUE_TOO_LONG` for a
+ *   hold, `MALFORMED_VALUE` for a `DS` or `IS` string, given or fetched, that is not one or is
+ *   longer than its VR allows, or bulk data that is not a whole number of values of its VR, `VALUE_TOO_LONG` for a
  *   value its Value Length Field cannot hold, and `VR_MISMATCH` for an attribute whose VR the
  *   written Data Set does not read back with, as under Implicit VR Little Endian, where no VR is
  *   written. One value holding a delimiter its VR splits on (a backslash in a multi-valued string
@@ -674,8 +698,10 @@ function refuseChangedElements(json: Record<string, unknown>, ds: Dataset): void
  *   tag in group `0001`, `0003`, `0005`, `0007` or `FFFF`. A Specific
  *   Character Set of more than one value, or one we do not carry (an ISO 2022 term, `GB18030`,
  *   `GBK`), at any depth, is `UNSUPPORTED_CHARACTER_SET`; an `InlineBinary` on a VR that is not
- *   binary, or a `BulkDataURI` on a VR F.2.2 does not name or beside a `Value`, is `INVALID_JSON`; text holding a control character its
- *   VR does not allow, ESC among them, is `MALFORMED_VALUE`; Sequences nested more than 64 deep
+ *   binary, or a `BulkDataURI` on a VR F.2.2 does not name or beside a `Value`, is `INVALID_JSON`;
+ *   text, given or fetched, holding a control character its VR does not allow, ESC among them, is
+ *   `MALFORMED_VALUE`, and fetched text bytes its set does not define are
+ *   `UNSUPPORTED_CHARACTER_SET` (bytes that are not UTF-8 under `ISO_IR 192` `MALFORMED_VALUE`); Sequences nested more than 64 deep
  *   are `NESTING_TOO_DEEP`; and any other error, one the `resolveBulkData` option threw included,
  *   is `CONVERSION_FAILED`: no other error leaves this function.
  * @example

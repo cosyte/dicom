@@ -398,13 +398,14 @@ on the wire.
   `report.fileMetaElementsDroppedCount`, and it is **not** recoverable from the output. If you need
   the source group verbatim, read it off the parsed dataset before the call.
 - **The DICOM JSON Model does not carry everything Part 10 does.** It records no File Meta, no
-  defined or undefined Sequence and Item length, no `DS` or `IS` text beyond its number, and no pad
+  defined or undefined Sequence and Item length, no `DS` or `IS` text beyond its number (a `DS`
+  no number holds goes as its text), and no pad
   byte, so Part 10 to JSON to Part 10 is byte-identical only where the source already wrote what
   `fromDicomJson` writes. What it cannot carry, or what PS3.18 Annex F leaves open (`SV` and `UV`
   values, the byte order of an `InlineBinary` under Big Endian, encapsulated Pixel Data with no
   `BulkDataURI`, and text outside 7-bit ASCII under most Specific Character Sets), is refused with
   a `DicomJsonError`. So is every value that would change on the way: a VR Implicit VR reads back as
-  another, a delimiter inside one value, a `DS` no double holds exactly, an `FL` below float32's
+  another, a delimiter inside one value, an `FL` below float32's
   normal range, an `FL` or `FD` negative zero, a Person Name of more than three groups, text bytes
   its Specific Character Set does not decode, a control character its VR does not allow, and any
   text that does not read back as itself. The reader decodes a byte its set does not define as

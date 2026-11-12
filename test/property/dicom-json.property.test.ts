@@ -566,7 +566,7 @@ describe("dicom conformance: DICOM JSON Model, exact or refused", () => {
     );
   });
 
-  it("a DS comes back with the decimal value of its text, or is refused", () => {
+  it("a DS comes back with the decimal value of its text, as a number or as the text", () => {
     checkProperty(
       "DICOM JSON DS exact or refused",
       fc.property(dsText, (text) => {
@@ -579,9 +579,14 @@ describe("dicom conformance: DICOM JSON Model, exact or refused", () => {
         const refused = refusalOf(() => {
           json = JSON.parse(JSON.stringify(toDicomJson(source))) as DicomJsonDataset;
         });
-        if (refused !== undefined) return refused === "UNREPRESENTABLE_NUMBER";
-        const n = (json as DicomJsonDataset)["00101020"]?.Value?.[0] as number;
-        if (!sameDecimal(text, JSON.stringify(n))) return false;
+        if (refused !== undefined) return false;
+        // A number where a double holds the value exactly, and the text itself where none does.
+        const n = (json as DicomJsonDataset)["00101020"]?.Value?.[0] as number | string;
+        if (typeof n === "string") {
+          const double = Number(n);
+          if (Number.isFinite(double) && sameDecimal(text, JSON.stringify(double))) return false;
+        }
+        if (!sameDecimal(text, typeof n === "string" ? n : JSON.stringify(n))) return false;
         const back = fromDicomJson(json as DicomJsonDataset, {
           fileMeta: { transferSyntaxUID: TS_EXPLICIT_LE },
         });
