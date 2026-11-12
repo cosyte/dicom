@@ -1,0 +1,22 @@
+# Locked public export surface of the `@cosyte/dicom/arbitraries` subpath
+# (`src/arbitraries/index.ts`).
+#
+# NAMES ONLY, values and types alike, as in `public-exports.snapshot.txt`.
+# `public-exports.snapshot.test.ts` compares this list against the subpath's
+# export set on every run and names each differing export when they disagree.
+# Editing this file is the explicit acknowledgement that the subpath's surface
+# moved, and a changeset is owed with it.
+#
+# Order is code-unit ascending, which is locale-independent. Blank lines and
+# lines opening with `#` are comments.
+
+DicomModel
+ModelElement
+arbitraryBytes
+dicomShapedGarbage
+encodeModel
+fatalInput
+fuzzInput
+recoverableInput
+truncatedValidFile
+wellFormedModel

@@ -17,6 +17,10 @@
  *   - isKnownCode   → membership in `WARNING_CODES`
  *   - hasPositional → `w.position.byteOffset` is a finite number (TOL-02)
  *
+ * Depth and seed come from `COSYTE_PROPERTY_RUNS` and `COSYTE_PROPERTY_SEED`
+ * (`test/helpers/property.ts`): 100 cases on a pull request, 10,000 nightly,
+ * each property's seed printed before it runs.
+ *
  * @module
  */
 
@@ -32,10 +36,9 @@ import {
   type Dataset,
 } from "../../src/index.js";
 
-import { arbitraryBytes, recoverableInput, truncatedValidFile } from "./_arbitraries.js";
+import { propertyRun } from "../helpers/property.js";
 
-/** Stable run budget so any counterexample reproduces deterministically. */
-const NUM_RUNS = 600;
+import { arbitraryBytes, recoverableInput, truncatedValidFile } from "./_arbitraries.js";
 
 /** The only throwable codes - the four Tier-3 fatals. */
 const FATAL_CODE_SET: ReadonlySet<string> = new Set(Object.values(FATAL_CODES));
@@ -62,6 +65,7 @@ function hasPositionalContext(w: { readonly position?: unknown }): boolean {
 
 describe("dicom conformance: lenient mode never throws except sanctioned Tier-3 fatals", () => {
   it("recoverable/quirky/garbage input either parses or throws a Tier-3 fatal - nothing else", () => {
+    const { seed } = propertyRun("lenient: recoverable input");
     lenientNeverThrowsProperty({
       arbitrary: recoverableInput(),
       parse: (raw: Buffer) => parseDicom(raw),
@@ -69,11 +73,12 @@ describe("dicom conformance: lenient mode never throws except sanctioned Tier-3 
       getWarnings,
       isKnownCode: (code) => WARNING_CODE_SET.has(code),
       hasPositionalContext,
-      numRuns: NUM_RUNS,
+      seed,
     });
   });
 
   it("pure random byte buffers never throw a non-fatal / non-DicomParseError", () => {
+    const { seed } = propertyRun("lenient: random bytes");
     lenientNeverThrowsProperty({
       arbitrary: arbitraryBytes(),
       parse: (raw: Buffer) => parseDicom(raw),
@@ -81,11 +86,12 @@ describe("dicom conformance: lenient mode never throws except sanctioned Tier-3 
       getWarnings,
       isKnownCode: (code) => WARNING_CODE_SET.has(code),
       hasPositionalContext,
-      numRuns: NUM_RUNS,
+      seed,
     });
   });
 
   it("random truncations of valid files recover or throw a sanctioned fatal", () => {
+    const { seed } = propertyRun("lenient: truncated files");
     lenientNeverThrowsProperty({
       arbitrary: truncatedValidFile(),
       parse: (raw: Buffer) => parseDicom(raw),
@@ -93,7 +99,7 @@ describe("dicom conformance: lenient mode never throws except sanctioned Tier-3 
       getWarnings,
       isKnownCode: (code) => WARNING_CODE_SET.has(code),
       hasPositionalContext,
-      numRuns: NUM_RUNS,
+      seed,
     });
   });
 });

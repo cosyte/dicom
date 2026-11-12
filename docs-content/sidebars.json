@@ -29,7 +29,13 @@
     {
       "type": "category",
       "label": "Guides",
-      "items": ["recipes", "cookbook", "serialization", "deidentification"]
+      "items": [
+        "recipes",
+        "cookbook",
+        "serialization",
+        "deidentification",
+        "property-testing"
+      ]
     },
     {
       "type": "category",

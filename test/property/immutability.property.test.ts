@@ -19,6 +19,10 @@
  *      requirement; the full new-document COW lands with the Phase 3 mutation
  *      API and should adopt `immutabilityProperty` directly then.
  *
+ * Depth and seed come from `COSYTE_PROPERTY_RUNS` and `COSYTE_PROPERTY_SEED`
+ * (`test/helpers/property.ts`): 100 cases on a pull request, 10,000 nightly,
+ * each property's seed printed before it runs.
+ *
  * @module
  */
 
@@ -31,10 +35,9 @@ import { immutabilityProperty } from "@cosyte/test-utils";
 import { parseDicom, type Dataset, type DicomParseWarning, type Element } from "../../src/index.js";
 import type { Tag } from "../../src/dictionary/types.js";
 
-import { encodeModel, recoverableInput, TS_DEFLATED_LE, wellFormedModel } from "./_arbitraries.js";
+import { checkProperty, propertyRun } from "../helpers/property.js";
 
-/** Stable run budget so any counterexample reproduces deterministically. */
-const NUM_RUNS = 300;
+import { encodeModel, recoverableInput, TS_DEFLATED_LE, wellFormedModel } from "./_arbitraries.js";
 
 /** Test-only structural accessor for the protected `Dataset._elements` map. */
 interface DatasetWithElements {
@@ -46,6 +49,7 @@ function elementsOf(ds: Dataset): ReadonlyMap<Tag, Element> {
 
 describe("dicom conformance: parsed-model immutability", () => {
   it("Dataset.warnings is frozen - a mutation attempt throws or no-ops, never edits in place", () => {
+    const { seed } = propertyRun("immutability: frozen warnings");
     immutabilityProperty<Dataset>({
       // Recoverable inputs maximize the chance the warnings array is non-empty,
       // but the invariant holds for empty arrays too. Inputs that throw a fatal
@@ -64,14 +68,15 @@ describe("dicom conformance: parsed-model immutability", () => {
         });
       },
       getSnapshot: (ds) => ds.warnings.map((w) => w.code),
-      numRuns: NUM_RUNS,
+      seed,
     });
   });
 
   it("warnings array is frozen on every parsed Dataset (runtime freeze probe)", () => {
-    fc.assert(
+    checkProperty(
+      "immutability: frozen warnings probe",
       fc.property(wellFormedModel(), (model) => {
-        const ds = parseDicom(Buffer.from(encodeModel(model), "latin1"));
+        const ds = parseDicom(encodeModel(model));
         expect(Object.isFrozen(ds.warnings)).toBe(true);
         const frozen: readonly DicomParseWarning[] = ds.warnings;
         expect(() => {
@@ -82,14 +87,14 @@ describe("dicom conformance: parsed-model immutability", () => {
           });
         }).toThrow(TypeError);
       }),
-      { numRuns: NUM_RUNS },
     );
   });
 
   it("copyValues:true detaches rawBytes - mutating the source never perturbs a parsed Element", () => {
-    fc.assert(
+    checkProperty(
+      "immutability: copyValues detaches",
       fc.property(wellFormedModel(), (model) => {
-        const source = Buffer.from(encodeModel(model), "latin1");
+        const source = encodeModel(model);
         const ds = parseDicom(source, { copyValues: true });
 
         // Snapshot every element's bytes by value BEFORE mutating the source.
@@ -104,7 +109,6 @@ describe("dicom conformance: parsed-model immutability", () => {
           expect(el.rawBytes.toString("hex")).toBe(before.get(tag));
         }
       }),
-      { numRuns: NUM_RUNS },
     );
   });
 
@@ -120,13 +124,14 @@ describe("dicom conformance: parsed-model immutability", () => {
     // flipping the source bytes legitimately does not reach it. The
     // copyValues:true detachment test above covers Deflated correctly (copy
     // detaches from whatever buffer it views).
-    fc.assert(
+    checkProperty(
+      "immutability: default values are views",
       fc.property(
         wellFormedModel()
           .filter((m) => Object.keys(m.elements).length > 0)
           .filter((m) => m.transferSyntax !== TS_DEFLATED_LE),
         (model) => {
-          const source = Buffer.from(encodeModel(model), "latin1");
+          const source = encodeModel(model);
           const ds = parseDicom(source, { copyValues: false });
           const before = new Map<string, string>();
           for (const [tag, el] of elementsOf(ds)) before.set(tag, el.rawBytes.toString("hex"));
@@ -145,7 +150,6 @@ describe("dicom conformance: parsed-model immutability", () => {
           expect(sawAnyChange).toBe(true);
         },
       ),
-      { numRuns: NUM_RUNS },
     );
   });
 });

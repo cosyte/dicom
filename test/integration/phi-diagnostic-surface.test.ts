@@ -11,8 +11,8 @@
  *
  * This package already had property tests that could not have failed. Their
  * generator blocked the leaking path three independent ways, and the third is
- * the one to remember: `TEXT_ALPHABET` in `test/property/_arbitraries.ts`
- * excludes the backslash "so a single-valued element stays single-valued", and
+ * the one to remember: `TEXT_CHARACTERS` in `src/arbitraries/model.ts`
+ * excludes the backslash "so each value stays one value", and
  * the backslash is exactly the byte `(0008,0005)` Specific Character Set splits
  * on before the leaking branch. `TAG_VR` also never generates `(0008,0005)` at
  * all, and no generator emits a Private Creator element, so two more leaking
