@@ -3,8 +3,10 @@
  * one that does not read back as the text the JSON gave:
  *
  *   - A C1 code point (U+0080 to U+009F) under the default repertoire, `ISO_IR 6` and `ISO_IR 100`
- *     is written as one ISO 8859-1 byte, and the reader decodes those sets as windows-1252, which
- *     reads 27 of those bytes as other characters (0x80 as the euro sign).
+ *     is written as one ISO 8859-1 byte, and the reader decodes those sets with the runtime's
+ *     `TextDecoder("latin1")`, which the Encoding Standard maps to windows-1252: that reads 27 of
+ *     those bytes as other characters (0x80 as the euro sign). The tests ask the reader's own
+ *     decoder which bytes differ, so they hold the refusal exactly there on any runtime.
  *   - A lone surrogate under `ISO_IR 192` is written as the UTF-8 of U+FFFD.
  *
  * Both were written and read back as other text with no refusal. It also refuses an element in an
@@ -17,7 +19,10 @@
 
 import { describe, expect, it } from "vitest";
 
+import { Buffer } from "node:buffer";
+
 import {
+  decodeText,
   DICOM_JSON_ERROR_CODES,
   DicomJsonError,
   fromDicomJson,
@@ -39,8 +44,18 @@ function refusal(fn: () => unknown): string | undefined {
   return undefined;
 }
 
-/** The C1 code points windows-1252 decodes as themselves: they come back as they were sent. */
-const KEPT_C1 = new Set([0x81, 0x8d, 0x8f, 0x90, 0x9d]);
+/** `true` when the reader decodes the one byte `cp` under `ISO_IR 100` as U+00`cp` itself. */
+function readsBack(cp: number): boolean {
+  return decodeText(Buffer.from([cp]), ["ISO_IR 100"]) === String.fromCharCode(cp);
+}
+
+/** `true` when the reader decodes the Latin-1 sets as windows-1252, as Node and Deno do. */
+const WINDOWS_1252 = !readsBack(0x80);
+
+/** The code `fn` is refused with under the reader's Latin-1 decoding of the C1 code point `cp`. */
+function c1Code(cp: number): string | undefined {
+  return readsBack(cp) ? undefined : DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET;
+}
 
 function withCharset(charset: string | undefined, attrs: DicomJsonDataset): DicomJsonDataset {
   return charset === undefined ? attrs : { "00080005": { vr: "CS", Value: [charset] }, ...attrs };
@@ -58,29 +73,22 @@ describe("text that does not read back as it was sent", () => {
           back = toDicomJson(fromDicomJson(json, LE));
         });
         const label = `${String(charset)} U+${cp.toString(16)}`;
-        if (KEPT_C1.has(cp)) {
-          expect(code, label).toBeUndefined();
-          expect(back?.["00100020"]?.Value, label).toEqual([text]);
-        } else {
-          expect(code, label).toBe(DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET);
-          refused += 1;
-        }
+        expect(code, label).toBe(c1Code(cp));
+        if (code === undefined) expect(back?.["00100020"]?.Value, label).toEqual([text]);
+        else refused += 1;
       }
     }
-    expect(refused).toBe(27 * 3);
+    // windows-1252 reads all but 0x81, 0x8D, 0x8F, 0x90 and 0x9D as other characters.
+    expect(refused).toBe(WINDOWS_1252 ? 27 * 3 : 0);
   });
 
   it("refuses the reviewer's two inputs: U+0080 in an LO and U+0092 in a Person Name", () => {
     const lo = withCharset("ISO_IR 100", { "00100020": { vr: "LO", Value: ["SYN\u0080ID"] } });
-    expect(refusal(() => fromDicomJson(lo, LE))).toBe(
-      DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET,
-    );
+    expect(refusal(() => fromDicomJson(lo, LE))).toBe(c1Code(0x80));
     const pn: DicomJsonDataset = {
       "00100010": { vr: "PN", Value: [{ Alphabetic: "O\u0092FAKE^TEST" }] },
     };
-    expect(refusal(() => fromDicomJson(pn, LE))).toBe(
-      DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET,
-    );
+    expect(refusal(() => fromDicomJson(pn, LE))).toBe(c1Code(0x92));
   });
 
   it("refuses a C1 code point inside a Sequence Item, under the Item's set or the one it inherits", () => {
@@ -93,11 +101,12 @@ describe("text that does not read back as it was sent", () => {
     const inherited = withCharset("ISO_IR 100", {
       "0040A730": { vr: "SQ", Value: [{ "00104000": { vr: "LT", Value: ["A\u009fB"] } }] },
     });
-    for (const json of [own, inherited]) {
+    for (const [json, cp] of [
+      [own, 0x85],
+      [inherited, 0x9f],
+    ] as const) {
       for (const sequenceLength of ["defined", "undefined"] as const) {
-        expect(refusal(() => fromDicomJson(json, { ...LE, sequenceLength }))).toBe(
-          DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET,
-        );
+        expect(refusal(() => fromDicomJson(json, { ...LE, sequenceLength }))).toBe(c1Code(cp));
       }
     }
   });
