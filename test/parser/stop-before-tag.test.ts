@@ -59,7 +59,7 @@ function elements(pixelBytes: number): (BuildDicomElement | BuildDicomSqElement)
         },
       ],
     },
-    { tag: "00100010", vr: "PN", value: text("TESTPATIENT^SYNTHETIC") },
+    { tag: "00100010", vr: "PN", value: text("TEST^PATIENT") },
     { tag: "00100020", vr: "LO", value: text("FAKE-0001") },
     { tag: "0020000D", vr: "UI", value: text("2.25.222") },
     { tag: "00280010", vr: "US", value: us(4) },
@@ -209,9 +209,9 @@ describe("parseDicom with stopBeforeTag", () => {
       expect(() => parseDicom(file(EXPLICIT_LE), { stopBeforeTag: bad })).toThrow(TypeError);
     }
     try {
-      parseDicom(file(EXPLICIT_LE), { stopBeforeTag: "SMITH^JOHN" });
+      parseDicom(file(EXPLICIT_LE), { stopBeforeTag: "NOT-A-TAG-TOKEN" });
     } catch (err) {
-      expect((err as Error).message).not.toContain("SMITH");
+      expect((err as Error).message).not.toContain("NOT-A-TAG");
     }
   });
 });

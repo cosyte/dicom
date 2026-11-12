@@ -42,7 +42,7 @@ const HEADER: readonly (readonly [string, BuildDicomElement["vr"], string])[] = 
   ["00080016", "UI", "1.2.840.10008.5.1.4.1.1.2"],
   ["00080018", "UI", "2.25.4444"],
   ["00080060", "CS", "CT"],
-  ["00100010", "PN", "TESTPATIENT^SYNTHETIC"],
+  ["00100010", "PN", "TEST^PATIENT"],
   ["00100020", "LO", "FAKE-0003"],
   ["00100030", "DA", "19000101"],
   ["0020000D", "UI", "2.25.5555"],

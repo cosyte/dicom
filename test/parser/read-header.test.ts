@@ -38,7 +38,7 @@ function text(value: string): Buffer {
 function file(transferSyntax: string, pixelBytes: number, headerPadBytes = 0): Buffer {
   const elements: BuildDicomElement[] = [
     { tag: "00080060", vr: "CS", value: text("MR") },
-    { tag: "00100010", vr: "PN", value: text("TESTPATIENT^SYNTHETIC") },
+    { tag: "00100010", vr: "PN", value: text("TEST^PATIENT") },
     { tag: "00100020", vr: "LO", value: text("FAKE-0002") },
     { tag: "0020000D", vr: "UI", value: text("2.25.333") },
     // A long header, to cross the first read when asked to.
