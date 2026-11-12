@@ -231,9 +231,8 @@ function g1CodePoints(ir: number): readonly number[] | undefined {
         NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
         NONE, NONE, NONE, NONE, NONE, NONE, NONE, NONE,
       ];
-    default:
-      return undefined;
   }
+  return undefined;
 }
 
 /**
@@ -297,9 +296,8 @@ export function singleByteSetOf(term: string): number | undefined {
     case "ISO_IR 166":
     case "ISO 2022 IR 166":
       return 166;
-    default:
-      return undefined;
   }
+  return undefined;
 }
 
 /**
