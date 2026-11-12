@@ -56,6 +56,7 @@ export const WARNING_CODES = {
   DICOM_MISSING_PREAMBLE: "DICOM_MISSING_PREAMBLE",
   DICOM_NONZERO_RESERVED_BYTES: "DICOM_NONZERO_RESERVED_BYTES",
   DICOM_ODD_LENGTH_VALUE_PADDED: "DICOM_ODD_LENGTH_VALUE_PADDED",
+  DICOM_PARSE_STOPPED_BEFORE_TAG: "DICOM_PARSE_STOPPED_BEFORE_TAG",
   DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED: "DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED",
   DICOM_PIXEL_DATA_LENGTH_MISMATCH: "DICOM_PIXEL_DATA_LENGTH_MISMATCH",
   DICOM_PRIVATE_TAG_NO_CREATOR: "DICOM_PRIVATE_TAG_NO_CREATOR",
@@ -370,6 +371,12 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   // of the three has a place here. The tags are constants of this code, and the
   // byte offset is the Pixel Data element's own header, which this parser
   // counted. See `pixelDataFragmentsNotDelimited`.
+  // The tag goes through `renderTag`, so only a tag PS3.6 carries a literal row
+  // for is printed, and a private or unknown one reads as withheld. The tag the
+  // caller asked to stop before is not echoed: the caller has it already. See
+  // `parseStoppedBeforeTag`.
+  DICOM_PARSE_STOPPED_BEFORE_TAG:
+    "The parse stopped before the top-level element ({tag}), as ParseOptions.stopBeforeTag asked: that element and every element after it in the top-level Data Set were not read. The byte offset locates the element.",
   DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED:
     "Encapsulated Pixel Data (7FE0,0010) reaches the end of the bytes being read without the Sequence Delimitation Item (FFFE,E0DD) PS3.5 2026c A.4 requires after its last fragment, so the fragments read from it may not be all the sender wrote. No fragment byte, length or count is reproduced here; the byte offset locates the Pixel Data element.",
   DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR:
@@ -1077,6 +1084,35 @@ export function itemCrossesSequenceEnd(position: DicomPosition, tag: Tag): Dicom
  */
 export function emptyItemInSequence(position: DicomPosition, tag: Tag): DicomParseWarning {
   return build(WARNING_CODES.DICOM_EMPTY_ITEM_IN_SEQUENCE, position, { tag });
+}
+
+/**
+ * Build a `DICOM_PARSE_STOPPED_BEFORE_TAG` warning. Emitted once, by a parse
+ * given `ParseOptions.stopBeforeTag`, when it reaches the first top-level Data
+ * Element whose tag is at or after the one asked for, and stops there. Nothing
+ * from that element on is read, so the Dataset holds only the elements before
+ * it.
+ *
+ * @remarks
+ * This is the parse doing what it was asked, not a deviation in the file, so it
+ * is the one code that is never escalated: `{ strict: true }` and a profile's
+ * `escalations` both leave it a warning. A profile may still suppress it; the
+ * parse stops either way.
+ *
+ * The `{tag}` slot is the tag of the element the parse stopped before, read off
+ * the wire and rendered through `renderTag`: a tag PS3.6 carries a literal row
+ * for is printed, any other reads as withheld. `position.byteOffset` is that
+ * element's header offset, counted by this parser, in the frame the top-level
+ * Data Set is read in (the inflated stream under Deflated Explicit VR Little
+ * Endian, with `deflated: true`).
+ *
+ * @example
+ * ```ts
+ * const w = parseStoppedBeforeTag({ byteOffset: 1024 }, "7FE00010");
+ * ```
+ */
+export function parseStoppedBeforeTag(position: DicomPosition, tag: Tag): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_PARSE_STOPPED_BEFORE_TAG, position, { tag });
 }
 
 /**

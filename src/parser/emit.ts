@@ -12,7 +12,9 @@
  *     escalates the code, the closure throws `DicomParseError` carrying the
  *     warning's own code, which `DicomParseError.code` admits by type
  *     (`FatalCode | WarningCode`). An escalated warning bypasses
- *     `ctx.warnings` entirely - no residue.
+ *     `ctx.warnings` entirely - no residue. The one code never escalated is
+ *     `DICOM_PARSE_STOPPED_BEFORE_TAG`, which reports a stop the caller asked
+ *     for rather than a deviation in the file.
  *
  * This module is the ONLY reader of {@link ParseContext.frame}, and both the
  * snippet cut below and the `offsetFrame` published beside it are the reason
@@ -29,7 +31,7 @@
  */
 
 import type { ParseContext } from "./types.js";
-import type { DicomParseWarning } from "./warnings.js";
+import { WARNING_CODES, type DicomParseWarning } from "./warnings.js";
 import { DicomParseError, buildSnippet } from "./errors.js";
 
 /**
@@ -62,15 +64,19 @@ export function makeEmitter(ctx: ParseContext): (w: DicomParseWarning) => void {
     );
   };
   return (w) => {
-    // Global strict mode escalates every Tier-2 code, overriding any
+    // `DICOM_PARSE_STOPPED_BEFORE_TAG` is the parse doing what the caller
+    // asked, not a deviation in the file, so neither strict mode nor a
+    // profile escalates it. A profile may still suppress it.
+    const escalable = w.code !== WARNING_CODES.DICOM_PARSE_STOPPED_BEFORE_TAG;
+    // Global strict mode escalates every other Tier-2 code, overriding any
     // profile posture.
-    if (ctx.strict) escalate(w);
+    if (ctx.strict && escalable) escalate(w);
     // Profile posture: suppress drops a tolerated warning entirely;
     // escalate promotes it to a thrown error. `defineProfile` guarantees a
     // code is never in both sets, so the order between them is immaterial.
     if (ctx.profile !== undefined) {
       if (ctx.profile.suppressions.has(w.code)) return;
-      if (ctx.profile.escalations.has(w.code)) escalate(w);
+      if (escalable && ctx.profile.escalations.has(w.code)) escalate(w);
     }
     ctx.warnings.push(w);
     if (ctx.onWarning !== undefined) {

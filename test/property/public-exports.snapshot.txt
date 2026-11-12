@@ -30,9 +30,11 @@ DeidentifyOption
 DeidentifyOptions
 DeidentifyReport
 DeidentifyResult
+DicomByteSource
 DicomDate
 DicomDateTime
 DicomDirectory
+DicomFileHandle
 DicomParseError
 DicomParseWarning
 DicomPosition
@@ -98,6 +100,7 @@ parseSpecificCharacterSet
 parseTime
 profiles
 readCode
+readDicomHeader
 readPixelDataFragments
 resolveDecoderLabel
 serializeDicom

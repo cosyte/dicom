@@ -17,6 +17,11 @@ export * as Dictionary from "./dictionary/index.js";
 // === Parser, dataset model, and the warning / error registries ===
 
 export { parseDicom } from "./parser/index.js";
+export {
+  readDicomHeader,
+  type DicomByteSource,
+  type DicomFileHandle,
+} from "./parser/read-header.js";
 
 export { Dataset } from "./dataset/dataset.js";
 export { Element } from "./dataset/element.js";

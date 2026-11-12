@@ -68,6 +68,7 @@ import {
   type InnerParser,
   type ParseSequenceOptions,
 } from "./sequence.js";
+import { stopsHere } from "./stop.js";
 import type { DicomPosition, ParseContext } from "./types.js";
 import {
   groupLengthInDataset,
@@ -115,6 +116,12 @@ export function _parseExplicit(
 
   while (cursor.position < buffer.length) {
     const headerStart = cursor.position;
+
+    // `ParseOptions.stopBeforeTag`: the top-level Data Set ends here when this element is at or
+    // after the stop tag. See `./stop.ts`.
+    if (ctx.stop !== undefined && stopsHere(buffer, headerStart, mode.littleEndian, ctx, emit)) {
+      break;
+    }
 
     // Detect FFFE markers BEFORE the explicit-VR header read - FFFE
     // markers have no on-wire VR field and would mis-decode through

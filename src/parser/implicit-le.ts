@@ -64,6 +64,7 @@ import {
   unexpectedFffeAtDatasetRoot,
 } from "./fatals.js";
 import { parseSequence, tryParseDefinedLengthSQ, tryParseUnAsSQ } from "./sequence.js";
+import { stopsHere } from "./stop.js";
 import type { ParseContext } from "./types.js";
 import { groupLengthInDataset, type DicomParseWarning } from "./warnings.js";
 import { tagOf } from "./wire-tokens.js";
@@ -100,6 +101,9 @@ export function parseImplicitLE(
 
   while (cursor.position < buffer.length) {
     const headerStart = cursor.position;
+    // `ParseOptions.stopBeforeTag`: the top-level Data Set ends here when this element is at or
+    // after the stop tag. See `./stop.ts`.
+    if (ctx.stop !== undefined && stopsHere(buffer, headerStart, true, ctx, emit)) break;
     let group: number;
     let element: number;
     let length: number;
