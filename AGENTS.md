@@ -52,6 +52,29 @@ CI's `scaling-gate` job runs `pnpm test:perf`, the scaling gates in `test/perf/s
 they fail when `parseDicom`, reading every tag, or `serializeDicom` grows faster than its input. They
 run apart from `pnpm test` and never under coverage.
 
+## The testing standard
+
+`quality-floor.json` holds the coverage and the mutation score CI measures, and they only rise.
+`pnpm quality:check` holds coverage to it (after `pnpm test:coverage`); with `--base origin/main`
+every changed line coverage counts must also have run, and no floor may be lowered. On a pull
+request CI's `mutation` job mutates the changed source files with `stryker.config.mjs`
+(`pnpm mutate changed --base origin/main`, then `pnpm quality:mutation --base origin/main`) and
+every mutant in the changed lines must be killed, or excused inline by a `Stryker disable` comment
+that names its reason. `.github/workflows/weekly-mutation.yml` runs the full run over all of `src/`
+(`pnpm mutate:full`) twice a week, in sixteen shards, and holds its score to the floor. To raise a
+floor, run `pnpm quality:raise` after a full run and open a pull request. Mutation runs the suite of
+`vitest.mutation.config.ts`, which leaves out the tests that cannot judge a mutant: the scaling
+gates, the fuzz targets, the tooling tests, and the tests that build the package or hold the docs.
+
+The round-trip, lenient and immutability properties under `test/property/` run through
+`test/helpers/property.ts`: 100 cases on a pull request and 10,000 each night
+(`.github/workflows/nightly-properties.yml`, which runs `pnpm test:property`), the depth read from
+`COSYTE_PROPERTY_RUNS`. Each prints its seed before it runs, and a failure prints the seed and path
+that replay it (`COSYTE_PROPERTY_SEED`, `COSYTE_PROPERTY_PATH`). The fuzz targets
+(`*-fuzz.property.test.ts`) keep their own nightly run, `pnpm fuzz`. Their generators are the
+published ones, `@cosyte/dicom/arbitraries` (`src/arbitraries/`); `test/arbitraries/` holds them to
+what they document and pins what each draws from a fixed seed.
+
 ## Benchmarks
 
 `bench/dicom.bench.mjs` measures the built package on synthetic files in the shapes real traffic

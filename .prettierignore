@@ -6,3 +6,5 @@ node_modules/
 pnpm-lock.yaml
 src/dictionary/generated/
 vendor/
+reports/
+.stryker-tmp/

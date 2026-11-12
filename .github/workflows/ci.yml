@@ -41,18 +41,32 @@ jobs:
   # the rest of the suite are held to running there. A skipped job satisfies a required check, so
   # require `ci / deno` only while `run-deno` below stays on.
   #
-  # This caller alone is one release ahead of the others: the release of commit 0be6757a7738 is the
-  # first with those two jobs. Its name carries its date, which a PHI scan of a changed file reads
-  # as a date of service, so the comment names its commit instead. The other callers move to it
-  # with the next change to them.
+  # The testing standard's two jobs run beside `verify` too:
+  # - `coverage-ratchet`: `pnpm test:coverage`, then coverage held to quality-floor.json by
+  #   `cosyte-ratchet`; on a pull request every changed line coverage counts must have run and no
+  #   floor may be lowered or removed.
+  # - `mutation` (pull requests only): the changed source files mutated with stryker.config.mjs on
+  #   the suite of vitest.mutation.config.ts, and every mutant in the changed lines killed or
+  #   excused inline with its reason. `ci / mutation` is a required check. The full run over all of
+  #   `src/` is weekly-mutation.yml's.
+  # A skipped job satisfies a required check, so require `ci / coverage-ratchet` or
+  # `ci / mutation` only while its input below stays on.
+  #
+  # This caller, nightly-properties.yml and weekly-mutation.yml name the release of commit
+  # 398cd4ded647, the first with the testing standard's jobs, its sharded weekly run and its
+  # nightly property run. Its name carries its date, which a PHI scan of a changed file reads as a
+  # date of service, so the comment names its commit instead. The other callers move to it with
+  # the next change to them.
   ci:
-    uses: cosyte/.github/.github/workflows/ci.yml@0be6757a773885cbd5165dbfa0f93772d907b3e8 # the release of 0be6757a7738
+    uses: cosyte/.github/.github/workflows/ci.yml@398cd4ded647dddd9f2e220ceb042840f59e1426 # the release of 398cd4ded647
     with:
       run-phi-scan: true
       run-scaling-gate: true
       run-bench-compare: true
       bench-suites: bench/dicom.bench.mjs
       run-deno: true
+      run-coverage-ratchet: true
+      run-mutation: true
 
   # The runnable examples under examples/, checked the way a consumer meets them: each imports
   # `@cosyte/dicom` by name, which resolves through package.json `exports` to the BUILT dist/, so

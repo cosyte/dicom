@@ -47,10 +47,8 @@ let frozenUids: { readonly [uid: string]: UidEntry } | undefined;
 
 function uidTable(): { readonly [uid: string]: UidEntry } {
   if (frozenUids !== undefined) return frozenUids;
-  for (const k of Object.keys(UIDS)) {
-    const v = UIDS[k];
-    if (v !== undefined && !Object.isFrozen(v)) Object.freeze(v);
-  }
+  // Runs once, before anything has frozen an entry; freezing a frozen object would change nothing.
+  for (const entry of Object.values(UIDS)) Object.freeze(entry);
   frozenUids = Object.freeze(UIDS);
   return frozenUids;
 }

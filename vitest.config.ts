@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { cosyteVitest } from "@cosyte/vitest-config";
 
 /**
@@ -5,18 +7,21 @@ import { cosyteVitest } from "@cosyte/vitest-config";
  *
  * The shared default gates every measured `src/**` file at >= 90 (lines/branches/functions/
  * statements); `coverageDirs` adds an explicit per-directory gate on each source directory.
- * Generated code (`src/dictionary/generated/**`) and barrels (`**\/index.ts`) are excluded by the
- * shared config, so the dictionary gate covers only the hand-written modules beside them.
+ * Generated code (`src/dictionary/generated/**`) and barrels are excluded by the shared config,
+ * which tells a barrel (nothing but re-exports) from code by reading each file, so an `index.ts`
+ * that holds code of its own, such as `src/parser/index.ts`, is measured.
  *
- * Every gate here is 100, globally and per directory, which is what the suite measures: lines 100
- * / branches 100 / functions 100 / statements 100. A floor only rises, so a change that adds a line
- * or a branch must add the test that reaches it. A line no input can reach carries an inline
- * `v8 ignore` comment that names its reason (a re-throw of an error the call cannot raise, a
+ * THE COVERAGE FLOOR IS `quality-floor.json`, read below, and nowhere else: 100 on lines, branches,
+ * functions and statements, for the whole of `src/` and for each directory in `COVERAGE_DIRS`. The
+ * same file holds the mutation score, and `pnpm quality:check` (`cosyte-ratchet`, CI's
+ * `coverage-ratchet` job) holds the measured coverage to it. A floor only rises, so a change that
+ * adds a line or a branch must add the test that reaches it. A line no input can reach carries an
+ * inline `v8 ignore` comment that names its reason (a re-throw of an error the call cannot raise, a
  * fallback the noUncheckedIndexedAccess types require, a guard its caller already enforces); add
- * one only with that reason, and never to make a reachable line pass. These numbers sit above the
- * shared default and are the floor for this repository whatever the shared ratchet starts at.
+ * one only with that reason, and never to make a reachable line pass, nor a lower number in the
+ * file.
  *
- * `hookTimeout` IS ABSENT DELIBERATELY (2026-08-03, `PARSER-TESTTIMEOUT-ASSERTS-AN-IDLE-BOX`). The
+ * `hookTimeout` IS ABSENT DELIBERATELY (`PARSER-TESTTIMEOUT-ASSERTS-AN-IDLE-BOX`). The
  * line that used to sit under `testTimeout` set it to exactly Vitest's own default, measured rather
  * than read: on this repository's Vitest, a `beforeAll` that sleeps past it reds at "Hook timed out
  * in 10000ms" with no configuration at all. It was verbatim the default and said nothing, so it is
@@ -37,19 +42,50 @@ import { cosyteVitest } from "@cosyte/vitest-config";
  * generalises, so measure the one in front of you under the load you actually run rather than
  * trusting its headroom.
  */
+const COVERAGE_DIRS = [
+  "parser",
+  "dataset",
+  "dictionary",
+  "serialize",
+  "profiles",
+  "deident",
+  "arbitraries",
+];
+
+/** The four coverage metrics the floor file holds. */
+interface CoverageFloor {
+  readonly lines: number;
+  readonly branches: number;
+  readonly functions: number;
+  readonly statements: number;
+}
+
+/**
+ * The coverage floor for every metric, read from `quality-floor.json`. A file without all four
+ * metrics is refused, so a typo there cannot fall back to the shared 90.
+ */
+function readCoverageFloor(): CoverageFloor {
+  const file = JSON.parse(
+    readFileSync(new URL("./quality-floor.json", import.meta.url), "utf8"),
+  ) as { packages?: Record<string, { coverage?: Partial<CoverageFloor> }> };
+  const { lines, branches, functions, statements } = file.packages?.["."]?.coverage ?? {};
+  const floor = { lines, branches, functions, statements };
+  for (const [metric, value] of Object.entries(floor)) {
+    if (typeof value !== "number" || value < 0 || value > 100) {
+      throw new Error(`quality-floor.json: the coverage floor for ${metric} is not a score`);
+    }
+  }
+  return floor as CoverageFloor;
+}
+
+/** The floor for every metric, globally and per directory. */
+const FLOOR = readCoverageFloor();
+
 export default cosyteVitest({
-  coverageDirs: ["parser", "dataset", "dictionary", "serialize", "profiles", "deident"],
+  coverageDirs: COVERAGE_DIRS,
   coverageThresholds: {
-    lines: 100,
-    branches: 100,
-    functions: 100,
-    statements: 100,
-    "src/parser/**": { lines: 100, branches: 100, functions: 100, statements: 100 },
-    "src/dataset/**": { lines: 100, branches: 100, functions: 100, statements: 100 },
-    "src/dictionary/**": { lines: 100, branches: 100, functions: 100, statements: 100 },
-    "src/serialize/**": { lines: 100, branches: 100, functions: 100, statements: 100 },
-    "src/profiles/**": { lines: 100, branches: 100, functions: 100, statements: 100 },
-    "src/deident/**": { lines: 100, branches: 100, functions: 100, statements: 100 },
+    ...FLOOR,
+    ...Object.fromEntries(COVERAGE_DIRS.map((dir) => [`src/${dir}/**`, { ...FLOOR }])),
   },
   test: {
     globals: false,

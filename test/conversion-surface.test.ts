@@ -469,36 +469,41 @@ describe("toDate is honest about the timezone", () => {
     }
   });
 
-  it("reads no zone from the host, by construction", () => {
-    // The strongest available statement of "the host timezone is NEVER read":
-    // the module cannot read it, because none of the routes to it occurs in the
-    // source. A behavioural test cannot say this without re-running the suite
-    // under another TZ. Comments are stripped first, so a route NAMED in a doc
-    // comment as the thing not to use cannot fail the scan that forbids CALLING
-    // it, and so the scan cannot be satisfied by moving a call into a comment.
-    const source = readFileSync(MODULE_SOURCE, "utf8")
-      .replaceAll(/\/\*[\s\S]*?\*\//gu, " ")
-      .replaceAll(/\/\/[^\n]*/gu, " ");
-    // Non-vacuity on the strip itself, and on the read: the module doc block is
-    // gone, and the code that survived it is still there.
-    expect(source).not.toContain("@module");
-    expect(source).toContain("export function toDate(");
-    for (const route of [
-      "getTimezoneOffset",
-      "Intl",
-      "Date.parse",
-      "toLocale",
-      "setFullYear",
-      "setHours",
-      "Date.UTC",
-      "process.env",
-    ]) {
-      expect(source.includes(route), route).toBe(false);
-    }
-    // And the one construction route it does use.
-    expect(source).toContain("setUTCFullYear");
-    expect(source).toContain("setUTCHours");
-  });
+  // Skipped in a mutation run only (`vitest.mutation.config.ts` sets DICOM_MUTATION_RUN): there the
+  // module is StrykerJS's instrumented copy, whose text is not the source this scan holds.
+  it.skipIf(process.env["DICOM_MUTATION_RUN"] === "1")(
+    "reads no zone from the host, by construction",
+    () => {
+      // The strongest available statement of "the host timezone is NEVER read":
+      // the module cannot read it, because none of the routes to it occurs in the
+      // source. A behavioural test cannot say this without re-running the suite
+      // under another TZ. Comments are stripped first, so a route NAMED in a doc
+      // comment as the thing not to use cannot fail the scan that forbids CALLING
+      // it, and so the scan cannot be satisfied by moving a call into a comment.
+      const source = readFileSync(MODULE_SOURCE, "utf8")
+        .replaceAll(/\/\*[\s\S]*?\*\//gu, " ")
+        .replaceAll(/\/\/[^\n]*/gu, " ");
+      // Non-vacuity on the strip itself, and on the read: the module doc block is
+      // gone, and the code that survived it is still there.
+      expect(source).not.toContain("@module");
+      expect(source).toContain("export function toDate(");
+      for (const route of [
+        "getTimezoneOffset",
+        "Intl",
+        "Date.parse",
+        "toLocale",
+        "setFullYear",
+        "setHours",
+        "Date.UTC",
+        "process.env",
+      ]) {
+        expect(source.includes(route), route).toBe(false);
+      }
+      // And the one construction route it does use.
+      expect(source).toContain("setUTCFullYear");
+      expect(source).toContain("setUTCHours");
+    },
+  );
 
   it("fills components below the stated precision to their lowest legal value", () => {
     expect(toDate(parseDateTime("2024").value, { assumeOffsetMinutes: 0 })?.toISOString()).toBe(

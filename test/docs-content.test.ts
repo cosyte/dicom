@@ -22,8 +22,9 @@ import { FIRST_USE_CT_NO_PREAMBLE, FIRST_USE_CT_OBJECT } from "./fixtures/first-
  * runners). Blocks tagged ` ```ts runnable throws ` must throw; plain ` ```ts ` blocks are
  * illustrative and are not executed.
  *
- * `@cosyte/dicom` ships a single top-level entry, so every snippet imports `@cosyte/dicom` and
- * resolves against the **built** ESM artifact - exactly what an installer loads, not the source tree.
+ * Every snippet imports `@cosyte/dicom`, and the property-testing page `@cosyte/dicom/arbitraries`
+ * too; each resolves against the **built** ESM artifact - exactly what an installer loads, not the
+ * source tree.
  * Every DICOM object in the docs is synthetic: a small base64-encoded Part 10 buffer built from an
  * invented patient and fake UIDs, so a snippet needs no `.dcm` file on disk and no real PHI ever
  * touches this suite. The runnable blocks stay on the deterministic, in-process parser / serializer /
@@ -34,10 +35,13 @@ import { FIRST_USE_CT_NO_PREAMBLE, FIRST_USE_CT_OBJECT } from "./fixtures/first-
  */
 const root = join(import.meta.dirname, "..");
 
-/** Map the published entry point to its built ESM artifact. */
+/** Map the published entry points to their built ESM artifacts. */
 const ENTRY = join(root, "dist", "index.mjs");
-const resolveEntry = (specifier: string): string | undefined =>
-  specifier === "@cosyte/dicom" ? ENTRY : undefined;
+const ARBITRARIES_ENTRY = join(root, "dist", "arbitraries.mjs");
+const resolveEntry = (specifier: string): string | undefined => {
+  if (specifier === "@cosyte/dicom") return ENTRY;
+  return specifier === "@cosyte/dicom/arbitraries" ? ARBITRARIES_ENTRY : undefined;
+};
 
 beforeAll(() => {
   execFileSync("pnpm", ["build"], { cwd: root, stdio: "inherit" });

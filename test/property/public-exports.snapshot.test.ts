@@ -39,6 +39,11 @@ import { describe, expect, test } from "vitest";
 const REPO_ROOT = join(import.meta.dirname, "..", "..");
 const ENTRY = join(REPO_ROOT, "src", "index.ts");
 const SNAPSHOT_PATH = join(import.meta.dirname, "public-exports.snapshot.txt");
+const ARBITRARIES_ENTRY = join(REPO_ROOT, "src", "arbitraries", "index.ts");
+const ARBITRARIES_SNAPSHOT_PATH = join(
+  import.meta.dirname,
+  "public-exports.arbitraries.snapshot.txt",
+);
 
 const COMPILER_OPTIONS: ts.CompilerOptions = {
   target: ts.ScriptTarget.ES2023,
@@ -173,4 +178,14 @@ describe("dicom public API: the root entry's export surface is locked", () => {
     // comparator that reports drift for every input.
     expect(drift(actual, actual)).toStrictEqual([]);
   }, 30_000);
+
+  test("the `./arbitraries` subpath's export set matches its committed snapshot", () => {
+    const program = ts.createProgram([ARBITRARIES_ENTRY], COMPILER_OPTIONS);
+    const actual = exportedNames(program, ARBITRARIES_ENTRY);
+    const snapshot = readSnapshot(ARBITRARIES_SNAPSHOT_PATH);
+    // The same three assertions as the root entry's, in the same order: the named drift first.
+    expect(drift(actual, snapshot)).toStrictEqual([]);
+    expect(actual.length).toBe(snapshot.length);
+    expect(snapshot).toStrictEqual([...snapshot].sort(byCodeUnit));
+  }, 60_000);
 });

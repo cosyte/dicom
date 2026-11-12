@@ -10,6 +10,10 @@ dist/
 coverage/
 .vitest-cache/
 
+# Mutation testing (StrykerJS): the reports and the sandbox it runs in
+reports/
+.stryker-tmp/
+
 # docSnippetSuite() temp modules (cleaned by the suite; ignored in case a run is interrupted)
 .cosyte-doc-snippets/
 
