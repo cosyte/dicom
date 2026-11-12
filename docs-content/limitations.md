@@ -2,7 +2,7 @@
 id: limitations
 title: Known limitations
 sidebar_label: Known limitations
-sidebar_position: 17
+sidebar_position: 18
 description: The do-not-over-trust list of what the package does not do, the PHI residuals it discloses, and what it never defaults.
 ---
 
@@ -40,13 +40,9 @@ These are non-goals, not gaps. Each is a companion package or another tool's job
 | **Patient matching.** Patient ID is surfaced with its issuer; the library never decides that two identifiers are the same person                                                                    | out of scope          |
 | **A File-set view.** A DICOMDIR's Directory Record tree is read and its offsets rewritten on write (below), but no DICOMDIR is built from files and nothing is removed from a File-set               | out of scope for v1   |
 
-Supported transfer syntaxes: the four native ones, Implicit VR LE `1.2.840.10008.1.2`, Explicit VR
-LE `...1.2.1`, Deflated Explicit VR LE `...1.2.1.99`, and Explicit VR BE `...1.2.2` (retired,
-legacy-only), plus **every encapsulation syntax PS3.5 2026c section A.4 names**: JPEG Baseline,
-Extended, Lossless, and Lossless First-Order Prediction; RLE Lossless; JPEG-LS Lossless and
-Near-Lossless; JPEG 2000 and HTJ2K; MPEG2; MPEG-4 AVC/H.264; HEVC/H.265 Main and Main 10; JPEG XL;
-Deflated Image Frame Compression; and Encapsulated Uncompressed Explicit VR LE. `Dictionary.uid()`
-names each UID. An encapsulated object is read under Explicit VR LE rules, as section A.4 requires,
+Supported transfer syntaxes: the four native ones plus **every encapsulation syntax PS3.5 2026c
+section A.4 names**, listed in
+[Compatibility](./compatibility.md#supported-transfer-syntaxes). An encapsulated object is read under Explicit VR LE rules, as section A.4 requires,
 so its metadata parses in full and `readPixelDataFragments` hands back its Basic Offset Table and
 fragments as raw bytes. **Its pixels are never decoded.** `serializeDicom` writes each of those
 syntaxes back under the object's own UID, a de-identified object included: the Data Set as Explicit
@@ -80,7 +76,7 @@ names. The limits sit with that capability:
   omission, and whether that URL can carry identity is an open question this package has not ruled
   on. The refusal keys on the File Meta Transfer Syntax alone: a non-JPIP object that carries
   `(0028,7FE0)` is de-identified like any other and keeps it (see
-  [De-identification](./deidentification#scope-limits-on-this-pages-subject)).
+  [De-identification](./deidentification.md#scope-limits-on-this-pages-subject)).
 - **Three misuses section A.6 forbids parse without a code**, as the section A.4 ones above do: an
   object with no `(0028,7FE0)` (then `ds.get("00287FE0")` is `undefined`, never an empty string or
   a placeholder), one that carries a top-level Pixel Data anyway, and one whose Photometric
@@ -145,7 +141,12 @@ top-level tag, Pixel Data by default, so the Pixel Data of a large file is not r
 incremental reader beyond that: what comes after the stop is not read at all, and a file whose read
 cannot stop is held in memory whole. That is a file with no top-level element at or after the stop
 tag, a Deflated Explicit VR Little Endian file, whose whole Data Set is one deflate stream, and a file
-`parseDicom` refuses; `readDicomHeader`'s `maxBytes` bounds it, with no default. Only the top-level
+`parseDicom` refuses; `readDicomHeader`'s `maxBytes` bounds it, with no default. **`maxBytes` bounds
+what the read takes, not what a stream already holds**: a stream's chunks are held as the stream
+makes them, so a stream that delivers the whole file as one chunk has put all of it in memory before
+the read sees it. The read itself takes 64 KiB first and twice as much each time the header turns
+out to be longer; see [Read only the header of a large file](./recipes.md#read-only-the-header-of-a-large-file).
+Only the top-level
 Data Set stops: a Sequence Item is read in full whatever its tags, and a file whose top-level
 elements are out of ascending tag order stops at the first one at or after the stop tag. A parse
 that stops does not check a DICOMDIR's Directory Record offsets, since the records they name may be
@@ -193,7 +194,7 @@ structural fact about DICOM that no reader can resolve from the wire.
   which was a disclosure and not a fix. The surface it shipped through is **pinned as a measured
   matrix** in `test/integration/deident-private-reservation.test.ts` rather than described in prose,
   because the prose has been wrong twice. Detail:
-  [Scope and non-goals](./non-goals).
+  [Scope and non-goals](./non-goals.md).
 
 - **Two audit-contract changes came with that, and a consumer switching on either has to act.**
   `report.unauditableSequences` no longer produces its retired `kept` outcome for a retained private
@@ -269,7 +270,7 @@ structural fact about DICOM that no reader can resolve from the wire.
   mostly die before a `Dataset` exists, so what carries their messages is `onWarning` and the
   `{ strict: true }` `DicomParseError` rather than a surviving `ds.warnings`: a fact about those
   fixtures and not a promise about the parser. Treat both channels the same way.
-  Full treatment: [Keeping PHI out of logs](./troubleshooting#keeping-phi-out-of-logs).
+  Full treatment: [Keeping PHI out of logs](./troubleshooting.md#keeping-phi-out-of-logs).
 
 - **Two carriers this list once named as open are now bound, and neither bound is an all-clear.**
   `DICOM_PRIVATE_TAG_NO_CREATOR`, `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR`, and
@@ -293,7 +294,7 @@ structural fact about DICOM that no reader can resolve from the wire.
   it in this release; the removal is recorded by byte offset and never by tag. **It narrows the older
   gap and does not close it**: an attribute PS3.6 registers and the pinned Table E.1-1 does not list
   is still kept as the source wrote it. Detail:
-  [Attributes neither table carries](./deidentification#attributes-neither-table-carries).
+  [Attributes neither table carries](./deidentification.md#attributes-neither-table-carries).
 
 - **A Sequence an Option cleans keeps no Items, so Clean Structured Content and Clean Graphics keep
   no content.** What is kept is exactly this: the Sequence attribute, with no Items, at every depth,
@@ -305,7 +306,7 @@ structural fact about DICOM that no reader can resolve from the wire.
   structured report's content tree and a graphic annotation do not survive, under these Options or
   without them. Earlier releases walked these lists and kept every attribute in them with no row of
   its own, Text Value and Code Meaning among them, while the report said `cleaned`. Detail:
-  [The options surface](./deidentification#the-options-surface).
+  [The options surface](./deidentification.md#the-options-surface).
 
 - **A de-identified DICOMDIR is NOT File-set conformant, and the run says so rather than implying
   otherwise.** PS3.15 §E.1.1's group-0004 bullet removes `(0004,xxxx)` from everything that is not a
@@ -380,7 +381,7 @@ on the wire.
   `items` do not match its bytes and any `UN`-carried Sequence are written as read, an element whose
   own bytes do not show where a reader ends it is written after the ascending rest of its Data Set
   whatever its tag, and an element a lying length relocated stays where it was placed. See
-  [Serialization](./serialization#what-the-writer-guarantees).
+  [Serialization](./serialization.md#what-the-writer-guarantees).
 - **`Element.byteOffset` inside a sequence item disagrees with itself and always has**: `0` inside a
   defined-length item (its own frame), file-absolute inside an undefined-length one. The same is true
   of a warning's `position.byteOffset`. There is no frame-of-reference contract on either, and
@@ -421,13 +422,13 @@ than substituting a plausible value. `undefined` means the object did not carry 
 
 | Topic                                                                       | Page                                                                 |
 | --------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| The error model and symptom-by-symptom triage                               | [Troubleshooting](./troubleshooting)                                 |
-| What a diagnostic carries and what it does not                              | [Tolerance](./spec-notes-tolerance)                                  |
-| Keeping PHI out of logs                                                     | [Keeping PHI out of logs](./troubleshooting#keeping-phi-out-of-logs) |
-| The safety-critical views and their fail-safe rules                         | [Safety](./spec-notes-safety)                                        |
-| Writing bytes back out, and what the writer will not do                     | [Serialization](./serialization)                                     |
-| The de-identification surface and the scope limits on it                    | [De-identification](./deidentification)                              |
-| Working recipes, each citing the PS3 clause it reads                        | [Cookbook](./cookbook)                                               |
+| The error model and symptom-by-symptom triage                               | [Troubleshooting](./troubleshooting.md)                                 |
+| What a diagnostic carries and what it does not                              | [Tolerance](./spec-notes-tolerance.md)                                  |
+| Keeping PHI out of logs                                                     | [Keeping PHI out of logs](./troubleshooting.md#keeping-phi-out-of-logs) |
+| The safety-critical views and their fail-safe rules                         | [Safety](./spec-notes-safety.md)                                        |
+| Writing bytes back out, and what the writer will not do                     | [Serialization](./serialization.md)                                     |
+| The de-identification surface and the scope limits on it                    | [De-identification](./deidentification.md)                              |
+| Working recipes, each citing the PS3 clause it reads                        | [Recipes](./recipes.md) and the [cookbook](./cookbook.md)               |
 
 Everything on this page is a documented boundary rather than a bug. Where a limitation applies, the
 raw bytes are preserved (usually with a warning); they are simply not interpreted further.
