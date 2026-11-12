@@ -27,9 +27,11 @@ New `toDicomJson` and `fromDicomJson` convert a Data Set to the DICOM JSON Model
   control character the VR does not allow (ESC among them), a Person Name of more than three
   groups, text bytes the Specific Character Set does not decode, text it is not encoded under
   here or that does not read back as itself (`fromDicomJson` reads every text value it writes back
-  through the reader's decoder, which reads the default repertoire and `ISO_IR 100` as
-  windows-1252, so text holding most C1 characters is refused, as is a lone surrogate under
-  `ISO_IR 192`), a tag in group `0001`, `0003`, `0005` or `0007`, Sequences nested more than 64 deep (`NESTING_TOO_DEEP`), and JSON of another shape. Any
+  through the reader's decoder, which reads a byte its set does not define as U+FFFD, so any
+  character past U+007F under the default repertoire (ISO-IR 6) is refused, as is every C1
+  code point (U+0080 to U+009F) under `ISO_IR 100`, and a lone surrogate under `ISO_IR 192`), a
+  tag in group `0001`, `0003`, `0005`, `0007` or `FFFF`, Sequences nested more than 64 deep
+  (`NESTING_TOO_DEEP`), and JSON of another shape. Any
   other error, one a callback throws included, is `CONVERSION_FAILED`: nothing but a
   `DicomJsonError` leaves either converter. PS3.18 is not vendored here, so the cases we could not
   confirm against it are among the refusals.
