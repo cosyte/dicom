@@ -50,7 +50,7 @@ describe("resolveImplicitVR - D-21 case 1: standard tag with single VR", () => {
   });
 });
 
-describe("resolveImplicitVR - D-21 case 2: standard tag with multi-VR (first array entry)", () => {
+describe("resolveImplicitVR - D-21 case 2: standard tag with multi-VR (US with no Pixel Representation read)", () => {
   it("returns US for (0028,0106) SmallestImagePixelValue (declared US/SS)", () => {
     const ctx = makeCtx();
     const captured: DicomParseWarning[] = [];

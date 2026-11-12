@@ -93,6 +93,14 @@ DATE:40101006
 DATE:70011001
 DATE:70011002
 DATE:70011003
+# The same for the waveform and overlay tags the Implicit VR multi-VR tests write:
+# `(5400,0110)` Channel Minimum Value, `(5400,0112)` Channel Maximum Value, `(5400,1004)`
+# Waveform Bits Allocated, `(5400,1010)` Waveform Data and `(6000,0102)` Overlay Bit Position.
+DATE:54000110
+DATE:54000112
+DATE:54001004
+DATE:54001010
+DATE:60000102
 
 # NOT A DATE EITHER. `20170914` is the Context Group Version of PS3.16 CID 7050
 # "De-identification Method", quoted wherever `(0012,0064)` De-identification Method Code

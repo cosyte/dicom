@@ -44,17 +44,17 @@ const ISO_2022 = [
 
 export const KNOWN_DIFFERENCES: readonly KnownDifference[] = [
   {
-    id: "implicit-pixel-data-vr",
+    id: "dcmjs-implicit-us-or-ss",
     kind: "vr",
     documents: ["seed/rich-implicit-le"],
-    paths: ["7FE00010"],
+    paths: ["00409096[*].00409211", "00409096[*].00409216"],
     reason:
-      "A defect on our side. In Implicit VR Little Endian we give native Pixel Data the first VR " +
-      "its registry row lists, OB; the standard gives it OW in that transfer syntax, and dcmjs " +
-      "reads OW. The value bytes agree.",
+      "In Implicit VR, dcmjs gives a US or SS attribute that holds a pixel sample value its first " +
+      "listed VR, US. We give it SS when the Pixel Representation (0028,0103) in force is 1, as it " +
+      "is in this document, so the value decodes as signed. The value bytes agree.",
     citation:
-      "PS3.5 section A.1: Pixel Data (7FE0,0010) has the Value Representation OW and shall be " +
-      "encoded in Little Endian.",
+      "PS3.5 section 8.1.1: a Pixel Sample Value is a 2's complement or an unsigned integer as " +
+      "specified by the Data Element Pixel Representation (0028,0103).",
   },
   {
     id: "dcmjs-no-ol-ov-sv",

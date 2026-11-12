@@ -408,6 +408,16 @@ export interface ParseContext {
    */
   currentCharset?: readonly string[] | undefined;
   /**
+   * The Pixel Representation `(0028,0103)` read so far in the Data Set being
+   * parsed under Implicit VR, or `undefined` before one is. It signs the "US or
+   * SS" attributes that hold a pixel sample value (see
+   * `./implicit-multi-vr.ts`). Mutable, and scoped as
+   * {@link ParseContext.currentCharset} is: inherited into Sequence Items,
+   * reset per Item and restored by `parseSequence`, so an Icon Image Item's
+   * own value never reaches its siblings or its parent.
+   */
+  pixelRepresentation?: number | undefined;
+  /**
    * Active source/vendor {@link Profile}. Threaded from
    * `ParseOptions.profile`. When absent the parse is unprofiled, which is the
    * baseline. Consulted by the emitter (escalations / suppressions) and by

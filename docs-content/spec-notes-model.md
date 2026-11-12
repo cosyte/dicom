@@ -31,6 +31,28 @@ disagreement with the dictionary is flagged (`DICOM_VR_MISMATCH`), never silentl
 the dictionary lists with more than one VR, such as Pixel Data `(7FE0,0010)` as OB or OW, agrees
 with any VR it lists.
 
+In Implicit VR such a tag takes the VR PS3.5 gives it in that transfer syntax, not the first one
+listed, because a writer byte-swaps by VR: a 16-bit value read as OB and written as Big Endian
+would come out with every sample reversed.
+
+- Pixel Data, Overlay Data `(60xx,3000)` and Waveform Data `(5400,1010)` are OW. PS3.5 section A.1
+  says "Pixel Data (7FE0,0010) has the Value Representation OW" in that transfer syntax, PS3.5
+  section 8.1.2 says "the VR of OB may not be used for Overlay Data" there, and by PS3.5 section 8.3
+  the channel minimum, channel maximum and waveform padding values "shall be encoded with the same
+  VR as Waveform Data", so they are OW too. Dark Current Counts and Air Counts, OB or OW with no
+  rule in PS3.5, read as OW, the VR whose bytes survive a swap.
+- LUT Data `(0028,3006)` is US, or OW when its value is longer than the 65,534 bytes an Explicit VR
+  US can declare.
+- The US or SS attributes that hold a pixel sample value, such as Smallest Image Pixel
+  Value `(0028,0106)` and Pixel Padding Value `(0028,0120)`, are SS when the Pixel Representation
+  `(0028,0103)` read before them in their Data Set, or in a Data Set enclosing it, is 1, and US
+  otherwise. PS3.5 section 8.1.1 makes a pixel sample signed or unsigned "as specified by the Data
+  Element Pixel Representation (0028,0103)". One that comes before any Pixel Representation reads as
+  US.
+- The lookup table descriptors stay US whatever the Pixel Representation, since their first and
+  third values are always unsigned, and the retired Curve Data, Audio Sample Data and Variable
+  Pixel Data keep the first VR listed.
+
 ## Reaching elements
 
 `ds.get(tag)` returns the `Element` at a tag (or `undefined`); `ds.has(tag)` tests presence;
