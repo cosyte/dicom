@@ -3,7 +3,7 @@ id: cookbook
 title: Cookbook
 sidebar_label: Cookbook
 sidebar_position: 13
-description: Task-oriented recipes with runnable examples for indexing studies, routing keys, pixel metadata, de-identification, FHIR and HL7 v2 bridges, and more.
+description: Task-oriented recipes with runnable examples for indexing studies, routing keys, pixel metadata, de-identification, FHIR and HL7 v2 bridges, veterinary patients, and more.
 ---
 
 # Cookbook
@@ -718,3 +718,69 @@ warning codes to a thrown `DicomParseError` (a stricter gate for a trusted sende
 suppress benign, high-volume codes for a known-quirky source. Note that `{ strict: true }` turns
 every Tier-2 warning into a `DicomParseError`, which carries the raw `snippet` the warning does not,
 so a PHI review of the lenient path does not transfer to the strict one.
+
+## 9. Read a veterinary patient
+
+**The problem:** your objects come from a veterinary practice, and you need the species, the breed,
+whether the animal is neutered, and who is responsible for it, from headers that often do not follow
+the standard to the letter.
+
+`ds.patient` reads all of these. Each one is typed-absent when the object does not carry it, so on a
+human patient none of them appears. The species and breed code sequences are read through `readCode`, so a code
+arrives as the same `CodedConcept` triplet everywhere else in the package uses. A value the view
+cannot read as written does not throw: it is kept as written or left absent, and reported on
+`ds.patient.issues` with a code from `PATIENT_ISSUE_CODES`.
+
+**Attributes read** (PS3.6 2026c): `(0010,2201)` Patient Species Description, `(0010,2202)` Patient
+Species Code Sequence, `(0010,2203)` Patient's Sex Neutered, `(0010,2292)` Patient Breed
+Description, `(0010,2293)` Patient Breed Code Sequence, `(0010,2297)` Responsible Person,
+`(0010,2298)` Responsible Person Role, `(0010,2299)` Responsible Organization.
+
+```ts runnable
+import { parseDicom, PATIENT_ISSUE_CODES } from "@cosyte/dicom";
+
+// A synthetic veterinary object: invented codes in a private 99SYNTH scheme, invented names.
+const buf = Buffer.from(
+  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABESUNNAgAAAFVMBAAcAAAAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xABAAEABQTg4AU1lOVEhFVElDXlBFVCAQACAATE8MAFNZTlRILVBFVC0xIBAAASJMTxIAU1lOVEhFVElDIFNQRUNJRVMgEAACIlNRAAD//////v8A4DwAAAAIAAABU0gKAFNZTlNQRUNJRVMIAAIBU0gIADk5U1lOVEggCAAEAUxPEgBTeW50aGV0aWMgc3BlY2llcyD+/93gAAAAABAAAyJDUwgATkVVVEVSRUQQAJIiTE8QAFNZTlRIRVRJQyBCUkVFRCAQAJMiU1EAAP/////+/wDgOAAAAAgAAAFTSAgAU1lOQlJFRUQIAAIBU0gIADk5U1lOVEggCAAEAUxPEABTeW50aGV0aWMgYnJlZWQg/v/d4AAAAAAQAJciUE4QAFNZTlRIRVRJQ15PV05FUiAQAJgiQ1MGAE9XTkVSIBAAmSJMTw4AU0FNUExFIENMSU5JQyA=",
+  "base64",
+);
+
+const p = parseDicom(buf).patient;
+
+p.speciesDescription; // => "SYNTHETIC SPECIES"
+p.speciesCode?.codeValue; // => "SYNSPECIES"
+p.speciesCode?.codingSchemeDesignator; // => "99SYNTH"
+p.breedDescription; // => "SYNTHETIC BREED"
+p.breedCode?.codeMeaning; // => "Synthetic breed"
+p.responsiblePerson?.role; // => "OWNER"
+p.responsiblePerson?.organization; // => "SAMPLE CLINIC"
+
+// The sender wrote NEUTERED, which is not one of the two values the standard allows.
+// The view keeps it as written and reports it; nothing throws.
+p.sexNeutered; // => "NEUTERED"
+p.issues?.map((i) => i.code); // => ["DICOM_PATIENT_VALUE_NOT_ENUMERATED"]
+p.issues?.[0]?.tag; // => "00102203"
+p.issues?.[0]?.code === PATIENT_ISSUE_CODES.DICOM_PATIENT_VALUE_NOT_ENUMERATED; // => true
+```
+
+What each issue code means:
+
+| Code                                      | What the view did                                                                                                                                  |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DICOM_PATIENT_VALUE_NOT_ENUMERATED`      | Patient's Sex Neutered holds a value other than `ALTERED` or `UNALTERED`. The value is kept as written.                                            |
+| `DICOM_PATIENT_VALUE_WRONG_TYPE`          | The element is written in a VR its value does not decode from, such as `OB`. The field is left absent.                                             |
+| `DICOM_PATIENT_CODE_SEQUENCE_EMPTY`       | A code sequence holds no item. The code is left absent.                                                                                            |
+| `DICOM_PATIENT_CODE_SEQUENCE_EXTRA_ITEMS` | A code sequence holds more than one item. The first is read.                                                                                       |
+| `DICOM_PATIENT_CODE_INCOMPLETE`           | The code item has no code value in any of its three forms, no meaning, or no coding scheme designator beside a non-URN value. What it has is kept. |
+
+Three things to keep in mind:
+
+- **Responsible Person Role is not checked against a list.** The view keeps whatever role the sender
+  wrote, and reports nothing about it.
+- **`responsiblePerson` is identifying.** It names a person and an organization, so log none of it.
+  An issue's `message` is built from its code and tag alone, never from a value, so the issues are
+  safe to log.
+- **De-identification.** The Annex E table this package carries removes `(0010,2297)` Responsible
+  Person and `(0010,2299)` Responsible Organization, and `(0010,2203)` Patient's Sex Neutered unless
+  you pass the `RetainPatientCharacteristics` option. It has no row for the species, the breed or the role, so
+  `deidentify()` keeps them.

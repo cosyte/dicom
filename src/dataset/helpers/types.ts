@@ -21,6 +21,7 @@
 
 import type { Item } from "../item.js";
 import type { DicomDate, DicomTime, PersonName } from "../vr/types.js";
+import type { PatientIssueCode } from "./patient-issues.js";
 
 /**
  * One entry of Other Patient IDs Sequence `(0010,1002)` - a `{id, issuer,
@@ -63,6 +64,70 @@ export interface PatientView {
   readonly name?: PersonName;
   readonly birthDate?: DicomDate;
   readonly sex?: string;
+  /** Patient Species Description `(0010,2201)`, as written. */
+  readonly speciesDescription?: string;
+  /** The one item of Patient Species Code Sequence `(0010,2202)`, read by `readCode`. */
+  readonly speciesCode?: CodedConcept;
+  /**
+   * Patient's Sex Neutered `(0010,2203)`, as written. The standard's values are `ALTERED` and
+   * `UNALTERED`; another value is kept and reported on {@link PatientView.issues}.
+   */
+  readonly sexNeutered?: string;
+  /** Patient Breed Description `(0010,2292)`, as written. */
+  readonly breedDescription?: string;
+  /** The one item of Patient Breed Code Sequence `(0010,2293)`, read by `readCode`. */
+  readonly breedCode?: CodedConcept;
+  /**
+   * Responsible Person `(0010,2297)`, Responsible Person Role `(0010,2298)` and Responsible
+   * Organization `(0010,2299)`, present when any of the three is.
+   */
+  readonly responsiblePerson?: ResponsiblePerson;
+  /**
+   * What the view could not read as written among the non-human attributes above, each with a
+   * stable code. Present only when there is at least one; frozen.
+   */
+  readonly issues?: readonly PatientIssue[];
+}
+
+/**
+ * The person or organization responsible for a patient, usually an animal's owner: Responsible
+ * Person `(0010,2297)`, Responsible Person Role `(0010,2298)` and Responsible Organization
+ * `(0010,2299)`. Each part is typed-absent when the object does not carry it. These are
+ * identifying values, so log none of them.
+ *
+ * @example
+ * ```ts
+ * import { parseDicom } from "@cosyte/dicom";
+ * const owner = parseDicom(buf).patient.responsiblePerson;
+ * owner?.name?.alphabetic.familyName; // "SYNTHETIC"
+ * owner?.role;                         // "OWNER"
+ * owner?.organization;                 // "SAMPLE CLINIC"
+ * ```
+ */
+export interface ResponsiblePerson {
+  readonly name?: PersonName;
+  readonly role?: string;
+  readonly organization?: string;
+}
+
+/**
+ * One thing the patient view could not read as written among the non-human patient attributes.
+ * `message` comes by `code` from a frozen registry with only `tag` substituted, so it carries no
+ * value from the file and is safe to log.
+ *
+ * @example
+ * ```ts
+ * import { parseDicom } from "@cosyte/dicom";
+ * for (const issue of parseDicom(buf).patient.issues ?? []) {
+ *   console.warn(issue.code, issue.tag); // "DICOM_PATIENT_VALUE_NOT_ENUMERATED" "00102203"
+ * }
+ * ```
+ */
+export interface PatientIssue {
+  readonly code: PatientIssueCode;
+  /** The attribute's tag, eight uppercase hex digits. */
+  readonly tag: string;
+  readonly message: string;
 }
 
 /**
