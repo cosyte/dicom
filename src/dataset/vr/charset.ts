@@ -245,8 +245,9 @@ export function decodeText(bytes: Buffer, terms: readonly string[] | undefined):
  * @internal
  */
 export function singleByteSetIn(terms: readonly string[] | undefined): number | undefined {
+  if (terms === undefined) return 6;
   let first: number | undefined;
-  for (const term of terms ?? []) {
+  for (const term of terms) {
     const set = singleByteSetOf(term);
     if (set === undefined && TERM_TO_LABEL.has(term)) return undefined;
     first ??= set;

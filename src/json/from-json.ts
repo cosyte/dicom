@@ -575,13 +575,8 @@ function refuseChangedElements(json: Record<string, unknown>, ds: Dataset): void
     if (!isTextVr(read.vr)) continue;
     // `writeDataset` has already refused a `Value` that is not an array, and wrote this text.
     const text = textValue((fields["Value"] ?? []) as readonly unknown[], read.vr, tag);
-    // Bytes the set does not define are text it does not encode, refused as such here.
-    let back: string;
-    try {
-      back = textOf(read);
-    } catch {
-      return refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET, tag);
-    }
+    // Bytes the set does not define are text it does not encode, refused as such.
+    const back = textOf(read, DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET);
     const pad = read.vr === "UI" ? "\0" : " ";
     if (back !== text && back !== `${text}${pad}`) {
       refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET, tag);

@@ -66,7 +66,8 @@ function trimEnd(text: string): string {
  * Only Specific Character Sets without code extensions are carried. Bytes the set does not
  * decode are refused, never read as U+FFFD, and a leading byte order mark is kept.
  * `fromDicomJson` reads back each text value it writes through this, so the two directions read
- * text the same way.
+ * text the same way, and refuses bytes a single-byte set does not define with its own code,
+ * `undecodable`, since there the text is what the set cannot encode.
  *
  * @internal
  * @example
@@ -74,7 +75,10 @@ function trimEnd(text: string): string {
  * textOf(parseDicom(buf).get("00100020") as Element); // "SYNTHETIC^ID "
  * ```
  */
-export function textOf(el: Element): string {
+export function textOf(
+  el: Element,
+  undecodable: DicomJsonErrorCode = DICOM_JSON_ERROR_CODES.MALFORMED_VALUE,
+): string {
   const bytes = el.rawBytes;
   if (!isCharsetVr(el.vr)) return bytes.toString("latin1");
   const terms = el.specificCharacterSet ?? [];
@@ -85,7 +89,7 @@ export function textOf(el: Element): string {
     // JIS X 0201 a 0x5C is YEN SIGN in ST, LT and UT and the Value delimiter elsewhere, as the
     // reader has it.
     const decoded = decodeSingleByte(bytes, set, !isSingleStringVr(el.vr));
-    if (decoded.bytesUndecodable) refuse(DICOM_JSON_ERROR_CODES.MALFORMED_VALUE, el);
+    if (decoded.bytesUndecodable) refuse(undecodable, el);
     return decoded.text;
   }
   // UTF-8 drops a leading byte order mark, which the reader sets aside first, so this does too.

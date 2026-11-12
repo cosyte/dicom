@@ -274,6 +274,16 @@ function isDelimiter(byte: number, delimiters: DelimiterClass): boolean {
   return false;
 }
 
+/**
+ * The character a GL byte other than a delimiter encodes in ISO-IR 14, JIS X 0201's romaji: YEN
+ * SIGN at `0x5C` and OVERLINE at `0x7E` (PS3.5 section 6.1.2.3), ASCII's everywhere else.
+ */
+function romajiCharacter(byte: number): string {
+  if (byte === BACKSLASH) return YEN_SIGN;
+  if (byte === TILDE) return OVERLINE;
+  return String.fromCharCode(byte);
+}
+
 function isGl(byte: number): boolean {
   return byte >= 0x21 && byte <= 0x7e;
 }
@@ -427,16 +437,16 @@ export function decodeWithCodeExtensions(
       continue;
     }
 
-    // ISO-IR 6 or ISO-IR 14 in G0: GL bytes read as ASCII, but for ISO-IR 14's own two.
+    // ISO-IR 6 or ISO-IR 14 in G0: GL bytes read as ASCII.
     if (isDelimiter(byte, delimiters)) {
       out.push(String.fromCharCode(byte));
       reset();
       i += 1;
       continue;
     }
-    const romaji = g0 === 14;
-    if (romaji && (byte === BACKSLASH || byte === TILDE)) {
-      out.push(byte === BACKSLASH ? YEN_SIGN : OVERLINE);
+    // ISO-IR 14 reads each byte apart, since two of its bytes are not ASCII's characters.
+    if (g0 === 14) {
+      out.push(romajiCharacter(byte));
       i += 1;
       continue;
     }
@@ -444,7 +454,6 @@ export function decodeWithCodeExtensions(
     while (end < bytes.length) {
       const b = at(bytes, end);
       if (b < SPACE || b >= DEL || isDelimiter(b, delimiters)) break;
-      if (romaji && (b === BACKSLASH || b === TILDE)) break;
       end += 1;
     }
     out.push(bytes.toString("latin1", i, end));

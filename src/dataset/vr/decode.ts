@@ -148,11 +148,10 @@ function delimiterClass(vr: VR): DelimiterClass {
 
 /**
  * `true` when every byte is ASCII other than SO (`0x0E`), SI (`0x0F`) and ESC
- * (`0x1B`). Every decoder `decodeText` can pick (each single-byte table but
- * JIS X 0201's, UTF-8, GB18030, GBK, EUC-KR, and ISO-2022-JP outside an escape)
- * maps those bytes to themselves, so their Latin-1 reading is their decoding.
- * JIS X 0201 reads `0x5C` and `0x7E` otherwise, so the caller skips this under
- * `ISO_IR 13`.
+ * (`0x1B`). Every multi-byte decoder `decodeText` can pick (UTF-8, GB18030,
+ * GBK, EUC-KR, and ISO-2022-JP outside an escape) maps those bytes to
+ * themselves, so their Latin-1 reading is their decoding. A single-byte set
+ * never comes here: its table reads ASCII in one pass already.
  */
 function isPlainAscii(src: Buffer, start: number, end: number): boolean {
   for (let i = start; i < end; i++) {
@@ -178,11 +177,13 @@ function charsetText(
   }
   if (!usesCodeExtensions(charset)) {
     const set = singleByteSetIn(charset);
-    if (set !== 13 && isPlainAscii(src, s, end)) return src.toString("latin1", s, end);
-    if (set === undefined) return decodeText(src.subarray(s, end), charset);
-    const decoded = decodeSingleByte(src.subarray(s, end), set, delimiterClass(vr) !== "text");
-    if (decoded.bytesUndecodable) warn(charsetBytesUndecodable(position(), tag, vr));
-    return decoded.text;
+    if (set !== undefined) {
+      const decoded = decodeSingleByte(src.subarray(s, end), set, delimiterClass(vr) !== "text");
+      if (decoded.bytesUndecodable) warn(charsetBytesUndecodable(position(), tag, vr));
+      return decoded.text;
+    }
+    if (isPlainAscii(src, s, end)) return src.toString("latin1", s, end);
+    return decodeText(src.subarray(s, end), charset);
   }
   const decoded = decodeWithCodeExtensions(src.subarray(s, end), charset, delimiterClass(vr));
   if (decoded.escapeUndeclared) warn(charsetEscapeUndeclared(position(), tag, vr));
