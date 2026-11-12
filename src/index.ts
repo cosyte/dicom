@@ -21,6 +21,7 @@ export {
   readDicomHeader,
   type DicomByteSource,
   type DicomFileHandle,
+  type ReadDicomHeaderOptions,
 } from "./parser/read-header.js";
 
 export { Dataset } from "./dataset/dataset.js";

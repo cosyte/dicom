@@ -32,13 +32,14 @@ const FIRST_READ_BYTES = 64 * 1024;
  * @example
  * ```ts
  * import { open } from "node:fs/promises";
- * import { readDicomHeader, type DicomFileHandle } from "@cosyte/dicom";
- * const handle: DicomFileHandle = await open("study.dcm");
+ * import { readDicomHeader } from "@cosyte/dicom";
+ * // Node's FileHandle is a DicomFileHandle.
+ * const handle = await open("study.dcm");
  * try {
  *   const ds = await readDicomHeader(handle);
  *   console.log(ds.has("00100010"));
  * } finally {
- *   await (handle as Awaited<ReturnType<typeof open>>).close();
+ *   await handle.close();
  * }
  * ```
  */
@@ -65,6 +66,34 @@ export interface DicomFileHandle {
  * ```
  */
 export type DicomByteSource = string | URL | DicomFileHandle | AsyncIterable<Uint8Array>;
+
+/**
+ * The options of {@link readDicomHeader}: every {@link ParseOptions} field, and a limit on how much
+ * of the source is read.
+ *
+ * @example
+ * ```ts
+ * import { readDicomHeader, type ReadDicomHeaderOptions } from "@cosyte/dicom";
+ * const options: ReadDicomHeaderOptions = { maxBytes: 16 * 1024 * 1024 };
+ * const ds = await readDicomHeader("study.dcm", options);
+ * ```
+ */
+export interface ReadDicomHeaderOptions extends ParseOptions {
+  /**
+   * The most bytes of the source read into memory, a positive whole number. When the stop is not
+   * found within them and the source goes on past them, the read ends and `readDicomHeader` throws
+   * a `RangeError`; a source no longer than the limit is read as without one. One byte past the
+   * limit is read from a file, to learn whether it goes on; a stream's chunk that crosses the limit
+   * is cut there, though the stream itself made the whole chunk.
+   *
+   * There is no default: without it a file whose read cannot stop (no element at or after the stop
+   * tag, or Deflated) is read whole, as `parseDicom` would need it. Set it when the source is not
+   * trusted, so a file with no stop tag cannot grow memory without bound.
+   *
+   * Omit (do not pass `undefined`) for no limit.
+   */
+  readonly maxBytes?: number;
+}
 
 /** Pulls the next bytes of a source; `undefined` once the source is exhausted. */
 interface ByteReader {
@@ -95,7 +124,12 @@ interface ByteReader {
  *
  * A path is opened and closed here. A file handle is read from byte 0 and left open. A stream is
  * read from where it is and, once the stop is found, ended early through its iterator's `return`,
- * which destroys a Node `Readable` and cancels a web `ReadableStream`.
+ * which destroys a Node `Readable` and cancels a web `ReadableStream`. A stream's chunks are held as
+ * the stream makes them: one that hands over the whole file in one chunk has already put the whole
+ * file in memory.
+ *
+ * `options.maxBytes` bounds what is read: past it, with the stop not found, the read ends with a
+ * `RangeError`. Set it for a source you do not trust.
  *
  * @example
  * ```ts
@@ -114,7 +148,7 @@ interface ByteReader {
  */
 export async function readDicomHeader(
   source: DicomByteSource,
-  options: ParseOptions = {},
+  options: ReadDicomHeaderOptions = {},
 ): Promise<Dataset> {
   return readHeaderFrom(source, options, FIRST_READ_BYTES);
 }
@@ -127,17 +161,19 @@ export async function readDicomHeader(
  */
 export async function readHeaderFrom(
   source: DicomByteSource,
-  options: ParseOptions,
+  options: ReadDicomHeaderOptions,
   firstReadBytes: number,
 ): Promise<Dataset> {
+  const { maxBytes, ...rest } = options;
   const parseOptions: ParseOptions = {
-    ...options,
-    stopBeforeTag: options.stopBeforeTag ?? DEFAULT_STOP_TAG,
+    ...rest,
+    stopBeforeTag: rest.stopBeforeTag ?? DEFAULT_STOP_TAG,
   };
   // The trial parses run without the caller's callback, so it hears each warning once.
   const { onWarning, ...trialOptions } = parseOptions;
-  // Refuse a malformed stop tag before anything is opened.
+  // Refuse a malformed stop tag or limit before anything is opened.
   stopTagNumber(trialOptions.stopBeforeTag);
+  const limit = byteLimit(maxBytes);
 
   const reader = await open(source);
   try {
@@ -145,11 +181,22 @@ export async function readHeaderFrom(
     let total = 0;
     let want = firstReadBytes;
     for (;;) {
+      const target = Math.min(want, limit);
       let ended = false;
-      while (total < want) {
-        const chunk = await reader.next(want - total);
+      // Whether the source holds more than `limit` bytes: a chunk crossed it.
+      let past = false;
+      while (total < target) {
+        const chunk = await reader.next(target - total);
         if (chunk === undefined) {
           ended = true;
+          break;
+        }
+        const room = limit - total;
+        if (chunk.length > room) {
+          // A copy of the part within the limit, so the Dataset holds no view of the rest.
+          chunks.push(Buffer.from(chunk.subarray(0, room)));
+          total = limit;
+          past = true;
           break;
         }
         chunks.push(chunk);
@@ -164,11 +211,29 @@ export async function readHeaderFrom(
         if (onWarning !== undefined) replay(found, onWarning);
         return found;
       }
+      if (total >= limit) {
+        // At the limit without the stop: a source that ends here is parsed whole, as without one.
+        if (!past && (await reader.next(1)) === undefined) return parseDicom(bytes, parseOptions);
+        throw new RangeError(
+          `readDicomHeader read maxBytes (${String(limit)}) bytes of the source without reaching the tag it stops before.`,
+        );
+      }
       want = total * 2;
     }
   } finally {
     await reader.close();
   }
+}
+
+/** `ReadDicomHeaderOptions.maxBytes` as a number to compare against; no limit is `Infinity`. */
+function byteLimit(maxBytes: unknown): number {
+  if (maxBytes === undefined) return Number.POSITIVE_INFINITY;
+  if (typeof maxBytes !== "number" || !Number.isSafeInteger(maxBytes) || maxBytes <= 0) {
+    throw new TypeError(
+      "ReadDicomHeaderOptions.maxBytes must be a positive whole number of bytes.",
+    );
+  }
+  return maxBytes;
 }
 
 /** The Dataset of a prefix that holds everything before the stop, or `undefined` if it does not. */

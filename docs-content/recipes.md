@@ -83,7 +83,22 @@ const patientOnly = await readDicomHeader(createReadStream("study.dcm"), {
 
 It stops before the first top-level element whose tag is at or after `stopBeforeTag`, Float Pixel Data `(7FE0,0008)` when that is not given, which is also before Double Float Pixel Data and Pixel Data. The Dataset is the one `parseDicom` returns on the whole file with the same `stopBeforeTag`: the same elements, byte for byte, the same warnings, and a last warning, `DICOM_PARSE_STOPPED_BEFORE_TAG`, at the element it stopped before. It reads 64 KiB first and twice as much each time the header turns out to be longer. The source is a `DicomByteSource`: a path, a `file:` URL, a `DicomFileHandle` (Node's `FileHandle` from `node:fs/promises` is one) or any async iterable of bytes. A handle is read from byte 0 and left open; a stream is ended early once the stop is found.
 
-Three kinds of file are read to the end, and so held in memory whole: one with no top-level element at or after the stop tag, a Deflated Explicit VR Little Endian one (its Data Set, Pixel Data included, is one deflate stream), and one `parseDicom` would refuse, so the error thrown is the one the whole file gives.
+Three kinds of file are read to the end, and so held in memory whole: one with no top-level element at or after the stop tag, a Deflated Explicit VR Little Endian one (its Data Set, Pixel Data included, is one deflate stream), and one `parseDicom` would refuse, so the error thrown is the one the whole file gives. A stream's chunks are held as the stream makes them, so a stream that delivers the whole file as one chunk has put it all in memory before the read sees it.
+
+For a file you do not trust, set `maxBytes`, the one field `ReadDicomHeaderOptions` adds to `ParseOptions`. The read then never holds more than that many bytes of the source: when the stop is not within them and the file goes on, it throws a `RangeError` instead of reading on. There is no default, since any number we picked would refuse some legitimate file (a large Deflated study, a long structured report), so without it the three kinds above are read whole:
+
+```ts
+import { readDicomHeader } from "@cosyte/dicom";
+
+try {
+  const ds = await readDicomHeader("upload.dcm", { maxBytes: 16 * 1024 * 1024 });
+  ds.patient.id;
+} catch (err) {
+  if (err instanceof RangeError) {
+    // No stop tag in the first 16 MiB: refuse the upload rather than read on.
+  }
+}
+```
 
 With the bytes already in memory, `parseDicom` takes the same option. Nothing past the stop is read, so a file cut short inside its Pixel Data still parses:
 

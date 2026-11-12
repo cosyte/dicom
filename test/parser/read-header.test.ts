@@ -222,3 +222,74 @@ describe("readDicomHeader", () => {
     await expect(readDicomHeader(Readable.from(["text"]))).rejects.toBeInstanceOf(TypeError);
   });
 });
+
+describe("readDicomHeader with maxBytes", () => {
+  const KIB = 1024;
+  // A header longer than the limit, so the stop is not found in time.
+  const longHeader = file(EXPLICIT_LE, 8 * 1024 * 1024, 300 * KIB);
+
+  it("stops reading at the limit and throws when the stop is not found within it", async () => {
+    const handle = countingHandle(longHeader);
+    const read = readDicomHeader(handle, { maxBytes: 128 * KIB });
+    await expect(read).rejects.toBeInstanceOf(RangeError);
+    await expect(read).rejects.toThrow(/maxBytes \(131072\)/u);
+    // The limit, and one byte more to learn that the file goes on past it.
+    expect(handle.furthest).toBe(128 * KIB + 1);
+  });
+
+  it("bounds a file with no stop tag at all, which would otherwise be read to its end", async () => {
+    const handle = countingHandle(longHeader);
+    await expect(
+      readDicomHeader(handle, { stopBeforeTag: "FFFFFFFF", maxBytes: 100 * KIB }),
+    ).rejects.toBeInstanceOf(RangeError);
+    expect(handle.furthest).toBe(100 * KIB + 1);
+  });
+
+  it("bounds a stream, cutting a chunk that crosses the limit", async () => {
+    const { iterable, state } = chunked(longHeader, 48 * KIB);
+    await expect(readDicomHeader(iterable, { maxBytes: 100 * KIB })).rejects.toBeInstanceOf(
+      RangeError,
+    );
+    expect(state.pulled).toBe(3);
+    expect(state.returned).toBe(true);
+  });
+
+  it("gives the same Dataset when the stop is within the limit", async () => {
+    const expected = summary(parseDicom(longHeader, { stopBeforeTag: "7FE00008" }));
+    const handle = countingHandle(longHeader);
+    expect(summary(await readDicomHeader(handle, { maxBytes: 512 * KIB }))).toEqual(expected);
+    expect(handle.furthest).toBe(512 * KIB);
+    // A stream that hands over the whole file in one chunk is cut at the limit and still found.
+    expect(
+      summary(await readDicomHeader(Readable.from([longHeader]), { maxBytes: 400 * KIB })),
+    ).toEqual(expected);
+  });
+
+  it("reads a file no longer than the limit whole, as without one", async () => {
+    const small = file(EXPLICIT_LE, 1024);
+    const expected = summary(parseDicom(small));
+    for (const maxBytes of [small.length, small.length + 1]) {
+      const ds = await readDicomHeader(countingHandle(small), {
+        stopBeforeTag: "FFFFFFFF",
+        maxBytes,
+      });
+      expect(summary(ds)).toEqual(expected);
+    }
+    await expect(
+      readDicomHeader(countingHandle(small), {
+        stopBeforeTag: "FFFFFFFF",
+        maxBytes: small.length - 1,
+      }),
+    ).rejects.toBeInstanceOf(RangeError);
+  });
+
+  it("refuses a limit that is not a positive whole number before reading", async () => {
+    for (const maxBytes of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, "1024"]) {
+      const handle = countingHandle(longHeader);
+      await expect(
+        readDicomHeader(handle, { maxBytes: maxBytes as unknown as number }),
+      ).rejects.toBeInstanceOf(TypeError);
+      expect(handle.furthest).toBe(0);
+    }
+  });
+});

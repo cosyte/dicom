@@ -9,13 +9,16 @@ New `readDicomHeader` and `ParseOptions.stopBeforeTag` read a file's header with
   as the first top-level element at or after the stop tag, Float Pixel Data `(7FE0,0008)` by
   default, and returns the Dataset `parseDicom` gives on the whole file with that stop. It reads
   64 KiB first and twice as much each time the header is longer. A Deflated file, a file with
-  nothing at or after the stop tag, and a file the parser refuses are still read whole. The types
-  `DicomByteSource` and `DicomFileHandle` are exported with it.
+  nothing at or after the stop tag, and a file the parser refuses are still read whole, unless
+  the new `maxBytes` option is set: then a read that has not found the stop within that many bytes
+  throws a `RangeError` instead of reading on. `maxBytes` has no default. The types
+  `DicomByteSource`, `DicomFileHandle` and `ReadDicomHeaderOptions` are exported with it.
 - **`ParseOptions.stopBeforeTag`** (new option) stops `parseDicom` before the first top-level
   element whose tag is at or after the one given, as eight hexadecimal digits. Every element
   before it is read exactly as a full parse reads it, and nothing after it is read, so a file cut
   short inside its Pixel Data still parses. Only the top-level Data Set stops; Sequence Items are
-  read whole.
+  read whole. A parse that stops does not check a DICOMDIR's Directory Record offsets, whose
+  records may lie past the stop.
 - **`DICOM_PARSE_STOPPED_BEFORE_TAG`** (new warning code) ends `ds.warnings` when a parse stops,
   positioned at the element it stopped before. It is never escalated, under `strict` or by a
   profile. A `switch` over `WarningCode` with a `default` branch needs no change.
