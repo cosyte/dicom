@@ -75,6 +75,14 @@ that replay it (`COSYTE_PROPERTY_SEED`, `COSYTE_PROPERTY_PATH`). The fuzz target
 published ones, `@cosyte/dicom/arbitraries` (`src/arbitraries/`); `test/arbitraries/` holds them to
 what they document and pins what each draws from a fixed seed.
 
+`test/differential/` holds the reader to another implementation: it reads a synthetic corpus (the
+fuzz seed corpus and one document per Specific Character Set term) with `parseDicom` and with
+dcmjs, a development dependency of that test only, and compares every tag, VR and value at every
+depth. Each place the two part is listed in `test/differential/known-differences.ts` with its
+reason and the clause that settles it; a difference the list does not name fails the test, and so
+does an entry that no longer occurs. Where the standard is with dcmjs, the entry says the defect is
+ours, and the fix removes the entry.
+
 ## Benchmarks
 
 `bench/dicom.bench.mjs` measures the built package on synthetic files in the shapes real traffic
