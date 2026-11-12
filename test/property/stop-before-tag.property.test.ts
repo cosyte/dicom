@@ -24,6 +24,7 @@ import {
   type BuildDicomElement,
   type BuildDicomSqElement,
 } from "../helpers/build-dicom.js";
+import { buildDicomdir, twoPatientRecords, type OffsetSpec } from "../helpers/build-dicomdir.js";
 import { readHeaderFrom } from "../../src/parser/read-header.js";
 
 const IMPLICIT_LE = "1.2.840.10008.1.2";
@@ -167,33 +168,87 @@ function codes(ws: readonly DicomParseWarning[]): string[] {
   return ws.map((w) => w.code);
 }
 
+/**
+ * The stopped parse of `bytes` holds the full parse's top-level elements before the stop, byte for
+ * byte, and the full parse's warnings up to that point followed by the one stop warning.
+ */
+function expectStoppedMatchesFull(bytes: Buffer, stopTag: string): void {
+  const full = parseDicom(bytes);
+  const stopped = parseDicom(bytes, { stopBeforeTag: stopTag });
+  const stop = tagNumber(stopTag);
+
+  const before = full.elements().filter((e) => tagNumber(e.tag) < stop);
+  expect(rows(stopped)).toEqual(
+    before.map((e) => [e.tag, e.vr, e.length, e.byteOffset, e.rawBytes.toString("hex")]),
+  );
+  expect(stopped.fileMeta).toEqual(full.fileMeta);
+
+  const reached = full.elements().find((e) => tagNumber(e.tag) >= stop);
+  if (reached === undefined) {
+    expect(codes(stopped.warnings)).toEqual(codes(full.warnings));
+    return;
+  }
+  const last = stopped.warnings.at(-1);
+  expect(last?.code).toBe(WARNING_CODES.DICOM_PARSE_STOPPED_BEFORE_TAG);
+  expect(last?.position.byteOffset).toBe(reached.byteOffset);
+  const earlier = stopped.warnings.slice(0, -1);
+  expect(full.warnings.slice(0, earlier.length)).toEqual(earlier);
+}
+
+/** Tags worth stopping at in a DICOMDIR: each root attribute, the gaps around them, and none. */
+const DICOMDIR_STOPS: readonly string[] = [
+  "00040000",
+  "00041130",
+  "00041200",
+  "00041201",
+  "00041202",
+  "00041212",
+  "00041213",
+  "00041220",
+  "00041221",
+  "7FE00010",
+  "FFFFFFFF",
+];
+
+/** Where a root offset points: a record, none, inside a record, or past the end of the file. */
+const rootOffsetArb: fc.Arbitrary<OffsetSpec> = fc.oneof(
+  fc.integer({ min: 0, max: 9 }),
+  fc.constantFrom<OffsetSpec>("zero", "pastEnd", "sequenceHeader", { midRecord: 0 }),
+);
+
+const dicomdirArb = fc.record({
+  ts: fc.constantFrom(IMPLICIT_LE, EXPLICIT_LE, EXPLICIT_BE, DEFLATED_LE),
+  firstRoot: rootOffsetArb,
+  lastRoot: rootOffsetArb,
+  sequenceUndefinedLength: fc.boolean(),
+});
+
 describe("stopBeforeTag keeps everything before the stop byte for byte", () => {
   it("matches a full parse's elements before the stop, and its warnings up to it", () => {
     fc.assert(
       fc.property(shapeArb, fc.constantFrom(...STOPS), (shape, stopTag) => {
         const bytes = buildDicom({ transferSyntax: shape.ts, elements: elementsOf(shape) });
-        const full = parseDicom(bytes);
-        const stopped = parseDicom(bytes, { stopBeforeTag: stopTag });
-        const stop = tagNumber(stopTag);
-
-        const before = full.elements().filter((e) => tagNumber(e.tag) < stop);
-        expect(rows(stopped)).toEqual(
-          before.map((e) => [e.tag, e.vr, e.length, e.byteOffset, e.rawBytes.toString("hex")]),
-        );
-        expect(stopped.fileMeta).toEqual(full.fileMeta);
-
-        const reached = full.elements().find((e) => tagNumber(e.tag) >= stop);
-        if (reached === undefined) {
-          expect(codes(stopped.warnings)).toEqual(codes(full.warnings));
-          return;
-        }
-        const last = stopped.warnings.at(-1);
-        expect(last?.code).toBe(WARNING_CODES.DICOM_PARSE_STOPPED_BEFORE_TAG);
-        expect(last?.position.byteOffset).toBe(reached.byteOffset);
-        const earlier = stopped.warnings.slice(0, -1);
-        expect(full.warnings.slice(0, earlier.length)).toEqual(earlier);
+        expectStoppedMatchesFull(bytes, stopTag);
       }),
       { numRuns: 300 },
+    );
+  });
+
+  it("matches a full parse on a DICOMDIR, whose record offsets are checked after the walk", () => {
+    // A stop inside group 0004 can fall before the Directory Record Sequence the root offsets
+    // name; the stopped parse must not report those offsets against records it never read.
+    fc.assert(
+      fc.property(dicomdirArb, fc.constantFrom(...DICOMDIR_STOPS), (dir, stopTag) => {
+        const { bytes } = buildDicomdir({
+          transferSyntax: dir.ts,
+          ...twoPatientRecords(),
+          firstRoot: dir.firstRoot,
+          lastRoot: dir.lastRoot,
+          sequenceUndefinedLength: dir.sequenceUndefinedLength,
+        });
+        expectStoppedMatchesFull(bytes, stopTag);
+      }),
+      { numRuns: 200 },
     );
   });
 

@@ -279,6 +279,11 @@ export interface ParseOptions {
    * the order) stops at the first one at or after the tag. When no top-level
    * element reaches it, the whole file is read and no warning is added.
    *
+   * A parse that stops does not check a DICOMDIR's Directory Record offsets
+   * (`DICOM_DIRECTORY_*` warnings), since the records they name may be past
+   * the stop and unread; `ds.directory` holds only the records it read. Parse
+   * the whole file to check them.
+   *
    * The stop is never escalated, under `strict` or by a profile. A value
    * that is not eight hexadecimal digits throws a `TypeError` before anything
    * is read. To read only the header of a large file without loading the rest

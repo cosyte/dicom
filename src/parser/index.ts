@@ -201,12 +201,16 @@ export function parseDicomStopping(
   datasetOverTable(ds, table, root);
 
   // Step 5: a DICOMDIR's Directory Record offsets, resolved once here so every
-  // one that names no record reaches `ds.warnings` and `onWarning`.
-  emitDirectoryFindings(
-    ds,
-    { origin: hadPreamble ? 0 : PREAMBLE_AND_PREFIX_LENGTH, fileMetaEnd },
-    emit,
-  );
+  // one that names no record reaches `ds.warnings` and `onWarning`. A parse that
+  // stopped at `stopBeforeTag` skips it: the records its offsets name may lie
+  // past the stop, unread, and `ds.warnings` ends with the stop warning.
+  if (stop?.at === undefined) {
+    emitDirectoryFindings(
+      ds,
+      { origin: hadPreamble ? 0 : PREAMBLE_AND_PREFIX_LENGTH, fileMetaEnd },
+      emit,
+    );
+  }
 
   setDatasetWarnings(ds, ctx.warnings);
   return { ds, stopped: stop?.at !== undefined };

@@ -24,6 +24,14 @@ import {
   type BuildDicomElement,
   type BuildDicomSqElement,
 } from "../helpers/build-dicom.js";
+import {
+  buildDicomdir,
+  twoPatientRecords,
+  TS_DEFLATED_LE,
+  TS_EXPLICIT_BE,
+  TS_EXPLICIT_LE,
+  TS_IMPLICIT_LE,
+} from "../helpers/build-dicomdir.js";
 
 const IMPLICIT_LE = "1.2.840.10008.1.2";
 const EXPLICIT_LE = "1.2.840.10008.1.2.1";
@@ -213,5 +221,54 @@ describe("parseDicom with stopBeforeTag", () => {
     } catch (err) {
       expect((err as Error).message).not.toContain("NOT-A-TAG");
     }
+  });
+});
+
+describe("parseDicom with stopBeforeTag on a DICOMDIR", () => {
+  // The Directory Record Sequence (0004,1220) holds the records the root offsets (0004,1200) and
+  // (0004,1202) name. A parse that stops before it never reads those records, so it has nothing to
+  // resolve the offsets against, and must not report them as unresolved.
+  const RECORD_SEQUENCE = "00041220";
+  const DIRECTORY_CODES: readonly string[] = [
+    WARNING_CODES.DICOM_DIRECTORY_OFFSET_UNRESOLVED,
+    WARNING_CODES.DICOM_DIRECTORY_OFFSET_MALFORMED,
+    WARNING_CODES.DICOM_DIRECTORY_RECORD_REVISITED,
+    WARNING_CODES.DICOM_DIRECTORY_OFFSET_DEFLATED,
+  ];
+
+  for (const ts of [TS_IMPLICIT_LE, TS_EXPLICIT_LE, TS_EXPLICIT_BE, TS_DEFLATED_LE]) {
+    it(`stopped before the Directory Record Sequence under ${ts}, ends with the stop alone`, () => {
+      const { bytes } = buildDicomdir({ transferSyntax: ts, ...twoPatientRecords() });
+      const full = parseDicom(bytes);
+      const stopped = parseDicom(bytes, { stopBeforeTag: RECORD_SEQUENCE });
+
+      expect(rows(stopped)).toEqual(rows(full).filter((r) => r.tag < RECORD_SEQUENCE));
+      expect(rows(stopped).map((r) => r.tag)).toContain("00041200");
+      const fullBefore = codes(full.warnings).filter((c) => !DIRECTORY_CODES.includes(c));
+      expect(codes(stopped.warnings)).toEqual([
+        ...fullBefore,
+        WARNING_CODES.DICOM_PARSE_STOPPED_BEFORE_TAG,
+      ]);
+    });
+  }
+
+  it("parses under strict mode when the full parse does", () => {
+    const { bytes } = buildDicomdir({ transferSyntax: TS_EXPLICIT_LE, ...twoPatientRecords() });
+    expect(codes(parseDicom(bytes, { strict: true }).warnings)).toEqual([]);
+    const stopped = parseDicom(bytes, { strict: true, stopBeforeTag: RECORD_SEQUENCE });
+    expect(codes(stopped.warnings)).toEqual([WARNING_CODES.DICOM_PARSE_STOPPED_BEFORE_TAG]);
+  });
+
+  it("still reports the offsets of a DICOMDIR the stop does not reach", () => {
+    // No top-level element reaches the stop, so the parse is a full one and checks the offsets.
+    const { bytes } = buildDicomdir({
+      transferSyntax: TS_EXPLICIT_LE,
+      ...twoPatientRecords(),
+      firstRoot: "pastEnd",
+    });
+    const full = parseDicom(bytes);
+    expect(codes(full.warnings)).toContain(WARNING_CODES.DICOM_DIRECTORY_OFFSET_UNRESOLVED);
+    const unstopped = parseDicom(bytes, { stopBeforeTag: "7FE00010" });
+    expect(codes(unstopped.warnings)).toEqual(codes(full.warnings));
   });
 });
