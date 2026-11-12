@@ -127,7 +127,10 @@ describe("the patient view on a non-human patient", () => {
       { tag: "00102201", vr: "LO", value: Buffer.alloc(0) },
       { tag: "00102203", vr: "CS", value: Buffer.alloc(0) },
       { tag: "00102297", vr: "PN", value: Buffer.alloc(0) },
+      { tag: "00102292", vr: "LO", value: ascii("  ") },
+      { tag: "00102299", vr: "UT", value: ascii("  ") },
     ]).patient;
+    expect(p.breedDescription).toBeUndefined();
     expect(p.speciesDescription).toBeUndefined();
     expect(p.sexNeutered).toBeUndefined();
     expect(p.responsiblePerson).toBeUndefined();

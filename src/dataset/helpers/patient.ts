@@ -53,22 +53,31 @@ function readOtherPatientIds(ds: Dataset): readonly OtherPatientId[] {
 // run cannot switch per test, so it would go unjudged.
 
 /**
- * Whether the element at `tag` is present but decoded to a value kind other than the ones its
- * dictionary VR gives: an explicit VR the sender got wrong, or a value left as bytes. An empty
- * value is absent, not wrong.
+ * The value at `tag` when it decoded to one of `kinds`, the value kinds its dictionary VR gives.
+ * Absent or empty is `undefined` with nothing reported. Any other kind (an explicit VR the sender
+ * got wrong, or a value left as bytes) is `undefined` with a wrong-type issue. One lookup per tag.
  */
-function wrongType(ds: Dataset, tag: Tag, kinds: readonly DicomValue["kind"][]): boolean {
+function readValue<K extends DicomValue["kind"]>(
+  ds: Dataset,
+  tag: Tag,
+  kinds: readonly K[],
+  issues: PatientIssue[],
+): Extract<DicomValue, { kind: K }> | undefined {
   const v = ds.get(tag)?.value;
-  return v !== undefined && v.kind !== "empty" && !kinds.includes(v.kind);
+  if (v === undefined || v.kind === "empty") return undefined;
+  if ((kinds as readonly DicomValue["kind"][]).includes(v.kind)) {
+    return v as Extract<DicomValue, { kind: K }>;
+  }
+  issues.push(patientIssue(PATIENT_ISSUE_CODES.DICOM_PATIENT_VALUE_WRONG_TYPE, tag));
+  return undefined;
 }
 
-/** A string attribute, with a wrong-type issue when it is present in a form that is not text. */
+/** A string attribute: the first non-empty value, as `readString` gives it. */
 function readTolerantString(ds: Dataset, tag: Tag, issues: PatientIssue[]): string | undefined {
-  if (wrongType(ds, tag, ["strings", "text"])) {
-    issues.push(patientIssue(PATIENT_ISSUE_CODES.DICOM_PATIENT_VALUE_WRONG_TYPE, tag));
-    return undefined;
-  }
-  return readString(ds, tag);
+  const v = readValue(ds, tag, ["strings", "text"], issues);
+  if (v === undefined) return undefined;
+  const text = v.kind === "strings" ? v.values[0] : v.value;
+  return text !== undefined && text.length > 0 ? text : undefined;
 }
 
 /**
@@ -77,11 +86,7 @@ function readTolerantString(ds: Dataset, tag: Tag, issues: PatientIssue[]): stri
  * of its three forms, no designator beside a non-URN value, or no meaning is reported and kept.
  */
 function readCodeSequence(ds: Dataset, tag: Tag, issues: PatientIssue[]): CodedConcept | undefined {
-  if (wrongType(ds, tag, ["sequence"])) {
-    issues.push(patientIssue(PATIENT_ISSUE_CODES.DICOM_PATIENT_VALUE_WRONG_TYPE, tag));
-    return undefined;
-  }
-  const items = readItems(ds, tag);
+  const items = readValue(ds, tag, ["sequence"], issues)?.items;
   if (items === undefined) return undefined;
   const first = items[0];
   if (first === undefined) {
@@ -109,13 +114,8 @@ function readCodeSequence(ds: Dataset, tag: Tag, issues: PatientIssue[]): CodedC
 
 function readResponsiblePerson(ds: Dataset, issues: PatientIssue[]): ResponsiblePerson | undefined {
   const person: { -readonly [K in keyof ResponsiblePerson]: ResponsiblePerson[K] } = {};
-  const personTag = "00102297"; // Responsible Person
-  if (wrongType(ds, personTag, ["personName"])) {
-    issues.push(patientIssue(PATIENT_ISSUE_CODES.DICOM_PATIENT_VALUE_WRONG_TYPE, personTag));
-  } else {
-    const name = readPersonName(ds, personTag);
-    if (name !== undefined) person.name = name;
-  }
+  const name = readValue(ds, "00102297", ["personName"], issues)?.values[0]; // Responsible Person
+  if (name !== undefined) person.name = name;
   const role = readTolerantString(ds, "00102298", issues); // Responsible Person Role
   const organization = readTolerantString(ds, "00102299", issues); // Responsible Organization
   if (role !== undefined) person.role = role;
