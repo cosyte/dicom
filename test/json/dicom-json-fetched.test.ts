@@ -271,6 +271,16 @@ describe("a DS no JSON number holds exactly", () => {
     expect(refusal(() => toDicomJson(is))).toBe("UNREPRESENTABLE_NUMBER");
   });
 
+  it("refuses an IS no double holds even within the 16 bytes a DS string may take", () => {
+    const is = parseDicom(
+      buildDicom({
+        transferSyntax: TS_EXPLICIT_LE,
+        elements: [{ tag: "00200013", vr: "IS", value: Buffer.from("9007199254740993", "latin1") }],
+      }),
+    );
+    expect(refusal(() => toDicomJson(is))).toBe("UNREPRESENTABLE_NUMBER");
+  });
+
   it("comes back through fromDicomJson as the same text", () => {
     const attr = json("9007199254740993") as DicomJsonAttribute;
     const back = fromDicomJson({ "0040A30A": attr }, LE).get("0040A30A")?.rawBytes ?? [];
