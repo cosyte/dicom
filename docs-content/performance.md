@@ -12,7 +12,7 @@ This page describes what we measure on `@cosyte/dicom`, how we measure it, and h
 benchmarks yourself. The shared method every Cosyte package follows (throughput, latency
 percentiles, memory, import time and bundle size, and how a pull request is compared with `main`)
 is written down in the performance standard in
-[cosyte/config's decision records](https://github.com/cosyte/config/tree/main/documentation/decisions).
+[cosyte/config](https://github.com/cosyte/config), the repository our shared configuration lives in.
 The numbers for the current release are in [Current numbers](#current-numbers) below.
 
 Three things run today: the benchmarks, which compare a pull request's build with its base; the

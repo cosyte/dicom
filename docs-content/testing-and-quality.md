@@ -11,7 +11,7 @@ description: "How we test @cosyte/dicom: unit tests, corpora, property tests, fu
 This page describes how we test `@cosyte/dicom`, what each technique catches, and what it cannot.
 The shared rules every Cosyte package follows (the coverage and mutation floors, the property-based
 runners, what a pull request must prove) are written down in the testing standard in
-[cosyte/config's decision records](https://github.com/cosyte/config/tree/main/documentation/decisions).
+[cosyte/config](https://github.com/cosyte/config), the repository our shared configuration lives in.
 The numbers for the current release are in [Current numbers](#current-numbers) below.
 
 The failure we test hardest against is the quiet one: a header read wrong but plausible, such as a
