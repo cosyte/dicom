@@ -5,8 +5,11 @@
  * without changing the value, and every case whose JSON form we could not confirm against the
  * standard, throws one of these codes:
  *
- *   - `UNSUPPORTED_VR` - the element's VR is `SV`, `UV` or one PS3.5 does not define. We do not
- *     write the 64-bit integer VRs into JSON until we have confirmed their JSON form.
+ *   - `UNSUPPORTED_VR` - the element's VR is `SV` or `UV` with a `Value`, or one PS3.5 does not
+ *     define. A JSON number holds an integer exactly only up to 2^53, and the 64-bit integer VRs
+ *     hold integers up to 2^63 and 2^64: we do not write their values as JSON until we have read
+ *     the form PS3.18 Annex F gives them in a copy of PS3.18 pinned in this repository.
+ *     `fromDicomJson` takes them as bytes by `BulkDataURI`.
  *   - `UNSUPPORTED_ELEMENT` - an element whose value the model cannot hold as metadata: an
  *     encapsulated (undefined-length) Pixel Data fragment stream the `bulkDataUri` option gave no
  *     URI for (PS3.18 Annex F has no inline form for one), an undefined-length `UN` value the
@@ -17,16 +20,21 @@
  *     under Big Endian. `toDicomJson` refuses them there by URI too; `fromDicomJson` swaps bulk
  *     data fetched by URI, which PS3.18 section 8.7.3.3.1 serves in Little Endian.
  *   - `UNREPRESENTABLE_NUMBER` - a number one side cannot carry exactly: NaN, an infinity or
- *     negative zero in `FL` or `FD` (JSON writes `-0` as `0`), a `DS` or `IS` value that is not a number or whose decimal value a JSON number
- *     does not hold, an `IS` string past the range of its VR (past 2^53, or more digits than a double keeps), a number whose `DS` or `IS`
- *     text would be too long for its VR, or an `FL` number float32 does not hold, past its range or
- *     below its smallest normal value.
+ *     negative zero in `FL` or `FD` (JSON writes `-0` as `0`), a `DS` or `IS` value that is not a
+ *     number, an `IS` whose decimal value a JSON number does not hold (past 2^53, or more digits
+ *     than a double keeps; a `DS` there is written as a JSON string, unless its text is longer
+ *     than the 16 bytes PS3.5 allows), an `IS` string, given or
+ *     fetched, past the range of its VR, a number whose `DS` or `IS` text would be too long for
+ *     its VR, or an `FL` number float32 does not hold, past its range or below its smallest
+ *     normal value.
  *   - `MALFORMED_VALUE` - a value not well formed for its VR: a binary value, or bulk data fetched
- *     for a VR of numbers, whose length is not a whole number of values, a `DS` or `IS` JSON string
- *     that is not one or is longer than its VR allows, a Person Name with more than three component groups, text bytes
- *     its Specific Character Set does not decode, or text for `fromDicomJson` holding a control
- *     character its VR does not allow (PS3.5 section 6.2: none but TAB, LF, FF and CR in `LT`,
- *     `ST` and `UT`, none at all elsewhere, and so never ESC).
+ *     for a VR of numbers or, under Explicit VR Big Endian, for `OW`, `OF`, `OD`, `OL` or `OV`,
+ *     whose length is not a whole number of values, a `DS` or `IS` JSON string or text fetched by
+ *     `BulkDataURI` that is not one or is longer than its VR allows, a Person Name with more than
+ *     three component groups, text bytes its Specific Character Set does not decode, or text for
+ *     `fromDicomJson`, given or fetched, holding a control character its VR does not allow
+ *     (PS3.5 section 6.2: none but TAB, LF, FF and CR in `LT`, `ST` and `UT`, none at all
+ *     elsewhere, and so never ESC).
  *   - `INVALID_JSON` - the input to `fromDicomJson` is not a DICOM JSON Model object we read: a key
  *     that is not eight hex digits, a File Meta `(0002,xxxx)` or item delimitation `(FFFE,xxxx)`
  *     tag, a tag in group `0001`, `0003`, `0005` or `0007`, which PS3.5 section 7.8.1 says
@@ -117,15 +125,15 @@ export type DicomJsonErrorCode =
 function messageOf(code: DicomJsonErrorCode): string {
   switch (code) {
     case "UNSUPPORTED_VR":
-      return "The element's VR has no DICOM JSON form we write: SV and UV are refused until their JSON form is confirmed, and a VR PS3.5 does not define has none.";
+      return "The element's VR has no DICOM JSON form we write: SV and UV values are refused until we read their form in a pinned copy of PS3.18, since a JSON number holds an integer exactly only up to 2^53, and a VR PS3.5 does not define has none.";
     case "UNSUPPORTED_ELEMENT":
       return "The element's value cannot be held as DICOM JSON metadata: an encapsulated fragment stream with no BulkDataURI, an undefined-length value that is not a Sequence, or a Sequence that was not read.";
     case "UNSUPPORTED_BYTE_ORDER":
       return "An OW, OF, OD, OL or OV value under Explicit VR Big Endian is refused: PS3.18 Annex F leaves the byte order of its InlineBinary open.";
     case "UNREPRESENTABLE_NUMBER":
-      return "A number cannot be carried exactly: NaN, an infinity or an FL or FD negative zero, a DS or IS value that is not a number or that a JSON number does not hold exactly, one too long for its VR, or an FL value outside float32's normal range.";
+      return "A number cannot be carried exactly: NaN, an infinity or an FL or FD negative zero, a DS or IS value that is not a number, an IS value a JSON number does not hold exactly, one too long for its VR, or an FL value outside float32's normal range.";
     case "MALFORMED_VALUE":
-      return "A value is not well formed for its VR: a binary length that is not a whole number of values, a DS or IS string that is not one or is too long, a Person Name with more than three component groups, text its Specific Character Set does not decode, or a control character the VR does not allow.";
+      return "A value is not well formed for its VR: a binary length that is not a whole number of values, a DS or IS string, given or fetched, that is not one or is too long, a Person Name with more than three component groups, text its Specific Character Set does not decode, or a control character the VR does not allow.";
     case "INVALID_JSON":
       return "The input is not a DICOM JSON Model object of the shape PS3.18 Annex F gives, or one value holds a delimiter its VR splits on.";
     case "BULK_DATA_UNRESOLVED":

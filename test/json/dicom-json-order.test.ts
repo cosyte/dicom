@@ -156,8 +156,10 @@ describe("attribute order (PS3.18 F.2.2)", () => {
       "00081155": 5,
       "00081156": "SYNTHETIC",
       "00081157": null,
-      "00081158": [{ b: 1 }],
+      "00081158": [{ b: 1, a: 2 }],
       "00081159": { vr: "LO", Extra: { vr: "SQ", Value: [{ b: 1, a: 2 }] } },
+      "00081160": { vr: "SQ", Value: { vr: "SQ", Value: [{ b: 1, a: 2 }] } },
+      "00081161": { vr: "LO", Value: [new Number(5), new String("SYNTHETIC"), Number.NaN] },
     } as unknown as DicomJsonDataset;
     expect(stringifyDicomJson(json)).toBe(
       JSON.stringify({
@@ -167,20 +169,136 @@ describe("attribute order (PS3.18 F.2.2)", () => {
         "00081155": 5,
         "00081156": "SYNTHETIC",
         "00081157": null,
-        "00081158": [{ b: 1 }],
+        "00081158": [{ b: 1, a: 2 }],
         "00081159": json["00081159"],
+        "00081160": json["00081160"],
+        "00081161": json["00081161"],
         "00100020": json["00100020"],
         "00101020": json["00101020"],
       }),
     );
   });
 
+  it("orders hex tags by their value, whatever the case of their letters", () => {
+    const json = {
+      "0010000b": { vr: "LO" },
+      "0010000A": { vr: "LO" },
+      "0010000c": { vr: "LO" },
+      "00100009": { vr: "LO" },
+      "0010000D": { vr: "LO" },
+      "00081032": { vr: "SQ", Value: [{ "0008010f": { vr: "SH" }, "0008010E": { vr: "SH" } }] },
+    } as unknown as DicomJsonDataset;
+    expect(tagOrder(stringifyDicomJson(json))).toEqual([
+      "00081032",
+      "0008010E",
+      "0008010f",
+      "00100009",
+      "0010000A",
+      "0010000b",
+      "0010000c",
+      "0010000D",
+    ]);
+    // Two keys of one tag, which fromDicomJson refuses, still come out in one fixed order.
+    const twice = {
+      "0010000a": { vr: "LO" },
+      "0010000A": { vr: "SH" },
+    } as unknown as DicomJsonDataset;
+    expect(tagOrder(stringifyDicomJson(twice))).toEqual(["0010000A", "0010000a"]);
+    const reversed = {
+      "0010000A": { vr: "SH" },
+      "0010000a": { vr: "LO" },
+    } as unknown as DicomJsonDataset;
+    expect(tagOrder(stringifyDicomJson(reversed))).toEqual(["0010000A", "0010000a"]);
+  });
+
+  it("calls a toJSON method as JSON.stringify calls it, with its key, once", () => {
+    const keys: string[] = [];
+    function stamped(key: string, out: unknown): { toJSON: (k: string) => unknown } {
+      return {
+        toJSON(k: string) {
+          keys.push(`${key}<-${k}`);
+          return out;
+        },
+      };
+    }
+    const json = stamped("root", {
+      "00100020": stamped("attr", { vr: "LO", Value: [stamped("value", "MRN-42")] }),
+      "00081032": {
+        vr: "SQ",
+        Value: stamped("items", [stamped("item", { "00080100": { vr: "SH" } })]),
+      },
+      "00080020": { vr: "DA", Value: [new Date(Date.UTC(2026, 0, 2))] },
+      "00080021": stamped("gone", undefined),
+    }) as unknown as DicomJsonDataset;
+    const text = stringifyDicomJson(json);
+    expect(text).toBe(
+      '{"00080020":{"vr":"DA","Value":["2026-01-02T00:00:00.000Z"]},' +
+        '"00081032":{"vr":"SQ","Value":[{"00080100":{"vr":"SH"}}]},' +
+        '"00100020":{"vr":"LO","Value":["MRN-42"]}}',
+    );
+    expect([...keys].sort()).toEqual(
+      ["root<-", "attr<-00100020", "value<-0", "items<-Value", "item<-0", "gone<-00080021"].sort(),
+    );
+    keys.length = 0;
+    // An object in a Data Set's place whose toJSON gives no Data Set is written as it gives.
+    const odd = { "00100020": { vr: "LO", Value: ["x"] }, toJSON: () => "SYNTHETIC" };
+    expect(stringifyDicomJson(odd as unknown as DicomJsonDataset)).toBe('"SYNTHETIC"');
+    expect(stringifyDicomJson(stamped("root", 5) as unknown as DicomJsonDataset)).toBe("5");
+    expect(keys).toEqual(["root<-"]);
+    // A toJSON whose result has its own toJSON: JSON.stringify calls only the first.
+    const inner = stamped("inner", "INNER");
+    const nested = {
+      "00100020": { vr: "LO", Value: [stamped("outer", inner)] },
+    } as unknown as DicomJsonDataset;
+    expect(stringifyDicomJson(nested)).toBe(JSON.stringify(nested));
+  });
+
+  it("asks a bigint's toJSON too, as JSON.stringify does", () => {
+    const proto = BigInt.prototype as unknown as { toJSON?: (this: bigint) => string };
+    proto.toJSON = function toJSON(this: bigint) {
+      return {
+        "00100020": { vr: "LO", Value: [String(this)] },
+        "00080020": { vr: "DA" },
+      } as unknown as string;
+    };
+    try {
+      const json = { "00081032": { vr: "SQ", Value: [7n] } } as unknown as DicomJsonDataset;
+      expect(stringifyDicomJson(json)).toBe(
+        '{"00081032":{"vr":"SQ","Value":[{"00080020":{"vr":"DA"},"00100020":{"vr":"LO","Value":["7"]}}]}}',
+      );
+    } finally {
+      delete proto.toJSON;
+    }
+  });
+
+  it("writes what a toJSON gives at each depth as JSON.stringify writes it, space included", () => {
+    const json = {
+      "00100020": { vr: "LO", Value: [{ toJSON: () => ({ b: [1, { c: 2 }] }) }] },
+      "00081032": { vr: "SQ", Value: { toJSON: () => [{}, { "00080100": { vr: "SH" } }] } },
+    } as unknown as DicomJsonDataset;
+    const ordered = {
+      "00081032": json["00081032"],
+      "00100020": json["00100020"],
+    };
+    for (const space of [undefined, 2, "\t"] as const) {
+      expect(stringifyDicomJson(json, space)).toBe(JSON.stringify(ordered, null, space));
+    }
+  });
+
   it("refuses with a DicomJsonError, not the error it met", () => {
     const cyclic: Record<string, unknown> = { vr: "SQ" };
     cyclic["Value"] = [{ "00080100": cyclic }];
+    const throwing = {
+      toJSON(): never {
+        throw new Error("SYNTHETIC failure holding MRN-42");
+      },
+    };
     for (const json of [
       { "00100020": { vr: "LO", Value: [10n] } },
       { "00081032": cyclic },
+      { toJSON: () => undefined },
+      { "00100020": throwing },
+      { "00100020": { vr: "LO", Value: [throwing] } },
     ] as unknown as DicomJsonDataset[]) {
       let code: string | undefined;
       try {

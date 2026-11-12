@@ -187,8 +187,10 @@ ascending. `toDicomJson` adds them in that order at every depth, but a JavaScrip
 all-digit key with no leading zero first, whatever order it was added in, so `JSON.stringify`
 writes a tag such as `60000010` (Overlay Rows) or `20000010` (Number of Copies) ahead of
 `00080005`. `stringifyDicomJson(json, space?)` writes the same text as `JSON.stringify` with every
-Data Set's attributes in ascending order; where the object already lists them so, the two give the
-same text. `JSON.parse` reads either back.
+Data Set's attributes in ascending order of their tags, whatever the case of their hex letters;
+where the object already lists them so, the two give the same text. A `toJSON` method is called as
+`JSON.stringify` calls it, once, with its key, and what it returns is written in its place.
+`JSON.parse` reads either back.
 
 ```ts runnable
 import {
@@ -225,7 +227,7 @@ How each VR is written, and read back the same way:
 | `AE` `AS` `CS` `DA` `DT` `LO` `SH` `TM` `UC` `UI` | `Value`: strings split on backslashes, padding removed, `null` for an empty value of several                                            |
 | `LT` `ST` `UT` `UR`                               | `Value`: one string, a backslash kept as a character                                                                                    |
 | `PN`                                              | `Value`: objects of `Alphabetic`, `Ideographic` and `Phonetic` component groups                                                         |
-| `DS` `IS`                                         | `Value`: JSON numbers of the text's exact decimal value; `fromDicomJson` also reads a JSON string, written as its own text              |
+| `DS` `IS`                                         | `Value`: JSON numbers of the text's exact decimal value, and a `DS` no number holds as a JSON string of its text; strings read as text  |
 | `US` `SS` `UL` `SL` `FL` `FD`                     | `Value`: JSON numbers                                                                                                                   |
 | `AT`                                              | `Value`: tags as eight uppercase hex digits                                                                                             |
 | `SQ`                                              | `Value`: nested Data Sets, `{}` for an empty Item                                                                                       |
@@ -247,15 +249,20 @@ one it throws for is refused with `CONVERSION_FAILED`.
 `UT` and `UV`, and `fromDicomJson` takes one on each: a US lookup table or an `FL` list by URI is
 handed to `resolveBulkData` with its VR, as a binary value is. On any other VR, or beside a
 `Value`, a `BulkDataURI` is refused with `INVALID_JSON`; `InlineBinary` stays with the seven binary
-VRs. Text fetched by URI is written as the resolver gives it, in the Data Set's character set.
-Bytes for a VR of numbers that are not a whole number of values are refused with
-`MALFORMED_VALUE`.
+VRs. Text fetched by URI is written as the resolver gives it, in the Data Set's character set,
+and held to the checks the same text given as a `Value` is held to, with the same codes: a `DS` or
+`IS` that is not one, or is longer than its VR allows, and a control character its VR does not
+allow are refused with `MALFORMED_VALUE`, an `IS` out of range with `UNREPRESENTABLE_NUMBER`, and
+bytes its Specific Character Set does not define with `UNSUPPORTED_CHARACTER_SET` (bytes that are
+not UTF-8 under `ISO_IR 192`, which no JSON text can be, with `MALFORMED_VALUE`). Bytes for a VR of
+numbers that are not a whole number of values are refused with `MALFORMED_VALUE`.
 
 **Byte order.** A DICOMweb service serves uncompressed bulk data in Little Endian byte order
 (PS3.18, in the retrieve section on bulk data), so `fromDicomJson` takes the resolver's bytes as
 Little Endian: under Explicit VR Big Endian it swaps each value of `OW`, `US` and `SS` (two
 bytes), `OF`, `OL`, `UL`, `SL` and `FL` (four) and `OD`, `OV`, `FD`, `SV` and `UV` (eight), and
-leaves `OB`, `UN` and text as they are. An `InlineBinary` is another matter: the annex defines it
+leaves `OB`, `UN` and text as they are. Bytes that are not a whole number of values of their VR
+are refused there with `MALFORMED_VALUE`. An `InlineBinary` is another matter: the annex defines it
 as the base64 of the Value Field and leaves its byte order to PS3.19, which names none, so an
 `OW`, `OF`, `OD`, `OL` or `OV` `InlineBinary` under Big Endian is still refused with
 `UNSUPPORTED_BYTE_ORDER` rather than guessed at. `toDicomJson` refuses those VRs under Big Endian
@@ -308,8 +315,14 @@ code; it never writes a value it cannot carry faithfully:
   an `=` or a backslash in a Person Name group, is refused with `INVALID_JSON` rather than split
   into several values or groups. A `^` inside a group is a component delimiter and is kept.
 - **`DS` and `IS` numbers.** A JSON number is a double, so a `DS` whose decimal value no double
-  holds exactly, such as `9007199254740993` (past 2^53) or `0.10000000000000001`, is refused with
-  `UNREPRESENTABLE_NUMBER` rather than rounded. Only the form of the text may change.
+  holds exactly, such as `9007199254740993` (past 2^53) or `1e400`, is written as a JSON string of
+  its text, which the annex allows, rather than rounded: `toDicomJson` gives
+  `{ vr: "DS", Value: ["9007199254740993"] }`, and `fromDicomJson` writes that text back. The
+  string drops the value's leading and trailing padding spaces, and is written only where it is a
+  `DS` of at most the 16 bytes PS3.5 allows, which is all `fromDicomJson` reads; a longer one, such
+  as `0.10000000000000001`, is refused with `UNREPRESENTABLE_NUMBER`. A double holds every `IS` of
+  the 12 characters PS3.5 allows it; a longer one no double holds is refused with
+  `UNREPRESENTABLE_NUMBER`. Only the form of the text may change.
 - **`FL` numbers.** A JSON number is rounded to the nearest float32, as any `FL` writer rounds it.
   One past float32's range, or below its smallest normal value and not a float32 itself, is
   refused with `UNREPRESENTABLE_NUMBER`: `1e-50` would otherwise be written as 0.
@@ -343,6 +356,18 @@ code; it never writes a value it cannot carry faithfully:
   message could hold a value; a `resolveBulkData` that cannot resolve a URI should return
   `undefined`, which is refused with `BULK_DATA_UNRESOLVED`.
 
+A `DS` past 2^53 comes back as the same text:
+
+```ts runnable
+import { fromDicomJson, parseDicom, serializeDicom, toDicomJson } from "@cosyte/dicom";
+
+// Synthetic value: Patient's Weight (0010,1030) of 2^53 + 1, which no double holds.
+const fileMeta = { transferSyntaxUID: "1.2.840.10008.1.2.1" };
+const ds = fromDicomJson({ "00101030": { vr: "DS", Value: ["9007199254740993"] } }, { fileMeta });
+const json = toDicomJson(parseDicom(serializeDicom(ds)));
+json["00101030"]; // => { vr: "DS", Value: ["9007199254740993"] }
+```
+
 **Where the bytes can differ.** The JSON Model does not record everything Part 10 does, so the
 round trip is byte-identical only where the source already wrote what `fromDicomJson` writes:
 
@@ -354,8 +379,8 @@ round trip is byte-identical only where the source already wrote what `fromDicom
   JavaScript's shortest text for it, so `1.0`
   comes back as `1`, `+5` as `5` and `-0` as `0`; where that text is past the 16 characters `DS`
   allows, the value is written as its significant digits and a power of ten, so `100E14` comes
-  back as `1e16`. The decimal value never changes; a text whose value a JSON number does not hold
-  is refused, as above.
+  back as `1e16`. The decimal value never changes; a `DS` whose value a JSON number does not hold
+  is written as its text, as above.
 - **Padding.** Values are padded as PS3.5 pads them, `UI` with a NUL and other text with a space,
   so a `UI` a source padded with a space comes back padded with a NUL. Trailing spaces of a value
   are removed in the JSON.
@@ -369,16 +394,19 @@ round trip is byte-identical only where the source already wrote what `fromDicom
   Set with `DIRECTORY_OFFSET_UNRESOLVED`.
 
 **What is refused, with a `DicomJsonError`.** The converters refuse rather than change or guess a
-value, and the message carries no value. `UNSUPPORTED_VR`: `SV` and `UV` with a value.
+value, and the message carries no value. `UNSUPPORTED_VR`: `SV` and `UV` with a `Value`. A JSON
+number holds an integer exactly only up to 2^53, and these VRs hold integers up to 2^63 and 2^64,
+so we refuse them until we have read the form the annex gives them in a copy of PS3.18 pinned
+here, rather than write one we guessed. `fromDicomJson` takes them by `BulkDataURI`, as bytes.
 `BULK_DATA_URI_REQUIRED`: a bulk value with no URI and no `inlineBulkData`. `VR_MISMATCH`: an
 attribute whose VR the written Data Set does not read back with.
 `UNSUPPORTED_ELEMENT`: encapsulated Pixel Data with no URI from `bulkDataUri`, and any other
 undefined-length value that is not a Sequence. `UNSUPPORTED_BYTE_ORDER`: `OW`, `OF`, `OD`, `OL`
 and `OV` under Explicit VR Big Endian, as an `InlineBinary` or from `toDicomJson`.
 `UNREPRESENTABLE_NUMBER`: NaN, an infinity, an `FL` or `FD` negative zero, a `DS` or `IS` that is
-not a number or whose value no JSON number holds exactly, or a number its VR cannot hold.
-`MALFORMED_VALUE`: a binary length that is not a whole number of values, a `DS` or `IS` string
-that is not one or is longer than its VR allows, a Person Name of more than three groups, text bytes the Specific Character Set does not decode, or a control character
+not a number, an `IS` whose value no JSON number holds exactly, or a number its VR cannot hold.
+`MALFORMED_VALUE`: a binary length that is not a whole number of values, a `DS` or `IS` string,
+given or fetched, that is not one or is longer than its VR allows, a Person Name of more than three groups, text bytes the Specific Character Set does not decode, or a control character
 the VR does not allow. `UNSUPPORTED_CHARACTER_SET`: a Specific Character Set of more than one value
 or one not carried, at any depth, or text `fromDicomJson` cannot encode, which is any character
 outside 7-bit ASCII under a set other than the default repertoire, `ISO_IR 100` and `ISO_IR 192`.

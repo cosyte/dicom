@@ -145,8 +145,10 @@ const BULK_DATA_URI_VRS: readonly [string, string][] = [
 describe("BulkDataURI on each VR PS3.18 F.2.2 names", () => {
   it("hands the URI and the VR to resolveBulkData and writes the bytes it returns", () => {
     expect(BULK_DATA_URI_VRS).toHaveLength(21);
-    const bytes = Buffer.from("SYNTHETIC 12345678 VALUE", "latin1");
     for (const [tag, vr] of BULK_DATA_URI_VRS) {
+      // Text fetched for a DS or IS must be one, as it must be inline.
+      const text = vr === "DS" || vr === "IS" ? "12345678\\-90" : "SYNTHETIC 12345678 VALUE";
+      const bytes = Buffer.from(text, "latin1");
       const seen: [string, string][] = [];
       const options: FromDicomJsonOptions = {
         ...LE,

@@ -314,20 +314,9 @@ describe("numbers", () => {
     expect(one("00200013", "IS", latin1("-120"))).toEqual({ vr: "IS", Value: [-120] });
   });
 
-  it("refuses DS and IS text that is not a number, or not a finite one", () => {
-    for (const text of [
-      "x5",
-      "5x",
-      "0x10",
-      "0b1 ",
-      "1.2.3",
-      "e5 ",
-      "1e ",
-      "1e+",
-      "+",
-      ".",
-      "1e400 ",
-    ]) {
+  it("refuses DS and IS text that is not a number, and writes a DS past a double as text", () => {
+    expect(one("00101020", "DS", latin1("1e400 "))).toEqual({ vr: "DS", Value: ["1e400"] });
+    for (const text of ["x5", "5x", "0x10", "0b1 ", "1.2.3", "e5 ", "1e ", "1e+", "+", "."]) {
       expect(refusal(() => one("00101020", "DS", latin1(text)))).toBe("UNREPRESENTABLE_NUMBER");
     }
     for (const text of ["x5", "5x", "0x10", "0b1 ", "1.5 ", "+ "]) {
@@ -600,15 +589,15 @@ describe("DicomJsonError", () => {
   it("carries the code, the rendered tag and fixed text, and nothing else", () => {
     const messages: Record<string, string> = {
       UNSUPPORTED_VR:
-        "The element's VR has no DICOM JSON form we write: SV and UV are refused until their JSON form is confirmed, and a VR PS3.5 does not define has none.",
+        "The element's VR has no DICOM JSON form we write: SV and UV values are refused until we read their form in a pinned copy of PS3.18, since a JSON number holds an integer exactly only up to 2^53, and a VR PS3.5 does not define has none.",
       UNSUPPORTED_ELEMENT:
         "The element's value cannot be held as DICOM JSON metadata: an encapsulated fragment stream with no BulkDataURI, an undefined-length value that is not a Sequence, or a Sequence that was not read.",
       UNSUPPORTED_BYTE_ORDER:
         "An OW, OF, OD, OL or OV value under Explicit VR Big Endian is refused: PS3.18 Annex F leaves the byte order of its InlineBinary open.",
       UNREPRESENTABLE_NUMBER:
-        "A number cannot be carried exactly: NaN, an infinity or an FL or FD negative zero, a DS or IS value that is not a number or that a JSON number does not hold exactly, one too long for its VR, or an FL value outside float32's normal range.",
+        "A number cannot be carried exactly: NaN, an infinity or an FL or FD negative zero, a DS or IS value that is not a number, an IS value a JSON number does not hold exactly, one too long for its VR, or an FL value outside float32's normal range.",
       MALFORMED_VALUE:
-        "A value is not well formed for its VR: a binary length that is not a whole number of values, a DS or IS string that is not one or is too long, a Person Name with more than three component groups, text its Specific Character Set does not decode, or a control character the VR does not allow.",
+        "A value is not well formed for its VR: a binary length that is not a whole number of values, a DS or IS string, given or fetched, that is not one or is too long, a Person Name with more than three component groups, text its Specific Character Set does not decode, or a control character the VR does not allow.",
       INVALID_JSON:
         "The input is not a DICOM JSON Model object of the shape PS3.18 Annex F gives, or one value holds a delimiter its VR splits on.",
       BULK_DATA_UNRESOLVED:
