@@ -77,6 +77,9 @@ function readTolerantString(ds: Dataset, tag: Tag, issues: PatientIssue[]): stri
   const v = readValue(ds, tag, ["strings", "text"], issues);
   if (v === undefined) return undefined;
   const text = v.kind === "strings" ? v.values[0] : v.value;
+  // A decoded `strings` value always holds at least one value (it is a split), so `text` is never
+  // undefined here; the check is for the type checker only.
+  // Stryker disable next-line ConditionalExpression: equivalent, `text` is never undefined here
   return text !== undefined && text.length > 0 ? text : undefined;
 }
 
