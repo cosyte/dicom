@@ -203,18 +203,24 @@ describe("Specific Character Set", () => {
     expect(fromDicomJson(utf8, LE).get("00080060")?.rawBytes).toEqual(latin1("ÉX"));
   });
 
-  it("writes Latin-1 text under no Specific Character Set, an empty one, ISO_IR 6 and ISO_IR 100", () => {
+  it("writes Latin-1 text under ISO_IR 100, and refuses it under the default repertoire, which is ISO-IR 6", () => {
     const name = { vr: "PN", Value: [{ Alphabetic: "JÉRÔME^ÿ" }] };
     const bytes = latin1("JÉRÔME^ÿ");
-    expect(valueBytes("00100010", name)).toEqual(bytes);
+    const latin = fromDicomJson(
+      { "00080005": { vr: "CS", Value: ["ISO_IR 100"] }, "00100010": name },
+      LE,
+    );
+    expect(latin.get("00100010")?.rawBytes).toEqual(bytes);
+    expect(refusal(() => valueBytes("00100010", name))).toBe("UNSUPPORTED_CHARACTER_SET");
     for (const charset of [
       { vr: "CS" },
       { vr: "CS", Value: [null] },
       { vr: "CS", Value: ["ISO_IR 6"] },
-      { vr: "CS", Value: ["ISO_IR 100"] },
     ]) {
-      const ds = fromDicomJson({ "00080005": charset, "00100010": name }, LE);
-      expect(ds.get("00100010")?.rawBytes).toEqual(bytes);
+      expect(
+        refusal(() => fromDicomJson({ "00080005": charset, "00100010": name }, LE)),
+        JSON.stringify(charset),
+      ).toBe("UNSUPPORTED_CHARACTER_SET");
     }
   });
 

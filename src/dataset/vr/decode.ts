@@ -12,6 +12,9 @@
  *   - **Charset**: `LO SH UC LT ST UT PN` decode through `(0008,0005)`;
  *     the remaining string VRs are the Default Repertoire (ASCII, decoded
  *     Latin-1-lenient with `DICOM_NON_ASCII_IN_ASCII_VR` on stray bytes).
+ *     A single-byte set decodes by its own table (`./single-byte`), and a
+ *     byte it does not define reads as U+FFFD with
+ *     `DICOM_CHARSET_BYTES_UNDECODABLE`, once per value.
  *     A multi-valued `(0008,0005)` decodes with ISO 2022 code extensions
  *     (`./iso2022`), resetting to Value 1 at the VR's own delimiters, and
  *     flags `DICOM_CHARSET_ESCAPE_UNDECLARED`,
@@ -53,11 +56,12 @@ import {
   elementValueSource,
   elementValueStart,
 } from "../element.js";
-import { decodeText } from "./charset.js";
+import { decodeText, singleByteSetIn } from "./charset.js";
 import { parseDate, parseDateTime, parseTime } from "./datetime.js";
 import { decodeWithCodeExtensions, usesCodeExtensions, type DelimiterClass } from "./iso2022.js";
 import { decodeAttributeTags, decodeBigInts, decodeNumbersIn } from "./numeric.js";
 import { parsePersonName } from "./person-name.js";
+import { decodeSingleByte } from "./single-byte.js";
 import type { DicomDate, DicomDateTime, DicomTime, DicomValue, PersonName } from "./types.js";
 
 const BINARY_VRS: ReadonlySet<VR> = new Set<VR>(["OB", "OD", "OF", "OL", "OV", "OW", "UN"]);
@@ -144,9 +148,10 @@ function delimiterClass(vr: VR): DelimiterClass {
 
 /**
  * `true` when every byte is ASCII other than SO (`0x0E`), SI (`0x0F`) and ESC
- * (`0x1B`). Every decoder `decodeText` can pick (each single-byte table, UTF-8,
- * GB18030, GBK, EUC-KR, Shift_JIS, and ISO-2022-JP outside an escape) maps
- * those bytes to themselves, so their Latin-1 reading is their decoding.
+ * (`0x1B`). Every multi-byte decoder `decodeText` can pick (UTF-8, GB18030,
+ * GBK, EUC-KR, and ISO-2022-JP outside an escape) maps those bytes to
+ * themselves, so their Latin-1 reading is their decoding. A single-byte set
+ * never comes here: its table reads ASCII in one pass already.
  */
 function isPlainAscii(src: Buffer, start: number, end: number): boolean {
   for (let i = start; i < end; i++) {
@@ -171,6 +176,12 @@ function charsetText(
     s += 3;
   }
   if (!usesCodeExtensions(charset)) {
+    const set = singleByteSetIn(charset);
+    if (set !== undefined) {
+      const decoded = decodeSingleByte(src.subarray(s, end), set, delimiterClass(vr) !== "text");
+      if (decoded.bytesUndecodable) warn(charsetBytesUndecodable(position(), tag, vr));
+      return decoded.text;
+    }
     if (isPlainAscii(src, s, end)) return src.toString("latin1", s, end);
     return decodeText(src.subarray(s, end), charset);
   }

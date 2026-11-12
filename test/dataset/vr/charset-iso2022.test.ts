@@ -554,6 +554,37 @@ describe("AC-7: a line, value or PN component that ends without switching back",
   });
 });
 
+describe("JIS X 0201 under code extensions: ISO-IR 14 in G0 and ISO-IR 13 in G1", () => {
+  // PS3.5 section 6.1.2.3: under "ISO 2022 IR 13" 05/12 is a YEN SIGN in ISO-IR 14, which also has
+  // an OVERLINE at 07/14; a 05/12 byte still separates the Values of a multi-valued VR.
+  it("an LT reads 5C as YEN SIGN and 7E as OVERLINE while ISO-IR 14 is in G0", () => {
+    const value = parsed("ISO 2022 IR 13\\ISO 2022 IR 87", "LT", hex("41 5C 42 7E 43")).value;
+    expect(textOf(value)).toBe("A¥B‾C");
+    expect(codes(value)).toStrictEqual([]);
+  });
+
+  it("an LO still splits on 5C, and reads 7E as OVERLINE", () => {
+    const value = parsed("ISO 2022 IR 13\\ISO 2022 IR 87", "LO", hex("41 7E 5C 42")).value;
+    expect(stringsOf(value)).toStrictEqual(["A‾", "B"]);
+  });
+
+  it("ESC ( J switches to ISO-IR 14 from ISO-IR 6, and ESC ( B back", () => {
+    const bytes = hex("5C 1B 28 4A 5C 7E 1B 28 42 5C 7E");
+    expect(decodeText(bytes, ["", "ISO 2022 IR 13"])).toBe("\\¥‾\\~");
+  });
+
+  it.each([100, 101, 109, 110, 144, 127, 126, 138, 148, 203, 166, 13])(
+    "every GR byte of ISO-IR %i in G1 reads as its single-valued twin",
+    (ir) => {
+      const term = `ISO 2022 IR ${String(ir)}`;
+      for (let byte = 0xa0; byte <= 0xff; byte += 1) {
+        const withExtensions = decodeText(Buffer.from([byte]), [term, ""]);
+        expect(withExtensions, byte.toString(16)).toBe(decodeText(Buffer.from([byte]), [term]));
+      }
+    },
+  );
+});
+
 describe("AC-9: every other (0008,0005) decodes exactly as the pin's single-label path", () => {
   const pin = (bytes: Buffer, t: readonly string[]): string =>
     new TextDecoder(resolveDecoderLabel(t)).decode(bytes);

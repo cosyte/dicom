@@ -3,14 +3,14 @@
  * one that does not read back as the text the JSON gave:
  *
  *   - A C1 code point (U+0080 to U+009F) under the default repertoire, `ISO_IR 6` and `ISO_IR 100`
- *     is written as one ISO 8859-1 byte, and the reader decodes those sets with the runtime's
- *     `TextDecoder("latin1")`, which the Encoding Standard maps to windows-1252: that reads 27 of
- *     those bytes as other characters (0x80 as the euro sign). The tests ask the reader's own
- *     decoder which bytes differ, so they hold the refusal exactly there on any runtime.
+ *     is written as one ISO 8859-1 byte, which no single-byte set defines (PS3.5 section 6.1.1),
+ *     and the reader decodes it as U+FFFD. It once decoded these sets as windows-1252, which let
+ *     five of the 32 back and read the rest as other characters (0x80 as the euro sign).
+ *   - Any other character past U+007F under the default repertoire, which is ISO-IR 6.
  *   - A lone surrogate under `ISO_IR 192` is written as the UTF-8 of U+FFFD.
  *
- * Both were written and read back as other text with no refusal. It also refuses an element in an
- * odd group below `0008`, which PS3.5 section 7.8.1 says shall not be used.
+ * It also refuses an element in an odd group below `0008`, or in group `FFFF`, which PS3.5 section
+ * 7.8.1 says shall not be used.
  *
  * Every value is synthetic.
  *
@@ -44,17 +44,13 @@ function refusal(fn: () => unknown): string | undefined {
   return undefined;
 }
 
-/** `true` when the reader decodes the one byte `cp` under `ISO_IR 100` as U+00`cp` itself. */
-function readsBack(cp: number): boolean {
-  return decodeText(Buffer.from([cp]), ["ISO_IR 100"]) === String.fromCharCode(cp);
-}
-
-/** `true` when the reader decodes the Latin-1 sets as windows-1252, as Node and Deno do. */
-const WINDOWS_1252 = !readsBack(0x80);
-
-/** The code `fn` is refused with under the reader's Latin-1 decoding of the C1 code point `cp`. */
+/**
+ * The code a C1 code point is refused with: every one of them, since no single-byte set defines
+ * `0x80` to `0x9F` (PS3.5 section 6.1.1) and the reader decodes each as U+FFFD.
+ */
 function c1Code(cp: number): string | undefined {
-  return readsBack(cp) ? undefined : DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET;
+  expect(decodeText(Buffer.from([cp]), ["ISO_IR 100"])).toBe("�");
+  return DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET;
 }
 
 function withCharset(charset: string | undefined, attrs: DicomJsonDataset): DicomJsonDataset {
@@ -78,8 +74,43 @@ describe("text that does not read back as it was sent", () => {
         else refused += 1;
       }
     }
-    // windows-1252 reads all but 0x81, 0x8D, 0x8F, 0x90 and 0x9D as other characters.
-    expect(refused).toBe(WINDOWS_1252 ? 27 * 3 : 0);
+    // All 32, under each of the three; windows-1252 let 0x81, 0x8D, 0x8F, 0x90 and 0x9D through.
+    expect(refused).toBe(32 * 3);
+  });
+
+  it("refuses a Latin-1 letter under the default repertoire, which is ISO-IR 6, and keeps it under ISO_IR 100", () => {
+    for (const charset of [undefined, "ISO_IR 6"]) {
+      const json = withCharset(charset, { "00100020": { vr: "LO", Value: ["SYNéID"] } });
+      expect(
+        refusal(() => fromDicomJson(json, LE)),
+        String(charset),
+      ).toBe(DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET);
+    }
+    const latin = withCharset("ISO_IR 100", { "00100020": { vr: "LO", Value: ["SYNéID"] } });
+    expect(toDicomJson(fromDicomJson(latin, LE))).toEqual(latin);
+  });
+
+  it("reads JIS X 0201 as the reader does: 0x5C splits an LO and is YEN SIGN in an LT", () => {
+    const json = withCharset("ISO_IR 13", {
+      "00100020": { vr: "LO", Value: ["SYN", "ID"] },
+      "00104000": { vr: "LT", Value: ["SYN"] },
+    });
+    const ds = fromDicomJson(json, LE);
+    expect(toDicomJson(ds)["00100020"]?.Value).toEqual(["SYN", "ID"]);
+    const lt = ds.get("00104000");
+    expect(lt?.value).toMatchObject({ kind: "text", value: "SYN" });
+    // The bytes S Y N 5C 7E, written as Part 10 under ISO_IR 13 and read back.
+    const raw = withCharset("ISO_IR 13", { "00104000": { vr: "LT", Value: ["SYN\\~"] } });
+    expect(refusal(() => fromDicomJson(raw, LE))).toBe(
+      DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET,
+    );
+  });
+
+  it("refuses a tilde in an LT under ISO_IR 13, where 0x7E is OVERLINE", () => {
+    const json = withCharset("ISO_IR 13", { "00104000": { vr: "LT", Value: ["SYN~ID"] } });
+    expect(refusal(() => fromDicomJson(json, LE))).toBe(
+      DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET,
+    );
   });
 
   it("refuses the reviewer's two inputs: U+0080 in an LO and U+0092 in a Person Name", () => {
@@ -163,6 +194,16 @@ describe("odd groups below 0008", () => {
           group,
         ).toBe(DICOM_JSON_ERROR_CODES.INVALID_JSON);
       }
+    }
+  });
+
+  it("refuses an element in group FFFF, which the same clause rules out, at the top and in an Item", () => {
+    const top: DicomJsonDataset = { FFFF0010: { vr: "LO", Value: ["SYN"] } };
+    const nested: DicomJsonDataset = {
+      "0040A730": { vr: "SQ", Value: [{ FFFF1001: { vr: "UN", InlineBinary: "AAA=" } }] },
+    };
+    for (const json of [top, nested]) {
+      expect(refusal(() => fromDicomJson(json, LE))).toBe(DICOM_JSON_ERROR_CODES.INVALID_JSON);
     }
   });
 

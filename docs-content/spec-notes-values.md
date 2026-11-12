@@ -57,31 +57,31 @@ Each temporal and name payload keeps the on-wire string beside the parsed parts,
 when the parse is partial. `valid` is `true` only when the whole value parsed cleanly; when it is
 `false`, `raw` is the source of truth and the numeric fields are absent rather than guessed.
 
-| Export            | The value it carries                                                                                                                                             |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `DicomValue`      | The discriminated union itself. Switch on `.kind`.                                                                                                               |
-| `DicomDate`       | A `DA`: `raw`, `valid`, and `year` / `month` / `day` when it parsed.                                                                                              |
-| `DicomTime`       | A `TM`: `raw`, `valid`, `hours` / `minutes` / `seconds`, and `fractionalSeconds` as a number in `[0,1)`.                                                          |
+| Export            | The value it carries                                                                                                                                                                                |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DicomValue`      | The discriminated union itself. Switch on `.kind`.                                                                                                                                                  |
+| `DicomDate`       | A `DA`: `raw`, `valid`, and `year` / `month` / `day` when it parsed.                                                                                                                                |
+| `DicomTime`       | A `TM`: `raw`, `valid`, `hours` / `minutes` / `seconds`, and `fractionalSeconds` as a number in `[0,1)`.                                                                                            |
 | `DicomDateTime`   | A `DT`: the date and time parts together, plus `offsetMinutes` as a signed UTC offset when the value carried one. Without an offset it is a **local** time; decide the offset at your own boundary. |
-| `PersonName`      | A `PN`: up to three component groups, `alphabetic` always present, `ideographic` and `phonetic` only when the value supplied them (PS3.5 §6.2.1.1).               |
-| `PersonNameGroup` | One of those groups: `familyName`, `givenName`, `middleName`, `namePrefix`, `nameSuffix`, never flattened into a display string.                                  |
+| `PersonName`      | A `PN`: up to three component groups, `alphabetic` always present, `ideographic` and `phonetic` only when the value supplied them (PS3.5 §6.2.1.1).                                                 |
+| `PersonNameGroup` | One of those groups: `familyName`, `givenName`, `middleName`, `namePrefix`, `nameSuffix`, never flattened into a display string.                                                                    |
 
 ### Decoding a value yourself
 
 The pieces the `.value` getter uses are exported, for the cases where you hold bytes rather than an
 `Element`, or a string rather than an element at all. None of them throws.
 
-| Export                       | What it does                                                                                                                             |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `decodeElementValue`         | The decode itself: takes an `Element` and returns its `DicomValue`. This is what `.value` calls and caches.                              |
-| `parsePersonName`            | Parses one `PN` string into a `PersonName`.                                                                                              |
-| `parseDate`                  | Parses one `DA` string, and reports whether it used the legacy `YYYY.MM.DD` form.                                                        |
-| `parseTime`                  | Parses one `TM` string.                                                                                                                  |
-| `parseDateTime`              | Parses one `DT` string, and reports a non-standard UTC offset.                                                                           |
-| `parseSpecificCharacterSet`  | Splits a `(0008,0005)` value into its defined terms. A component outside the closed table reads `<withheld>` rather than being returned.  |
-| `isKnownCharsetTerm`         | Whether a defined term is one this build can map to a decoder.                                                                           |
-| `resolveDecoderLabel`        | The `TextDecoder` label to use for a term list, preferring a multibyte decoder and falling back to the default repertoire. A multi-valued set decodes with code extensions instead (see [Character sets](#character-sets)). |
-| `decodeText`                 | Decodes bytes under the terms, never throwing. A multi-valued set decodes with the code extensions of ISO 2022; any other decodes under the resolved label, where an unsupported label falls back to UTF-8, then to Latin-1. |
+| Export                      | What it does                                                                                                                                                                                                                                                                  |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `decodeElementValue`        | The decode itself: takes an `Element` and returns its `DicomValue`. This is what `.value` calls and caches.                                                                                                                                                                   |
+| `parsePersonName`           | Parses one `PN` string into a `PersonName`.                                                                                                                                                                                                                                   |
+| `parseDate`                 | Parses one `DA` string, and reports whether it used the legacy `YYYY.MM.DD` form.                                                                                                                                                                                             |
+| `parseTime`                 | Parses one `TM` string.                                                                                                                                                                                                                                                       |
+| `parseDateTime`             | Parses one `DT` string, and reports a non-standard UTC offset.                                                                                                                                                                                                                |
+| `parseSpecificCharacterSet` | Splits a `(0008,0005)` value into its defined terms. A component outside the closed table reads `<withheld>` rather than being returned.                                                                                                                                      |
+| `isKnownCharsetTerm`        | Whether a defined term is one this build can map to a decoder.                                                                                                                                                                                                                |
+| `resolveDecoderLabel`       | The `TextDecoder` label for a term list, preferring a multibyte decoder. `decodeText` uses it only for a multi-byte set: for a single-byte set it names the nearest WHATWG decoder (`latin1` is windows-1252), not the set (see [Character sets](#character-sets)).           |
+| `decodeText`                | Decodes bytes under the terms, never throwing. A multi-valued set decodes with the code extensions of ISO 2022, a single-byte set (or none) by its own table, and a multi-byte set under the resolved label, where an unsupported label falls back to UTF-8, then to Latin-1. |
 
 ### Converting a date, a time or a datetime
 
@@ -90,13 +90,13 @@ usually wants one. `toObject`, `toISO`, and `toDate` take any of the three and p
 single surface. Every `@cosyte/*` parser that decodes a date exports the same three names with the
 same meanings, so a caller that learns them here can read a timestamp out of any of them.
 
-| Export          | What it does                                                                                                                              |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `toObject`      | The calendar components the value stated, as a frozen `DateParts`. `undefined` for an invalid value.                                      |
-| `toISO`         | An ISO-8601 string truncated to the stated precision. `undefined` for an invalid value.                                                   |
-| `toDate`        | An absolute-instant `Date`, but only where the zone is determinate. `undefined` otherwise.                                                |
-| `DateParts`     | The shared result shape: `year` / `month` / `day` / `hour` / `minute` / `second` / `millisecond` / `offsetMinutes`, all optional.         |
-| `ToDateOptions` | `toDate`'s only option: `{ assumeOffsetMinutes }`, and no other key.                                                                       |
+| Export          | What it does                                                                                                                      |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `toObject`      | The calendar components the value stated, as a frozen `DateParts`. `undefined` for an invalid value.                              |
+| `toISO`         | An ISO-8601 string truncated to the stated precision. `undefined` for an invalid value.                                           |
+| `toDate`        | An absolute-instant `Date`, but only where the zone is determinate. `undefined` otherwise.                                        |
+| `DateParts`     | The shared result shape: `year` / `month` / `day` / `hour` / `minute` / `second` / `millisecond` / `offsetMinutes`, all optional. |
+| `ToDateOptions` | `toDate`'s only option: `{ assumeOffsetMinutes }`, and no other key.                                                              |
 
 Four rules make this surface worth having, and each one is a decision the naive version gets wrong.
 
@@ -195,10 +195,35 @@ sequence decodes the same way a top-level one does. An unsupported charset term 
 
 **With one Value there are no code extensions.** A single-valued `(0008,0005)` (`ISO_IR 192`
 UTF-8, the ISO-8859 family, `ISO_IR 13`, `ISO_IR 166`, `GB18030`, `GBK`) decodes each value with
-one decoder, as PS3.5 section 6.1.2.3 prescribes for a single Value. A multi-byte term sent alone,
-such as `ISO 2022 IR 149`, is not conformant (PS3.3 makes its multi-byte code-extension terms
-Value 2 to n), and it gets the same single-decoder treatment: no Value 1 reset and none of the
-warnings below.
+the table of that one set, as PS3.5 section 6.1.2.3 prescribes for a single Value. A multi-byte
+term sent alone, such as `ISO 2022 IR 149`, is not conformant (PS3.3 makes its multi-byte
+code-extension terms Value 2 to n), and it gets the same single-table treatment: no Value 1 reset
+and none of the code-extension warnings below.
+
+**A single-byte set decodes by its own table, every byte of it.** That is the default repertoire
+(no `(0008,0005)`, an empty one, or `ISO_IR 6`), each ISO 8859 part, TIS 620 (`ISO_IR 166`) and
+JIS X 0201 (`ISO_IR 13`), with or without code extensions:
+
+- The default repertoire is ISO-IR 6 (PS3.5 section 6.1.2.1), so it defines nothing at `0x80` to
+  `0xFF`. A file that writes Latin-1 letters with no `(0008,0005)` reads them as U+FFFD, with the
+  warning below, and its bytes stay on `Element.rawBytes`.
+- No set defines `0x80` to `0x9F`: "characters from the C1 set shall not be used" (PS3.5 section
+  6.1.1).
+- At `0xA0` to `0xFF`, each set reads as the Unicode Consortium's mapping file for it, except
+  where that file maps a later edition than ISO-IR registered: `ISO_IR 126` (ISO-IR 126) has no
+  `0xA4`, `0xA5` or `0xAA`, which ISO 8859-7:2003 added, and `ISO_IR 138` (ISO-IR 138) has no
+  `0xFD` or `0xFE`, which ISO 8859-8:1999 added.
+- Under `ISO_IR 13`, ISO-IR 14 is in G0 and ISO-IR 13 in G1, as JIS X 0201 has them. `0x7E` is
+  OVERLINE, and `0x5C` is YEN SIGN (PS3.5 section 6.1.2.3) in `ST`, `LT` and `UT`; in `PN`, `LO`,
+  `SH` and `UC` it separates Values, which the same clause says it does whatever character it is,
+  and reads as `\`. `0xA1` to `0xDF` are the half-width katakana; a byte past them, and the first
+  byte of what Shift_JIS would read as a two-byte character, is undefined.
+
+A byte the set does not define reads as U+FFFD, never as another set's character, and the value
+carries `DICOM_CHARSET_BYTES_UNDECODABLE`. Earlier releases decoded these sets
+with WHATWG `TextDecoder` labels, which read `0x80` to `0x9F` under the default repertoire and
+`ISO_IR 100` as windows-1252 (`0x80` as the euro sign), under `ISO_IR 148` as windows-1254, and
+under `ISO_IR 166` as windows-874, and read `ISO_IR 13` as Shift_JIS.
 
 **With more than one Value, the code extensions of ISO 2022 are decoded** (PS3.5 2026d section
 6.1.2.5), unless Value 1 is `ISO_IR 192`, `GB18030`, or `GBK`, which take none (section 6.1.2.4):
@@ -222,17 +247,18 @@ standard prints, with no warning. What the decode had to tolerate is flagged on 
 `warnings`, each code at most once per value, and never in `Dataset.warnings`, so `{ strict: true }`
 does not refuse the file. Their messages carry the tag and VR, never a byte of the value.
 
-| Code                                | When                                                                                                                                                                                                                   | What the value holds                                                                   |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `DICOM_CHARSET_ESCAPE_UNDECLARED`   | An escape sequence switches to a set no Value of `(0008,0005)` declares.                                                                                                                                              | The characters, decoded in the set the escape sequence names.                         |
-| `DICOM_CHARSET_BYTES_UNDECODABLE`   | An ESC that starts no sequence in either table (with every byte after it up to the next recognized sequence, CR, LF, FF or the end), a GR byte while G1 holds no set, a code the set does not define, or a set this runtime cannot decode. | U+FFFD in place of those bytes, never another set's reading. `Element.rawBytes` keeps them. |
-| `DICOM_CHARSET_EXTENSION_NOT_RESET` | A line, value or `PN` component ends while G0 still holds a set other than Value 1's.                                                                                                                                   | The characters decoded up to that point; what follows decodes from Value 1.            |
+| Code                                | When                                                                                                                                                                                                                                                                                                      | What the value holds                                                                        |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `DICOM_CHARSET_ESCAPE_UNDECLARED`   | An escape sequence switches to a set no Value of `(0008,0005)` declares.                                                                                                                                                                                                                                  | The characters, decoded in the set the escape sequence names.                               |
+| `DICOM_CHARSET_BYTES_UNDECODABLE`   | An ESC that starts no sequence in either table (with every byte after it up to the next recognized sequence, CR, LF, FF or the end), a GR byte while G1 holds no set, a code the set does not define, or a set this runtime cannot decode. Under a single-valued set too: a byte its set does not define. | U+FFFD in place of those bytes, never another set's reading. `Element.rawBytes` keeps them. |
+| `DICOM_CHARSET_EXTENSION_NOT_RESET` | A line, value or `PN` component ends while G0 still holds a set other than Value 1's.                                                                                                                                                                                                                     | The characters decoded up to that point; what follows decodes from Value 1.                 |
 
 Limits, stated here because each one is a place the decode is narrower than a reader might assume:
 
 - **A single-valued `(0008,0005)` gets no code-extension handling**, as described above.
-- **ISO-IR 14's `0x5C` and `0x7E` read as `\` and `~`**, not YEN SIGN and OVERLINE, because `0x5C`
-  is also the value delimiter and a consumer splits on `\`.
+- **ISO-IR 14's `0x5C` reads as `\` where it separates Values** (`PN`, `LO`, `SH`, `UC`), not as
+  YEN SIGN, so a consumer splits on `\` as under every other set. In `ST`, `LT` and `UT` it is
+  YEN SIGN, and `0x7E` is OVERLINE everywhere.
 - **Every line starts over from Value 1.** An `LT` or `UT` that switches to KS X 1001 once and then
   runs over several lines reads its later lines as U+FFFD, with `DICOM_CHARSET_BYTES_UNDECODABLE`,
   because PS3.5 requires the switch again on each line. The bytes stay on `Element.rawBytes`.

@@ -42,9 +42,10 @@
  *     or text `fromDicomJson` does not encode: a character outside 7-bit ASCII under a set other
  *     than the default repertoire, `ISO_IR 100` and `ISO_IR 192`, one that set cannot hold, or
  *     text that does not read back as itself. `fromDicomJson` reads every text value it writes
- *     back through the reader's decoder: the reader decodes the default repertoire and
- *     `ISO_IR 100` as windows-1252, so 27 of the C1 code points U+0080 to U+009F are refused, and
- *     under `ISO_IR 192` a lone surrogate is.
+ *     back through the reader's decoder, which reads a byte its set does not define as U+FFFD:
+ *     so under the default repertoire (ISO-IR 6) any character past U+007F is refused, under
+ *     `ISO_IR 100` the C1 code points U+0080 to U+009F are, and under `ISO_IR 192` a lone
+ *     surrogate is.
  *   - `UNSUPPORTED_TRANSFER_SYNTAX` - `fromDicomJson` was asked for a Transfer Syntax other than
  *     Implicit VR Little Endian, Explicit VR Little Endian, Explicit VR Big Endian or Deflated
  *     Explicit VR Little Endian.

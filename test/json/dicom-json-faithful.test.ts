@@ -329,6 +329,34 @@ describe("text bytes its character set does not decode are refused", () => {
       );
     expect(refusal(run)).toBe(DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET);
   });
+
+  it("refuses a C1 byte under ISO_IR 100 and a high byte under the default repertoire", () => {
+    for (const [charset, byte] of [
+      ["ISO_IR 100", 0x80],
+      ["ISO_IR 6 ", 0xe9],
+    ] as const) {
+      const run = (): unknown =>
+        toDicomJson(
+          parsed([
+            { tag: "00080005", vr: "CS", value: latin1(charset) },
+            { tag: "00100020", vr: "LO", value: Buffer.from([0x41, byte]) },
+          ]),
+        );
+      expect(refusal(run), charset).toBe(DICOM_JSON_ERROR_CODES.MALFORMED_VALUE);
+    }
+  });
+
+  it("writes JIS X 0201 as the reader reads it: 5C is YEN SIGN in an LT and splits an LO", () => {
+    const json = toDicomJson(
+      parsed([
+        { tag: "00080005", vr: "CS", value: latin1("ISO_IR 13 ") },
+        { tag: "00100020", vr: "LO", value: Buffer.from([0x41, 0x5c, 0xb1, 0x7e]) },
+        { tag: "00104000", vr: "LT", value: Buffer.from([0x41, 0x5c, 0xb1, 0x7e]) },
+      ]),
+    );
+    expect(json["00100020"]).toEqual({ vr: "LO", Value: ["A", "ｱ‾"] });
+    expect(json["00104000"]).toEqual({ vr: "LT", Value: ["A¥ｱ‾"] });
+  });
 });
 
 describe("bulk values are never written inline by default", () => {

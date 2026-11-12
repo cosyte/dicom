@@ -85,12 +85,34 @@ const NUMERIC_WIDTH: Readonly<Record<string, number>> = {
 
 const ASCII_VRS = new Set(["AE", "AS", "CS", "DA", "DS", "DT", "IS", "TM", "UI", "UR"]);
 const TEXT_VRS = new Set(["LO", "LT", "PN", "SH", "ST", "UC", "UT"]);
+const MULTI_VALUED_TEXT_VRS = new Set(["LO", "PN", "SH", "UC"]);
 
 /** Drop the trailing spaces and NULs PS3.5 section 6.2 pads a string value with. */
 function stripPadBytes(bytes: Buffer): Buffer {
   let end = bytes.length;
   while (end > 0 && (bytes[end - 1] === 0x20 || bytes[end - 1] === 0x00)) end--;
   return bytes.subarray(0, end);
+}
+
+/**
+ * Our text of a value whose characters the Specific Character Set governs, with its Values joined
+ * by a backslash. That is `decodeText` of the whole value, except under JIS X 0201, where a 0x5C
+ * byte separates the Values of a `PN`, `LO`, `SH` or `UC` and `decodeText`, which reads text as an
+ * `LT` does, reads it as YEN SIGN; each Value is decoded apart there, as `Element.value` does.
+ */
+function charsetText(el: Element): string {
+  const terms = el.specificCharacterSet;
+  const jis = terms?.length === 1 && (terms[0] === "ISO_IR 13" || terms[0] === "ISO 2022 IR 13");
+  if (!jis || !MULTI_VALUED_TEXT_VRS.has(el.vr)) return decodeText(el.rawBytes, terms);
+  const values: string[] = [];
+  let start = 0;
+  for (let i = 0; i <= el.rawBytes.length; i++) {
+    if (i === el.rawBytes.length || el.rawBytes[i] === 0x5c) {
+      values.push(decodeText(el.rawBytes.subarray(start, i), terms));
+      start = i + 1;
+    }
+  }
+  return values.join("\\");
 }
 
 function stripPadText(text: string): string {
@@ -126,9 +148,7 @@ function cosyteValue(el: Element, owner: Dataset): Value {
     return bytesValue(el.littleEndian ? el.rawBytes : toLittleEndian(el.rawBytes, width));
   }
   if (ASCII_VRS.has(el.vr)) return bytesValue(stripPadBytes(el.rawBytes));
-  if (TEXT_VRS.has(el.vr)) {
-    return { kind: "text", text: stripPadText(decodeText(el.rawBytes, el.specificCharacterSet)) };
-  }
+  if (TEXT_VRS.has(el.vr)) return { kind: "text", text: stripPadText(charsetText(el)) };
   return bytesValue(el.rawBytes);
 }
 

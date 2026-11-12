@@ -114,13 +114,19 @@ describe("decodeText on a runtime whose TextDecoder lacks the label", () => {
 
   it("falls back to UTF-8 when the term's own decoder is missing", () => {
     vi.stubGlobal("TextDecoder", decoderSupporting(["utf-8"]));
-    // ISO_IR 13 resolves to shift_jis, which this runtime refuses.
-    expect(decodeText(Buffer.from("Ångström", "utf-8"), ["ISO_IR 13"])).toBe("Ångström");
+    // GBK resolves to gbk, which this runtime refuses. A single-byte set takes no decoder.
+    expect(decodeText(Buffer.from("Ångström", "utf-8"), ["GBK"])).toBe("Ångström");
   });
 
   it("falls back to Latin-1, byte for byte, when no decoder is available at all", () => {
     vi.stubGlobal("TextDecoder", decoderSupporting([]));
-    expect(decodeText(Buffer.from([0x41, 0xc5, 0x42]), ["ISO_IR 13"])).toBe("A\u00c5B");
+    expect(decodeText(Buffer.from([0x41, 0xc5, 0x42]), ["GBK"])).toBe("A\u00c5B");
+  });
+
+  it("decodes a single-byte set by its own table with no decoder at all", () => {
+    vi.stubGlobal("TextDecoder", decoderSupporting([]));
+    expect(decodeText(Buffer.from([0x41, 0xc5, 0x42]), ["ISO_IR 100"])).toBe("A\u00c5B");
+    expect(decodeText(Buffer.from([0xb1, 0x5c]), ["ISO_IR 13"])).toBe("\uff71\u00a5");
   });
 });
 

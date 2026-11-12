@@ -247,6 +247,25 @@ const LOAD_BEARING: readonly { part: VendoredPart; clause: string; sentence: str
     sentence:
       "any information encoded in SR Content Items or Acquisition Context or Specimen Preparation Sequence Items",
   },
+  {
+    // The docs lean on this to read 0x80 to 0x9F as no character under any single-byte set.
+    part: "PS3.5",
+    clause: "6.1.1",
+    sentence: "characters from the C1 set shall not be used",
+  },
+  {
+    // The docs lean on this to read 0x80 to 0xFF as no character in the default repertoire.
+    part: "PS3.5",
+    clause: "6.1.2.1",
+    sentence: "The default repertoire for character strings in DICOM shall be the Basic G0 Set",
+  },
+  {
+    // The docs lean on this to read 0x5C under ISO_IR 13 as YEN SIGN, and on the note after it to
+    // keep it the Value delimiter.
+    part: "PS3.5",
+    clause: "6.1.2.3",
+    sentence: "in the character set of ISO-IR 14",
+  },
 ];
 
 /** Markdown the gate covers: the npm-visible README plus everything the docs site ships. */
