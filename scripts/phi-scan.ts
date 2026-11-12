@@ -56,7 +56,10 @@
  * `src/dictionary/generated/annex-e.ts` is a generated table of DICOM tags, and a tag such as
  * `(4008,0101)` written as eight digits satisfies the `YYYYMMDD` shape, so the compact-date
  * pass matches hundreds of them; `vendor/nema/` is a SHA-pinned copy of a standards document
- * full of real publication dates. Neither is PHI and neither is fixed by a walk root.
+ * full of real publication dates. Neither is PHI and neither is fixed by a walk root. The paths
+ * route, which the pre-push hook runs over every outgoing path, skips a vendored file the same
+ * way, but only once its bytes hash to its pin (see `isVerifiedVendorPin`), so the standard's own
+ * worked examples need no entry in the global allow-list.
  *
  * NO HIT COUNT FOR THEM IS WRITTEN DOWN, deliberately: it is a number about prose as much as
  * about code, and a draft of this comment moved it by one just by naming a tag in eight-digit
@@ -161,7 +164,8 @@
 
 import { readFileSync, statSync, lstatSync, existsSync, readdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { join, resolve, relative, sep, isAbsolute } from "node:path";
+import { createHash } from "node:crypto";
+import { dirname, join, resolve, relative, sep, isAbsolute } from "node:path";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -336,6 +340,53 @@ const CORPUS_EXEMPT = new Set(["test/fixtures/phi-scan/README.md"]);
 function isCorpusExempt(relPath: string): boolean {
   return CORPUS_EXEMPT.has(relPath);
 }
+
+/**
+ * A hash-pinned vendored file: `vendor/<dir>.../<sha256>/<file>`, with the SHA-256 written as 64
+ * lowercase hex characters as the directory name.
+ */
+const VENDOR_PIN_PATH = /^vendor\/(?:[^/]+\/)+?([0-9a-f]{64})\/[^/]+$/;
+
+/**
+ * Whether a path the paths route was handed is a VERIFIED vendored pin, which the scan skips.
+ *
+ * The all route never opens `vendor/` (see the banner). The paths route, which the pre-push hook
+ * runs over every outgoing path, used to read it like any other file, so re-pinning a standard
+ * meant excusing the standard's own worked examples (a sample person name, a sample date) in
+ * `scripts/phi-allow-list.txt`, which has no path scope and so excused them in `test/` and
+ * `docs-content/` as well. Skipping the pinned file instead keeps the allow-list for the corpora it
+ * is written for.
+ *
+ * A file is skipped only when ALL of these hold, each checked on this run, never assumed:
+ *
+ *   - its path is `vendor/.../<sha256>/<file>`, the file directly inside the hash directory;
+ *   - it is a regular file, not a link (`lstat`), so the bytes hashed are the bytes git carries;
+ *   - `SHA.txt` beside the hash directory is a regular file whose content, trimmed, is exactly
+ *     that hash, the pin record the generators and the pin tests read;
+ *   - the SHA-256 of the file's bytes is that hash.
+ *
+ * So its content is the content the pin names, which a reviewer read when the pin landed. A file
+ * that fails any of them is scanned like every other path: a byte changed under a pin, a pin with
+ * no `SHA.txt`, or a hash directory outside `vendor/`. A pin whose name is a git commit rather than
+ * a content hash (`vendor/innolitics/<commit>/`) is not a content pin and is scanned too.
+ *
+ * Every skipped path is printed on stdout, as the corpus exemption is, so a skip is an observation
+ * rather than a silence.
+ */
+function isVerifiedVendorPin(relPath: string, abs: string): boolean {
+  const m = VENDOR_PIN_PATH.exec(relPath);
+  const hash = m?.[1];
+  if (hash === undefined) return false;
+  if (!lstatSync(abs).isFile()) return false;
+  const hashDir = dirname(abs);
+  const pinRecord = join(dirname(hashDir), "SHA.txt");
+  if (!existsSync(pinRecord) || !lstatSync(pinRecord).isFile()) return false;
+  if (readFileSync(pinRecord, "utf8").trim() !== hash) return false;
+  return createHash("sha256").update(readFileSync(abs)).digest("hex") === hash;
+}
+
+/** Verified vendored pins the last paths-route run skipped, for the report. */
+const pinnedThisRun: string[] = [];
 
 /**
  * The shortest base64 run worth decoding: enough characters to encode ONE Explicit VR LE short-form
@@ -2035,6 +2086,7 @@ interface Target {
 
 function buildTargetsForPaths(paths: string[]): Target[] {
   const out: Target[] = [];
+  pinnedThisRun.length = 0;
   for (const p of paths) {
     const abs = isAbsolute(p) ? p : resolve(REPO_ROOT, p);
     if (!existsSync(abs)) {
@@ -2045,6 +2097,12 @@ function buildTargetsForPaths(paths: string[]): Target[] {
       throw new InvocationError(`Not a regular file: ${p}`);
     }
     const rel = normalizePath(abs);
+    // A scope decision, taken before the target is enumerated, like the corpus exemption: a
+    // verified pin is never a target, so it cannot withhold the verdict, and it is named on stdout.
+    if (isVerifiedVendorPin(rel, abs)) {
+      pinnedThisRun.push(rel);
+      continue;
+    }
     out.push({
       path: rel,
       read: () => readFileSync(abs),
@@ -2879,11 +2937,18 @@ function scanTarget(target: Target, allow: AllowList, hits: Hit[], unread: Unrea
  * were reached counts only the roots that were there to reach.
  */
 function reportExemptions(): void {
-  if (exemptThisRun.length === 0) return;
-  process.stdout.write(
-    `[phi-scan] corpus exemption in force for ${String(exemptThisRun.length)} file(s): ` +
-      `${exemptThisRun.join(", ")}\n`,
-  );
+  if (exemptThisRun.length > 0) {
+    process.stdout.write(
+      `[phi-scan] corpus exemption in force for ${String(exemptThisRun.length)} file(s): ` +
+        `${exemptThisRun.join(", ")}\n`,
+    );
+  }
+  if (pinnedThisRun.length > 0) {
+    process.stdout.write(
+      `[phi-scan] skipped ${String(pinnedThisRun.length)} vendored file(s) whose SHA-256 ` +
+        `matches its pin: ${pinnedThisRun.join(", ")}\n`,
+    );
+  }
 }
 
 /**
