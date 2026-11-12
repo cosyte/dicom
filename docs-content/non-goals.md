@@ -2,13 +2,13 @@
 id: non-goals
 title: Scope and non-goals
 sidebar_label: Scope and non-goals
-sidebar_position: 18
+sidebar_position: 15
 description: What this package does not do, the de-identification residuals it discloses rather than closes, and the companion packages it leaves room for.
 ---
 
 # Scope and non-goals
 
-This is the summary of what the package leaves out, and of the de-identification residuals it discloses. The [known limitations](./limitations) page is the full "do not over-trust" list; read both before you point this package at real data.
+This is the summary of what the package leaves out, and of the de-identification residuals it discloses. The [known limitations](./limitations.md) page is the full "do not over-trust" list; read both before you point this package at real data.
 
 `@cosyte/dicom` is metadata-first by design. Even at v1-complete, do **not** rely on it for:
 

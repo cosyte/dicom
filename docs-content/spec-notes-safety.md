@@ -2,7 +2,7 @@
 id: spec-notes-safety
 title: Safety-critical views
 sidebar_label: Safety-critical views
-sidebar_position: 9
+sidebar_position: 10
 description: The four typed views over the safety-critical attributes (patient, study, series, and image) and why an absent value stays absent.
 ---
 
@@ -86,8 +86,13 @@ For Enhanced multi-frame objects (`ds.image.isEnhancedMultiFrame === true`), `ds
 resolves each frame's functional-group macros **Per-Frame-else-Shared**. The per-frame group wins,
 falling back to the shared group:
 
-```ts
-// Illustrative: an Enhanced multi-frame object.
+```ts runnable
+import { parseDicom } from "@cosyte/dicom";
+
+// A synthetic single-frame CT image: not Enhanced, so the branch below is skipped. On an Enhanced
+// multi-frame object it reads frame 0's geometry.
+const ds = parseDicom(Buffer.from("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABESUNNAgAAAFVMBAAcAAAAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xAAgAFgBVSRoAMS4yLjg0MC4xMDAwOC41LjEuNC4xLjEuMgAIABgAVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMTExAAgAIABEQQgAMTkwMDAxMDEIADAAVE0GADA5MDAwMAgAUABTSAgAQUNDLTAwMDEIAGAAQ1MCAENUEAAQAFBOCABEb2VeSmFuZRAAIABMTwYATVJOLTQyEAAhAExPDABTQU1QTEUtSE9TUCAgAA0AVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMS4xACAADgBVSR4AMS4yLjgyNi4wLjEuMzY4MDA0My44LjQ5OC4xLjIAIAARAElTAgAyICgAAgBVUwIAAQAoAAQAQ1MMAE1PTk9DSFJPTUUyICgAEABVUwIAAAIoABEAVVMCAAACKAAwAERTCAAwLjVcMC41ICgAAAFVUwIAEAAoAAEBVVMCAAwAKAACAVVTAgALACgAAwFVUwIAAQAoAFIQRFMGAC0xMDI0ICgAUxBEUwIAMSA=", "base64"));
+ds.image.isEnhancedMultiFrame; // => false
 if (ds.image.isEnhancedMultiFrame) {
   const f = ds.image.frame(0);
   f.planePosition?.imagePositionPatient; // this frame's [x, y, z]
@@ -108,7 +113,7 @@ value that was not in the object is typed-absent, never substituted.
 
 | Export                  | What it is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PatientView`           | `ds.patient`. Identity, and the wrong-patient failure class. `id` is not globally unique on its own: correct cross-system matching needs `id` with `issuerOfId` and the issuer qualifiers, plus `otherIds`. For a non-human patient it also carries `speciesDescription`, `speciesCode`, `sexNeutered`, `breedDescription`, `breedCode` and `responsiblePerson`, and `issues` when one of them could not be read as written; the [cookbook](./cookbook#9-read-a-veterinary-patient) shows them. |
+| `PatientView`           | `ds.patient`. Identity, and the wrong-patient failure class. `id` is not globally unique on its own: correct cross-system matching needs `id` with `issuerOfId` and the issuer qualifiers, plus `otherIds`. For a non-human patient it also carries `speciesDescription`, `speciesCode`, `sexNeutered`, `breedDescription`, `breedCode` and `responsiblePerson`, and `issues` when one of them could not be read as written; the [cookbook](./cookbook.md#read-a-veterinary-patient) shows them. |
 | `OtherPatientId`        | One entry in `patient.otherIds`: `id` with its `issuer` and `typeCode`.                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `ResponsiblePerson`     | `patient.responsiblePerson`: the responsible person's `name`, their `role` and the responsible `organization`, each typed-absent when not carried. Identifying, so never logged.                                                                                                                                                                                                                                                                                                                |
 | `PatientIssue`          | One entry in `patient.issues`: a `code`, the attribute's `tag`, and a `message` built from those two alone.                                                                                                                                                                                                                                                                                                                                                                                     |
@@ -125,5 +130,5 @@ value that was not in the object is typed-absent, never substituted.
 | `DicomValueError`       | The thrown class. Its message is built from the code and structural facts alone, so it is not a PHI surface the way a `DicomParseError` snippet is.                                                                                                                                                                                                                                                                                                                                             |
 
 Where a view's absence is load-bearing rather than incidental, it is stated once, on
-[Known limitations](./limitations). Read that page before treating an `undefined` here as a default
+[Known limitations](./limitations.md). Read that page before treating an `undefined` here as a default
 you may fill in.

@@ -2,7 +2,7 @@
 id: deidentification
 title: Metadata de-identification
 sidebar_label: De-identification
-sidebar_position: 15
+sidebar_position: 14
 description: How deidentify() applies the PS3.15 Annex E profile to header metadata, what its options do, and what its report records.
 ---
 
@@ -19,7 +19,7 @@ A de-identified output from `@cosyte/dicom` is **metadata-de-identified only**. 
 scope: where a file carries burned-in annotation this layer cannot remove, you get a
 `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED` warning rather than a false sense of safety, and pixel
 cleaning is deferred to `@cosyte/dicom-pixel`. **A report that reads clean does not close a residual.**
-[Known limitations](./limitations) is the measured, still-open list, and it is required reading
+[Known limitations](./limitations.md) is the measured, still-open list, and it is required reading
 before you route any of this at real data.
 
 :::
@@ -101,7 +101,7 @@ const ds = parseDicom(buf);
 
 // The registry is the source of truth for what may be retained.
 DEIDENTIFY_OPTIONS.includes("RetainLongitudinalTemporal"); // => true
-DEIDENTIFY_OPTIONS.includes("CleanPixelData"); // => false
+(DEIDENTIFY_OPTIONS as readonly string[]).includes("CleanPixelData"); // => false
 
 // Default: dates go, and the object declares that.
 deidentify(ds).dataset.get("00280303")?.value.kind; // => "strings"
@@ -130,7 +130,7 @@ would have cleaned it. They are **mutually exclusive** and a call naming both is
 requires the dates themselves to be modified and the manner described in a Conformance Statement, and
 both are yours, so every modified-dates run raises `DICOM_DEIDENT_DATES_NOT_TRANSFORMED` on its
 report. Activate the full-dates Option only when real dates are genuinely required, and see
-[Known limitations](./limitations) for the whole of that residual.
+[Known limitations](./limitations.md) for the whole of that residual.
 
 ## What the object records about the method
 
@@ -293,7 +293,7 @@ own design.
 
 `DeidentifyReport` is an audit trail, not a redacted surface. **Several of its fields carry source
 bytes rather than table lookups, and they are named on the type. Read that list before logging a
-report whole**, and read [Keeping PHI out of logs](./troubleshooting#keeping-phi-out-of-logs) for the
+report whole**, and read [Keeping PHI out of logs](./troubleshooting.md#keeping-phi-out-of-logs) for the
 mechanism. An emptied audit is not a performed one: a report that reads as a complete scrub it did
 not perform is the worse half of every residual on the limitations page.
 
@@ -326,7 +326,7 @@ makeUidRemapper("not-an-oid");
 
 ## Scope limits on this page's subject
 
-These are boundaries, not defects; the full list is on [Known limitations](./limitations).
+These are boundaries, not defects; the full list is on [Known limitations](./limitations.md).
 
 - **Metadata only.** Burned-in annotation is warned, never removed. Pixel scrubbing is
   `@cosyte/dicom-pixel`.
@@ -363,18 +363,18 @@ These are boundaries, not defects; the full list is on [Known limitations](./lim
   with a description of the de-identifying application (§E.1.1), so the Source AE Title and the
   source's implementation identity go with it. That loss is recorded, and it is not recoverable from
   the output. If you need the source group verbatim, read it off the parsed dataset before the call,
-  and see [Serialization](./serialization) for the round trip that does hold.
+  and see [Serialization](./serialization.md) for the round trip that does hold.
 - **A de-identified DICOMDIR is not File-set conformant.** Its Directory Records are de-identified as
   Data Sets and `serializeDicom` rewrites their offsets to where they land, but the run creates no
   DICOMDIR from the de-identified files and removes no non-de-identified DICOMDIR from the File-set,
   and `DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED` names exactly those two clauses. Referenced
   File IDs `(0004,1500)` are kept verbatim. Build a de-identified File-set from the de-identified
-  files, not from this output; see [Known limitations](./limitations).
+  files, not from this output; see [Known limitations](./limitations.md).
 
 ## Where to go next
 
-- A worked recipe, including what the File Meta group stops naming:
-  [Cookbook](./cookbook#4-de-identify-before-sharing).
-- What a diagnostic may and may not carry: [Tolerance and warnings](./spec-notes-tolerance).
-- Vouching for known-safe private attributes: [Source profiles](./spec-notes-profiles).
-- The measured, still-open residuals: [Known limitations](./limitations).
+- The steps, with a sample that runs:
+  [De-identify before sharing](./recipes.md#de-identify-before-sharing).
+- What a diagnostic may and may not carry: [Tolerance and warnings](./spec-notes-tolerance.md).
+- Vouching for known-safe private attributes: [Source profiles](./spec-notes-profiles.md).
+- The measured, still-open residuals: [Known limitations](./limitations.md).

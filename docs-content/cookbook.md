@@ -1,751 +1,103 @@
 ---
 id: cookbook
-title: Cookbook
+title: Use the cookbook for warnings, animal patients and dates
 sidebar_label: Cookbook
-sidebar_position: 13
-description: Task-oriented recipes with runnable examples for indexing studies, routing keys, pixel metadata, de-identification, FHIR and HL7 v2 bridges, veterinary patients, and more.
+sidebar_position: 5
+description: Steps for triaging parse warnings, reading a veterinary patient, and checking what a de-identified object says about its dates.
 ---
 
 # Cookbook
 
-Task-oriented recipes for the DICOM jobs you actually get handed. Each one is: here's the problem,
-here's the code, here's what you get back. Every symbol below is a real `@cosyte/dicom` export, no
-pseudo-API. All sample objects are **synthetic** (an invented patient, fake UIDs), encoded as base64
-so a recipe needs no file on disk; never paste a real DICOM object into a doc or a test.
-
-Read [Getting started](./intro) first for the parse model; the recipes here assume you can already
-get a parsed `Dataset`. Read [Known limitations](./limitations) before you trust any of this on real
-data: it is the one page on this site written to tell you what the library does **not** do.
-
-## How the citations here work
-
-Every recipe names the PS3 clause for the attributes it reads, and the rule for which clause it may
-name is deliberately narrow.
-
-- **Attribute identity** (tag, name, keyword, VR, VM) is cited to **PS3.6 2026c**, the Registry of
-  DICOM Data Elements. The edition **vendored in this repository and pinned by SHA-256**
-  (`vendor/nema/part06/`) is **2026d**, which carries every row cited here unchanged and is the copy
-  the shipped data dictionary is generated from, and a test re-reads it to confirm that every
-  `(gggg,eeee) Name` pair written on this site is the registry's own.
-- **Encoding rules** are cited to **PS3.5 2026c** and **de-identification rules to PS3.15 2026c**.
-  The editions vendored and pinned the same way (`vendor/nema/part05/` and `vendor/nema/part15/`)
-  are **2026d**, which carries every clause cited here unchanged. Two checks of
-  different strength run over those, and **what each one covers is worth stating exactly, because a
-  citation gate that is described as total is a claim of its own**. A clause written in the form
-  `PS3.N §X`, `PS3.N section X`, or `PS3.N Annex X`, with the label next to its part, is resolved in
-  the pinned document by collecting all candidate sections carrying that label and requiring exactly
-  one. **A label the text writes away from its part is not covered**: a second label in a list
-  (`PS3.5 §7.5.1, §7.8.1`) and a bare `section X` whose part was named a sentence earlier are both read by
-  a human, not by the gate. On top of that, each clause the text leans on for a normative statement
-  is required to carry that sentence **in its own body, not in a subsection**, because a label proves
-  the label exists and proves nothing about what the body says.
-- **No numbered clause of PS3.3, PS3.4, PS3.10 or PS3.16 is cited anywhere on this site.** Those
-  parts are not vendored here, so a clause number for one could not be checked against anything, and
-  a citation nobody can check is worse than none. Where an IOD-level or file-format rule matters, the
-  text names the part and says what it relies on, without a clause number.
-
-The date in every sample object below is `19000101`. That is not a style choice: this repository's
-PHI scanner reads doc fixtures as well as test fixtures, and it rejects any `DA` or `DT` value inside
-the last 120 years wherever it finds one, because a plausible real study date is exactly the shape it
-exists to catch.
-
----
-
-## 1. Extract metadata and index a folder of studies
-
-**The problem:** you have a directory of objects and you need a searchable index: who, which study,
-which series, which instance, what kind of image.
-
-The four views (`patient`, `study`, `series`, `image`) pull the right field out of the right tag, and
-they are fail-safe: an absent attribute reads `undefined`, never a substituted default.
-
-**Attributes read** (PS3.6 2026c, Registry of DICOM Data Elements): `(0010,0020)` Patient ID,
-`(0010,0021)` Issuer of Patient ID, `(0008,0050)` Accession Number, `(0020,000D)` Study Instance UID,
-`(0020,000E)` Series Instance UID, `(0008,0018)` SOP Instance UID, `(0008,0016)` SOP Class UID,
-`(0008,0060)` Modality, `(0008,0020)` Study Date, `(0028,0010)` Rows, `(0028,0011)` Columns.
-
-```ts runnable
-import { parseDicom, Dictionary } from "@cosyte/dicom";
-
-const buf = Buffer.from(
-  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABESUNNAgAAAFVMBAAcAAAAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xAAgAFgBVSRoAMS4yLjg0MC4xMDAwOC41LjEuNC4xLjEuMgAIABgAVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMTExAAgAIABEQQgAMTkwMDAxMDEIADAAVE0GADA5MDAwMAgAUABTSAgAQUNDLTAwMDEIAGAAQ1MCAENUEAAQAFBOCABEb2VeSmFuZRAAIABMTwYATVJOLTQyEAAhAExPDABTQU1QTEUtSE9TUCAgAA0AVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMS4xACAADgBVSR4AMS4yLjgyNi4wLjEuMzY4MDA0My44LjQ5OC4xLjIAIAARAElTAgAyICgAAgBVUwIAAQAoAAQAQ1MMAE1PTk9DSFJPTUUyICgAEABVUwIAAAIoABEAVVMCAAACKAAwAERTCAAwLjVcMC41ICgAAAFVUwIAEAAoAAEBVVMCAAwAKAACAVVTAgALACgAAwFVUwIAAQAoAFIQRFMGAC0xMDI0ICgAUxBEUwIAMSA=",
-  "base64",
-);
-
-const ds = parseDicom(buf);
-
-const row = {
-  patientId: ds.patient.id, //         (0010,0020)
-  issuer: ds.patient.issuerOfId, //    (0010,0021)
-  accession: ds.study.accessionNumber, // (0008,0050)
-  studyUid: ds.study.instanceUid, //   (0020,000D)
-  seriesUid: ds.series.instanceUid, // (0020,000E)
-  sopInstanceUid: ds.image.sopInstanceUid, // (0008,0018)
-  modality: ds.series.modality, //     (0008,0060)
-  rows: ds.image.rows, //              (0028,0010)
-  columns: ds.image.columns, //        (0028,0011)
-};
-
-row.patientId; // => "MRN-42"
-row.accession; // => "ACC-0001"
-row.modality; // => "CT"
-row.rows; // => 512
-
-// A date is structured rather than a string, and `valid` is answered rather than assumed.
-ds.study.date?.year; // => 1900
-ds.study.date?.valid; // => true
-
-// SOP Class UID says what KIND of object this is. Resolve the UID to its registered name
-// through the dictionary rather than hard-coding a table of your own.
-const sopClass = ds.get("00080016")?.value;
-const sopClassUid = sopClass?.kind === "strings" ? sopClass.values[0] : undefined;
-Dictionary.uid(sopClassUid ?? "")?.name; // => "CT Image Storage"
-
-// The parser recorded no deviation. That is a statement about what THIS reader tolerated,
-// not a conformance verdict: PS3.10 governs the file format and is not vendored here.
-ds.warnings.length; // => 0
-```
-
-Over a real folder, wrap the parse per file. A quirky object is tolerated rather than rejected and
-absent fields come back `undefined`, and a JPEG, JPEG 2000, RLE, or other PS3.5 2026c section A.4
-compressed object indexes like any other, its pixels never decoded (see
-[section 7](#7-read-raw-pixel-data-without-decoding-it)), as does a JPIP Referenced object, whose
-Pixel Data Provider URL is read and never fetched. But **a folder walk still needs a
-`try`/`catch`**, because the Tier-3 conditions throw and a real archive meets every one of them:
-`UNSUPPORTED_TRANSFER_SYNTAX` for an object under a syntax this parser refuses (SMPTE ST 2110, or a
-retired UID); `INVALID_FILE_META` for a truncated
-or partly-copied file; `NOT_DICOM_PART_10` for whatever non-DICOM file wandered into the folder; and
-`EMPTY_INPUT` for a zero-byte one. Each throws the one class, so catch `DicomParseError` per file
-and skip.
-
-```ts
-import { readFile } from "node:fs/promises";
-import { parseDicom, DicomParseError } from "@cosyte/dicom";
-
-async function indexFile(path: string) {
-  try {
-    const ds = parseDicom(await readFile(path));
-    return { ok: true as const, studyUid: ds.study.instanceUid, warnings: ds.warnings.length };
-  } catch (err) {
-    if (err instanceof DicomParseError) return { ok: false as const, code: err.code };
-    throw err;
-  }
-}
-```
-
-Log `err.code`, `err.byteOffset`, and `err.offsetFrame`. Do **not** log `err.snippet`: it is up to 16
-raw source bytes and the library does not redact it. **`err.byteOffset` indexes the buffer you passed
-in only when `err.offsetFrame` is `"input"`**: inside a Sequence Item it counts from that Item, so
-cutting your own copy of the file at it returns a different element. See
-[Keeping PHI out of logs](./troubleshooting#keeping-phi-out-of-logs).
-
----
-
-## 2. Build routing keys
-
-**The problem:** you are filing objects into an archive, reconciling them against an order, or
-matching them to a patient record, and you need the identifiers that make each of those joins sound.
-
-There are three different keys here and they are not interchangeable.
-
-**Attributes read** (PS3.6 2026c): `(0020,000D)` Study Instance UID, `(0020,000E)` Series Instance
-UID, `(0008,0018)` SOP Instance UID, `(0008,0050)` Accession Number, `(0010,0020)` Patient ID,
-`(0010,0021)` Issuer of Patient ID, `(0010,1002)` Other Patient IDs Sequence.
-
-```ts runnable
-import { parseDicom } from "@cosyte/dicom";
-
-const buf = Buffer.from(
-  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABESUNNAgAAAFVMBAAcAAAAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xAAgAFgBVSRoAMS4yLjg0MC4xMDAwOC41LjEuNC4xLjEuMgAIABgAVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMTExAAgAIABEQQgAMTkwMDAxMDEIADAAVE0GADA5MDAwMAgAUABTSAgAQUNDLTAwMDEIAGAAQ1MCAENUEAAQAFBOCABEb2VeSmFuZRAAIABMTwYATVJOLTQyEAAhAExPDABTQU1QTEUtSE9TUCAgAA0AVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMS4xACAADgBVSR4AMS4yLjgyNi4wLjEuMzY4MDA0My44LjQ5OC4xLjIAIAARAElTAgAyICgAAgBVUwIAAQAoAAQAQ1MMAE1PTk9DSFJPTUUyICgAEABVUwIAAAIoABEAVVMCAAACKAAwAERTCAAwLjVcMC41ICgAAAFVUwIAEAAoAAEBVVMCAAwAKAACAVVTAgALACgAAwFVUwIAAQAoAFIQRFMGAC0xMDI0ICgAUxBEUwIAMSA=",
-  "base64",
-);
-
-const ds = parseDicom(buf);
-
-// 1. Hierarchy keys. A UID is globally unique by construction, so these need no issuer.
-const studyKey = ds.study.instanceUid;
-const seriesKey = ds.series.instanceUid;
-const instanceKey = ds.image.sopInstanceUid;
-
-studyKey; // => "1.2.826.0.1.3680043.8.498.1.1"
-seriesKey; // => "1.2.826.0.1.3680043.8.498.1.2"
-instanceKey; // => "1.2.826.0.1.3680043.8.498.111"
-
-// 2. Order key. The Accession Number is the HIS-to-PACS join and is NOT globally unique:
-//    it is unique only within the system that issued it.
-ds.study.accessionNumber; // => "ACC-0001"
-
-// 3. Patient key. A Patient ID ALONE is ambiguous across systems. The issuer is a separate
-//    attribute and the library surfaces it separately rather than folding it in for you.
-const p = ds.patient;
-const patientKey = `${p.issuerOfId ?? ""}|${p.id ?? ""}`;
-patientKey; // => "SAMPLE-HOSP|MRN-42"
-
-// Additional {id, issuer} pairs, when the sender wrote any, arrive as a list.
-p.otherIds.length; // => 0
-```
-
-Three things worth being explicit about, because getting any of them wrong is a real-world outage:
-
-- **`ds.patient.id` is a string the sending system chose.** It is not globally unique and this
-  library does no patient matching. Pair it with `ds.patient.issuerOfId` and treat the pair as the
-  key, and read `ds.patient.otherIds` for any further assigning authorities the object carried. The
-  Issuer of Patient ID attribute is `(0010,0021)` in PS3.6 2026c; the module that requires the two to
-  be read together is in PS3.3, which is not vendored here, so no clause is claimed for it.
-- **`instanceKey` and `seriesKey` have no representation in HL7 v2.** Image-level and series-level
-  identity live only in DICOM (see recipe 5).
-- **Do not derive a routing key from a de-identified object and expect it to match the original.**
-  `deidentify()` replaces UIDs by default. The mapping it used is on `report.uidMap`, whose **keys
-  are the source UIDs** and are therefore not safe to log.
-
----
-
-## 3. Read pixel-interpretation metadata safely
-
-**The problem:** you (or a downstream renderer) will touch the pixels, and the interpretation
-attributes decide what the stored numbers _mean_. The dangerous DICOM failure is the confident,
-wrong image, so none of these views defaults a missing value.
-
-**Attributes read** (PS3.6 2026c): `(0028,0002)` Samples per Pixel, `(0028,0004)` Photometric
-Interpretation, `(0028,0010)` Rows, `(0028,0011)` Columns, `(0028,0030)` Pixel Spacing,
-`(0018,1164)` Imager Pixel Spacing, `(0028,0100)` Bits Allocated, `(0028,0101)` Bits Stored,
-`(0028,0102)` High Bit, `(0028,0103)` Pixel Representation, `(0028,1052)` Rescale Intercept,
-`(0028,1053)` Rescale Slope.
-
-```ts runnable
-import { parseDicom } from "@cosyte/dicom";
-
-const buf = Buffer.from(
-  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABESUNNAgAAAFVMBAAcAAAAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xAAgAFgBVSRoAMS4yLjg0MC4xMDAwOC41LjEuNC4xLjEuMgAIABgAVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMTExAAgAIABEQQgAMTkwMDAxMDEIADAAVE0GADA5MDAwMAgAUABTSAgAQUNDLTAwMDEIAGAAQ1MCAENUEAAQAFBOCABEb2VeSmFuZRAAIABMTwYATVJOLTQyEAAhAExPDABTQU1QTEUtSE9TUCAgAA0AVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMS4xACAADgBVSR4AMS4yLjgyNi4wLjEuMzY4MDA0My44LjQ5OC4xLjIAIAARAElTAgAyICgAAgBVUwIAAQAoAAQAQ1MMAE1PTk9DSFJPTUUyICgAEABVUwIAAAIoABEAVVMCAAACKAAwAERTCAAwLjVcMC41ICgAAAFVUwIAEAAoAAEBVVMCAAwAKAACAVVTAgALACgAAwFVUwIAAQAoAFIQRFMGAC0xMDI0ICgAUxBEUwIAMSA=",
-  "base64",
-);
-
-const img = parseDicom(buf).image;
-
-img.samplesPerPixel; // => 1
-img.photometricInterpretation; // => "MONOCHROME2"
-img.bitsAllocated; // => 16
-img.bitsStored; // => 12
-img.highBit; // => 11
-
-// (0028,0103) Pixel Representation is 0 for unsigned and 1 for two's complement.
-// `signed` is a boolean ONLY when the attribute was present; otherwise it is undefined.
-img.pixelRepresentation; // => 1
-img.signed; // => true
-
-// Modality LUT: stored value -> real-world value is `stored * slope + intercept`.
-// An ABSENT slope reads `undefined`, and you MUST NOT read that as 1.
-img.rescaleSlope; // => 1
-img.rescaleIntercept; // => -1024
-
-// Pixel Spacing is [row spacing, column spacing] in mm, in the patient plane.
-img.pixelSpacing; // => [0.5, 0.5]
-
-// Imager Pixel Spacing is a DIFFERENT attribute at the detector plane and is absent here.
-// The view does not fall back from one to the other.
-img.imagerPixelSpacing; // => undefined
-```
-
-The two failure modes this shape exists to prevent:
-
-- **A defaulted rescale.** `undefined` means the object did not carry the attribute. Substituting
-  `1`/`0` turns stored values into confidently wrong Hounsfield units. Decide what to do about an
-  absent Modality LUT in your own code, where the decision is visible.
-- **A defaulted signedness.** Reading a two's-complement image as unsigned inverts the dark end of
-  the range. `img.signed` is `undefined` rather than `false` when `(0028,0103)` was absent.
-
-`(0028,0030)` and `(0018,1164)` are different measurements and this library never substitutes one
-for the other. Which one a given IOD requires is a PS3.3 question, and PS3.3 is not vendored here, so
-no clause is claimed; what is claimed is that both attributes are surfaced separately and neither is
-invented.
-
-For Enhanced multi-frame objects, `image.frame(i)` resolves each frame's functional-group macros
-Per-Frame first and Shared second. It throws a `DicomValueError` (carrying only structural facts,
-never a value) for an out-of-range frame, or when a required geometry macro is missing from both
-groups.
-
-```ts
-if (img.isEnhancedMultiFrame) {
-  const f = img.frame(0);
-  f.planePosition?.imagePositionPatient; // this frame's [x, y, z]
-  f.pixelMeasures?.pixelSpacing; // this frame's [row, col] mm
-  f.pixelValueTransformation?.rescaleSlope; // this frame's slope, if the macro is present
-}
-```
-
-> **Vendor note.** Philips writes private rescale attributes `(2005,1409/140A/140B)` that shadow the
-> standard `(0028,1052/1053)`; using the standard attributes alone can yield non-quantitative values.
-> This parser **preserves** the private attributes so you can prefer them. Reach them with
-> `ds.get("20051409")`, optionally under `profiles.philips`.
-
----
-
-## 4. De-identify before sharing
-
-**The problem:** you need to strip identifying metadata before an object leaves your control, and you
-need a record of what was done, without mutating the original.
-
-`deidentify(ds)` applies the PS3.15 2026d Annex E **Basic Application Level Confidentiality Profile**
-(§E.2), replacing, emptying, or removing every attribute Table E.1-1 lists as identifying, and returns
-a fresh `Dataset` plus a `DeidentifyReport`. It is a **pure function**: your input dataset is never
-mutated.
-
-Several report fields are **not** value-free and are named on the type: `uidMap`, whose keys are the
-source UIDs the file carried, and `removedPrivateTags`, `unauditableSequences[].tag`, and
-`contextPath`, whose entries are four source bytes each, and
-`unauditableSequences[].byteLength` / `undefinedVrElements[].byteLength`, each the declared Value
-Length off an element header that may itself have been fabricated. `embeddedAttributes[].hidden` **left that
-list**: an entry is now a tag this run acted on that PS3.15 Table E.1-1 gives a literal row, with
-repeating-group mask hits excluded, which also means it can be empty on a real finding. **Read the
-list on the type rather than a count quoted anywhere**, this one included: the number has been
-corrected twice.
-
-```ts runnable
-import { parseDicom, deidentify, serializeDicom } from "@cosyte/dicom";
-
-const buf = Buffer.from(
-  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABESUNNAgAAAFVMBAAcAAAAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xAAgAFgBVSRoAMS4yLjg0MC4xMDAwOC41LjEuNC4xLjEuMgAIABgAVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMTExAAgAIABEQQgAMTkwMDAxMDEIADAAVE0GADA5MDAwMAgAUABTSAgAQUNDLTAwMDEIAGAAQ1MCAENUEAAQAFBOCABEb2VeSmFuZRAAIABMTwYATVJOLTQyEAAhAExPDABTQU1QTEUtSE9TUCAgAA0AVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMS4xACAADgBVSR4AMS4yLjgyNi4wLjEuMzY4MDA0My44LjQ5OC4xLjIAIAARAElTAgAyICgAAgBVUwIAAQAoAAQAQ1MMAE1PTk9DSFJPTUUyICgAEABVUwIAAAIoABEAVVMCAAACKAAwAERTCAAwLjVcMC41ICgAAAFVUwIAEAAoAAEBVVMCAAwAKAACAVVTAgALACgAAwFVUwIAAQAoAFIQRFMGAC0xMDI0ICgAUxBEUwIAMSA=",
-  "base64",
-);
-
-const ds = parseDicom(buf);
-const { dataset, report } = deidentify(ds);
-
-// The original is untouched; the identifying fields are gone from the copy.
-ds.patient.id; // => "MRN-42"
-dataset.patient.id; // => undefined
-
-// Patient's Name is emptied (Annex E action "Z"), not left in place.
-dataset.get("00100010")?.value.kind; // => "empty"
-
-// The Accession Number is emptied too: it identifies the order, and through it the patient.
-dataset.study.accessionNumber; // => undefined
-
-// UIDs are remapped to deterministic 2.25 replacements that stay consistent across files.
-dataset.study.instanceUid?.startsWith("2.25."); // => true
-
-// The object says what this run did to its DATES, so a recipient does not have to
-// guess. PS3.15 2026c section E.2 requires REMOVED when no Retain Longitudinal
-// Temporal Information Option is applied, which is this call.
-dataset.get("00280303")?.vr; // => "CS"
-dataset.get("00280303")?.value; // => { kind: "strings", values: ["REMOVED"] }
-
-// Section E.3.6's Full Dates branch requires UNMODIFIED, and the real dates are
-// then in the output.
-const dated = deidentify(ds, { retain: ["RetainLongitudinalTemporal"] }).dataset;
-dated.get("00280303")?.value; // => { kind: "strings", values: ["UNMODIFIED"] }
-
-// And its Modified Dates branch requires MODIFIED. That resolves Table E.1-1's
-// modified-dates column; YOU perform the date transformation section E.3.6 also
-// asks for, and the run says so on its report.
-const shifted = deidentify(ds, {
-  retain: ["RetainLongitudinalTemporalModifiedDates"],
-});
-shifted.dataset.get("00280303")?.value; // => { kind: "strings", values: ["MODIFIED"] }
-shifted.report.warnings.map((w) => w.code); // => ["DICOM_DEIDENT_DATES_NOT_TRANSFORMED"]
-
-// The report lists what was acted on. It is NOT value-free: see the fields
-// named on DeidentifyReport before logging one whole.
-report.attributes.length > 0; // => true
-report.warnings.length; // => 0
-
-// The de-identified copy serializes to bytes you can share.
-Buffer.isBuffer(serializeDicom(dataset)); // => true
-```
-
-### The header stops naming the sending site
-
-§E.1.1 does not stop at Table E.1-1, and two of its unconditional bullets are about the parts of a
-file that are not the Data Set. `deidentify()` discharges both, on every run and under every Option.
-
-**The File Meta group is replaced rather than carried through.** §E.1.1 requires it "replaced with a
-description of the de-identifying application", because otherwise "identity information may leak
-through unmodified File Meta Information ... includ[ing] information regarding Application Entity
-Titles, Presentation Addresses, implementation information, and private information". So:
-
-- `(0002,0016)` Source Application Entity Title is **gone** from the output.
-- `(0002,0012)` Implementation Class UID and `(0002,0013)` Implementation Version Name **name
-  `@cosyte/dicom`** and hold none of the source's values.
-- Every non-modeled `(0002,xxxx)` element is **dropped**, not filtered: `(0002,0017)` Sending
-  Application Entity Title, `(0002,0018)` Receiving Application Entity Title, `(0002,0100)` Private
-  Information Creator UID, `(0002,0102)` Private Information, and anything a vendor invented.
-  **This deliberately breaks the byte-for-byte File Meta round trip** for de-identified
-  output; it still holds for parse-then-serialize. `report.fileMetaElementsDropped` names what went
-  and `report.fileMetaElementsDroppedCount` counts it, complete at any input size.
-- What survives identifies the **object**, not the sender: File Meta Information Version, Media
-  Storage SOP Class UID, Transfer Syntax UID, and the Media Storage SOP Instance UID (remapped
-  unless `RetainUIDs`). The 128-byte preamble was already written as zeros on every path.
-
-**Group 0004 is removed**, at every depth: §E.1.1 requires it "removed from any SOP Instance or DICOM
-File other than a DICOMDIR File". `report.group0004Removals` names them (capped, with a context path
-for the nested ones) and `report.group0004RemovalCount` is the complete total.
-
-**The DICOMDIR carve-out is honored and is not silent.** If `(0002,0002)` is
-`1.2.840.10008.1.3.10` (Media Storage Directory Storage) the `(0004,xxxx)` elements stay, the
-Directory Records are de-identified as Data Sets, and `serializeDicom` rewrites each record offset to
-where its record lands in the written bytes. The run raises
-`DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED` for the two File-set clauses of that bullet it does
-**not** discharge: creating a DICOMDIR from the de-identified files it references, and removing the
-non-de-identified DICOMDIR from the File-set. Referenced File IDs are kept verbatim. Do not treat such
-output as a File-set-conformant DICOMDIR.
-
-This is **metadata-level** de-identification. Pixel data is out of scope: when an object carries
-burned-in annotation this layer cannot remove, you get a `DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED`
-warning on the report rather than a false sense of safety. Pixel cleaning is deferred to
-`@cosyte/dicom-pixel`. Opt into the metadata-affecting Annex E Options (e.g. `RetainUIDs`,
-`RetainLongitudinalTemporal`, `CleanDescriptors`) via `deidentify(ds, { retain: [...] })`.
-
-**The de-identified object declares what happened to its dates, in the three states PS3.15 defines.**
-`(0028,0303) Longitudinal Temporal Information Modified` is written on every run: **`REMOVED`** when
-no Retain Longitudinal Temporal Information Option was active, **`UNMODIFIED`** when
-`RetainLongitudinalTemporal` was, and **`MODIFIED`** when `RetainLongitudinalTemporalModifiedDates`
-was. PS3.15 2026c §E.2 states the first ("The Attribute Longitudinal Temporal Information Modified
-(0028,0303) shall be added to the Data Set with a Value of `REMOVED` if none of the Retain
-Longitudinal Temporal Information Options is applied") and §E.3.6 the other two, for its Full Dates
-and Modified Dates branches. That is the whole point of the attribute: without it, a recipient
-holding dates cannot tell real ones from scrubbed ones, and a study with no dates to begin with is
-indistinguishable from one this run emptied. **It is replaced, not added to**: the attribute is
-`VM 1`, so a `(0028,0303)` the source already carried is discarded rather than joined, which is the
-opposite of what `(0012,0063)` does with a prior method text and is the standard's own asymmetry.
-
-**The two §E.3.6 Options are mutually exclusive and the second one's limit rides with it.** A call
-naming both is rejected with a `DeidentifyError`. `RetainLongitudinalTemporalModifiedDates` resolves
-Table E.1-1's modified-dates column and writes `MODIFIED`; **this library performs no date
-transformation**, so the modification §E.3.6 also requires is yours, and every such run carries
-`DICOM_DEIDENT_DATES_NOT_TRANSFORMED` on `report.warnings` saying so. See
-[Known limitations](./limitations) for the whole of that residual, and for what to do if you shift
-dates yourself after the call.
-
-**Before you rely on this on real data, read [Known limitations](./limitations).** Several routes are
-measured, disclosed, and open, and the report reading clean is not by itself proof that nothing
-survived.
-
-The attribute-action table behind all of this is generated from **NEMA's PS3.15 2026d DocBook**, the
-normative publication of the standard, rather than from a third-party mirror of it. That matters
-because an attribute the table does not list is an attribute `deidentify()` keeps, silently,
-whenever the PS3.6 registry carries its tag (one the registry does not carry either is removed; see
-[Attributes neither table carries](./deidentification#attributes-neither-table-carries)): the
-current edition's patient attributes, including the `(0010,00xx)` preferred-name and pronoun block,
-the `(0010,004x)` gender-identity and sex-parameters attributes, and `EthnicGroupCodeSequence` /
-`EthnicGroups`, are all removed because the table is the edition's, not a snapshot of it. Four rows
-of Table E.1-1 name a family rather than a single tag (`(50xx,xxxx)` Curve Data, `(60xx,3000)` and
-`(60xx,4000)` Overlay Data and Comments, and the odd-group private-attribute row). All four are
-acted on: private attributes are removed through their own path, and the three repeating-group rows
-are matched by mask across the sixteen even groups the standard bounds them to, removed, and
-reported with the mask that matched. **That bound is stated across two editions, and citing only the
-current one would be wrong**: PS3.5 2026c §7.6 gives the overlay range (`6000` to `601E`) and, in the
-same clause, retires curve encoding and delegates the curve range to PS3.5-2004 by URL. Both
-editions are vendored and SHA-pinned here, and the generator proves the delegation link rather than
-assuming it.
-
-```ts
-const { report } = deidentify(parseDicom(buf));
-report.attributes
-  .filter((a) => a.repeatingGroup !== undefined)
-  .forEach((a) => console.log(a.tag, a.keyword, a.repeatingGroup));
-// 60004000 Overlay Comments 60xx4000
-```
-
----
-
-## 5. Bridge to FHIR `ImagingStudy` and HL7 v2
-
-**The problem:** the imaging study has to join the rest of the record, and someone has asked you for
-a FHIR resource or an HL7 v2 field mapping.
-
-The crosswalk to work from is the FHIR
-[`ImagingStudy` "Mappings for DICOM"](https://build.fhir.org/imagingstudy-mappings.html) tab, which
-maps each `ImagingStudy` element to the DICOM attribute it comes from. **Say which FHIR you mean:**
-that URL is `build.fhir.org`, the continuous build, not a balloted release, so pin the mappings page
-for the FHIR version your integration targets (R4 / R4B / R5) rather than treating the build as
-stable. Nothing in this package is versioned against FHIR; this library's job is to surface the DICOM
-attributes correctly, and it does not build FHIR resources for you.
-
-**Attributes read** (PS3.6 2026c): `(0020,000D)` Study Instance UID, `(0020,000E)` Series Instance
-UID, `(0008,0018)` SOP Instance UID, `(0008,0016)` SOP Class UID, `(0008,0060)` Modality,
-`(0008,0020)` Study Date, `(0008,0030)` Study Time, `(0010,0020)` Patient ID, `(0010,0021)` Issuer of
-Patient ID, `(0008,0050)` Accession Number.
-
-```ts runnable
-import { parseDicom } from "@cosyte/dicom";
-
-const buf = Buffer.from(
-  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABESUNNAgAAAFVMBAAcAAAAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xAAgAFgBVSRoAMS4yLjg0MC4xMDAwOC41LjEuNC4xLjEuMgAIABgAVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMTExAAgAIABEQQgAMTkwMDAxMDEIADAAVE0GADA5MDAwMAgAUABTSAgAQUNDLTAwMDEIAGAAQ1MCAENUEAAQAFBOCABEb2VeSmFuZRAAIABMTwYATVJOLTQyEAAhAExPDABTQU1QTEUtSE9TUCAgAA0AVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMS4xACAADgBVSR4AMS4yLjgyNi4wLjEuMzY4MDA0My44LjQ5OC4xLjIAIAARAElTAgAyICgAAgBVUwIAAQAoAAQAQ1MMAE1PTk9DSFJPTUUyICgAEABVUwIAAAIoABEAVVMCAAACKAAwAERTCAAwLjVcMC41ICgAAAFVUwIAEAAoAAEBVVMCAAwAKAACAVVTAgALACgAAwFVUwIAAQAoAFIQRFMGAC0xMDI0ICgAUxBEUwIAMSA=",
-  "base64",
-);
-
-const ds = parseDicom(buf);
-
-// --- FHIR ImagingStudy ---------------------------------------------------
-// ImagingStudy.identifier carries the Study Instance UID as a `urn:oid:` value.
-const identifier = `urn:oid:${ds.study.instanceUid ?? ""}`;
-identifier; // => "urn:oid:1.2.826.0.1.3680043.8.498.1.1"
-
-// ImagingStudy.series.uid and .series.modality come straight off the series view.
-const series = { uid: ds.series.instanceUid, modality: ds.series.modality };
-series.modality; // => "CT"
-
-// ImagingStudy.series.instance.uid and .sopClass, per instance.
-const instance = { uid: ds.image.sopInstanceUid };
-instance.uid; // => "1.2.826.0.1.3680043.8.498.111"
-
-// ImagingStudy.started is a FHIR dateTime, so Study Date and Study Time compose into one
-// value. Both are structured here, so you build the string rather than concatenating raw
-// bytes and hoping.
-const d = ds.study.date;
-const t = ds.study.time;
-const started =
-  d?.valid === true
-    ? `${String(d.year).padStart(4, "0")}-${String(d.month).padStart(2, "0")}-${String(d.day).padStart(2, "0")}` +
-      (t?.valid === true
-        ? `T${String(t.hours).padStart(2, "0")}:${String(t.minutes ?? 0).padStart(2, "0")}:${String(t.seconds ?? 0).padStart(2, "0")}`
-        : "")
-    : undefined;
-started; // => "1900-01-01T09:00:00"
-
-// ImagingStudy.subject resolves to a Patient. The DICOM side of that join is the Patient ID
-// AND its issuer, never the id alone.
-const subject = { id: ds.patient.id, assigner: ds.patient.issuerOfId };
-subject.assigner; // => "SAMPLE-HOSP"
-
-// --- HL7 v2 ---------------------------------------------------------------
-// The Accession Number is the HIS-to-PACS workhorse and is conventionally carried in
-// OBR-18 (Placer Field 1) or OBR-19 in a radiology ORM/ORU. Which one your interface uses
-// is a site agreement, not a DICOM rule.
-const accession = ds.study.accessionNumber;
-accession; // => "ACC-0001"
-
-// The Study Instance UID has no standard HL7 v2 field. Sites that carry it use a Z-segment
-// or an agreed OBR/ZDS slot; there is nothing to read out of the standard here.
-```
-
-Three cautions that matter more than the field list:
-
-- **`ImagingStudy.started` needs a time zone and DICOM may not carry one.** `(0008,0201)` Timezone
-  Offset From UTC exists but is frequently absent, and this library never invents one. A FHIR
-  `dateTime` without an offset is a local time; decide the offset at your boundary, explicitly.
-- **Series and SOP Instance UIDs are not represented in HL7 v2.** Image-level identity lives only in
-  DICOM. If someone asks you to "send the image ID in the ORU", the honest answer is that there is no
-  standard field for it.
-- **A `urn:oid:` identifier is only correct for a genuine OID.** The Study Instance UID is a UID by
-  construction; do not wrap an Accession Number the same way.
-
----
-
-## 6. Re-serialize a parsed object to spec-clean bytes
-
-**The problem:** you parsed an object (perhaps a quirky one) and need Part 10 bytes back out for
-storage or forwarding, with a guarantee that nothing was silently lost.
-
-`serializeDicom(ds)` writes a `Dataset` back to a Part 10 `Buffer`: preamble and `DICM`, File Meta
-always Explicit VR LE with a recomputed group length, and the dataset body **in the source transfer
-syntax, no transcode**. It obeys the conservative half of Postel's Law: every Value Field padded to
-an even length (PS3.5 2026c §7.1.1 defines the Value Field as "An even number of bytes containing the
-Value(s) of the Data Element"), correct headers, byte-for-byte encapsulated-pixel-data passthrough,
-and every Data Set it can walk (the root and each Sequence Item, at every depth up to
-`NESTING_DEPTH_LIMIT`) written in ascending tag order with Items kept in order and no value changed.
-A tag repeated inside an Item, a Sequence that cannot be walked, is nested past the bound or whose
-parsed `items` do not match its bytes, and any `UN`-carried Sequence are written as read, unordered;
-an element whose own bytes do not show where a reader ends it (an undefined-length `UN` the parser
-could not read as a Sequence, for one) is written after the ascending rest of its Data Set; see
-[Serialization](./serialization#what-the-writer-guarantees). Serializing an already-serialized
-object is a fixed point.
-
-```ts runnable
-import { parseDicom, serializeDicom } from "@cosyte/dicom";
-
-const buf = Buffer.from(
-  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABESUNNAgAAAFVMBAAcAAAAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xAAgAFgBVSRoAMS4yLjg0MC4xMDAwOC41LjEuNC4xLjEuMgAIABgAVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMTExAAgAIABEQQgAMTkwMDAxMDEIADAAVE0GADA5MDAwMAgAUABTSAgAQUNDLTAwMDEIAGAAQ1MCAENUEAAQAFBOCABEb2VeSmFuZRAAIABMTwYATVJOLTQyEAAhAExPDABTQU1QTEUtSE9TUCAgAA0AVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMS4xACAADgBVSR4AMS4yLjgyNi4wLjEuMzY4MDA0My44LjQ5OC4xLjIAIAARAElTAgAyICgAAgBVUwIAAQAoAAQAQ1MMAE1PTk9DSFJPTUUyICgAEABVUwIAAAIoABEAVVMCAAACKAAwAERTCAAwLjVcMC41ICgAAAFVUwIAEAAoAAEBVVMCAAwAKAACAVVTAgALACgAAwFVUwIAAQAoAFIQRFMGAC0xMDI0ICgAUxBEUwIAMSA=",
-  "base64",
-);
-
-const ds = parseDicom(buf);
-const out = serializeDicom(ds);
-
-Buffer.isBuffer(out); // => true
-
-// Re-parsing the bytes yields the same data...
-parseDicom(out).patient.name?.alphabetic?.familyName; // => "Doe"
-
-// ...and re-serializing is byte-identical (a fixed point).
-serializeDicom(parseDicom(out)).equals(out); // => true
-```
-
-Only the typed `FileMeta` fields round-trip through the model; the rest of File Meta is recomputed
-spec-clean on emit. Non-modeled `(0002,xxxx)` elements the source carried are preserved verbatim and
-re-emitted in ascending tag order.
-
-**That is the parse-then-serialize path, and it is not what `deidentify()` output does.** A
-de-identified File Meta group describes this de-identifying application instead of the source, so the
-byte-for-byte round trip above does not hold for it. See
-[De-identify before sharing](#4-de-identify-before-sharing).
-
----
-
-## 7. Read raw pixel data without decoding it
-
-**The problem:** you need the pixel bytes (to hand to an imaging pipeline, to hash, to forward) but
-`@cosyte/dicom` deliberately does not decode them.
-
-Pixel Data `(7FE0,0010)` decodes to a `{ kind: "binary", bytes }` value: the raw `Buffer`, exactly
-as stored. PS3.5 2026c §8.2 is the clause that governs how those bytes are encoded, native or
-encapsulated. You read the geometry from the [`image` view](./spec-notes-safety) and the bytes from
-the element; interpreting them is your pipeline's job.
-
-```ts runnable
-import { parseDicom } from "@cosyte/dicom";
-
-// Synthetic 2x2, 16-bit object with a tiny raw Pixel Data element.
-const buf = Buffer.from(
-  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABESUNNAgAAAFVMBAAcAAAAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xACgAEABVUwIAAgAoABEAVVMCAAIAKAAAAVVTAgAQAOB/EABPQgAACAAAAAEAAgADAAQA",
-  "base64",
-);
-
-const ds = parseDicom(buf);
-
-ds.image.rows; // => 2
-ds.image.columns; // => 2
-
-const pixels = ds.get("7FE00010")?.value; // Pixel Data
-pixels?.kind; // => "binary"
-const byteLength = pixels?.kind === "binary" ? pixels.bytes.length : undefined;
-byteLength; // => 8
-
-ds.warnings.length; // => 0
-```
-
-The bytes are never windowed, rescaled, or color-transformed here. That is
-[out of scope](./limitations).
-
-**Encapsulated (compressed) objects.** Every transfer syntax PS3.5 2026c section A.4 names (JPEG,
-JPEG-LS, JPEG 2000, HTJ2K, RLE, MPEG, HEVC, JPEG XL, Deflated Image Frame, and Encapsulated
-Uncompressed) parses: section A.4 makes the whole Data Set Explicit VR Little Endian with only Pixel
-Data encapsulated, so the metadata reads exactly as it would under Explicit VR LE. The Pixel Data
-element's `value` is still the whole on-wire span as `binary`. `readPixelDataFragments(ds)` returns a
-`PixelDataFragments` with the Basic Offset Table and every fragment as raw bytes, in file order, with
-no Item header in any of them, and `undefined` when Pixel Data is absent or native.
-
-```ts runnable
-import { parseDicom, readPixelDataFragments } from "@cosyte/dicom";
-
-// Synthetic 2x2, 8-bit object under JPEG Baseline (Process 1), with an empty Basic Offset
-// Table and two fragments of fill bytes. The fragments are not a JPEG codestream, and nothing
-// here needs them to be: they are never decoded.
-const buf = Buffer.from(
-  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABESUNNAgAAAFVMBAAeAAAAAgAQAFVJFgAxLjIuODQwLjEwMDA4LjEuMi40LjUwKAAQAFVTAgACACgAEQBVUwIAAgAoAAABVVMCAAgA4H8QAE9CAAD//////v8A4AAAAAD+/wDgCAAAAAECAwQFBgcI/v8A4AQAAAAJCgsM/v/d4AAAAAA=",
-  "base64",
-);
-
-const ds = parseDicom(buf);
-ds.fileMeta?.transferSyntaxUID; // => "1.2.840.10008.1.2.4.50"
-ds.image.rows; // => 2
-
-const pixels = readPixelDataFragments(ds);
-pixels?.basicOffsetTable?.length; // => 0
-pixels?.fragments.length; // => 2
-pixels?.fragments[0]?.toString("hex"); // => "0102030405060708"
-
-ds.warnings.length; // => 0
-```
-
-**The limits sit beside that capability.** No pixel is decompressed, no frame is assembled from
-fragments, and neither the Basic Offset Table nor an Extended Offset Table `(7FE0,0001)` is
-interpreted. `serializeDicom` writes each section A.4 syntax back under its own UID, a de-identified
-object included, with the Basic Offset Table and fragment Items byte for byte, and **refuses with
-`INVALID_ENCAPSULATED_PIXEL_DATA`**, never repairing, a top-level Pixel Data section A.4 does not
-allow: absent, native, beside Float or Double Float Pixel Data, a stream not ended by its Sequence
-Delimitation Item, or an odd or empty Item. A fragment stream that ends before its Sequence
-Delimitation Item still parses, and `DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED` on `ds.warnings` says
-the fragment list may be short, which is why the writer will not write it.
-
-**JPIP Referenced objects carry a URL, not fragments.** Under the four JPIP Referenced syntaxes
-(PS3.5 2026c sections A.6, A.7, A.11 and A.12) the metadata parses as it would under Explicit VR LE,
-the two Deflate ones inflated first. A conformant one has no Pixel Data to read, so
-`readPixelDataFragments` returns `undefined`; its pixels are referenced by Pixel Data Provider URL
-`(0028,7FE0)`, which
-`ds.get("00287FE0")?.value` returns as `{ kind: "text", value }` exactly as the file carries it. It
-is **never fetched**; retrieving it is your call and your network. Such an object is read-only
-here: `serializeDicom` refuses it with `UNSUPPORTED_TRANSFER_SYNTAX`, and `deidentify()` refuses it
-with a `DeidentifyError` whose code is `UNSUPPORTED_TRANSFER_SYNTAX`, because the URL has no PS3.15
-Table E.1-1 action and would otherwise be kept. The SMPTE ST 2110 syntaxes and every retired UID
-stay the fatal `UNSUPPORTED_TRANSFER_SYNTAX`. See [Known limitations](./limitations).
-
----
-
-## 8. Triage warnings: the lenient, never-throw contract
-
-**The problem:** you want to log or triage every tolerated deviation without your pipeline throwing on
-a vendor quirk.
-
-Every recoverable deviation collects on `ds.warnings` with a stable code and a byte offset; only a
-`FATAL_CODES` member throws. Each message is looked up in a frozen registry keyed by the code, with
-only structural substitutions (a tag, a VR, a number).
-
-**What a message may contain is a mechanism, not a verdict**, and the verdict form of this paragraph
-was corrected twice, so it is gone rather than tried a third time. `{tag}` renders only a tag PS3.6's
-element registry carries a **literal row** for and `<withheld>` otherwise; `{vr}` renders only one of
-the 34 VRs PS3.5 defines; and a raw number a header carries is bound out of the factory signature
-where it is bound at all, so `DICOM_ODD_LENGTH_VALUE_PADDED` no longer prints the odd length and
-`DICOM_NONZERO_RESERVED_BYTES` no longer prints its two reserved bytes. **Where a `deidentify()`
-code still prints a length that is the header's own, that is `PRE-EXISTING` and disclosed rather than
-closed**: see the troubleshooting page. The cost is that a message about a private, Group Length, or
-repeating-group element no longer names its tag. A thrown `DicomParseError`'s `message` comes from
-its own frozen registry, whose factories have no tag slot at all, but the error still carries a
-16-byte hex `snippet` of the source. All of it is measured and covered in
-[Keeping PHI out of logs](./troubleshooting#keeping-phi-out-of-logs).
-
-```ts runnable
-import { parseDicom, WARNING_CODES } from "@cosyte/dicom";
-
-// Synthetic object with the preamble omitted: a tolerated quirk.
-const buf = Buffer.from(
-  "AgAAAFVMBAAcAAAAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xAAgAYABDUwIAQ1QQACAATE8GAE1STi00Mg==",
-  "base64",
-);
-
-const ds = parseDicom(buf);
-
-// The object parsed; the deviation is recorded, not hidden.
-ds.series.modality; // => "CT"
-ds.warnings.some((w) => w.code === WARNING_CODES.DICOM_MISSING_PREAMBLE); // => true
-
-// Every warning carries a stable code and a byte offset, and a registry message.
-ds.warnings.every((w) => typeof w.code === "string"); // => true
-```
-
-**Escalate when you want strictness.** A [source profile](./spec-notes-profiles) can promote chosen
-warning codes to a thrown `DicomParseError` (a stricter gate for a trusted sender) or
-suppress benign, high-volume codes for a known-quirky source. Note that `{ strict: true }` turns
-every Tier-2 warning into a `DicomParseError`, which carries the raw `snippet` the warning does not,
-so a PHI review of the lenient path does not transfer to the strict one.
-
-## 9. Read a veterinary patient
-
-**The problem:** your objects come from a veterinary practice, and you need the species, the breed,
-whether the animal is neutered, and who is responsible for it, from headers that often do not follow
-the standard to the letter.
-
-`ds.patient` reads all of these. Each one is typed-absent when the object does not carry it, so on a
-human patient none of them appears. The species and breed code sequences are read through `readCode`, so a code
-arrives as the same `CodedConcept` triplet everywhere else in the package uses. A value the view
-cannot read as written does not throw: it is kept as written or left absent, and reported on
-`ds.patient.issues` with a code from `PATIENT_ISSUE_CODES`.
+Each entry here is one job: the steps, a sample that runs, and what you get back. Every sample
+object is synthetic (an invented patient, fake UIDs) and encoded as base64, so no entry needs a
+file of yours on disk. The [recipes](./recipes.md) cover indexing, routing keys, pixel metadata,
+de-identification, the FHIR and HL7 v2 bridge, and writing bytes back out. Read
+[Known limitations](./limitations.md) before you trust any of this on real data.
+
+## Triage warnings
+
+You want to log or triage every tolerated deviation without your pipeline throwing on a vendor
+quirk.
+
+1. Parse leniently, the default, and read `ds.warnings`. Every recoverable deviation is there with a
+   stable `code` and a byte offset; only a member of `FATAL_CODES` throws.
+
+   ```ts runnable
+   import { parseDicom, WARNING_CODES } from "@cosyte/dicom";
+
+   // A synthetic object with the preamble omitted: a tolerated quirk.
+   const ds = parseDicom(
+     Buffer.from(
+       "AgAAAFVMBAAcAAAAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xAAgAYABDUwIAQ1QQACAATE8GAE1STi00Mg==",
+       "base64",
+     ),
+   );
+
+   // The object parsed; the deviation is recorded, not hidden.
+   ds.series.modality; // => "CT"
+   ds.warnings.map((w) => w.code); // => ["DICOM_MISSING_PREAMBLE"]
+   ds.warnings.some((w) => w.code === WARNING_CODES.DICOM_MISSING_PREAMBLE); // => true
+   ```
+
+2. Compare on `WARNING_CODES` members rather than strings, and give a `switch` over the codes a
+   `default` branch: the registry gains codes between releases.
+
+3. Log `w.code` and `w.position`, which carry nothing from the document. A message carries only
+   structural substitutions; [Keeping PHI out of logs](./troubleshooting.md#keeping-phi-out-of-logs)
+   says exactly what each may contain.
+
+4. To be stricter for a trusted sender, pass `{ strict: true }` or a
+   [source profile](./spec-notes-profiles.md) that escalates chosen codes. An escalated warning
+   throws a `DicomParseError` whose `code` is the warning's own, and that error carries the raw
+   `snippet` the warning does not; [Error handling](./error-handling.md#when-a-warning-becomes-a-throw)
+   has the details.
+
+   ```ts runnable
+   import { parseDicom, DicomParseError, FATAL_CODES } from "@cosyte/dicom";
+
+   const buf = Buffer.from(
+     "AgAAAFVMBAAcAAAAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xAAgAYABDUwIAQ1QQACAATE8GAE1STi00Mg==",
+     "base64",
+   );
+
+   let code: string | undefined;
+   try {
+     parseDicom(buf, { strict: true });
+   } catch (err) {
+     if (err instanceof DicomParseError) code = err.code;
+   }
+   code; // => "DICOM_MISSING_PREAMBLE"
+   (code ?? "") in FATAL_CODES; // => false
+   ```
+
+## Read a veterinary patient
+
+Your objects come from a veterinary practice, and you need the species, the breed, whether the
+animal is neutered, and who is responsible for it, from headers that often do not follow the
+standard to the letter.
 
 **Attributes read** (PS3.6 2026c): `(0010,2201)` Patient Species Description, `(0010,2202)` Patient
 Species Code Sequence, `(0010,2203)` Patient's Sex Neutered, `(0010,2292)` Patient Breed
 Description, `(0010,2293)` Patient Breed Code Sequence, `(0010,2297)` Responsible Person,
 `(0010,2298)` Responsible Person Role, `(0010,2299)` Responsible Organization.
 
+1. Read them off `ds.patient`. Each is typed-absent when the object does not carry it, so on a human
+   patient none appears. The code sequences are read through `readCode`, so a code arrives as the
+   same `CodedConcept` triplet the rest of the package uses.
+
+2. Read `ds.patient.issues`. A value the view cannot read as written does not throw: it is kept as
+   written or left absent, and reported there with a code from `PATIENT_ISSUE_CODES`.
+
 ```ts runnable
 import { parseDicom, PATIENT_ISSUE_CODES } from "@cosyte/dicom";
 
 // A synthetic veterinary object: invented codes in a private 99SYNTH scheme, invented names.
-const buf = Buffer.from(
-  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABESUNNAgAAAFVMBAAcAAAAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xABAAEABQTg4AU1lOVEhFVElDXlBFVCAQACAATE8MAFNZTlRILVBFVC0xIBAAASJMTxIAU1lOVEhFVElDIFNQRUNJRVMgEAACIlNRAAD//////v8A4DwAAAAIAAABU0gKAFNZTlNQRUNJRVMIAAIBU0gIADk5U1lOVEggCAAEAUxPEgBTeW50aGV0aWMgc3BlY2llcyD+/93gAAAAABAAAyJDUwgATkVVVEVSRUQQAJIiTE8QAFNZTlRIRVRJQyBCUkVFRCAQAJMiU1EAAP/////+/wDgOAAAAAgAAAFTSAgAU1lOQlJFRUQIAAIBU0gIADk5U1lOVEggCAAEAUxPEABTeW50aGV0aWMgYnJlZWQg/v/d4AAAAAAQAJciUE4QAFNZTlRIRVRJQ15PV05FUiAQAJgiQ1MGAE9XTkVSIBAAmSJMTw4AU0FNUExFIENMSU5JQyA=",
-  "base64",
-);
-
-const p = parseDicom(buf).patient;
+const p = parseDicom(
+  Buffer.from(
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABESUNNAgAAAFVMBAAcAAAAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xABAAEABQTg4AU1lOVEhFVElDXlBFVCAQACAATE8MAFNZTlRILVBFVC0xIBAAASJMTxIAU1lOVEhFVElDIFNQRUNJRVMgEAACIlNRAAD//////v8A4DwAAAAIAAABU0gKAFNZTlNQRUNJRVMIAAIBU0gIADk5U1lOVEggCAAEAUxPEgBTeW50aGV0aWMgc3BlY2llcyD+/93gAAAAABAAAyJDUwgATkVVVEVSRUQQAJIiTE8QAFNZTlRIRVRJQyBCUkVFRCAQAJMiU1EAAP/////+/wDgOAAAAAgAAAFTSAgAU1lOQlJFRUQIAAIBU0gIADk5U1lOVEggCAAEAUxPEABTeW50aGV0aWMgYnJlZWQg/v/d4AAAAAAQAJciUE4QAFNZTlRIRVRJQ15PV05FUiAQAJgiQ1MGAE9XTkVSIBAAmSJMTw4AU0FNUExFIENMSU5JQyA=",
+    "base64",
+  ),
+).patient;
 
 p.speciesDescription; // => "SYNTHETIC SPECIES"
 p.speciesCode?.codeValue; // => "SYNSPECIES"
@@ -773,14 +125,64 @@ What each issue code means:
 | `DICOM_PATIENT_CODE_SEQUENCE_EXTRA_ITEMS` | A code sequence holds more than one item. The first is read.                                                                                       |
 | `DICOM_PATIENT_CODE_INCOMPLETE`           | The code item has no code value in any of its three forms, no meaning, or no coding scheme designator beside a non-URN value. What it has is kept. |
 
-Three things to keep in mind:
-
 - **Responsible Person Role is not checked against a list.** The view keeps whatever role the sender
   wrote, and reports nothing about it.
 - **`responsiblePerson` is identifying.** It names a person and an organization, so log none of it.
   An issue's `message` is built from its code and tag alone, never from a value, so the issues are
   safe to log.
-- **De-identification.** The Annex E table this package carries removes `(0010,2297)` Responsible
-  Person and `(0010,2299)` Responsible Organization, and `(0010,2203)` Patient's Sex Neutered unless
-  you pass the `RetainPatientCharacteristics` option. It has no row for the species, the breed or the role, so
-  `deidentify()` keeps them.
+- **De-identification.** The Annex E table we carry removes `(0010,2297)` Responsible Person and
+  `(0010,2299)` Responsible Organization, and `(0010,2203)` Patient's Sex Neutered unless you pass
+  the `RetainPatientCharacteristics` option. It has no row for the species, the breed or the role,
+  so `deidentify()` keeps them.
+
+## Check the dates on a de-identified object
+
+You received an object that someone de-identified, and before you use its dates you need to know
+whether they are real, modified, or gone.
+
+1. Read `(0028,0303)` Longitudinal Temporal Information Modified. A run of `deidentify()` writes it
+   in one of three states: `REMOVED` when no Retain Longitudinal Temporal Information Option was
+   active, `UNMODIFIED` when `RetainLongitudinalTemporal` was, and `MODIFIED` when
+   `RetainLongitudinalTemporalModifiedDates` was.
+
+   ```ts runnable
+   import { parseDicom, deidentify } from "@cosyte/dicom";
+
+   const source = parseDicom(
+     Buffer.from(
+       "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABESUNNAgAAAFVMBAAcAAAAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xAAgAFgBVSRoAMS4yLjg0MC4xMDAwOC41LjEuNC4xLjEuMgAIABgAVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMTExAAgAIABEQQgAMTkwMDAxMDEIADAAVE0GADA5MDAwMAgAUABTSAgAQUNDLTAwMDEIAGAAQ1MCAENUEAAQAFBOCABEb2VeSmFuZRAAIABMTwYATVJOLTQyEAAhAExPDABTQU1QTEUtSE9TUCAgAA0AVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMS4xACAADgBVSR4AMS4yLjgyNi4wLjEuMzY4MDA0My44LjQ5OC4xLjIAIAARAElTAgAyICgAAgBVUwIAAQAoAAQAQ1MMAE1PTk9DSFJPTUUyICgAEABVUwIAAAIoABEAVVMCAAACKAAwAERTCAAwLjVcMC41ICgAAAFVUwIAEAAoAAEBVVMCAAwAKAACAVVTAgALACgAAwFVUwIAAQAoAFIQRFMGAC0xMDI0ICgAUxBEUwIAMSA=",
+       "base64",
+     ),
+   );
+
+   // Three de-identified copies, one per state, as a sender would produce them.
+   const removed = deidentify(source).dataset;
+   const unmodified = deidentify(source, { retain: ["RetainLongitudinalTemporal"] }).dataset;
+   const modified = deidentify(source, {
+     retain: ["RetainLongitudinalTemporalModifiedDates"],
+   }).dataset;
+
+   const datesState = (ds: typeof removed) => {
+     const value = ds.get("00280303")?.value;
+     return value?.kind === "strings" ? value.values[0] : undefined;
+   };
+
+   datesState(removed); // => "REMOVED"
+   removed.study.date; // => undefined
+
+   datesState(unmodified); // => "UNMODIFIED"
+   unmodified.study.date?.raw; // => "19000101"
+
+   datesState(modified); // => "MODIFIED"
+   ```
+
+2. Treat `UNMODIFIED` dates as real ones. Treat `MODIFIED` as a statement about the table column the
+   sender used, not proof that any date was shifted: this library performs no date transformation,
+   and a sender that ran `RetainLongitudinalTemporalModifiedDates` with us received
+   `DICOM_DEIDENT_DATES_NOT_TRANSFORMED` saying the shift was theirs to do.
+
+3. Treat an object with no `(0028,0303)` as one whose dates you cannot judge: it was not
+   de-identified by a run that records the state.
+
+[De-identification](./deidentification.md) explains the attribute and the two Options, and
+[Known limitations](./limitations.md) states the residual of the modified-dates branch.

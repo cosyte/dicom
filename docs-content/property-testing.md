@@ -1,12 +1,12 @@
 ---
 id: property-testing
-title: Property testing with our generators
+title: Property-test your code with our generators
 sidebar_label: Property testing
-sidebar_position: 15.5
+sidebar_position: 6
 description: The fast-check generators at @cosyte/dicom/arbitraries, what each one draws, and how to use them to test code built on the parser.
 ---
 
-# Property testing with our generators
+# Property-test your code with our generators
 
 `@cosyte/dicom/arbitraries` exports the [fast-check](https://fast-check.dev/) generators we test
 this library with: well-formed Data Sets and the Part 10 bytes they encode to, files with one
@@ -82,7 +82,7 @@ const run = fc.check(
 run.failed; // => false
 ```
 
-## How we run our own properties
+## The properties we run on this package
 
 Our round-trip, lenient and immutability properties run 100 cases on every pull request and 10,000
 each night. `COSYTE_PROPERTY_RUNS` sets the depth of a run, and each property prints its seed
