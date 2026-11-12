@@ -145,6 +145,20 @@ describe("Implicit VR LE: US or SS attributes follow Pixel Representation (0028,
     expect(vrOf(implicit(el("00280106", u16(7))), "00280106")).toBe("US");
   });
 
+  it("takes an empty Pixel Representation as none", () => {
+    const ds = implicit(
+      el("00280103", u16(1)),
+      el("00280103", Buffer.alloc(0)),
+      el("00280106", u16(65535)),
+    );
+    expect(vrOf(ds, "00280106")).toBe("US");
+  });
+
+  it("reads an empty Pixel Representation that ends the Data Set", () => {
+    const ds = implicit(el("00280103", Buffer.alloc(0)));
+    expect(ds.get("00280103")?.length).toBe(0);
+  });
+
   it("gives an Item the Pixel Representation of the Data Set that encloses it", () => {
     const ds = implicit(
       el("00280103", u16(1)),
