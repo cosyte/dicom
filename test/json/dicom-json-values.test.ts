@@ -285,10 +285,22 @@ describe("numbers", () => {
   });
 
   it("refuses DS and IS text that is not a number, or not a finite one", () => {
-    for (const text of ["x5", "5x", "1.2.3", "e5 ", "1e ", "1e+", "+", ".", "1e400 "]) {
+    for (const text of [
+      "x5",
+      "5x",
+      "0x10",
+      "0b1 ",
+      "1.2.3",
+      "e5 ",
+      "1e ",
+      "1e+",
+      "+",
+      ".",
+      "1e400 ",
+    ]) {
       expect(refusal(() => one("00101020", "DS", latin1(text)))).toBe("UNREPRESENTABLE_NUMBER");
     }
-    for (const text of ["x5", "5x", "1.5 ", "+ "]) {
+    for (const text of ["x5", "5x", "0x10", "0b1 ", "1.5 ", "+ "]) {
       expect(refusal(() => one("00200013", "IS", latin1(text)))).toBe("UNREPRESENTABLE_NUMBER");
     }
   });

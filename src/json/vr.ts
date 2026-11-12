@@ -15,21 +15,7 @@
  * ```
  */
 export function isMultiStringVr(vr: string): boolean {
-  switch (vr) {
-    case "AE":
-    case "AS":
-    case "CS":
-    case "DA":
-    case "DT":
-    case "LO":
-    case "SH":
-    case "TM":
-    case "UC":
-    case "UI":
-      return true;
-    default:
-      return false;
-  }
+  return ["AE", "AS", "CS", "DA", "DT", "LO", "SH", "TM", "UC", "UI"].includes(vr);
 }
 
 /**
@@ -41,15 +27,7 @@ export function isMultiStringVr(vr: string): boolean {
  * ```
  */
 export function isSingleStringVr(vr: string): boolean {
-  switch (vr) {
-    case "LT":
-    case "ST":
-    case "UT":
-    case "UR":
-      return true;
-    default:
-      return false;
-  }
+  return ["LT", "ST", "UT", "UR"].includes(vr);
 }
 
 /**
@@ -62,18 +40,7 @@ export function isSingleStringVr(vr: string): boolean {
  * ```
  */
 export function isCharsetVr(vr: string): boolean {
-  switch (vr) {
-    case "SH":
-    case "LO":
-    case "UC":
-    case "ST":
-    case "LT":
-    case "UT":
-    case "PN":
-      return true;
-    default:
-      return false;
-  }
+  return ["SH", "LO", "UC", "ST", "LT", "UT", "PN"].includes(vr);
 }
 
 /**
@@ -86,19 +53,10 @@ export function isCharsetVr(vr: string): boolean {
  * ```
  */
 export function numberWidth(vr: string): 2 | 4 | 8 | undefined {
-  switch (vr) {
-    case "US":
-    case "SS":
-      return 2;
-    case "UL":
-    case "SL":
-    case "FL":
-      return 4;
-    case "FD":
-      return 8;
-    default:
-      return undefined;
-  }
+  if (vr === "US" || vr === "SS") return 2;
+  if (vr === "UL" || vr === "SL" || vr === "FL") return 4;
+  if (vr === "FD") return 8;
+  return undefined;
 }
 
 /**
@@ -122,16 +80,7 @@ export function isBinaryVr(vr: string): boolean {
  * ```
  */
 export function isSwappedBinaryVr(vr: string): boolean {
-  switch (vr) {
-    case "OD":
-    case "OF":
-    case "OL":
-    case "OV":
-    case "OW":
-      return true;
-    default:
-      return false;
-  }
+  return ["OD", "OF", "OL", "OV", "OW"].includes(vr);
 }
 
 /**

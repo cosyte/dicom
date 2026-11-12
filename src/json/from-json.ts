@@ -25,7 +25,11 @@ import { hasValueForm } from "./to-json.js";
 import type { DicomJsonDataset, FromDicomJsonOptions } from "./types.js";
 import { isBinaryVr, isCharsetVr, isSingleStringVr, isSwappedBinaryVr, numberWidth } from "./vr.js";
 
-type Encoding = "implicit" | "explicitLE" | "explicitBE";
+/** How a Data Set body is encoded: Implicit or Explicit VR, and its byte order. */
+interface Encoding {
+  readonly implicit: boolean;
+  readonly le: boolean;
+}
 
 /** The undefined-length sentinel (PS3.5 section 7.1.1). */
 const UNDEFINED_LENGTH = 0xffffffff;
@@ -36,18 +40,16 @@ const MAX_LONG_LENGTH = 0xfffffffe;
 
 /** The body encoding of a Transfer Syntax this writes, or `undefined`. */
 function encodingOf(transferSyntaxUID: string): Encoding | undefined {
-  switch (transferSyntaxUID) {
-    case "1.2.840.10008.1.2":
-      return "implicit";
-    // Explicit VR Little Endian, and Deflated, whose body is Explicit VR LE (PS3.5 section A.5).
-    case "1.2.840.10008.1.2.1":
-    case "1.2.840.10008.1.2.1.99":
-      return "explicitLE";
-    case "1.2.840.10008.1.2.2":
-      return "explicitBE";
-    default:
-      return undefined;
+  if (transferSyntaxUID === "1.2.840.10008.1.2") return { implicit: true, le: true };
+  // Explicit VR Little Endian, and Deflated, whose body is Explicit VR LE (PS3.5 section A.5).
+  if (
+    transferSyntaxUID === "1.2.840.10008.1.2.1" ||
+    transferSyntaxUID === "1.2.840.10008.1.2.1.99"
+  ) {
+    return { implicit: false, le: true };
   }
+  if (transferSyntaxUID === "1.2.840.10008.1.2.2") return { implicit: false, le: false };
+  return undefined;
 }
 
 /** `true` for eight hex digits, a tag as the model keys it. */
@@ -57,19 +59,11 @@ function isTagKey(text: string): boolean {
 
 /** The lowest and highest value of an integer VR, or `undefined` for another VR. */
 function rangeOf(vr: string): readonly [number, number] | undefined {
-  switch (vr) {
-    case "US":
-      return [0, 0xffff];
-    case "SS":
-      return [-0x8000, 0x7fff];
-    case "UL":
-      return [0, 0xffffffff];
-    case "SL":
-    case "IS":
-      return [-0x80000000, 0x7fffffff];
-    default:
-      return undefined;
-  }
+  if (vr === "US") return [0, 0xffff];
+  if (vr === "SS") return [-0x8000, 0x7fff];
+  if (vr === "UL") return [0, 0xffffffff];
+  if (vr === "SL" || vr === "IS") return [-0x80000000, 0x7fffffff];
+  return undefined;
 }
 
 function refuse(code: DicomJsonErrorCode, tag: string | undefined): never {
@@ -132,9 +126,9 @@ class Writer {
 }
 
 /**
- * The Specific Character Set terms a JSON Data Set names, `null` read as an empty term, or
- * `inherited` when it names none. A term that is not a string matches no set, and the attribute
- * itself is refused when it is written.
+ * The Specific Character Set terms a JSON Data Set names, or `inherited` when it names none.
+ * {@link encodeText} reads a `null` first term as the empty one; a term that is not a string
+ * matches no set, and the attribute itself is refused when it is written.
  */
 function charsetOf(
   json: Record<string, unknown>,
@@ -145,7 +139,7 @@ function charsetOf(
   const value = attr["Value"];
   if (value === undefined) return [];
   if (!Array.isArray(value)) refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, "00080005");
-  return value.map((term: unknown) => (term === null ? "" : term));
+  return value;
 }
 
 /**
@@ -282,7 +276,7 @@ function scalarValue(
   terms: readonly unknown[],
   ctx: Context,
 ): Buffer {
-  const le = ctx.encoding !== "explicitBE";
+  const le = ctx.encoding.le;
   const value = attr["Value"];
   const inline = attr["InlineBinary"];
   const uri = attr["BulkDataURI"];
@@ -374,11 +368,11 @@ function writeHeader(
   tag: string,
 ): void {
   // Implicit VR and the long-form VRs have a 32-bit Value Length Field, the rest 16 bits.
-  const long = ctx.encoding === "implicit" || LONG_FORM_VRS.has(vr as VR);
+  const long = ctx.encoding.implicit || LONG_FORM_VRS.has(vr as VR);
   refuseIfLonger(length, long ? MAX_LONG_LENGTH : MAX_SHORT_LENGTH, tag);
   w.u16(group);
   w.u16(element);
-  if (ctx.encoding === "implicit") {
+  if (ctx.encoding.implicit) {
     w.u32(length);
     return;
   }
@@ -402,7 +396,7 @@ function writeSequence(
 ): void {
   w.u16(group);
   w.u16(element);
-  if (ctx.encoding !== "implicit") {
+  if (!ctx.encoding.implicit) {
     w.bytes(Buffer.from("SQ"));
     w.u16(0);
   }
@@ -514,7 +508,7 @@ export function fromDicomJson(json: DicomJsonDataset, options: FromDicomJsonOpti
     undefinedLength: options.sequenceLength === "undefined",
     resolveBulkData: options.resolveBulkData,
   };
-  const w = new Writer(encoding !== "explicitBE");
+  const w = new Writer(encoding.le);
   writeDataset(w, json, [], ctx);
   let body = w.concat();
   if (fileMeta.transferSyntaxUID === "1.2.840.10008.1.2.1.99") {
