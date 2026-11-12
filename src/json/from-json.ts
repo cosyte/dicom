@@ -5,6 +5,9 @@
  * by `parseDicom`, so the `Dataset` it returns holds its bytes exactly as a parsed one does and
  * `serializeDicom` writes it like any other.
  *
+ * The tables here are functions rather than module constants, so that each is built where it is
+ * read.
+ *
  * @module
  */
 
@@ -20,42 +23,54 @@ import type { VR } from "../dictionary/types.js";
 import { DICOM_JSON_ERROR_CODES, DicomJsonError, type DicomJsonErrorCode } from "./errors.js";
 import { hasValueForm } from "./to-json.js";
 import type { DicomJsonDataset, FromDicomJsonOptions } from "./types.js";
-import {
-  BINARY_VRS,
-  CHARSET_VRS,
-  NUMBER_WIDTH,
-  SINGLE_STRING_VRS,
-  SWAPPED_BINARY_VRS,
-} from "./vr.js";
+import { isBinaryVr, isCharsetVr, isSingleStringVr, isSwappedBinaryVr, numberWidth } from "./vr.js";
 
 type Encoding = "implicit" | "explicitLE" | "explicitBE";
 
-const TS_DEFLATED_LE = "1.2.840.10008.1.2.1.99";
-
-const ENCODINGS: Readonly<Record<string, Encoding>> = {
-  "1.2.840.10008.1.2": "implicit",
-  "1.2.840.10008.1.2.1": "explicitLE",
-  "1.2.840.10008.1.2.2": "explicitBE",
-  [TS_DEFLATED_LE]: "explicitLE",
-};
-
+/** The undefined-length sentinel (PS3.5 section 7.1.1). */
 const UNDEFINED_LENGTH = 0xffffffff;
+/** The largest even length a 16-bit Value Length Field holds. */
 const MAX_SHORT_LENGTH = 0xfffe;
+/** The largest even length a 32-bit Value Length Field holds, short of the sentinel. */
 const MAX_LONG_LENGTH = 0xfffffffe;
-const TAG_KEY = /^[0-9A-Fa-f]{8}$/u;
-const CHARSET_TAG = "00080005";
 
-/** The ranges of the integer VRs. */
-const INTEGER_RANGE: Readonly<Record<string, readonly [number, number]>> = {
-  US: [0, 0xffff],
-  SS: [-0x8000, 0x7fff],
-  UL: [0, 0xffffffff],
-  SL: [-0x80000000, 0x7fffffff],
-};
+/** The body encoding of a Transfer Syntax this writes, or `undefined`. */
+function encodingOf(transferSyntaxUID: string): Encoding | undefined {
+  switch (transferSyntaxUID) {
+    case "1.2.840.10008.1.2":
+      return "implicit";
+    // Explicit VR Little Endian, and Deflated, whose body is Explicit VR LE (PS3.5 section A.5).
+    case "1.2.840.10008.1.2.1":
+    case "1.2.840.10008.1.2.1.99":
+      return "explicitLE";
+    case "1.2.840.10008.1.2.2":
+      return "explicitBE";
+    default:
+      return undefined;
+  }
+}
 
-const IS_MIN = -0x80000000;
-const IS_MAX = 0x7fffffff;
-const DS_MAX_CHARS = 16;
+/** `true` for eight hex digits, a tag as the model keys it. */
+function isTagKey(text: string): boolean {
+  return /^[0-9A-Fa-f]{8}$/u.test(text);
+}
+
+/** The lowest and highest value of an integer VR, or `undefined` for another VR. */
+function rangeOf(vr: string): readonly [number, number] | undefined {
+  switch (vr) {
+    case "US":
+      return [0, 0xffff];
+    case "SS":
+      return [-0x8000, 0x7fff];
+    case "UL":
+      return [0, 0xffffffff];
+    case "SL":
+    case "IS":
+      return [-0x80000000, 0x7fffffff];
+    default:
+      return undefined;
+  }
+}
 
 function refuse(code: DicomJsonErrorCode, tag: string | undefined): never {
   throw new DicomJsonError(code, renderTag(tag));
@@ -65,7 +80,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** How a Data Set's text is encoded: the Specific Character Set terms in effect. */
+/** What every Data Set of one call is written with. */
 interface Context {
   readonly encoding: Encoding;
   readonly undefinedLength: boolean;
@@ -116,18 +131,21 @@ class Writer {
   }
 }
 
-/** The Specific Character Set terms a JSON Data Set names, or `inherited` when it names none. */
-function charsetOf(json: Record<string, unknown>, inherited: readonly string[]): readonly string[] {
-  const attr = json[CHARSET_TAG];
+/**
+ * The Specific Character Set terms a JSON Data Set names, `null` read as an empty term, or
+ * `inherited` when it names none. A term that is not a string matches no set, and the attribute
+ * itself is refused when it is written.
+ */
+function charsetOf(
+  json: Record<string, unknown>,
+  inherited: readonly unknown[],
+): readonly unknown[] {
+  const attr = json["00080005"];
   if (!isRecord(attr)) return inherited;
   const value = attr["Value"];
   if (value === undefined) return [];
-  if (!Array.isArray(value)) refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, CHARSET_TAG);
-  return value.map((term: unknown) => {
-    if (term === null) return "";
-    if (typeof term !== "string") refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, CHARSET_TAG);
-    return term;
-  });
+  if (!Array.isArray(value)) refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, "00080005");
+  return value.map((term: unknown) => (term === null ? "" : term));
 }
 
 /**
@@ -135,11 +153,11 @@ function charsetOf(json: Record<string, unknown>, inherited: readonly string[]):
  * bytes under every Specific Character Set; anything else is encoded only for the default
  * repertoire and `ISO_IR 100` (Latin-1, as the reader decodes them) and `ISO_IR 192` (UTF-8).
  */
-function encodeText(text: string, vr: string, terms: readonly string[], tag: string): Buffer {
+function encodeText(text: string, vr: string, terms: readonly unknown[], tag: string): Buffer {
   if (text.split("").every((c) => c.charCodeAt(0) <= 0x7f)) return Buffer.from(text);
   const first = terms[0] ?? "";
   const single = terms.length <= 1;
-  if (!CHARSET_VRS.has(vr) || (single && (first === "" || first === "ISO_IR 6"))) {
+  if (!isCharsetVr(vr) || (single && (first === "" || first === "ISO_IR 6"))) {
     return latin1(text, tag);
   }
   if (single && first === "ISO_IR 100") return latin1(text, tag);
@@ -178,34 +196,33 @@ function personNameText(value: unknown, tag: string): string {
   return groups.join("=").replace(/=+$/u, "");
 }
 
-function numberText(value: unknown, vr: string, tag: string): string {
-  if (value === null) return "";
+/** A number the JSON gave, checked as a JSON number and against the range of its VR. */
+function numberOf(value: unknown, vr: string, tag: string): number {
   if (typeof value !== "number") refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, tag);
   if (!Number.isFinite(value)) refuse(DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER, tag);
-  if (vr === "IS") {
-    if (!Number.isInteger(value) || value < IS_MIN || value > IS_MAX) {
+  const range = rangeOf(vr);
+  if (range !== undefined) {
+    if (!Number.isInteger(value) || value < range[0] || value > range[1]) {
       refuse(DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER, tag);
     }
-    return String(value);
   }
-  const text = String(value);
-  if (text.length > DS_MAX_CHARS) refuse(DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER, tag);
+  return value;
+}
+
+function numberText(value: unknown, vr: string, tag: string): string {
+  if (value === null) return "";
+  const text = String(numberOf(value, vr, tag));
+  // A DS value is at most 16 bytes (PS3.5 section 6.2); an IS in range is never longer.
+  if (text.length > 16) refuse(DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER, tag);
   return text;
 }
 
 function binaryNumbers(values: readonly unknown[], vr: string, le: boolean, tag: string): Buffer {
-  const width = NUMBER_WIDTH[vr] as 2 | 4 | 8;
+  const width = numberWidth(vr) as 2 | 4 | 8;
   const out = Buffer.alloc(values.length * width);
-  values.forEach((value, i) => {
-    if (typeof value !== "number") refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, tag);
-    if (!Number.isFinite(value)) refuse(DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER, tag);
+  values.forEach((raw, i) => {
+    const value = numberOf(raw, vr, tag);
     const at = i * width;
-    const range = INTEGER_RANGE[vr];
-    if (range !== undefined) {
-      if (!Number.isInteger(value) || value < range[0] || value > range[1]) {
-        refuse(DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER, tag);
-      }
-    }
     switch (vr) {
       case "US":
         if (le) out.writeUInt16LE(value, at);
@@ -241,7 +258,7 @@ function binaryNumbers(values: readonly unknown[], vr: string, le: boolean, tag:
 function attributeTags(values: readonly unknown[], le: boolean, tag: string): Buffer {
   const out = Buffer.alloc(values.length * 4);
   values.forEach((value, i) => {
-    if (typeof value !== "string" || !TAG_KEY.test(value)) {
+    if (typeof value !== "string" || !isTagKey(value)) {
       refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, tag);
     }
     const group = parseInt(value.slice(0, 4), 16);
@@ -262,19 +279,19 @@ function scalarValue(
   attr: Record<string, unknown>,
   vr: string,
   tag: string,
-  terms: readonly string[],
+  terms: readonly unknown[],
   ctx: Context,
 ): Buffer {
   const le = ctx.encoding !== "explicitBE";
   const value = attr["Value"];
   const inline = attr["InlineBinary"];
   const uri = attr["BulkDataURI"];
-  if (BINARY_VRS.has(vr)) {
+  if (isBinaryVr(vr)) {
     // A binary VR carries its bytes one way: never as a Value, never both inline and by URI.
     if (value !== undefined || (inline !== undefined && uri !== undefined)) {
       refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, tag);
     }
-    if (!le && SWAPPED_BINARY_VRS.has(vr)) {
+    if (!le && isSwappedBinaryVr(vr)) {
       if (inline !== undefined || uri !== undefined) {
         refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_BYTE_ORDER, tag);
       }
@@ -303,9 +320,9 @@ function scalarValue(
   if (value === undefined) return Buffer.alloc(0);
   if (!Array.isArray(value)) refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, tag);
   const values: readonly unknown[] = value;
-  if (NUMBER_WIDTH[vr] !== undefined) return binaryNumbers(values, vr, le, tag);
+  if (numberWidth(vr) !== undefined) return binaryNumbers(values, vr, le, tag);
   if (vr === "AT") return attributeTags(values, le, tag);
-  if (SINGLE_STRING_VRS.has(vr) && values.length > 1) {
+  if (isSingleStringVr(vr) && values.length > 1) {
     refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, tag);
   }
   let texts: string[];
@@ -320,7 +337,7 @@ function writeItems(
   w: Writer,
   items: readonly unknown[],
   tag: string,
-  terms: readonly string[],
+  terms: readonly unknown[],
   ctx: Context,
 ): void {
   for (const item of items) {
@@ -340,6 +357,11 @@ function writeItems(
       fill(w.length - start);
     }
   }
+}
+
+/** Refuse a value longer than the largest even length its Value Length Field holds. */
+function refuseIfLonger(length: number, max: number, tag: string): void {
+  if (length > max) refuse(DICOM_JSON_ERROR_CODES.VALUE_TOO_LONG, tag);
 }
 
 function writeHeader(
@@ -369,18 +391,13 @@ function writeHeader(
   w.u16(length);
 }
 
-/** Refuse a value longer than the largest even length its Value Length Field holds. */
-function refuseIfLonger(length: number, max: number, tag: string): void {
-  if (length > max) refuse(DICOM_JSON_ERROR_CODES.VALUE_TOO_LONG, tag);
-}
-
 function writeSequence(
   w: Writer,
   group: number,
   element: number,
   items: readonly unknown[],
   tag: string,
-  terms: readonly string[],
+  terms: readonly unknown[],
   ctx: Context,
 ): void {
   w.u16(group);
@@ -401,6 +418,7 @@ function writeSequence(
   const start = w.length;
   writeItems(w, items, tag, terms, ctx);
   const length = w.length - start;
+  // Stryker disable next-line CallExpression: a Sequence past 4 GiB cannot be built in a test
   refuseIfLonger(length, MAX_LONG_LENGTH, tag);
   fill(length);
 }
@@ -408,14 +426,14 @@ function writeSequence(
 function writeDataset(
   w: Writer,
   json: Record<string, unknown>,
-  inherited: readonly string[],
+  inherited: readonly unknown[],
   ctx: Context,
 ): void {
   const terms = charsetOf(json, inherited);
   const entries: [number, string, unknown][] = [];
   const seen = new Set<string>();
   for (const [key, attr] of Object.entries(json)) {
-    if (!TAG_KEY.test(key)) refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, undefined);
+    if (!isTagKey(key)) refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, undefined);
     const tag = key.toUpperCase();
     if (seen.has(tag)) refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, tag);
     seen.add(tag);
@@ -448,7 +466,7 @@ function writeDataset(
     w.bytes(value);
     // PS3.5 pads an odd-length UI or binary value with NUL, and other text with SPACE.
     if (value.length % 2 === 1) {
-      w.bytes(Buffer.from([vr === "UI" || BINARY_VRS.has(vr) ? 0x00 : 0x20]));
+      w.bytes(Buffer.from([vr === "UI" || isBinaryVr(vr) ? 0x00 : 0x20]));
     }
   }
 }
@@ -488,7 +506,7 @@ function writeDataset(
  */
 export function fromDicomJson(json: DicomJsonDataset, options: FromDicomJsonOptions): Dataset {
   const fileMeta = options.fileMeta;
-  const encoding = ENCODINGS[fileMeta.transferSyntaxUID];
+  const encoding = encodingOf(fileMeta.transferSyntaxUID);
   if (encoding === undefined) refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_TRANSFER_SYNTAX, undefined);
   if (!isRecord(json)) refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, undefined);
   const ctx: Context = {
@@ -499,7 +517,9 @@ export function fromDicomJson(json: DicomJsonDataset, options: FromDicomJsonOpti
   const w = new Writer(encoding !== "explicitBE");
   writeDataset(w, json, [], ctx);
   let body = w.concat();
-  if (fileMeta.transferSyntaxUID === TS_DEFLATED_LE) body = zlibModule().deflateRawSync(body);
+  if (fileMeta.transferSyntaxUID === "1.2.840.10008.1.2.1.99") {
+    body = zlibModule().deflateRawSync(body);
+  }
   // The 128-byte preamble and the `DICM` prefix (PS3.10).
   const preamble = Buffer.concat([Buffer.alloc(128), Buffer.from([0x44, 0x49, 0x43, 0x4d])]);
   return parseDicom(Buffer.concat([preamble, encodeFileMeta(fileMeta), body]));

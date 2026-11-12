@@ -73,24 +73,30 @@ export type DicomJsonErrorCode =
   (typeof DICOM_JSON_ERROR_CODES)[keyof typeof DICOM_JSON_ERROR_CODES];
 
 /** The fixed text of each code. Nothing read from the input is ever added to it but a rendered tag. */
-const MESSAGES: Readonly<Record<DicomJsonErrorCode, string>> = {
-  UNSUPPORTED_VR:
-    "The element's VR has no DICOM JSON form we write: SV and UV are refused until their JSON form is confirmed, and a VR PS3.5 does not define has none.",
-  UNSUPPORTED_ELEMENT:
-    "The element's value cannot be held as DICOM JSON metadata: an encapsulated fragment stream, an undefined-length value that is not a Sequence, or a Sequence that was not read.",
-  UNSUPPORTED_BYTE_ORDER:
-    "An OW, OF, OD, OL or OV value under Explicit VR Big Endian is refused: the byte order of its InlineBinary is not confirmed.",
-  UNREPRESENTABLE_NUMBER:
-    "A number has no DICOM JSON or DICOM text form: NaN or an infinity, a DS or IS value that is not a number, or one too long for its VR.",
-  MALFORMED_VALUE: "A binary value's length is not a whole number of values for its VR.",
-  INVALID_JSON: "The input is not a DICOM JSON Model object of the shape PS3.18 Annex F gives.",
-  BULK_DATA_UNRESOLVED: "A BulkDataURI was not resolved to bytes by the resolveBulkData option.",
-  UNSUPPORTED_CHARACTER_SET:
-    "Text cannot be written under the Specific Character Set in effect: only the default repertoire, ISO_IR 100 and ISO_IR 192 are encoded, each only with the characters it holds.",
-  UNSUPPORTED_TRANSFER_SYNTAX:
-    "fromDicomJson writes only Implicit VR Little Endian, Explicit VR Little Endian, Explicit VR Big Endian and Deflated Explicit VR Little Endian.",
-  VALUE_TOO_LONG: "A value is too long for the Value Length Field of its VR.",
-};
+function messageOf(code: DicomJsonErrorCode): string {
+  switch (code) {
+    case "UNSUPPORTED_VR":
+      return "The element's VR has no DICOM JSON form we write: SV and UV are refused until their JSON form is confirmed, and a VR PS3.5 does not define has none.";
+    case "UNSUPPORTED_ELEMENT":
+      return "The element's value cannot be held as DICOM JSON metadata: an encapsulated fragment stream, an undefined-length value that is not a Sequence, or a Sequence that was not read.";
+    case "UNSUPPORTED_BYTE_ORDER":
+      return "An OW, OF, OD, OL or OV value under Explicit VR Big Endian is refused: the byte order of its InlineBinary is not confirmed.";
+    case "UNREPRESENTABLE_NUMBER":
+      return "A number has no DICOM JSON or DICOM text form: NaN or an infinity, a DS or IS value that is not a number, or one too long for its VR.";
+    case "MALFORMED_VALUE":
+      return "A binary value's length is not a whole number of values for its VR.";
+    case "INVALID_JSON":
+      return "The input is not a DICOM JSON Model object of the shape PS3.18 Annex F gives.";
+    case "BULK_DATA_UNRESOLVED":
+      return "A BulkDataURI was not resolved to bytes by the resolveBulkData option.";
+    case "UNSUPPORTED_CHARACTER_SET":
+      return "Text cannot be written under the Specific Character Set in effect: only the default repertoire, ISO_IR 100 and ISO_IR 192 are encoded, each only with the characters it holds.";
+    case "UNSUPPORTED_TRANSFER_SYNTAX":
+      return "fromDicomJson writes only Implicit VR Little Endian, Explicit VR Little Endian, Explicit VR Big Endian and Deflated Explicit VR Little Endian.";
+    case "VALUE_TOO_LONG":
+      return "A value is too long for the Value Length Field of its VR.";
+  }
+}
 
 /**
  * Thrown by `toDicomJson` and `fromDicomJson` when a value cannot cross between the Part 10 model
@@ -121,7 +127,7 @@ export class DicomJsonError extends Error {
    * @internal
    */
   public constructor(code: DicomJsonErrorCode, renderedTag: string) {
-    super(`[${code}] ${MESSAGES[code]} Tag: ${renderedTag}.`);
+    super(`[${code}] ${messageOf(code)} Tag: ${renderedTag}.`);
     this.name = "DicomJsonError";
     this.code = code;
     this.tag = renderedTag;

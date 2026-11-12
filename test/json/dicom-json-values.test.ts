@@ -475,6 +475,8 @@ describe("structure", () => {
   it("refuses a Sequence of another shape", () => {
     for (const attr of [
       { vr: "SQ", Value: "item" },
+      { vr: "SQ", Value: 5 },
+      { vr: "SQ", Value: {} },
       { vr: "SQ", Value: [null] },
       { vr: "SQ", BulkDataURI: "https://example.com/bulk/1" },
     ]) {
@@ -497,6 +499,8 @@ describe("structure", () => {
       { "00100020": { vr: "LO", BulkDataURI: "https://example.com/bulk/1" } },
       { "00100010": { vr: "PN", Value: [{ Alphabetic: 5 }] } },
       { "00100010": { vr: "PN", Value: [{ Phonetic: "P", Ideographic: 5 }] } },
+      { "00100010": { vr: "PN", Value: [5] } },
+      { "00100010": { vr: "PN", Value: [[]] } },
     ]) {
       expect(refusal(() => fromDicomJson(json as unknown as DicomJsonDataset, LE))).toBe(
         "INVALID_JSON",
@@ -581,6 +585,8 @@ describe("DicomJsonError", () => {
       return undefined;
     };
     expect(tagOf({ "00100020": { vr: "LO", Value: [1] } })).toBe("00100020");
+    expect(tagOf({ "0020000D": { vr: "UI", Value: [1] } })).toBe("0020000D");
+    expect(tagOf({ "00080005": { vr: "CS", Value: "ISO_IR 192" } })).toBe("00080005");
     expect(tagOf({ "00091001": { vr: "LO", Value: [1] } })).toBe("<withheld>");
     expect(tagOf({ "0010002": { vr: "LO" } })).toBe("<withheld>");
     expect(tagOf([])).toBe("<withheld>");

@@ -1,50 +1,159 @@
 /**
  * How each VR is carried in the DICOM JSON Model (PS3.18 Annex F), as both converters read it.
  *
+ * Each table is a function rather than a module constant, so that it is built where it is read.
+ *
  * @module
  */
 
-/** String VRs whose value may hold several values split by a backslash. */
-export const MULTI_STRING_VRS: ReadonlySet<string> = new Set([
-  "AE",
-  "AS",
-  "CS",
-  "DA",
-  "DT",
-  "LO",
-  "SH",
-  "TM",
-  "UC",
-  "UI",
-]);
-
-/** String VRs that hold one value, in which a backslash is a character. */
-export const SINGLE_STRING_VRS: ReadonlySet<string> = new Set(["LT", "ST", "UT", "UR"]);
+/**
+ * `true` for a string VR whose value may hold several values split by a backslash.
+ *
+ * @example
+ * ```ts
+ * isMultiStringVr("CS"); // true
+ * ```
+ */
+export function isMultiStringVr(vr: string): boolean {
+  switch (vr) {
+    case "AE":
+    case "AS":
+    case "CS":
+    case "DA":
+    case "DT":
+    case "LO":
+    case "SH":
+    case "TM":
+    case "UC":
+    case "UI":
+      return true;
+    default:
+      return false;
+  }
+}
 
 /**
- * The VRs whose text is read through `(0008,0005)` Specific Character Set; every other string VR
- * is in the Default Repertoire.
+ * `true` for a string VR that holds one value, in which a backslash is a character.
+ *
+ * @example
+ * ```ts
+ * isSingleStringVr("LT"); // true
+ * ```
  */
-export const CHARSET_VRS: ReadonlySet<string> = new Set(["SH", "LO", "UC", "ST", "LT", "UT", "PN"]);
+export function isSingleStringVr(vr: string): boolean {
+  switch (vr) {
+    case "LT":
+    case "ST":
+    case "UT":
+    case "UR":
+      return true;
+    default:
+      return false;
+  }
+}
 
-/** Binary number VRs written as JSON numbers, with the width of one value in bytes. */
-export const NUMBER_WIDTH: Readonly<Record<string, 2 | 4 | 8>> = {
-  US: 2,
-  SS: 2,
-  UL: 4,
-  SL: 4,
-  FL: 4,
-  FD: 8,
-};
+/**
+ * `true` for a VR whose text is read through `(0008,0005)` Specific Character Set; every other
+ * string VR is in the Default Repertoire.
+ *
+ * @example
+ * ```ts
+ * isCharsetVr("PN"); // true
+ * ```
+ */
+export function isCharsetVr(vr: string): boolean {
+  switch (vr) {
+    case "SH":
+    case "LO":
+    case "UC":
+    case "ST":
+    case "LT":
+    case "UT":
+    case "PN":
+      return true;
+    default:
+      return false;
+  }
+}
 
-/** VRs written as `InlineBinary` or `BulkDataURI`, never `Value`. */
-export const BINARY_VRS: ReadonlySet<string> = new Set(["OB", "OD", "OF", "OL", "OV", "OW", "UN"]);
+/**
+ * The width in bytes of one value of a binary number VR written as a JSON number, or `undefined`
+ * for any other VR.
+ *
+ * @example
+ * ```ts
+ * numberWidth("US"); // 2
+ * ```
+ */
+export function numberWidth(vr: string): 2 | 4 | 8 | undefined {
+  switch (vr) {
+    case "US":
+    case "SS":
+      return 2;
+    case "UL":
+    case "SL":
+    case "FL":
+      return 4;
+    case "FD":
+      return 8;
+    default:
+      return undefined;
+  }
+}
 
-/** Binary VRs whose bytes Explicit VR Big Endian swaps, which we refuse there. */
-export const SWAPPED_BINARY_VRS: ReadonlySet<string> = new Set(["OD", "OF", "OL", "OV", "OW"]);
+/**
+ * `true` for a VR written as `InlineBinary` or `BulkDataURI`, never `Value`.
+ *
+ * @example
+ * ```ts
+ * isBinaryVr("OB"); // true
+ * ```
+ */
+export function isBinaryVr(vr: string): boolean {
+  return vr === "OB" || vr === "UN" || isSwappedBinaryVr(vr);
+}
 
-/** A DS value as PS3.5 section 6.2 gives it, leading and trailing spaces removed. */
-export const DECIMAL_STRING = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/u;
+/**
+ * `true` for a binary VR whose bytes Explicit VR Big Endian swaps, which we refuse there.
+ *
+ * @example
+ * ```ts
+ * isSwappedBinaryVr("OW"); // true
+ * ```
+ */
+export function isSwappedBinaryVr(vr: string): boolean {
+  switch (vr) {
+    case "OD":
+    case "OF":
+    case "OL":
+    case "OV":
+    case "OW":
+      return true;
+    default:
+      return false;
+  }
+}
 
-/** An IS value as PS3.5 section 6.2 gives it, leading and trailing spaces removed. */
-export const INTEGER_STRING = /^[+-]?\d+$/u;
+/**
+ * `true` for a DS value as PS3.5 section 6.2 gives it, leading and trailing spaces removed.
+ *
+ * @example
+ * ```ts
+ * isDecimalString("-1.5e3"); // true
+ * ```
+ */
+export function isDecimalString(text: string): boolean {
+  return /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/u.test(text);
+}
+
+/**
+ * `true` for an IS value as PS3.5 section 6.2 gives it, leading and trailing spaces removed.
+ *
+ * @example
+ * ```ts
+ * isIntegerString("+42"); // true
+ * ```
+ */
+export function isIntegerString(text: string): boolean {
+  return /^[+-]?\d+$/u.test(text);
+}

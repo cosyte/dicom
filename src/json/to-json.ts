@@ -19,14 +19,14 @@ import type {
   ToDicomJsonOptions,
 } from "./types.js";
 import {
-  BINARY_VRS,
-  CHARSET_VRS,
-  DECIMAL_STRING,
-  INTEGER_STRING,
-  MULTI_STRING_VRS,
-  NUMBER_WIDTH,
-  SINGLE_STRING_VRS,
-  SWAPPED_BINARY_VRS,
+  isBinaryVr,
+  isCharsetVr,
+  isDecimalString,
+  isIntegerString,
+  isMultiStringVr,
+  isSingleStringVr,
+  isSwappedBinaryVr,
+  numberWidth,
 } from "./vr.js";
 
 /** `0xFFFFFFFF` - the undefined-length sentinel (PS3.5 section 7.1.1). */
@@ -51,19 +51,7 @@ function trimEnd(text: string): string {
 /** The element's text: through `(0008,0005)` for a charset VR, Latin-1 for the rest. */
 function textOf(el: Element): string {
   const bytes = el.rawBytes;
-  return CHARSET_VRS.has(el.vr)
-    ? decodeText(bytes, el.specificCharacterSet)
-    : bytes.toString("latin1");
-}
-
-/**
- * The values of a multi-valued text, trimmed. `undefined` for a value that is empty as a whole,
- * which the model writes with no `Value`; an empty value among several is `""`.
- */
-function splitValues(el: Element): string[] | undefined {
-  const values = textOf(el).split("\\").map(trimEnd);
-  if (values.length === 1 && values[0] === "") return undefined;
-  return values;
+  return isCharsetVr(el.vr) ? decodeText(bytes, el.specificCharacterSet) : bytes.toString("latin1");
 }
 
 function personName(text: string): DicomJsonPersonName | null {
@@ -76,10 +64,10 @@ function personName(text: string): DicomJsonPersonName | null {
   return Object.keys(out).length === 0 ? null : out;
 }
 
-function numberString(el: Element, text: string, shape: RegExp): number | null {
+function numberString(el: Element, text: string, valid: (text: string) => boolean): number | null {
   const trimmed = text.trim();
   if (trimmed === "") return null;
-  if (!shape.test(trimmed)) refuse(DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER, el);
+  if (!valid(trimmed)) refuse(DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER, el);
   const n = Number(trimmed);
   if (!Number.isFinite(n)) refuse(DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER, el);
   return n;
@@ -142,9 +130,9 @@ function attributeTags(el: Element, bytes: Buffer): string[] {
  */
 export function hasValueForm(vr: string): boolean {
   return (
-    MULTI_STRING_VRS.has(vr) ||
-    SINGLE_STRING_VRS.has(vr) ||
-    NUMBER_WIDTH[vr] !== undefined ||
+    isMultiStringVr(vr) ||
+    isSingleStringVr(vr) ||
+    numberWidth(vr) !== undefined ||
     vr === "AT" ||
     vr === "PN" ||
     vr === "DS" ||
@@ -156,33 +144,31 @@ export function hasValueForm(vr: string): boolean {
 function scalarAttribute(el: Element, options: ToDicomJsonOptions): DicomJsonAttribute {
   const vr = el.vr;
   const bytes = el.rawBytes;
-  if (BINARY_VRS.has(vr)) {
-    if (bytes.length === 0) return { vr };
-    if (!el.littleEndian && SWAPPED_BINARY_VRS.has(vr)) {
+  // An empty value has no form in question, whatever its VR: an empty SV or UV is written too.
+  if (bytes.length === 0) return { vr };
+  if (isBinaryVr(vr)) {
+    if (!el.littleEndian && isSwappedBinaryVr(vr)) {
       refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_BYTE_ORDER, el);
     }
     const uri = options.bulkDataUri?.(el);
     if (uri !== undefined) return { vr, BulkDataURI: uri };
     return { vr, InlineBinary: bytes.toString("base64") };
   }
-  // An empty SV or UV has no value whose form is in question, so only a value is refused.
-  if (bytes.length === 0 && (vr === "SV" || vr === "UV")) return { vr };
   if (!hasValueForm(vr)) refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_VR, el);
-  if (bytes.length === 0) return { vr };
-  const width = NUMBER_WIDTH[vr];
+  const width = numberWidth(vr);
   if (width !== undefined) return { vr, Value: binaryNumbers(el, bytes, width) };
   if (vr === "AT") return { vr, Value: attributeTags(el, bytes) };
-  if (SINGLE_STRING_VRS.has(vr)) {
+  if (isSingleStringVr(vr)) {
     const text = trimEnd(textOf(el));
     return text === "" ? { vr } : { vr, Value: [text] };
   }
-  const values = splitValues(el);
-  if (values === undefined) return { vr };
+  const values = textOf(el).split("\\").map(trimEnd);
   let out: DicomJsonValue[];
   if (vr === "PN") out = values.map(personName);
-  else if (vr === "DS") out = values.map((v) => numberString(el, v, DECIMAL_STRING));
-  else if (vr === "IS") out = values.map((v) => numberString(el, v, INTEGER_STRING));
+  else if (vr === "DS") out = values.map((v) => numberString(el, v, isDecimalString));
+  else if (vr === "IS") out = values.map((v) => numberString(el, v, isIntegerString));
   else out = values.map((v) => (v === "" ? null : v));
+  // A value of padding alone, or one Person Name with no group, is an empty value.
   if (out.length === 1 && out[0] === null) return { vr };
   return { vr, Value: out };
 }
