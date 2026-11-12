@@ -4,11 +4,11 @@ exports[`what each generator draws from a fixed seed > is pinned 1`] = `
 {
   "arbitraryBytes": "6dae56a98b4acd7754a14b0993b32f9ca57089f11db5a06f268966099e745594",
   "dicomShapedGarbage": "6ed9ff84c759eba1a76ab127e9a2db602b64dfa4029a7cc1bb2ac358c38ba8aa",
-  "encodeModel": "251a899393310fef7b51f5725abd399f3f557b4283d9e2fd357f7a3bc982d360",
+  "encodeModel": "e041d0bed29ad74a910c1656a7ce4a2675cd1cd72f6a4ebd1315200f776e2b84",
   "fatalInput": "fed426327fa554b6ed1d80051717f96ad5194f527bcbe17ce7e9346f19039cff",
-  "fuzzInput": "ab28bc14b6227f69dcdde4b1ee9a79ba08b682d852264c061592f99c0247a7cf",
-  "recoverableInput": "cccf7e34a18cb118f6e656b4fb5fe143df92e1092ba9131dec5147331364c2f2",
-  "truncatedValidFile": "789bfc3b20590124689cedebee37b630d05c7f71732cd5914a48886fa200476d",
+  "fuzzInput": "03d0acd84d65bec95b17297a4a609355d89ec564710f4e42dac7d90db248ba81",
+  "recoverableInput": "bc1478643310608d0ec03c942f7ba2acd9ee0ea6e9aa6fd173576986b8dc4bde",
+  "truncatedValidFile": "6eb4e510d0c1fc529d0f19aaa1a04736132b9af62ca47a1c85912d68203a386b",
   "wellFormedModel": "645e842013315bbfdda5fdb07fe22242481de008d66389d0b3dae7abb6f1881b",
 }
 `;

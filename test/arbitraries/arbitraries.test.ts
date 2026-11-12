@@ -3,15 +3,10 @@
  * they produce, and their writer held byte for byte to the test encoder `buildDicom`.
  *
  * Every sample here is drawn from a fixed seed, so each test sees the same values on every run.
- * The digests at the end pin what each generator draws from that seed: a change to a generator
- * that changes its output changes its digest, and the snapshot has to be updated in the same
- * change, where a reviewer reads it. Deflated Data Sets are left out of the digests (only the bytes
- * before the transfer syntax UID are kept), since another zlib can compress the same bytes
- * differently; the writer test compares them with `buildDicom` in one process instead.
+ * `digests.test.ts` pins what each generator draws from that seed.
  */
 
 import { Buffer } from "node:buffer";
-import { createHash } from "node:crypto";
 
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
@@ -21,7 +16,6 @@ import {
   dicomShapedGarbage,
   encodeModel,
   fatalInput,
-  fuzzInput,
   recoverableInput,
   truncatedValidFile,
   wellFormedModel,
@@ -409,46 +403,5 @@ describe("the hostile generators", () => {
     const lengths = files.map((f) => f.length);
     expect(Math.min(...lengths)).toBe(0);
     expect(new Set(lengths).size).toBeGreaterThan(100);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Digests: what each generator draws from the fixed seed.
-// ---------------------------------------------------------------------------
-
-const DEFLATED_UID = Buffer.from(DEFLATED_LE);
-
-/** The bytes of one sample a digest reads: a deflated file only up to its transfer syntax UID. */
-function stableBytes(bytes: Buffer): Buffer {
-  const at = bytes.indexOf(DEFLATED_UID);
-  return at < 0 ? bytes : bytes.subarray(0, at);
-}
-
-function digest(samples: readonly Buffer[], keep = stableBytes): string {
-  const hash = createHash("sha256");
-  for (const bytes of samples) {
-    const kept = keep(bytes);
-    hash.update(`${String(kept.length)}:`);
-    hash.update(kept);
-  }
-  return hash.digest("hex");
-}
-
-describe("what each generator draws from a fixed seed", () => {
-  it("is pinned", () => {
-    const models = sample(wellFormedModel(), 300);
-    expect({
-      wellFormedModel: digest(
-        models.map((m) => Buffer.from(JSON.stringify(m))),
-        (bytes) => bytes,
-      ),
-      encodeModel: digest(models.map(encodeModel)),
-      recoverableInput: digest(sample(recoverableInput(), 300)),
-      fatalInput: digest(sample(fatalInput(), 100)),
-      arbitraryBytes: digest(sample(arbitraryBytes(), 100)),
-      dicomShapedGarbage: digest(sample(dicomShapedGarbage(), 100)),
-      truncatedValidFile: digest(sample(truncatedValidFile(), 300)),
-      fuzzInput: digest(sample(fuzzInput(), 300)),
-    }).toMatchSnapshot();
   });
 });
