@@ -162,7 +162,17 @@
  * D-15 / D-16 / D-17 / TEST-09.
  */
 
-import { readFileSync, statSync, lstatSync, existsSync, readdirSync } from "node:fs";
+import {
+  readFileSync,
+  statSync,
+  lstatSync,
+  existsSync,
+  readdirSync,
+  openSync,
+  fstatSync,
+  closeSync,
+  constants as fsConstants,
+} from "node:fs";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { dirname, join, resolve, relative, sep, isAbsolute } from "node:path";
@@ -360,7 +370,8 @@ const VENDOR_PIN_PATH = /^vendor\/(?:[^/]+\/)+?([0-9a-f]{64})\/[^/]+$/;
  * A file is skipped only when ALL of these hold, each checked on this run, never assumed:
  *
  *   - its path is `vendor/.../<sha256>/<file>`, the file directly inside the hash directory;
- *   - it is a regular file, not a link (`lstat`), so the bytes hashed are the bytes git carries;
+ *   - it is a regular file, not a link (`readRegularFile`), so the bytes hashed are the bytes git
+ *     carries;
  *   - `SHA.txt` beside the hash directory is a regular file whose content, trimmed, is exactly
  *     that hash, the pin record the generators and the pin tests read;
  *   - the SHA-256 of the file's bytes is that hash.
@@ -377,12 +388,32 @@ function isVerifiedVendorPin(relPath: string, abs: string): boolean {
   const m = VENDOR_PIN_PATH.exec(relPath);
   const hash = m?.[1];
   if (hash === undefined) return false;
-  if (!lstatSync(abs).isFile()) return false;
-  const hashDir = dirname(abs);
-  const pinRecord = join(dirname(hashDir), "SHA.txt");
-  if (!existsSync(pinRecord) || !lstatSync(pinRecord).isFile()) return false;
-  if (readFileSync(pinRecord, "utf8").trim() !== hash) return false;
-  return createHash("sha256").update(readFileSync(abs)).digest("hex") === hash;
+  const record = readRegularFile(join(dirname(dirname(abs)), "SHA.txt"));
+  if (record?.toString("utf8").trim() !== hash) return false;
+  const bytes = readRegularFile(abs);
+  return bytes !== null && createHash("sha256").update(bytes).digest("hex") === hash;
+}
+
+/**
+ * The bytes of `abs` when it is a regular file and not a link, else `null`.
+ *
+ * One descriptor answers both questions, so the bytes read are the file that was checked: a
+ * separate `lstat` then `readFile` is two lookups of the path, and a link swapped in between them
+ * would be read through. `O_NOFOLLOW` refuses a link at the last component (`ELOOP`); `fstat` on
+ * the open descriptor then rules out a directory, a FIFO or a device.
+ */
+function readRegularFile(abs: string): Buffer | null {
+  let fd: number;
+  try {
+    fd = openSync(abs, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
+  } catch {
+    return null;
+  }
+  try {
+    return fstatSync(fd).isFile() ? readFileSync(fd) : null;
+  } finally {
+    closeSync(fd);
+  }
 }
 
 /** Verified vendored pins the last paths-route run skipped, for the report. */
