@@ -199,6 +199,9 @@ export function parseSequence(
   // Items inherit the parent dataset's charset; an item's own (0008,0005)
   // override must NOT leak to sibling items or back to the parent.
   const parentCharset = ctx.currentCharset;
+  // Pixel Representation is scoped the same way: an Item reads under its
+  // enclosing Data Set's, and its own does not leak (see `implicit-multi-vr.ts`).
+  const parentPixelRepresentation = ctx.pixelRepresentation;
 
   // Private block reservations are scoped to one Data Set, and an Item is one.
   // PS3.5 section 7.5.1: "Each Item Value shall contain a DICOM Data Set
@@ -307,6 +310,7 @@ export function parseSequence(
       // (0008,0005) cannot leak to its siblings, and give the item an empty
       // reservation map of its own for the same reason (PS3.5 section 7.8.1).
       ctx.currentCharset = parentCharset;
+      ctx.pixelRepresentation = parentPixelRepresentation;
       ctx.creators = NO_PRIVATE_CREATORS;
       if (itemLength === UNDEFINED_LENGTH) {
         // Undefined-length item - call innerStrategy with stopOnItemDelim;
@@ -403,6 +407,7 @@ export function parseSequence(
     ctx.nestingDepth -= 1;
     ctx.encodingContextStack.pop();
     ctx.currentCharset = parentCharset;
+    ctx.pixelRepresentation = parentPixelRepresentation;
     ctx.creators = parentCreators;
   }
 }

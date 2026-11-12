@@ -26,6 +26,7 @@ import { isKnownCharsetTerm, parseSpecificCharacterSet } from "../dataset/vr/cha
 import type { DictionaryEntry, Tag, VR } from "../dictionary/types.js";
 import type { ByteCursor } from "./byte-cursor.js";
 import { isRecognizedVr } from "./endian.js";
+import { implicitMultiVr } from "./implicit-multi-vr.js";
 import { tagOf, vrAt } from "./wire-tokens.js";
 import type { DicomPosition, ParseContext } from "./types.js";
 import {
@@ -111,12 +112,14 @@ export const LONG_FORM_VRS: ReadonlySet<VR> = new Set<VR>([
  * Resolve the VR for an Implicit VR LE element via the 5-case fallback:
  *
  *   1. Standard tag with single VR in dict → use it.
- *   2. Standard tag with multi-VR entry → use the first array entry. The
- *      multi-VR ambiguity is a known DICOM data-dictionary quirk; resolved
- *      here by always picking the first listed VR.
+ *   2. Standard tag with multi-VR entry → the VR PS3.5 gives it under
+ *      Implicit VR, from the transfer syntax, the Value Length and the Pixel
+ *      Representation in force (`implicitMultiVr`, which cites the clauses),
+ *      and the first listed VR where no rule applies.
  *   3. Standard tag matching a repeating-group family
  *      (`(50xx,xxxx)`, `(60xx,xxxx)`, `(7Fxx,xxxx)`, `(1000,xxxX)`,
- *      `(1010,xxxx)`) → use the family entry's first VR.
+ *      `(1010,xxxx)`) → the same: Overlay Data `(60xx,3000)` is OW, and any
+ *      other family takes its entry's first VR.
  *   4. Private tag (odd group):
  *        - `(gggg,0010..00FF)` Private Creator slot → VR=LO (PS3.5 §7.8).
  *        - No creator registered for the block → fallback UN; emit
@@ -139,6 +142,7 @@ export function resolveImplicitVR(
   ctx: ParseContext,
   emit: (w: DicomParseWarning) => void,
   position: DicomPosition,
+  length = 0,
 ): VR {
   // Case 4 first - private (odd-group) tags never resolve via dictionary
   // tag lookup (they're vendor-specific) other than the creator-slot path.
@@ -175,14 +179,22 @@ export function resolveImplicitVR(
   // Cases 1, 2, 3, 5 - standard (even-group) tag.
   const direct = tagEntry(tag);
   if (direct !== undefined) {
-    // Case 1 / 2: dict has a direct entry. Pick first VR (multi-VR
-    // ambiguity documented above). PS3.6 gives a few retired rows, such as
-    // (0028,0020), no VR at all; those read as UN, as an unknown tag does.
+    // Case 1 / 2: dict has a direct entry. A row listing more than one VR
+    // takes the one PS3.5 gives it here (see `implicitMultiVr`). PS3.6 gives a
+    // few retired rows, such as (0028,0020), no VR at all; those read as UN,
+    // as an unknown tag does.
+    // Stryker disable next-line ConditionalExpression,EqualityOperator: equivalent, no single-VR row names a keyword `implicitMultiVr` has a rule for; the test only spares a single-VR row the lookups
+    if (direct.vr.length > 1) {
+      const vr = implicitMultiVr(direct, length, ctx.pixelRepresentation);
+      if (vr !== undefined) return vr;
+    }
     return direct.vr[0] ?? "UN";
   }
   // Case 3: try repeating-group family match.
   const family = matchRepeatingGroup(tag);
   if (family !== undefined) {
+    const vr = implicitMultiVr(family, length, ctx.pixelRepresentation);
+    if (vr !== undefined) return vr;
     /* v8 ignore next -- unreachable: every repeating-group family entry in the dictionary lists a VR. */
     return family.vr[0] ?? "UN";
   }
