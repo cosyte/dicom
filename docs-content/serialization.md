@@ -3,7 +3,7 @@ id: serialization
 title: Serialization to Part 10
 sidebar_label: Serialization
 sidebar_position: 13
-description: What serializeDicom guarantees when it writes a dataset back to Part 10 bytes, when it refuses, and what it never does.
+description: What serializeDicom guarantees when it writes a dataset back to Part 10 bytes, when it refuses, what it never does, and the DICOM JSON Model converters.
 ---
 
 # Serialization to Part 10
@@ -173,6 +173,91 @@ These are boundaries, not defects. The full list of package non-goals is on
   source wrote one tag twice the earlier element was already gone before the writer saw it
   (`DICOM_DUPLICATE_TAG_IN_DATA_SET` on the parse). Serializing does not restore it, and no value is
   invented for it.
+
+## The DICOM JSON Model
+
+`toDicomJson(ds)` writes a Data Set as the DICOM JSON Model of PS3.18 Annex F: one JSON object
+keyed by tag, eight uppercase hex digits, each attribute with its `vr` and its value as `Value`,
+`InlineBinary` or `BulkDataURI`. `fromDicomJson(json, { fileMeta })` reads such an object back
+into a `Dataset`, which `serializeDicom` writes as Part 10. The JSON Model holds no File Meta, so
+`fromDicomJson` takes the File Meta to write under, and its Transfer Syntax UID picks the encoding.
+
+```ts runnable
+import { fromDicomJson, parseDicom, serializeDicom, toDicomJson } from "@cosyte/dicom";
+
+// Synthetic object: Modality CT and an invented Patient ID.
+const buf = Buffer.from(
+  "AgAAAFVMBAAcAAAAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xAAgAYABDUwIAQ1QQACAATE8GAE1STi00Mg==",
+  "base64",
+);
+const ds = parseDicom(buf);
+
+const json = toDicomJson(ds);
+json["00080060"]; // => { vr: "CS", Value: ["CT"] }
+json["00100020"]; // => { vr: "LO", Value: ["MRN-42"] }
+
+// The JSON Model carries no File Meta, so the source's goes back in.
+const fileMeta = ds.fileMeta ?? { transferSyntaxUID: "1.2.840.10008.1.2.1" };
+const back = fromDicomJson(JSON.parse(JSON.stringify(json)), { fileMeta });
+
+// Part 10 to JSON to Part 10 writes the same bytes.
+serializeDicom(back).equals(serializeDicom(ds)); // => true
+```
+
+How each VR is written, and read back the same way:
+
+| VR                                                         | JSON form                                                                                  |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `AE` `AS` `CS` `DA` `DT` `LO` `SH` `TM` `UC` `UI`          | `Value`: strings split on backslashes, padding removed, `null` for an empty value of several |
+| `LT` `ST` `UT` `UR`                                        | `Value`: one string, a backslash kept as a character                                       |
+| `PN`                                                       | `Value`: objects of `Alphabetic`, `Ideographic` and `Phonetic` component groups              |
+| `DS` `IS`                                                  | `Value`: JSON numbers                                                                      |
+| `US` `SS` `UL` `SL` `FL` `FD`                              | `Value`: JSON numbers                                                                      |
+| `AT`                                                       | `Value`: tags as eight uppercase hex digits                                                |
+| `SQ`                                                       | `Value`: nested Data Sets, `{}` for an empty Item                                          |
+| `OB` `OD` `OF` `OL` `OV` `OW` `UN`                         | `InlineBinary` (base64), or `BulkDataURI` where the `bulkDataUri` option gives one         |
+
+The shapes are typed: a `DicomJsonDataset` maps each tag to a `DicomJsonAttribute`, whose `Value`
+is an array of `DicomJsonValue`, a Person Name value being a `DicomJsonPersonName`. The options are
+`ToDicomJsonOptions` and `FromDicomJsonOptions`, and a refusal's code is a `DicomJsonErrorCode`.
+
+An attribute with an empty value has no value field. Text is decoded through `(0008,0005)`
+Specific Character Set, which is kept as it is, and encoded back under it. A `BulkDataURI` comes
+back through the `resolveBulkData` option of `fromDicomJson`; one it does not resolve is refused.
+
+**Where the bytes can differ.** The JSON Model does not record everything Part 10 does, so the
+round trip is byte-identical only where the source already wrote what `fromDicomJson` writes:
+
+- **Sequence and Item lengths.** The model does not say whether a Sequence or Item had a defined
+  or an undefined length. `fromDicomJson` writes defined lengths, or undefined lengths with
+  `sequenceLength: "undefined"`; a source that mixed the two comes back with one of them.
+- **`DS` and `IS` text.** A number is written in JavaScript's shortest text for it, so `1.0`
+  comes back as `1` and `+5` as `5`.
+- **Padding.** Values are padded as PS3.5 pads them, `UI` with a NUL and other text with a space,
+  so a `UI` a source padded with a space comes back padded with a NUL. Trailing spaces of a value
+  are removed in the JSON.
+- **A `UN` value read as a Sequence** comes back as `SQ`, and a DICOMDIR's Directory Record
+  offsets name bytes of the file it was read from, so `serializeDicom` refuses the rebuilt Data
+  Set with `DIRECTORY_OFFSET_UNRESOLVED`.
+
+**What is refused, with a `DicomJsonError`.** The converters refuse rather than change or guess a
+value, and the message carries no value. `UNSUPPORTED_VR`: `SV` and `UV` with a value.
+`UNSUPPORTED_ELEMENT`: encapsulated Pixel Data and any other undefined-length value that is not a
+Sequence. `UNSUPPORTED_BYTE_ORDER`: `OW`, `OF`, `OD`, `OL` and `OV` under Explicit VR Big Endian.
+`UNREPRESENTABLE_NUMBER`: NaN, an infinity, a `DS` or `IS` that is not a number, or a number its
+VR cannot hold. `UNSUPPORTED_CHARACTER_SET`: text `fromDicomJson` cannot encode, which is any
+character outside 7-bit ASCII under a Specific Character Set other than the default repertoire,
+`ISO_IR 100` and `ISO_IR 192`. `UNSUPPORTED_TRANSFER_SYNTAX`: `fromDicomJson` writes only the
+three uncompressed syntaxes and Deflated Explicit VR LE. `INVALID_JSON`, `MALFORMED_VALUE`,
+`BULK_DATA_UNRESOLVED` and `VALUE_TOO_LONG` cover the rest.
+
+**What we have not checked against the standard.** PS3.18 is not vendored in this repository, so
+these forms are what we write and read, not a conformance verdict. The cases we could not confirm
+are the ones refused above: the JSON form of `SV` and `UV` values, the byte order of an
+`InlineBinary` under Big Endian, and `DS` or `IS` carried as JSON strings, which `fromDicomJson`
+refuses as `INVALID_JSON`. The `null` for an empty value among several, and an Item written as
+`{}`, are also our reading. A JSON array of several Data Sets is not read; pass each Data Set in
+turn.
 
 ## Where to go next
 

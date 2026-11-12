@@ -100,6 +100,20 @@ export {
   DicomSerializeError,
 } from "./serialize/errors.js";
 
+// === DICOM JSON Model surface (PS3.18 Annex F) ===
+
+export { toDicomJson } from "./json/to-json.js";
+export { fromDicomJson } from "./json/from-json.js";
+export { DICOM_JSON_ERROR_CODES, type DicomJsonErrorCode, DicomJsonError } from "./json/errors.js";
+export type {
+  DicomJsonAttribute,
+  DicomJsonDataset,
+  DicomJsonPersonName,
+  DicomJsonValue,
+  FromDicomJsonOptions,
+  ToDicomJsonOptions,
+} from "./json/types.js";
+
 // === Source/vendor profile surface ===
 
 export { defineProfile, profiles, ProfileDefinitionError } from "./profiles/index.js";

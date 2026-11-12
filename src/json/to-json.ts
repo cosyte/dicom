@@ -1,0 +1,246 @@
+/**
+ * `toDicomJson`: a parsed {@link Dataset} as the DICOM JSON Model of PS3.18 Annex F.
+ *
+ * @module
+ */
+
+import type { Buffer } from "node:buffer";
+
+import type { Dataset } from "../dataset/dataset.js";
+import type { Element } from "../dataset/element.js";
+import { decodeText } from "../dataset/vr/charset.js";
+import { renderTag } from "../parser/tokens.js";
+import { DICOM_JSON_ERROR_CODES, DicomJsonError, type DicomJsonErrorCode } from "./errors.js";
+import type {
+  DicomJsonAttribute,
+  DicomJsonDataset,
+  DicomJsonPersonName,
+  DicomJsonValue,
+  ToDicomJsonOptions,
+} from "./types.js";
+import {
+  BINARY_VRS,
+  CHARSET_VRS,
+  DECIMAL_STRING,
+  INTEGER_STRING,
+  MULTI_STRING_VRS,
+  NUMBER_WIDTH,
+  SINGLE_STRING_VRS,
+  SWAPPED_BINARY_VRS,
+} from "./vr.js";
+
+/** `0xFFFFFFFF` - the undefined-length sentinel (PS3.5 section 7.1.1). */
+const UNDEFINED_LENGTH = 0xffffffff;
+
+function refuse(code: DicomJsonErrorCode, el: Element): never {
+  throw new DicomJsonError(code, renderTag(el.tag));
+}
+
+/** `text` without the trailing SPACE and NUL padding a value may carry. */
+function trimEnd(text: string): string {
+  let end = text.length;
+  // Stryker disable next-line EqualityOperator: equivalent, at 0 charCodeAt(-1) is NaN, which is no pad
+  while (end > 0) {
+    const c = text.charCodeAt(end - 1);
+    if (c !== 0x20 && c !== 0x00) break;
+    end--;
+  }
+  return text.slice(0, end);
+}
+
+/** The element's text: through `(0008,0005)` for a charset VR, Latin-1 for the rest. */
+function textOf(el: Element): string {
+  const bytes = el.rawBytes;
+  return CHARSET_VRS.has(el.vr)
+    ? decodeText(bytes, el.specificCharacterSet)
+    : bytes.toString("latin1");
+}
+
+/**
+ * The values of a multi-valued text, trimmed. `undefined` for a value that is empty as a whole,
+ * which the model writes with no `Value`; an empty value among several is `""`.
+ */
+function splitValues(el: Element): string[] | undefined {
+  const values = textOf(el).split("\\").map(trimEnd);
+  if (values.length === 1 && values[0] === "") return undefined;
+  return values;
+}
+
+function personName(text: string): DicomJsonPersonName | null {
+  // `split` returns at least one string, so the first group needs no default.
+  const [alphabetic, ideographic = "", phonetic = ""] = text.split("=") as [string, ...string[]];
+  const out: { Alphabetic?: string; Ideographic?: string; Phonetic?: string } = {};
+  if (alphabetic !== "") out.Alphabetic = alphabetic;
+  if (ideographic !== "") out.Ideographic = ideographic;
+  if (phonetic !== "") out.Phonetic = phonetic;
+  return Object.keys(out).length === 0 ? null : out;
+}
+
+function numberString(el: Element, text: string, shape: RegExp): number | null {
+  const trimmed = text.trim();
+  if (trimmed === "") return null;
+  if (!shape.test(trimmed)) refuse(DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER, el);
+  const n = Number(trimmed);
+  if (!Number.isFinite(n)) refuse(DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER, el);
+  return n;
+}
+
+function binaryNumbers(el: Element, bytes: Buffer, width: 2 | 4 | 8): number[] {
+  if (bytes.length % width !== 0) refuse(DICOM_JSON_ERROR_CODES.MALFORMED_VALUE, el);
+  const le = el.littleEndian;
+  const vr: string = el.vr;
+  const out: number[] = [];
+  for (let at = 0; at < bytes.length; at += width) {
+    let n: number;
+    switch (vr) {
+      case "US":
+        n = le ? bytes.readUInt16LE(at) : bytes.readUInt16BE(at);
+        break;
+      case "SS":
+        n = le ? bytes.readInt16LE(at) : bytes.readInt16BE(at);
+        break;
+      case "UL":
+        n = le ? bytes.readUInt32LE(at) : bytes.readUInt32BE(at);
+        break;
+      case "SL":
+        n = le ? bytes.readInt32LE(at) : bytes.readInt32BE(at);
+        break;
+      case "FL":
+        n = le ? bytes.readFloatLE(at) : bytes.readFloatBE(at);
+        break;
+      default:
+        n = le ? bytes.readDoubleLE(at) : bytes.readDoubleBE(at);
+    }
+    if (!Number.isFinite(n)) refuse(DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER, el);
+    out.push(n);
+  }
+  return out;
+}
+
+function attributeTags(el: Element, bytes: Buffer): string[] {
+  if (bytes.length % 4 !== 0) refuse(DICOM_JSON_ERROR_CODES.MALFORMED_VALUE, el);
+  const le = el.littleEndian;
+  const out: string[] = [];
+  for (let at = 0; at < bytes.length; at += 4) {
+    const group = le ? bytes.readUInt16LE(at) : bytes.readUInt16BE(at);
+    const element = le ? bytes.readUInt16LE(at + 2) : bytes.readUInt16BE(at + 2);
+    out.push((group * 0x10000 + element).toString(16).toUpperCase().padStart(8, "0"));
+  }
+  return out;
+}
+
+/**
+ * `true` for a VR this module writes as `Value`: every string VR, the binary numbers and `AT`.
+ * `SV` and `UV` are not among them; their JSON form is not confirmed against PS3.18.
+ *
+ * @internal
+ * @example
+ * ```ts
+ * hasValueForm("PN"); // true
+ * hasValueForm("UV"); // false
+ * ```
+ */
+export function hasValueForm(vr: string): boolean {
+  return (
+    MULTI_STRING_VRS.has(vr) ||
+    SINGLE_STRING_VRS.has(vr) ||
+    NUMBER_WIDTH[vr] !== undefined ||
+    vr === "AT" ||
+    vr === "PN" ||
+    vr === "DS" ||
+    vr === "IS"
+  );
+}
+
+/** The value fields of one scalar element. */
+function scalarAttribute(el: Element, options: ToDicomJsonOptions): DicomJsonAttribute {
+  const vr = el.vr;
+  const bytes = el.rawBytes;
+  if (BINARY_VRS.has(vr)) {
+    if (bytes.length === 0) return { vr };
+    if (!el.littleEndian && SWAPPED_BINARY_VRS.has(vr)) {
+      refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_BYTE_ORDER, el);
+    }
+    const uri = options.bulkDataUri?.(el);
+    if (uri !== undefined) return { vr, BulkDataURI: uri };
+    return { vr, InlineBinary: bytes.toString("base64") };
+  }
+  // An empty SV or UV has no value whose form is in question, so only a value is refused.
+  if (bytes.length === 0 && (vr === "SV" || vr === "UV")) return { vr };
+  if (!hasValueForm(vr)) refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_VR, el);
+  if (bytes.length === 0) return { vr };
+  const width = NUMBER_WIDTH[vr];
+  if (width !== undefined) return { vr, Value: binaryNumbers(el, bytes, width) };
+  if (vr === "AT") return { vr, Value: attributeTags(el, bytes) };
+  if (SINGLE_STRING_VRS.has(vr)) {
+    const text = trimEnd(textOf(el));
+    return text === "" ? { vr } : { vr, Value: [text] };
+  }
+  const values = splitValues(el);
+  if (values === undefined) return { vr };
+  let out: DicomJsonValue[];
+  if (vr === "PN") out = values.map(personName);
+  else if (vr === "DS") out = values.map((v) => numberString(el, v, DECIMAL_STRING));
+  else if (vr === "IS") out = values.map((v) => numberString(el, v, INTEGER_STRING));
+  else out = values.map((v) => (v === "" ? null : v));
+  if (out.length === 1 && out[0] === null) return { vr };
+  return { vr, Value: out };
+}
+
+function attributeOf(el: Element, options: ToDicomJsonOptions): DicomJsonAttribute {
+  if (el.vr === "SQ") {
+    const items = el.items;
+    if (items === undefined) refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_ELEMENT, el);
+    if (items.length === 0) return { vr: "SQ" };
+    return { vr: "SQ", Value: items.map((item) => datasetOf(item, options)) };
+  }
+  if (el.length === UNDEFINED_LENGTH) refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_ELEMENT, el);
+  return scalarAttribute(el, options);
+}
+
+function datasetOf(ds: Dataset, options: ToDicomJsonOptions): DicomJsonDataset {
+  const out: Record<string, DicomJsonAttribute> = {};
+  for (const el of ds.elements()) {
+    // Group Length (gggg,0000) is left out, as serializeDicom leaves it out (PS3.5 section 7.2).
+    if (el.tag.endsWith("0000")) continue;
+    out[el.tag] = attributeOf(el, options);
+  }
+  return out;
+}
+
+/**
+ * The DICOM JSON Model (PS3.18 Annex F) of a {@link Dataset}: one JSON object whose keys are the
+ * tags, eight uppercase hex digits, in the order the Data Set holds them, each with its `vr` and
+ * its value as `Value`, `InlineBinary` or `BulkDataURI`. Metadata only: no File Meta Information,
+ * which the model does not carry, and no retired Group Length.
+ *
+ * How each VR is written: text VRs as JSON strings with their padding removed, `null` for an empty
+ * value among several; `PN` as an object of `Alphabetic`, `Ideographic` and `Phonetic` groups;
+ * `DS`, `IS`, `US`, `SS`, `UL`, `SL`, `FL` and `FD` as JSON numbers; `AT` as eight hex digits;
+ * `SQ` as an array of nested Data Sets; and `OB`, `OD`, `OF`, `OL`, `OV`, `OW` and `UN` as base64
+ * `InlineBinary`, or as a `BulkDataURI` where the `bulkDataUri` option gives one. An attribute with
+ * an empty value has no value field. Text is decoded through `(0008,0005)` Specific Character Set
+ * and `(0008,0005)` is kept as it is.
+ *
+ * The result is a plain object: `JSON.stringify` writes it, and `fromDicomJson` reads it back.
+ *
+ * @param ds - The Data Set, usually from `parseDicom`.
+ * @param options - Where to hand binary values out as a `BulkDataURI`.
+ * @returns The Data Set as a DICOM JSON object.
+ * @throws {@link DicomJsonError} rather than change or guess a value: `UNSUPPORTED_VR` for `SV`
+ *   and `UV`, `UNSUPPORTED_ELEMENT` for encapsulated Pixel Data or another undefined-length value
+ *   that is not a read Sequence, `UNSUPPORTED_BYTE_ORDER` for an `OW`, `OF`, `OD`, `OL` or `OV`
+ *   value under Explicit VR Big Endian, `UNREPRESENTABLE_NUMBER` for NaN, an infinity, or a `DS`
+ *   or `IS` value that is not a number, and `MALFORMED_VALUE` for a binary value whose length is
+ *   not a whole number of values.
+ * @example
+ * ```ts
+ * import { parseDicom, toDicomJson } from "@cosyte/dicom";
+ * const json = toDicomJson(parseDicom(buf));
+ * json["00100010"]; // { vr: "PN", Value: [{ Alphabetic: "DOE^JANE" }] }
+ * JSON.stringify(json);
+ * ```
+ */
+export function toDicomJson(ds: Dataset, options: ToDicomJsonOptions = {}): DicomJsonDataset {
+  return datasetOf(ds, options);
+}

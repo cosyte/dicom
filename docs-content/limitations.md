@@ -33,7 +33,7 @@ These are non-goals, not gaps. Each is a companion package or another tool's job
 | **Repairing a fragment stream on write.** `serializeDicom` writes each PS3.5 2026c section A.4 syntax and refuses a malformed top-level Pixel Data with `INVALID_ENCAPSULATED_PIXEL_DATA`           | out of scope          |
 | **Burned-in annotation removal / Clean Pixel Data.** A de-identified output from this package is **metadata-de-identified only**, and it warns rather than claiming otherwise                       | `@cosyte/dicom-pixel` |
 | **Networking.** No DIMSE: no C-STORE, C-FIND, C-MOVE, MWL or MPPS                                                                                                                                   | `@cosyte/dicom-net`   |
-| **Web services.** No DICOMweb: no QIDO, WADO or STOW                                                                                                                                                | `@cosyte/dicomweb`    |
+| **Web services.** No DICOMweb: no QIDO, WADO or STOW. The DICOM JSON Model is converted (`toDicomJson`, `fromDicomJson`), but no `BulkDataURI` is fetched                                           | `@cosyte/dicomweb`    |
 | **Transcoding.** The serializer re-emits in the dataset's source transfer syntax only                                                                                                               | out of scope          |
 | **Terminology resolution.** Coded values are surfaced with their designator and canonical source but are never validated, looked up, or cross-mapped; `SRT` is not normalized to `SCT`              | `@cosyte/terminology` |
 | **Typed SR and RT models.** SR content trees and RT objects are navigable as raw structure, with no clinical model over them. Deliberately flagged and deferred rather than half-built              | out of scope for v1   |
@@ -397,6 +397,13 @@ on the wire.
   loss, recorded on `report.fileMetaElementsDropped` and counted on
   `report.fileMetaElementsDroppedCount`, and it is **not** recoverable from the output. If you need
   the source group verbatim, read it off the parsed dataset before the call.
+- **The DICOM JSON Model does not carry everything Part 10 does.** It records no File Meta, no
+  defined or undefined Sequence and Item length, no `DS` or `IS` text beyond its number, and no pad
+  byte, so Part 10 to JSON to Part 10 is byte-identical only where the source already wrote what
+  `fromDicomJson` writes. What it cannot carry, and what we have not checked against PS3.18, which
+  is not vendored here (`SV` and `UV` values, binary byte order under Big Endian, encapsulated Pixel
+  Data, and text outside 7-bit ASCII under most Specific Character Sets), is refused with a
+  `DicomJsonError`. See [Serialization](./serialization.md#the-dicom-json-model).
 - **`NESTING_DEPTH_LIMIT` is this library's bound, not the standard's.** A fully conformant file
   nested deeper than it is refused, and a sequence refused that way is emptied by `deidentify()`
   rather than shipped, so expect data loss on such a file.

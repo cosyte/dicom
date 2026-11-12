@@ -19,6 +19,7 @@ pnpm examples
 | [`walk-elements.ts`](walk-elements.ts)                       | Walk every element with its dictionary name and its typed, decoded value.                                                                        | `pnpm tsx examples/walk-elements.ts`            |
 | [`tolerate-and-reserialize.ts`](tolerate-and-reserialize.ts) | Read an object saved without its preamble, see the stable warning code, and write it back as spec-clean Part 10 that reads back with no warning. | `pnpm tsx examples/tolerate-and-reserialize.ts` |
 | [`deidentify.ts`](deidentify.ts)                             | De-identify the header with the PS3.15 Annex E Basic Profile, print the audit report, and write the result out.                                  | `pnpm tsx examples/deidentify.ts`               |
+| [`dicom-json.ts`](dicom-json.ts)                             | Convert the object to the DICOM JSON Model and back, and write the same Part 10 bytes it started as.                                             | `pnpm tsx examples/dicom-json.ts`               |
 
 `data/ct-object.ts` holds the synthetic CT object as base64, a copy of the first-use fixture the
 README and the quickstart parse, kept in a module because this repository builds every fixture in
