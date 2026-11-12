@@ -11,9 +11,6 @@ import type { Tag, VR } from "../dictionary/types.js";
 import type { DicomPosition, FallbackState, ParseContext, ParseOptions } from "./types.js";
 import { charsetAssumed, type DicomParseWarning } from "./warnings.js";
 
-/** The `code` of the `TypeError` an option the parse does not take is refused with. */
-const INVALID_OPTION = "DICOM_INVALID_OPTION";
-
 /**
  * The parse's {@link FallbackState}, or `undefined` when no fallback is asked for. A value the
  * options do not take is refused with a `TypeError` whose `code` is `DICOM_INVALID_OPTION` and
@@ -28,7 +25,7 @@ export function fallbackStateOf(options: ParseOptions): FallbackState | undefine
       new TypeError(
         'ParseOptions.fallbackCharacterSet must be a term of FALLBACK_CHARACTER_SETS, such as "ISO_IR 100", and fallbackCharacterSetForUnknown a boolean given with it.',
       ),
-      { code: INVALID_OPTION },
+      { code: "DICOM_INVALID_OPTION" },
     );
   }
   return fallback === undefined ? undefined : { ...fallback, warned: false };
@@ -36,31 +33,40 @@ export function fallbackStateOf(options: ParseOptions): FallbackState | undefine
 
 /**
  * Emit `DICOM_CHARSET_ASSUMED` for the element about to be written when it is the parse's first
- * text element read under the fallback: a VR whose text `(0008,0005)` governs, in a Data Set whose
- * charset is the fallback's own list.
+ * text element read under `fallback`: a VR whose text `(0008,0005)` governs, in a Data Set whose
+ * charset is the fallback's own list. The caller passes `ctx.fallback` only when it is set.
  *
  * @internal
  */
 export function noteAssumedCharset(
+  fallback: FallbackState,
   ctx: ParseContext,
   emit: (w: DicomParseWarning) => void,
   position: DicomPosition,
   tag: Tag,
   vr: VR,
 ): void {
-  const fallback = ctx.fallback;
-  if (fallback === undefined || fallback.warned || ctx.currentCharset !== fallback.terms) return;
-  if (!isCharsetTextVr(vr)) return;
+  if (fallback.warned || ctx.currentCharset !== fallback.terms || !isCharsetTextVr(vr)) return;
   fallback.warned = true;
   emit(charsetAssumed(position, tag));
 }
 
 /**
  * The VRs whose text is read through `(0008,0005)`: PS3.5 section 6.1.2.3 lets a set replace the
- * default repertoire "for use in Value Representations SH, LO, ST, LT, PN, UC and UT".
+ * default repertoire "for use in Value Representations SH, LO, ST, LT, PN, UC and UT". A switch
+ * rather than a module-level list, so the mutation run can judge each row.
  */
-const CHARSET_TEXT_VRS: readonly VR[] = ["SH", "LO", "UC", "ST", "LT", "UT", "PN"];
-
 function isCharsetTextVr(vr: VR): boolean {
-  return CHARSET_TEXT_VRS.includes(vr);
+  switch (vr as string) {
+    case "SH":
+    case "LO":
+    case "UC":
+    case "ST":
+    case "LT":
+    case "UT":
+    case "PN":
+      return true;
+    default:
+      return false;
+  }
 }

@@ -526,10 +526,11 @@ export function tryParseDefinedLengthSQ(
     if (isStrictEscalation(err)) throw err;
     ctx.nestingDepth = savedDepth;
     // `parseSequence` pops what it pushed in a `finally`, so a throw leaves the stack balanced.
-    /* v8 ignore next 3 -- unreachable: `parseSequence` restores the stack before rethrowing. */
+    /* v8 ignore start -- unreachable: `parseSequence` restores the stack before rethrowing. */
     while (ctx.encodingContextStack.length > savedStackLen) {
       ctx.encodingContextStack.pop();
     }
+    /* v8 ignore stop */
     while (ctx.warnings.length > savedWarningsLen) {
       ctx.warnings.pop();
     }
@@ -626,10 +627,11 @@ export function tryParseUnAsSQ(
     // Restore state - drop any warnings emitted during the failed descent.
     ctx.nestingDepth = savedDepth;
     // `parseSequence` pops what it pushed in a `finally`, so a throw leaves the stack balanced.
-    /* v8 ignore next 3 -- unreachable: `parseSequence` restores the stack before rethrowing. */
+    /* v8 ignore start -- unreachable: `parseSequence` restores the stack before rethrowing. */
     while (ctx.encodingContextStack.length > savedStackLen) {
       ctx.encodingContextStack.pop();
     }
+    /* v8 ignore stop */
     while (ctx.warnings.length > savedWarningsLen) {
       ctx.warnings.pop();
     }

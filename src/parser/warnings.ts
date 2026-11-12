@@ -526,8 +526,10 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
     "(0008,0005) Specific Character Set value {n} names a defined term this build does not support; decoding text as UTF-8 best-effort. The term is not reproduced here - read the element if you need it.",
   // The tag goes through `renderTag`. The set the caller named is not echoed: the caller has it
   // already, and `Element.specificCharacterSet` names it. See `charsetAssumed`.
+  // Stryker disable StringLiteral: static, this registry is built once at import and the mutation run does not reload it; test/dataset/vr/charset-fallback.test.ts holds the message
   DICOM_CHARSET_ASSUMED:
     "Element ({tag}) is the first text value read under the character set ParseOptions.fallbackCharacterSet names, because (0008,0005) Specific Character Set is absent or empty for it (or, with fallbackCharacterSetForUnknown, names a term this build does not decode), where PS3.5 would read the default repertoire ISO-IR 6. Every text value read the same way after it reads under that set too; raw bytes preserved. The byte offset locates the element.",
+  // Stryker restore StringLiteral
   DICOM_CHARSET_AMBIGUOUS_SEPARATOR:
     "(0008,0005) Specific Character Set value {n} is ambiguous under the active code extensions; decoding text as UTF-8 best-effort.",
   // The three ISO 2022 code-extension codes take a tag and a VR and nothing

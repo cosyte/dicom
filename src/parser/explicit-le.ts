@@ -389,7 +389,14 @@ export function _parseExplicit(
 
     // The first text element read under `ParseOptions.fallbackCharacterSet` says so, once.
     if (ctx.fallback !== undefined) {
-      noteAssumedCharset(ctx, emit, (position ??= { byteOffset: headerStart }), tag, vr);
+      noteAssumedCharset(
+        ctx.fallback,
+        ctx,
+        emit,
+        (position ??= { byteOffset: headerStart }),
+        tag,
+        vr,
+      );
     }
 
     // An even group has no Private Creator, so it skips the reservation lookup.

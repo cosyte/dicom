@@ -318,7 +318,7 @@ export function parseImplicitLE(
     }
 
     // The first text element read under `ParseOptions.fallbackCharacterSet` says so, once.
-    if (ctx.fallback !== undefined) noteAssumedCharset(ctx, emit, position, tag, vr);
+    if (ctx.fallback !== undefined) noteAssumedCharset(ctx.fallback, ctx, emit, position, tag, vr);
 
     const privateCreator = safeModelCreator(resolvePrivateCreator(tag, ctx), ctx);
     defineRow(

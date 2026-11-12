@@ -216,6 +216,12 @@ describe("when the fallback applies", () => {
     expect(nameOf(off)).toBe("DOE^JOS�E");
   });
 
+  it("an empty Value 1 with code extensions declares a set, so the fallback does not apply", () => {
+    const ds = parseDicom(file([cs("\\ISO 2022 IR 87"), COMMENTS]), LATIN1);
+    expect(ds.get("00104000")?.specificCharacterSet).toEqual(["", "ISO 2022 IR 87"]);
+    expect(codes(ds)).toEqual([]);
+  });
+
   it("an unknown term among known ones is replaced only when asked", () => {
     const buf = file([
       cs("ISO_IR 126\\ISO_IR 9999"),
@@ -325,6 +331,61 @@ describe("when the fallback applies", () => {
     expect(assumed[0]?.message).toContain("(00104000)");
   });
 
+  it("a failed descent after the warning was raised does not raise it again", () => {
+    const studyDescription: BuildDicomElement = {
+      tag: "00081030",
+      vr: "LO",
+      value: Buffer.from("SYNTHETIC STUDY ", "latin1"),
+    };
+    // The Implicit VR Sequence that over-declares, as above, after a text element.
+    const sq = parseDicom(
+      file(
+        [
+          studyDescription,
+          { tag: "00081115", items: [{ elements: [PATIENT_NAME] }], declaredLengthDelta: 8 },
+          { tag: "00100020", vr: "LO", value: Buffer.alloc(0) },
+          COMMENTS,
+        ],
+        TS_IMPLICIT_LE,
+      ),
+      LATIN1,
+    );
+    expect(codes(sq)).toEqual([ASSUMED, "DICOM_SQ_NOT_DESCENDED"]);
+    expect(sq.warnings[0]?.message).toContain("(00081030)");
+    // The undefined-length UN in an Item, as above, after a text element.
+    const pn = Buffer.concat([
+      Buffer.from([0x10, 0x00, 0x10, 0x00, NAME_BYTES.length, 0, 0, 0]),
+      NAME_BYTES,
+    ]);
+    const overrun = Buffer.from([0x10, 0x00, 0x20, 0x00, 0x00, 0x00, 0xff, 0x00]);
+    const un = parseDicom(
+      file([
+        studyDescription,
+        {
+          tag: "00081115",
+          items: [
+            {
+              elements: [
+                {
+                  tag: "0040A730",
+                  items: [],
+                  undefinedLength: true,
+                  encapsulatedPixelData: true,
+                  explicitVr: "UN",
+                  encapsulatedFragments: [pn, overrun],
+                },
+              ],
+            },
+          ],
+        },
+        COMMENTS,
+      ]),
+      LATIN1,
+    );
+    expect(codes(un).filter((c) => c === ASSUMED)).toHaveLength(1);
+    expect(un.warnings[0]?.message).toContain("(00081030)");
+  });
+
   it("readDicomHeader takes the option too", async () => {
     const bytes = file([PATIENT_NAME]);
     const ds = await readDicomHeader(
@@ -429,6 +490,9 @@ describe("an invalid option is refused with a coded error", () => {
       expect(thrown).not.toBeInstanceOf(DicomParseError);
       expect((thrown as { code?: string }).code).toBe("DICOM_INVALID_OPTION");
       expect((thrown as Error).message).not.toContain("9999");
+      expect((thrown as Error).message).toContain(
+        "ParseOptions.fallbackCharacterSet must be a term of FALLBACK_CHARACTER_SETS",
+      );
     }
   });
 
