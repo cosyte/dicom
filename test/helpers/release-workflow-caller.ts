@@ -457,3 +457,36 @@ export function sharedReleaseRefs(source: string): string[] {
   }
   return refs;
 }
+
+/** One job's call into a shared workflow: the pinned `@ref` and its `with:` inputs as text. */
+export interface SharedWorkflowCall {
+  readonly ref: string;
+  readonly inputs: Readonly<Record<string, string>>;
+}
+
+/**
+ * Every job of `source` that calls `workflow` (a `uses:` target without its `@ref`), with the
+ * reference it pins and the scalar inputs it passes. A flow sequence such as `os` stays the text
+ * the workflow writes, so a test reads it with {@link flowList}.
+ */
+export function sharedWorkflowCalls(source: string, workflow: string): SharedWorkflowCall[] {
+  const jobs = asMap(parseWorkflow(source)["jobs"]) ?? {};
+  const prefix = `${workflow}@`;
+  const calls: SharedWorkflowCall[] = [];
+  for (const job of Object.values(jobs)) {
+    const uses = asString(asMap(job)?.["uses"]);
+    if (uses === null || !uses.startsWith(prefix)) continue;
+    const inputs: Record<string, string> = {};
+    for (const [key, value] of Object.entries(asMap(asMap(job)?.["with"]) ?? {})) {
+      const text = asString(value);
+      if (text !== null) inputs[key] = text;
+    }
+    calls.push({ ref: uses.slice(prefix.length), inputs });
+  }
+  return calls;
+}
+
+/** A flow sequence written as a scalar input (`'["a", "b"]'`), read as its items. */
+export function flowList(value: string | undefined): string[] {
+  return asStringList(value);
+}

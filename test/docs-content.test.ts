@@ -13,6 +13,7 @@ import {
 } from "@cosyte/vitest-config/snippets";
 
 import { base64Object, compileErrors, fences, section } from "./_helpers/first-use.js";
+import { TSX_CLI } from "./helpers/run-script.js";
 import { FIRST_USE_CT_NO_PREAMBLE, FIRST_USE_CT_OBJECT } from "./fixtures/first-use/ct-object.js";
 
 /**
@@ -38,13 +39,24 @@ const root = join(import.meta.dirname, "..");
 /** Map the published entry points to their built ESM artifacts. */
 const ENTRY = join(root, "dist", "index.mjs");
 const ARBITRARIES_ENTRY = join(root, "dist", "arbitraries.mjs");
+/**
+ * Each as a `file:` URL, which the ESM loader takes on every system; a bare Windows path such as
+ * `D:\a\...` reads to it as a URL with the scheme `d:` and is refused.
+ */
 const resolveEntry = (specifier: string): string | undefined => {
-  if (specifier === "@cosyte/dicom") return ENTRY;
-  return specifier === "@cosyte/dicom/arbitraries" ? ARBITRARIES_ENTRY : undefined;
+  if (specifier === "@cosyte/dicom") return pathToFileURL(ENTRY).href;
+  return specifier === "@cosyte/dicom/arbitraries"
+    ? pathToFileURL(ARBITRARIES_ENTRY).href
+    : undefined;
 };
 
 beforeAll(() => {
-  execFileSync("pnpm", ["build"], { cwd: root, stdio: "inherit" });
+  // On Windows `pnpm` is a `.cmd` file, which Node starts only through a shell.
+  execFileSync("pnpm", ["build"], {
+    cwd: root,
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  });
 }, 180_000);
 
 docSnippetSuite({
@@ -96,8 +108,7 @@ function runAsProgram(
   mkdirSync(FIRST_USE_TMP, { recursive: true });
   const file = join(FIRST_USE_TMP, name);
   writeFileSync(file, code.replace(specifier, JSON.stringify(pathToFileURL(ENTRY).href)), "utf8");
-  const tsx = join(root, "node_modules", ".bin", "tsx");
-  const run = spawnSync(tsx, [file], {
+  const run = spawnSync(process.execPath, [TSX_CLI, file], {
     cwd: root,
     encoding: "utf8",
     shell: false,

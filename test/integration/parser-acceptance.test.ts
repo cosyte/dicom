@@ -166,7 +166,7 @@ describe("ROADMAP Phase 2 §SC1: parses all 4 v1 transfer syntaxes correctly", (
     // visible from a single integration sweep.
     const fs = await import("node:fs/promises");
     const path = await import("node:path");
-    const here = path.dirname(new URL(import.meta.url).pathname);
+    const here = import.meta.dirname;
     const repoRoot = path.resolve(here, "..", "..");
     const deflatedSrc = await fs.readFile(
       path.join(repoRoot, "src", "parser", "deflated-le.ts"),
