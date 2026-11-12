@@ -139,7 +139,9 @@ describe("dicom public API: the root entry's export surface is locked", () => {
   }, 120_000);
 
   test("a drifted export is detected and named (the gate can go red)", () => {
-    const fixture = join(REPO_ROOT, "__public-exports-control__.ts");
+    // TypeScript names every file with forward slashes, so the fixture's name is written that way:
+    // on Windows a backslashed name would never match the host's lookups below.
+    const fixture = join(REPO_ROOT, "__public-exports-control__.ts").replaceAll("\\", "/");
     const source = ts.createSourceFile(
       fixture,
       [

@@ -30,7 +30,28 @@ jobs:
       contents: write # create tags / the GitHub release
       id-token: write # npm trusted publishing and provenance
       pull-requests: write # open the "Version Packages" PR
-    uses: cosyte/.github/.github/workflows/release.yml@c0db8d8e5927269820de4401b3b5ad6141854b76 # workflows-2026-11-08-c0db8d8e5927
+    uses: cosyte/.github/.github/workflows/release.yml@398cd4ded647dddd9f2e220ceb042840f59e1426 # workflows-2026-11-10-398cd4ded647
     with:
       package-name: "@cosyte/dicom"
+      # The release gates, each a step of the shared `version` job, run before anything publishes.
+      # test/ci/platform-matrix.test.ts holds them, and holds this file to the commit ci.yml names.
+      # - The latest weekly mutation result: the newest completed run of weekly-mutation.yml on
+      #   main must have succeeded and be at most 8 days old. On for every caller, so
+      #   `mutation-workflow` and `mutation-max-age-days` keep their defaults. Until
+      #   weekly-mutation.yml has a green run on main, a release stops here.
+      # - The benchmarks: `pnpm test:perf`, then bench/dicom.bench.mjs timed against the build with
+      #   `cosyte-bench run` and checked with `cosyte-bench check`.
+      # - The package checks: the manifest names only specifiers a registry can resolve, then
+      #   `npm pack`, every declared file and `exports` target is in the tarball, it installs into
+      #   a clean directory and each entry point loads by name.
+      # Provenance and an SBOM attached to the GitHub release are on for every caller.
+      #
+      # `run-tarball-samples` stays off for now. That gate runs every `ts` and `js` block under
+      # docs-content/, and the pages still carry illustrative blocks that are not meant to run on
+      # their own (a `ds` from an earlier block, a `study.dcm` path). It turns on once each such
+      # block is marked `no-run <reason>`; the `runnable` blocks already run against the build in
+      # test/docs-content.test.ts.
+      run-benchmarks: true
+      bench-suites: bench/dicom.bench.mjs
+      run-package-checks: true
     secrets: inherit
