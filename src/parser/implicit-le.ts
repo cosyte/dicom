@@ -72,9 +72,6 @@ import { tagOf } from "./wire-tokens.js";
 /** The `(0008,0005)` Specific Character Set tag. */
 const SPECIFIC_CHARACTER_SET_TAG: Tag = "00080005";
 
-/** The `(0028,0103)` Pixel Representation tag, which signs the "US or SS" pixel sample values. */
-const PIXEL_REPRESENTATION_TAG: Tag = "00280103";
-
 /**
  * Parse the dataset portion of an Implicit VR LE buffer starting at
  * `datasetStart`. Reads element-by-element until the cursor reaches the
@@ -315,7 +312,7 @@ export function parseImplicitLE(
 
     // (0028,0103) Pixel Representation signs the "US or SS" pixel sample values that follow it in
     // this Data Set (PS3.5 section 8.1.1). A value that is not one US is no Pixel Representation.
-    if (tag === PIXEL_REPRESENTATION_TAG) {
+    if (tag === "00280103") {
       ctx.pixelRepresentation = length === 2 ? buffer.readUInt16LE(valueStart) : undefined;
     }
 

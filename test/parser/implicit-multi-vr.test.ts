@@ -136,6 +136,31 @@ describe("Implicit VR LE: US or SS attributes follow Pixel Representation (0028,
     expect(vrOf(ds, "00280107")).toBe("SS");
   });
 
+  it.each([
+    ["00189810", "Zero Velocity Pixel Value"],
+    ["00221452", "Mapped Pixel Value"],
+    ["00280071", "Perimeter Value"],
+    ["00280104", "Smallest Valid Pixel Value"],
+    ["00280105", "Largest Valid Pixel Value"],
+    ["00280106", "Smallest Image Pixel Value"],
+    ["00280107", "Largest Image Pixel Value"],
+    ["00280108", "Smallest Pixel Value in Series"],
+    ["00280109", "Largest Pixel Value in Series"],
+    ["00280110", "Smallest Image Pixel Value in Plane"],
+    ["00280111", "Largest Image Pixel Value in Plane"],
+    ["00280120", "Pixel Padding Value"],
+    ["00280121", "Pixel Padding Range Limit"],
+    ["00409211", "Real World Value Last Value Mapped"],
+    ["00409216", "Real World Value First Value Mapped"],
+    ["00603004", "Histogram First Bin Value"],
+    ["00603006", "Histogram Last Bin Value"],
+  ] as const)("reads %s %s as SS under a Pixel Representation of 1", (tag, _name) => {
+    const ds = implicit(el("00280103", u16(1)), seq("00409096", [el(tag, u16(-1))]));
+    const value = ds.get("00409096")?.items?.[0]?.get(tag);
+    expect(value?.vr).toBe("SS");
+    expect(value?.value).toMatchObject({ kind: "numbers", values: [-1] });
+  });
+
   it("reads Pixel Padding Value as US when Pixel Representation is 0", () => {
     const ds = implicit(el("00280103", u16(0)), el("00280120", u16(65535)));
     expect(vrOf(ds, "00280120")).toBe("US");

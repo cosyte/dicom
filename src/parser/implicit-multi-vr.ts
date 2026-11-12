@@ -42,42 +42,6 @@
 
 import type { DictionaryEntry, VR } from "../dictionary/types.js";
 
-/** The "OB or OW" attributes read as OW under Implicit VR, by registry keyword. */
-const OW_UNDER_IMPLICIT: ReadonlySet<string> = new Set([
-  "PixelData",
-  "OverlayData",
-  "WaveformData",
-  "ChannelMinimumValue",
-  "ChannelMaximumValue",
-  "WaveformPaddingValue",
-  "DarkCurrentCounts",
-  "AirCounts",
-]);
-
-/** The "US or OW" lookup table data, read as OW only when an Explicit VR US cannot carry it. */
-const US_OR_OW_TABLES: ReadonlySet<string> = new Set(["LUTData", "GrayLookupTableData"]);
-
-/** The "US or SS" attributes that hold a pixel sample value, signed as Pixel Representation says. */
-const PIXEL_SAMPLE_VALUES: ReadonlySet<string> = new Set([
-  "ZeroVelocityPixelValue",
-  "MappedPixelValue",
-  "PerimeterValue",
-  "SmallestValidPixelValue",
-  "LargestValidPixelValue",
-  "SmallestImagePixelValue",
-  "LargestImagePixelValue",
-  "SmallestPixelValueInSeries",
-  "LargestPixelValueInSeries",
-  "SmallestImagePixelValueInPlane",
-  "LargestImagePixelValueInPlane",
-  "PixelPaddingValue",
-  "PixelPaddingRangeLimit",
-  "RealWorldValueLastValueMapped",
-  "RealWorldValueFirstValueMapped",
-  "HistogramFirstBinValue",
-  "HistogramLastBinValue",
-]);
-
 /** The longest value the 16-bit Value Length of an Explicit VR US can declare (PS3.5 section 7.1.2). */
 const MAX_US_LENGTH = 0xfffe;
 
@@ -101,9 +65,43 @@ export function implicitMultiVr(
   length: number,
   pixelRepresentation: number | undefined,
 ): VR | undefined {
-  const keyword = entry.keyword;
-  if (OW_UNDER_IMPLICIT.has(keyword)) return "OW";
-  if (US_OR_OW_TABLES.has(keyword)) return length > MAX_US_LENGTH ? "OW" : "US";
-  if (PIXEL_SAMPLE_VALUES.has(keyword)) return pixelRepresentation === SIGNED ? "SS" : "US";
-  return undefined;
+  // A switch rather than module-level sets: each case is a label a test reaches, so a mutated
+  // keyword is caught by the test of its attribute.
+  switch (entry.keyword) {
+    // The "OB or OW" attributes read as OW.
+    case "PixelData":
+    case "OverlayData":
+    case "WaveformData":
+    case "ChannelMinimumValue":
+    case "ChannelMaximumValue":
+    case "WaveformPaddingValue":
+    case "DarkCurrentCounts":
+    case "AirCounts":
+      return "OW";
+    // The "US or OW" lookup table data, OW only when an Explicit VR US cannot carry it.
+    case "LUTData":
+    case "GrayLookupTableData":
+      return length > MAX_US_LENGTH ? "OW" : "US";
+    // The "US or SS" attributes that hold a pixel sample value, signed as Pixel Representation says.
+    case "ZeroVelocityPixelValue":
+    case "MappedPixelValue":
+    case "PerimeterValue":
+    case "SmallestValidPixelValue":
+    case "LargestValidPixelValue":
+    case "SmallestImagePixelValue":
+    case "LargestImagePixelValue":
+    case "SmallestPixelValueInSeries":
+    case "LargestPixelValueInSeries":
+    case "SmallestImagePixelValueInPlane":
+    case "LargestImagePixelValueInPlane":
+    case "PixelPaddingValue":
+    case "PixelPaddingRangeLimit":
+    case "RealWorldValueLastValueMapped":
+    case "RealWorldValueFirstValueMapped":
+    case "HistogramFirstBinValue":
+    case "HistogramLastBinValue":
+      return pixelRepresentation === SIGNED ? "SS" : "US";
+    default:
+      return undefined;
+  }
 }
