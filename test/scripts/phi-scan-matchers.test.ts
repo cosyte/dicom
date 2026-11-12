@@ -30,6 +30,14 @@ import { tmpdir } from "node:os";
 import { runRepoScript } from "../helpers/run-script.js";
 import { htmlBlockConditions } from "../helpers/commonmark-spec.js";
 
+/**
+ * The committed log's only heading is the template `<path>`, and each candidate is written as a
+ * file so a refusal is about the missing log entry. Windows cannot name a file `<path>`, so the
+ * two cases that read the committed log skip there; the parser they hold is text in, text out, and
+ * they run on Linux and macOS.
+ */
+const NO_ANGLE_BRACKET_FILE_NAMES = process.platform === "win32";
+
 const REPO_ROOT = join(import.meta.dirname, "..", "..");
 const CARET = String.fromCharCode(0x5e);
 const DASH = String.fromCharCode(0x2d);
@@ -928,15 +936,18 @@ describe("phi-scan parses its own override log the way the pattern did, minus de
     expect(missingFromOverrideLog(root, names)).toEqual(expectedMissing);
   });
 
-  it("treats the committed override log as holding no entries at all", () => {
-    // The repository's own file, read as it ships. Its only `###` line is the template inside the
-    // fence, so a `--allow-fixture` for it must be refused.
-    const committed = readFileSync(join(REPO_ROOT, "phi-scan-overrides.md"), "utf8");
-    const parsed = splitCommittedHeadings(committed);
-    expect(parsed).toEqual(["<path>"]);
-    const root = makeConfigRepo({ overrides: committed });
-    expect(missingFromOverrideLog(root, parsed)).toEqual(new Set(parsed));
-  });
+  it.skipIf(NO_ANGLE_BRACKET_FILE_NAMES)(
+    "treats the committed override log as holding no entries at all",
+    () => {
+      // The repository's own file, read as it ships. Its only `###` line is the template inside the
+      // fence, so a `--allow-fixture` for it must be refused.
+      const committed = readFileSync(join(REPO_ROOT, "phi-scan-overrides.md"), "utf8");
+      const parsed = splitCommittedHeadings(committed);
+      expect(parsed).toEqual(["<path>"]);
+      const root = makeConfigRepo({ overrides: committed });
+      expect(missingFromOverrideLog(root, parsed)).toEqual(new Set(parsed));
+    },
+  );
 });
 
 /**
@@ -1203,13 +1214,16 @@ describe("phi-scan suppresses a heading inside a CommonMark section 4.6 HTML blo
     expect(missingFromOverrideLog(widened, ["widened"])).toEqual(new Set());
   });
 
-  it("leaves the committed override log holding no entries at all", () => {
-    // The anchor, re-asked under the new block class: this repository's own log carries no HTML, so
-    // adding section 4.6 must not have moved it. Its only heading is still the fenced template.
-    const committed = readFileSync(join(REPO_ROOT, "phi-scan-overrides.md"), "utf8");
-    const root = makeConfigRepo({ overrides: committed });
-    expect(missingFromOverrideLog(root, ["<path>"])).toEqual(new Set(["<path>"]));
-  });
+  it.skipIf(NO_ANGLE_BRACKET_FILE_NAMES)(
+    "leaves the committed override log holding no entries at all",
+    () => {
+      // The anchor, re-asked under the new block class: this repository's own log carries no HTML, so
+      // adding section 4.6 must not have moved it. Its only heading is still the fenced template.
+      const committed = readFileSync(join(REPO_ROOT, "phi-scan-overrides.md"), "utf8");
+      const root = makeConfigRepo({ overrides: committed });
+      expect(missingFromOverrideLog(root, ["<path>"])).toEqual(new Set(["<path>"]));
+    },
+  );
 });
 
 /** Every `###` capture the PATTERN finds in `raw`, fence or no fence. */

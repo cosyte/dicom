@@ -35,7 +35,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { createGeneratorSandbox, REPO_ROOT, type Sandbox } from "../helpers/generator-sandbox.js";
-import { UNDER_DENO, runRepoScript, type ScriptResult } from "../helpers/run-script.js";
+import { UNDER_BUN, UNDER_DENO, runRepoScript, type ScriptResult } from "../helpers/run-script.js";
 
 /** The committed artifact, in the real tree. READ ONLY: this is the regen gate's answer. */
 const COMMITTED_ARTIFACT = join(REPO_ROOT, "src", "dictionary", "generated", "annex-e.ts");
@@ -486,7 +486,8 @@ describe.skipIf(UNDER_DENO)("generate-annex-e", () => {
     GENERATOR_TIMEOUT_MS,
   );
 
-  it(
+  // Under Bun the child is Bun, which does resolve the specifier: see `UNDER_BUN`.
+  it.skipIf(UNDER_BUN)(
     "still needs tsx, because Node will not resolve its .js specifier onto the .ts file",
     () => {
       // The reason `run-script.ts` carves this one script out, pinned rather than

@@ -427,8 +427,7 @@ describe("Security: Buffer-slice retention (T-02-01-04 / T-02-05-04 / D-16)", ()
 describe("Security: D-38 - Phase 2 ships zero curated DICOM fixtures", () => {
   it("no .dcm files exist under test/integration/", async () => {
     const { readdir } = await import("node:fs/promises");
-    const path = await import("node:path");
-    const here = path.dirname(new URL(import.meta.url).pathname);
+    const here = import.meta.dirname;
     const entries = await readdir(here);
     const dcmFiles = entries.filter((name) => name.endsWith(".dcm"));
     expect(dcmFiles).toEqual([]);

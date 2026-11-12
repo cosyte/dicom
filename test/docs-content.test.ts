@@ -13,6 +13,7 @@ import {
 } from "@cosyte/vitest-config/snippets";
 
 import { base64Object, compileErrors, fences, section } from "./_helpers/first-use.js";
+import { TSX_CLI } from "./helpers/run-script.js";
 import { FIRST_USE_CT_NO_PREAMBLE, FIRST_USE_CT_OBJECT } from "./fixtures/first-use/ct-object.js";
 
 /**
@@ -44,7 +45,12 @@ const resolveEntry = (specifier: string): string | undefined => {
 };
 
 beforeAll(() => {
-  execFileSync("pnpm", ["build"], { cwd: root, stdio: "inherit" });
+  // On Windows `pnpm` is a `.cmd` file, which Node starts only through a shell.
+  execFileSync("pnpm", ["build"], {
+    cwd: root,
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  });
 }, 180_000);
 
 docSnippetSuite({
@@ -96,8 +102,7 @@ function runAsProgram(
   mkdirSync(FIRST_USE_TMP, { recursive: true });
   const file = join(FIRST_USE_TMP, name);
   writeFileSync(file, code.replace(specifier, JSON.stringify(pathToFileURL(ENTRY).href)), "utf8");
-  const tsx = join(root, "node_modules", ".bin", "tsx");
-  const run = spawnSync(tsx, [file], {
+  const run = spawnSync(process.execPath, [TSX_CLI, file], {
     cwd: root,
     encoding: "utf8",
     shell: false,
