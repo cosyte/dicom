@@ -48,6 +48,7 @@ function encodingOf(transferSyntaxUID: string): Encoding | undefined {
   ) {
     return { implicit: false, le: true };
   }
+  // Stryker disable next-line ObjectLiteral: equivalent, every read of implicit and le tests truthiness and the encoding never leaves this module, so {} reads as both false
   if (transferSyntaxUID === "1.2.840.10008.1.2.2") return { implicit: false, le: false };
   return undefined;
 }

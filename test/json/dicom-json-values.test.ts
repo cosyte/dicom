@@ -267,6 +267,25 @@ describe("Specific Character Set", () => {
       expect(refusal(() => fromDicomJson(json, LE))).toBe("INVALID_JSON");
     }
   });
+
+  it("refuses a Specific Character Set of another shape before writing text that sorts ahead of it", () => {
+    // (0004,1130) sorts before (0008,0005): read as terms, the string would refuse that text instead.
+    for (const value of ["ISO_IR 192", 5]) {
+      const json = {
+        "00041130": { vr: "LO", Value: ["é"] },
+        "00080005": { vr: "CS", Value: value },
+      } as unknown as DicomJsonDataset;
+      let caught: unknown;
+      try {
+        fromDicomJson(json, LE);
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBeInstanceOf(DicomJsonError);
+      expect((caught as DicomJsonError).code).toBe("INVALID_JSON");
+      expect((caught as DicomJsonError).tag).toBe("00080005");
+    }
+  });
 });
 
 describe("numbers", () => {
