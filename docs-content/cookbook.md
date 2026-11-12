@@ -105,7 +105,7 @@ p.speciesCode?.codingSchemeDesignator; // => "99SYNTH"
 p.breedDescription; // => "SYNTHETIC BREED"
 p.breedCode?.codeMeaning; // => "Synthetic breed"
 p.responsiblePerson?.role; // => "OWNER"
-p.responsiblePerson?.organization; // => "SAMPLE CLINIC"
+p.responsiblePerson?.organization; // => "SAMPLE CLINIC" /* synthetic */
 
 // The sender wrote NEUTERED, which is not one of the two values the standard allows.
 // The view keeps it as written and reports it; nothing throws.
@@ -171,7 +171,7 @@ whether they are real, modified, or gone.
    removed.study.date; // => undefined
 
    datesState(unmodified); // => "UNMODIFIED"
-   unmodified.study.date?.raw; // => "19000101"
+   unmodified.study.date?.raw; // => "19000101" /* synthetic */
 
    datesState(modified); // => "MODIFIED"
    ```

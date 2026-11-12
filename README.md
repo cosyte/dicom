@@ -66,17 +66,17 @@ const buf = Buffer.from(
 );
 const ds = parseDicom(buf);
 
-console.log("patient", ds.patient.id, "issuer", ds.patient.issuerOfId);
-console.log("study", ds.study.instanceUid);
+// Print what is safe to log: a modality, sizes, numbers and warning codes.
 console.log("series", ds.series.modality, "image", ds.image.rows, "x", ds.image.columns);
 console.log("rescale slope", ds.image.rescaleSlope, "intercept", ds.image.rescaleIntercept);
 console.log("tolerated", ds.warnings.length, ds.warnings[0]?.code);
 
-// The values printed above, which the test suite asserts on every run.
+// The values the test suite asserts on every run. The patient ID and the UID identify a person and
+// a study, so they are read and asserted on, never printed; these are synthetic.
 // NOT globally unique on its own: pair it with ds.patient.issuerOfId.
-ds.patient.id; // => "MRN-42"
+ds.patient.id; // => "MRN-42" /* synthetic */
 // The global study anchor.
-ds.study.instanceUid; // => "1.2.826.0.1.3680043.8.498.1.1"
+ds.study.instanceUid; // => "1.2.826.0.1.3680043.8.498.1.1" /* synthetic */
 ds.series.modality; // => "CT"
 ds.image.rows; // => 512
 // number | undefined: undefined means "absent", never a substituted 1.
@@ -88,8 +88,6 @@ ds.warnings.map((w) => w.code); // => ["DICOM_MISSING_PREAMBLE"]
 It prints:
 
 ```text
-patient MRN-42 issuer SAMPLE-HOSP
-study 1.2.826.0.1.3680043.8.498.1.1
 series CT image 512 x 512
 rescale slope 1 intercept -1024
 tolerated 1 DICOM_MISSING_PREAMBLE

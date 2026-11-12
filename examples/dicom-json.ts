@@ -33,8 +33,10 @@ const json = toDicomJson(ds);
 // which JSON.stringify does not for an all-digit tag such as 60000010.
 const text = stringifyDicomJson(json);
 
+// The JSON Model holds every value the object carries, the patient's name among them, so it is
+// never printed whole: print its shape, and the attributes that identify nobody.
 console.log(`Attributes: ${String(Object.keys(json).length)}`);
-console.log("Patient's Name:", JSON.stringify(json["00100010"]));
+console.log("Patient's Name VR:", json["00100010"]?.vr);
 console.log("Modality:", JSON.stringify(json["00080060"]));
 console.log("Pixel Spacing:", JSON.stringify(json["00280030"]));
 console.log(`JSON text: ${String(text.length)} characters`);
@@ -50,6 +52,7 @@ console.log(
 );
 
 // The checks that make this file a test: `pnpm examples` fails if any of them does not hold.
+// Asserted, never printed. The name is synthetic.
 assert.deepEqual(json["00100010"], { vr: "PN", Value: [{ Alphabetic: "Doe^Jane" }] });
 assert.deepEqual(json["00080060"], { vr: "CS", Value: ["CT"] });
 assert.deepEqual(json["00280030"], { vr: "DS", Value: [0.5, 0.5] });

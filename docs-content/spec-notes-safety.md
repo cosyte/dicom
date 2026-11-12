@@ -28,12 +28,12 @@ const ds = parseDicom(buf);
 
 // Patient: an identifier is not globally unique on its own; pair id with issuer
 // to match across systems, and the name stays structured, never flattened.
-ds.patient.id; // => "MRN-42"
-ds.patient.issuerOfId; // => "SAMPLE-HOSP"
-ds.patient.name?.alphabetic?.familyName; // => "Doe"
+ds.patient.id; // => "MRN-42" /* synthetic */
+ds.patient.issuerOfId; // => "SAMPLE-HOSP" /* synthetic */
+ds.patient.name?.alphabetic?.familyName; // => "Doe" /* synthetic */
 
 // Study / series.
-ds.study.instanceUid; // => "1.2.826.0.1.3680043.8.498.1.1"
+ds.study.instanceUid; // => "1.2.826.0.1.3680043.8.498.1.1" /* synthetic */
 ds.series.modality; // => "CT"
 
 // Image: the geometry you need before interpreting a pixel.

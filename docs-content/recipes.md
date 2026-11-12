@@ -54,8 +54,8 @@ instance, what kind of image.
      columns: ds.image.columns, // (0028,0011)
    };
 
-   row.patientId; // => "MRN-42"
-   row.accession; // => "ACC-0001"
+   row.patientId; // => "MRN-42" /* synthetic */
+   row.accession; // => "ACC-0001" /* synthetic */
    row.modality; // => "CT"
    row.rows; // => 512
 
@@ -138,14 +138,14 @@ holds the whole study in memory to read a few hundred bytes of patient and study
 
    // From a path: opened, read up to the Pixel Data, closed.
    const ds = await readDicomHeader(path);
-   ds.patient.id; // => "MRN-42"
-   ds.study.instanceUid; // => "1.2.826.0.1.3680043.8.498.1.1"
+   ds.patient.id; // => "MRN-42" /* synthetic */
+   ds.study.instanceUid; // => "1.2.826.0.1.3680043.8.498.1.1" /* synthetic */
 
    // From a stream, stopping before the first tag of group 0020.
    const patientOnly = await readDicomHeader(createReadStream(path), {
      stopBeforeTag: "00200000",
    });
-   patientOnly.patient.id; // => "MRN-42"
+   patientOnly.patient.id; // => "MRN-42" /* synthetic */
    patientOnly.has("0020000D"); // => false
    patientOnly.warnings.at(-1)?.code; // => "DICOM_PARSE_STOPPED_BEFORE_TAG"
 
@@ -209,7 +209,7 @@ holds the whole study in memory to read a few hundred bytes of patient and study
 
    const ds = parseDicom(Buffer.from("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABESUNNAgAAAFVMBAAcAAAAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xAAgAFgBVSRoAMS4yLjg0MC4xMDAwOC41LjEuNC4xLjEuMgAIABgAVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMTExAAgAIABEQQgAMTkwMDAxMDEIADAAVE0GADA5MDAwMAgAUABTSAgAQUNDLTAwMDEIAGAAQ1MCAENUEAAQAFBOCABEb2VeSmFuZRAAIABMTwYATVJOLTQyEAAhAExPDABTQU1QTEUtSE9TUCAgAA0AVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMS4xACAADgBVSR4AMS4yLjgyNi4wLjEuMzY4MDA0My44LjQ5OC4xLjIAIAARAElTAgAyICgAAgBVUwIAAQAoAAQAQ1MMAE1PTk9DSFJPTUUyICgAEABVUwIAAAIoABEAVVMCAAACKAAwAERTCAAwLjVcMC41ICgAAAFVUwIAEAAoAAEBVVMCAAwAKAACAVVTAgALACgAAwFVUwIAAQAoAFIQRFMGAC0xMDI0ICgAUxBEUwIAMSA=", "base64"), { stopBeforeTag: "00200000" });
 
-   ds.patient.id; // => "MRN-42"
+   ds.patient.id; // => "MRN-42" /* synthetic */
    ds.has("0020000D"); // => false
    ds.warnings.at(-1)?.code; // => "DICOM_PARSE_STOPPED_BEFORE_TAG"
    ```
@@ -234,18 +234,18 @@ const ds = parseDicom(
 );
 
 // 1. Hierarchy keys. A UID is globally unique by construction, so these need no issuer.
-ds.study.instanceUid; // => "1.2.826.0.1.3680043.8.498.1.1"
-ds.series.instanceUid; // => "1.2.826.0.1.3680043.8.498.1.2"
-ds.image.sopInstanceUid; // => "1.2.826.0.1.3680043.8.498.111"
+ds.study.instanceUid; // => "1.2.826.0.1.3680043.8.498.1.1" /* synthetic */
+ds.series.instanceUid; // => "1.2.826.0.1.3680043.8.498.1.2" /* synthetic */
+ds.image.sopInstanceUid; // => "1.2.826.0.1.3680043.8.498.111" /* synthetic */
 
 // 2. Order key. The Accession Number is the HIS-to-PACS join, unique only within the system
 //    that issued it.
-ds.study.accessionNumber; // => "ACC-0001"
+ds.study.accessionNumber; // => "ACC-0001" /* synthetic */
 
 // 3. Patient key. A Patient ID alone is ambiguous across systems: pair it with its issuer.
 const p = ds.patient;
 const patientKey = `${p.issuerOfId ?? ""}|${p.id ?? ""}`;
-patientKey; // => "SAMPLE-HOSP|MRN-42"
+patientKey; // => "SAMPLE-HOSP|MRN-42" /* synthetic */
 
 // Further {id, issuer} pairs, when the sender wrote any, arrive as a list.
 p.otherIds.length; // => 0
@@ -431,7 +431,7 @@ was done, and without changing the original.
    const { dataset, report } = deidentify(ds);
 
    // The original is untouched; the identifying fields are gone from the copy.
-   ds.patient.id; // => "MRN-42"
+   ds.patient.id; // => "MRN-42" /* synthetic */
    dataset.patient.id; // => undefined
 
    // Patient's Name is emptied (Annex E action "Z"), and the Accession Number with it.
@@ -473,8 +473,8 @@ was done, and without changing the original.
      retain: ["RetainUIDs", "RetainLongitudinalTemporal", "CleanDescriptors"],
    });
 
-   dataset.study.instanceUid; // => "1.2.826.0.1.3680043.8.498.1.1"
-   dataset.study.date?.raw; // => "19000101"
+   dataset.study.instanceUid; // => "1.2.826.0.1.3680043.8.498.1.1" /* synthetic */
+   dataset.study.date?.raw; // => "19000101" /* synthetic */
    dataset.get("00280303")?.value; // => { kind: "strings", values: ["UNMODIFIED"] }
    ```
 
@@ -599,14 +599,14 @@ const ds = parseDicom(
 
 // FHIR ImagingStudy.identifier carries the Study Instance UID as a `urn:oid:` value.
 const identifier = `urn:oid:${ds.study.instanceUid ?? ""}`;
-identifier; // => "urn:oid:1.2.826.0.1.3680043.8.498.1.1"
+identifier; // => "urn:oid:1.2.826.0.1.3680043.8.498.1.1" /* synthetic */
 
 // ImagingStudy.series.uid and .series.modality come off the series view.
 const series = { uid: ds.series.instanceUid, modality: ds.series.modality };
 series.modality; // => "CT"
 
 // ImagingStudy.series.instance.uid, per instance.
-ds.image.sopInstanceUid; // => "1.2.826.0.1.3680043.8.498.111"
+ds.image.sopInstanceUid; // => "1.2.826.0.1.3680043.8.498.111" /* synthetic */
 
 // ImagingStudy.started is a FHIR dateTime: compose Study Date and Study Time from their parts.
 const d = ds.study.date;
@@ -617,15 +617,15 @@ const started =
     ? `${pad(d.year, 4)}-${pad(d.month, 2)}-${pad(d.day, 2)}` +
       (t?.valid === true ? `T${pad(t.hours, 2)}:${pad(t.minutes, 2)}:${pad(t.seconds, 2)}` : "")
     : undefined;
-started; // => "1900-01-01T09:00:00"
+started; // => "1900-01-01T09:00:00" /* synthetic */
 
 // ImagingStudy.subject: the DICOM side of that join is the Patient ID and its issuer.
 const subject = { id: ds.patient.id, assigner: ds.patient.issuerOfId };
-subject.assigner; // => "SAMPLE-HOSP"
+subject.assigner; // => "SAMPLE-HOSP" /* synthetic */
 
 // HL7 v2: the Accession Number is the HIS-to-PACS join, conventionally OBR-18 or OBR-19 in a
 // radiology ORM or ORU. Which one is a site agreement, not a DICOM rule.
-ds.study.accessionNumber; // => "ACC-0001"
+ds.study.accessionNumber; // => "ACC-0001" /* synthetic */
 ```
 
 - **`ImagingStudy.started` needs a time zone, and DICOM may not carry one.** `(0008,0201)` Timezone
@@ -652,7 +652,7 @@ const out = serializeDicom(parseDicom(buf));
 Buffer.isBuffer(out); // => true
 
 // Reading the bytes back gives the same data...
-parseDicom(out).patient.name?.alphabetic?.familyName; // => "Doe"
+parseDicom(out).patient.name?.alphabetic?.familyName; // => "Doe" /* synthetic */
 
 // ...and writing them again is byte-identical: a fixed point.
 serializeDicom(parseDicom(out)).equals(out); // => true

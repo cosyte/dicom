@@ -325,7 +325,8 @@ export interface EmbeddedAttributeFinding {
  * import { deidentify, parseDicom } from "@cosyte/dicom";
  * const { report } = deidentify(parseDicom(buf));
  * for (const s of report.unauditableSequences) {
- *   console.warn(`${s.tag}: ${String(s.byteLength)} bytes dropped, item stream unreadable`);
+ *   // The tag and the length can be bytes of the file (above): log the outcome, not them.
+ *   console.warn(`sequence ${s.applied}, item stream unreadable`);
  * }
  * ```
  */
@@ -451,7 +452,8 @@ export interface UnauditableSequenceFinding {
  * import { deidentify, parseDicom, type UnenumerablePrivateRemoval } from "@cosyte/dicom";
  * const { report } = deidentify(parseDicom(buf), { retain: ["RetainSafePrivate"], profile });
  * report.unenumerablePrivateRemovals.forEach((r: UnenumerablePrivateRemoval) => {
- *   console.warn(`${r.tag} ${r.applied} (${r.reason})`, r.contextPath ?? "root");
+ *   // The tag and the path can be bytes of the file (above), so log the outcome and the depth.
+ *   console.warn(`${r.applied} (${r.reason})`, "depth", r.contextPath?.length ?? 0);
  * });
  * ```
  */
@@ -556,7 +558,8 @@ export interface UnenumerablePrivateRemoval {
  * import { deidentify, parseDicom } from "@cosyte/dicom";
  * const { report } = deidentify(parseDicom(buf));
  * for (const u of report.undefinedVrElements) {
- *   console.warn(`offset ${String(u.byteOffset)}: ${String(u.byteLength)} bytes dropped`);
+ *   // The length can be bytes of the file (above): log the offset, which the parser counted.
+ *   console.warn(`offset ${String(u.byteOffset)}: an element with an undefined VR was emptied`);
  * }
  * ```
  */
@@ -644,9 +647,9 @@ export interface UndefinedVrFinding {
  * ```ts
  * import { deidentify, parseDicom, type FileMetaDroppedElement } from "@cosyte/dicom";
  * const { report } = deidentify(parseDicom(buf));
- * report.fileMetaElementsDropped.forEach((d: FileMetaDroppedElement) => {
- *   console.warn(`${d.tag} ${d.vr}: ${String(d.byteLength)} bytes not re-emitted`);
- * });
+ * const dropped: readonly FileMetaDroppedElement[] = report.fileMetaElementsDropped;
+ * // The tag, the VR and the length can be bytes of the file (above): log the count instead.
+ * console.warn(`${String(dropped.length)} File Meta element(s) not re-emitted`);
  * ```
  */
 export interface FileMetaDroppedElement {
@@ -709,7 +712,8 @@ export interface FileMetaDroppedElement {
  * import { deidentify, parseDicom, type Group0004Removal } from "@cosyte/dicom";
  * const { report } = deidentify(parseDicom(buf));
  * report.group0004Removals.forEach((r: Group0004Removal) => {
- *   console.warn(`${r.tag} removed`, r.contextPath ?? "root");
+ *   // The tag and the path are read from the file, so log that a removal happened and its depth.
+ *   console.warn("group 0004 element removed, depth", r.contextPath?.length ?? 0);
  * });
  * ```
  */
@@ -790,7 +794,8 @@ export interface Group0004Removal {
  * import { deidentify, parseDicom, type UnregisteredElementRemoval } from "@cosyte/dicom";
  * const { report } = deidentify(parseDicom(buf));
  * report.unregisteredElementRemovals.forEach((r: UnregisteredElementRemoval) => {
- *   console.warn(`removed at offset ${String(r.byteOffset)}`, r.contextPath ?? "root");
+ *   // The path is read from the file, so log the offset and the depth, never the path.
+ *   console.warn(`removed at offset ${String(r.byteOffset)}`, "depth", r.contextPath?.length ?? 0);
  * });
  * ```
  */

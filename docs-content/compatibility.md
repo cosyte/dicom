@@ -34,7 +34,7 @@ const ds = parseDicom(
 );
 
 ds.warnings.map((w) => w.code); // => ["DICOM_MISSING_PREAMBLE"]
-ds.patient.id; // => "MRN-42"
+ds.patient.id; // => "MRN-42" /* synthetic */
 ```
 
 | Tier | Behavior       | When                           | Example codes            |
@@ -79,7 +79,7 @@ import { parseDicom, profiles } from "@cosyte/dicom";
 
 // Resolve Siemens CSA private headers to their real VRs instead of UN.
 const ds = parseDicom(Buffer.from("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABESUNNAgAAAFVMBAAcAAAAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xAAgAFgBVSRoAMS4yLjg0MC4xMDAwOC41LjEuNC4xLjEuMgAIABgAVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMTExAAgAIABEQQgAMTkwMDAxMDEIADAAVE0GADA5MDAwMAgAUABTSAgAQUNDLTAwMDEIAGAAQ1MCAENUEAAQAFBOCABEb2VeSmFuZRAAIABMTwYATVJOLTQyEAAhAExPDABTQU1QTEUtSE9TUCAgAA0AVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMS4xACAADgBVSR4AMS4yLjgyNi4wLjEuMzY4MDA0My44LjQ5OC4xLjIAIAARAElTAgAyICgAAgBVUwIAAQAoAAQAQ1MMAE1PTk9DSFJPTUUyICgAEABVUwIAAAIoABEAVVMCAAACKAAwAERTCAAwLjVcMC41ICgAAAFVUwIAEAAoAAEBVVMCAAwAKAACAVVTAgALACgAAwFVUwIAAQAoAFIQRFMGAC0xMDI0ICgAUxBEUwIAMSA=", "base64"), { profile: profiles.siemens });
-ds.patient.id; // => "MRN-42"
+ds.patient.id; // => "MRN-42" /* synthetic */
 ```
 
 A profile bundles three things that only ever **tighten or annotate** a parse, never loosen it past the lenient default:

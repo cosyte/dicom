@@ -20,7 +20,7 @@ DICOM file
  ├── File Meta group (0002,xxxx)   : transfer syntax UID, SOP Class/Instance UID
  └── dataset
       ├── (0008,0060) Modality           "CT"
-      ├── (0010,0010) PatientName  PN     "Doe^Jane"
+      ├── (0010,0010) PatientName  PN     «a person's name»
       ├── (0020,000D) StudyInstanceUID UI "1.2.840.…"
       ├── (0028,0100) BitsAllocated  US   16
       └── (7FE0,0010) PixelData     OW    «raw bytes, not decoded»
@@ -45,9 +45,9 @@ const ds = parseDicom(
   ),
 );
 
-ds.patient.id; // => "MRN-42"
-ds.patient.issuerOfId; // => "SAMPLE-HOSP"
-ds.study.instanceUid; // => "1.2.826.0.1.3680043.8.498.1.1"
+ds.patient.id; // => "MRN-42" /* synthetic */
+ds.patient.issuerOfId; // => "SAMPLE-HOSP" /* synthetic */
+ds.study.instanceUid; // => "1.2.826.0.1.3680043.8.498.1.1" /* synthetic */
 ds.series.modality; // => "CT"
 Dictionary.byKeyword("Modality")?.tag; // => "00080060"
 ds.has("00080060"); // => true
@@ -61,16 +61,17 @@ import { parseDicom } from "@cosyte/dicom";
 const ds = parseDicom(Buffer.from("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABESUNNAgAAAFVMBAAcAAAAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xAAgAFgBVSRoAMS4yLjg0MC4xMDAwOC41LjEuNC4xLjEuMgAIABgAVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMTExAAgAIABEQQgAMTkwMDAxMDEIADAAVE0GADA5MDAwMAgAUABTSAgAQUNDLTAwMDEIAGAAQ1MCAENUEAAQAFBOCABEb2VeSmFuZRAAIABMTwYATVJOLTQyEAAhAExPDABTQU1QTEUtSE9TUCAgAA0AVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMS4xACAADgBVSR4AMS4yLjgyNi4wLjEuMzY4MDA0My44LjQ5OC4xLjIAIAARAElTAgAyICgAAgBVUwIAAQAoAAQAQ1MMAE1PTk9DSFJPTUUyICgAEABVUwIAAAIoABEAVVMCAAACKAAwAERTCAAwLjVcMC41ICgAAAFVUwIAEAAoAAEBVVMCAAwAKAACAVVTAgALACgAAwFVUwIAAQAoAFIQRFMGAC0xMDI0ICgAUxBEUwIAMSA=", "base64"));
 
 const p = ds.patient;
-p.id; // => "MRN-42"
-p.issuerOfId; // => "SAMPLE-HOSP"
-p.name?.alphabetic?.familyName; // => "Doe"
+p.id; // => "MRN-42" /* synthetic */
+p.issuerOfId; // => "SAMPLE-HOSP" /* synthetic */
+p.name?.alphabetic?.familyName; // => "Doe" /* synthetic */
 
 const s = ds.study;
-s.instanceUid; // => "1.2.826.0.1.3680043.8.498.1.1"
-s.accessionNumber; // => "ACC-0001"
+s.instanceUid; // => "1.2.826.0.1.3680043.8.498.1.1" /* synthetic */
+s.accessionNumber; // => "ACC-0001" /* synthetic */
 ```
 
-A Patient ID is not globally unique on its own: pair it with its issuer for matching across
+These are the fields that identify a person and a study, so an example here asserts on them and
+never prints them; the values are synthetic. A Patient ID is not globally unique on its own: pair it with its issuer for matching across
 systems. The name is a structured person name, never flattened. The Accession Number
 `(0008,0050)` ties the study to the order in the hospital information system.
 
@@ -107,7 +108,7 @@ const rows = ds.get("00280010")?.value; // Rows, a US
 rows?.kind === "numbers" ? rows.values[0] : undefined; // => 512
 
 const name = ds.get("00100010")?.value; // Patient's Name, a PN
-name?.kind === "personName" ? name.values[0]?.alphabetic?.givenName : undefined; // => "Jane"
+name?.kind === "personName" ? name.values[0]?.alphabetic?.givenName : undefined; // => "Jane" /* synthetic */
 ```
 
 Decode is fail-safe: it never throws and never coerces a malformed value to a plausible-but-wrong one (a bad `DS`/`IS` token becomes `null`, never `NaN`→0). Per-value deviations surface on the returned value's own `warnings`.

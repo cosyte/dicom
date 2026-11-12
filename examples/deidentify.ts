@@ -26,10 +26,14 @@ for (const a of report.attributes) {
 
 const safe = parseDicom(serializeDicom(dataset));
 const method = safe.get("00120063")?.value;
-console.log("Patient ID after:", JSON.stringify(safe.patient.id));
-console.log("Study UID after:", safe.study.instanceUid);
-console.log("Method recorded:", method?.kind === "strings" ? method.values[0] : undefined);
-console.log("Source untouched:", source.patient.id);
+// The source's patient ID and Study Instance UID, and the replacement UID, are read and asserted on
+// below, never printed: the source's are what the run exists to keep out of a log.
+const sourceId = source.patient.id; // "MRN-42", synthetic
+const replacedUid = safe.study.instanceUid; // a "2.25." UID derived from the source UID
+console.log("Patient ID present after:", safe.patient.id !== undefined);
+console.log("Study UID replaced:", replacedUid !== source.study.instanceUid);
+console.log("Method recorded:", method?.kind === "strings");
+console.log("Source untouched:", sourceId !== undefined);
 
 // The checks that make this file a test: `pnpm examples` fails if any of them does not hold.
 const applied = new Map(report.attributes.map((a) => [a.keyword, a.applied]));
@@ -39,6 +43,7 @@ assert.equal(applied.get("Issuer of Patient ID"), "removed");
 assert.equal(applied.get("Study Instance UID"), "uid-remapped");
 assert.equal(safe.patient.id, undefined);
 assert.equal(safe.patient.name, undefined);
-assert.notEqual(safe.study.instanceUid, source.study.instanceUid);
+assert.notEqual(replacedUid, source.study.instanceUid);
+assert.ok(replacedUid?.startsWith("2.25."));
 assert.equal(method?.kind, "strings");
-assert.equal(source.patient.id, "MRN-42");
+assert.equal(sourceId, "MRN-42");

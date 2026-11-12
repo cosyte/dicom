@@ -50,7 +50,7 @@ const buf = Buffer.from(
 const ds = parseDicom(buf);
 
 ds.series.modality; // => "CT"
-ds.patient.id; // => "MRN-42"
+ds.patient.id; // => "MRN-42" /* synthetic */
 ds.warnings.length; // => 0
 ```
 

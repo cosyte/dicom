@@ -38,14 +38,15 @@ const buf = Buffer.from(
 
 const ds = parseDicom(buf);
 
-// Identity: whose object, matchable across systems.
-ds.patient.id; // => "MRN-42"
-ds.patient.issuerOfId; // => "SAMPLE-HOSP"
-ds.patient.name?.alphabetic?.familyName; // => "Doe"
-ds.patient.name?.alphabetic?.givenName; // => "Jane"
+// Identity: whose object, matchable across systems. These identify a person and a study: read
+// them and match on them, never log them. The values here are synthetic.
+ds.patient.id; // => "MRN-42" /* synthetic */
+ds.patient.issuerOfId; // => "SAMPLE-HOSP" /* synthetic */
+ds.patient.name?.alphabetic?.familyName; // => "Doe" /* synthetic */
+ds.patient.name?.alphabetic?.givenName; // => "Jane" /* synthetic */
 
 // Study / series context.
-ds.study.instanceUid; // => "1.2.826.0.1.3680043.8.498.1.1"
+ds.study.instanceUid; // => "1.2.826.0.1.3680043.8.498.1.1" /* synthetic */
 ds.series.number; // => 2
 ds.series.modality; // => "CT"
 
