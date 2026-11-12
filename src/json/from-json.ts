@@ -31,14 +31,18 @@ import {
 import { hasValueForm, textOf } from "./to-json.js";
 import type { DicomJsonDataset, FromDicomJsonOptions } from "./types.js";
 import {
+  bulkDataWidth,
   carriesCharset,
   decimalKey,
   hasForbiddenControl,
   isBinaryVr,
   isCharsetVr,
+  isDecimalString,
+  isIntegerString,
   isSingleStringVr,
   isSwappedBinaryVr,
   numberWidth,
+  takesBulkDataUri,
 } from "./vr.js";
 
 /** How a Data Set body is encoded: Implicit or Explicit VR, and its byte order. */
@@ -238,8 +242,31 @@ function numberOf(value: unknown, vr: string, tag: string): number {
   return value;
 }
 
+/**
+ * A `DS` or `IS` value given as a JSON string, which PS3.18 F.2.3 allows beside a JSON number: its
+ * text is written as it is, so the form and the precision of a decimal string are kept. It must be
+ * a value of its VR as PS3.5 section 6.2 gives it, leading and trailing spaces aside, and no longer
+ * than the 16 bytes of a `DS` or the 12 of an `IS`, or it is `MALFORMED_VALUE`; an `IS` past the
+ * range PS3.5 gives it is `UNREPRESENTABLE_NUMBER`, as a JSON number there is. An empty string is
+ * an empty value.
+ */
+function numberStringText(value: string, vr: string, tag: string): string {
+  const trimmed = value.replace(/^ +| +$/gu, "");
+  if (trimmed === "") return value;
+  const ds = vr === "DS";
+  if (
+    !(ds ? isDecimalString(trimmed) : isIntegerString(trimmed)) ||
+    value.length > (ds ? 16 : 12)
+  ) {
+    refuse(DICOM_JSON_ERROR_CODES.MALFORMED_VALUE, tag);
+  }
+  if (!ds) numberOf(Number(trimmed), vr, tag);
+  return value;
+}
+
 function numberText(value: unknown, vr: string, tag: string): string {
   if (value === null) return "";
+  if (typeof value === "string") return numberStringText(value, vr, tag);
   const n = numberOf(value, vr, tag);
   const text = String(n);
   // A DS value is at most 16 bytes (PS3.5 section 6.2); an IS in range is never longer.
@@ -314,6 +341,28 @@ function attributeTags(values: readonly unknown[], le: boolean, tag: string): Bu
   return out;
 }
 
+/**
+ * The bytes `resolveBulkData` gives for a `BulkDataURI`. PS3.18 section 8.7.3.3.1 serves
+ * uncompressed bulk data in Little Endian byte order, so under Explicit VR Big Endian each value of
+ * a VR wider than a byte is swapped into the order the Data Set is written in, and bytes that are
+ * not a whole number of such values are `MALFORMED_VALUE`. A number VR's bytes must be a whole
+ * number of values in either order. The resolver's own bytes are never changed.
+ */
+function bulkData(uri: unknown, vr: string, tag: string, ctx: Context): Buffer {
+  if (typeof uri !== "string") refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, tag);
+  const resolved = ctx.resolveBulkData?.(uri, vr);
+  if (resolved === undefined) refuse(DICOM_JSON_ERROR_CODES.BULK_DATA_UNRESOLVED, tag);
+  const bytes = Buffer.from(resolved);
+  const width = bulkDataWidth(vr);
+  const checked = !ctx.encoding.le || !isBinaryVr(vr);
+  if (checked && bytes.length % width !== 0) refuse(DICOM_JSON_ERROR_CODES.MALFORMED_VALUE, tag);
+  if (ctx.encoding.le) return bytes;
+  if (width === 2) return bytes.swap16();
+  if (width === 4) return bytes.swap32();
+  if (width === 8) return bytes.swap64();
+  return bytes;
+}
+
 /** The value bytes of one non-Sequence attribute, unpadded. */
 function scalarValue(
   attr: Record<string, unknown>,
@@ -331,29 +380,27 @@ function scalarValue(
     if (value !== undefined || (inline !== undefined && uri !== undefined)) {
       refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, tag);
     }
-    if (!le && isSwappedBinaryVr(vr)) {
-      if (inline !== undefined || uri !== undefined) {
-        refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_BYTE_ORDER, tag);
-      }
-    }
     if (inline !== undefined) {
+      // PS3.18 F.2.7 defers the form of an InlineBinary to PS3.19, which names no byte order:
+      // under Big Endian a value whose bytes would need swapping is refused, never guessed at.
+      if (!le && isSwappedBinaryVr(vr)) refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_BYTE_ORDER, tag);
       if (typeof inline !== "string") refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, tag);
       const bytes = Buffer.from(inline, "base64");
       // Node's decoder skips what is not base64, so only the canonical encoding of the bytes is read.
       if (bytes.toString("base64") !== inline) refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, tag);
       return bytes;
     }
-    if (uri !== undefined) {
-      if (typeof uri !== "string") refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, tag);
-      const bytes = ctx.resolveBulkData?.(uri, vr);
-      if (bytes === undefined) refuse(DICOM_JSON_ERROR_CODES.BULK_DATA_UNRESOLVED, tag);
-      return Buffer.from(bytes);
-    }
+    if (uri !== undefined) return bulkData(uri, vr, tag, ctx);
     return Buffer.alloc(0);
   }
-  if (inline !== undefined || uri !== undefined) {
-    // A Value-form VR carried as bytes: its byte order and padding are not confirmed, so refused.
-    refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, tag);
+  // InlineBinary is for the binary VRs only, and a BulkDataURI for the VRs PS3.18 F.2.2 names,
+  // never beside a Value.
+  if (inline !== undefined) refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, tag);
+  if (uri !== undefined) {
+    if (value !== undefined || !takesBulkDataUri(vr)) {
+      refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, tag);
+    }
+    return bulkData(uri, vr, tag, ctx);
   }
   if (value === undefined && (vr === "SV" || vr === "UV")) return Buffer.alloc(0);
   if (!hasValueForm(vr)) refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_VR, tag);
@@ -572,7 +619,8 @@ function refuseChangedElements(json: Record<string, unknown>, ds: Dataset): void
       });
       continue;
     }
-    if (!isTextVr(read.vr)) continue;
+    // Text fetched by URI is written as the resolver gave it, with no JSON text to compare.
+    if (!isTextVr(read.vr) || fields["BulkDataURI"] !== undefined) continue;
     // `writeDataset` has already refused a `Value` that is not an array, and wrote this text.
     const text = textValue((fields["Value"] ?? []) as readonly unknown[], read.vr, tag);
     // Bytes the set does not define are text it does not encode, refused as such.
@@ -592,8 +640,13 @@ function refuseChangedElements(json: Record<string, unknown>, ds: Dataset): void
  * inverse of `toDicomJson`: strings joined by backslashes and padded to even length (`UI` with a
  * NUL, the rest with a space), Person Name groups joined by `=`, `DS` and `IS` numbers in
  * JavaScript's shortest text for them (or, past 16 characters, as significant digits and a power
- * of ten: `1e16`), binary numbers and `AT` in the Transfer Syntax's byte
- * order, and base64 or resolved bulk data as it is. Data Elements are written in ascending tag
+ * of ten: `1e16`), and a `DS` or `IS` given as a JSON string, which PS3.18 F.2.3 allows, as its
+ * own text; binary numbers and `AT` in the Transfer Syntax's byte order, and base64 as it is. A
+ * `BulkDataURI` is taken on each VR PS3.18 F.2.2 names (`DS`, `FL`, `FD`, `IS`, `LT`, `OB`, `OD`,
+ * `OF`, `OL`, `OV`, `OW`, `SL`, `SS`, `ST`, `SV`, `UC`, `UL`, `UN`, `US`, `UT`, `UV`) and handed
+ * to `resolveBulkData`; the bytes it gives are Little Endian, as PS3.18 section 8.7.3.3.1 serves
+ * bulk data, and are swapped value by value under Explicit VR Big Endian. Text fetched so is
+ * written as the resolver gives it. Data Elements are written in ascending tag
  * order at every depth. Sequences and Items take the `sequenceLength` option, defined lengths by
  * default. Text is encoded under the `(0008,0005)` Specific Character Set of its Data Set.
  *
@@ -609,15 +662,19 @@ function refuseChangedElements(json: Record<string, unknown>, ds: Dataset): void
  *   not read back as (a character past U+007F under the default repertoire, which is ISO-IR 6, a
  *   C1 code point under `ISO_IR 100`, which no set defines, or a lone surrogate under
  *   `ISO_IR 192`), `UNSUPPORTED_BYTE_ORDER` for an
- *   `OW`, `OF`, `OD`, `OL` or `OV` value under Explicit VR Big Endian, `UNREPRESENTABLE_NUMBER` for
- *   a number out of its VR's range or an `FL` number float32 does not hold, `VALUE_TOO_LONG` for a
+ *   `OW`, `OF`, `OD`, `OL` or `OV` `InlineBinary` under Explicit VR Big Endian, whose byte order
+ *   the annex leaves open, `UNREPRESENTABLE_NUMBER` for
+ *   a number out of its VR's range (an `IS` string's included) or an `FL` number float32 does not
+ *   hold, `MALFORMED_VALUE` for a `DS` or `IS` string that is not one or is longer than its VR
+ *   allows, or bulk data that is not a whole number of values of its VR, `VALUE_TOO_LONG` for a
  *   value its Value Length Field cannot hold, and `VR_MISMATCH` for an attribute whose VR the
  *   written Data Set does not read back with, as under Implicit VR Little Endian, where no VR is
  *   written. One value holding a delimiter its VR splits on (a backslash in a multi-valued string
  *   or a Person Name, an `=` in a Person Name group) is `INVALID_JSON`, never split, and so is a
  *   tag in group `0001`, `0003`, `0005`, `0007` or `FFFF`. A Specific
  *   Character Set of more than one value, or one we do not carry (an ISO 2022 term, `GB18030`,
- *   `GBK`), at any depth, is `UNSUPPORTED_CHARACTER_SET`; text holding a control character its
+ *   `GBK`), at any depth, is `UNSUPPORTED_CHARACTER_SET`; an `InlineBinary` on a VR that is not
+ *   binary, or a `BulkDataURI` on a VR F.2.2 does not name or beside a `Value`, is `INVALID_JSON`; text holding a control character its
  *   VR does not allow, ESC among them, is `MALFORMED_VALUE`; Sequences nested more than 64 deep
  *   are `NESTING_TOO_DEEP`; and any other error, one the `resolveBulkData` option threw included,
  *   is `CONVERSION_FAILED`: no other error leaves this function.

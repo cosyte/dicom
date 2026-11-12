@@ -555,7 +555,7 @@ describe("refusals", () => {
       { "00100020": { vr: "LO", Value: [42] } },
       { "00100010": { vr: "PN", Value: ["DOE^JANE"] } },
       { "00100010": { vr: "PN", Value: [{ Alphabetic: "A", Nickname: "B" }] } },
-      { "00101020": { vr: "DS", Value: ["1.5"] } },
+      { "00101020": { vr: "DS", Value: [[1.5]] } },
       { "00209165": { vr: "AT", Value: ["0020003"] } },
       { "00282000": { vr: "OB", Value: [1] } },
       { "00282000": { vr: "OB", InlineBinary: "not base64!" } },

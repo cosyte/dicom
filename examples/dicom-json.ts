@@ -18,6 +18,7 @@ import {
   fromDicomJson,
   parseDicom,
   serializeDicom,
+  stringifyDicomJson,
   toDicomJson,
   type DicomJsonDataset,
 } from "@cosyte/dicom";
@@ -28,7 +29,9 @@ const ds = parseDicom(SYNTHETIC_CT);
 // The object carries no Pixel Data. One that does needs a `bulkDataUri` option to hand it out by
 // URI, or `inlineBulkData: true` to write it inline; without either the call is refused.
 const json = toDicomJson(ds);
-const text = JSON.stringify(json);
+// stringifyDicomJson writes the attributes in ascending tag order, as PS3.18 Annex F orders them,
+// which JSON.stringify does not for an all-digit tag such as 60000010.
+const text = stringifyDicomJson(json);
 
 console.log(`Attributes: ${String(Object.keys(json).length)}`);
 console.log("Patient's Name:", JSON.stringify(json["00100010"]));
@@ -53,3 +56,4 @@ assert.deepEqual(json["00280030"], { vr: "DS", Value: [0.5, 0.5] });
 assert.deepEqual(json["00280010"], { vr: "US", Value: [512] });
 assert.ok(bytes.equals(written));
 assert.deepEqual(toDicomJson(back), json);
+assert.equal(stringifyDicomJson(toDicomJson(back)), text);

@@ -138,7 +138,8 @@ export function isBinaryVr(vr: string): boolean {
 }
 
 /**
- * `true` for a binary VR whose bytes Explicit VR Big Endian swaps, which we refuse there.
+ * `true` for a binary VR whose bytes Explicit VR Big Endian swaps: we refuse one there as
+ * `InlineBinary`, whose byte order PS3.18 Annex F leaves open.
  *
  * @example
  * ```ts
@@ -147,6 +148,44 @@ export function isBinaryVr(vr: string): boolean {
  */
 export function isSwappedBinaryVr(vr: string): boolean {
   return ["OD", "OF", "OL", "OV", "OW"].includes(vr);
+}
+
+/**
+ * `true` for a VR PS3.18 F.2.2 allows a `BulkDataURI` on: `DS`, `FL`, `FD`, `IS`, `LT`, `OB`, `OD`,
+ * `OF`, `OL`, `OV`, `OW`, `SL`, `SS`, `ST`, `SV`, `UC`, `UL`, `UN`, `US`, `UT` and `UV`.
+ * `InlineBinary` stays with the binary VRs ({@link isBinaryVr}).
+ *
+ * @example
+ * ```ts
+ * takesBulkDataUri("US"); // true
+ * takesBulkDataUri("LO"); // false
+ * ```
+ */
+export function takesBulkDataUri(vr: string): boolean {
+  return (
+    isBinaryVr(vr) ||
+    ["DS", "FL", "FD", "IS", "LT", "SL", "SS", "ST", "SV", "UC", "UL", "US", "UT", "UV"].includes(
+      vr,
+    )
+  );
+}
+
+/**
+ * The width in bytes of one value of `vr` as bulk data, which Explicit VR Big Endian swaps, or 1
+ * for a VR of bytes or text, which it does not.
+ *
+ * @example
+ * ```ts
+ * bulkDataWidth("OW"); // 2
+ * bulkDataWidth("UV"); // 8
+ * bulkDataWidth("OB"); // 1
+ * ```
+ */
+export function bulkDataWidth(vr: string): 1 | 2 | 4 | 8 {
+  if (vr === "OW" || vr === "US" || vr === "SS") return 2;
+  if (["OF", "OL", "UL", "SL", "FL"].includes(vr)) return 4;
+  if (["OD", "OV", "FD", "SV", "UV"].includes(vr)) return 8;
+  return 1;
 }
 
 /**

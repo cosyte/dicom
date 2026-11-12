@@ -400,10 +400,10 @@ on the wire.
 - **The DICOM JSON Model does not carry everything Part 10 does.** It records no File Meta, no
   defined or undefined Sequence and Item length, no `DS` or `IS` text beyond its number, and no pad
   byte, so Part 10 to JSON to Part 10 is byte-identical only where the source already wrote what
-  `fromDicomJson` writes. What it cannot carry, and what we have not checked against PS3.18, which
-  is not vendored here (`SV` and `UV` values, binary byte order under Big Endian, encapsulated Pixel
-  Data, and text outside 7-bit ASCII under most Specific Character Sets), is refused with a
-  `DicomJsonError`. So is every value that would change on the way: a VR Implicit VR reads back as
+  `fromDicomJson` writes. What it cannot carry, or what PS3.18 Annex F leaves open (`SV` and `UV`
+  values, the byte order of an `InlineBinary` under Big Endian, encapsulated Pixel Data with no
+  `BulkDataURI`, and text outside 7-bit ASCII under most Specific Character Sets), is refused with
+  a `DicomJsonError`. So is every value that would change on the way: a VR Implicit VR reads back as
   another, a delimiter inside one value, a `DS` no double holds exactly, an `FL` below float32's
   normal range, an `FL` or `FD` negative zero, a Person Name of more than three groups, text bytes
   its Specific Character Set does not decode, a control character its VR does not allow, and any
@@ -415,7 +415,9 @@ on the wire.
   `ISO_IR 192`: a Data Set with the code extensions of ISO 2022, `GB18030` or `GBK`, at any depth, is
   refused, even one the reader decodes. JSON nested more than 64 Sequences deep is refused, and
   an odd-length `InlineBinary` comes back with the NUL pad byte Part 10 gives it. Pixel Data and
-  the other bulk values need a `BulkDataURI` unless `inlineBulkData: true` is passed. See
+  the other bulk values need a `BulkDataURI` unless `inlineBulkData: true` is passed. Write the
+  JSON text with `stringifyDicomJson`, since `JSON.stringify` puts an all-digit tag such as
+  `60000010` ahead of the ascending order the annex gives the attributes. See
   [Serialization](./serialization.md#the-dicom-json-model).
 - **`NESTING_DEPTH_LIMIT` is this library's bound, not the standard's.** A fully conformant file
   nested deeper than it is refused, and a sequence refused that way is emptied by `deidentify()`
