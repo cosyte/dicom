@@ -35,8 +35,12 @@ import { parseDicom, serializeDicom, type Dataset } from "../../src/index.js";
 
 /** Worklist entries in the count axis's base phase: about 25 ms of reading on a developer machine. */
 const COUNT = 500;
-/** Measurements in the size axis's base SR, about 128 KiB; the scaled phase has 4 times as many. */
-const MEASUREMENTS = 250;
+/**
+ * Measurements in the size axis's base SR, about 252 KiB; the scaled phase has 4 times as many.
+ * Five hundred, so the base phase stays clear of the contract's 4 ms minimum on a hosted runner,
+ * where 250 came to 3.76 ms for the read and 3.74 ms for the write and the gate skipped.
+ */
+const MEASUREMENTS = 500;
 /**
  * SR documents in each size-axis phase. Four, so the faster reader's base phase stays clear of the
  * contract's 4 ms minimum on a hosted runner, where two came to 3.9 ms; the documents are the same
