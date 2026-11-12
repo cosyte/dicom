@@ -180,7 +180,7 @@ function charsetText(
     const set = singleByteSetIn(charset);
     if (set !== 13 && isPlainAscii(src, s, end)) return src.toString("latin1", s, end);
     if (set === undefined) return decodeText(src.subarray(s, end), charset);
-    const decoded = decodeSingleByte(src.subarray(s, end), set, delimiterClass(vr));
+    const decoded = decodeSingleByte(src.subarray(s, end), set, delimiterClass(vr) !== "text");
     if (decoded.bytesUndecodable) warn(charsetBytesUndecodable(position(), tag, vr));
     return decoded.text;
   }

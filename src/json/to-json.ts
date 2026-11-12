@@ -79,13 +79,12 @@ export function textOf(el: Element): string {
   if (!isCharsetVr(el.vr)) return bytes.toString("latin1");
   const terms = el.specificCharacterSet ?? [];
   if (!carriesCharset(terms)) refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET, el);
-  if (terms[0] !== "ISO_IR 192") {
+  const set = singleByteSetIn(terms);
+  if (set !== undefined) {
     // A single-byte set reads each byte as one character, or as U+FFFD where it has none. Under
     // JIS X 0201 a 0x5C is YEN SIGN in ST, LT and UT and the Value delimiter elsewhere, as the
     // reader has it.
-    const set = singleByteSetIn(terms) ?? 6;
-    const text = isSingleStringVr(el.vr) ? "text" : "multiValued";
-    const decoded = decodeSingleByte(bytes, set, text);
+    const decoded = decodeSingleByte(bytes, set, !isSingleStringVr(el.vr));
     if (decoded.bytesUndecodable) refuse(DICOM_JSON_ERROR_CODES.MALFORMED_VALUE, el);
     return decoded.text;
   }

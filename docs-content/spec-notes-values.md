@@ -195,10 +195,10 @@ sequence decodes the same way a top-level one does. An unsupported charset term 
 
 **With one Value there are no code extensions.** A single-valued `(0008,0005)` (`ISO_IR 192`
 UTF-8, the ISO-8859 family, `ISO_IR 13`, `ISO_IR 166`, `GB18030`, `GBK`) decodes each value with
-one code table, as PS3.5 section 6.1.2.3 prescribes for a single Value. A multi-byte term sent alone,
-such as `ISO 2022 IR 149`, is not conformant (PS3.3 makes its multi-byte code-extension terms
-Value 2 to n), and it gets the same single-table treatment: no Value 1 reset and none of the
-code-extension warnings below.
+the table of that one set, as PS3.5 section 6.1.2.3 prescribes for a single Value. A multi-byte
+term sent alone, such as `ISO 2022 IR 149`, is not conformant (PS3.3 makes its multi-byte
+code-extension terms Value 2 to n), and it gets the same single-table treatment: no Value 1 reset
+and none of the code-extension warnings below.
 
 **A single-byte set decodes by its own table, every byte of it.** That is the default repertoire
 (no `(0008,0005)`, an empty one, or `ISO_IR 6`), each ISO 8859 part, TIS 620 (`ISO_IR 166`) and

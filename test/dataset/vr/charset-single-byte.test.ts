@@ -27,6 +27,7 @@ import { Buffer } from "node:buffer";
 
 import { describe, expect, it } from "vitest";
 
+import { singleByteSetIn } from "../../../src/dataset/vr/charset.js";
 import { decodeText, parseDicom, type Element } from "../../../src/index.js";
 import { buildDicom } from "../../helpers/build-dicom.js";
 import { PUBLISHED_G1_ROWS } from "./_unicode-single-byte-tables.js";
@@ -218,6 +219,19 @@ describe("the reviewed cases", () => {
   it("the Greek euro sign and the Hebrew LRM, which the registered editions lack, read as U+FFFD", () => {
     expect(decodeText(Buffer.from([0xa4]), ["ISO_IR 126"])).toBe(REPLACEMENT);
     expect(decodeText(Buffer.from([0xfd]), ["ISO_IR 138"])).toBe(REPLACEMENT);
+  });
+
+  it("a term no set answers to decodes as the default repertoire, ISO-IR 6", () => {
+    for (const terms of [["ISO_IR 9999"], ["ISO_IR 14"]]) {
+      expect(decodeText(Buffer.from([0x41, 0x80, 0xe9, 0x5c]), terms)).toBe("A��\\");
+    }
+  });
+
+  it("a multi-byte term wins over a single-byte one, as the decoder label does", () => {
+    expect(singleByteSetIn(["ISO_IR 100", "ISO_IR 192"])).toBeUndefined();
+    expect(singleByteSetIn(["ISO_IR 9999", "ISO_IR 126", "ISO_IR 100"])).toBe(126);
+    expect(decodeText(Buffer.from("é", "utf-8"), ["ISO_IR 192"])).toBe("é");
+    expect(decodeText(Buffer.from([0xd5, 0xc5]), ["GBK"])).toBe("张");
   });
 
   it("a high byte with no (0008,0005) is undefined in the default repertoire", () => {

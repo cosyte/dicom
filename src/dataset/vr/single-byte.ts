@@ -32,8 +32,6 @@
 
 import type { Buffer } from "node:buffer";
 
-import type { DelimiterClass } from "./iso2022.js";
-
 /** A byte the set does not define. */
 const NONE = -1;
 
@@ -255,8 +253,13 @@ const G1_CODE_POINTS: ReadonlyMap<number, readonly number[]> = new Map<number, r
   ],
 ]);
 
-/** The G1 tables as strings, `undefined` for a byte the set does not define, built on first use. */
-const g1Tables = new Map<number, readonly (string | undefined)[]>();
+/** The G1 tables as characters, `undefined` for a byte the set does not define. */
+const G1_TABLES: ReadonlyMap<number, readonly (string | undefined)[]> = new Map(
+  [...G1_CODE_POINTS].map(([ir, codePoints]) => [
+    ir,
+    codePoints.map((cp) => (cp === NONE ? undefined : String.fromCharCode(cp))),
+  ]),
+);
 
 /**
  * The character byte `byte` (`0xA0` to `0xFF`) encodes in the G1 set ISO-IR `ir`, or `undefined`
@@ -265,14 +268,7 @@ const g1Tables = new Map<number, readonly (string | undefined)[]>();
  * @internal
  */
 export function g1Character(ir: number, byte: number): string | undefined {
-  let table = g1Tables.get(ir);
-  if (table === undefined) {
-    const codePoints = G1_CODE_POINTS.get(ir);
-    if (codePoints === undefined) return undefined;
-    table = codePoints.map((cp) => (cp === NONE ? undefined : String.fromCharCode(cp)));
-    g1Tables.set(ir, table);
-  }
-  return table[byte - 0xa0];
+  return G1_TABLES.get(ir)?.[byte - 0xa0];
 }
 
 /**
@@ -314,8 +310,8 @@ export interface SingleByteDecode {
  * default repertoire, `13` for JIS X 0201). Never throws.
  *
  * `0x00` to `0x7F` read as ISO-IR 6, except that under JIS X 0201 `0x7E` is OVERLINE and `0x5C`
- * is YEN SIGN in a `text` value (`ST`, `LT`, `UT`) and the Value delimiter `\` in any other, so a
- * consumer splits on `\` as under every other set. `0x80` to `0x9F`, and a byte of `0xA0` to `0xFF`
+ * is YEN SIGN, or, when `valueDelimiter` says the VR is multi-valued (`PN`, `LO`, `SH`, `UC`), the
+ * Value delimiter `\`, so a consumer splits on `\` as under every other set. `0x80` to `0x9F`, and a byte of `0xA0` to `0xFF`
  * the G1 set does not define, read as U+FFFD and set `bytesUndecodable`.
  *
  * @internal
@@ -323,7 +319,7 @@ export interface SingleByteDecode {
 export function decodeSingleByte(
   bytes: Buffer,
   ir: number,
-  delimiters: DelimiterClass,
+  valueDelimiter: boolean,
 ): SingleByteDecode {
   const jis = ir === 13;
   let text = "";
@@ -336,7 +332,7 @@ export function decodeSingleByte(
     if (byte < 0x80) {
       if (!jis || (byte !== BACKSLASH && byte !== TILDE)) continue;
       if (byte === TILDE) character = OVERLINE;
-      else character = delimiters === "text" ? YEN_SIGN : "\\";
+      else character = valueDelimiter ? "\\" : YEN_SIGN;
     } else {
       character = byte < 0xa0 ? undefined : g1Character(ir, byte);
       if (character === undefined) {

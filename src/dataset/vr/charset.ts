@@ -221,7 +221,7 @@ export function resolveDecoderLabel(terms: readonly string[] | undefined): strin
 export function decodeText(bytes: Buffer, terms: readonly string[] | undefined): string {
   if (usesCodeExtensions(terms)) return decodeWithCodeExtensions(bytes, terms, "text").text;
   const set = singleByteSetIn(terms);
-  if (set !== undefined) return decodeSingleByte(bytes, set, "text").text;
+  if (set !== undefined) return decodeSingleByte(bytes, set, false).text;
   const label = resolveDecoderLabel(terms);
   try {
     return decoderFor(label).decode(bytes);
