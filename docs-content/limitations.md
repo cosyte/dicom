@@ -140,6 +140,17 @@ the file was read, including after `deidentify()` has moved every record. The li
   DICOMDIR is read and written without a warning, although PS3.10 makes Explicit VR LE the only
   conformant syntax for a DICOMDIR File.
 
+**Reading only the header is not streaming.** `readDicomHeader` and `stopBeforeTag` stop before a
+top-level tag, Pixel Data by default, so the Pixel Data of a large file is not read. There is no
+incremental reader beyond that: what comes after the stop is not read at all, and a file whose read
+cannot stop is held in memory whole. That is a file with no top-level element at or after the stop
+tag, a Deflated Explicit VR Little Endian file, whose whole Data Set is one deflate stream, and a file
+`parseDicom` refuses; `readDicomHeader`'s `maxBytes` bounds it, with no default. Only the top-level
+Data Set stops: a Sequence Item is read in full whatever its tags, and a file whose top-level
+elements are out of ascending tag order stops at the first one at or after the stop tag. A parse
+that stops does not check a DICOMDIR's Directory Record offsets, since the records they name may be
+past the stop and unread: parse the whole file to have them checked.
+
 ---
 
 ## 2. Open PHI residuals: measured, disclosed, and NOT closed

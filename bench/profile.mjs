@@ -9,6 +9,10 @@
 //    copies included, over one input's bytes. The same process times that first call and then the
 //    median of 5 warm calls, which is the single-call time of the sizes whose warmup a reading
 //    cannot settle.
+// 1b. The header read: an Enhanced CT object of 1, 20 and 200 frames written to a file, then read
+//    back in a fresh process two ways, the whole file into `parseDicom` and `readDicomHeader` on
+//    its path, which stops before Pixel Data. Same resident high water mark as section 1, so the
+//    two peaks compare, and the second one should not grow with the Pixel Data.
 // 2. Throughput from each shape's smallest size to its largest, timed the same simple way for every
 //    size: warmed, then the median of 9 samples of whole passes.
 // 3. A CPU profile and a sampled heap profile of the hottest paths, with the top functions of each.
@@ -20,10 +24,11 @@
 // synthetic, built in code.
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { Session } from "node:inspector/promises";
 import { findSourceMap } from "node:module";
-import { resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { readTags, SHAPES } from "./dicom.bench.mjs";
@@ -38,10 +43,11 @@ const RESIDENT_MIN_BYTES = 256 * 1024;
 const OPERATIONS = ["parse", "parse, then read tags", "serialize"];
 
 function args(argv) {
-  const out = { target: argv[0], dir: undefined, memoryCase: undefined };
+  const out = { target: argv[0], dir: undefined, memoryCase: undefined, headerCase: undefined };
   for (let i = 1; i < argv.length; i++) {
     if (argv[i] === "--out") out.dir = argv[++i];
     else if (argv[i] === "--memory-case") out.memoryCase = argv[++i];
+    else if (argv[i] === "--header-case") out.headerCase = argv[++i];
   }
   return out;
 }
@@ -102,6 +108,75 @@ function memoryCase(dicom, spec) {
     warmCallMs: warm[2],
     held,
   };
+}
+
+/** The frame counts of the Enhanced CT objects the header read is measured on. */
+const HEADER_FRAMES = [1, 20, 200];
+/** The two ways a header is read: the whole file into `parseDicom`, or `readDicomHeader`. */
+const HEADER_READS = ["parseDicom(readFileSync(path))", "readDicomHeader(path)"];
+
+/**
+ * The child half of section 1b: one file, one way of reading it, one fresh process. The file is
+ * written and its bytes dropped before the high water mark is reset, so the peak is what the read
+ * itself made resident: the file's bytes and the parse for the first way, the prefixes read and
+ * their parse for the second.
+ */
+async function headerCase(dicom, spec) {
+  const [framesIndex, readIndex] = spec.split(":").map(Number);
+  const dir = mkdtempSync(join(tmpdir(), "dicom-header-read-"));
+  try {
+    const path = join(dir, "enhanced-ct.dcm");
+    let bytes = enhancedCt(0, HEADER_FRAMES[framesIndex]);
+    const fileBytes = bytes.length;
+    writeFileSync(path, bytes);
+    bytes = undefined;
+    settle();
+    writeFileSync("/proc/self/clear_refs", "5");
+    const rssBefore = status("VmRSS");
+    const start = performance.now();
+    const ds =
+      readIndex === 0
+        ? dicom.parseDicom(readFileSync(path))
+        : await dicom.readDicomHeader(path);
+    const elapsed = performance.now() - start;
+    const peak = status("VmHWM") - rssBefore;
+    return {
+      bytes: fileBytes,
+      peakResidentBytes: peak,
+      callMs: elapsed,
+      elements: ds.elements().length,
+      pixelData: ds.has("7FE00010"),
+    };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** Section 1b: the header read against the whole-file read, each in its own process. */
+function headerSection(target) {
+  const lines = [
+    "### Reading only the header of a large file",
+    "",
+    "An Enhanced CT object written to a file, then read in a fresh process: the whole file into `parseDicom`, against `readDicomHeader` on its path, which stops before Pixel Data. Peak resident memory above the resident set before the read, as in the section above, and the time of that one read.",
+    "",
+    "| Read | Frames | File | Peak resident | Top-level elements | Pixel Data read | Time |",
+    "| --- | --- | --- | --- | --- | --- | --- |",
+  ];
+  const self = fileURLToPath(import.meta.url);
+  for (const [r, read] of HEADER_READS.entries()) {
+    for (const [f, frames] of HEADER_FRAMES.entries()) {
+      const out = execFileSync(
+        process.execPath,
+        ["--expose-gc", self, target, "--header-case", `${String(f)}:${String(r)}`],
+        { encoding: "utf8", maxBuffer: 1024 * 1024 },
+      );
+      const h = JSON.parse(out);
+      lines.push(
+        `| \`${read}\` | ${String(frames)} | ${mib(h.bytes)} | ${mib(h.peakResidentBytes)} | ${String(h.elements)} | ${h.pixelData ? "yes" : "no"} | ${ms(h.callMs)} |`,
+      );
+    }
+  }
+  return lines;
 }
 
 function mib(bytes) {
@@ -376,6 +451,10 @@ async function main() {
     process.stdout.write(JSON.stringify(memoryCase(dicom, options.memoryCase)));
     return 0;
   }
+  if (options.headerCase !== undefined) {
+    process.stdout.write(JSON.stringify(await headerCase(dicom, options.headerCase)));
+    return 0;
+  }
   if (options.dir !== undefined) mkdirSync(options.dir, { recursive: true });
   const lines = [
     `## @cosyte/dicom: memory, throughput and profile`,
@@ -383,6 +462,8 @@ async function main() {
     `Node ${process.version}, ${process.platform}-${process.arch}.`,
     "",
     ...memorySection(options.target),
+    "",
+    ...headerSection(options.target),
     "",
     ...throughputSection(dicom),
     "",

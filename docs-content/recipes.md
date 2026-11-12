@@ -61,6 +61,64 @@ row.modality; // => "CT"
 row.rows; // => 512
 ```
 
+## Read only the header of a large file
+
+`parseDicom` takes the whole file as one buffer, so indexing a 1 GiB multi-frame study that way holds 1 GiB in memory to read a few hundred bytes of patient and study tags. `readDicomHeader` reads from a path, a file handle or a stream only as far as the Pixel Data, and never reads the rest:
+
+```ts
+import { createReadStream } from "node:fs";
+import { readDicomHeader } from "@cosyte/dicom";
+
+// From a path: opened, read up to the Pixel Data, closed.
+const ds = await readDicomHeader("study.dcm");
+ds.patient.id; // (0010,0020)
+ds.study.instanceUid; // (0020,000D)
+ds.has("7FE00010"); // false: Pixel Data was never read
+
+// From a stream, stopping earlier: before the first tag of group 0020.
+const patientOnly = await readDicomHeader(createReadStream("study.dcm"), {
+  stopBeforeTag: "00200000",
+});
+```
+
+It stops before the first top-level element whose tag is at or after `stopBeforeTag`, Float Pixel Data `(7FE0,0008)` when that is not given, which is also before Double Float Pixel Data and Pixel Data. The Dataset is the one `parseDicom` returns on the whole file with the same `stopBeforeTag`: the same elements, byte for byte, the same warnings, and a last warning, `DICOM_PARSE_STOPPED_BEFORE_TAG`, at the element it stopped before. It reads 64 KiB first and twice as much each time the header turns out to be longer. The source is a `DicomByteSource`: a path, a `file:` URL, a `DicomFileHandle` (Node's `FileHandle` from `node:fs/promises` is one) or any async iterable of bytes. A handle is read from byte 0 and left open; a stream is ended early once the stop is found.
+
+Three kinds of file are read to the end, and so held in memory whole: one with no top-level element at or after the stop tag, a Deflated Explicit VR Little Endian one (its Data Set, Pixel Data included, is one deflate stream), and one `parseDicom` would refuse, so the error thrown is the one the whole file gives. A stream's chunks are held as the stream makes them, so a stream that delivers the whole file as one chunk has put it all in memory before the read sees it.
+
+For a file you do not trust, set `maxBytes`, the one field `ReadDicomHeaderOptions` adds to `ParseOptions`. The read then never holds more than that many bytes of the source: when the stop is not within them and the file goes on, it throws a `RangeError` instead of reading on. There is no default, since any number we picked would refuse some legitimate file (a large Deflated study, a long structured report), so without it the three kinds above are read whole:
+
+```ts
+import { readDicomHeader } from "@cosyte/dicom";
+
+try {
+  const ds = await readDicomHeader("upload.dcm", { maxBytes: 16 * 1024 * 1024 });
+  ds.patient.id;
+} catch (err) {
+  if (err instanceof RangeError) {
+    // No stop tag in the first 16 MiB: refuse the upload rather than read on.
+  }
+}
+```
+
+With the bytes already in memory, `parseDicom` takes the same option. Nothing past the stop is read, so a file cut short inside its Pixel Data still parses:
+
+```ts runnable
+import { parseDicom } from "@cosyte/dicom";
+
+// The synthetic CT object from the recipe above, stopped before its first (0020,xxxx) tag.
+const ds = parseDicom(
+  Buffer.from(
+    "AgAAAFVMBAAcAAAAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xAAgAFgBVSRoAMS4yLjg0MC4xMDAwOC41LjEuNC4xLjEuMgAIABgAVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMTExAAgAIABEQQgAMTkwMDAxMDEIAGAAQ1MCAENUEAAQAFBOCABEb2VeSmFuZRAAIABMTwYATVJOLTQyEAAhAExPDABTQU1QTEUtSE9TUCAgAA0AVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMS4xACAADgBVSR4AMS4yLjgyNi4wLjEuMzY4MDA0My44LjQ5OC4xLjIAIAARAElTAgAyICgAEABVUwIAAAIoABEAVVMCAAACKAAAAVVTAgAQACgAAwFVUwIAAQAoAFIQRFMGAC0xMDI0ICgAUxBEUwIAMSAoADAARFMIADAuNVwwLjUg",
+    "base64",
+  ),
+  { stopBeforeTag: "00200000" },
+);
+
+ds.patient.id; // => "MRN-42"
+ds.has("0020000D"); // => false
+ds.warnings.at(-1)?.code; // => "DICOM_PARSE_STOPPED_BEFORE_TAG"
+```
+
 ## Build routing keys
 
 Routing and reconciliation hang off a small set of identifiers. Surface them correctly: a Patient ID without its issuer is ambiguous across systems. The two attributes are `(0010,0020)` Patient ID and `(0010,0021)` Issuer of Patient ID in the PS3.6 2026d registry, which is vendored and SHA-pinned here; the module that requires them to be read together is in PS3.3, which is **not** vendored here, so no clause number is claimed for it.

@@ -38,7 +38,8 @@ import { emptyInput, emptyInputAfterNormalization, unsupportedTransferSyntax } f
 import { parseFileMeta } from "./file-meta.js";
 import { parsePart10Header } from "./part10-header.js";
 import { TRANSFER_SYNTAX_PARSERS } from "./transfer-syntax.js";
-import type { OnWarningCallback, ParseContext, ParseOptions } from "./types.js";
+import { stopTagNumber } from "./stop.js";
+import type { OnWarningCallback, ParseContext, ParseOptions, StopState } from "./types.js";
 import type { DicomParseWarning } from "./warnings.js";
 
 /** File Preamble (128 bytes) plus the `DICM` prefix (4 bytes), PS3.10 section 7.1. */
@@ -83,6 +84,10 @@ const PREAMBLE_AND_PREFIX_LENGTH = 132;
  * Pass `{ strict: true }` to escalate every Tier-2 warning to a thrown
  * `DicomParseError` carrying the warning code.
  *
+ * Pass `{ stopBeforeTag: "7FE00010" }` to stop before Pixel Data and read only
+ * the header; `readDicomHeader` does that from a file or a stream without
+ * reading the rest of the file at all.
+ *
  * @example
  * ```ts
  * import { parseDicom, WARNING_CODES, DicomParseError } from "@cosyte/dicom";
@@ -125,6 +130,25 @@ export function parseDicom(
   input: Buffer | Uint8Array | ArrayBuffer,
   options: ParseOptions = {},
 ): Dataset {
+  return parseDicomStopping(input, options).ds;
+}
+
+/**
+ * {@link parseDicom}, and whether the parse stopped at `options.stopBeforeTag`. `readDicomHeader`
+ * reads this to know a prefix of a file held everything before the stop.
+ *
+ * @internal
+ */
+export function parseDicomStopping(
+  input: Buffer | Uint8Array | ArrayBuffer,
+  options: ParseOptions,
+): { readonly ds: Dataset; readonly stopped: boolean } {
+  // A malformed stop tag is the caller's mistake and is refused before any byte is read.
+  const stop: StopState | undefined =
+    options.stopBeforeTag === undefined
+      ? undefined
+      : { tag: stopTagNumber(options.stopBeforeTag), at: undefined };
+
   // First EMPTY_INPUT check - raw input length (dual check, first half).
   if (rawInputIsEmpty(input)) {
     throw emptyInput();
@@ -140,7 +164,7 @@ export function parseDicom(
   // Build ParseContext. `copyValues` defaults to false. `onWarning` is
   // omitted (not set to undefined) per exactOptionalPropertyTypes.
   const warnings: DicomParseWarning[] = [];
-  const ctx: ParseContext = buildContext(buffer, options, warnings);
+  const ctx: ParseContext = buildContext(buffer, options, warnings, stop);
   const emit = makeEmitter(ctx);
 
   // Step 1: Detect Part 10 framing (preamble + DICM, with the stripPreamble tri-state).
@@ -177,15 +201,19 @@ export function parseDicom(
   datasetOverTable(ds, table, root);
 
   // Step 5: a DICOMDIR's Directory Record offsets, resolved once here so every
-  // one that names no record reaches `ds.warnings` and `onWarning`.
-  emitDirectoryFindings(
-    ds,
-    { origin: hadPreamble ? 0 : PREAMBLE_AND_PREFIX_LENGTH, fileMetaEnd },
-    emit,
-  );
+  // one that names no record reaches `ds.warnings` and `onWarning`. A parse that
+  // stopped at `stopBeforeTag` skips it: the records its offsets name may lie
+  // past the stop, unread, and `ds.warnings` ends with the stop warning.
+  if (stop?.at === undefined) {
+    emitDirectoryFindings(
+      ds,
+      { origin: hadPreamble ? 0 : PREAMBLE_AND_PREFIX_LENGTH, fileMetaEnd },
+      emit,
+    );
+  }
 
   setDatasetWarnings(ds, ctx.warnings);
-  return ds;
+  return { ds, stopped: stop?.at !== undefined };
 }
 
 /** The warnings and elements the root is built with, before the table and the warnings are set. */
@@ -213,8 +241,9 @@ function buildContext(
   buffer: Buffer,
   options: ParseOptions,
   warnings: DicomParseWarning[],
+  stop: StopState | undefined,
 ): ParseContext {
-  const base: Omit<ParseContext, "onWarning" | "profile"> = {
+  const fields: Omit<ParseContext, "onWarning" | "profile" | "stop"> = {
     // The root frame. Every nested frame is entered from here by a swap that
     // moves the bytes and the name together; see `ParseFrame`.
     frame: { buffer, name: OFFSET_FRAMES.INPUT },
@@ -227,6 +256,9 @@ function buildContext(
     copyValues: options.copyValues === true,
     table: new CompactTable(options.copyValues === true),
   };
+  // The stop is set only when asked for, so a full parse's loops see `undefined` and skip it.
+  const base: Omit<ParseContext, "onWarning" | "profile"> =
+    stop !== undefined ? { ...fields, stop } : fields;
   // Thread the source/vendor profile through when supplied; omit the key
   // entirely otherwise (exactOptionalPropertyTypes).
   const withProfile: Omit<ParseContext, "onWarning"> =

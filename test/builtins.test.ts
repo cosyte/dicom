@@ -1,14 +1,15 @@
 /**
- * `node:zlib` and `node:crypto` are loaded on first use, not when the package loads, and either
+ * `node:zlib`, `node:crypto` and `node:fs/promises` are loaded on first use, not when the package loads, and either
  * way of loading them hands back the module itself.
  */
 
 import * as crypto from "node:crypto";
+import * as fsPromises from "node:fs/promises";
 import * as zlib from "node:zlib";
 
 import { describe, expect, it } from "vitest";
 
-import { cryptoModule, loadBuiltin, zlibModule } from "../src/builtins.js";
+import { cryptoModule, fsPromisesModule, loadBuiltin, zlibModule } from "../src/builtins.js";
 
 type Process = { getBuiltinModule?: unknown };
 
@@ -18,6 +19,8 @@ describe("the lazily loaded built-ins", () => {
     expect(zlibModule()).toBe(zlibModule());
     expect(cryptoModule().createHash).toBe(crypto.createHash);
     expect(cryptoModule()).toBe(cryptoModule());
+    expect(fsPromisesModule().open).toBe(fsPromises.open);
+    expect(fsPromisesModule()).toBe(fsPromisesModule());
   });
 
   it("load through process.getBuiltinModule when the running Node has it", () => {

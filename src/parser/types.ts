@@ -262,6 +262,58 @@ export interface ParseOptions {
    * Omit (do not pass `undefined`) for the unprofiled default behaviour.
    */
   readonly profile?: Profile;
+  /**
+   * Stop the parse before the first top-level Data Element whose tag is at or
+   * after this one, given as eight hexadecimal digits (`"7FE00010"` is Pixel
+   * Data). The Dataset then holds every top-level element before that point,
+   * each exactly as a full parse reads it, and `ds.warnings` ends with one
+   * `DICOM_PARSE_STOPPED_BEFORE_TAG` at the element the parse stopped before.
+   * Nothing past it is read, so a file cut short after that point still
+   * parses.
+   *
+   * Only the top-level Data Set stops: an element inside a Sequence Item is
+   * read whatever its tag, and the File Meta group is always read whole. The
+   * comparison is "at or after" rather than "equal", so a file without the tag
+   * still stops at the first element past where it would be; a file whose
+   * top-level elements are out of ascending order (PS3.5 section 7.1 requires
+   * the order) stops at the first one at or after the tag. When no top-level
+   * element reaches it, the whole file is read and no warning is added.
+   *
+   * A parse that stops does not check a DICOMDIR's Directory Record offsets
+   * (`DICOM_DIRECTORY_*` warnings), since the records they name may be past
+   * the stop and unread; `ds.directory` holds only the records it read. Parse
+   * the whole file to check them.
+   *
+   * The stop is never escalated, under `strict` or by a profile. A value
+   * that is not eight hexadecimal digits throws a `TypeError` before anything
+   * is read. To read only the header of a large file without loading the rest
+   * of it into memory, see `readDicomHeader`.
+   *
+   * Omit (do not pass `undefined`) to read the whole Data Set.
+   *
+   * @example
+   * ```ts
+   * import { parseDicom } from "@cosyte/dicom";
+   * const ds = parseDicom(bytes, { stopBeforeTag: "7FE00010" });
+   * console.log(ds.has("00100010"), ds.has("7FE00010")); // true false
+   * ```
+   */
+  readonly stopBeforeTag?: string;
+}
+
+/**
+ * Where a parse given `ParseOptions.stopBeforeTag` stops, and where it did.
+ * One object for the whole parse, shared by reference with every context made
+ * from it, so the Deflated reader's inner context records the stop where the
+ * outer parse reads it.
+ *
+ * @internal
+ */
+export interface StopState {
+  /** The stop tag as a number, `group * 0x10000 + element`. */
+  readonly tag: number;
+  /** The byte offset the parse stopped at, in the top-level frame; `undefined` until it stops. */
+  at: number | undefined;
 }
 
 /**
@@ -372,4 +424,10 @@ export interface ParseContext {
    * `../dataset/compact.ts`). Made by `parseDicom`, or by the first read that finds none.
    */
   table?: CompactTable;
+  /**
+   * Set when the parse was given `ParseOptions.stopBeforeTag`: the top-level
+   * element loops end before the first element at or after `stop.tag`, and
+   * record where in `stop.at`. Absent for a full parse.
+   */
+  readonly stop?: StopState;
 }

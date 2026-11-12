@@ -34,6 +34,8 @@ caught; // => "EMPTY_INPUT"
 
 A Tier-2 warning is escalated to a throw in two ways: `{ strict: true }` escalates every warning, and a profile's `escalate` list escalates the codes it names (`profiles.strict` names a set of them). **An escalated warning is thrown as a `DicomParseError` whose `code` is the warning's own code**, such as `DICOM_MISSING_PREAMBLE`, not a member of `FATAL_CODES`. Its `message` is the warning's registry message, and `byteOffset`, `offsetFrame` and `snippet` locate the warning the same way they locate a fatal. The warning is not also added to `ds.warnings`, and `onWarning` does not fire for it.
 
+`DICOM_PARSE_STOPPED_BEFORE_TAG` is the exception and is never escalated: it says a parse given `stopBeforeTag` stopped where it was asked to. It reports no fault in the file, so `{ strict: true }` and a profile's `escalate` list both leave it a warning.
+
 So `err.code` is typed `FatalCode | WarningCode`, not `FatalCode` alone. Test for the fatal codes you handle and treat any other `code` as an escalated warning: `err.code in FATAL_CODES` tells the two apart, and a `switch` over `err.code` needs a `default` branch. Do not list every warning code instead: the warning registry grows between releases, so that union is open (see [Compatibility](./compatibility#exports-that-grow-between-releases)).
 
 ```ts runnable
