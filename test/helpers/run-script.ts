@@ -42,6 +42,7 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
@@ -56,6 +57,29 @@ import { join } from "node:path";
  */
 export const UNDER_DENO = "Deno" in globalThis;
 
+/**
+ * `true` when this suite runs under Bun, as CI's `bun` job runs it (`bun --bun run test`).
+ *
+ * There, `process.execPath` is Bun, so a child started by {@link runRepoScript} is Bun too, and
+ * Bun resolves a `.js` specifier onto its `.ts` file, which Node does not. The one case that pins
+ * Node's refusal skips under Bun by this flag and runs on every Node in the `verify` jobs.
+ */
+export const UNDER_BUN = typeof process.versions["bun"] === "string";
+
+const REPO_ROOT = join(import.meta.dirname, "..", "..");
+
+/**
+ * The module `tsx`'s bin runs, read from its `package.json`. A test starts it with the running
+ * runtime (`process.execPath`), never `node_modules/.bin/tsx`: on Windows that file is a shell
+ * script Node cannot start without a shell.
+ */
+export const TSX_CLI = ((): string => {
+  const dir = join(REPO_ROOT, "node_modules", "tsx");
+  const manifest = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as { bin?: unknown };
+  if (typeof manifest.bin !== "string") throw new Error("tsx's package.json names no single bin");
+  return join(dir, manifest.bin);
+})();
+
 /** `node` strips types natively; `tsx` is for the one script Node cannot resolve. */
 export type ScriptRunner = "node" | "tsx";
 
@@ -64,8 +88,6 @@ export interface ScriptResult {
   stdout: string;
   stderr: string;
 }
-
-const REPO_ROOT = join(import.meta.dirname, "..", "..");
 
 export interface RunScriptOptions {
   /** Working directory for the child. Defaults to `root`. */
@@ -106,16 +128,22 @@ export function runRepoScript(
   options: RunScriptOptions = {},
 ): ScriptResult {
   const { root = REPO_ROOT, cwd = root, runner = "node", nodeArgs = [] } = options;
-  const bin = runner === "tsx" ? join(REPO_ROOT, "node_modules", ".bin", "tsx") : process.execPath;
+  // `tsx` runs as its CLI module under the running Node, never `node_modules/.bin/tsx`: on Windows
+  // that file is a shell script Node cannot start without a shell.
+  const runnerArgs = runner === "tsx" ? [TSX_CLI] : [];
   if (nodeArgs.length > 0 && runner !== "node") {
     throw new Error("runRepoScript: nodeArgs is node-only; tsx would drop it and measure nothing");
   }
-  const r = spawnSync(bin, [...nodeArgs, join(root, "scripts", name), ...args], {
-    cwd,
-    encoding: "utf8",
-    // spawnSync's 1 MiB default kills a script that prints more, leaving code -1 and cut output.
-    maxBuffer: 256 * 1024 * 1024,
-    shell: false,
-  });
+  const r = spawnSync(
+    process.execPath,
+    [...runnerArgs, ...nodeArgs, join(root, "scripts", name), ...args],
+    {
+      cwd,
+      encoding: "utf8",
+      // spawnSync's 1 MiB default kills a script that prints more, leaving code -1 and cut output.
+      maxBuffer: 256 * 1024 * 1024,
+      shell: false,
+    },
+  );
   return { code: r.status ?? -1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
 }

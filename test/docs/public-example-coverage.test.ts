@@ -98,7 +98,9 @@ describe("public API @example coverage", () => {
   }, 120_000);
 
   test("an export with no @example is detected (the gate can go red)", () => {
-    const fixture = join(REPO_ROOT, "__example-coverage-control__.ts");
+    // TypeScript names every file with forward slashes, so the fixture's name is written that way:
+    // on Windows a backslashed name would never match the host's lookups below.
+    const fixture = join(REPO_ROOT, "__example-coverage-control__.ts").replaceAll("\\", "/");
     const source = ts.createSourceFile(
       fixture,
       [

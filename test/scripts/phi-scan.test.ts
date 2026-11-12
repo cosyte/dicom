@@ -2996,11 +2996,12 @@ describe("phi-scan: an unexpected error is an invocation error, never a hit", ()
     chmodSync(denied, 0o000);
     try {
       const r = runIn(root, []);
-      // A root-owned runner can read a mode-000 directory, so the premise is
-      // asserted rather than assumed: if the walk succeeded there is nothing
-      // here to catch and the case would otherwise pass for the wrong reason.
+      // A root-owned runner can read a mode-000 directory, and Windows does not
+      // deny a read by mode bits at all, so the premise is asserted rather than
+      // assumed: if the walk succeeded there is nothing here to catch and the
+      // case would otherwise pass for the wrong reason.
       if (r.code === 0) {
-        expect(process.getuid?.()).toBe(0);
+        expect(process.platform === "win32" || process.getuid?.() === 0).toBe(true);
         return;
       }
       expect(r.code, `stderr: ${r.stderr}`).toBe(2);

@@ -401,16 +401,34 @@ function isVerifiedVendorPin(relPath: string, abs: string): boolean {
  * separate `lstat` then `readFile` is two lookups of the path, and a link swapped in between them
  * would be read through. `O_NOFOLLOW` refuses a link at the last component (`ELOOP`); `fstat` on
  * the open descriptor then rules out a directory, a FIFO or a device.
+ *
+ * Windows has no `O_NOFOLLOW` (`fsConstants.O_NOFOLLOW` is undefined there), so the open follows a
+ * link. There the path is `lstat`ed first and a link refused, and the open descriptor must then be
+ * the same file the `lstat` saw (`dev` and `ino`), so a link swapped in between is refused too.
  */
 function readRegularFile(abs: string): Buffer | null {
+  const noFollow = fsConstants.O_NOFOLLOW;
+  let seen: { dev: number; ino: number } | null = null;
+  if (noFollow === undefined) {
+    try {
+      const st = lstatSync(abs);
+      if (!st.isFile()) return null;
+      seen = { dev: st.dev, ino: st.ino };
+    } catch {
+      return null;
+    }
+  }
   let fd: number;
   try {
-    fd = openSync(abs, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
+    fd = openSync(abs, fsConstants.O_RDONLY | (noFollow ?? 0));
   } catch {
     return null;
   }
   try {
-    return fstatSync(fd).isFile() ? readFileSync(fd) : null;
+    const st = fstatSync(fd);
+    if (!st.isFile()) return null;
+    if (seen !== null && (st.dev !== seen.dev || st.ino !== seen.ino)) return null;
+    return readFileSync(fd);
   } finally {
     closeSync(fd);
   }
