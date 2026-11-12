@@ -101,7 +101,6 @@ export function implicitMultiVr(
     case "HistogramFirstBinValue":
     case "HistogramLastBinValue":
       return pixelRepresentation === SIGNED ? "SS" : "US";
-    default:
-      return undefined;
   }
+  return undefined;
 }
