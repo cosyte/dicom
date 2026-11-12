@@ -452,6 +452,16 @@ describe("animalPatientInput", () => {
     expect(views.some((v) => v.issues === undefined)).toBe(true);
   });
 
+  it("writes each file's elements in ascending tag order", () => {
+    for (const file of files) {
+      const tags = parseDicom(file)
+        .elements()
+        .map((e) => e.tag);
+      expect(tags).toEqual([...tags].sort());
+    }
+    expect(files.some((f) => parseDicom(f).elements().length > 4)).toBe(true);
+  });
+
   it("writes under both little-endian syntaxes", () => {
     for (const syntax of [IMPLICIT_LE, EXPLICIT_LE]) {
       const uid = Buffer.from(syntax.length % 2 === 0 ? syntax : `${syntax}\0`);

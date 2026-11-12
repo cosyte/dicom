@@ -45,17 +45,24 @@ export const PATIENT_ISSUE_CODES = {
  */
 export type PatientIssueCode = (typeof PATIENT_ISSUE_CODES)[keyof typeof PATIENT_ISSUE_CODES];
 
-const MESSAGES: Readonly<Record<PatientIssueCode, string>> = Object.freeze({
-  DICOM_PATIENT_CODE_INCOMPLETE:
-    "the code item lacks a code value, a coding scheme designator or a code meaning; what it carries is kept",
-  DICOM_PATIENT_CODE_SEQUENCE_EMPTY: "the code sequence holds no item; the code is left absent",
-  DICOM_PATIENT_CODE_SEQUENCE_EXTRA_ITEMS:
-    "the code sequence holds more than the one item allowed; the first is read",
-  DICOM_PATIENT_VALUE_NOT_ENUMERATED:
-    "the value is not one of the standard's enumerated values; it is kept as written",
-  DICOM_PATIENT_VALUE_WRONG_TYPE:
-    "the element is not encoded as its dictionary VR, so its value is not read",
-});
+/**
+ * The registry text for a code. A `switch`, not a table: a table is built once when the module
+ * loads, which the mutation run cannot judge per test.
+ */
+function messageFor(code: PatientIssueCode): string {
+  switch (code) {
+    case "DICOM_PATIENT_CODE_INCOMPLETE":
+      return "the code item lacks a code value, a coding scheme designator or a code meaning; what it carries is kept";
+    case "DICOM_PATIENT_CODE_SEQUENCE_EMPTY":
+      return "the code sequence holds no item; the code is left absent";
+    case "DICOM_PATIENT_CODE_SEQUENCE_EXTRA_ITEMS":
+      return "the code sequence holds more than the one item allowed; the first is read";
+    case "DICOM_PATIENT_VALUE_NOT_ENUMERATED":
+      return "the value is not one of the standard's enumerated values; it is kept as written";
+    case "DICOM_PATIENT_VALUE_WRONG_TYPE":
+      return "the element is not encoded as its dictionary VR, so its value is not read";
+  }
+}
 
 /**
  * Build one frozen {@link PatientIssue}: the code, the tag, and the registry message.
@@ -63,5 +70,5 @@ const MESSAGES: Readonly<Record<PatientIssueCode, string>> = Object.freeze({
  * @internal
  */
 export function patientIssue(code: PatientIssueCode, tag: string): PatientIssue {
-  return Object.freeze({ code, tag, message: `${renderTag(tag)}: ${MESSAGES[code]}` });
+  return Object.freeze({ code, tag, message: `${renderTag(tag)}: ${messageFor(code)}` });
 }

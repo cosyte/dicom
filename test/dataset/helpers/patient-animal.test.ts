@@ -313,4 +313,45 @@ describe("malformed non-human attributes never throw and are reported by code", 
     expect(ds.patient.sexNeutered).toBe("UNALTERED");
     expect(ds.patient.issues).toBeUndefined();
   });
+
+  it("reports a code item with a designator and a meaning but no value in any form", () => {
+    const ds = parse([
+      {
+        tag: "00102202",
+        items: [
+          {
+            elements: [
+              { tag: "00080102", vr: "SH", value: ascii("99SYNTH") },
+              { tag: "00080104", vr: "LO", value: ascii("Synthetic species") },
+            ],
+          },
+        ],
+      },
+    ]);
+    expect(issueCodes(ds)).toEqual([
+      [PATIENT_ISSUE_CODES.DICOM_PATIENT_CODE_INCOMPLETE, "00102202"],
+    ]);
+  });
+
+  it("words each code's message from the registry, after the tag", () => {
+    const ds = parse([
+      { tag: "00102201", vr: "OB", value: ascii("SYNTHETIC SPECIES") },
+      { tag: "00102202", items: [] },
+      { tag: "00102203", vr: "CS", value: ascii("YES") },
+      {
+        tag: "00102293",
+        items: [
+          { elements: [{ tag: "00080104", vr: "LO", value: ascii("Synthetic breed") }] },
+          { elements: code("SYNBREED", "Synthetic breed") },
+        ],
+      },
+    ]);
+    expect(ds.patient.issues?.map((i) => i.message)).toEqual([
+      "00102201: the element is not encoded as its dictionary VR, so its value is not read",
+      "00102202: the code sequence holds no item; the code is left absent",
+      "00102203: the value is not one of the standard's enumerated values; it is kept as written",
+      "00102293: the code sequence holds more than the one item allowed; the first is read",
+      "00102293: the code item lacks a code value, a coding scheme designator or a code meaning; what it carries is kept",
+    ]);
+  });
 });

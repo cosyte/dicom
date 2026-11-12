@@ -112,7 +112,10 @@ export function animalPatientInput(): Arbitrary<Buffer> {
     );
 }
 
-/** The attributes of one file, each present or not, in ascending tag order. */
+/**
+ * The attributes of one file, each present or not. `fc.record` keeps its keys in the order they
+ * are written, which is ascending tag order, so the Data Set is written in that order.
+ */
 function attributes(explicit: boolean): Arbitrary<(LeafElement | SequenceElement)[]> {
   return fc
     .record(
@@ -140,5 +143,5 @@ function attributes(explicit: boolean): Arbitrary<(LeafElement | SequenceElement
       },
       { requiredKeys: [] },
     )
-    .map((present) => Object.values(present).sort((a, b) => a.tag.localeCompare(b.tag)));
+    .map((present) => Object.values(present));
 }

@@ -31,20 +31,6 @@ const PATIENT_NAME: Tag = "00100010";
 const PATIENT_BIRTH_DATE: Tag = "00100030";
 const PATIENT_SEX: Tag = "00100040";
 const TYPE_OF_PATIENT_ID: Tag = "00100022";
-const SPECIES_DESCRIPTION: Tag = "00102201";
-const SPECIES_CODE_SEQ: Tag = "00102202";
-const SEX_NEUTERED: Tag = "00102203";
-const BREED_DESCRIPTION: Tag = "00102292";
-const BREED_CODE_SEQ: Tag = "00102293";
-const RESPONSIBLE_PERSON: Tag = "00102297";
-const RESPONSIBLE_PERSON_ROLE: Tag = "00102298";
-const RESPONSIBLE_ORGANIZATION: Tag = "00102299";
-const LONG_CODE_VALUE: Tag = "00080119";
-const URN_CODE_VALUE: Tag = "00080120";
-
-/** Patient's Sex Neutered's enumerated values (PS3.3, Patient Module). */
-const SEX_NEUTERED_VALUES: ReadonlySet<string> = new Set(["ALTERED", "UNALTERED"]);
-
 type Tag = string;
 
 function readOtherPatientIds(ds: Dataset): readonly OtherPatientId[] {
@@ -62,6 +48,10 @@ function readOtherPatientIds(ds: Dataset): readonly OtherPatientId[] {
   });
 }
 
+// The non-human attributes' tags are written where they are read, inside the functions below,
+// rather than as module constants: a value fixed when the module loads is a mutant the mutation
+// run cannot switch per test, so it would go unjudged.
+
 /**
  * Whether the element at `tag` is present but decoded to a value kind other than the ones its
  * dictionary VR gives: an explicit VR the sender got wrong, or a value left as bytes. An empty
@@ -72,11 +62,9 @@ function wrongType(ds: Dataset, tag: Tag, kinds: readonly DicomValue["kind"][]):
   return v !== undefined && v.kind !== "empty" && !kinds.includes(v.kind);
 }
 
-const STRING_KINDS: readonly DicomValue["kind"][] = ["strings", "text"];
-
 /** A string attribute, with a wrong-type issue when it is present in a form that is not text. */
 function readTolerantString(ds: Dataset, tag: Tag, issues: PatientIssue[]): string | undefined {
-  if (wrongType(ds, tag, STRING_KINDS)) {
+  if (wrongType(ds, tag, ["strings", "text"])) {
     issues.push(patientIssue(PATIENT_ISSUE_CODES.DICOM_PATIENT_VALUE_WRONG_TYPE, tag));
     return undefined;
   }
@@ -104,8 +92,8 @@ function readCodeSequence(ds: Dataset, tag: Tag, issues: PatientIssue[]): CodedC
     issues.push(patientIssue(PATIENT_ISSUE_CODES.DICOM_PATIENT_CODE_SEQUENCE_EXTRA_ITEMS, tag));
   }
   const code = readCode(first);
-  const longValue = readString(first, LONG_CODE_VALUE);
-  const urnValue = readString(first, URN_CODE_VALUE);
+  const longValue = readString(first, "00080119"); // Long Code Value
+  const urnValue = readString(first, "00080120"); // URN Code Value
   const hasValue =
     code.codeValue !== undefined || longValue !== undefined || urnValue !== undefined;
   const needsDesignator = urnValue === undefined;
@@ -121,16 +109,15 @@ function readCodeSequence(ds: Dataset, tag: Tag, issues: PatientIssue[]): CodedC
 
 function readResponsiblePerson(ds: Dataset, issues: PatientIssue[]): ResponsiblePerson | undefined {
   const person: { -readonly [K in keyof ResponsiblePerson]: ResponsiblePerson[K] } = {};
-  if (wrongType(ds, RESPONSIBLE_PERSON, ["personName"])) {
-    issues.push(
-      patientIssue(PATIENT_ISSUE_CODES.DICOM_PATIENT_VALUE_WRONG_TYPE, RESPONSIBLE_PERSON),
-    );
+  const personTag = "00102297"; // Responsible Person
+  if (wrongType(ds, personTag, ["personName"])) {
+    issues.push(patientIssue(PATIENT_ISSUE_CODES.DICOM_PATIENT_VALUE_WRONG_TYPE, personTag));
   } else {
-    const name = readPersonName(ds, RESPONSIBLE_PERSON);
+    const name = readPersonName(ds, personTag);
     if (name !== undefined) person.name = name;
   }
-  const role = readTolerantString(ds, RESPONSIBLE_PERSON_ROLE, issues);
-  const organization = readTolerantString(ds, RESPONSIBLE_ORGANIZATION, issues);
+  const role = readTolerantString(ds, "00102298", issues); // Responsible Person Role
+  const organization = readTolerantString(ds, "00102299", issues); // Responsible Organization
   if (role !== undefined) person.role = role;
   if (organization !== undefined) person.organization = organization;
   return Object.keys(person).length > 0 ? person : undefined;
@@ -145,14 +132,19 @@ function readAnimalAttributes(
   view: { -readonly [K in keyof PatientView]: PatientView[K] },
 ): void {
   const issues: PatientIssue[] = [];
-  const speciesDescription = readTolerantString(ds, SPECIES_DESCRIPTION, issues);
-  const speciesCode = readCodeSequence(ds, SPECIES_CODE_SEQ, issues);
-  const sexNeutered = readTolerantString(ds, SEX_NEUTERED, issues);
-  if (sexNeutered !== undefined && !SEX_NEUTERED_VALUES.has(sexNeutered)) {
-    issues.push(patientIssue(PATIENT_ISSUE_CODES.DICOM_PATIENT_VALUE_NOT_ENUMERATED, SEX_NEUTERED));
+  // Patient Species Description and Patient Species Code Sequence.
+  const speciesDescription = readTolerantString(ds, "00102201", issues);
+  const speciesCode = readCodeSequence(ds, "00102202", issues);
+  // Patient's Sex Neutered, whose enumerated values are ALTERED and UNALTERED (PS3.3, Patient
+  // Module). Another value is kept as written and reported.
+  const neuteredTag = "00102203";
+  const sexNeutered = readTolerantString(ds, neuteredTag, issues);
+  if (sexNeutered !== undefined && sexNeutered !== "ALTERED" && sexNeutered !== "UNALTERED") {
+    issues.push(patientIssue(PATIENT_ISSUE_CODES.DICOM_PATIENT_VALUE_NOT_ENUMERATED, neuteredTag));
   }
-  const breedDescription = readTolerantString(ds, BREED_DESCRIPTION, issues);
-  const breedCode = readCodeSequence(ds, BREED_CODE_SEQ, issues);
+  // Patient Breed Description and Patient Breed Code Sequence.
+  const breedDescription = readTolerantString(ds, "00102292", issues);
+  const breedCode = readCodeSequence(ds, "00102293", issues);
   const responsiblePerson = readResponsiblePerson(ds, issues);
   if (speciesDescription !== undefined) view.speciesDescription = speciesDescription;
   if (speciesCode !== undefined) view.speciesCode = speciesCode;
