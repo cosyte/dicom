@@ -63,7 +63,7 @@ Two documents, because the bound is stated across two editions.
 - **Source (current):** `https://dicom.nema.org/medical/dicom/current/source/docbook/part05/part05.xml`
 - **Edition:** PS3.5 **2026c** (read from the document's own
   `<subtitle>DICOM PS3.5 2026c - Data Structures and Encoding</subtitle>`, not asserted here)
-- **Retrieved:** 2026-07-28
+- **Retrieved:** 28 July 2026
 - **SHA-256:** `4dfd7b8cbc7c368b7cf03e9c4b8a0773bed91266fcdb0bbf8ed634b7287cacca` (`part05/SHA.txt`)
 - **Committed at:** `part05/4dfd7b8c.../part05.xml`, 1,021,881 bytes, verbatim
 
@@ -71,7 +71,7 @@ Two documents, because the bound is stated across two editions.
 
 - **Source (retired curve bound):** `http://medical.nema.org/MEDICAL/Dicom/2004/printed/04_05pu.pdf`
 - **Edition:** PS3.5-2004, the edition the current section 7.6 Note links by that exact URL
-- **Retrieved:** 2026-07-28
+- **Retrieved:** 28 July 2026
 - **SHA-256:** `f045aabbbca747afbce425b390109840a89f2a981b7cfeb44d88bc219ad590c7` (`part05-2004/SHA.txt`)
 - **Committed at:** `part05-2004/f045aabb.../04_05pu.pdf`, 546,038 bytes, verbatim
 - **Copyright:** NEMA. Both vendored unmodified as build inputs; the generated bound is the derived
@@ -192,7 +192,7 @@ all.
 - **Source:** `https://dicom.nema.org/medical/dicom/current/source/docbook/part06/part06.xml`
 - **Edition:** PS3.6 **2026d** (read from the document's own
   `<subtitle>DICOM PS3.6 2026d - Data Dictionary</subtitle>`, not asserted here)
-- **Retrieved:** 2026-09-24
+- **Retrieved:** 24 September 2026
 - **SHA-256:** `fa9f0f8d67eba692dcf95cfeae0a8f4e071beeb7844215a860bc4b9d5dfaad25` (`part06/SHA.txt`)
 - **Committed at:** `part06/fa9f0f8d.../part06.xml`, 9,666,976 bytes, verbatim
 - **Copyright:** NEMA. Vendored unmodified as a build input, in the same way the standard's tables
@@ -351,7 +351,7 @@ the same names. Inserting a space would be hand-editing a generated table to tas
 - **Edition:** PS3.15 **2026d** (read from the document's own
   `<subtitle>DICOM PS3.15 2026d - Security and System Management Profiles</subtitle>`, not asserted
   here)
-- **Retrieved:** 2026-09-24
+- **Retrieved:** 24 September 2026
 - **SHA-256:** `1eb2a9724822476b3f1f3de23d15ae655a4c7f6e9d32bf16f2d9ef76d7d8437c` (`part15/SHA.txt`)
 - **Committed at:** `part15/1eb2a972.../part15.xml`, 3,555,642 bytes, verbatim
 - **Copyright:** NEMA. Vendored unmodified as a build input; the generated action table is the
