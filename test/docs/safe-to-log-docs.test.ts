@@ -429,3 +429,209 @@ describe("What is safe to log", () => {
     expect(lineOf(field), field).toBeDefined();
   });
 });
+
+/**
+ * One public member of a type a parsed data set exposes: its name as the page writes it
+ * (`Type.field`, or `Type.method()` for a method) and the type text its source declares.
+ */
+interface Member {
+  readonly name: string;
+  readonly type: string;
+}
+
+/**
+ * The public members `typeName` declares in `src/<file>`, read from the source: an interface's
+ * fields and methods, or a class's public fields, getters and methods (never its constructor). A
+ * field typed as an object literal takes the whole literal as its type.
+ */
+function membersOf(file: string, typeName: string): Member[] {
+  const text = readFileSync(join(root, "src", file), "utf8");
+  const head = new RegExp(`^export (interface|class) ${typeName}\\b[^\\n]*\\{$`, "mu").exec(text);
+  expect(head, `${typeName} in src/${file}`).not.toBeNull();
+  const start = (head?.index ?? 0) + (head?.[0].length ?? 0);
+  const lines = text.slice(start, text.indexOf("\n}\n", start)).split("\n");
+  const isClass = head?.[1] === "class";
+  const out: Member[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    if (!/^ {2}\S/u.test(line) || /^ {2}(?:\/\*\*|\*|\/\/)/u.test(line)) continue;
+    const decl = isClass ? /^ {2}public (.*)$/u.exec(line)?.[1] : line.trim();
+    if (decl === undefined || decl.startsWith("constructor(")) continue;
+    const method = /^(?:get )?(\w+)\(([^)]*)\): (.+?)\s*[;{]$/u.exec(decl);
+    if (method !== null) {
+      const getter = decl.startsWith("get ");
+      out.push({
+        name: `${typeName}.${method[1] ?? ""}${getter ? "" : "()"}`,
+        type: method[3] ?? "",
+      });
+      continue;
+    }
+    const field = /^(?:readonly )?(\w+)\??: (.+?);?$/u.exec(decl);
+    if (field === null) continue;
+    let type = field[2] ?? "";
+    if (type === "{") {
+      while (i + 1 < lines.length && !/^ {2}\};$/u.test(lines[i + 1] ?? "")) {
+        i += 1;
+        type += lines[i] ?? "";
+      }
+    }
+    out.push({ name: `${typeName}.${field[1] ?? ""}`, type });
+  }
+  return out;
+}
+
+/** Every public type a parsed data set, a warning and its position expose, by source file. */
+const VIEW_TYPES: readonly (readonly [string, string])[] = [
+  ["dataset/dataset.ts", "Dataset"],
+  ["dataset/item.ts", "Item"],
+  ["dataset/element.ts", "Element"],
+  ["dataset/helpers/types.ts", "PatientView"],
+  ["dataset/helpers/types.ts", "OtherPatientId"],
+  ["dataset/helpers/types.ts", "ResponsiblePerson"],
+  ["dataset/helpers/types.ts", "PatientIssue"],
+  ["dataset/helpers/types.ts", "StudyView"],
+  ["dataset/helpers/types.ts", "SeriesView"],
+  ["dataset/helpers/types.ts", "ImageView"],
+  ["dataset/helpers/types.ts", "CodedConcept"],
+  ["dataset/helpers/types.ts", "RealWorldValueMap"],
+  ["dataset/helpers/types.ts", "FrameFunctionalGroups"],
+  ["dataset/file-meta.ts", "FileMeta"],
+  ["dataset/file-meta.ts", "FileMetaRawElement"],
+  ["dataset/directory.ts", "DicomDirectory"],
+  ["dataset/directory.ts", "DirectoryRecord"],
+  ["parser/warnings.ts", "DicomParseWarning"],
+  ["parser/types.ts", "DicomPosition"],
+];
+
+/**
+ * Types that are a value read from the file whole: text, bytes, a name, a date, a decoded value, or
+ * a nested Data Set. A member typed with one of them holds file content.
+ */
+const CONTENT_TYPE = /\b(?:string|Buffer|Item|PersonName|DicomDate|DicomTime|DicomValue)\b/u;
+
+/** Types that hold no content at all: closed sets the parser checks or composes. */
+const CLOSED_TYPES = new Set(["Tag", "VR", "WarningCode", "PatientIssueCode"]);
+
+/**
+ * The members typed as text that are still safe to log, each for the reason the page gives: the
+ * parser composes the value or checks it against a closed set, or it is a Code String (CS) that
+ * PS3.3 gives defined terms for.
+ */
+const SAFE_TEXT = new Set([
+  // A parse goes on only for a syntax `TRANSFER_SYNTAX_PARSERS` knows, else it throws.
+  "FileMeta.transferSyntaxUID",
+  // `<withheld>` unless the active profile names the creator.
+  "Element.privateCreator",
+  // Built by code from a frozen registry.
+  "DicomParseWarning.message",
+  "PatientIssue.message",
+  // The view's own tag constant.
+  "PatientIssue.tag",
+  // Composed by the DICOMDIR record checks from tags and Item indices.
+  "DicomPosition.contextPath",
+  // Resolved by the library from the coding scheme designator, for four designators only.
+  "CodedConcept.schemeUid",
+  // Code Strings with defined terms.
+  "SeriesView.modality",
+  "ImageView.photometricInterpretation",
+  "ImageView.units",
+  "DirectoryRecord.type",
+  "Element.specificCharacterSet",
+]);
+
+describe("What is safe to log: every member of a parsed data set and a warning", () => {
+  const text = section(
+    readFileSync(join(docsDir, "error-handling.md"), "utf8"),
+    "What is safe to log",
+  );
+  const byType = new Map(VIEW_TYPES.map(([file, name]) => [name, membersOf(file, name)]));
+  const all = [...byType.values()].flat();
+
+  /** The table claims of `name`: `safe` from a "Safe to log" cell, `content` from a "File content" cell. */
+  function tableClaims(name: string): string[] {
+    const out = new Set<string>();
+    for (const line of text.split("\n")) {
+      if (!line.startsWith("|")) continue;
+      const cells = line.split("|");
+      if ((cells[2] ?? "").includes(`\`${name}\``)) out.add("safe");
+      if ((cells[3] ?? "").includes(`\`${name}\``)) out.add("content");
+    }
+    return [...out];
+  }
+
+  /** Whether a member can hold file content, following the listed types its type names. */
+  function holdsContent(m: Member, seen: Set<string> = new Set()): boolean {
+    if (SAFE_TEXT.has(m.name)) return false;
+    if (CONTENT_TYPE.test(m.type)) return true;
+    for (const ref of m.type.match(/\b[A-Z]\w+\b/gu) ?? []) {
+      const members = byType.get(ref);
+      if (members === undefined || seen.has(ref)) continue;
+      seen.add(ref);
+      if (members.some((x) => holdsContent(x, seen))) return true;
+    }
+    return false;
+  }
+
+  const named = (name: string): Member => {
+    const m = all.find((x) => x.name === name);
+    expect(m, name).toBeDefined();
+    return m ?? { name, type: "" };
+  };
+
+  it("reads the members from src/, so it cannot pass on nothing", () => {
+    expect(byType.get("ImageView")?.map((m) => m.name)).toEqual(
+      expect.arrayContaining([
+        "ImageView.rescaleType",
+        "ImageView.modalityLutSequence",
+        "ImageView.frame()",
+      ]),
+    );
+    expect(byType.get("Dataset")?.map((m) => m.name)).toEqual(
+      expect.arrayContaining(["Dataset.patient", "Dataset.get()", "Dataset.warnings"]),
+    );
+    expect(named("FrameFunctionalGroups.pixelValueTransformation").type).toMatch(
+      /rescaleType\?: string/u,
+    );
+    expect(all.length).toBeGreaterThan(80);
+    expect(tableClaims("NoSuchType.field")).toEqual([]);
+  });
+
+  it("knows every type a member refers to", () => {
+    for (const m of all) {
+      for (const ref of m.type.match(/\b[A-Z]\w+\b/gu) ?? []) {
+        const known = byType.has(ref) || CLOSED_TYPES.has(ref) || CONTENT_TYPE.test(ref);
+        expect(known, `${m.name}: ${ref}`).toBe(true);
+      }
+    }
+  });
+
+  it("classifies every member in a table, once", () => {
+    for (const m of all) expect(tableClaims(m.name), m.name).toHaveLength(1);
+  });
+
+  it("never calls a member that can hold file content safe to log", () => {
+    for (const m of all) {
+      if (holdsContent(m)) expect(tableClaims(m.name), m.name).toEqual(["content"]);
+    }
+  });
+
+  it.each([
+    "ImageView.rescaleType",
+    "ImageView.modalityLutSequence",
+    "ImageView.voiLutSequence",
+    "ImageView.realWorldValueMaps",
+    "ImageView.frame()",
+    "CodedConcept.codeMeaning",
+    "FileMeta.mediaStorageSOPClassUID",
+    "FileMeta.fileMetaInformationVersion",
+    "DirectoryRecord.item",
+    "Dataset.image",
+  ])("finds %s can hold file content", (name) => {
+    expect(holdsContent(named(name)), name).toBe(true);
+  });
+
+  it("says an escalated File Meta group length warning keeps its declared length", () => {
+    const flat = text.replace(/\s+/gu, " ");
+    expect(flat).toMatch(/escalat[^.]*`DICOM_FILE_META_GROUP_LENGTH_MISMATCH`[^.]*declared/u);
+  });
+});
