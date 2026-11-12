@@ -74,6 +74,8 @@ export type { DateParts, ToDateOptions } from "./dataset/vr/date-conversion.js";
 export type {
   PatientView,
   OtherPatientId,
+  ResponsiblePerson,
+  PatientIssue,
   StudyView,
   SeriesView,
   ImageView,
@@ -82,6 +84,7 @@ export type {
   FrameFunctionalGroups,
 } from "./dataset/helpers/types.js";
 export { readCode, codingSchemeOid, CODING_SCHEME_OIDS } from "./dataset/helpers/coded.js";
+export { PATIENT_ISSUE_CODES, type PatientIssueCode } from "./dataset/helpers/patient-issues.js";
 export {
   VALUE_ERROR_CODES,
   type ValueErrorCode,

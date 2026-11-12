@@ -59,7 +59,10 @@ OFFSET_FRAMES
 OffsetFrame
 OnWarningCallback
 OtherPatientId
+PATIENT_ISSUE_CODES
 ParseOptions
+PatientIssue
+PatientIssueCode
 PatientView
 PersonName
 PersonNameGroup
@@ -70,6 +73,7 @@ ProfileDefinitionError
 ProfilePrivateTags
 ReadDicomHeaderOptions
 RealWorldValueMap
+ResponsiblePerson
 SERIALIZE_ERROR_CODES
 Sequence
 SerializeErrorCode

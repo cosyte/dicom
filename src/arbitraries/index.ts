@@ -34,3 +34,4 @@ export {
   recoverableInput,
   truncatedValidFile,
 } from "./inputs.js";
+export { animalPatientInput } from "./patient.js";

@@ -2,6 +2,7 @@
 
 exports[`what each generator draws from a fixed seed > is pinned 1`] = `
 {
+  "animalPatientInput": "43d9448d1afa7c87ac8001c959e02afbcfc0797e88198fbcb4c28cee3e7c9217",
   "arbitraryBytes": "6dae56a98b4acd7754a14b0993b32f9ca57089f11db5a06f268966099e745594",
   "dicomShapedGarbage": "6ed9ff84c759eba1a76ab127e9a2db602b64dfa4029a7cc1bb2ac358c38ba8aa",
   "encodeModel": "e041d0bed29ad74a910c1656a7ce4a2675cd1cd72f6a4ebd1315200f776e2b84",

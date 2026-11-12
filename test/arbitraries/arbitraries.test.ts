@@ -12,6 +12,7 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 
 import {
+  animalPatientInput,
   arbitraryBytes,
   dicomShapedGarbage,
   encodeModel,
@@ -31,7 +32,13 @@ import {
   type Part10Spec,
   type SequenceElement,
 } from "../../src/arbitraries/encode.js";
-import { DicomParseError, FATAL_CODES, WARNING_CODES, parseDicom } from "../../src/index.js";
+import {
+  DicomParseError,
+  FATAL_CODES,
+  PATIENT_ISSUE_CODES,
+  WARNING_CODES,
+  parseDicom,
+} from "../../src/index.js";
 import type { Dataset } from "../../src/index.js";
 import type { VR } from "../../src/dictionary/types.js";
 import {
@@ -403,5 +410,55 @@ describe("the hostile generators", () => {
     const lengths = files.map((f) => f.length);
     expect(Math.min(...lengths)).toBe(0);
     expect(new Set(lengths).size).toBeGreaterThan(100);
+  });
+});
+
+describe("animalPatientInput", () => {
+  const files = sample(animalPatientInput(), 1_000);
+  const views = files.map((f) => parseDicom(f).patient);
+
+  it("reads with no fatal error, and the patient view reports only registered codes", () => {
+    const codes = new Set<string>(Object.values(PATIENT_ISSUE_CODES));
+    for (const view of views) {
+      for (const issue of view.issues ?? []) expect(codes.has(issue.code), issue.code).toBe(true);
+    }
+  });
+
+  it("draws every attribute, read and unread, and every issue code", () => {
+    const fields = [
+      "speciesDescription",
+      "speciesCode",
+      "sexNeutered",
+      "breedDescription",
+      "breedCode",
+      "responsiblePerson",
+    ] as const;
+    for (const field of fields) {
+      expect(
+        views.some((v) => v[field] !== undefined),
+        field,
+      ).toBe(true);
+      expect(
+        views.some((v) => v[field] === undefined),
+        field,
+      ).toBe(true);
+    }
+    const role = views.some((v) => v.responsiblePerson?.role !== undefined);
+    const organization = views.some((v) => v.responsiblePerson?.organization !== undefined);
+    const name = views.some((v) => v.responsiblePerson?.name !== undefined);
+    expect([role, organization, name]).toEqual([true, true, true]);
+    const drawn = new Set(views.flatMap((v) => (v.issues ?? []).map((i) => i.code)));
+    expect([...drawn].sort()).toEqual(Object.values(PATIENT_ISSUE_CODES).sort());
+    expect(views.some((v) => v.issues === undefined)).toBe(true);
+  });
+
+  it("writes under both little-endian syntaxes", () => {
+    for (const syntax of [IMPLICIT_LE, EXPLICIT_LE]) {
+      const uid = Buffer.from(syntax.length % 2 === 0 ? syntax : `${syntax}\0`);
+      expect(
+        files.some((f) => f.includes(uid)),
+        syntax,
+      ).toBe(true);
+    }
   });
 });

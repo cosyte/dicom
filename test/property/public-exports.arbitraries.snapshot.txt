@@ -12,6 +12,7 @@
 
 DicomModel
 ModelElement
+animalPatientInput
 arbitraryBytes
 dicomShapedGarbage
 encodeModel

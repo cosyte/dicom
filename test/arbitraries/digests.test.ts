@@ -17,6 +17,7 @@ import fc from "fast-check";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  animalPatientInput,
   arbitraryBytes,
   dicomShapedGarbage,
   encodeModel,
@@ -59,6 +60,7 @@ describe("what each generator draws from a fixed seed", () => {
       dicomShapedGarbage: digest(sample(dicomShapedGarbage(), 100)),
       truncatedValidFile: digest(sample(truncatedValidFile(), 300)),
       fuzzInput: digest(sample(fuzzInput(), 300)),
+      animalPatientInput: digest(sample(animalPatientInput(), 300)),
     }).toMatchSnapshot();
   });
 
