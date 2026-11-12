@@ -8,7 +8,7 @@
  * Each describe block references the DICT-* requirement it covers.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import * as Dictionary from "../../src/dictionary/index.js";
 
 describe("Dictionary.lookup (DICT-03 + DICT-04)", () => {
@@ -284,5 +284,15 @@ describe("Dictionary entries are immutable (immutability guardrail)", () => {
       // Intentional mutation attempt at runtime.
       (u as unknown as { name: string }).name = "Tampered";
     }).toThrow();
+  });
+
+  it("freezes every UID entry on the first read of a freshly loaded table", async () => {
+    // The table is frozen once per loaded module, so a module this file already read cannot show
+    // the first read again; a fresh copy of the module, and of the generated table under it, can.
+    vi.resetModules();
+    const fresh = await import("../../src/dictionary/index.js");
+    for (const value of ["1.2.840.10008.1.2", "1.2.840.10008.1.2.1", "1.2.840.10008.1.2.2"]) {
+      expect(Object.isFrozen(fresh.uid(value)), value).toBe(true);
+    }
   });
 });
