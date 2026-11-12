@@ -66,7 +66,8 @@ function isCharsetTextVr(vr: VR): boolean {
     case "UT":
     case "PN":
       return true;
-    default:
-      return false;
   }
+  // After the switch rather than as its `default`, whose removal would return `undefined`, an
+  // equivalent mutant.
+  return false;
 }
