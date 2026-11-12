@@ -8,7 +8,8 @@ import type { Buffer } from "node:buffer";
 
 import type { Dataset } from "../dataset/dataset.js";
 import type { Element } from "../dataset/element.js";
-import { decodeText } from "../dataset/vr/charset.js";
+import { resolveDecoderLabel } from "../dataset/vr/charset.js";
+import { decodeWithCodeExtensions, usesCodeExtensions } from "../dataset/vr/iso2022.js";
 import { renderTag } from "../parser/tokens.js";
 import { DICOM_JSON_ERROR_CODES, DicomJsonError, type DicomJsonErrorCode } from "./errors.js";
 import type {
@@ -20,6 +21,7 @@ import type {
 } from "./types.js";
 import {
   isBinaryVr,
+  isBulkTag,
   isCharsetVr,
   isDecimalString,
   isIntegerString,
@@ -48,15 +50,34 @@ function trimEnd(text: string): string {
   return text.slice(0, end);
 }
 
-/** The element's text: through `(0008,0005)` for a charset VR, Latin-1 for the rest. */
+/**
+ * The element's text: through `(0008,0005)` for a charset VR, Latin-1 for the rest. Bytes the set
+ * does not decode are refused, never read as U+FFFD, and a leading byte order mark is kept.
+ */
 function textOf(el: Element): string {
   const bytes = el.rawBytes;
-  return isCharsetVr(el.vr) ? decodeText(bytes, el.specificCharacterSet) : bytes.toString("latin1");
+  if (!isCharsetVr(el.vr)) return bytes.toString("latin1");
+  const terms = el.specificCharacterSet;
+  if (usesCodeExtensions(terms)) {
+    const decoded = decodeWithCodeExtensions(bytes, terms, "text");
+    if (decoded.bytesUndecodable) refuse(DICOM_JSON_ERROR_CODES.MALFORMED_VALUE, el);
+    return decoded.text;
+  }
+  try {
+    const decoder = new TextDecoder(resolveDecoderLabel(terms), { fatal: true, ignoreBOM: true });
+    return decoder.decode(bytes);
+  } catch {
+    return refuse(DICOM_JSON_ERROR_CODES.MALFORMED_VALUE, el);
+  }
 }
 
-function personName(text: string): DicomJsonPersonName | null {
+function personName(el: Element, text: string): DicomJsonPersonName | null {
+  const groups = text.split("=");
+  // PS3.5 section 6.2: "There shall be no more than two component group delimiters". A fourth
+  // group is refused, never dropped.
+  if (groups.length > 3) refuse(DICOM_JSON_ERROR_CODES.MALFORMED_VALUE, el);
   // `split` returns at least one string, so the first group needs no default.
-  const [alphabetic, ideographic = "", phonetic = ""] = text.split("=") as [string, ...string[]];
+  const [alphabetic, ideographic = "", phonetic = ""] = groups as [string, ...string[]];
   const out: { Alphabetic?: string; Ideographic?: string; Phonetic?: string } = {};
   if (alphabetic !== "") out.Alphabetic = alphabetic;
   if (ideographic !== "") out.Ideographic = ideographic;
@@ -64,13 +85,36 @@ function personName(text: string): DicomJsonPersonName | null {
   return Object.keys(out).length === 0 ? null : out;
 }
 
+/**
+ * The decimal value a number's text names, as its significant digits and the power of ten they
+ * are scaled by, so that two texts of one value give the same key: `"12.50"` and `"1.25e1"` both
+ * give `"125e-1"`. The sign is left out: a text and the double read from it never differ in sign.
+ */
+function decimalKey(text: string): string {
+  const match = /^[+-]?(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/u.exec(text) as RegExpExecArray;
+  const [, whole = "", fraction = "", exponent = "0"] = match;
+  const digits = (whole + fraction).replace(/^0+/u, "");
+  if (digits === "") return "0";
+  const significant = digits.replace(/0+$/u, "");
+  const power = Number(exponent) - fraction.length + digits.length - significant.length;
+  return `${significant}e${power}`;
+}
+
+/**
+ * A `DS` or `IS` value as the JSON number of the same decimal value, or a refusal: a double that
+ * does not hold the text's value exactly (past 2^53, or more digits than a double keeps) is never
+ * written in its place. Only the text's form may change: `"1.0"` is written as `1`.
+ */
 function numberString(el: Element, text: string, valid: (text: string) => boolean): number | null {
   const trimmed = text.trim();
   if (trimmed === "") return null;
   if (!valid(trimmed)) refuse(DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER, el);
   const n = Number(trimmed);
-  if (!Number.isFinite(n)) refuse(DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER, el);
-  return n;
+  if (!Number.isFinite(n) || decimalKey(String(n)) !== decimalKey(trimmed)) {
+    refuse(DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER, el);
+  }
+  // `-0` is zero, and JSON writes it as `0`.
+  return n === 0 ? 0 : n;
 }
 
 function binaryNumbers(el: Element, bytes: Buffer, width: 2 | 4 | 8): number[] {
@@ -152,6 +196,10 @@ function scalarAttribute(el: Element, options: ToDicomJsonOptions): DicomJsonAtt
     }
     const uri = options.bulkDataUri?.(el);
     if (uri !== undefined) return { vr, BulkDataURI: uri };
+    // Pixel Data and the other bulk values go inline only when the caller asks for it.
+    if (isBulkTag(el.tag) && options.inlineBulkData !== true) {
+      refuse(DICOM_JSON_ERROR_CODES.BULK_DATA_URI_REQUIRED, el);
+    }
     return { vr, InlineBinary: bytes.toString("base64") };
   }
   if (!hasValueForm(vr)) refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_VR, el);
@@ -164,7 +212,7 @@ function scalarAttribute(el: Element, options: ToDicomJsonOptions): DicomJsonAtt
   }
   const values = textOf(el).split("\\").map(trimEnd);
   let out: DicomJsonValue[];
-  if (vr === "PN") out = values.map(personName);
+  if (vr === "PN") out = values.map((v) => personName(el, v));
   else if (vr === "DS") out = values.map((v) => numberString(el, v, isDecimalString));
   else if (vr === "IS") out = values.map((v) => numberString(el, v, isIntegerString));
   else out = values.map((v) => (v === "" ? null : v));
@@ -204,25 +252,31 @@ function datasetOf(ds: Dataset, options: ToDicomJsonOptions): DicomJsonDataset {
  * value among several; `PN` as an object of `Alphabetic`, `Ideographic` and `Phonetic` groups;
  * `DS`, `IS`, `US`, `SS`, `UL`, `SL`, `FL` and `FD` as JSON numbers; `AT` as eight hex digits;
  * `SQ` as an array of nested Data Sets; and `OB`, `OD`, `OF`, `OL`, `OV`, `OW` and `UN` as base64
- * `InlineBinary`, or as a `BulkDataURI` where the `bulkDataUri` option gives one. An attribute with
- * an empty value has no value field. Text is decoded through `(0008,0005)` Specific Character Set
- * and `(0008,0005)` is kept as it is.
+ * `InlineBinary`, or as a `BulkDataURI` where the `bulkDataUri` option gives one. Pixel Data and
+ * the other bulk values are written inline only with the `inlineBulkData` option. An attribute
+ * with an empty value has no value field. Text is decoded through `(0008,0005)` Specific Character
+ * Set and `(0008,0005)` is kept as it is.
  *
  * The result is a plain object: `JSON.stringify` writes it, and `fromDicomJson` reads it back.
  *
  * @param ds - The Data Set, usually from `parseDicom`.
- * @param options - Where to hand binary values out as a `BulkDataURI`.
+ * @param options - Where to hand binary values out as a `BulkDataURI`, and whether bulk values may
+ *   go inline.
  * @returns The Data Set as a DICOM JSON object.
  * @throws {@link DicomJsonError} rather than change or guess a value: `UNSUPPORTED_VR` for `SV`
  *   and `UV`, `UNSUPPORTED_ELEMENT` for encapsulated Pixel Data or another undefined-length value
  *   that is not a read Sequence, `UNSUPPORTED_BYTE_ORDER` for an `OW`, `OF`, `OD`, `OL` or `OV`
  *   value under Explicit VR Big Endian, `UNREPRESENTABLE_NUMBER` for NaN, an infinity, or a `DS`
- *   or `IS` value that is not a number, and `MALFORMED_VALUE` for a binary value whose length is
- *   not a whole number of values.
+ *   or `IS` value that is not a number or that no JSON number holds exactly, `MALFORMED_VALUE` for
+ *   a binary value whose length is not a whole number of values, a Person Name of more than three
+ *   groups or text its Specific Character Set does not decode, and `BULK_DATA_URI_REQUIRED` for a
+ *   bulk value with no URI and no `inlineBulkData`.
  * @example
  * ```ts
  * import { parseDicom, toDicomJson } from "@cosyte/dicom";
- * const json = toDicomJson(parseDicom(buf));
+ * const json = toDicomJson(parseDicom(buf), {
+ *   bulkDataUri: (el) => `https://example.com/bulk/${el.tag}`,
+ * });
  * json["00100010"]; // { vr: "PN", Value: [{ Alphabetic: "DOE^JANE" }] }
  * JSON.stringify(json);
  * ```

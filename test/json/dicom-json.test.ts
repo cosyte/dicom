@@ -211,12 +211,15 @@ function syntheticObject(undefinedLength: boolean, swapped: boolean): AnyElement
 }
 
 /** Part 10 to JSON text to Part 10. */
+/** Every value inline, Pixel Data included, so the round trip carries every byte. */
+const INLINE = { inlineBulkData: true } as const;
+
 function roundTrip(
   bytes: Buffer,
   sequenceLength: "defined" | "undefined",
 ): { readonly json: DicomJsonDataset; readonly out: Buffer } {
   const ds = parseDicom(bytes);
-  const json = JSON.parse(JSON.stringify(toDicomJson(ds))) as DicomJsonDataset;
+  const json = JSON.parse(JSON.stringify(toDicomJson(ds, INLINE))) as DicomJsonDataset;
   const fileMeta = ds.fileMeta as FileMeta;
   const out = serializeDicom(fromDicomJson(json, { fileMeta, sequenceLength }));
   return { json, out };
@@ -237,6 +240,7 @@ describe("toDicomJson: each VR's JSON form (PS3.18 Annex F)", () => {
     parseDicom(
       buildDicom({ transferSyntax: TS_EXPLICIT_LE, elements: syntheticObject(false, true) }),
     ),
+    INLINE,
   );
 
   it("keys each attribute by its tag as eight uppercase hex digits, with its vr", () => {
@@ -301,6 +305,7 @@ describe("toDicomJson: each VR's JSON form (PS3.18 Annex F)", () => {
       buildDicom({ transferSyntax: TS_EXPLICIT_LE, elements: syntheticObject(false, true) }),
     );
     const withUri = toDicomJson(ds, {
+      ...INLINE,
       bulkDataUri: (el) => (el.tag === "7FE00010" ? "https://example.com/bulk/1" : undefined),
     });
     expect(withUri["7FE00010"]).toEqual({ vr: "OW", BulkDataURI: "https://example.com/bulk/1" });
@@ -385,8 +390,10 @@ const SEED_OUTCOMES: Readonly<Record<string, string>> = {
   "cp246-un-sequence": "same-json",
   "private-ge-implicit-le": "identical",
   "private-siemens-explicit-le": "identical",
+  // A private Sequence under Implicit VR, written with defined lengths, reads back as UN: nothing
+  // on the wire names it a Sequence, so the changed VR is refused.
+  "private-sequence-implicit-le": "refused:VR_MISMATCH",
   // Each mixes an undefined-length Sequence with defined-length Items, or the reverse.
-  "private-sequence-implicit-le": "same-json",
   "nested-explicit-le": "same-json",
   "nested-implicit-le": "same-json",
   "file-meta-extras": "identical",
@@ -435,7 +442,9 @@ describe("the fuzz seed corpus round trip", () => {
         outcome = "identical";
         break;
       }
-      const again = JSON.parse(JSON.stringify(toDicomJson(parseDicom(out)))) as DicomJsonDataset;
+      const again = JSON.parse(
+        JSON.stringify(toDicomJson(parseDicom(out), INLINE)),
+      ) as DicomJsonDataset;
       outcome = JSON.stringify(again) === JSON.stringify(json) ? "same-json" : "changed";
     }
     outcomes[seed.name] = outcome;

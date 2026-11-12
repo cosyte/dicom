@@ -211,11 +211,11 @@ How each VR is written, and read back the same way:
 | `AE` `AS` `CS` `DA` `DT` `LO` `SH` `TM` `UC` `UI`          | `Value`: strings split on backslashes, padding removed, `null` for an empty value of several |
 | `LT` `ST` `UT` `UR`                                        | `Value`: one string, a backslash kept as a character                                       |
 | `PN`                                                       | `Value`: objects of `Alphabetic`, `Ideographic` and `Phonetic` component groups              |
-| `DS` `IS`                                                  | `Value`: JSON numbers                                                                      |
+| `DS` `IS`                                                  | `Value`: JSON numbers of the text's exact decimal value                                    |
 | `US` `SS` `UL` `SL` `FL` `FD`                              | `Value`: JSON numbers                                                                      |
 | `AT`                                                       | `Value`: tags as eight uppercase hex digits                                                |
 | `SQ`                                                       | `Value`: nested Data Sets, `{}` for an empty Item                                          |
-| `OB` `OD` `OF` `OL` `OV` `OW` `UN`                         | `InlineBinary` (base64), or `BulkDataURI` where the `bulkDataUri` option gives one         |
+| `OB` `OD` `OF` `OL` `OV` `OW` `UN`                         | `InlineBinary` (base64), or `BulkDataURI` where the `bulkDataUri` option gives one; bulk values inline only with `inlineBulkData: true` |
 
 The shapes are typed: a `DicomJsonDataset` maps each tag to a `DicomJsonAttribute`, whose `Value`
 is an array of `DicomJsonValue`, a Person Name value being a `DicomJsonPersonName`. The options are
@@ -225,6 +225,39 @@ An attribute with an empty value has no value field. Text is decoded through `(0
 Specific Character Set, which is kept as it is, and encoded back under it. A `BulkDataURI` comes
 back through the `resolveBulkData` option of `fromDicomJson`; one it does not resolve is refused.
 
+**Bulk values are not written inline by default.** The model is for metadata, so Pixel Data
+`(7FE0,0010)`, Float and Double Float Pixel Data `(7FE0,0008)` and `(7FE0,0009)`, Overlay Data
+`(60xx,3000)`, Waveform Data `(5400,1010)`, Spectroscopy Data `(5600,0020)` and Encapsulated
+Document `(0042,0011)` need a URI from the `bulkDataUri` option, at any depth. With none, and
+without `inlineBulkData: true`, `toDicomJson` refuses the call with `BULK_DATA_URI_REQUIRED`
+rather than leave the value out. Every other binary value is written inline unless `bulkDataUri`
+gives it a URI.
+
+**Exact, or refused.** A converter gives back exactly the value it was given, or refuses with a
+code; it never writes a value it cannot carry faithfully:
+
+- **Implicit VR.** Implicit VR Little Endian writes no VR, and the reader takes the one PS3.5 and
+  the dictionary give the tag, `UN` for a private one. `fromDicomJson` reads the Data Set it wrote
+  back and refuses with `VR_MISMATCH` any attribute, at any depth, whose VR came back other than
+  the JSON's: Smallest Image Pixel Value `SS` -1 with no Pixel Representation of 1 would read as
+  `US` 65535, and a private `DS` as `UN`. A private Sequence of defined length reads as `UN` too;
+  write it with `sequenceLength: "undefined"`, or under Explicit VR.
+- **Delimiters.** One value holding a backslash in any string VR but `LT`, `ST`, `UT` and `UR`, or
+  an `=` or a backslash in a Person Name group, is refused with `INVALID_JSON` rather than split
+  into several values or groups. A `^` inside a group is a component delimiter and is kept.
+- **`DS` and `IS` numbers.** A JSON number is a double, so a `DS` whose decimal value no double
+  holds exactly, such as `9007199254740993` (past 2^53) or `0.10000000000000001`, is refused with
+  `UNREPRESENTABLE_NUMBER` rather than rounded. Only the form of the text may change.
+- **`FL` numbers.** A JSON number is rounded to the nearest float32, as any `FL` writer rounds it.
+  One past float32's range, or below its smallest normal value and not a float32 itself, is
+  refused with `UNREPRESENTABLE_NUMBER`: `1e-50` would otherwise be written as 0.
+- **Person Name groups.** A Person Name of more than three component groups is refused with
+  `MALFORMED_VALUE`, never truncated: PS3.5 section 6.2 says "There shall be no more than two
+  component group delimiters".
+- **Text bytes.** Bytes the Specific Character Set does not decode, such as invalid UTF-8 under
+  `ISO_IR 192`, are refused with `MALFORMED_VALUE` rather than read as U+FFFD, and a leading byte
+  order mark is kept as U+FEFF.
+
 **Where the bytes can differ.** The JSON Model does not record everything Part 10 does, so the
 round trip is byte-identical only where the source already wrote what `fromDicomJson` writes:
 
@@ -232,7 +265,8 @@ round trip is byte-identical only where the source already wrote what `fromDicom
   or an undefined length. `fromDicomJson` writes defined lengths, or undefined lengths with
   `sequenceLength: "undefined"`; a source that mixed the two comes back with one of them.
 - **`DS` and `IS` text.** A number is written in JavaScript's shortest text for it, so `1.0`
-  comes back as `1` and `+5` as `5`.
+  comes back as `1`, `+5` as `5` and `-0` as `0`. The decimal value never changes; a text whose
+  value a JSON number does not hold is refused, as above.
 - **Padding.** Values are padded as PS3.5 pads them, `UI` with a NUL and other text with a space,
   so a `UI` a source padded with a space comes back padded with a NUL. Trailing spaces of a value
   are removed in the JSON.
@@ -242,21 +276,26 @@ round trip is byte-identical only where the source already wrote what `fromDicom
 
 **What is refused, with a `DicomJsonError`.** The converters refuse rather than change or guess a
 value, and the message carries no value. `UNSUPPORTED_VR`: `SV` and `UV` with a value.
+`BULK_DATA_URI_REQUIRED`: a bulk value with no URI and no `inlineBulkData`. `VR_MISMATCH`: an
+attribute whose VR the written Data Set does not read back with.
 `UNSUPPORTED_ELEMENT`: encapsulated Pixel Data and any other undefined-length value that is not a
 Sequence. `UNSUPPORTED_BYTE_ORDER`: `OW`, `OF`, `OD`, `OL` and `OV` under Explicit VR Big Endian.
-`UNREPRESENTABLE_NUMBER`: NaN, an infinity, a `DS` or `IS` that is not a number, or a number its
-VR cannot hold. `UNSUPPORTED_CHARACTER_SET`: text `fromDicomJson` cannot encode, which is any
-character outside 7-bit ASCII under a Specific Character Set other than the default repertoire,
+`UNREPRESENTABLE_NUMBER`: NaN, an infinity, a `DS` or `IS` that is not a number or whose value
+no JSON number holds exactly, or a number its VR cannot hold. `MALFORMED_VALUE`: a binary length
+that is not a whole number of values, a Person Name of more than three groups, or text bytes the
+Specific Character Set does not decode. `UNSUPPORTED_CHARACTER_SET`: text `fromDicomJson` cannot
+encode, which is any character outside 7-bit ASCII under a Specific Character Set other than the default repertoire,
 `ISO_IR 100` and `ISO_IR 192`. `UNSUPPORTED_TRANSFER_SYNTAX`: `fromDicomJson` writes only the
-three uncompressed syntaxes and Deflated Explicit VR LE. `INVALID_JSON`, `MALFORMED_VALUE`,
-`BULK_DATA_UNRESOLVED` and `VALUE_TOO_LONG` cover the rest.
+three uncompressed syntaxes and Deflated Explicit VR LE. `INVALID_JSON` (another shape, or a
+delimiter inside one value), `BULK_DATA_UNRESOLVED` and `VALUE_TOO_LONG` cover the rest.
 
 **What we have not checked against the standard.** PS3.18 is not vendored in this repository, so
 these forms are what we write and read, not a conformance verdict. The cases we could not confirm
 are the ones refused above: the JSON form of `SV` and `UV` values, the byte order of an
 `InlineBinary` under Big Endian, and `DS` or `IS` carried as JSON strings, which `fromDicomJson`
 refuses as `INVALID_JSON`. The `null` for an empty value among several, and an Item written as
-`{}`, are also our reading. A JSON array of several Data Sets is not read; pass each Data Set in
+`{}`, are also our reading, and so is which values count as bulk and the rounding of an `FL`
+number to float32. A JSON array of several Data Sets is not read; pass each Data Set in
 turn.
 
 ## Where to go next

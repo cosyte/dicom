@@ -403,7 +403,11 @@ on the wire.
   `fromDicomJson` writes. What it cannot carry, and what we have not checked against PS3.18, which
   is not vendored here (`SV` and `UV` values, binary byte order under Big Endian, encapsulated Pixel
   Data, and text outside 7-bit ASCII under most Specific Character Sets), is refused with a
-  `DicomJsonError`. See [Serialization](./serialization.md#the-dicom-json-model).
+  `DicomJsonError`. So is every value that would change on the way: a VR Implicit VR reads back as
+  another, a delimiter inside one value, a `DS` no double holds exactly, an `FL` below float32's
+  normal range, a Person Name of more than three groups, and text bytes its Specific Character Set
+  does not decode. Pixel Data and the other bulk values need a `BulkDataURI` unless
+  `inlineBulkData: true` is passed. See [Serialization](./serialization.md#the-dicom-json-model).
 - **`NESTING_DEPTH_LIMIT` is this library's bound, not the standard's.** A fully conformant file
   nested deeper than it is refused, and a sequence refused that way is emptied by `deidentify()`
   rather than shipped, so expect data loss on such a file.

@@ -84,6 +84,26 @@ export function isSwappedBinaryVr(vr: string): boolean {
 }
 
 /**
+ * `true` for the tag of a bulk value, which `toDicomJson` writes inline only when asked: Pixel Data
+ * `(7FE0,0010)`, Float and Double Float Pixel Data `(7FE0,0008)` and `(7FE0,0009)`, Overlay Data
+ * `(60xx,3000)` in the even groups `6000` to `601E`, Waveform Data `(5400,1010)`, Spectroscopy
+ * Data `(5600,0020)` and Encapsulated Document `(0042,0011)`.
+ *
+ * @example
+ * ```ts
+ * isBulkTag("7FE00010"); // true
+ * isBulkTag("00282000"); // false
+ * ```
+ */
+export function isBulkTag(tag: string): boolean {
+  if (["7FE00008", "7FE00009", "7FE00010", "54001010", "56000020", "00420011"].includes(tag)) {
+    return true;
+  }
+  const group = parseInt(tag.slice(0, 4), 16);
+  return tag.endsWith("3000") && group >= 0x6000 && group <= 0x601e && group % 2 === 0;
+}
+
+/**
  * `true` for a DS value as PS3.5 section 6.2 gives it, leading and trailing spaces removed.
  *
  * @example

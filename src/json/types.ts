@@ -86,9 +86,19 @@ export interface ToDicomJsonOptions {
   /**
    * Asked for each element of a binary VR (`OB`, `OD`, `OF`, `OL`, `OV`, `OW`, `UN`) that has a
    * value. Return a URI to write the attribute as a `BulkDataURI`, or `undefined` to write its
-   * bytes inline as base64 in `InlineBinary`. Without it every binary value is written inline.
+   * bytes inline as base64 in `InlineBinary`. A bulk value (Pixel Data `(7FE0,0010)`, Float and
+   * Double Float Pixel Data `(7FE0,0008)` and `(7FE0,0009)`, Overlay Data `(60xx,3000)`,
+   * Waveform Data `(5400,1010)`, Spectroscopy Data `(5600,0020)` and Encapsulated Document
+   * `(0042,0011)`) is written inline only when `inlineBulkData` is `true`; with no URI and no
+   * opt-in it is refused with `BULK_DATA_URI_REQUIRED`.
    */
   readonly bulkDataUri?: (element: Element) => string | undefined;
+  /**
+   * `true` to write a bulk value the `bulkDataUri` option gave no URI for inline, as base64 in
+   * `InlineBinary`. Off by default: the model is for metadata, and Pixel Data inline is rarely
+   * what a caller means.
+   */
+  readonly inlineBulkData?: boolean;
 }
 
 /**

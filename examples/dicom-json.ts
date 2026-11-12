@@ -25,6 +25,8 @@ import {
 import { SYNTHETIC_CT } from "./data/ct-object.js";
 
 const ds = parseDicom(SYNTHETIC_CT);
+// The object carries no Pixel Data. One that does needs a `bulkDataUri` option to hand it out by
+// URI, or `inlineBulkData: true` to write it inline; without either the call is refused.
 const json = toDicomJson(ds);
 const text = JSON.stringify(json);
 

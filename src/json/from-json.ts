@@ -15,6 +15,7 @@ import { Buffer } from "node:buffer";
 
 import { zlibModule } from "../builtins.js";
 import type { Dataset } from "../dataset/dataset.js";
+import type { Element } from "../dataset/element.js";
 import { LONG_FORM_VRS } from "../parser/element-header.js";
 import { parseDicom } from "../parser/index.js";
 import { renderTag } from "../parser/tokens.js";
@@ -57,6 +58,9 @@ function encodingOf(transferSyntaxUID: string): Encoding | undefined {
 function isTagKey(text: string): boolean {
   return /^[0-9A-Fa-f]{8}$/u.test(text);
 }
+
+/** The smallest positive normal float32, 2^-126. */
+const MIN_NORMAL_FLOAT32 = 2 ** -126;
 
 /** The lowest and highest value of an integer VR, or `undefined` for another VR. */
 function rangeOf(vr: string): readonly [number, number] | undefined {
@@ -167,9 +171,17 @@ function latin1(text: string, tag: string): Buffer {
   return Buffer.from(text, "latin1");
 }
 
-function stringValue(value: unknown, tag: string): string {
+/**
+ * One string value. PS3.5 section 6.1.2.3 says a backslash "shall only be used in character
+ * strings with Value Representations of UT, ST and LT"; in any other string VR it separates
+ * Values, so one value holding one would be read back as two: it is refused, never written.
+ */
+function stringValue(value: unknown, vr: string, tag: string): string {
   if (value === null) return "";
   if (typeof value !== "string") refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, tag);
+  if (!isSingleStringVr(vr) && value.includes("\\")) {
+    refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, tag);
+  }
   return value;
 }
 
@@ -180,6 +192,10 @@ function personNameText(value: unknown, tag: string): string {
     const group = value[key];
     if (group === undefined) return "";
     if (typeof group !== "string") refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, tag);
+    // `=` splits the groups and a backslash the values: inside a group, either would change them.
+    if (group.includes("=") || group.includes("\\")) {
+      refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, tag);
+    }
     return group;
   });
   for (const key of Object.keys(value)) {
@@ -235,13 +251,21 @@ function binaryNumbers(values: readonly unknown[], vr: string, le: boolean, tag:
         if (le) out.writeInt32LE(value, at);
         else out.writeInt32BE(value, at);
         break;
-      case "FL":
-        if (!Number.isFinite(Math.fround(value))) {
+      case "FL": {
+        // A number is rounded to the nearest float32, as every FL writer rounds it; one past
+        // float32's range, or below its normal range and not a float32 itself, is refused, since
+        // there the nearest float32 is not near (1e-50 would be written as 0).
+        const single = Math.fround(value);
+        if (
+          !Number.isFinite(single) ||
+          (single !== value && Math.abs(single) < MIN_NORMAL_FLOAT32)
+        ) {
           refuse(DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER, tag);
         }
         if (le) out.writeFloatLE(value, at);
         else out.writeFloatBE(value, at);
         break;
+      }
       default:
         if (le) out.writeDoubleLE(value, at);
         else out.writeDoubleBE(value, at);
@@ -323,7 +347,7 @@ function scalarValue(
   let texts: string[];
   if (vr === "PN") texts = values.map((v) => personNameText(v, tag));
   else if (vr === "DS" || vr === "IS") texts = values.map((v) => numberText(v, vr, tag));
-  else texts = values.map((v) => stringValue(v, tag));
+  else texts = values.map((v) => stringValue(v, vr, tag));
   return encodeText(texts.join("\\"), vr, terms, tag);
 }
 
@@ -467,6 +491,30 @@ function writeDataset(
 }
 
 /**
+ * Refuse a Data Set whose elements read back with another VR than its JSON gives, at every depth.
+ * Under Implicit VR Little Endian no VR is written, and the reader takes the one PS3.5 and the
+ * dictionary give the tag (`UN` for a private one), so a value written as one VR would be read as
+ * another: `SS` -1 as `US` 65535.
+ */
+function refuseChangedVrs(json: Record<string, unknown>, ds: Dataset): void {
+  for (const [key, attr] of Object.entries(json)) {
+    const tag = key.toUpperCase();
+    // `writeDataset` has already refused an attribute that is not a record with a string `vr`.
+    const fields = attr as Record<string, unknown>;
+    const el = ds.get(tag);
+    // Stryker disable next-line OptionalChaining: equivalent, the reader reads back every element written; the check is there so a dropped one is refused with a code
+    const vr = el?.vr;
+    if (vr !== fields["vr"]) refuse(DICOM_JSON_ERROR_CODES.VR_MISMATCH, tag);
+    if (vr !== "SQ") continue;
+    // The reader descends every Sequence it reads as SQ, one Item for each the JSON gives.
+    const read = (el as Element).items as readonly Dataset[];
+    ((fields["Value"] ?? []) as Record<string, unknown>[]).forEach((item, i) => {
+      refuseChangedVrs(item, read[i] as Dataset);
+    });
+  }
+}
+
+/**
  * A {@link Dataset} from a DICOM JSON Model object (PS3.18 Annex F), written under the File Meta
  * the caller gives and read back by `parseDicom`, so `serializeDicom` writes it as Part 10.
  *
@@ -488,8 +536,11 @@ function writeDataset(
  *   `BULK_DATA_UNRESOLVED` for a `BulkDataURI` nothing resolved, `UNSUPPORTED_CHARACTER_SET` for
  *   text its Specific Character Set is not encoded under here, `UNSUPPORTED_BYTE_ORDER` for an
  *   `OW`, `OF`, `OD`, `OL` or `OV` value under Explicit VR Big Endian, `UNREPRESENTABLE_NUMBER` for
- *   a number out of its VR's range, and `VALUE_TOO_LONG` for a value its Value Length Field cannot
- *   hold.
+ *   a number out of its VR's range or an `FL` number float32 does not hold, `VALUE_TOO_LONG` for a
+ *   value its Value Length Field cannot hold, and `VR_MISMATCH` for an attribute whose VR the
+ *   written Data Set does not read back with, as under Implicit VR Little Endian, where no VR is
+ *   written. One value holding a delimiter its VR splits on (a backslash in a multi-valued string
+ *   or a Person Name, an `=` in a Person Name group) is `INVALID_JSON`, never split.
  * @example
  * ```ts
  * import { fromDicomJson, parseDicom, serializeDicom, toDicomJson } from "@cosyte/dicom";
@@ -517,5 +568,7 @@ export function fromDicomJson(json: DicomJsonDataset, options: FromDicomJsonOpti
   }
   // The 128-byte preamble and the `DICM` prefix (PS3.10).
   const preamble = Buffer.concat([Buffer.alloc(128), Buffer.from([0x44, 0x49, 0x43, 0x4d])]);
-  return parseDicom(Buffer.concat([preamble, encodeFileMeta(fileMeta), body]));
+  const ds = parseDicom(Buffer.concat([preamble, encodeFileMeta(fileMeta), body]));
+  refuseChangedVrs(json, ds);
+  return ds;
 }

@@ -401,8 +401,8 @@ describe("numbers", () => {
 describe("binary values", () => {
   it("reads every binary VR as InlineBinary and refuses the swapped ones under Big Endian", () => {
     const swapped: [string, VR][] = [
-      ["7FE00009", "OD"],
-      ["7FE00008", "OF"],
+      ["0014410C", "OD"],
+      ["0014410B", "OF"],
       ["00660040", "OL"],
       ["00720081", "OV"],
       ["00281201", "OW"],
@@ -582,9 +582,11 @@ describe("DicomJsonError", () => {
       UNSUPPORTED_BYTE_ORDER:
         "An OW, OF, OD, OL or OV value under Explicit VR Big Endian is refused: the byte order of its InlineBinary is not confirmed.",
       UNREPRESENTABLE_NUMBER:
-        "A number has no DICOM JSON or DICOM text form: NaN or an infinity, a DS or IS value that is not a number, or one too long for its VR.",
-      MALFORMED_VALUE: "A binary value's length is not a whole number of values for its VR.",
-      INVALID_JSON: "The input is not a DICOM JSON Model object of the shape PS3.18 Annex F gives.",
+        "A number cannot be carried exactly: NaN or an infinity, a DS or IS value that is not a number or that a JSON number does not hold exactly, one too long for its VR, or an FL value outside float32's normal range.",
+      MALFORMED_VALUE:
+        "A value is not well formed for its VR: a binary length that is not a whole number of values, a Person Name with more than three component groups, or text its Specific Character Set does not decode.",
+      INVALID_JSON:
+        "The input is not a DICOM JSON Model object of the shape PS3.18 Annex F gives, or one value holds a delimiter its VR splits on.",
       BULK_DATA_UNRESOLVED:
         "A BulkDataURI was not resolved to bytes by the resolveBulkData option.",
       UNSUPPORTED_CHARACTER_SET:
@@ -592,6 +594,10 @@ describe("DicomJsonError", () => {
       UNSUPPORTED_TRANSFER_SYNTAX:
         "fromDicomJson writes only Implicit VR Little Endian, Explicit VR Little Endian, Explicit VR Big Endian and Deflated Explicit VR Little Endian.",
       VALUE_TOO_LONG: "A value is too long for the Value Length Field of its VR.",
+      BULK_DATA_URI_REQUIRED:
+        "A bulk value such as Pixel Data is not written inline unless the inlineBulkData option is set: give it a URI through the bulkDataUri option.",
+      VR_MISMATCH:
+        "The written Data Set reads back with another VR than the JSON gives: under Implicit VR Little Endian the reader takes the VR PS3.5 and the dictionary give the tag, and UN for a private one.",
     };
     expect(Object.keys(DICOM_JSON_ERROR_CODES).sort()).toEqual(Object.keys(messages).sort());
     for (const [key, code] of Object.entries(DICOM_JSON_ERROR_CODES)) {
