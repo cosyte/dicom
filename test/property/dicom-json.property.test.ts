@@ -199,10 +199,12 @@ const cases = fc
     sequenceLength: fc.constantFrom("defined" as const, "undefined" as const),
   })
   .chain(({ transferSyntaxUID, sequenceLength }) =>
+    // Under ISO_IR 100, which holds the Latin-1 letters NAME and FREE draw: the default
+    // repertoire is ISO-IR 6 and holds none of them (PS3.5 section 6.1.2.1).
     dataset(transferSyntaxUID === TS_EXPLICIT_BE, 2).map((json) => ({
       transferSyntaxUID,
       sequenceLength,
-      json,
+      json: { "00080005": { vr: "CS", Value: ["ISO_IR 100"] }, ...json } as DicomJsonDataset,
     })),
   );
 
