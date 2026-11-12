@@ -81,6 +81,16 @@ const CHARSET_DOCUMENTS: readonly DifferentialDocument[] = [
   // Half-width katakana in JIS X 0201.
   { name: "charset/ISO_IR 13", bytes: charsetDocument("ISO_IR 13", [0xb1, 0xb2, 0xb3]) },
   { name: "charset/GBK", bytes: charsetDocument("GBK", [0xd5, 0xc5]) },
+  // Bytes a set leaves undefined, or reads otherwise than a WHATWG decoder of the same name: a C1
+  // byte under ISO_IR 100, a Latin-1 letter in the default repertoire, YEN SIGN and OVERLINE in
+  // JIS X 0201, and the euro sign ISO 8859-7:2003 added after ISO-IR 126 was registered.
+  { name: "charset/ISO_IR 100 C1", bytes: charsetDocument("ISO_IR 100", [0xe9, 0x80, 0x92]) },
+  { name: "charset/default high byte", bytes: charsetDocument("", [0xe9]) },
+  {
+    name: "charset/ISO_IR 13 5C 7E",
+    bytes: charsetDocument("ISO_IR 13", [0xb1, 0x7e, 0x5c, 0xb2]),
+  },
+  { name: "charset/ISO_IR 126 A4", bytes: charsetDocument("ISO_IR 126", [0xc1, 0xa4]) },
   // GB 2312 in G1 by its escape sequence, then JIS X 0212 in G0 by its own.
   {
     name: "charset/ISO 2022 IR 58",

@@ -20,14 +20,17 @@
  *
  * Fail-safe: bytes no designated set decodes read as U+FFFD and are never read
  * under another set, and three flags tell the caller what happened so it can
- * attach a warning. Zero runtime dependencies: every set decodes through a Node
- * full-ICU `TextDecoder` label, and a set whose label this runtime lacks reads
- * as U+FFFD.
+ * attach a warning. Zero runtime dependencies: a single-byte G1 set decodes by
+ * its own table (`./single-byte`), a 94x94 set through a Node full-ICU
+ * `TextDecoder` label, and a 94x94 set whose label this runtime lacks reads as
+ * U+FFFD.
  *
  * @module
  */
 
 import type { Buffer } from "node:buffer";
+
+import { g1Character } from "./single-byte.js";
 
 /**
  * Which single GL bytes of a value are delimiters, and so reset points:
@@ -63,7 +66,10 @@ const DEL = 0x7f;
 const BACKSLASH = 0x5c;
 const CARET = 0x5e;
 const EQUALS = 0x3d;
+const TILDE = 0x7e;
 const REPLACEMENT = String.fromCharCode(0xfffd);
+const YEN_SIGN = String.fromCharCode(0xa5);
+const OVERLINE = String.fromCharCode(0x203e);
 
 /** Value 1 terms that take no code extensions (PS3.5 2026d section 6.1.2.4). */
 const NO_CODE_EXTENSION_VALUE_1: ReadonlySet<string> = new Set(["ISO_IR 192", "GB18030", "GBK"]);
@@ -128,29 +134,6 @@ const TERM_ROWS: ReadonlyMap<string, TermRow> = (() => {
   for (const ir of [87, 159, 149, 58]) rows.set(`ISO 2022 IR ${String(ir)}`, { declares: [ir] });
   return rows;
 })();
-
-/**
- * The `TextDecoder` label for each single-byte G1 set: the label its
- * single-valued twin decodes under, so a byte reads the same with or without
- * code extensions.
- */
-const SINGLE_BYTE_LABELS: ReadonlyMap<number, string> = new Map([
-  [100, "latin1"],
-  [101, "iso-8859-2"],
-  [109, "iso-8859-3"],
-  [110, "iso-8859-4"],
-  [144, "iso-8859-5"],
-  [127, "iso-8859-6"],
-  [126, "iso-8859-7"],
-  [138, "iso-8859-8"],
-  [148, "iso-8859-9"],
-  [203, "iso-8859-15"],
-  [166, "windows-874"],
-  [13, "shift_jis"],
-]);
-
-/** ISO-IR 13 is a 94-character set, so `0xA0` and `0xFF` are outside it; the rest have 96. */
-const NINETY_FOUR_CHARACTER_G1: ReadonlySet<number> = new Set([13]);
 
 /** A 94x94 set: its decoder label, any byte its decoder needs first, and the cells it assigns. */
 interface DoubleByteSet {
@@ -227,28 +210,6 @@ function isCharacter(text: string): boolean {
   const cp = text.codePointAt(0);
   if (cp === undefined || String.fromCodePoint(cp).length !== text.length) return false;
   return cp >= 0x80 && cp !== 0xfffd && !(cp >= 0xe000 && cp <= 0xf8ff);
-}
-
-const singleByteTables = new Map<number, readonly (string | undefined)[]>();
-
-/** The character a GR byte encodes in single-byte G1 set `ir`, or `undefined`. */
-function singleByteCharacter(ir: number, byte: number): string | undefined {
-  let table = singleByteTables.get(ir);
-  if (table === undefined) {
-    const label = SINGLE_BYTE_LABELS.get(ir);
-    // Every G1 set an escape sequence can designate has a row in SINGLE_BYTE_LABELS.
-    /* v8 ignore next -- unreachable: no designated single-byte G1 set lacks a label. */
-    const decoder = label === undefined ? undefined : decoderFor(label);
-    const built: (string | undefined)[] = [];
-    for (let b = 0xa0; b <= 0xff; b += 1) {
-      const outside = NINETY_FOUR_CHARACTER_G1.has(ir) && (b === 0xa0 || b === 0xff);
-      const text = decoder === undefined || outside ? "" : decoder.decode(Uint8Array.of(b));
-      built.push(isCharacter(text) ? text : undefined);
-    }
-    table = built;
-    singleByteTables.set(ir, table);
-  }
-  return table[byte - 0xa0];
 }
 
 const pairCaches = new Map<number, Map<number, string | undefined>>();
@@ -349,8 +310,10 @@ export function usesCodeExtensions(
  * gives G0 ISO-IR 14 and G1 ISO-IR 13. A set is declared when a Value's table
  * row carries its escape sequence, and an empty Value 1 declares ISO-IR 6.
  *
- * ISO-IR 14's `0x5C` and `0x7E` stay U+005C and U+007E: `0x5C` is also the
- * value delimiter, and a consumer splits on `\`.
+ * ISO-IR 14 reads `0x7E` as OVERLINE, and `0x5C` as YEN SIGN where the VR has
+ * no `\` delimiter (`text`); elsewhere `0x5C` is the Value delimiter, as PS3.5
+ * section 6.1.2.3 has it whatever character the byte is, and reads as `\` so a
+ * consumer splits on it as under every other set.
  *
  * @internal
  */
@@ -427,7 +390,7 @@ export function decodeWithCodeExtensions(
           i += 1;
         }
       } else {
-        const text = singleByteCharacter(g1, byte);
+        const text = g1Character(g1, byte);
         if (text === undefined) replace();
         else out.push(text);
         i += 1;
@@ -464,10 +427,16 @@ export function decodeWithCodeExtensions(
       continue;
     }
 
-    // ISO-IR 6 or ISO-IR 14 in G0: GL bytes read as ASCII.
+    // ISO-IR 6 or ISO-IR 14 in G0: GL bytes read as ASCII, but for ISO-IR 14's own two.
     if (isDelimiter(byte, delimiters)) {
       out.push(String.fromCharCode(byte));
       reset();
+      i += 1;
+      continue;
+    }
+    const romaji = g0 === 14;
+    if (romaji && (byte === BACKSLASH || byte === TILDE)) {
+      out.push(byte === BACKSLASH ? YEN_SIGN : OVERLINE);
       i += 1;
       continue;
     }
@@ -475,6 +444,7 @@ export function decodeWithCodeExtensions(
     while (end < bytes.length) {
       const b = at(bytes, end);
       if (b < SPACE || b >= DEL || isDelimiter(b, delimiters)) break;
+      if (romaji && (b === BACKSLASH || b === TILDE)) break;
       end += 1;
     }
     out.push(bytes.toString("latin1", i, end));

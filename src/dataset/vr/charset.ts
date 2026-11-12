@@ -2,10 +2,12 @@
  * Specific Character Set `(0008,0005)` resolution + text decoding for the
  * VR value decoders.
  *
- * Zero runtime deps: decoding rides on Node 22's full-ICU `TextDecoder`
- * (the `@cosyte/dicom` ≤3-dep ceiling keeps `iconv-lite` in reserve only if
- * a future CJK case forces it). A multi-valued set's ISO 2022 code
- * extensions are decoded by `./iso2022`, set by set, on the same labels.
+ * Zero runtime deps. A single-byte set (the default repertoire, the ISO 8859
+ * parts, TIS 620 and JIS X 0201) decodes by its own table in `./single-byte`;
+ * the multi-byte sets ride on Node 22's full-ICU `TextDecoder` (the
+ * `@cosyte/dicom` ≤3-dep ceiling keeps `iconv-lite` in reserve only if a future
+ * CJK case forces it). A multi-valued set's ISO 2022 code extensions are
+ * decoded by `./iso2022`, set by set.
  *
  * Term-list corrections verified against PS3.3 §C.12.1.1.2 for this build
  * (the easy-to-get-wrong ones):
@@ -22,12 +24,18 @@ import type { Buffer } from "node:buffer";
 
 import { WITHHELD } from "../../parser/tokens.js";
 import { decodeWithCodeExtensions, usesCodeExtensions } from "./iso2022.js";
+import { decodeSingleByte, singleByteSetOf } from "./single-byte.js";
 
 /**
  * Defined term → `TextDecoder` label. Both the single-byte (`ISO_IR nnn`)
  * and the ISO-2022 code-extension (`ISO 2022 IR nnn`) spellings map to the
  * same decoder where a single-byte mapping exists; the multibyte
  * code-extension terms (87/159/149/58) map to their multibyte decoders.
+ *
+ * {@link decodeText} uses a label only for a multi-byte set. A single-byte
+ * term's label is the nearest WHATWG decoder, kept for
+ * {@link resolveDecoderLabel}'s callers, and is not its set: `latin1` is
+ * windows-1252 and `shift_jis` reads two bytes as one character.
  */
 const TERM_TO_LABEL: ReadonlyMap<string, string> = new Map([
   // Default repertoire (ISO 646 IRV / ASCII). Latin-1 is a lenient,
@@ -153,9 +161,12 @@ export function isKnownCharsetTerm(term: string): boolean {
  * the term list mixes single-byte and code-extension sets; falls back to
  * the default repertoire (Latin-1, lenient) when no term resolves.
  *
- * {@link decodeText} decodes under this label when the list has one term, or
- * when Value 1 is `ISO_IR 192`, `GB18030` or `GBK`. Any other multi-term list
- * decodes with ISO 2022 code extensions instead, whatever label this returns.
+ * {@link decodeText} decodes under this label only when it names a multi-byte
+ * set (`ISO_IR 192`, `GB18030`, `GBK`, or a multi-byte code-extension term sent
+ * alone). A single-byte set decodes by its own table, which this label only
+ * approximates: `latin1` is the WHATWG name of windows-1252, not ISO 8859-1,
+ * and `shift_jis` is not JIS X 0201. Any other multi-term list decodes with
+ * ISO 2022 code extensions, whatever label this returns.
  *
  * @example
  * ```ts
@@ -188,6 +199,13 @@ export function resolveDecoderLabel(terms: readonly string[] | undefined): strin
  * designated set decodes read as U+FFFD. Only the string is returned here;
  * `Element.value` carries the warnings for an element's value.
  *
+ * A single-byte set, and a list that names no set this build decodes, decodes
+ * by the set's own table (PS3.5 sections 6.1.1, 6.1.2.1 and 6.1.2.3): the
+ * default repertoire is ISO-IR 6, with nothing at `0x80` to `0xFF`; no set
+ * defines the C1 bytes `0x80` to `0x9F`; and under `ISO_IR 13` (JIS X 0201)
+ * `0x5C` is YEN SIGN and `0x7E` OVERLINE. A byte the set does not define reads
+ * as U+FFFD, never as another set's character.
+ *
  * Every other term list decodes under {@link resolveDecoderLabel}'s label: an
  * unsupported label falls back to UTF-8, then to Latin-1 (1:1, cannot fail).
  *
@@ -195,12 +213,15 @@ export function resolveDecoderLabel(terms: readonly string[] | undefined): strin
  * ```ts
  * import { decodeText } from "@cosyte/dicom";
  * const s = decodeText(buf, ["ISO_IR 192"]); // UTF-8
+ * decodeText(Buffer.from([0x45, 0x80]), ["ISO_IR 100"]); // "E" and U+FFFD: 0x80 is C1
  * // ESC $ B, the JIS X 0208 bytes of one character, ESC ( B
  * decodeText(Buffer.from([0x1b, 0x24, 0x42, 0x3b, 0x33, 0x1b, 0x28, 0x42]), ["", "ISO 2022 IR 87"]);
  * ```
  */
 export function decodeText(bytes: Buffer, terms: readonly string[] | undefined): string {
   if (usesCodeExtensions(terms)) return decodeWithCodeExtensions(bytes, terms, "text").text;
+  const set = singleByteSetIn(terms);
+  if (set !== undefined) return decodeSingleByte(bytes, set, "text").text;
   const label = resolveDecoderLabel(terms);
   try {
     return decoderFor(label).decode(bytes);
@@ -211,6 +232,26 @@ export function decodeText(bytes: Buffer, terms: readonly string[] | undefined):
       return bytes.toString("latin1");
     }
   }
+}
+
+/**
+ * The single-byte set a term list without code extensions decodes under, by
+ * the ISO-IR number of its G1 set (`6` for the default repertoire), or
+ * `undefined` when it names a multi-byte set. It is chosen as
+ * {@link resolveDecoderLabel} chooses its label: a multi-byte term wins, then
+ * the first known single-byte one, and a list that names no known term is the
+ * default repertoire.
+ *
+ * @internal
+ */
+export function singleByteSetIn(terms: readonly string[] | undefined): number | undefined {
+  let first: number | undefined;
+  for (const term of terms ?? []) {
+    const set = singleByteSetOf(term);
+    if (set === undefined && TERM_TO_LABEL.has(term)) return undefined;
+    first ??= set;
+  }
+  return first ?? 6;
 }
 
 type Decoder = InstanceType<typeof TextDecoder>;

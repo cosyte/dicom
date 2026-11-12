@@ -8,7 +8,8 @@ import { Buffer } from "node:buffer";
 
 import type { Dataset } from "../dataset/dataset.js";
 import type { Element } from "../dataset/element.js";
-import { decodeText, parseSpecificCharacterSet } from "../dataset/vr/charset.js";
+import { decodeText, parseSpecificCharacterSet, singleByteSetIn } from "../dataset/vr/charset.js";
+import { decodeSingleByte } from "../dataset/vr/single-byte.js";
 import { renderTag } from "../parser/tokens.js";
 import {
   codedError,
@@ -39,8 +40,6 @@ import {
 
 /** `0xFFFFFFFF` - the undefined-length sentinel (PS3.5 section 7.1.1). */
 const UNDEFINED_LENGTH = 0xffffffff;
-/** U+FFFD, which a decoder gives for bytes it has no character for. */
-const REPLACEMENT = String.fromCharCode(0xfffd);
 /** U+FEFF, the byte order mark. */
 const BYTE_ORDER_MARK = String.fromCharCode(0xfeff);
 
@@ -61,8 +60,9 @@ function trimEnd(text: string): string {
 }
 
 /**
- * The element's text: Latin-1 for a Default Repertoire VR, and for a charset VR the text
- * `decodeText`, the reader's own decoder, gives under `(0008,0005)`, so the two never disagree.
+ * The element's text: Latin-1 for a Default Repertoire VR, and for a charset VR the text the
+ * reader's own decoders give under `(0008,0005)` (a single-byte set's table, with `0x5C` read as
+ * its VR reads it, or `decodeText` for `ISO_IR 192`), so the two never disagree.
  * Only Specific Character Sets without code extensions are carried. Bytes the set does not
  * decode are refused, never read as U+FFFD, and a leading byte order mark is kept.
  * `fromDicomJson` reads back each text value it writes through this, so the two directions read
@@ -80,10 +80,14 @@ export function textOf(el: Element): string {
   const terms = el.specificCharacterSet ?? [];
   if (!carriesCharset(terms)) refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET, el);
   if (terms[0] !== "ISO_IR 192") {
-    // A single-byte set reads each byte as one character, or as U+FFFD where it has none.
-    const text = decodeText(bytes, terms);
-    if (text.includes(REPLACEMENT)) refuse(DICOM_JSON_ERROR_CODES.MALFORMED_VALUE, el);
-    return text;
+    // A single-byte set reads each byte as one character, or as U+FFFD where it has none. Under
+    // JIS X 0201 a 0x5C is YEN SIGN in ST, LT and UT and the Value delimiter elsewhere, as the
+    // reader has it.
+    const set = singleByteSetIn(terms) ?? 6;
+    const text = isSingleStringVr(el.vr) ? "text" : "multiValued";
+    const decoded = decodeSingleByte(bytes, set, text);
+    if (decoded.bytesUndecodable) refuse(DICOM_JSON_ERROR_CODES.MALFORMED_VALUE, el);
+    return decoded.text;
   }
   // UTF-8 drops a leading byte order mark, which the reader sets aside first, so this does too.
   const bom = bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf;

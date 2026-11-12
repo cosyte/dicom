@@ -172,12 +172,12 @@ function charsetOf(
  * of 7-bit ASCII is the same bytes under each of those sets, none of which uses code extensions,
  * and holds no control character {@link hasForbiddenControl} lets through but TAB, LF, FF and
  * CR; anything else is encoded only for the default repertoire and `ISO_IR 100` (as ISO 8859-1)
- * and `ISO_IR 192` (UTF-8). That is not yet a promise the text reads back the same: the reader
- * decodes the default repertoire and `ISO_IR 100` as windows-1252, where most C1 code points are
- * other characters, and UTF-8 has no lone surrogate. Nor does ISO 8859-1 hold a character past
+ * and `ISO_IR 192` (UTF-8). That is not yet a promise the text reads back the same: the default
+ * repertoire is ISO-IR 6 and defines no byte past `0x7F`, neither set defines the C1 bytes
+ * `0x80` to `0x9F`, and UTF-8 has no lone surrogate. Nor does ISO 8859-1 hold a character past
  * U+00FF, of which `Buffer` writes the low byte only. {@link refuseChangedElements} reads every
- * value back and refuses the ones that differ, those among them: no byte decodes, under either
- * reading, as the character past U+00FF it was cut from.
+ * value back and refuses the ones that differ, those among them: the reader decodes a byte its set
+ * does not define as U+FFFD, and no byte as the character past U+00FF it was cut from.
  */
 function encodeText(text: string, vr: string, terms: readonly unknown[], tag: string): Buffer {
   if (text.split("").every((c) => c.charCodeAt(0) <= 0x7f)) return Buffer.from(text);
@@ -505,7 +505,9 @@ function writeDataset(
     if (group === 0x0002 || group === 0xfffe) refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, tag);
     // PS3.5 section 7.8.1: "Elements with Tags (0001,xxxx), (0003,xxxx), (0005,xxxx), (0007,xxxx)
     // and (FFFF,xxxx) shall not be used."
-    if (group <= 0x0007 && group % 2 === 1) refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, tag);
+    if ((group <= 0x0007 && group % 2 === 1) || group === 0xffff) {
+      refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, tag);
+    }
     entries.push([n, tag, attr]);
   }
   entries.sort((a, b) => a[0] - b[0]);
@@ -546,8 +548,8 @@ function writeDataset(
  * - The text of a text VR, as {@link textOf} reads it through the reader's own decoder under the
  *   Specific Character Set the reader gives the element, against the text the JSON asked for and
  *   the one pad character an odd length takes. Any difference is `UNSUPPORTED_CHARACTER_SET`: the
- *   set the text was encoded in does not give it back (a C1 code point under a set the reader
- *   decodes as windows-1252, a lone surrogate under `ISO_IR 192`).
+ *   set the text was encoded in does not give it back (a character past U+007F under the default
+ *   repertoire, a C1 code point under `ISO_IR 100`, a lone surrogate under `ISO_IR 192`).
  *
  * Binary numbers, `AT` and binary VRs are written by fixed-width writes or as bytes, and read by
  * the same reads, with nothing decoded between.
@@ -573,7 +575,13 @@ function refuseChangedElements(json: Record<string, unknown>, ds: Dataset): void
     if (!isTextVr(read.vr)) continue;
     // `writeDataset` has already refused a `Value` that is not an array, and wrote this text.
     const text = textValue((fields["Value"] ?? []) as readonly unknown[], read.vr, tag);
-    const back = textOf(read);
+    // Bytes the set does not define are text it does not encode, refused as such here.
+    let back: string;
+    try {
+      back = textOf(read);
+    } catch {
+      return refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET, tag);
+    }
     const pad = read.vr === "UI" ? "\0" : " ";
     if (back !== text && back !== `${text}${pad}`) {
       refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET, tag);
@@ -603,15 +611,16 @@ function refuseChangedElements(json: Record<string, unknown>, ds: Dataset): void
  *   Deflated ones, `UNSUPPORTED_VR` for `SV`, `UV` or a VR PS3.5 does not define,
  *   `BULK_DATA_UNRESOLVED` for a `BulkDataURI` nothing resolved, `UNSUPPORTED_CHARACTER_SET` for
  *   text its Specific Character Set is not encoded under here or that the written Data Set does
- *   not read back as (a C1 code point under the default repertoire or `ISO_IR 100`, which the
- *   reader decodes as windows-1252, or a lone surrogate under `ISO_IR 192`), `UNSUPPORTED_BYTE_ORDER` for an
+ *   not read back as (a character past U+007F under the default repertoire, which is ISO-IR 6, a
+ *   C1 code point under `ISO_IR 100`, which no set defines, or a lone surrogate under
+ *   `ISO_IR 192`), `UNSUPPORTED_BYTE_ORDER` for an
  *   `OW`, `OF`, `OD`, `OL` or `OV` value under Explicit VR Big Endian, `UNREPRESENTABLE_NUMBER` for
  *   a number out of its VR's range or an `FL` number float32 does not hold, `VALUE_TOO_LONG` for a
  *   value its Value Length Field cannot hold, and `VR_MISMATCH` for an attribute whose VR the
  *   written Data Set does not read back with, as under Implicit VR Little Endian, where no VR is
  *   written. One value holding a delimiter its VR splits on (a backslash in a multi-valued string
  *   or a Person Name, an `=` in a Person Name group) is `INVALID_JSON`, never split, and so is a
- *   tag in group `0001`, `0003`, `0005` or `0007`. A Specific
+ *   tag in group `0001`, `0003`, `0005`, `0007` or `FFFF`. A Specific
  *   Character Set of more than one value, or one we do not carry (an ISO 2022 term, `GB18030`,
  *   `GBK`), at any depth, is `UNSUPPORTED_CHARACTER_SET`; text holding a control character its
  *   VR does not allow, ESC among them, is `MALFORMED_VALUE`; Sequences nested more than 64 deep
