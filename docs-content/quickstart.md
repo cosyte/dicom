@@ -16,7 +16,7 @@ its `(group,element)` tag.
 
 `@cosyte/dicom` is **metadata-first**: it reads the header, decodes typed values, and exposes pixel
 data as a raw `Buffer`. It never decodes pixels, and it is not a DIMSE/DICOMweb client. See
-[Troubleshooting](./troubleshooting) for the explicit non-goals.
+[Troubleshooting](./troubleshooting.md) for the explicit non-goals.
 
 > Every object below is **synthetic**: an invented patient ("Jane Doe"), obviously-fake UIDs and an
 > invented MRN, encoded as a base64 buffer. A DICOM object is PHI; a fixture must never hold a real
@@ -65,7 +65,7 @@ Every one of those fields is **typed-absent when the tag is absent**, never a su
 `ds.image.rescaleSlope` is `undefined` (not `1`) when Rescale Slope is missing; `ds.image.signed` is
 `undefined` unless Pixel Representation was present; the three pixel-spacing tags are distinct fields,
 never aliased. The dangerous DICOM failure is the confident, wrong image, so a missing value stays
-missing. See [Safety-critical views](./spec-notes-safety) for the full contract.
+missing. See [Safety-critical views](./spec-notes-safety.md) for the full contract.
 
 ## Reach any element by tag
 
@@ -114,21 +114,21 @@ parseDicom(Buffer.from("this is not a DICOM file, just some ASCII text here", "a
 
 ## Next
 
-- [Core concepts](./spec-notes-model): the Part 10 object model, the ways to read elements, the
-  tolerance tiers and warning codes, the error types, the typed value layer, the safety-critical
-  views, the source-profile system, and the supported transfer syntaxes.
-- [Recipes](./recipes) and the [cookbook](./cookbook): re-serialize spec-clean bytes, de-identify
-  before sharing, read raw pixel data, and triage warnings.
-- [Troubleshooting](./troubleshooting): symptom to cause, the fatal codes, and what a diagnostic may
-  and may not carry.
-- [Known limitations](./limitations): the "do not over-trust" list. What is out of scope (no pixel
+- **How-to guides.** The [recipes](./recipes.md): index a folder of studies, read only the header of
+  a large file, build routing keys, read pixel metadata and raw pixel data, de-identify before
+  sharing, bridge to FHIR and HL7 v2, and write bytes back out. The [cookbook](./cookbook.md):
+  triage warnings, read a veterinary patient, and check the dates on a de-identified object.
+  [Property-test your code](./property-testing.md) with our generators.
+- **Explanation.** [The object model](./spec-notes-model.md), [access patterns](./access-patterns.md),
+  [tolerance and warnings](./spec-notes-tolerance.md), [serialization](./serialization.md) and
+  [de-identification](./deidentification.md).
+- [Troubleshooting](./troubleshooting.md): symptom to cause, the fatal codes, and what a diagnostic
+  may and may not carry.
+- [Known limitations](./limitations.md): the "do not over-trust" list. What is out of scope (no pixel
   decode, no DIMSE, no DICOMweb), which PHI residuals are measured and still open, and what is never
-  defaulted. Read it, and [Scope and non-goals](./non-goals), before you point this
-  package at real data.
-- [Serialization](./serialization) and [De-identification](./deidentification): writing spec-clean
-  bytes back out, and stripping identifying metadata before you share an object.
+  defaulted. Read it, and [Scope and non-goals](./non-goals.md), before you point this package at
+  real data.
 
-> **About runnable examples.** The blocks tagged ` ```ts runnable ` above are extracted by the test
-> suite, executed against the built package, and their `// =>` results asserted, so a documented
-> example can never silently drift from the code (`docSnippetSuite()`, the documentation analog of
-> the parser conformance runners). Blocks shown as plain ` ```ts ` are illustrative.
+> **About the samples.** Every TypeScript sample in these docs is extracted by the test suite and
+> run against the built package, and its `// =>` results are asserted, so a documented example
+> cannot drift from the code. A sample that cannot run says why in its fence.

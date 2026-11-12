@@ -54,19 +54,23 @@ ds.patient.id; // => "MRN-42"
 ds.warnings.length; // => 0
 ```
 
-If that resolves and returns, the install is good. Head to the [Quickstart](./quickstart).
+If that resolves and returns, the install is good. Head to the [Quickstart](./quickstart.md).
 
 ## Module systems
 
 `@cosyte/dicom` is `"type": "module"` and exposes both conditions, so both of these resolve to the
 right build without extra configuration:
 
-```ts
+```ts runnable
 // ESM / TypeScript
 import { parseDicom, serializeDicom, deidentify } from "@cosyte/dicom";
+
+typeof parseDicom; // => "function"
+typeof serializeDicom; // => "function"
+typeof deidentify; // => "function"
 ```
 
-```js
+```js no-run it uses require, which the sample runner cannot call from an ES module
 // CommonJS
 const { parseDicom, serializeDicom, deidentify } = require("@cosyte/dicom");
 ```
@@ -87,5 +91,5 @@ obviously-fake UIDs and MRNs) encoded as a small base64 buffer so a snippet need
 Do the same in your own tests: a real DICOM object is PHI, and one committed to a repository is a
 leak the moment it publishes. The parser helps: every warning and error message carries only
 structural locators (attribute tag, byte offset, code), never a patient name, an identifier, or
-pixel content. See [Troubleshooting](./troubleshooting) for the redaction posture and the explicit
+pixel content. See [Troubleshooting](./troubleshooting.md) for the redaction posture and the explicit
 non-goals.

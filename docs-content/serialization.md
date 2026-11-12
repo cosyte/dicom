@@ -1,12 +1,12 @@
 ---
 id: serialization
-title: Serializing Part 10
+title: Serialization to Part 10
 sidebar_label: Serialization
-sidebar_position: 14
+sidebar_position: 13
 description: What serializeDicom guarantees when it writes a dataset back to Part 10 bytes, when it refuses, and what it never does.
 ---
 
-# Serializing Part 10
+# Serialization to Part 10
 
 `serializeDicom(ds)` writes a `Dataset` back to a Part 10 `Buffer`. It is the conservative half of
 Postel's Law: the parser accepts what real scanners emit, and the writer applies the guarantees
@@ -25,7 +25,7 @@ publishes.
   Group Length recomputed from what is actually written rather than copied from the source.
 - **The dataset body in the source transfer syntax.** The Transfer Syntax UID on the object decides
   every byte of the encoding, and the writer does not transcode. Under every encapsulation syntax
-  PS3.5 2026c section A.4 names (JPEG, JPEG-LS, JPEG 2000, HTJ2K, RLE, and the rest), the Data Set is
+  PS3.5 2026c section A.4 names ([Compatibility](./compatibility.md#supported-transfer-syntaxes) lists them), the Data Set is
   Explicit VR LE and the top-level Pixel Data is `OB` of undefined length: the source's Basic Offset
   Table and fragment Items byte for byte and in order, then a zero-length Sequence Delimitation Item.
   A top-level Pixel Data section A.4 does not allow is refused, not repaired (below).
@@ -139,7 +139,7 @@ than written stale, which would name the wrong bytes, or written as zero, which 
 the tree. `DIRECTORY_OFFSET_DEFLATED` means the DICOMDIR is written under Deflated Explicit VR LE with
 a non-zero offset, which names no Item a reader of a deflated stream can seek to; one whose offsets
 are all zero is written. The limits of the record model are on
-[Known limitations](./limitations).
+[Known limitations](./limitations.md).
 
 `VALUE_TOO_LONG_FOR_VR` means a Private Creator Data Element under an Explicit VR syntax, or a File
 Meta Information element under any (the File Meta group is always Explicit VR Little Endian), has a
@@ -154,7 +154,7 @@ no Transfer Syntax UID, length, or byte from the `Dataset` reaches it, so unlike
 ## What the writer will not do
 
 These are boundaries, not defects. The full list of package non-goals is on
-[Known limitations](./limitations); what follows is the part that belongs to the writer.
+[Known limitations](./limitations.md); what follows is the part that belongs to the writer.
 
 - **No transcode.** The body is re-emitted in the transfer syntax the object arrived in. Converting
   between syntaxes is a different operation with different failure modes, and this package does not
@@ -166,7 +166,7 @@ These are boundaries, not defects. The full list of package non-goals is on
   and re-emitted in ascending tag order, so a repeated non-modeled element is re-emitted repeated;
   that is unchanged behavior and is recorded here rather than fixed silently.
 - **The byte-for-byte File Meta round trip is scoped to parse-then-serialize.** It does **not** hold
-  for [de-identified](./deidentification) output, because a de-identified File Meta group describes
+  for [de-identified](./deidentification.md) output, because a de-identified File Meta group describes
   the de-identifying application instead of the source (PS3.15 §E.1.1). That is a deliberate fidelity
   loss and the report records it.
 - **A repeated tag is not recoverable here.** A parsed Data Set is a `Map<Tag, Element>`, so where the
@@ -176,6 +176,6 @@ These are boundaries, not defects. The full list of package non-goals is on
 
 ## Where to go next
 
-- A worked recipe with a fuller object: [Cookbook](./cookbook#6-re-serialize-a-parsed-object-to-spec-clean-bytes).
-- What the parser tolerated on the way in: [Tolerance and warnings](./spec-notes-tolerance).
-- Stripping identifying metadata before you share the bytes: [De-identification](./deidentification).
+- The steps, with a sample that runs: [Re-serialize a parsed object](./recipes.md#re-serialize-a-parsed-object-to-spec-clean-bytes).
+- What the parser tolerated on the way in: [Tolerance and warnings](./spec-notes-tolerance.md).
+- Stripping identifying metadata before you share the bytes: [De-identification](./deidentification.md).
