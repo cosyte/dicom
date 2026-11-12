@@ -8,8 +8,11 @@
 import { codedError } from "./errors.js";
 import type { DicomJsonDataset } from "./types.js";
 
-/** What a value is where it sits: a Data Set, one attribute, a Sequence's Items, or other JSON. */
-type Kind = "dataset" | "attribute" | "items" | "plain";
+/**
+ * What a value is where it sits: a Data Set, one attribute, or a Sequence's Items. `undefined` is
+ * any other JSON, which `JSON.stringify` writes.
+ */
+type Kind = "dataset" | "attribute" | "items" | undefined;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -47,7 +50,7 @@ function write(value: unknown, kind: Kind, indent: string, gap: string): string 
     const inner = `${indent}${gap}`;
     const parts: string[] = [];
     for (const key of keys) {
-      let child: Kind = "plain";
+      let child: Kind;
       if (kind === "dataset") child = "attribute";
       else if (key === "Value" && value["vr"] === "SQ") child = "items";
       const text = write(value[key], child, inner, gap);

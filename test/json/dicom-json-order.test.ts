@@ -154,6 +154,10 @@ describe("attribute order (PS3.18 F.2.2)", () => {
       "00081140": { vr: "SQ", Value: "not an array" },
       "00081150": { vr: "SQ", Value: [5, "x"], Extra: [{ b: 1, a: 2 }] },
       "00081155": 5,
+      "00081156": "SYNTHETIC",
+      "00081157": null,
+      "00081158": [{ b: 1 }],
+      "00081159": { vr: "LO", Extra: { vr: "SQ", Value: [{ b: 1, a: 2 }] } },
     } as unknown as DicomJsonDataset;
     expect(stringifyDicomJson(json)).toBe(
       JSON.stringify({
@@ -161,6 +165,10 @@ describe("attribute order (PS3.18 F.2.2)", () => {
         "00081140": json["00081140"],
         "00081150": json["00081150"],
         "00081155": 5,
+        "00081156": "SYNTHETIC",
+        "00081157": null,
+        "00081158": [{ b: 1 }],
+        "00081159": json["00081159"],
         "00100020": json["00100020"],
         "00101020": json["00101020"],
       }),
