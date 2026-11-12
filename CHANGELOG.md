@@ -1,5 +1,121 @@
 # Changelog
 
+## 0.1.16
+
+### Patch Changes
+
+- 420e2f9: New `toDicomJson` and `fromDicomJson` convert a Data Set to the DICOM JSON Model and back, metadata only, refusing by code what the model cannot carry.
+
+  - `toDicomJson(ds, options?)` returns one JSON object keyed by tag, each attribute with its `vr`
+    and its `Value`, `InlineBinary` (base64) or `BulkDataURI` (the `bulkDataUri` option chooses
+    which binary values go out by URI). File Meta and retired Group Length are left out. Pixel Data
+    and the other bulk values (Float and Double Float Pixel Data, Overlay Data, Waveform Data,
+    Spectroscopy Data, Encapsulated Document) need a URI, or the `inlineBulkData: true` opt-in, and
+    are refused with `BULK_DATA_URI_REQUIRED` otherwise.
+  - `fromDicomJson(json, { fileMeta, sequenceLength?, resolveBulkData? })` writes the JSON under the
+    File Meta it is given and returns the `Dataset` `parseDicom` reads from it, so `serializeDicom`
+    writes it as Part 10. Explicit VR LE, Implicit VR LE, Explicit VR BE and Deflated Explicit VR
+    LE are written.
+  - Part 10 to JSON to Part 10 is byte-identical where the source wrote what `fromDicomJson` writes:
+    the JSON Model records no Sequence length form, no `DS` or `IS` text beyond its number and no pad
+    byte, so a source that differs there comes back with the same JSON and different bytes.
+  - A value comes back exactly or is refused, never changed, apart from the losses listed above
+    and one more: an odd-length `InlineBinary` or resolved `BulkDataURI` is written with the NUL pad
+    byte Part 10 requires, and comes back with it. Refused with the new `DicomJsonError` (codes in
+    `DICOM_JSON_ERROR_CODES`): `SV` and `UV` values, encapsulated Pixel Data, `OW`, `OF`, `OD`, `OL`
+    and `OV` under Explicit VR Big Endian, numbers JSON or the VR cannot hold (a `DS` no double
+    holds exactly, an `FL` below float32's normal range, an `FL` or `FD` negative zero), a VR
+    Implicit VR would read back as another (`VR_MISMATCH`), a backslash or `=` inside one value, a
+    control character the VR does not allow (ESC among them), a Person Name of more than three
+    groups, text bytes the Specific Character Set does not decode, text it is not encoded under
+    here or that does not read back as itself (`fromDicomJson` reads every text value it writes back
+    through the reader's decoder, which reads a byte its set does not define as U+FFFD, so any
+    character past U+007F under the default repertoire (ISO-IR 6) is refused, as is every C1
+    code point (U+0080 to U+009F) under `ISO_IR 100`, and a lone surrogate under `ISO_IR 192`), a
+    tag in group `0001`, `0003`, `0005`, `0007` or `FFFF`, Sequences nested more than 64 deep
+    (`NESTING_TOO_DEEP`), and JSON of another shape. Any
+    other error, one a callback throws included, is `CONVERSION_FAILED`: nothing but a
+    `DicomJsonError` leaves either converter. PS3.18 is not vendored here, so the cases we could not
+    confirm against it are among the refusals.
+  - Specific Character Sets carried: one value of the default repertoire, a single-byte `ISO_IR` set
+    without code extensions, or `ISO_IR 192`. A Data Set with ISO 2022 code extensions, `GB18030` or
+    `GBK`, at any depth, is refused with `UNSUPPORTED_CHARACTER_SET`, even where `parseDicom` reads
+    it, and text is decoded by the same decoder `element.value` uses.
+  - New exports: `toDicomJson`, `fromDicomJson`, `DicomJsonError`, `DICOM_JSON_ERROR_CODES`, and the
+    types `DicomJsonErrorCode`, `DicomJsonDataset`, `DicomJsonAttribute`, `DicomJsonValue`,
+    `DicomJsonPersonName`, `ToDicomJsonOptions` and `FromDicomJsonOptions`. Nothing existing changes,
+    so no caller has to change.
+
+- f3b9d46: A caller can name the character set to read text under when a Data Set declares none: the `fallbackCharacterSet` option of `parseDicom`, `readDicomHeader` and `toDicomJson`.
+
+  - Files that write Latin-1 names with no `(0008,0005)`, or an empty one, read those letters as
+    U+FFFD since the default repertoire became ISO-IR 6 (PS3.5 section 6.1.2.1), and `toDicomJson`
+    refused them. With `{ fallbackCharacterSet: "ISO_IR 100" }` they read by the ISO 8859-1 table,
+    with no `DICOM_CHARSET_BYTES_UNDECODABLE` for a byte the set defines. The default is unchanged.
+  - The option takes one term of the new `FALLBACK_CHARACTER_SETS` export (type
+    `FallbackCharacterSet`): `ISO_IR 6`, a single-byte `ISO_IR` set, or `ISO_IR 192`. It applies
+    where `(0008,0005)` is absent or empty, in a Sequence Item too, and where it names a term we do
+    not decode only with `fallbackCharacterSetForUnknown: true`. A declared set is read as declared.
+  - A parse that reads text under the fallback adds one `DICOM_CHARSET_ASSUMED` warning, a new code,
+    at the first such element, naming its tag and no text. Like `DICOM_PARSE_STOPPED_BEFORE_TAG`, it
+    is never escalated by `strict` or a profile. A `switch` over `WarningCode` that lists every code
+    needs a `default` branch for it.
+  - Nothing written changes: `Element.rawBytes` keeps the bytes, `serializeDicom` writes them back,
+    and no `(0008,0005)` is added. `Element.specificCharacterSet` names the assumed set.
+  - A value outside the list is refused before anything is read: `parseDicom` and `readDicomHeader`
+    throw a `TypeError` whose `code` is `"DICOM_INVALID_OPTION"`, and `toDicomJson` a
+    `DicomJsonError` with the new code `INVALID_OPTION`. A `switch` over `DicomJsonErrorCode` that
+    lists every code needs a case or a `default` branch for it.
+  - The docs say what to do with files in the later Greek and Hebrew editions (ISO 8859-7:2003 and
+    ISO 8859-8:1999), whose added characters still read as U+FFFD under `ISO_IR 126` and
+    `ISO_IR 138`.
+
+- 6fe0ccd: Under Implicit VR Little Endian, an attribute PS3.6 lists with more than one VR now reads with the VR PS3.5 gives it, not the first listed.
+
+  - Pixel Data `(7FE0,0010)`, Overlay Data `(60xx,3000)`, Waveform Data `(5400,1010)`, Channel
+    Minimum Value `(5400,0110)`, Channel Maximum Value `(5400,0112)`, Waveform Padding Value
+    `(5400,100A)`, Dark Current Counts `(0014,3050)` and Air Counts `(0014,3070)` report `vr` `"OW"`
+    where they reported `"OB"`. A 16-bit value read as OB and written as Big Endian was never
+    byte-swapped, so every sample came out reversed.
+  - LUT Data `(0028,3006)` and Gray Lookup Table Data `(0028,1200)` report `"OW"` when the value is
+    longer than 65,534 bytes, which an Explicit VR US cannot declare, and `"US"` otherwise, as before.
+  - The US or SS attributes that hold a pixel sample value (Smallest and Largest Image Pixel Value,
+    Pixel Padding Value, Real World Value First and Last Value Mapped, Histogram First and Last Bin
+    Value and the rest) report `"SS"`, and `element.value` decodes them as signed, when the Pixel
+    Representation `(0028,0103)` read before them in their Data Set or an enclosing one is 1. They
+    stay `"US"` otherwise. The lookup table descriptors stay `"US"`.
+  - The bytes read do not change, and neither does an Explicit VR read. A caller that compared
+    `element.vr` to `"OB"` for native Pixel Data from an Implicit VR file compares it to `"OW"`, or
+    to either.
+
+- 8ab5152: Text under a single-byte Specific Character Set now decodes by that set's own table, byte for byte, so some bytes read as different text than before.
+
+  - Under `ISO_IR 100`, and with no `(0008,0005)` or `ISO_IR 6`, the bytes `0x80` to `0x9F` read as
+    U+FFFD where they read as windows-1252 characters (`0x80` was the euro sign). PS3.5 section 6.1.1
+    says the C1 set shall not be used, so no set defines them. `ISO_IR 148` read them as
+    windows-1254 and `ISO_IR 166` read nine of them as windows-874; they read as U+FFFD too.
+  - With no `(0008,0005)`, an empty one, or `ISO_IR 6`, every byte from `0x80` up reads as U+FFFD:
+    the default repertoire is ISO-IR 6 (PS3.5 section 6.1.2.1). A file that writes Latin-1 letters
+    without declaring `ISO_IR 100` now reads them as U+FFFD.
+  - `ISO_IR 13` and `ISO 2022 IR 13` read as JIS X 0201, not Shift_JIS. `0x7E` reads as OVERLINE,
+    and `0x5C` as YEN SIGN in `ST`, `LT` and `UT` (PS3.5 section 6.1.2.3); in `PN`, `LO`, `SH` and
+    `UC` it still separates Values. A byte past the half-width katakana, `0xE0` to `0xFF`, reads as
+    U+FFFD, and two bytes such as `81 5C` no longer read as one kanji.
+  - `ISO_IR 126` reads `0xA4`, `0xA5` and `0xAA` as U+FFFD, and `ISO_IR 138` reads `0xFD` and
+    `0xFE` as U+FFFD: ISO 8859-7:2003 and ISO 8859-8:1999 added those characters after ISO-IR 126 and
+    ISO-IR 138 were registered.
+  - A value holding a byte its single-byte set does not define now carries
+    `DICOM_CHARSET_BYTES_UNDECODABLE` on `element.value.warnings`, as one under ISO 2022 code
+    extensions already did. `element.rawBytes` keeps the bytes, so a caller that knows a file's real
+    encoding can still decode them. `decodeText` returns the same text without the warning.
+  - `toDicomJson` refuses such a value with `MALFORMED_VALUE`, and `fromDicomJson` refuses text that
+    would be written as such a byte with `UNSUPPORTED_CHARACTER_SET`: any character past U+007F under
+    the default repertoire, and every C1 code point under `ISO_IR 100`, where 27 of the 32 were
+    refused before. `fromDicomJson` also refuses an element in group `FFFF` with `INVALID_JSON`, as
+    PS3.5 section 7.8.1 rules it out with the odd groups below `0008`.
+  - `resolveDecoderLabel` returns the labels it did. They name the nearest WHATWG decoder, which
+    `decodeText` no longer uses for a single-byte set.
+
 ## 0.1.15
 
 ### Patch Changes
