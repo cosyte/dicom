@@ -46,7 +46,9 @@ export function compileErrors(
   paths: Readonly<Record<string, string>>,
   code: string,
 ): string[] {
-  const file = join(root, "first-use-example.mts");
+  // TypeScript names every file with forward slashes, so the in-memory file is named that way: on
+  // Windows a backslashed name would never match the host's lookups below.
+  const file = join(root, "first-use-example.mts").replaceAll("\\", "/");
   const options: ts.CompilerOptions = {
     ...READER_OPTIONS,
     typeRoots: [join(root, "node_modules", "@types")],
