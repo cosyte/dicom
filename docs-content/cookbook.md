@@ -27,9 +27,9 @@ name is deliberately narrow.
   (`vendor/nema/part06/`) is **2026d**, which carries every row cited here unchanged and is the copy
   the shipped data dictionary is generated from, and a test re-reads it to confirm that every
   `(gggg,eeee) Name` pair written on this site is the registry's own.
-- **Encoding rules** are cited to **PS3.5 2026c** and **de-identification rules to PS3.15 2026c**,
-  vendored and pinned the same way (`vendor/nema/part05/` and `vendor/nema/part15/` at 2026d,
-  whose clauses cited here are unchanged). Two checks of
+- **Encoding rules** are cited to **PS3.5 2026c** and **de-identification rules to PS3.15 2026c**.
+  The editions vendored and pinned the same way (`vendor/nema/part05/` and `vendor/nema/part15/`)
+  are **2026d**, which carries every clause cited here unchanged. Two checks of
   different strength run over those, and **what each one covers is worth stating exactly, because a
   citation gate that is described as total is a claim of its own**. A clause written in the form
   `PS3.N §X`, `PS3.N section X`, or `PS3.N Annex X`, with the label next to its part, is resolved in

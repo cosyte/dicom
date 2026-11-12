@@ -16,7 +16,6 @@ DOE^
 # every casing of every name on this list, which is the wrong direction for an allow-list.
 Doe^
 SYNTHETIC^
-PHANTOM^
 
 # --- Allow-listed exact PN values (full match) ---
 ANON^PATIENT
@@ -77,17 +76,6 @@ Yam^Tar
 # surname is admitted.
 Hong^Gildong
 Zhang^XiaoDong
-# The worked examples PS3.5 2026d itself prints, matched by the text sweep when the vendored
-# `vendor/nema/part05/<sha>/part05.xml` is in a changed set: the PN examples of section 6.2
-# ("Adams^John Robert Quincy^^Rev.^B.A. M.Div.", "Morrison-Jones^Susan^^^Ph.D., Chief Executive
-# Officer", "Smith^Fluffy", "ABC Farms^Running on Water") and the Chinese name example of Annex J
-# (`Wang^XiaoDong=<ideographic>=`). They are NEMA's published text, not anybody's record. Listed
-# EXACT, as the text sweep matches them, never as surname prefixes.
-Adams^John
-Morrison-Jones^Susan
-Smith^Fluffy
-Farms^Running
-Wang^XiaoDong
 
 # --- Allow-listed dates (8-char YYYYMMDD, ignored by 120-year check) ---
 DATE:19000101
@@ -112,14 +100,11 @@ DATE:70011003
 # identifier has the `YYYYMMDD` shape and the compact-date pass matches it.
 DATE:20170914
 
-# NEMA'S OWN TEXT, NOT A PATIENT'S. PS3.5 2026d section 6.2 gives `"19930822" would represent
-# August 22, 1993` as its DA example, and its compression note links WG-04 minutes by a URL that
-# carries `2004-02-18`. Both are in the vendored `vendor/nema/part05/<sha>/part05.xml`. The same
-# global widening as above applies: either date is now excused in every corpus this scanner reads.
-DATE:19930822
-DATE:20040218
-
 # --- Notes ---
+# A vendored standard needs no entry here. The scanner skips a file under
+# `vendor/.../<sha256>/` once its bytes hash to its pin (`isVerifiedVendorPin` in
+# scripts/phi-scan.ts), so the worked examples a standard prints (a sample name, a sample
+# date) are never excused in `test/` or `docs-content/` on its behalf.
 # To add a new synthetic identifier: append a line above and commit.
 # To bypass for one fixture without listing it here: run `pnpm phi-scan -- --allow-fixture <path>`
 # AND add a justification entry to phi-scan-overrides.md (otherwise the bypass is rejected).
