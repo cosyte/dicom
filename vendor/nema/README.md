@@ -31,6 +31,31 @@ edition on purpose, it is pinned exactly like the others, and the generator refu
 the current edition still points at it. It is also the only PDF here, because 2004 predates NEMA's
 DocBook sources.
 
+## Edition cadence
+
+NEMA publishes several editions of the standard a year, each named by year and letter (2026c,
+2026d, ...), and every part moves to the new edition at once. Our rule:
+
+1. **Each new edition is re-pinned within six weeks of its publication** on
+   `https://dicom.nema.org/medical/dicom/current/`. The three current-edition parts, `part05/`,
+   `part06/` and `part15/`, move together in one change, by the re-pinning procedure in each part's
+   section below, and the regenerated `src/dictionary/generated/` rides in the same commit.
+   `part05-2004/` is a frozen archive and does not move with the editions.
+2. **The Annex E rows of each edition are read for de-identification changes** before the re-pin
+   merges, whether or not the diff looks small. Read every Table E.1-1 row `pnpm gen:annex-e`
+   reports as added, every action-code override it prints, and every row of the edition's
+   correction proposals that touches PS3.15 Annex E. A changed or new action code changes what
+   `deidentify()` removes, so it gets a test that fails on the previous pin and a changeset that
+   names the edition.
+3. **A new transfer syntax in PS3.5 or PS3.6 Annex A gets a test** that reads a synthetic object in
+   it, in the same change.
+4. The pull request lists every added or changed tag, UID, transfer syntax and Annex E row the
+   generators report, so a reviewer can check the diff against the edition.
+
+The check is the `curl ... | sha256sum` comparison under each part's "Verifying the pin": a hash
+that differs from `SHA.txt` means a new edition is out and the six weeks have started. There is no
+automated staleness gate, for the reasons given under PS3.6.
+
 ## PS3.5, Part 5: repeating-group bound
 
 Two documents, because the bound is stated across two editions.

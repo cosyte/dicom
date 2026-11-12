@@ -43,6 +43,11 @@ After the build, CI's `examples` job runs `pnpm typecheck:examples`, `pnpm lint:
 `pnpm gen:clean`, `pnpm gen:all`, then `git diff --exit-code src/dictionary/generated/` must print
 nothing.
 
+Each new NEMA edition of PS3.5, PS3.6 and PS3.15 is re-pinned under `vendor/nema/` within six
+weeks of its publication, the three parts together, and the Annex E rows of each edition are read
+for de-identification changes before the re-pin merges. `vendor/nema/README.md` ("Edition cadence")
+holds the full rule.
+
 CI's `scaling-gate` job runs `pnpm test:perf`, the scaling gates in `test/perf/scaling-gate.perf.ts`:
 they fail when `parseDicom`, reading every tag, or `serializeDicom` grows faster than its input. They
 run apart from `pnpm test` and never under coverage.
