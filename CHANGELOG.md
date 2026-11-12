@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.1.15
+
+### Patch Changes
+
+- c87d521: New subpath `@cosyte/dicom/arbitraries`: the fast-check generators we test the parser with, for testing code you build on it.
+
+  - It exports `wellFormedModel()` and `encodeModel()`, a well-formed Data Set as a plain value and
+    its Part 10 bytes; `recoverableInput()`, files with one deviation the reader recovers from;
+    `fatalInput()`, input the reader refuses; `truncatedValidFile()`, `arbitraryBytes()`,
+    `dicomShapedGarbage()` and `fuzzInput()`; and the types `DicomModel` and `ModelElement`.
+    The docs page "Property testing with our generators" shows each one.
+  - `fast-check` 4 is an optional peer dependency: install it to use the subpath. The main entry
+    point, `@cosyte/dicom`, never loads it, and nothing a caller of it does needs to change.
+  - Every generated value is synthetic; nothing in one comes from a patient.
+
+- 8b4481b: `ds.patient` now reads a non-human patient's species, breed, neutered status and responsible person, tolerantly, reporting what it cannot read by code.
+
+  - New optional fields on `PatientView`: `speciesDescription` `(0010,2201)`, `speciesCode`
+    `(0010,2202)`, `sexNeutered` `(0010,2203)`, `breedDescription` `(0010,2292)`, `breedCode`
+    `(0010,2293)`, and `responsiblePerson` with `name` `(0010,2297)`, `role` `(0010,2298)` and
+    `organization` `(0010,2299)`. The species and breed codes are read through `readCode`.
+  - New optional `PatientView.issues`: present only when one of those attributes could not be read
+    as written (a VR the value does not decode from, a neutered status other than `ALTERED` or
+    `UNALTERED`, an empty, multi-item or incomplete code sequence). Nothing throws.
+  - New exports: the types `ResponsiblePerson`, `PatientIssue` and `PatientIssueCode`, and the frozen
+    registry `PATIENT_ISSUE_CODES`. New generator `animalPatientInput()` at
+    `@cosyte/dicom/arbitraries`.
+  - A caller changes nothing: on an object without these attributes, `ds.patient` has the same fields
+    as before. Code that builds its own `PatientView` value still compiles, since every new field is
+    optional. The cookbook's "Read a veterinary patient" recipe shows each field.
+
+- 8699e69: PS3.5 is re-pinned to the 2026d edition, so PS3.5, PS3.6 and PS3.15 are now all read from DICOM 2026d.
+
+  - The only change between PS3.5 2026c and 2026d is in section 8.2.5 (MPEG2 Main Profile): its
+    attribute values move into a new Table 8.2.5-1 that allows single-component `MONOCHROME2` data.
+    No tag, UID or transfer syntax was added, changed or removed, and nothing here reads section 8.2.5,
+    so parsing, writing and `deidentify()` behave as before.
+  - The repeating-group bound (section 7.6) and the section A.4 encapsulation syntaxes, 35 UIDs, are
+    regenerated from 2026d and are unchanged.
+  - The `UNSUPPORTED_TRANSFER_SYNTAX` fatal message now names "PS3.5 2026d section A.4" instead of
+    2026c. A caller that matches on `code` needs no change; one that matches the message text should
+    expect the new edition.
+
 ## 0.1.14
 
 ### Patch Changes
