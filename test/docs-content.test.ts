@@ -39,9 +39,15 @@ const root = join(import.meta.dirname, "..");
 /** Map the published entry points to their built ESM artifacts. */
 const ENTRY = join(root, "dist", "index.mjs");
 const ARBITRARIES_ENTRY = join(root, "dist", "arbitraries.mjs");
+/**
+ * Each as a `file:` URL, which the ESM loader takes on every system; a bare Windows path such as
+ * `D:\a\...` reads to it as a URL with the scheme `d:` and is refused.
+ */
 const resolveEntry = (specifier: string): string | undefined => {
-  if (specifier === "@cosyte/dicom") return ENTRY;
-  return specifier === "@cosyte/dicom/arbitraries" ? ARBITRARIES_ENTRY : undefined;
+  if (specifier === "@cosyte/dicom") return pathToFileURL(ENTRY).href;
+  return specifier === "@cosyte/dicom/arbitraries"
+    ? pathToFileURL(ARBITRARIES_ENTRY).href
+    : undefined;
 };
 
 beforeAll(() => {
