@@ -18,14 +18,22 @@ import type { Dataset } from "../dataset/dataset.js";
 import type { Element } from "../dataset/element.js";
 import { LONG_FORM_VRS } from "../parser/element-header.js";
 import { parseDicom } from "../parser/index.js";
+import { NESTING_DEPTH_LIMIT } from "../parser/sequence.js";
 import { renderTag } from "../parser/tokens.js";
 import { encodeFileMeta } from "../serialize/file-meta.js";
 import type { VR } from "../dictionary/types.js";
-import { DICOM_JSON_ERROR_CODES, DicomJsonError, type DicomJsonErrorCode } from "./errors.js";
+import {
+  codedError,
+  DICOM_JSON_ERROR_CODES,
+  DicomJsonError,
+  type DicomJsonErrorCode,
+} from "./errors.js";
 import { hasValueForm } from "./to-json.js";
 import type { DicomJsonDataset, FromDicomJsonOptions } from "./types.js";
 import {
+  carriesCharset,
   decimalKey,
+  hasForbiddenControl,
   isBinaryVr,
   isCharsetVr,
   isSingleStringVr,
@@ -136,8 +144,9 @@ class Writer {
 
 /**
  * The Specific Character Set terms a JSON Data Set names, or `inherited` when it names none.
- * {@link encodeText} reads a `null` first term as the empty one; a term that is not a string
- * matches no set, and the attribute itself is refused when it is written.
+ * {@link encodeText} reads a `null` first term as the empty one. A term that is neither a string
+ * nor `null` is refused as another shape; more than one term, or a set we do not carry (an ISO
+ * 2022 term with its code extensions, `GB18030`, `GBK`), as `UNSUPPORTED_CHARACTER_SET`.
  */
 function charsetOf(
   json: Record<string, unknown>,
@@ -148,23 +157,30 @@ function charsetOf(
   const value = attr["Value"];
   if (value === undefined) return [];
   if (!Array.isArray(value)) refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, "00080005");
-  return value;
+  const terms: readonly unknown[] = value;
+  if (terms.some((term) => term !== null && typeof term !== "string")) {
+    refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, "00080005");
+  }
+  if (!carriesCharset(terms.map((term) => term ?? ""))) {
+    refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET, "00080005");
+  }
+  return terms;
 }
 
 /**
- * Encode text under the terms in effect. Text of the Default Repertoire's 7-bit range is the same
- * bytes under every Specific Character Set; anything else is encoded only for the default
- * repertoire and `ISO_IR 100` (Latin-1, as the reader decodes them) and `ISO_IR 192` (UTF-8).
+ * Encode text under the one term in effect, which {@link charsetOf} has checked we carry. Text
+ * of 7-bit ASCII is the same bytes under each of those sets, none of which uses code extensions,
+ * and holds no control character {@link hasForbiddenControl} lets through but TAB, LF, FF and
+ * CR; anything else is encoded only for the default repertoire and `ISO_IR 100` (Latin-1, as the
+ * reader decodes them) and `ISO_IR 192` (UTF-8).
  */
 function encodeText(text: string, vr: string, terms: readonly unknown[], tag: string): Buffer {
   if (text.split("").every((c) => c.charCodeAt(0) <= 0x7f)) return Buffer.from(text);
   const first = terms[0] ?? "";
-  const single = terms.length <= 1;
-  if (!isCharsetVr(vr) || (single && (first === "" || first === "ISO_IR 6"))) {
+  if (!isCharsetVr(vr) || first === "" || first === "ISO_IR 6" || first === "ISO_IR 100") {
     return latin1(text, tag);
   }
-  if (single && first === "ISO_IR 100") return latin1(text, tag);
-  if (single && first === "ISO_IR 192") return Buffer.from(text);
+  if (first === "ISO_IR 192") return Buffer.from(text);
   return refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET, tag);
 }
 
@@ -355,7 +371,11 @@ function scalarValue(
   if (vr === "PN") texts = values.map((v) => personNameText(v, tag));
   else if (vr === "DS" || vr === "IS") texts = values.map((v) => numberText(v, vr, tag));
   else texts = values.map((v) => stringValue(v, vr, tag));
-  return encodeText(texts.join("\\"), vr, terms, tag);
+  const text = texts.join("\\");
+  // PS3.5 section 6.2: no control character but TAB, LF, FF and CR in LT, ST and UT, none in
+  // another VR, and ESC only for code extensions, which are not carried.
+  if (hasForbiddenControl(text, vr)) refuse(DICOM_JSON_ERROR_CODES.MALFORMED_VALUE, tag);
+  return encodeText(text, vr, terms, tag);
 }
 
 /** The bytes of one Sequence's Items, each with its Item header and, if undefined, delimiter. */
@@ -365,6 +385,7 @@ function writeItems(
   tag: string,
   terms: readonly unknown[],
   ctx: Context,
+  depth: number,
 ): void {
   for (const item of items) {
     if (!isRecord(item)) refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, tag);
@@ -372,14 +393,14 @@ function writeItems(
     w.u16(0xe000);
     if (ctx.undefinedLength) {
       w.u32(UNDEFINED_LENGTH);
-      writeDataset(w, item, terms, ctx);
+      writeDataset(w, item, terms, ctx, depth);
       w.u16(0xfffe);
       w.u16(0xe00d);
       w.u32(0);
     } else {
       const fill = w.u32Later();
       const start = w.length;
-      writeDataset(w, item, terms, ctx);
+      writeDataset(w, item, terms, ctx, depth);
       fill(w.length - start);
     }
   }
@@ -425,6 +446,7 @@ function writeSequence(
   tag: string,
   terms: readonly unknown[],
   ctx: Context,
+  depth: number,
 ): void {
   w.u16(group);
   w.u16(element);
@@ -434,7 +456,7 @@ function writeSequence(
   }
   if (ctx.undefinedLength) {
     w.u32(UNDEFINED_LENGTH);
-    writeItems(w, items, tag, terms, ctx);
+    writeItems(w, items, tag, terms, ctx, depth);
     w.u16(0xfffe);
     w.u16(0xe0dd);
     w.u32(0);
@@ -442,18 +464,24 @@ function writeSequence(
   }
   const fill = w.u32Later();
   const start = w.length;
-  writeItems(w, items, tag, terms, ctx);
+  writeItems(w, items, tag, terms, ctx, depth);
   const length = w.length - start;
   // Stryker disable next-line CallExpression: a Sequence past 4 GiB cannot be built in a test
   refuseIfLonger(length, MAX_LONG_LENGTH, tag);
   fill(length);
 }
 
+/**
+ * Write one Data Set. `depth` counts the Sequences it is nested in, 0 at the top: a Sequence it
+ * holds is nested one deeper, and past `NESTING_DEPTH_LIMIT` the reader would refuse it, so it is
+ * refused here first, before the next level is read.
+ */
 function writeDataset(
   w: Writer,
   json: Record<string, unknown>,
   inherited: readonly unknown[],
   ctx: Context,
+  depth: number,
 ): void {
   const terms = charsetOf(json, inherited);
   const entries: [number, string, unknown][] = [];
@@ -483,7 +511,8 @@ function writeDataset(
       }
       const items = attr["Value"] ?? [];
       if (!Array.isArray(items)) refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, tag);
-      writeSequence(w, group, element, items, tag, terms, ctx);
+      if (depth >= NESTING_DEPTH_LIMIT) refuse(DICOM_JSON_ERROR_CODES.NESTING_TOO_DEEP, tag);
+      writeSequence(w, group, element, items, tag, terms, ctx, depth + 1);
       continue;
     }
     const value = scalarValue(attr, vr, tag, terms, ctx);
@@ -548,7 +577,12 @@ function refuseChangedVrs(json: Record<string, unknown>, ds: Dataset): void {
  *   value its Value Length Field cannot hold, and `VR_MISMATCH` for an attribute whose VR the
  *   written Data Set does not read back with, as under Implicit VR Little Endian, where no VR is
  *   written. One value holding a delimiter its VR splits on (a backslash in a multi-valued string
- *   or a Person Name, an `=` in a Person Name group) is `INVALID_JSON`, never split.
+ *   or a Person Name, an `=` in a Person Name group) is `INVALID_JSON`, never split. A Specific
+ *   Character Set of more than one value, or one we do not carry (an ISO 2022 term, `GB18030`,
+ *   `GBK`), at any depth, is `UNSUPPORTED_CHARACTER_SET`; text holding a control character its
+ *   VR does not allow, ESC among them, is `MALFORMED_VALUE`; Sequences nested more than 64 deep
+ *   are `NESTING_TOO_DEEP`; and any other error, one the `resolveBulkData` option threw included,
+ *   is `CONVERSION_FAILED`: no other error leaves this function.
  * @example
  * ```ts
  * import { fromDicomJson, parseDicom, serializeDicom, toDicomJson } from "@cosyte/dicom";
@@ -559,6 +593,14 @@ function refuseChangedVrs(json: Record<string, unknown>, ds: Dataset): void {
  * ```
  */
 export function fromDicomJson(json: DicomJsonDataset, options: FromDicomJsonOptions): Dataset {
+  try {
+    return datasetFrom(json, options);
+  } catch (err) {
+    throw codedError(err);
+  }
+}
+
+function datasetFrom(json: DicomJsonDataset, options: FromDicomJsonOptions): Dataset {
   const fileMeta = options.fileMeta;
   const encoding = encodingOf(fileMeta.transferSyntaxUID);
   if (encoding === undefined) refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_TRANSFER_SYNTAX, undefined);
@@ -569,7 +611,7 @@ export function fromDicomJson(json: DicomJsonDataset, options: FromDicomJsonOpti
     resolveBulkData: options.resolveBulkData,
   };
   const w = new Writer(encoding.le);
-  writeDataset(w, json, [], ctx);
+  writeDataset(w, json, [], ctx, 0);
   let body = w.concat();
   if (fileMeta.transferSyntaxUID === "1.2.840.10008.1.2.1.99") {
     body = zlibModule().deflateRawSync(body);

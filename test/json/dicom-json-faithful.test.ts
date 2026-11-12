@@ -13,7 +13,6 @@ import { describe, expect, it } from "vitest";
 import {
   DICOM_JSON_ERROR_CODES,
   DicomJsonError,
-  decodeText,
   fromDicomJson,
   parseDicom,
   serializeDicom,
@@ -303,19 +302,16 @@ describe("text bytes its character set does not decode are refused", () => {
     );
   });
 
-  it("decodes code extensions as the reader does, escape sequences left out", () => {
-    const terms = ["", "ISO 2022 IR 149"];
-    // ESC $ ) C designates KS X 1001 to G1; then the two bytes of one Hangul syllable.
+  it("refuses code extensions, even text the reader decodes whole", () => {
+    // ESC $ ) C designates KS X 1001 to G1; then the two bytes of one Hangul syllable. The reader
+    // reads it, but code extensions are not carried, so the Data Set is refused.
     const bytes = Buffer.from([0x1b, 0x24, 0x29, 0x43, 0xb1, 0xe8]);
-    const json = toDicomJson(
-      parsed([
-        { tag: "00080005", vr: "CS", value: latin1("\\ISO 2022 IR 149 ") },
-        { tag: "00100020", vr: "LO", value: bytes },
-      ]),
-    );
-    const text = decodeText(bytes, terms);
-    expect(text).not.toContain("\u001b");
-    expect(json["00100020"]).toEqual({ vr: "LO", Value: [text] });
+    const ds = parsed([
+      { tag: "00080005", vr: "CS", value: latin1("\\ISO 2022 IR 149 ") },
+      { tag: "00100020", vr: "LO", value: bytes },
+    ]);
+    expect(ds.get("00100020")?.value).toMatchObject({ kind: "strings" });
+    expect(refusal(() => toDicomJson(ds))).toBe(DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET);
   });
 
   it("refuses bytes no designated set decodes under code extensions", () => {
@@ -331,7 +327,7 @@ describe("text bytes its character set does not decode are refused", () => {
           },
         ]),
       );
-    expect(refusal(run)).toBe(DICOM_JSON_ERROR_CODES.MALFORMED_VALUE);
+    expect(refusal(run)).toBe(DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET);
   });
 });
 

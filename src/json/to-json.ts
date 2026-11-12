@@ -4,14 +4,18 @@
  * @module
  */
 
-import type { Buffer } from "node:buffer";
+import { Buffer } from "node:buffer";
 
 import type { Dataset } from "../dataset/dataset.js";
 import type { Element } from "../dataset/element.js";
-import { resolveDecoderLabel } from "../dataset/vr/charset.js";
-import { decodeWithCodeExtensions, usesCodeExtensions } from "../dataset/vr/iso2022.js";
+import { decodeText, parseSpecificCharacterSet } from "../dataset/vr/charset.js";
 import { renderTag } from "../parser/tokens.js";
-import { DICOM_JSON_ERROR_CODES, DicomJsonError, type DicomJsonErrorCode } from "./errors.js";
+import {
+  codedError,
+  DICOM_JSON_ERROR_CODES,
+  DicomJsonError,
+  type DicomJsonErrorCode,
+} from "./errors.js";
 import type {
   DicomJsonAttribute,
   DicomJsonDataset,
@@ -20,6 +24,7 @@ import type {
   ToDicomJsonOptions,
 } from "./types.js";
 import {
+  carriesCharset,
   decimalKey,
   isBinaryVr,
   isBulkTag,
@@ -34,6 +39,10 @@ import {
 
 /** `0xFFFFFFFF` - the undefined-length sentinel (PS3.5 section 7.1.1). */
 const UNDEFINED_LENGTH = 0xffffffff;
+/** U+FFFD, which a decoder gives for bytes it has no character for. */
+const REPLACEMENT = String.fromCharCode(0xfffd);
+/** U+FEFF, the byte order mark. */
+const BYTE_ORDER_MARK = String.fromCharCode(0xfeff);
 
 function refuse(code: DicomJsonErrorCode, el: Element): never {
   throw new DicomJsonError(code, renderTag(el.tag));
@@ -52,25 +61,29 @@ function trimEnd(text: string): string {
 }
 
 /**
- * The element's text: through `(0008,0005)` for a charset VR, Latin-1 for the rest. Bytes the set
- * does not decode are refused, never read as U+FFFD, and a leading byte order mark is kept.
+ * The element's text: Latin-1 for a Default Repertoire VR, and for a charset VR the text
+ * `decodeText`, the reader's own decoder, gives under `(0008,0005)`, so the two never disagree.
+ * Only Specific Character Sets without code extensions are carried. Bytes the set does not
+ * decode are refused, never read as U+FFFD, and a leading byte order mark is kept.
  */
 function textOf(el: Element): string {
   const bytes = el.rawBytes;
   if (!isCharsetVr(el.vr)) return bytes.toString("latin1");
-  const terms = el.specificCharacterSet;
-  if (usesCodeExtensions(terms)) {
-    // Stryker disable next-line StringLiteral: equivalent, isDelimiter is false for every byte under both "text" and ""
-    const decoded = decodeWithCodeExtensions(bytes, terms, "text");
-    if (decoded.bytesUndecodable) refuse(DICOM_JSON_ERROR_CODES.MALFORMED_VALUE, el);
-    return decoded.text;
+  const terms = el.specificCharacterSet ?? [];
+  if (!carriesCharset(terms)) refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET, el);
+  if (terms[0] !== "ISO_IR 192") {
+    // A single-byte set reads each byte as one character, or as U+FFFD where it has none.
+    const text = decodeText(bytes, terms);
+    if (text.includes(REPLACEMENT)) refuse(DICOM_JSON_ERROR_CODES.MALFORMED_VALUE, el);
+    return text;
   }
-  try {
-    const decoder = new TextDecoder(resolveDecoderLabel(terms), { fatal: true, ignoreBOM: true });
-    return decoder.decode(bytes);
-  } catch {
-    return refuse(DICOM_JSON_ERROR_CODES.MALFORMED_VALUE, el);
-  }
+  // UTF-8 drops a leading byte order mark, which the reader sets aside first, so this does too.
+  const bom = bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf;
+  const body = bom ? bytes.subarray(3) : bytes;
+  const text = decodeText(body, terms);
+  // Valid UTF-8, and only that, encodes back to the same bytes: a real U+FFFD is kept.
+  if (!Buffer.from(text, "utf8").equals(body)) refuse(DICOM_JSON_ERROR_CODES.MALFORMED_VALUE, el);
+  return bom ? `${BYTE_ORDER_MARK}${text}` : text;
 }
 
 function personName(el: Element, text: string): DicomJsonPersonName | null {
@@ -130,7 +143,10 @@ function binaryNumbers(el: Element, bytes: Buffer, width: 2 | 4 | 8): number[] {
       default:
         n = le ? bytes.readDoubleLE(at) : bytes.readDoubleBE(at);
     }
-    if (!Number.isFinite(n)) refuse(DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER, el);
+    // JSON writes -0 as 0, which is another FL or FD value: refused, like NaN and the infinities.
+    if (!Number.isFinite(n) || Object.is(n, -0)) {
+      refuse(DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER, el);
+    }
     out.push(n);
   }
   return out;
@@ -224,6 +240,10 @@ function datasetOf(ds: Dataset, options: ToDicomJsonOptions): DicomJsonDataset {
   for (const el of ds.elements()) {
     // Group Length (gggg,0000) is left out, as serializeDicom leaves it out (PS3.5 section 7.2).
     if (el.tag.endsWith("0000")) continue;
+    // A Specific Character Set we do not carry is refused, whether or not any text follows it.
+    if (el.tag === "00080005" && !carriesCharset(parseSpecificCharacterSet(el.rawBytes))) {
+      refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET, el);
+    }
     out[el.tag] = attributeOf(el, options);
   }
   return out;
@@ -242,7 +262,8 @@ function datasetOf(ds: Dataset, options: ToDicomJsonOptions): DicomJsonDataset {
  * `InlineBinary`, or as a `BulkDataURI` where the `bulkDataUri` option gives one. Pixel Data and
  * the other bulk values are written inline only with the `inlineBulkData` option. An attribute
  * with an empty value has no value field. Text is decoded through `(0008,0005)` Specific Character
- * Set and `(0008,0005)` is kept as it is.
+ * Set, by the decoder `Element.value` uses, and `(0008,0005)` is kept as it is. Only one value of
+ * the default repertoire, a single-byte `ISO_IR` set or `ISO_IR 192` is carried.
  *
  * The result is a plain object: `JSON.stringify` writes it, and `fromDicomJson` reads it back.
  *
@@ -253,11 +274,14 @@ function datasetOf(ds: Dataset, options: ToDicomJsonOptions): DicomJsonDataset {
  * @throws {@link DicomJsonError} rather than change or guess a value: `UNSUPPORTED_VR` for `SV`
  *   and `UV`, `UNSUPPORTED_ELEMENT` for encapsulated Pixel Data or another undefined-length value
  *   that is not a read Sequence, `UNSUPPORTED_BYTE_ORDER` for an `OW`, `OF`, `OD`, `OL` or `OV`
- *   value under Explicit VR Big Endian, `UNREPRESENTABLE_NUMBER` for NaN, an infinity, or a `DS`
- *   or `IS` value that is not a number or that no JSON number holds exactly, `MALFORMED_VALUE` for
- *   a binary value whose length is not a whole number of values, a Person Name of more than three
- *   groups or text its Specific Character Set does not decode, and `BULK_DATA_URI_REQUIRED` for a
- *   bulk value with no URI and no `inlineBulkData`.
+ *   value under Explicit VR Big Endian, `UNREPRESENTABLE_NUMBER` for NaN, an infinity, an `FL` or
+ *   `FD` negative zero, or a `DS` or `IS` value that is not a number or that no JSON number holds
+ *   exactly, `MALFORMED_VALUE` for a binary value whose length is not a whole number of values, a
+ *   Person Name of more than three groups or text its Specific Character Set does not decode,
+ *   `UNSUPPORTED_CHARACTER_SET` for a Specific Character Set of more than one value or one we do
+ *   not carry, at any depth, `BULK_DATA_URI_REQUIRED` for a bulk value with no URI and no
+ *   `inlineBulkData`, and `CONVERSION_FAILED` for any other error, one the `bulkDataUri` option
+ *   threw included.
  * @example
  * ```ts
  * import { parseDicom, toDicomJson } from "@cosyte/dicom";
@@ -269,5 +293,9 @@ function datasetOf(ds: Dataset, options: ToDicomJsonOptions): DicomJsonDataset {
  * ```
  */
 export function toDicomJson(ds: Dataset, options: ToDicomJsonOptions = {}): DicomJsonDataset {
-  return datasetOf(ds, options);
+  try {
+    return datasetOf(ds, options);
+  } catch (err) {
+    throw codedError(err);
+  }
 }

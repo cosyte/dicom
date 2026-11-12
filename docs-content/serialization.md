@@ -98,11 +98,11 @@ The writer has its own error taxonomy, separate from the parser's `FATAL_CODES` 
 read-side structural corruption) and from the value layer's `DicomValueError`. It throws only with
 a code listed below.
 
-| Export                                                     | What it is                                                                                                                                   |
-| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SERIALIZE_ERROR_CODES`                                    | The frozen registry of the writer's codes: `MISSING_TRANSFER_SYNTAX`, `UNSUPPORTED_TRANSFER_SYNTAX`, `INVALID_ENCAPSULATED_PIXEL_DATA`, `DIRECTORY_OFFSET_UNRESOLVED`, `DIRECTORY_OFFSET_DEFLATED`, `VALUE_TOO_LONG_FOR_VR`. |
-| `SerializeErrorCode`                                       | The discriminant type over that registry, so a `switch` on a caught code is exhaustive.                                                      |
-| `DicomSerializeError`                                      | The thrown class. Narrow with `err instanceof DicomSerializeError`, then on `err.code`.                                                       |
+| Export                  | What it is                                                                                                                                                                                                                   |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SERIALIZE_ERROR_CODES` | The frozen registry of the writer's codes: `MISSING_TRANSFER_SYNTAX`, `UNSUPPORTED_TRANSFER_SYNTAX`, `INVALID_ENCAPSULATED_PIXEL_DATA`, `DIRECTORY_OFFSET_UNRESOLVED`, `DIRECTORY_OFFSET_DEFLATED`, `VALUE_TOO_LONG_FOR_VR`. |
+| `SerializeErrorCode`    | The discriminant type over that registry, so a `switch` on a caught code is exhaustive.                                                                                                                                      |
+| `DicomSerializeError`   | The thrown class. Narrow with `err instanceof DicomSerializeError`, then on `err.code`.                                                                                                                                      |
 
 `MISSING_TRANSFER_SYNTAX` means the `Dataset` carries no `fileMeta`, or its `transferSyntaxUID` is
 empty. The Transfer Syntax UID is the dispatch input that decides every byte of the encoding, so
@@ -206,24 +206,36 @@ serializeDicom(back).equals(serializeDicom(ds)); // => true
 
 How each VR is written, and read back the same way:
 
-| VR                                                         | JSON form                                                                                  |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `AE` `AS` `CS` `DA` `DT` `LO` `SH` `TM` `UC` `UI`          | `Value`: strings split on backslashes, padding removed, `null` for an empty value of several |
-| `LT` `ST` `UT` `UR`                                        | `Value`: one string, a backslash kept as a character                                       |
-| `PN`                                                       | `Value`: objects of `Alphabetic`, `Ideographic` and `Phonetic` component groups              |
-| `DS` `IS`                                                  | `Value`: JSON numbers of the text's exact decimal value                                    |
-| `US` `SS` `UL` `SL` `FL` `FD`                              | `Value`: JSON numbers                                                                      |
-| `AT`                                                       | `Value`: tags as eight uppercase hex digits                                                |
-| `SQ`                                                       | `Value`: nested Data Sets, `{}` for an empty Item                                          |
-| `OB` `OD` `OF` `OL` `OV` `OW` `UN`                         | `InlineBinary` (base64), or `BulkDataURI` where the `bulkDataUri` option gives one; bulk values inline only with `inlineBulkData: true` |
+| VR                                                | JSON form                                                                                                                               |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `AE` `AS` `CS` `DA` `DT` `LO` `SH` `TM` `UC` `UI` | `Value`: strings split on backslashes, padding removed, `null` for an empty value of several                                            |
+| `LT` `ST` `UT` `UR`                               | `Value`: one string, a backslash kept as a character                                                                                    |
+| `PN`                                              | `Value`: objects of `Alphabetic`, `Ideographic` and `Phonetic` component groups                                                         |
+| `DS` `IS`                                         | `Value`: JSON numbers of the text's exact decimal value                                                                                 |
+| `US` `SS` `UL` `SL` `FL` `FD`                     | `Value`: JSON numbers                                                                                                                   |
+| `AT`                                              | `Value`: tags as eight uppercase hex digits                                                                                             |
+| `SQ`                                              | `Value`: nested Data Sets, `{}` for an empty Item                                                                                       |
+| `OB` `OD` `OF` `OL` `OV` `OW` `UN`                | `InlineBinary` (base64), or `BulkDataURI` where the `bulkDataUri` option gives one; bulk values inline only with `inlineBulkData: true` |
 
 The shapes are typed: a `DicomJsonDataset` maps each tag to a `DicomJsonAttribute`, whose `Value`
 is an array of `DicomJsonValue`, a Person Name value being a `DicomJsonPersonName`. The options are
 `ToDicomJsonOptions` and `FromDicomJsonOptions`, and a refusal's code is a `DicomJsonErrorCode`.
 
 An attribute with an empty value has no value field. Text is decoded through `(0008,0005)`
-Specific Character Set, which is kept as it is, and encoded back under it. A `BulkDataURI` comes
-back through the `resolveBulkData` option of `fromDicomJson`; one it does not resolve is refused.
+Specific Character Set by the same decoder `element.value` uses, so the two never disagree;
+`(0008,0005)` is kept as it is, and text is encoded back under it. A `BulkDataURI` comes back
+through the `resolveBulkData` option of `fromDicomJson`; one it does not resolve is refused, and
+one it throws for is refused with `CONVERSION_FAILED`.
+
+**Specific Character Sets carried.** One value of the default repertoire (no value, an empty one,
+or `ISO_IR 6`), of a single-byte set without code extensions (`ISO_IR 100`, `101`, `109`, `110`,
+`144`, `127`, `126`, `138`, `148`, `203`, `13` and `166`), or `ISO_IR 192`. Both converters refuse
+any Data Set, at any depth, whose `(0008,0005)` has more than one value or names another set (an
+ISO 2022 term, `GB18030`, `GBK`) with `UNSUPPORTED_CHARACTER_SET`, even when it holds no text: the
+JSON Model has no place for the escape sequences of the code extensions of ISO 2022, and a converter that
+read them differently from the reader would change a name without a word. `fromDicomJson` writes
+text outside 7-bit ASCII only under the default repertoire and `ISO_IR 100` (as Latin-1) and
+`ISO_IR 192` (as UTF-8); under the other single-byte sets it writes 7-bit ASCII alone.
 
 **Bulk values are not written inline by default.** The model is for metadata, so Pixel Data
 `(7FE0,0010)`, Float and Double Float Pixel Data `(7FE0,0008)` and `(7FE0,0009)`, Overlay Data
@@ -257,6 +269,21 @@ code; it never writes a value it cannot carry faithfully:
 - **Text bytes.** Bytes the Specific Character Set does not decode, such as invalid UTF-8 under
   `ISO_IR 192`, are refused with `MALFORMED_VALUE` rather than read as U+FFFD, and a leading byte
   order mark is kept as U+FEFF.
+- **Control characters.** PS3.5 section 6.2 allows TAB, LF, FF and CR in `LT`, `ST` and `UT`, no
+  control character in any other string VR, and ESC only for code extensions, which are not
+  carried. `fromDicomJson` refuses text holding any other C0 control character (U+0000 to U+001F)
+  with `MALFORMED_VALUE`, under every Specific Character Set, so no escape sequence written as JSON
+  text can turn into other characters when it is read back. `toDicomJson` writes such a character
+  as it reads it.
+- **`FL` and `FD` negative zero.** JSON writes `-0` as `0`, which is another IEEE value, so
+  `toDicomJson` refuses an `FL` or `FD` negative zero with `UNREPRESENTABLE_NUMBER`.
+- **Nesting.** `parseDicom` reads Sequences nested at most 64 deep (`NESTING_DEPTH_LIMIT`), so
+  `fromDicomJson` refuses JSON nested deeper with `NESTING_TOO_DEEP` before it writes the next
+  level: neither the reader's error nor a stack overflow leaves it.
+- **No other error.** Any error a converter meets that no code above names, one a callback threw
+  included, is refused with `CONVERSION_FAILED`. The error it replaces is not kept, since its
+  message could hold a value; a `resolveBulkData` that cannot resolve a URI should return
+  `undefined`, which is refused with `BULK_DATA_UNRESOLVED`.
 
 **Where the bytes can differ.** The JSON Model does not record everything Part 10 does, so the
 round trip is byte-identical only where the source already wrote what `fromDicomJson` writes:
@@ -272,6 +299,11 @@ round trip is byte-identical only where the source already wrote what `fromDicom
 - **Padding.** Values are padded as PS3.5 pads them, `UI` with a NUL and other text with a space,
   so a `UI` a source padded with a space comes back padded with a NUL. Trailing spaces of a value
   are removed in the JSON.
+- **An odd-length binary value from JSON.** A Part 10 value has an even length, so an
+  `InlineBinary` or resolved `BulkDataURI` of an odd number of bytes is written with one NUL pad
+  byte after it. Read back, that byte is part of the value: `{ vr: "OB", InlineBinary: "AAAA" }`
+  (three bytes) comes back as `"AAAAAA=="` (four). JSON to Part 10 to JSON adds the byte; Part 10
+  to JSON to Part 10 never meets an odd value.
 - **A `UN` value read as a Sequence** comes back as `SQ`, and a DICOMDIR's Directory Record
   offsets name bytes of the file it was read from, so `serializeDicom` refuses the rebuilt Data
   Set with `DIRECTORY_OFFSET_UNRESOLVED`.
@@ -282,14 +314,17 @@ value, and the message carries no value. `UNSUPPORTED_VR`: `SV` and `UV` with a 
 attribute whose VR the written Data Set does not read back with.
 `UNSUPPORTED_ELEMENT`: encapsulated Pixel Data and any other undefined-length value that is not a
 Sequence. `UNSUPPORTED_BYTE_ORDER`: `OW`, `OF`, `OD`, `OL` and `OV` under Explicit VR Big Endian.
-`UNREPRESENTABLE_NUMBER`: NaN, an infinity, a `DS` or `IS` that is not a number or whose value
-no JSON number holds exactly, or a number its VR cannot hold. `MALFORMED_VALUE`: a binary length
-that is not a whole number of values, a Person Name of more than three groups, or text bytes the
-Specific Character Set does not decode. `UNSUPPORTED_CHARACTER_SET`: text `fromDicomJson` cannot
-encode, which is any character outside 7-bit ASCII under a Specific Character Set other than the default repertoire,
-`ISO_IR 100` and `ISO_IR 192`. `UNSUPPORTED_TRANSFER_SYNTAX`: `fromDicomJson` writes only the
-three uncompressed syntaxes and Deflated Explicit VR LE. `INVALID_JSON` (another shape, or a
-delimiter inside one value), `BULK_DATA_UNRESOLVED` and `VALUE_TOO_LONG` cover the rest.
+`UNREPRESENTABLE_NUMBER`: NaN, an infinity, an `FL` or `FD` negative zero, a `DS` or `IS` that is
+not a number or whose value no JSON number holds exactly, or a number its VR cannot hold.
+`MALFORMED_VALUE`: a binary length that is not a whole number of values, a Person Name of more
+than three groups, text bytes the Specific Character Set does not decode, or a control character
+the VR does not allow. `UNSUPPORTED_CHARACTER_SET`: a Specific Character Set of more than one value
+or one not carried, at any depth, or text `fromDicomJson` cannot encode, which is any character
+outside 7-bit ASCII under a set other than the default repertoire, `ISO_IR 100` and `ISO_IR 192`.
+`UNSUPPORTED_TRANSFER_SYNTAX`: `fromDicomJson` writes only the three uncompressed syntaxes and
+Deflated Explicit VR LE. `NESTING_TOO_DEEP`: Sequences nested more than 64 deep.
+`CONVERSION_FAILED`: any other error. `INVALID_JSON` (another shape, or a delimiter inside one
+value), `BULK_DATA_UNRESOLVED` and `VALUE_TOO_LONG` cover the rest.
 
 **What we have not checked against the standard.** PS3.18 is not vendored in this repository, so
 these forms are what we write and read, not a conformance verdict. The cases we could not confirm

@@ -231,15 +231,18 @@ describe("Specific Character Set", () => {
     );
   });
 
-  it("writes 7-bit text under any set, and refuses more only where it does not encode", () => {
+  it("writes 7-bit text under any set it carries, and refuses more only where it does not encode", () => {
     const ascii = { vr: "LO", Value: ["SYNTH\u007f"] };
+    const charset = { vr: "CS", Value: ["ISO_IR 101"] };
+    const ds = fromDicomJson({ "00080005": charset, "00100020": ascii }, LE);
+    expect(ds.get("00100020")?.rawBytes).toEqual(latin1("SYNTH\u007f"));
+    const json = { "00080005": charset, "00100020": { vr: "LO", Value: ["é"] } };
+    expect(refusal(() => fromDicomJson(json, LE))).toBe("UNSUPPORTED_CHARACTER_SET");
+    // Code extensions are not carried, so even 7-bit text under them is refused.
     const multi = { vr: "CS", Value: ["ISO_IR 100", "ISO 2022 IR 87"] };
-    for (const charset of [{ vr: "CS", Value: ["ISO_IR 101"] }, multi]) {
-      const ds = fromDicomJson({ "00080005": charset, "00100020": ascii }, LE);
-      expect(ds.get("00100020")?.rawBytes).toEqual(latin1("SYNTH\u007f"));
-      const json = { "00080005": charset, "00100020": { vr: "LO", Value: ["é"] } };
-      expect(refusal(() => fromDicomJson(json, LE))).toBe("UNSUPPORTED_CHARACTER_SET");
-    }
+    expect(refusal(() => fromDicomJson({ "00080005": multi, "00100020": ascii }, LE))).toBe(
+      "UNSUPPORTED_CHARACTER_SET",
+    );
   });
 
   it("encodes an Item's text under the set it inherits, or its own", () => {
@@ -587,15 +590,15 @@ describe("DicomJsonError", () => {
       UNSUPPORTED_BYTE_ORDER:
         "An OW, OF, OD, OL or OV value under Explicit VR Big Endian is refused: the byte order of its InlineBinary is not confirmed.",
       UNREPRESENTABLE_NUMBER:
-        "A number cannot be carried exactly: NaN or an infinity, a DS or IS value that is not a number or that a JSON number does not hold exactly, one too long for its VR, or an FL value outside float32's normal range.",
+        "A number cannot be carried exactly: NaN, an infinity or an FL or FD negative zero, a DS or IS value that is not a number or that a JSON number does not hold exactly, one too long for its VR, or an FL value outside float32's normal range.",
       MALFORMED_VALUE:
-        "A value is not well formed for its VR: a binary length that is not a whole number of values, a Person Name with more than three component groups, or text its Specific Character Set does not decode.",
+        "A value is not well formed for its VR: a binary length that is not a whole number of values, a Person Name with more than three component groups, text its Specific Character Set does not decode, or a control character the VR does not allow.",
       INVALID_JSON:
         "The input is not a DICOM JSON Model object of the shape PS3.18 Annex F gives, or one value holds a delimiter its VR splits on.",
       BULK_DATA_UNRESOLVED:
         "A BulkDataURI was not resolved to bytes by the resolveBulkData option.",
       UNSUPPORTED_CHARACTER_SET:
-        "Text cannot be written under the Specific Character Set in effect: only the default repertoire, ISO_IR 100 and ISO_IR 192 are encoded, each only with the characters it holds.",
+        "The Specific Character Set is not one we carry: only one value, the default repertoire, a single-byte ISO_IR set or ISO_IR 192, with no code extensions; and text outside 7-bit ASCII is written only under the default repertoire, ISO_IR 100 and ISO_IR 192.",
       UNSUPPORTED_TRANSFER_SYNTAX:
         "fromDicomJson writes only Implicit VR Little Endian, Explicit VR Little Endian, Explicit VR Big Endian and Deflated Explicit VR Little Endian.",
       VALUE_TOO_LONG: "A value is too long for the Value Length Field of its VR.",
@@ -603,6 +606,9 @@ describe("DicomJsonError", () => {
         "A bulk value such as Pixel Data is not written inline unless the inlineBulkData option is set: give it a URI through the bulkDataUri option.",
       VR_MISMATCH:
         "The written Data Set reads back with another VR than the JSON gives: under Implicit VR Little Endian the reader takes the VR PS3.5 and the dictionary give the tag, and UN for a private one.",
+      NESTING_TOO_DEEP: "Sequences are nested more than 64 deep, past what parseDicom reads.",
+      CONVERSION_FAILED:
+        "The conversion failed with an error no other code names, such as one a callback threw; that error is not kept, since its message could hold a value.",
     };
     expect(Object.keys(DICOM_JSON_ERROR_CODES).sort()).toEqual(Object.keys(messages).sort());
     for (const [key, code] of Object.entries(DICOM_JSON_ERROR_CODES)) {

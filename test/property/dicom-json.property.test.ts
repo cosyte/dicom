@@ -14,8 +14,12 @@
  * A second pair of properties draws the shapes a converter could change silently: a VR Implicit
  * VR reads back as another, a delimiter inside one value, a `DS` past what a double holds, an `FL`
  * below float32's normal range, a Person Name of four or five groups, bytes that are not UTF-8
- * under `ISO_IR 192`, and Pixel Data with and without the inline opt-in. Each comes back exactly,
- * or is refused with the code for its shape; never anything else.
+ * under `ISO_IR 192`, a control character a VR does not allow, an `FL` or `FD` negative zero, and
+ * Pixel Data with and without the inline opt-in. Each comes back exactly, or is refused with the
+ * code for its shape; never anything else.
+ *
+ * A last property hands `fromDicomJson` hostile JSON, any JSON value and Data Sets of near-valid
+ * shapes nested past the reader's limit, and holds that nothing but a `DicomJsonError` is thrown.
  *
  * Depth and seed come from `COSYTE_PROPERTY_RUNS` and `COSYTE_PROPERTY_SEED`
  * (`test/helpers/property.ts`). Every value is synthetic.
@@ -85,7 +89,7 @@ const personName = fc
 
 const decimal = fc
   .double({ noNaN: true, noDefaultInfinity: true, min: -1e9, max: 1e9 })
-  .filter((n) => String(n).length <= 16 && !Object.is(n, -0));
+  .filter((n) => String(n).length <= 16);
 
 const uid = fc
   .array(fc.integer({ min: 1, max: 99999 }), { minLength: 2, maxLength: 6 })
@@ -121,10 +125,7 @@ function attributes(bigEndian: boolean): Record<string, fc.Arbitrary<DicomJsonAt
   const out: Record<string, fc.Arbitrary<DicomJsonAttribute>> = {
     "00080008": value("CS", strings(chars(UPPER, 16))),
     "00080020": value("DA", strings(fc.constantFrom("19000101", "19001231"))),
-    "00089459": value(
-      "FL",
-      numbers(fc.float({ noNaN: true, noDefaultInfinity: true }).filter((n) => !Object.is(n, -0))),
-    ),
+    "00089459": value("FL", numbers(fc.float({ noNaN: true, noDefaultInfinity: true }))),
     "00081161": value("UL", numbers(fc.integer({ min: 0, max: 0xffffffff }))),
     "00100010": value("PN", fc.array(personName, { minLength: 1, maxLength: 2 })),
     "00100020": value(
@@ -142,10 +143,7 @@ function attributes(bigEndian: boolean): Record<string, fc.Arbitrary<DicomJsonAt
       chars(FREE, 200).map((s) => [s]),
     ),
     "00186020": value("SL", numbers(fc.integer({ min: -0x80000000, max: 0x7fffffff }))),
-    "00189089": value(
-      "FD",
-      numbers(fc.double({ noNaN: true, noDefaultInfinity: true }).filter((n) => !Object.is(n, -0))),
-    ),
+    "00189089": value("FD", numbers(fc.double({ noNaN: true, noDefaultInfinity: true }))),
     "00189219": value("SS", numbers(fc.integer({ min: -0x8000, max: 0x7fff }))),
     "0020000D": value(
       "UI",
@@ -207,6 +205,18 @@ const cases = fc
     })),
   );
 
+/**
+ * `true` when an `FL` or `FD` value of `json`, at any depth, is negative zero: JSON writes it as
+ * `0`, another value, so `toDicomJson` refuses it.
+ */
+function hasNegativeZero(json: DicomJsonDataset): boolean {
+  return Object.values(json).some((attr) => {
+    const values = attr.Value ?? [];
+    if (attr.vr === "SQ") return (values as DicomJsonDataset[]).some(hasNegativeZero);
+    return (attr.vr === "FL" || attr.vr === "FD") && values.some((v) => Object.is(v, -0));
+  });
+}
+
 describe("dicom conformance: DICOM JSON Model round trip", () => {
   it("JSON to Part 10 to JSON is the same JSON, and Part 10 to JSON to Part 10 the same bytes", () => {
     checkProperty(
@@ -214,9 +224,16 @@ describe("dicom conformance: DICOM JSON Model round trip", () => {
       fc.property(cases, ({ transferSyntaxUID, sequenceLength, json }) => {
         const options = { fileMeta: { transferSyntaxUID }, sequenceLength };
         const bytes = serializeDicom(fromDicomJson(json, options));
-        const back = JSON.parse(JSON.stringify(toDicomJson(parseDicom(bytes)))) as DicomJsonDataset;
+        let back: DicomJsonDataset | undefined;
+        const refused = refusalOf(() => {
+          back = JSON.parse(JSON.stringify(toDicomJson(parseDicom(bytes)))) as DicomJsonDataset;
+        });
+        // An FL or FD -0 is refused on the way back, and nothing else is.
+        if (refused !== undefined || hasNegativeZero(json)) {
+          return refused === "UNREPRESENTABLE_NUMBER" && hasNegativeZero(json);
+        }
         if (JSON.stringify(back) !== JSON.stringify(json)) return false;
-        const again = serializeDicom(fromDicomJson(back, options));
+        const again = serializeDicom(fromDicomJson(back as DicomJsonDataset, options));
         return again.equals(bytes);
       }),
     );
@@ -387,13 +404,15 @@ const part10Case: fc.Arbitrary<Part10Case> = fc.oneof(
       exact: groups.length <= 3,
     };
   }),
-  // Bytes under ISO_IR 192, valid UTF-8 or not: never read as U+FFFD.
+  // Bytes under ISO_IR 192, valid UTF-8 or not, with C0 controls or not: never read as U+FFFD,
+  // and no control an LO does not allow written back.
   fc
     .uint8Array({ minLength: 1, maxLength: 12 })
     .map((raw) => Buffer.from(raw.filter((b) => b !== 0x00 && b !== 0x20 && b !== 0x5c)))
     .filter((bytes) => bytes.length > 0)
     .map((bytes): Part10Case => {
       const valid = Buffer.from(bytes.toString("utf8"), "utf8").equals(bytes);
+      const control = bytes.some((b) => b < 0x20);
       const value = bytes.length % 2 === 1 ? Buffer.concat([bytes, Buffer.from(" ")]) : bytes;
       return {
         elements: [
@@ -402,7 +421,36 @@ const part10Case: fc.Arbitrary<Part10Case> = fc.oneof(
         ],
         code: "MALFORMED_VALUE",
         inline: false,
-        exact: valid,
+        exact: valid && !control,
+      };
+    }),
+  // FL and FD values, negative zero among them: JSON writes -0 as 0, so it is refused.
+  fc
+    .record({
+      fd: fc.boolean(),
+      values: fc.array(
+        fc.oneof(
+          fc.constant(-0),
+          fc.constant(0),
+          fc.double({ noNaN: true, noDefaultInfinity: true }),
+        ),
+        { minLength: 1, maxLength: 3 },
+      ),
+    })
+    .map(({ fd, values }): Part10Case => {
+      const width = fd ? 8 : 4;
+      const value = Buffer.alloc(values.length * width);
+      values.forEach((n, i) => {
+        if (fd) value.writeDoubleLE(n, i * width);
+        else value.writeFloatLE(Math.fround(n), i * width);
+      });
+      // Read back, a float32 past its range is an infinity, also refused.
+      const read = values.map((n) => (fd ? n : Math.fround(n)));
+      return {
+        elements: [{ tag: fd ? "00189087" : "00189089", vr: fd ? "FD" : "FL", value }],
+        code: "UNREPRESENTABLE_NUMBER",
+        inline: false,
+        exact: read.every((n) => Number.isFinite(n) && !Object.is(n, -0)),
       };
     }),
   // Pixel Data, inline only on request.
@@ -442,18 +490,18 @@ describe("dicom conformance: DICOM JSON Model, exact or refused", () => {
       "DICOM JSON exact or refused, from Part 10",
       fc.property(part10Case, ({ elements, code, inline, exact }) => {
         const source = parseDicom(buildDicom({ transferSyntax: TS_EXPLICIT_LE, elements }));
-        let json: DicomJsonDataset | undefined;
+        let back: ReturnType<typeof fromDicomJson> | undefined;
         const refused = refusalOf(() => {
-          json = JSON.parse(
+          const json = JSON.parse(
             JSON.stringify(toDicomJson(source, { inlineBulkData: inline })),
           ) as DicomJsonDataset;
+          back = fromDicomJson(json, { fileMeta: { transferSyntaxUID: TS_EXPLICIT_LE } });
         });
         if (refused !== undefined) return refused === code && !exact;
         if (!exact) return false;
-        const back = fromDicomJson(json as DicomJsonDataset, {
-          fileMeta: { transferSyntaxUID: TS_EXPLICIT_LE },
-        });
-        return serializeDicom(back).equals(serializeDicom(source));
+        return serializeDicom(back as ReturnType<typeof fromDicomJson>).equals(
+          serializeDicom(source),
+        );
       }),
     );
   });
@@ -482,6 +530,86 @@ describe("dicom conformance: DICOM JSON Model, exact or refused", () => {
           .trim();
         return sameDecimal(text, written);
       }),
+    );
+  });
+});
+
+/** VRs a hostile attribute names: every one PS3.5 defines, and some it does not. */
+const anyVr = fc.constantFrom(
+  ..."AE AS AT CS DA DS DT FD FL IS LO LT OB OD OF OL OV OW PN SH SL SQ SS ST SV TM UC UI UL UN UR US UT UV".split(
+    " ",
+  ),
+  "XX",
+  "lo",
+  "",
+);
+
+/** A value field of any JSON shape, near-valid ones weighted up. */
+const anyField = fc.oneof(
+  fc.jsonValue({ maxDepth: 2 }),
+  fc.array(fc.oneof(fc.string(), fc.double(), fc.integer(), fc.constant(null)), { maxLength: 3 }),
+  fc.array(
+    fc.dictionary(fc.constantFrom("Alphabetic", "Ideographic", "Phonetic", "x"), fc.string()),
+    {
+      maxLength: 2,
+    },
+  ),
+  fc.base64String({ maxLength: 12 }),
+);
+
+/** A hostile Data Set: tag keys or others, any VR, any value field, Items one level deeper. */
+const hostileDataset: fc.Arbitrary<unknown> = fc.letrec((tie) => ({
+  dataset: fc.dictionary(
+    fc.oneof(
+      tag,
+      fc.constantFrom("00080005", "00100010", "0040A730", "7FE00010", "FFFEE000", "00020010"),
+      fc.string({ maxLength: 9 }),
+    ),
+    fc.oneof(
+      { weight: 3, arbitrary: tie("attribute") },
+      { weight: 1, arbitrary: fc.jsonValue({ maxDepth: 1 }) },
+    ),
+    { maxKeys: 4 },
+  ),
+  attribute: fc.oneof(
+    fc.record(
+      { vr: anyVr, Value: anyField, InlineBinary: anyField, BulkDataURI: anyField },
+      { requiredKeys: ["vr"] },
+    ),
+    fc.record({
+      vr: fc.constant("SQ"),
+      Value: fc.array(tie("dataset"), { maxLength: 2 }),
+    }),
+  ),
+})).dataset;
+
+/** Data Sets nested `levels` deep, Sequences in Items. */
+const deepDataset = fc.integer({ min: 0, max: 300 }).map((levels) => {
+  let json: unknown = { "00100020": { vr: "LO", Value: ["X"] } };
+  for (let i = 0; i < levels; i++) json = { "00081115": { vr: "SQ", Value: [json] } };
+  return json;
+});
+
+describe("dicom conformance: DICOM JSON Model, hostile input", () => {
+  it("throws nothing but a DicomJsonError, whatever JSON it is given", () => {
+    checkProperty(
+      "DICOM JSON hostile input",
+      fc.property(
+        fc.oneof(hostileDataset, deepDataset, fc.anything()),
+        anySyntax,
+        fc.constantFrom("defined" as const, "undefined" as const),
+        (json, transferSyntaxUID, sequenceLength) => {
+          refusalOf(() => {
+            const ds = fromDicomJson(json as DicomJsonDataset, {
+              fileMeta: { transferSyntaxUID },
+              sequenceLength,
+              resolveBulkData: (uri) => (uri.length % 2 === 0 ? Buffer.from(uri) : undefined),
+            });
+            toDicomJson(ds, { inlineBulkData: true });
+          });
+          return true;
+        },
+      ),
     );
   });
 });

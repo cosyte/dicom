@@ -71,14 +71,17 @@ Thrown by `serializeDicom` for `MISSING_TRANSFER_SYNTAX` (the dataset names no t
 
 ## `DicomJsonError`
 
-Thrown by `toDicomJson` and `fromDicomJson` when a value cannot cross between Part 10 and the DICOM JSON Model without being changed or guessed at: `UNSUPPORTED_VR`, `UNSUPPORTED_ELEMENT`, `UNSUPPORTED_BYTE_ORDER`, `UNREPRESENTABLE_NUMBER`, `MALFORMED_VALUE`, `INVALID_JSON`, `BULK_DATA_UNRESOLVED`, `BULK_DATA_URI_REQUIRED`, `UNSUPPORTED_CHARACTER_SET`, `UNSUPPORTED_TRANSFER_SYNTAX`, `VALUE_TOO_LONG` and `VR_MISMATCH` (`DICOM_JSON_ERROR_CODES`). The message is fixed text and `err.tag` is the element's tag only when PS3.6 registers it one at a time, `"<withheld>"` otherwise, so neither carries a value. [Serialization](./serialization.md#the-dicom-json-model) says what each code refuses.
+Thrown by `toDicomJson` and `fromDicomJson` when a value cannot cross between Part 10 and the DICOM JSON Model without being changed or guessed at: `UNSUPPORTED_VR`, `UNSUPPORTED_ELEMENT`, `UNSUPPORTED_BYTE_ORDER`, `UNREPRESENTABLE_NUMBER`, `MALFORMED_VALUE`, `INVALID_JSON`, `BULK_DATA_UNRESOLVED`, `BULK_DATA_URI_REQUIRED`, `UNSUPPORTED_CHARACTER_SET`, `UNSUPPORTED_TRANSFER_SYNTAX`, `VALUE_TOO_LONG`, `VR_MISMATCH`, `NESTING_TOO_DEEP` and `CONVERSION_FAILED` (`DICOM_JSON_ERROR_CODES`). No other error leaves either converter: one a callback throws is replaced by `CONVERSION_FAILED`, and not kept. The message is fixed text and `err.tag` is the element's tag only when PS3.6 registers it one at a time, `"<withheld>"` otherwise, so neither carries a value. [Serialization](./serialization.md#the-dicom-json-model) says what each code refuses.
 
 ```ts runnable
 import { fromDicomJson, DicomJsonError } from "@cosyte/dicom";
 
 let code: string | undefined;
 try {
-  fromDicomJson({ "00100020": { vr: "LO", Value: [42] } }, { fileMeta: { transferSyntaxUID: "1.2.840.10008.1.2.1" } });
+  fromDicomJson(
+    { "00100020": { vr: "LO", Value: [42] } },
+    { fileMeta: { transferSyntaxUID: "1.2.840.10008.1.2.1" } },
+  );
 } catch (err) {
   if (err instanceof DicomJsonError) code = err.code;
 }

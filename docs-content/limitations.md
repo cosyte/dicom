@@ -27,18 +27,18 @@ been corrected twice and then deleted.
 
 These are non-goals, not gaps. Each is a companion package or another tool's job.
 
-| Not in v1                                                                                                                                                                                           | Where it goes         |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
-| **Pixel decode or decompression** in any transfer syntax, frame assembly from fragments, offset-table interpretation, rendering, windowing, or any measurement computed from pixels                 | `@cosyte/dicom-pixel` |
-| **Repairing a fragment stream on write.** `serializeDicom` writes each PS3.5 2026c section A.4 syntax and refuses a malformed top-level Pixel Data with `INVALID_ENCAPSULATED_PIXEL_DATA`           | out of scope          |
-| **Burned-in annotation removal / Clean Pixel Data.** A de-identified output from this package is **metadata-de-identified only**, and it warns rather than claiming otherwise                       | `@cosyte/dicom-pixel` |
-| **Networking.** No DIMSE: no C-STORE, C-FIND, C-MOVE, MWL or MPPS                                                                                                                                   | `@cosyte/dicom-net`   |
-| **Web services.** No DICOMweb: no QIDO, WADO or STOW. The DICOM JSON Model is converted (`toDicomJson`, `fromDicomJson`), but no `BulkDataURI` is fetched                                           | `@cosyte/dicomweb`    |
-| **Transcoding.** The serializer re-emits in the dataset's source transfer syntax only                                                                                                               | out of scope          |
-| **Terminology resolution.** Coded values are surfaced with their designator and canonical source but are never validated, looked up, or cross-mapped; `SRT` is not normalized to `SCT`              | `@cosyte/terminology` |
-| **Typed SR and RT models.** SR content trees and RT objects are navigable as raw structure, with no clinical model over them. Deliberately flagged and deferred rather than half-built              | out of scope for v1   |
-| **Patient matching.** Patient ID is surfaced with its issuer; the library never decides that two identifiers are the same person                                                                    | out of scope          |
-| **A File-set view.** A DICOMDIR's Directory Record tree is read and its offsets rewritten on write (below), but no DICOMDIR is built from files and nothing is removed from a File-set               | out of scope for v1   |
+| Not in v1                                                                                                                                                                                 | Where it goes         |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| **Pixel decode or decompression** in any transfer syntax, frame assembly from fragments, offset-table interpretation, rendering, windowing, or any measurement computed from pixels       | `@cosyte/dicom-pixel` |
+| **Repairing a fragment stream on write.** `serializeDicom` writes each PS3.5 2026c section A.4 syntax and refuses a malformed top-level Pixel Data with `INVALID_ENCAPSULATED_PIXEL_DATA` | out of scope          |
+| **Burned-in annotation removal / Clean Pixel Data.** A de-identified output from this package is **metadata-de-identified only**, and it warns rather than claiming otherwise             | `@cosyte/dicom-pixel` |
+| **Networking.** No DIMSE: no C-STORE, C-FIND, C-MOVE, MWL or MPPS                                                                                                                         | `@cosyte/dicom-net`   |
+| **Web services.** No DICOMweb: no QIDO, WADO or STOW. The DICOM JSON Model is converted (`toDicomJson`, `fromDicomJson`), but no `BulkDataURI` is fetched                                 | `@cosyte/dicomweb`    |
+| **Transcoding.** The serializer re-emits in the dataset's source transfer syntax only                                                                                                     | out of scope          |
+| **Terminology resolution.** Coded values are surfaced with their designator and canonical source but are never validated, looked up, or cross-mapped; `SRT` is not normalized to `SCT`    | `@cosyte/terminology` |
+| **Typed SR and RT models.** SR content trees and RT objects are navigable as raw structure, with no clinical model over them. Deliberately flagged and deferred rather than half-built    | out of scope for v1   |
+| **Patient matching.** Patient ID is surfaced with its issuer; the library never decides that two identifiers are the same person                                                          | out of scope          |
+| **A File-set view.** A DICOMDIR's Directory Record tree is read and its offsets rewritten on write (below), but no DICOMDIR is built from files and nothing is removed from a File-set    | out of scope for v1   |
 
 Supported transfer syntaxes: the four native ones plus **every encapsulation syntax PS3.5 2026c
 section A.4 names**, listed in
@@ -405,9 +405,14 @@ on the wire.
   Data, and text outside 7-bit ASCII under most Specific Character Sets), is refused with a
   `DicomJsonError`. So is every value that would change on the way: a VR Implicit VR reads back as
   another, a delimiter inside one value, a `DS` no double holds exactly, an `FL` below float32's
-  normal range, a Person Name of more than three groups, and text bytes its Specific Character Set
-  does not decode. Pixel Data and the other bulk values need a `BulkDataURI` unless
-  `inlineBulkData: true` is passed. See [Serialization](./serialization.md#the-dicom-json-model).
+  normal range, an `FL` or `FD` negative zero, a Person Name of more than three groups, text bytes
+  its Specific Character Set does not decode, and a control character its VR does not allow. Only
+  one Specific Character Set value is carried, the default repertoire, a single-byte set or
+  `ISO_IR 192`: a Data Set with the code extensions of ISO 2022, `GB18030` or `GBK`, at any depth, is
+  refused, even one the reader decodes. JSON nested more than 64 Sequences deep is refused, and
+  an odd-length `InlineBinary` comes back with the NUL pad byte Part 10 gives it. Pixel Data and
+  the other bulk values need a `BulkDataURI` unless `inlineBulkData: true` is passed. See
+  [Serialization](./serialization.md#the-dicom-json-model).
 - **`NESTING_DEPTH_LIMIT` is this library's bound, not the standard's.** A fully conformant file
   nested deeper than it is refused, and a sequence refused that way is emptied by `deidentify()`
   rather than shipped, so expect data loss on such a file.
@@ -431,15 +436,15 @@ than substituting a plausible value. `undefined` means the object did not carry 
 
 ## 5. Where the detail lives
 
-| Topic                                                                       | Page                                                                 |
-| --------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| The error model and symptom-by-symptom triage                               | [Troubleshooting](./troubleshooting.md)                                 |
-| What a diagnostic carries and what it does not                              | [Tolerance](./spec-notes-tolerance.md)                                  |
-| Keeping PHI out of logs                                                     | [Keeping PHI out of logs](./troubleshooting.md#keeping-phi-out-of-logs) |
-| The safety-critical views and their fail-safe rules                         | [Safety](./spec-notes-safety.md)                                        |
-| Writing bytes back out, and what the writer will not do                     | [Serialization](./serialization.md)                                     |
-| The de-identification surface and the scope limits on it                    | [De-identification](./deidentification.md)                              |
-| Working recipes, each citing the PS3 clause it reads                        | [Recipes](./recipes.md) and the [cookbook](./cookbook.md)               |
+| Topic                                                    | Page                                                                    |
+| -------------------------------------------------------- | ----------------------------------------------------------------------- |
+| The error model and symptom-by-symptom triage            | [Troubleshooting](./troubleshooting.md)                                 |
+| What a diagnostic carries and what it does not           | [Tolerance](./spec-notes-tolerance.md)                                  |
+| Keeping PHI out of logs                                  | [Keeping PHI out of logs](./troubleshooting.md#keeping-phi-out-of-logs) |
+| The safety-critical views and their fail-safe rules      | [Safety](./spec-notes-safety.md)                                        |
+| Writing bytes back out, and what the writer will not do  | [Serialization](./serialization.md)                                     |
+| The de-identification surface and the scope limits on it | [De-identification](./deidentification.md)                              |
+| Working recipes, each citing the PS3 clause it reads     | [Recipes](./recipes.md) and the [cookbook](./cookbook.md)               |
 
 Everything on this page is a documented boundary rather than a bug. Where a limitation applies, the
 raw bytes are preserved (usually with a warning); they are simply not interpreted further.

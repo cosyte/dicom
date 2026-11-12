@@ -44,6 +44,72 @@ export function isCharsetVr(vr: string): boolean {
 }
 
 /**
+ * `true` for a Specific Character Set term both converters carry: the default repertoire (empty,
+ * or `ISO_IR 6`), a single-byte `ISO_IR` set of PS3.3 Table C.12-2, or `ISO_IR 192`. Not an ISO
+ * 2022 term, whose code extensions the converters do not carry, nor `GB18030` or `GBK`.
+ *
+ * @example
+ * ```ts
+ * isCarriedCharsetTerm("ISO_IR 100"); // true
+ * isCarriedCharsetTerm("ISO 2022 IR 100"); // false
+ * ```
+ */
+export function isCarriedCharsetTerm(term: unknown): boolean {
+  return [
+    "",
+    "ISO_IR 6",
+    "ISO_IR 100",
+    "ISO_IR 101",
+    "ISO_IR 109",
+    "ISO_IR 110",
+    "ISO_IR 144",
+    "ISO_IR 127",
+    "ISO_IR 126",
+    "ISO_IR 138",
+    "ISO_IR 148",
+    "ISO_IR 203",
+    "ISO_IR 13",
+    "ISO_IR 166",
+    "ISO_IR 192",
+  ].includes(term as string);
+}
+
+/**
+ * `true` for Specific Character Set terms both converters carry: one value at most, and that one
+ * a term {@link isCarriedCharsetTerm} names.
+ *
+ * @example
+ * ```ts
+ * carriesCharset(["ISO_IR 192"]); // true
+ * carriesCharset(["", "ISO 2022 IR 87"]); // false
+ * ```
+ */
+export function carriesCharset(terms: readonly unknown[]): boolean {
+  return terms.length <= 1 && terms.every(isCarriedCharsetTerm);
+}
+
+/**
+ * `true` when `text` holds a C0 control character `vr` does not allow. PS3.5 section 6.2 allows
+ * TAB, LF, FF and CR in `LT`, `ST` and `UT`, and no control character in any other string VR but
+ * ESC, which only ISO 2022 code extensions use and the converters do not carry.
+ *
+ * @example
+ * ```ts
+ * hasForbiddenControl("A\r\nB", "LT"); // false
+ * hasForbiddenControl("A\u001bB", "LO"); // true
+ * ```
+ */
+export function hasForbiddenControl(text: string, vr: string): boolean {
+  const formatted = vr === "LT" || vr === "ST" || vr === "UT";
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (c >= 0x20) continue;
+    if (!formatted || (c !== 0x09 && c !== 0x0a && c !== 0x0c && c !== 0x0d)) return true;
+  }
+  return false;
+}
+
+/**
  * The width in bytes of one value of a binary number VR written as a JSON number, or `undefined`
  * for any other VR.
  *
