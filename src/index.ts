@@ -63,6 +63,8 @@ export {
   isKnownCharsetTerm,
   resolveDecoderLabel,
   decodeText,
+  FALLBACK_CHARACTER_SETS,
+  type FallbackCharacterSet,
 } from "./dataset/vr/charset.js";
 export { parsePersonName } from "./dataset/vr/person-name.js";
 export { parseDate, parseTime, parseDateTime } from "./dataset/vr/datetime.js";

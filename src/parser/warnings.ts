@@ -76,6 +76,7 @@ export const WARNING_CODES = {
 
   // === Charset-decode codes (declared here; the text decoders fire them) ===
   DICOM_CHARSET_AMBIGUOUS_SEPARATOR: "DICOM_CHARSET_AMBIGUOUS_SEPARATOR",
+  DICOM_CHARSET_ASSUMED: "DICOM_CHARSET_ASSUMED",
   DICOM_CHARSET_BYTES_UNDECODABLE: "DICOM_CHARSET_BYTES_UNDECODABLE",
   DICOM_CHARSET_ESCAPE_UNDECLARED: "DICOM_CHARSET_ESCAPE_UNDECLARED",
   DICOM_CHARSET_EXTENSION_NOT_RESET: "DICOM_CHARSET_EXTENSION_NOT_RESET",
@@ -523,6 +524,12 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
     "Element ({tag}) DT value has a non-standard UTC offset; decoded best-effort, raw preserved.",
   DICOM_UNSUPPORTED_CHARSET:
     "(0008,0005) Specific Character Set value {n} names a defined term this build does not support; decoding text as UTF-8 best-effort. The term is not reproduced here - read the element if you need it.",
+  // The tag goes through `renderTag`. The set the caller named is not echoed: the caller has it
+  // already, and `Element.specificCharacterSet` names it. See `charsetAssumed`.
+  // Stryker disable StringLiteral: static, this registry is built once at import and the mutation run does not reload it; test/dataset/vr/charset-fallback.test.ts holds the message
+  DICOM_CHARSET_ASSUMED:
+    "Element ({tag}) is the first text value read under the character set ParseOptions.fallbackCharacterSet names, because (0008,0005) Specific Character Set is absent or empty for it (or, with fallbackCharacterSetForUnknown, names a term this build does not decode), where PS3.5 would read the default repertoire ISO-IR 6. Every text value read the same way after it reads under that set too; raw bytes preserved. The byte offset locates the element.",
+  // Stryker restore StringLiteral
   DICOM_CHARSET_AMBIGUOUS_SEPARATOR:
     "(0008,0005) Specific Character Set value {n} is ambiguous under the active code extensions; decoding text as UTF-8 best-effort.",
   // The three ISO 2022 code-extension codes take a tag and a VR and nothing
@@ -2353,6 +2360,29 @@ export function dtNonstandardOffset(position: DicomPosition, tag: Tag): DicomPar
  */
 export function unsupportedCharset(position: DicomPosition, valueIndex: number): DicomParseWarning {
   return build(WARNING_CODES.DICOM_UNSUPPORTED_CHARSET, position, { n: valueIndex });
+}
+
+/**
+ * Build a `DICOM_CHARSET_ASSUMED` warning. Emitted once, by a parse given
+ * `ParseOptions.fallbackCharacterSet`, at the first `SH`, `LO`, `UC`, `ST`, `LT`, `UT` or `PN`
+ * element it reads under that set because its Data Set declares no `(0008,0005)` of its own (or,
+ * with `fallbackCharacterSetForUnknown`, declares one this build does not decode).
+ *
+ * @remarks
+ * This is the parse doing what it was asked, so like `DICOM_PARSE_STOPPED_BEFORE_TAG` it is never
+ * escalated: `{ strict: true }` and a profile's `escalations` both leave it a warning. A profile
+ * may still suppress it.
+ *
+ * Takes a position and the tag only: the `{tag}` slot goes through `renderTag`, and no byte of the
+ * value, and not the set the caller named, can reach the message.
+ *
+ * @example
+ * ```ts
+ * const w = charsetAssumed({ byteOffset: 320 }, "00100010");
+ * ```
+ */
+export function charsetAssumed(position: DicomPosition, tag: Tag): DicomParseWarning {
+  return build(WARNING_CODES.DICOM_CHARSET_ASSUMED, position, { tag });
 }
 
 /**

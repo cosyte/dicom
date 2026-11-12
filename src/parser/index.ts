@@ -38,8 +38,15 @@ import { emptyInput, emptyInputAfterNormalization, unsupportedTransferSyntax } f
 import { parseFileMeta } from "./file-meta.js";
 import { parsePart10Header } from "./part10-header.js";
 import { TRANSFER_SYNTAX_PARSERS } from "./transfer-syntax.js";
+import { fallbackStateOf } from "./fallback.js";
 import { stopTagNumber } from "./stop.js";
-import type { OnWarningCallback, ParseContext, ParseOptions, StopState } from "./types.js";
+import type {
+  FallbackState,
+  OnWarningCallback,
+  ParseContext,
+  ParseOptions,
+  StopState,
+} from "./types.js";
 import type { DicomParseWarning } from "./warnings.js";
 
 /** File Preamble (128 bytes) plus the `DICM` prefix (4 bytes), PS3.10 section 7.1. */
@@ -148,6 +155,8 @@ export function parseDicomStopping(
     options.stopBeforeTag === undefined
       ? undefined
       : { tag: stopTagNumber(options.stopBeforeTag), at: undefined };
+  // So is a fallback character set the option does not take.
+  const fallback = fallbackStateOf(options);
 
   // First EMPTY_INPUT check - raw input length (dual check, first half).
   if (rawInputIsEmpty(input)) {
@@ -164,7 +173,7 @@ export function parseDicomStopping(
   // Build ParseContext. `copyValues` defaults to false. `onWarning` is
   // omitted (not set to undefined) per exactOptionalPropertyTypes.
   const warnings: DicomParseWarning[] = [];
-  const ctx: ParseContext = buildContext(buffer, options, warnings, stop);
+  const ctx: ParseContext = buildContext(buffer, options, warnings, stop, fallback);
   const emit = makeEmitter(ctx);
 
   // Step 1: Detect Part 10 framing (preamble + DICM, with the stripPreamble tri-state).
@@ -242,6 +251,7 @@ function buildContext(
   options: ParseOptions,
   warnings: DicomParseWarning[],
   stop: StopState | undefined,
+  fallback: FallbackState | undefined,
 ): ParseContext {
   const fields: Omit<ParseContext, "onWarning" | "profile" | "stop"> = {
     // The root frame. Every nested frame is entered from here by a swap that
@@ -257,8 +267,11 @@ function buildContext(
     table: new CompactTable(options.copyValues === true),
   };
   // The stop is set only when asked for, so a full parse's loops see `undefined` and skip it.
-  const base: Omit<ParseContext, "onWarning" | "profile"> =
+  const stopped: Omit<ParseContext, "onWarning" | "profile"> =
     stop !== undefined ? { ...fields, stop } : fields;
+  // A fallback character set is what the root reads under until a `(0008,0005)` says otherwise.
+  const base: Omit<ParseContext, "onWarning" | "profile"> =
+    fallback !== undefined ? { ...stopped, fallback, currentCharset: fallback.terms } : stopped;
   // Thread the source/vendor profile through when supplied; omit the key
   // entirely otherwise (exactOptionalPropertyTypes).
   const withProfile: Omit<ParseContext, "onWarning"> =

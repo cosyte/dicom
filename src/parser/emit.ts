@@ -12,9 +12,10 @@
  *     escalates the code, the closure throws `DicomParseError` carrying the
  *     warning's own code, which `DicomParseError.code` admits by type
  *     (`FatalCode | WarningCode`). An escalated warning bypasses
- *     `ctx.warnings` entirely - no residue. The one code never escalated is
- *     `DICOM_PARSE_STOPPED_BEFORE_TAG`, which reports a stop the caller asked
- *     for rather than a deviation in the file.
+ *     `ctx.warnings` entirely - no residue. Two codes are never escalated:
+ *     `DICOM_PARSE_STOPPED_BEFORE_TAG` and `DICOM_CHARSET_ASSUMED`, which
+ *     report a stop and a character set the caller asked for rather than a
+ *     deviation in the file.
  *
  * This module is the ONLY reader of {@link ParseContext.frame}, and both the
  * snippet cut below and the `offsetFrame` published beside it are the reason
@@ -64,10 +65,13 @@ export function makeEmitter(ctx: ParseContext): (w: DicomParseWarning) => void {
     );
   };
   return (w) => {
-    // `DICOM_PARSE_STOPPED_BEFORE_TAG` is the parse doing what the caller
-    // asked, not a deviation in the file, so neither strict mode nor a
-    // profile escalates it. A profile may still suppress it.
-    const escalable = w.code !== WARNING_CODES.DICOM_PARSE_STOPPED_BEFORE_TAG;
+    // `DICOM_PARSE_STOPPED_BEFORE_TAG` and `DICOM_CHARSET_ASSUMED` are the
+    // parse doing what the caller asked, not a deviation in the file, so
+    // neither strict mode nor a profile escalates them. A profile may still
+    // suppress them.
+    const escalable =
+      w.code !== WARNING_CODES.DICOM_PARSE_STOPPED_BEFORE_TAG &&
+      w.code !== WARNING_CODES.DICOM_CHARSET_ASSUMED;
     // Global strict mode escalates every other Tier-2 code, overriding any
     // profile posture.
     if (ctx.strict && escalable) escalate(w);

@@ -495,6 +495,9 @@ export function tryParseDefinedLengthSQ(
   const savedDepth = ctx.nestingDepth;
   const savedStackLen = ctx.encodingContextStack.length;
   const savedWarningsLen = ctx.warnings.length;
+  // A `DICOM_CHARSET_ASSUMED` the descent raises is dropped with its other warnings on failure, so
+  // whether it was raised is put back too, and the next text element raises it again.
+  const savedAssumed = ctx.fallback?.warned;
   const table = tableOf(ctx);
   table.begin(buffer);
   const savedTable = table.mark();
@@ -523,13 +526,15 @@ export function tryParseDefinedLengthSQ(
     if (isStrictEscalation(err)) throw err;
     ctx.nestingDepth = savedDepth;
     // `parseSequence` pops what it pushed in a `finally`, so a throw leaves the stack balanced.
-    /* v8 ignore next 3 -- unreachable: `parseSequence` restores the stack before rethrowing. */
+    /* v8 ignore start -- unreachable: `parseSequence` restores the stack before rethrowing. */
     while (ctx.encodingContextStack.length > savedStackLen) {
       ctx.encodingContextStack.pop();
     }
+    /* v8 ignore stop */
     while (ctx.warnings.length > savedWarningsLen) {
       ctx.warnings.pop();
     }
+    if (ctx.fallback !== undefined) ctx.fallback.warned = savedAssumed === true;
     table.rollBack(savedTable);
     // Emitted AFTER the rollback so it is the one warning that survives, and
     // emitted at all because a silently undescended sequence is invisible to
@@ -575,6 +580,9 @@ export function tryParseUnAsSQ(
   const savedDepth = ctx.nestingDepth;
   const savedStackLen = ctx.encodingContextStack.length;
   const savedWarningsLen = ctx.warnings.length;
+  // A `DICOM_CHARSET_ASSUMED` the descent raises is dropped with its other warnings on failure, so
+  // whether it was raised is put back too, and the next text element raises it again.
+  const savedAssumed = ctx.fallback?.warned;
   const table = tableOf(ctx);
   table.begin(buffer);
   const savedTable = table.mark();
@@ -619,13 +627,15 @@ export function tryParseUnAsSQ(
     // Restore state - drop any warnings emitted during the failed descent.
     ctx.nestingDepth = savedDepth;
     // `parseSequence` pops what it pushed in a `finally`, so a throw leaves the stack balanced.
-    /* v8 ignore next 3 -- unreachable: `parseSequence` restores the stack before rethrowing. */
+    /* v8 ignore start -- unreachable: `parseSequence` restores the stack before rethrowing. */
     while (ctx.encodingContextStack.length > savedStackLen) {
       ctx.encodingContextStack.pop();
     }
+    /* v8 ignore stop */
     while (ctx.warnings.length > savedWarningsLen) {
       ctx.warnings.pop();
     }
+    if (ctx.fallback !== undefined) ctx.fallback.warned = savedAssumed === true;
     table.rollBack(savedTable);
     return { success: false, itemFirst: 0, itemCount: 0, endOffset: valueStart };
   }

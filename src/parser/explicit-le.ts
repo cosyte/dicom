@@ -61,6 +61,7 @@ import {
   undefinedLengthOnNonSqExplicit,
   unexpectedFffeAtDatasetLevel,
 } from "./fatals.js";
+import { noteAssumedCharset } from "./fallback.js";
 import { parseImplicitLE } from "./implicit-le.js";
 import {
   parseSequence,
@@ -383,6 +384,18 @@ export function _parseExplicit(
         ctx,
         emit,
         (position ??= { byteOffset: headerStart }),
+      );
+    }
+
+    // The first text element read under `ParseOptions.fallbackCharacterSet` says so, once.
+    if (ctx.fallback !== undefined) {
+      noteAssumedCharset(
+        ctx.fallback,
+        ctx,
+        emit,
+        (position ??= { byteOffset: headerStart }),
+        tag,
+        vr,
       );
     }
 

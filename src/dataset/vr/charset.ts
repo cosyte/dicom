@@ -255,6 +255,87 @@ export function singleByteSetIn(terms: readonly string[] | undefined): number | 
   return first ?? 6;
 }
 
+/**
+ * The Specific Character Set defined terms a caller may name as `fallbackCharacterSet`, the set
+ * `parseDicom`, `readDicomHeader` and `toDicomJson` read text under where a Data Set declares
+ * none: one value of the default repertoire (`ISO_IR 6`), a single-byte `ISO_IR` set, or
+ * `ISO_IR 192`. These are the single-valued terms both the reader and `toDicomJson` decode; the
+ * code-extension spellings (`ISO 2022 IR nnn`) need more than one value, and `GB18030` and `GBK`
+ * are not carried by `toDicomJson`, so neither is a fallback.
+ *
+ * @example
+ * ```ts
+ * import { FALLBACK_CHARACTER_SETS } from "@cosyte/dicom";
+ * FALLBACK_CHARACTER_SETS.includes("ISO_IR 100"); // true
+ * ```
+ */
+export const FALLBACK_CHARACTER_SETS = Object.freeze([
+  "ISO_IR 6",
+  "ISO_IR 100",
+  "ISO_IR 101",
+  "ISO_IR 109",
+  "ISO_IR 110",
+  "ISO_IR 144",
+  "ISO_IR 127",
+  "ISO_IR 126",
+  "ISO_IR 138",
+  "ISO_IR 148",
+  "ISO_IR 203",
+  "ISO_IR 13",
+  "ISO_IR 166",
+  "ISO_IR 192",
+] as const);
+
+/**
+ * A term of {@link FALLBACK_CHARACTER_SETS}.
+ *
+ * @example
+ * ```ts
+ * import type { FallbackCharacterSet } from "@cosyte/dicom";
+ * const term: FallbackCharacterSet = "ISO_IR 100";
+ * ```
+ */
+export type FallbackCharacterSet = (typeof FALLBACK_CHARACTER_SETS)[number];
+
+/**
+ * A caller's fallback, checked: the one-term list text reads under, and whether it also replaces
+ * a `(0008,0005)` that names a term this build does not decode.
+ *
+ * @internal
+ */
+export interface Fallback {
+  readonly terms: readonly string[];
+  readonly forUnknown: boolean;
+}
+
+/**
+ * The options `fallbackCharacterSet` and `fallbackCharacterSetForUnknown` as a {@link Fallback},
+ * `undefined` when no fallback is asked for, or `null` when either is not a value the option
+ * takes: a term outside {@link FALLBACK_CHARACTER_SETS}, a `fallbackCharacterSetForUnknown` that
+ * is not a boolean, or one given without a `fallbackCharacterSet`. The caller refuses `null` with
+ * its own coded error.
+ *
+ * @internal
+ */
+export function fallbackOf(term: unknown, forUnknown: unknown): Fallback | undefined | null {
+  if (forUnknown !== undefined && typeof forUnknown !== "boolean") return null;
+  if (term === undefined) return forUnknown === undefined ? undefined : null;
+  if (!(FALLBACK_CHARACTER_SETS as readonly unknown[]).includes(term)) return null;
+  return { terms: Object.freeze([term as string]), forUnknown: forUnknown === true };
+}
+
+/**
+ * `true` when text under `terms` reads under `fallback` instead: `terms` declares no set (absent,
+ * or every value empty, which PS3.5 section 6.1.2.1 makes the default repertoire), or
+ * `fallback.forUnknown` is set and a value names a term this build does not decode.
+ *
+ * @internal
+ */
+export function fallbackApplies(terms: readonly string[] | undefined, fallback: Fallback): boolean {
+  if (terms === undefined || terms.every((t) => t === "")) return true;
+  return fallback.forUnknown && !terms.every(isKnownCharsetTerm);
+}
+
 type Decoder = InstanceType<typeof TextDecoder>;
 
 /**

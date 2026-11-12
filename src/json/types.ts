@@ -9,6 +9,7 @@ import type { Buffer } from "node:buffer";
 
 import type { Element } from "../dataset/element.js";
 import type { FileMeta } from "../dataset/file-meta.js";
+import type { FallbackCharacterSet } from "../dataset/vr/charset.js";
 
 /**
  * One Person Name value: its alphabetic, ideographic and phonetic component groups, each the
@@ -99,6 +100,23 @@ export interface ToDicomJsonOptions {
    * what a caller means.
    */
   readonly inlineBulkData?: boolean;
+  /**
+   * The Specific Character Set to read text under where its Data Set declares none (no
+   * `(0008,0005)`, or an empty one): one term of `FALLBACK_CHARACTER_SETS`, such as
+   * `"ISO_IR 100"`. Without it that text is the default repertoire ISO-IR 6, and a byte past
+   * `0x7F` is refused with `MALFORMED_VALUE`. A Data Set `parseDicom` read with its own
+   * `fallbackCharacterSet` already carries the set on each element, and needs no option here. No
+   * `(0008,0005)` is added to the result. A value outside the list is refused with
+   * `INVALID_OPTION`.
+   */
+  readonly fallbackCharacterSet?: FallbackCharacterSet;
+  /**
+   * `true` to read under `fallbackCharacterSet` also where `(0008,0005)` names a term this build
+   * does not decode, which is otherwise refused with `UNSUPPORTED_CHARACTER_SET`; the
+   * `(0008,0005)` value is then written as it is. Given without a `fallbackCharacterSet`, or as
+   * anything but a boolean, it is refused with `INVALID_OPTION`.
+   */
+  readonly fallbackCharacterSetForUnknown?: boolean;
 }
 
 /**

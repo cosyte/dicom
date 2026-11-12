@@ -17,6 +17,7 @@
  */
 
 import type { CompactTable } from "../dataset/compact.js";
+import type { Fallback, FallbackCharacterSet } from "../dataset/vr/charset.js";
 import type { VR } from "../dictionary/types.js";
 import type { ParseFrame } from "./errors.js";
 import type { DicomParseWarning, WarningCode } from "./warnings.js";
@@ -299,6 +300,55 @@ export interface ParseOptions {
    * ```
    */
   readonly stopBeforeTag?: string;
+  /**
+   * The Specific Character Set to read text under where a Data Set declares none: one term of
+   * `FALLBACK_CHARACTER_SETS`, such as `"ISO_IR 100"` for Latin-1 names a sender wrote without
+   * declaring them. PS3.5 section 6.1.2.1 makes the default repertoire ISO-IR 6 when
+   * `(0008,0005)` is absent or empty, and that stays the default: without this option a byte
+   * past `0x7F` there reads as U+FFFD with `DICOM_CHARSET_BYTES_UNDECODABLE`.
+   *
+   * With it, a Data Set whose `(0008,0005)` is absent or empty, and a Sequence Item that inherits
+   * one or declares an empty one of its own, reads `SH`, `LO`, `UC`, `ST`, `LT`, `UT` and `PN`
+   * by the named set's table, and `Element.specificCharacterSet` names that set. A declared set,
+   * `ISO_IR 6` included, is read as declared. A byte the named set does not define still reads
+   * as U+FFFD with the warning. The parse adds one `DICOM_CHARSET_ASSUMED` warning, at the first
+   * text element it reads under the assumption, naming that element's tag and no text; it is
+   * never escalated by `strict` or a profile.
+   *
+   * Nothing written changes: `Element.rawBytes` keeps the bytes as read, and `serializeDicom`
+   * writes them back without adding a `(0008,0005)`. To declare the set in the output, add the
+   * `(0008,0005)` element yourself.
+   *
+   * A value that is not a term of `FALLBACK_CHARACTER_SETS` throws a `TypeError` whose `code` is
+   * `"DICOM_INVALID_OPTION"` before anything is read; its message does not echo the value.
+   *
+   * Omit (do not pass `undefined`) to read under the default repertoire.
+   *
+   * @example
+   * ```ts
+   * import { parseDicom } from "@cosyte/dicom";
+   * const ds = parseDicom(bytes, { fallbackCharacterSet: "ISO_IR 100" });
+   * ```
+   */
+  readonly fallbackCharacterSet?: FallbackCharacterSet;
+  /**
+   * `true` to read under `fallbackCharacterSet` also where `(0008,0005)` names a term this build
+   * does not decode (which raises `DICOM_UNSUPPORTED_CHARSET` either way). Off by default: an
+   * unknown term is a declaration, and it is not replaced unless asked. Given without a
+   * `fallbackCharacterSet`, or as anything but a boolean, it is refused as that option is.
+   */
+  readonly fallbackCharacterSetForUnknown?: boolean;
+}
+
+/**
+ * The parse's `fallbackCharacterSet`, and whether its warning has been raised. One object for the
+ * whole parse, shared by reference with every context made from it, as {@link StopState} is.
+ *
+ * @internal
+ */
+export interface FallbackState extends Fallback {
+  /** `true` once `DICOM_CHARSET_ASSUMED` has been emitted. */
+  warned: boolean;
 }
 
 /**
@@ -440,4 +490,10 @@ export interface ParseContext {
    * record where in `stop.at`. Absent for a full parse.
    */
   readonly stop?: StopState;
+  /**
+   * Set when the parse was given `ParseOptions.fallbackCharacterSet`. `fallback.terms` is the
+   * very array {@link ParseContext.currentCharset} holds while text reads under the fallback, so
+   * an identity test tells an assumed set from a declared one.
+   */
+  readonly fallback?: FallbackState;
 }

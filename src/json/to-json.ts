@@ -8,9 +8,16 @@ import { Buffer } from "node:buffer";
 
 import type { Dataset } from "../dataset/dataset.js";
 import type { Element } from "../dataset/element.js";
-import { decodeText, parseSpecificCharacterSet, singleByteSetIn } from "../dataset/vr/charset.js";
+import {
+  decodeText,
+  fallbackApplies,
+  fallbackOf,
+  parseSpecificCharacterSet,
+  singleByteSetIn,
+  type Fallback,
+} from "../dataset/vr/charset.js";
 import { decodeSingleByte } from "../dataset/vr/single-byte.js";
-import { renderTag } from "../parser/tokens.js";
+import { WITHHELD, renderTag } from "../parser/tokens.js";
 import {
   codedError,
   DICOM_JSON_ERROR_CODES,
@@ -68,6 +75,8 @@ function trimEnd(text: string): string {
  * `fromDicomJson` reads back each text value it writes through this, so the two directions read
  * text the same way, and refuses bytes a single-byte set does not define with its own code,
  * `undecodable`, since there the text is what the set cannot encode.
+ * Under a `fallback` (the `fallbackCharacterSet` option), an element whose Data Set declares no
+ * set, or one this build does not decode where the fallback says so, reads under the fallback's.
  *
  * @internal
  * @example
@@ -78,10 +87,15 @@ function trimEnd(text: string): string {
 export function textOf(
   el: Element,
   undecodable: DicomJsonErrorCode = DICOM_JSON_ERROR_CODES.MALFORMED_VALUE,
+  fallback?: Fallback,
 ): string {
   const bytes = el.rawBytes;
   if (!isCharsetVr(el.vr)) return bytes.toString("latin1");
-  const terms = el.specificCharacterSet ?? [];
+  const declared = el.specificCharacterSet;
+  const terms =
+    fallback !== undefined && fallbackApplies(declared, fallback)
+      ? fallback.terms
+      : (declared ?? []);
   if (!carriesCharset(terms)) refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET, el);
   const set = singleByteSetIn(terms);
   if (set !== undefined) {
@@ -204,7 +218,11 @@ export function hasValueForm(vr: string): boolean {
 }
 
 /** The value fields of one scalar element. */
-function scalarAttribute(el: Element, options: ToDicomJsonOptions): DicomJsonAttribute {
+function scalarAttribute(
+  el: Element,
+  options: ToDicomJsonOptions,
+  fallback: Fallback | undefined,
+): DicomJsonAttribute {
   const vr = el.vr;
   const bytes = el.rawBytes;
   // An empty value has no form in question, whatever its VR: an empty SV or UV is written too.
@@ -226,10 +244,12 @@ function scalarAttribute(el: Element, options: ToDicomJsonOptions): DicomJsonAtt
   if (width !== undefined) return { vr, Value: binaryNumbers(el, bytes, width) };
   if (vr === "AT") return { vr, Value: attributeTags(el, bytes) };
   if (isSingleStringVr(vr)) {
-    const text = trimEnd(textOf(el));
+    const text = trimEnd(textOf(el, DICOM_JSON_ERROR_CODES.MALFORMED_VALUE, fallback));
     return text === "" ? { vr } : { vr, Value: [text] };
   }
-  const values = textOf(el).split("\\").map(trimEnd);
+  const values = textOf(el, DICOM_JSON_ERROR_CODES.MALFORMED_VALUE, fallback)
+    .split("\\")
+    .map(trimEnd);
   let out: DicomJsonValue[];
   if (vr === "PN") out = values.map((v) => personName(el, v));
   else if (vr === "DS") out = values.map((v) => numberString(el, v, isDecimalString));
@@ -240,27 +260,40 @@ function scalarAttribute(el: Element, options: ToDicomJsonOptions): DicomJsonAtt
   return { vr, Value: out };
 }
 
-function attributeOf(el: Element, options: ToDicomJsonOptions): DicomJsonAttribute {
+function attributeOf(
+  el: Element,
+  options: ToDicomJsonOptions,
+  fallback: Fallback | undefined,
+): DicomJsonAttribute {
   if (el.vr === "SQ") {
     const items = el.items;
     if (items === undefined) refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_ELEMENT, el);
     if (items.length === 0) return { vr: "SQ" };
-    return { vr: "SQ", Value: items.map((item) => datasetOf(item, options)) };
+    return { vr: "SQ", Value: items.map((item) => datasetOf(item, options, fallback)) };
   }
   if (el.length === UNDEFINED_LENGTH) refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_ELEMENT, el);
-  return scalarAttribute(el, options);
+  return scalarAttribute(el, options, fallback);
 }
 
-function datasetOf(ds: Dataset, options: ToDicomJsonOptions): DicomJsonDataset {
+function datasetOf(
+  ds: Dataset,
+  options: ToDicomJsonOptions,
+  fallback: Fallback | undefined,
+): DicomJsonDataset {
   const out: Record<string, DicomJsonAttribute> = {};
   for (const el of ds.elements()) {
     // Group Length (gggg,0000) is left out, as serializeDicom leaves it out (PS3.5 section 7.2).
     if (el.tag.endsWith("0000")) continue;
-    // A Specific Character Set we do not carry is refused, whether or not any text follows it.
-    if (el.tag === "00080005" && !carriesCharset(parseSpecificCharacterSet(el.rawBytes))) {
-      refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET, el);
+    // A Specific Character Set we do not carry is refused, whether or not any text follows it,
+    // unless the caller's fallback takes its place.
+    if (el.tag === "00080005") {
+      const declared = parseSpecificCharacterSet(el.rawBytes);
+      const replaced = fallback !== undefined && fallbackApplies(declared, fallback);
+      if (!replaced && !carriesCharset(declared)) {
+        refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET, el);
+      }
     }
-    out[el.tag] = attributeOf(el, options);
+    out[el.tag] = attributeOf(el, options, fallback);
   }
   return out;
 }
@@ -279,7 +312,11 @@ function datasetOf(ds: Dataset, options: ToDicomJsonOptions): DicomJsonDataset {
  * the other bulk values are written inline only with the `inlineBulkData` option. An attribute
  * with an empty value has no value field. Text is decoded through `(0008,0005)` Specific Character
  * Set, by the decoder `Element.value` uses, and `(0008,0005)` is kept as it is. Only one value of
- * the default repertoire, a single-byte `ISO_IR` set or `ISO_IR 192` is carried.
+ * the default repertoire, a single-byte `ISO_IR` set or `ISO_IR 192` is carried. With the
+ * `fallbackCharacterSet` option, text whose Data Set declares no set (no `(0008,0005)`, or an empty
+ * one) is read under the set it names instead of ISO-IR 6, and with
+ * `fallbackCharacterSetForUnknown` so is text under a term this build does not decode; no
+ * `(0008,0005)` is added to the result.
  *
  * The result is a plain object: `JSON.stringify` writes it, and `fromDicomJson` reads it back.
  *
@@ -296,7 +333,9 @@ function datasetOf(ds: Dataset, options: ToDicomJsonOptions): DicomJsonDataset {
  *   Person Name of more than three groups or text its Specific Character Set does not decode,
  *   `UNSUPPORTED_CHARACTER_SET` for a Specific Character Set of more than one value or one we do
  *   not carry, at any depth, `BULK_DATA_URI_REQUIRED` for a bulk value with no URI and no
- *   `inlineBulkData`, and `CONVERSION_FAILED` for any other error, one the `bulkDataUri` option
+ *   `inlineBulkData`, `INVALID_OPTION` for a `fallbackCharacterSet` outside
+ *   `FALLBACK_CHARACTER_SETS` or a `fallbackCharacterSetForUnknown` that is not a boolean given with
+ *   one, and `CONVERSION_FAILED` for any other error, one the `bulkDataUri` option
  *   threw included.
  * @example
  * ```ts
@@ -310,7 +349,13 @@ function datasetOf(ds: Dataset, options: ToDicomJsonOptions): DicomJsonDataset {
  */
 export function toDicomJson(ds: Dataset, options: ToDicomJsonOptions = {}): DicomJsonDataset {
   try {
-    return datasetOf(ds, options);
+    const fallback = fallbackOf(
+      options.fallbackCharacterSet,
+      options.fallbackCharacterSetForUnknown,
+    );
+    if (fallback === null)
+      throw new DicomJsonError(DICOM_JSON_ERROR_CODES.INVALID_OPTION, WITHHELD);
+    return datasetOf(ds, options, fallback);
   } catch (err) {
     throw codedError(err);
   }
