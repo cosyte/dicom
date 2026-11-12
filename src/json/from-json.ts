@@ -174,24 +174,19 @@ function charsetOf(
  * CR; anything else is encoded only for the default repertoire and `ISO_IR 100` (as ISO 8859-1)
  * and `ISO_IR 192` (UTF-8). That is not yet a promise the text reads back the same: the reader
  * decodes the default repertoire and `ISO_IR 100` as windows-1252, where most C1 code points are
- * other characters, and UTF-8 has no lone surrogate. {@link refuseChangedElements} reads every
- * value back and refuses the ones that differ.
+ * other characters, and UTF-8 has no lone surrogate. Nor does ISO 8859-1 hold a character past
+ * U+00FF, of which `Buffer` writes the low byte only. {@link refuseChangedElements} reads every
+ * value back and refuses the ones that differ, those among them: no byte decodes, under either
+ * reading, as the character past U+00FF it was cut from.
  */
 function encodeText(text: string, vr: string, terms: readonly unknown[], tag: string): Buffer {
   if (text.split("").every((c) => c.charCodeAt(0) <= 0x7f)) return Buffer.from(text);
   const first = terms[0] ?? "";
   if (!isCharsetVr(vr) || first === "" || first === "ISO_IR 6" || first === "ISO_IR 100") {
-    return latin1(text, tag);
+    return Buffer.from(text, "latin1");
   }
   if (first === "ISO_IR 192") return Buffer.from(text);
   return refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET, tag);
-}
-
-function latin1(text: string, tag: string): Buffer {
-  if (text.split("").some((c) => c.charCodeAt(0) > 0xff)) {
-    refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_CHARACTER_SET, tag);
-  }
-  return Buffer.from(text, "latin1");
 }
 
 /**

@@ -166,6 +166,11 @@ describe("odd groups below 0008", () => {
     }
   });
 
+  it("keeps an even group below 0008 other than File Meta: (0004,1130) File-set ID", () => {
+    const json: DicomJsonDataset = { "00041130": { vr: "CS", Value: ["SYNFILESET"] } };
+    expect(toDicomJson(fromDicomJson(json, LE))).toEqual(json);
+  });
+
   it("keeps an odd group from 0009 up", () => {
     const json: DicomJsonDataset = {
       "00090010": { vr: "LO", Value: ["SYNTHETIC CREATOR"] },
