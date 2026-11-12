@@ -13,34 +13,35 @@
     },
     {
       "type": "category",
-      "label": "Core concepts",
-      "collapsed": false,
+      "label": "How-to guides",
+      "items": ["recipes", "cookbook", "property-testing"]
+    },
+    {
+      "type": "category",
+      "label": "Explanation",
       "items": [
         "spec-notes-model",
         "access-patterns",
-        "spec-notes-tolerance",
-        "error-handling",
         "spec-notes-values",
         "spec-notes-safety",
+        "spec-notes-tolerance",
         "spec-notes-profiles",
-        "compatibility"
+        "serialization",
+        "deidentification",
+        "non-goals"
       ]
     },
     {
       "type": "category",
-      "label": "Guides",
-      "items": [
-        "recipes",
-        "cookbook",
-        "serialization",
-        "deidentification",
-        "property-testing"
-      ]
+      "label": "Reference",
+      "items": ["compatibility", "error-handling", "limitations"]
     },
     {
       "type": "category",
       "label": "Troubleshooting",
-      "items": ["troubleshooting", "limitations", "non-goals"]
-    }
+      "items": ["troubleshooting"]
+    },
+    "testing-and-quality",
+    "performance"
   ]
 }

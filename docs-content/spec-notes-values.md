@@ -2,7 +2,7 @@
 id: spec-notes-values
 title: Typed values and VR decode
 sidebar_label: Typed values
-sidebar_position: 8
+sidebar_position: 9
 description: How an element's bytes decode into a typed value for each of the 34 VRs, including character sets and bulk data.
 ---
 
@@ -172,7 +172,7 @@ renders fractional digits exactly as written, neither padded to three nor rounde
 `serializeDicom` remains the route that reproduces the original bytes. And because the three names
 are identical across every `@cosyte/*` parser, a file importing two of them has to alias:
 
-```ts
+```ts no-run it imports @cosyte/hl7, which this package does not depend on
 import { toISO as dicomToISO } from "@cosyte/dicom";
 import { toISO as hl7ToISO } from "@cosyte/hl7";
 ```
@@ -247,5 +247,5 @@ Limits, stated here because each one is a place the decode is narrower than a re
 Pixel Data and other bulk elements decode to `{ kind: "binary", bytes }`: the raw `Buffer`, never
 interpreted. This is the metadata-first boundary in the value layer: the bytes are handed to you
 exactly as stored (for encapsulated transfer syntaxes, as their fragments), and pixel decoding is out
-of scope. See [Reading raw pixel data](./cookbook) and the non-goals in
-[Troubleshooting](./troubleshooting).
+of scope. See [Read raw pixel data without decoding it](./recipes.md#read-raw-pixel-data-without-decoding-it) and the non-goals in
+[Troubleshooting](./troubleshooting.md).

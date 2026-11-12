@@ -2,7 +2,7 @@
 id: spec-notes-model
 title: The object model
 sidebar_label: The object model
-sidebar_position: 4
+sidebar_position: 7
 description: How a Part 10 object is framed (preamble, File Meta, and the dataset) and how the package models each part.
 ---
 
@@ -17,9 +17,8 @@ frames all of it into one immutable `Dataset`.
 
 Every element is a `(group,element)` **tag**, a **VR** (Value Representation: the two-letter type
 code), a length, and a value. `@cosyte/dicom` keys elements by the 8-character uppercase hex tag
-(e.g. `"00100010"` for Patient's Name). The parser supports the four native transfer syntaxes,
-Implicit VR LE, Explicit VR LE, Explicit VR BE, and Deflated Explicit VR LE, plus every encapsulation
-syntax PS3.5 2026c section A.4 names (JPEG, JPEG-LS, JPEG 2000, HTJ2K, RLE, and the rest), whose Data
+(e.g. `"00100010"` for Patient's Name). The parser supports the four native transfer syntaxes plus every encapsulation
+syntax PS3.5 2026c section A.4 names ([Compatibility](./compatibility.md#supported-transfer-syntaxes) lists them), whose Data
 Set section A.4 makes Explicit VR LE: those are read and written, their pixels are never decoded,
 and `serializeDicom` refuses with `INVALID_ENCAPSULATED_PIXEL_DATA` a top-level Pixel Data section
 A.4 does not allow. It also reads the four JPIP Referenced syntaxes of sections A.6, A.7, A.11 and
@@ -72,10 +71,13 @@ its `index`, its `(0004,1430)` `type`, its `(0004,1500)` `referencedFileId` comp
 and each `(0004,1400)` successor; a record's `lowerLevel` is the record its `(0004,1420)` names and
 each successor. Each record is in the tree at most once.
 
-```ts
+```ts runnable
 import { parseDicom } from "@cosyte/dicom";
 
-const dir = parseDicom(buf).directory;
+// This synthetic CT object is not a DICOMDIR, so it has no directory and the walk prints nothing.
+// The same loop walks a DICOMDIR's Patient, Study, Series and Image records.
+const dir = parseDicom(Buffer.from("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABESUNNAgAAAFVMBAAcAAAAAgAQAFVJFAAxLjIuODQwLjEwMDA4LjEuMi4xAAgAFgBVSRoAMS4yLjg0MC4xMDAwOC41LjEuNC4xLjEuMgAIABgAVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMTExAAgAIABEQQgAMTkwMDAxMDEIADAAVE0GADA5MDAwMAgAUABTSAgAQUNDLTAwMDEIAGAAQ1MCAENUEAAQAFBOCABEb2VeSmFuZRAAIABMTwYATVJOLTQyEAAhAExPDABTQU1QTEUtSE9TUCAgAA0AVUkeADEuMi44MjYuMC4xLjM2ODAwNDMuOC40OTguMS4xACAADgBVSR4AMS4yLjgyNi4wLjEuMzY4MDA0My44LjQ5OC4xLjIAIAARAElTAgAyICgAAgBVUwIAAQAoAAQAQ1MMAE1PTk9DSFJPTUUyICgAEABVUwIAAAIoABEAVVMCAAACKAAwAERTCAAwLjVcMC41ICgAAAFVUwIAEAAoAAEBVVMCAAwAKAACAVVTAgALACgAAwFVUwIAAQAoAFIQRFMGAC0xMDI0ICgAUxBEUwIAMSA=", "base64")).directory;
+dir; // => undefined
 for (const patient of dir?.root ?? []) {
   for (const study of patient.lowerLevel) {
     for (const series of study.lowerLevel) {
@@ -93,7 +95,7 @@ PS3.3's Basic Directory IOD defines these offsets (PS3.3 is not vendored here, s
 claimed for it). A file read without a preamble still counts the 132 bytes it lacks. Anything else, an
 offset inside a record, on an Item of a Sequence nested in a record, on the Sequence's header or past
 the end, names nothing and raises `DICOM_DIRECTORY_OFFSET_UNRESOLVED`. The limits, what the writer
-refuses, and what de-identification leaves undone are on [Known limitations](./limitations).
+refuses, and what de-identification leaves undone are on [Known limitations](./limitations.md).
 
 ## The generated data dictionary
 
@@ -169,11 +171,11 @@ Dictionary.uid("1.2.840.10008.1.2.2")?.retired; // => true
 A `Dataset` is immutable at the model boundary: `warnings` is frozen, and the element map is not
 exposed for mutation. Edits go through explicit methods (`setElement`, `addElement`, `removeElement`,
 and the sequence-item equivalents), each returning results rather than mutating shared parser output.
-This is the same discipline the serializer relies on. See [Re-serializing](./cookbook).
+This is the same discipline the serializer relies on. See [Serialization](./serialization.md).
 
 ## Where values come from
 
 `ds.get(tag)` gives you the raw `Element`; its `.value` decodes the bytes into a typed
-[`DicomValue`](./spec-notes-values). For the safety-critical attributes there is a shorter, typed
-path (the [`patient` / `study` / `series` / `image` views](./spec-notes-safety)) which is what the
-[Quickstart](./quickstart) uses.
+[`DicomValue`](./spec-notes-values.md). For the safety-critical attributes there is a shorter, typed
+path (the [`patient` / `study` / `series` / `image` views](./spec-notes-safety.md)) which is what the
+[Quickstart](./quickstart.md) uses.

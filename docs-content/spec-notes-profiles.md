@@ -2,7 +2,7 @@
 id: spec-notes-profiles
 title: Source and vendor profiles
 sidebar_label: Source profiles
-sidebar_position: 10
+sidebar_position: 12
 description: What a source or vendor profile bundles, the five built-in profiles, and how to define your own.
 ---
 
@@ -58,7 +58,7 @@ default:
 ## The five built-ins
 
 Five profiles ship under the frozen `profiles` namespace: `ge`, `siemens`, `philips` (vendor
-overlays) and `strict` / `lenient` (posture presets). They are the [tolerance dial](./spec-notes-tolerance)
+overlays) and `strict` / `lenient` (posture presets). They are the [tolerance dial](./spec-notes-tolerance.md)
 made concrete: `strict` escalates, `lenient` suppresses.
 
 ## Build your own
@@ -100,5 +100,5 @@ never turn a right answer into a wrong one.
 **A profile's declared VR is a second authority, and it is not a license over what a value nests.**
 PS3.15 §E.3.10 lets a de-identifier retain a private *Attribute* it knows to be safe; it does not let
 one vouch for a Data Set a sender nested inside that attribute's value. See
-[De-identification](./deidentification) for what `RetainSafePrivate` plus a profile does and does not
-keep, and [Known limitations](./limitations) for the residuals around it.
+[De-identification](./deidentification.md) for what `RetainSafePrivate` plus a profile does and does not
+keep, and [Known limitations](./limitations.md) for the residuals around it.

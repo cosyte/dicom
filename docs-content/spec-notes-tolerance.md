@@ -2,7 +2,7 @@
 id: spec-notes-tolerance
 title: Tolerance and the warning model
 sidebar_label: Tolerance and warnings
-sidebar_position: 6
+sidebar_position: 11
 description: The two warning tiers, the small fatal set, what a diagnostic carries and leaves out, and how to make a parse stricter.
 ---
 
@@ -214,7 +214,7 @@ identifiers, with the bound each one actually has. Some rows are a length rather
 test, and they say so. **And `contextPath` has no bound at all**: it was listed here as
 structural until it was measured, and it now has its own row saying what it really is. It is not the
 only entry read off the wire (`removedPrivateTags` and `UnauditableSequenceFinding.tag` are too, and
-are disclosed as such in [Troubleshooting](./troubleshooting)); it is the one that was described as
+are disclosed as such in [Troubleshooting](./troubleshooting.md)); it is the one that was described as
 though it were not:
 
 | Field                                                                                          | Bound                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -238,11 +238,11 @@ Everything else on the model is a **value**, and carries whatever the file carri
 **keys** of `DeidentifyReport.uidMap` (the source UIDs, kept so replacement stays consistent across a
 study). Treat those as PHI. They are what the parser is for.
 
-See [Troubleshooting](./troubleshooting) for the full symptom table and the logging posture.
+See [Troubleshooting](./troubleshooting.md) for the full symptom table and the logging posture.
 
 ## Escalate when you want strictness
 
-The tolerance posture is not fixed. A [source profile](./spec-notes-profiles) can **escalate** chosen
+The tolerance posture is not fixed. A [source profile](./spec-notes-profiles.md) can **escalate** chosen
 warning codes to a thrown error (a stricter gate for a trusted sender) or **suppress** benign,
 high-volume codes for a known-quirky source, without ever loosening a correct decode. The built-in
 `profiles.strict` and `profiles.lenient` are the two ends of that dial.
@@ -262,10 +262,10 @@ high-volume codes for a known-quirky source, without ever loosening a correct de
 | Export              | What it is                                                                                                                                                        |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `WARNING_CODES`     | The frozen Tier-2 registry. **It is the list**, and the locked snapshot under `test/property/__snapshots__/` measures it on every run. Read it rather than a numeral written anywhere. |
-| `WarningCode`       | The discriminant type over that registry. It widens with each new code, so treat it as open: [Compatibility](./compatibility#exports-that-grow-between-releases). |
+| `WarningCode`       | The discriminant type over that registry. It widens with each new code, so treat it as open: [Compatibility](./compatibility.md#exports-that-grow-between-releases). |
 | `DicomParseWarning` | One recorded deviation: its `code`, its `position`, and a `message` looked up in the frozen registry.                                                              |
 | `FATAL_CODES`       | The frozen Tier-3 registry. Same rule: enumerate it, never count it.                                                                                              |
-| `FatalCode`         | The discriminant type over that registry. `DicomParseError.code` is a `FatalCode` or, for an [escalated warning](./error-handling#when-a-warning-becomes-a-throw), that warning's `WarningCode`. |
+| `FatalCode`         | The discriminant type over that registry. `DicomParseError.code` is a `FatalCode` or, for an [escalated warning](./error-handling.md#when-a-warning-becomes-a-throw), that warning's `WarningCode`. |
 | `DicomParseError`   | The thrown class, for a fatal and for an escalated warning. Carries `code`, `byteOffset`, `offsetFrame`, `message` and a raw hex `snippet` of the source. **Treat `snippet` as PHI.** |
 | `DicomPosition`     | Where a diagnostic happened: `byteOffset`, plus `fileMeta` / `deflated` flags and a `contextPath` for a nested Sequence Item. Read the frame note below before indexing anything with it. |
 | `OFFSET_FRAMES`     | The frozen set of frames a `byteOffset` may be counted in: the caller's own input, the inflated Data Set of a Deflated object, or a slice this parser cut from inside a Value Field. |
