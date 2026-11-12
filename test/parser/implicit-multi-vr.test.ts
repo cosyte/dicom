@@ -36,7 +36,10 @@ function el(tag: Tag, value: Buffer): BuildDicomElement {
   return { tag, vr: "UN", value };
 }
 
-function seq(tag: Tag, ...items: (BuildDicomElement | BuildDicomSqElement)[][]): BuildDicomSqElement {
+function seq(
+  tag: Tag,
+  ...items: (BuildDicomElement | BuildDicomSqElement)[][]
+): BuildDicomSqElement {
   return { tag, items: items.map((elements) => ({ elements })) };
 }
 
@@ -65,17 +68,11 @@ describe("Implicit VR LE: OB or OW attributes PS3.5 makes OW", () => {
     expect(item?.get("7FE00010")?.vr).toBe("OW");
   });
 
-  it.each(["60003000", "60023000", "601E3000"] as const)(
-    "reads Overlay Data (%s) as OW",
-    (tag) => {
-      const group = tag.slice(0, 4);
-      const ds = implicit(
-        el(`${group}0100`, u16(1)),
-        el(tag, Buffer.from([0xff, 0x00, 0x0f, 0xf0])),
-      );
-      expect(vrOf(ds, tag)).toBe("OW");
-    },
-  );
+  it.each(["60003000", "60023000", "601E3000"] as const)("reads Overlay Data (%s) as OW", (tag) => {
+    const group = tag.slice(0, 4);
+    const ds = implicit(el(`${group}0100`, u16(1)), el(tag, Buffer.from([0xff, 0x00, 0x0f, 0xf0])));
+    expect(vrOf(ds, tag)).toBe("OW");
+  });
 
   it.each([8, 16])(
     "reads Waveform Data and the attributes PS3.5 section 8.3 ties to it as OW at %i bits",

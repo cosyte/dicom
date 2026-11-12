@@ -252,12 +252,18 @@ function valuesOf(ds: Dataset, image: Image): Record<string, unknown> {
   return {
     pixels: samples(required(ds.get("7FE00010"), "Pixel Data"), image.bits).slice(0, count),
     overlay: overlayBits(required(ds.get("60003000"), "Overlay Data")).slice(0, count),
-    waveform: samples(required(waveform.get("54001010"), "Waveform Data"), image.waveformBits).slice(
-      0,
-      image.waveform.length,
-    ),
-    channelMin: samples(required(channel.get("54000110"), "Channel Minimum"), image.waveformBits)[0],
-    channelMax: samples(required(channel.get("54000112"), "Channel Maximum"), image.waveformBits)[0],
+    waveform: samples(
+      required(waveform.get("54001010"), "Waveform Data"),
+      image.waveformBits,
+    ).slice(0, image.waveform.length),
+    channelMin: samples(
+      required(channel.get("54000110"), "Channel Minimum"),
+      image.waveformBits,
+    )[0],
+    channelMax: samples(
+      required(channel.get("54000112"), "Channel Maximum"),
+      image.waveformBits,
+    )[0],
     red: words(required(ds.get("00281201"), "Red Palette Data")),
     green: words(required(ds.get("00281202"), "Green Palette Data")),
     blue: words(required(ds.get("00281203"), "Blue Palette Data")),
