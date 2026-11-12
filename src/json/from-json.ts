@@ -66,9 +66,6 @@ function isTagKey(text: string): boolean {
   return /^[0-9A-Fa-f]{8}$/u.test(text);
 }
 
-/** The smallest positive normal float32, 2^-126. */
-const MIN_NORMAL_FLOAT32 = 2 ** -126;
-
 /** The lowest and highest value of an integer VR, or `undefined` for another VR. */
 function rangeOf(vr: string): readonly [number, number] | undefined {
   if (vr === "US") return [0, 0xffff];
@@ -235,7 +232,7 @@ function numberText(value: unknown, vr: string, tag: string): string {
   if (text.length <= 16) return text;
   // Past 16 characters, the same value in the fewest: its significant digits and a power of ten,
   // so 1e16, whose shortest text is 17 digits, is written as "1e16".
-  const compact = `${n < 0 ? "-" : ""}${decimalKey(text)}`;
+  const compact = `${text.startsWith("-") ? "-" : ""}${decimalKey(text)}`;
   if (compact.length > 16) refuse(DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER, tag);
   return compact;
 }
@@ -266,12 +263,10 @@ function binaryNumbers(values: readonly unknown[], vr: string, le: boolean, tag:
       case "FL": {
         // A number is rounded to the nearest float32, as every FL writer rounds it; one past
         // float32's range, or below its normal range and not a float32 itself, is refused, since
-        // there the nearest float32 is not near (1e-50 would be written as 0).
+        // there the nearest float32 is not near (1e-50 would be written as 0). 2^-126 is float32's
+        // smallest positive normal value.
         const single = Math.fround(value);
-        if (
-          !Number.isFinite(single) ||
-          (single !== value && Math.abs(single) < MIN_NORMAL_FLOAT32)
-        ) {
+        if (!Number.isFinite(single) || (single !== value && Math.abs(single) < 2 ** -126)) {
           refuse(DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER, tag);
         }
         if (le) out.writeFloatLE(value, at);

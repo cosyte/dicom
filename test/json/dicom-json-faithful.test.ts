@@ -23,6 +23,7 @@ import {
   type FromDicomJsonOptions,
 } from "../../src/index.js";
 import type { VR } from "../../src/dictionary/types.js";
+import { decimalKey } from "../../src/json/vr.js";
 import { buildDicom, type BuildDicomElement } from "../helpers/build-dicom.js";
 
 const TS_IMPLICIT_LE = "1.2.840.10008.1.2";
@@ -122,6 +123,17 @@ describe("Implicit VR: the VR the JSON names is the VR read back", () => {
     });
   });
 
+  it("names a registered tag given in lowercase hex in upper case when its VR changes", () => {
+    // (0020,000D) is UI under Implicit VR, so an LO there reads back as UI and is refused.
+    try {
+      fromDicomJson({ "0020000d": { vr: "LO", Value: ["SYNTH"] } }, IMPLICIT);
+      expect.unreachable();
+    } catch (err) {
+      expect((err as DicomJsonError).code).toBe(DICOM_JSON_ERROR_CODES.VR_MISMATCH);
+      expect((err as DicomJsonError).tag).toBe("0020000D");
+    }
+  });
+
   it("writes the VR the multi-VR rules give, and the same JSON under Explicit VR", () => {
     const json: DicomJsonDataset = {
       "00280103": { vr: "US", Value: [1] },
@@ -188,6 +200,43 @@ describe("a number JSON cannot carry exactly is refused", () => {
     expect(json["00101020"]).toEqual({ vr: "DS", Value: [1e16] });
     const back = fromDicomJson(json, LE).get("00101020")?.rawBytes ?? Buffer.alloc(0);
     expect(Buffer.from(back)).toEqual(latin1("1e16"));
+  });
+
+  it("writes a long DS of exactly 16 characters, and refuses one of 17, of either sign", () => {
+    const written = (n: number): Buffer =>
+      Buffer.from(
+        fromDicomJson({ "00101020": { vr: "DS", Value: [n] } }, LE).get("00101020")?.rawBytes ??
+          Buffer.alloc(0),
+      );
+    // The shortest texts are 19 and 18 characters; as digits and a power of ten, 16.
+    expect(written(1.234567890123e111)).toEqual(latin1("1234567890123e99"));
+    expect(written(-1.2345678901e111)).toEqual(latin1("-12345678901e101"));
+    // One more digit, or the sign, makes 17.
+    expect(refusal(() => written(1.2345678901234e111))).toBe(
+      DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER,
+    );
+    expect(refusal(() => written(-1.23456789012e111))).toBe(
+      DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER,
+    );
+  });
+
+  it("keeps an FL at each edge of float32's range, and refuses one just past it", () => {
+    const fl = (n: number): DicomJsonDataset => ({ "00089459": { vr: "FL", Value: [n] } });
+    const maxFloat32 = 3.4028234663852886e38;
+    const minNormal = 2 ** -126;
+    // The largest float32 and the smallest normal one are kept, either sign.
+    for (const n of [maxFloat32, -maxFloat32, minNormal, -minNormal]) {
+      expect(toDicomJson(fromDicomJson(fl(n), LE))).toEqual(fl(n));
+    }
+    // A number just below the smallest normal that rounds up to it is kept as it.
+    const roundsUp = minNormal * (1 - 2 ** -30);
+    expect(toDicomJson(fromDicomJson(fl(roundsUp), LE))).toEqual(fl(minNormal));
+    // A number that rounds to infinity, or to a subnormal float32, is refused.
+    for (const n of [2 ** 128 - 2 ** 103, minNormal - 1.5 * 2 ** -149]) {
+      expect(refusal(() => fromDicomJson(fl(n), LE))).toBe(
+        DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER,
+      );
+    }
   });
 
   it("refuses an FL that underflows float32, and keeps one float32 holds or rounds normally", () => {
@@ -342,5 +391,17 @@ describe("bulk values are never written inline by default", () => {
       vr: "OB",
       InlineBinary: u16(9).toString("base64"),
     });
+  });
+});
+
+describe("decimalKey", () => {
+  it("gives two texts of one value one key, and zero the key 0", () => {
+    expect(decimalKey("+0012.50")).toBe("125e-1");
+    expect(decimalKey("1.25e1")).toBe("125e-1");
+    expect(decimalKey("1500")).toBe("15e2");
+    expect(decimalKey("1.5E3")).toBe("15e2");
+    expect(decimalKey("-.5")).toBe("5e-1");
+    expect(decimalKey("7")).toBe("7e0");
+    for (const zero of ["0", "-0.000", "0e5", ".0"]) expect(decimalKey(zero)).toBe("0");
   });
 });

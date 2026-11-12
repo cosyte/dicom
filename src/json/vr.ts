@@ -115,11 +115,13 @@ export function isBulkTag(tag: string): boolean {
  */
 export function decimalKey(text: string): string {
   const match = /^[+-]?(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/u.exec(text) as RegExpExecArray;
-  const [, whole = "", fraction = "", exponent = "0"] = match;
+  // `(\d*)` always takes part, so the whole part is a string, empty when the text has none.
+  const whole = match[1] as string;
+  const fraction = match[2] ?? "";
   const digits = (whole + fraction).replace(/^0+/u, "");
   if (digits === "") return "0";
   const significant = digits.replace(/0+$/u, "");
-  const power = Number(exponent) - fraction.length + digits.length - significant.length;
+  const power = Number(match[3] ?? 0) - fraction.length + digits.length - significant.length;
   return `${significant}e${power}`;
 }
 

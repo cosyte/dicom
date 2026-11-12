@@ -60,6 +60,7 @@ function textOf(el: Element): string {
   if (!isCharsetVr(el.vr)) return bytes.toString("latin1");
   const terms = el.specificCharacterSet;
   if (usesCodeExtensions(terms)) {
+    // Stryker disable next-line StringLiteral: equivalent, isDelimiter is false for every byte under both "text" and ""
     const decoded = decodeWithCodeExtensions(bytes, terms, "text");
     if (decoded.bytesUndecodable) refuse(DICOM_JSON_ERROR_CODES.MALFORMED_VALUE, el);
     return decoded.text;
