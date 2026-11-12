@@ -171,8 +171,16 @@ describe("a delimiter inside a value is refused, never split on", () => {
 
 describe("a number JSON cannot carry exactly is refused, or a DS carried as a string", () => {
   it("writes a DS whose double is not its decimal value as a JSON string of its text", () => {
-    for (const text of ["9007199254740993", "9999999999999999", "1e-400", "0.10000000000000001"]) {
+    for (const text of ["9007199254740993", "9999999999999999", "1e-400", "-1E400"]) {
       expect(one("00101020", "DS", latin1(text))).toEqual({ vr: "DS", Value: [text] });
+    }
+  });
+
+  it("refuses a DS no double holds whose text is past the 16 bytes fromDicomJson reads", () => {
+    for (const text of ["0.10000000000000001", "90071992547409930"]) {
+      expect(refusal(() => one("00101020", "DS", latin1(text)))).toBe(
+        DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER,
+      );
     }
   });
 

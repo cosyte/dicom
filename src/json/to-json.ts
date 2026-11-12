@@ -49,6 +49,8 @@ import {
 const UNDEFINED_LENGTH = 0xffffffff;
 /** U+FEFF, the byte order mark. */
 const BYTE_ORDER_MARK = String.fromCharCode(0xfeff);
+/** The most bytes a `DS` value holds (PS3.5 section 6.2), and so the most `fromDicomJson` reads. */
+const DS_MAX_LENGTH = 16;
 
 function refuse(code: DicomJsonErrorCode, el: Element): never {
   throw new DicomJsonError(code, renderTag(el.tag));
@@ -134,9 +136,10 @@ function personName(el: Element, text: string): DicomJsonPersonName | null {
  * A `DS` or `IS` value as the JSON number of the same decimal value. Only the text's form may
  * change: `"1.0"` is written as `1`. A double that does not hold the text's value exactly (past
  * 2^53, more digits than a double keeps, or past its range) is never written in its place: a `DS`
- * is written as a JSON string of its text, spaces removed, which PS3.18 F.2.3 allows, and an `IS`
- * is refused: a double holds every `IS` of the 12 bytes PS3.5 allows it, so only a longer one gets
- * here.
+ * of at most 16 bytes, leading and trailing padding removed, is written as a JSON string of that
+ * text, which PS3.18 F.2.3 allows and `fromDicomJson` reads back as the same text; a longer `DS`,
+ * and an `IS`, are refused: a double holds every `IS` of the 12 bytes PS3.5 allows it, so only a
+ * longer one gets here.
  */
 function numberString(
   el: Element,
@@ -148,7 +151,9 @@ function numberString(
   if (!valid(trimmed)) refuse(DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER, el);
   const n = Number(trimmed);
   if (!Number.isFinite(n) || decimalKey(String(n)) !== decimalKey(trimmed)) {
-    if (el.vr === "DS") return trimmed;
+    // The string is written only where `fromDicomJson` reads it back as this text: a DS of at most
+    // the 16 bytes PS3.5 section 6.2 allows it.
+    if (el.vr === "DS" && trimmed.length <= DS_MAX_LENGTH) return trimmed;
     refuse(DICOM_JSON_ERROR_CODES.UNREPRESENTABLE_NUMBER, el);
   }
   // `-0` is zero, and JSON writes it as `0`.
@@ -325,9 +330,9 @@ function datasetOf(
  *
  * How each VR is written: text VRs as JSON strings with their padding removed, `null` for an empty
  * value among several; `PN` as an object of `Alphabetic`, `Ideographic` and `Phonetic` groups;
- * `DS`, `IS`, `US`, `SS`, `UL`, `SL`, `FL` and `FD` as JSON numbers, but a `DS` whose value no
- * JSON number holds exactly as a JSON string of its text, which PS3.18 F.2.3 allows; `AT` as eight
- * hex digits;
+ * `DS`, `IS`, `US`, `SS`, `UL`, `SL`, `FL` and `FD` as JSON numbers, but a `DS` of at most 16
+ * bytes whose value no JSON number holds exactly as a JSON string of its text, which PS3.18 F.2.3
+ * allows; `AT` as eight hex digits;
  * `SQ` as an array of nested Data Sets; and `OB`, `OD`, `OF`, `OL`, `OV`, `OW` and `UN` as base64
  * `InlineBinary`, or as a `BulkDataURI` where the `bulkDataUri` option gives one. Pixel Data and
  * the other bulk values are written inline only with the `inlineBulkData` option. Encapsulated

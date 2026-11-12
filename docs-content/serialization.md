@@ -315,11 +315,14 @@ code; it never writes a value it cannot carry faithfully:
   an `=` or a backslash in a Person Name group, is refused with `INVALID_JSON` rather than split
   into several values or groups. A `^` inside a group is a component delimiter and is kept.
 - **`DS` and `IS` numbers.** A JSON number is a double, so a `DS` whose decimal value no double
-  holds exactly, such as `9007199254740993` (past 2^53), `0.10000000000000001` or `1e400`, is
-  written as a JSON string of its text, which the annex allows, rather than rounded: `toDicomJson`
-  gives `{ vr: "DS", Value: ["9007199254740993"] }`. A double holds every `IS` of the 12 characters
-  PS3.5 allows it; a longer one no double holds is refused with `UNREPRESENTABLE_NUMBER`. Only the
-  form of the text may change.
+  holds exactly, such as `9007199254740993` (past 2^53) or `1e400`, is written as a JSON string of
+  its text, which the annex allows, rather than rounded: `toDicomJson` gives
+  `{ vr: "DS", Value: ["9007199254740993"] }`, and `fromDicomJson` writes that text back. The
+  string drops the value's leading and trailing padding spaces, and is written only where it is a
+  `DS` of at most the 16 bytes PS3.5 allows, which is all `fromDicomJson` reads; a longer one, such
+  as `0.10000000000000001`, is refused with `UNREPRESENTABLE_NUMBER`. A double holds every `IS` of
+  the 12 characters PS3.5 allows it; a longer one no double holds is refused with
+  `UNREPRESENTABLE_NUMBER`. Only the form of the text may change.
 - **`FL` numbers.** A JSON number is rounded to the nearest float32, as any `FL` writer rounds it.
   One past float32's range, or below its smallest normal value and not a float32 itself, is
   refused with `UNREPRESENTABLE_NUMBER`: `1e-50` would otherwise be written as 0.
@@ -352,6 +355,18 @@ code; it never writes a value it cannot carry faithfully:
   included, is refused with `CONVERSION_FAILED`. The error it replaces is not kept, since its
   message could hold a value; a `resolveBulkData` that cannot resolve a URI should return
   `undefined`, which is refused with `BULK_DATA_UNRESOLVED`.
+
+A `DS` past 2^53 comes back as the same text:
+
+```ts runnable
+import { fromDicomJson, parseDicom, serializeDicom, toDicomJson } from "@cosyte/dicom";
+
+// Synthetic value: Patient's Weight (0010,1030) of 2^53 + 1, which no double holds.
+const fileMeta = { transferSyntaxUID: "1.2.840.10008.1.2.1" };
+const ds = fromDicomJson({ "00101030": { vr: "DS", Value: ["9007199254740993"] } }, { fileMeta });
+const json = toDicomJson(parseDicom(serializeDicom(ds)));
+json["00101030"]; // => { vr: "DS", Value: ["9007199254740993"] }
+```
 
 **Where the bytes can differ.** The JSON Model does not record everything Part 10 does, so the
 round trip is byte-identical only where the source already wrote what `fromDicomJson` writes:

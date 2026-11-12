@@ -22,7 +22,8 @@
  *   - `UNREPRESENTABLE_NUMBER` - a number one side cannot carry exactly: NaN, an infinity or
  *     negative zero in `FL` or `FD` (JSON writes `-0` as `0`), a `DS` or `IS` value that is not a
  *     number, an `IS` whose decimal value a JSON number does not hold (past 2^53, or more digits
- *     than a double keeps; a `DS` there is written as a JSON string), an `IS` string, given or
+ *     than a double keeps; a `DS` there is written as a JSON string, unless its text is longer
+ *     than the 16 bytes PS3.5 allows), an `IS` string, given or
  *     fetched, past the range of its VR, a number whose `DS` or `IS` text would be too long for
  *     its VR, or an `FL` number float32 does not hold, past its range or below its smallest
  *     normal value.

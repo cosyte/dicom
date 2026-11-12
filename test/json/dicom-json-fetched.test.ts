@@ -237,7 +237,13 @@ describe("a DS no JSON number holds exactly", () => {
     expect(json("9999999999999999")).toEqual({ vr: "DS", Value: ["9999999999999999"] });
     expect(json("1e-400")).toEqual({ vr: "DS", Value: ["1e-400"] });
     expect(json("1E400")).toEqual({ vr: "DS", Value: ["1E400"] });
-    expect(json(" 0.10000000000000001")).toEqual({ vr: "DS", Value: ["0.10000000000000001"] });
+    expect(json(" 9007199254740995")).toEqual({ vr: "DS", Value: ["9007199254740995"] });
+  });
+
+  it("is refused when the text is past the 16 bytes fromDicomJson reads, as before", () => {
+    expect(refusal(() => json("0.10000000000000001"))).toBe("UNREPRESENTABLE_NUMBER");
+    expect(refusal(() => json(" 0.10000000000000001"))).toBe("UNREPRESENTABLE_NUMBER");
+    expect(refusal(() => json("1.5\\0.10000000000000001"))).toBe("UNREPRESENTABLE_NUMBER");
   });
 
   it("stays a number where a JSON number holds it, each value on its own", () => {

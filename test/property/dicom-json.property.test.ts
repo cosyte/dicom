@@ -597,6 +597,49 @@ describe("dicom conformance: DICOM JSON Model, exact or refused", () => {
       }),
     );
   });
+
+  it("every DS or IS string toDicomJson writes reads back through fromDicomJson as that text", () => {
+    const digits = fc.string({
+      unit: fc.constantFrom(..."0123456789"),
+      minLength: 1,
+      maxLength: 20,
+    });
+    const number = fc.oneof(
+      digits,
+      fc.tuple(digits, digits).map(([w, f]) => `${w}.${f}`),
+      fc.tuple(digits, fc.integer({ min: -400, max: 400 })).map(([m, e]) => `${m}E${e}`),
+    );
+    const padded = fc
+      .tuple(fc.constantFrom("", " ", "  "), fc.constantFrom("", "-", "+"), number)
+      .map(([space, sign, n]) => `${space}${sign}${n}`);
+    checkProperty(
+      "DICOM JSON DS and IS strings read back",
+      fc.property(fc.constantFrom("DS", "IS"), padded, (vr, text) => {
+        const even = text.length % 2 === 1 ? `${text} ` : text;
+        const tag = vr === "DS" ? "00101020" : "00200013";
+        const elements: BuildDicomElement[] = [{ tag, vr, value: Buffer.from(even, "latin1") }];
+        const source = parseDicom(buildDicom({ transferSyntax: TS_EXPLICIT_LE, elements }));
+        let json: DicomJsonDataset | undefined;
+        const refused = refusalOf(() => {
+          json = JSON.parse(JSON.stringify(toDicomJson(source))) as DicomJsonDataset;
+        });
+        if (refused !== undefined) return refused === "UNREPRESENTABLE_NUMBER";
+        const written = (json as DicomJsonDataset)[tag]?.Value?.[0];
+        if (typeof written !== "string") return true;
+        // Only a DS is ever written as a string, and only within the 16 bytes PS3.5 allows it.
+        if (vr !== "DS" || written.length > 16) return false;
+        let back: ReturnType<typeof fromDicomJson> | undefined;
+        const backRefused = refusalOf(() => {
+          back = fromDicomJson(json as DicomJsonDataset, {
+            fileMeta: { transferSyntaxUID: TS_EXPLICIT_LE },
+          });
+        });
+        if (backRefused !== undefined) return false;
+        const bytes = Buffer.from(back?.get(tag)?.rawBytes ?? []).toString("latin1");
+        return bytes.replace(/ $/u, "") === written;
+      }),
+    );
+  });
 });
 
 /** VRs a hostile attribute names: every one PS3.5 defines, and some it does not. */
