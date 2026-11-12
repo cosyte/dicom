@@ -383,8 +383,10 @@ describe("numbers", () => {
           "UNREPRESENTABLE_NUMBER",
         );
       }
+      // PS3.18 F.2.3 gives DS and IS a JSON string as well as a number; the binary numbers only
+      // a number.
       expect(refusal(() => fromDicomJson({ [tag]: { vr, Value: ["1"] } }, LE))).toBe(
-        "INVALID_JSON",
+        vr === "DS" || vr === "IS" ? undefined : "INVALID_JSON",
       );
     }
     expect(refusal(() => fromDicomJson({ "00089459": { vr: "FL", Value: [1e300] } }, LE))).toBe(
@@ -415,7 +417,7 @@ describe("numbers", () => {
 });
 
 describe("binary values", () => {
-  it("reads every binary VR as InlineBinary and refuses the swapped ones under Big Endian", () => {
+  it("reads every binary VR as InlineBinary and refuses the swapped ones inline under Big Endian", () => {
     const swapped: [string, VR][] = [
       ["0014410C", "OD"],
       ["0014410B", "OF"],
@@ -427,12 +429,18 @@ describe("binary values", () => {
     for (const [tag, vr] of swapped) {
       expect(one(tag, vr, bytes)).toEqual({ vr, InlineBinary: bytes.toString("base64") });
       expect(refusal(() => one(tag, vr, bytes, TS_EXPLICIT_BE))).toBe("UNSUPPORTED_BYTE_ORDER");
-      for (const attr of [
-        { vr, InlineBinary: bytes.toString("base64") },
-        { vr, BulkDataURI: "https://example.com/bulk/1" },
-      ]) {
-        expect(refusal(() => fromDicomJson({ [tag]: attr }, BE))).toBe("UNSUPPORTED_BYTE_ORDER");
-      }
+      expect(
+        refusal(() => fromDicomJson({ [tag]: { vr, InlineBinary: bytes.toString("base64") } }, BE)),
+      ).toBe("UNSUPPORTED_BYTE_ORDER");
+      // Bulk data fetched by URI is Little Endian (PS3.18 8.7.3.3.1), swapped rather than refused.
+      expect(
+        refusal(() =>
+          fromDicomJson(
+            { [tag]: { vr, BulkDataURI: "https://example.com/bulk/1" } },
+            { ...BE, resolveBulkData: () => bytes },
+          ),
+        ),
+      ).toBeUndefined();
       expect(again({ [tag]: { vr } }, BE)).toEqual({ [tag]: { vr } });
     }
     expect(one("00282000", "OB", bytes, TS_EXPLICIT_BE)).toEqual({
@@ -594,13 +602,13 @@ describe("DicomJsonError", () => {
       UNSUPPORTED_VR:
         "The element's VR has no DICOM JSON form we write: SV and UV are refused until their JSON form is confirmed, and a VR PS3.5 does not define has none.",
       UNSUPPORTED_ELEMENT:
-        "The element's value cannot be held as DICOM JSON metadata: an encapsulated fragment stream, an undefined-length value that is not a Sequence, or a Sequence that was not read.",
+        "The element's value cannot be held as DICOM JSON metadata: an encapsulated fragment stream with no BulkDataURI, an undefined-length value that is not a Sequence, or a Sequence that was not read.",
       UNSUPPORTED_BYTE_ORDER:
-        "An OW, OF, OD, OL or OV value under Explicit VR Big Endian is refused: the byte order of its InlineBinary is not confirmed.",
+        "An OW, OF, OD, OL or OV value under Explicit VR Big Endian is refused: PS3.18 Annex F leaves the byte order of its InlineBinary open.",
       UNREPRESENTABLE_NUMBER:
         "A number cannot be carried exactly: NaN, an infinity or an FL or FD negative zero, a DS or IS value that is not a number or that a JSON number does not hold exactly, one too long for its VR, or an FL value outside float32's normal range.",
       MALFORMED_VALUE:
-        "A value is not well formed for its VR: a binary length that is not a whole number of values, a Person Name with more than three component groups, text its Specific Character Set does not decode, or a control character the VR does not allow.",
+        "A value is not well formed for its VR: a binary length that is not a whole number of values, a DS or IS string that is not one or is too long, a Person Name with more than three component groups, text its Specific Character Set does not decode, or a control character the VR does not allow.",
       INVALID_JSON:
         "The input is not a DICOM JSON Model object of the shape PS3.18 Annex F gives, or one value holds a delimiter its VR splits on.",
       BULK_DATA_UNRESOLVED:

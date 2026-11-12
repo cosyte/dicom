@@ -121,6 +121,7 @@ readDicomHeader
 readPixelDataFragments
 resolveDecoderLabel
 serializeDicom
+stringifyDicomJson
 toDate
 toDicomJson
 toISO

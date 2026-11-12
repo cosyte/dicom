@@ -86,7 +86,8 @@ export interface DicomJsonDataset {
 export interface ToDicomJsonOptions {
   /**
    * Asked for each element of a binary VR (`OB`, `OD`, `OF`, `OL`, `OV`, `OW`, `UN`) that has a
-   * value. Return a URI to write the attribute as a `BulkDataURI`, or `undefined` to write its
+   * value, and for encapsulated Pixel Data, which has no inline form and is refused with
+   * `UNSUPPORTED_ELEMENT` without a URI. Return a URI to write the attribute as a `BulkDataURI`, or `undefined` to write its
    * bytes inline as base64 in `InlineBinary`. A bulk value (Pixel Data `(7FE0,0010)`, Float and
    * Double Float Pixel Data `(7FE0,0008)` and `(7FE0,0009)`, Overlay Data `(60xx,3000)`,
    * Waveform Data `(5400,1010)`, Spectroscopy Data `(5600,0020)` and Encapsulated Document
@@ -146,8 +147,11 @@ export interface FromDicomJsonOptions {
    */
   readonly sequenceLength?: "defined" | "undefined";
   /**
-   * Resolves a `BulkDataURI` to the value's bytes, given the URI and the attribute's VR. Return
-   * `undefined` for a URI it cannot resolve, which is refused with `BULK_DATA_UNRESOLVED`.
+   * Resolves a `BulkDataURI` to the value's bytes, given the URI and the attribute's VR, which is
+   * any VR PS3.18 F.2.2 allows a `BulkDataURI` on, text and number VRs among them. Return the
+   * bytes in Little Endian order, as a DICOMweb service serves them: under Explicit VR Big Endian
+   * they are swapped, value by value. Return `undefined` for a URI it cannot resolve, which is
+   * refused with `BULK_DATA_UNRESOLVED`.
    */
   readonly resolveBulkData?: (uri: string, vr: string) => Buffer | Uint8Array | undefined;
 }

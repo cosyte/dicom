@@ -182,8 +182,22 @@ keyed by tag, eight uppercase hex digits, each attribute with its `vr` and its v
 into a `Dataset`, which `serializeDicom` writes as Part 10. The JSON Model holds no File Meta, so
 `fromDicomJson` takes the File Meta to write under, and its Transfer Syntax UID picks the encoding.
 
+**Write the text with `stringifyDicomJson`.** The annex orders a Data Set's attributes by tag,
+ascending. `toDicomJson` adds them in that order at every depth, but a JavaScript object lists an
+all-digit key with no leading zero first, whatever order it was added in, so `JSON.stringify`
+writes a tag such as `60000010` (Overlay Rows) or `20000010` (Number of Copies) ahead of
+`00080005`. `stringifyDicomJson(json, space?)` writes the same text as `JSON.stringify` with every
+Data Set's attributes in ascending order; where the object already lists them so, the two give the
+same text. `JSON.parse` reads either back.
+
 ```ts runnable
-import { fromDicomJson, parseDicom, serializeDicom, toDicomJson } from "@cosyte/dicom";
+import {
+  fromDicomJson,
+  parseDicom,
+  serializeDicom,
+  stringifyDicomJson,
+  toDicomJson,
+} from "@cosyte/dicom";
 
 // Synthetic object: Modality CT and an invented Patient ID.
 const buf = Buffer.from(
@@ -198,7 +212,7 @@ json["00100020"]; // => { vr: "LO", Value: ["MRN-42"] }
 
 // The JSON Model carries no File Meta, so the source's goes back in.
 const fileMeta = ds.fileMeta ?? { transferSyntaxUID: "1.2.840.10008.1.2.1" };
-const back = fromDicomJson(JSON.parse(JSON.stringify(json)), { fileMeta });
+const back = fromDicomJson(JSON.parse(stringifyDicomJson(json)), { fileMeta });
 
 // Part 10 to JSON to Part 10 writes the same bytes.
 serializeDicom(back).equals(serializeDicom(ds)); // => true
@@ -211,11 +225,12 @@ How each VR is written, and read back the same way:
 | `AE` `AS` `CS` `DA` `DT` `LO` `SH` `TM` `UC` `UI` | `Value`: strings split on backslashes, padding removed, `null` for an empty value of several                                            |
 | `LT` `ST` `UT` `UR`                               | `Value`: one string, a backslash kept as a character                                                                                    |
 | `PN`                                              | `Value`: objects of `Alphabetic`, `Ideographic` and `Phonetic` component groups                                                         |
-| `DS` `IS`                                         | `Value`: JSON numbers of the text's exact decimal value                                                                                 |
+| `DS` `IS`                                         | `Value`: JSON numbers of the text's exact decimal value; `fromDicomJson` also reads a JSON string, written as its own text              |
 | `US` `SS` `UL` `SL` `FL` `FD`                     | `Value`: JSON numbers                                                                                                                   |
 | `AT`                                              | `Value`: tags as eight uppercase hex digits                                                                                             |
 | `SQ`                                              | `Value`: nested Data Sets, `{}` for an empty Item                                                                                       |
 | `OB` `OD` `OF` `OL` `OV` `OW` `UN`                | `InlineBinary` (base64), or `BulkDataURI` where the `bulkDataUri` option gives one; bulk values inline only with `inlineBulkData: true` |
+| encapsulated Pixel Data                           | `BulkDataURI` only, where the `bulkDataUri` option gives one: the annex has no inline form for a fragment stream                        |
 
 The shapes are typed: a `DicomJsonDataset` maps each tag to a `DicomJsonAttribute`, whose `Value`
 is an array of `DicomJsonValue`, a Person Name value being a `DicomJsonPersonName`. The options are
@@ -226,6 +241,25 @@ Specific Character Set by the same decoder `element.value` uses, so the two neve
 `(0008,0005)` is kept as it is, and text is encoded back under it. A `BulkDataURI` comes back
 through the `resolveBulkData` option of `fromDicomJson`; one it does not resolve is refused, and
 one it throws for is refused with `CONVERSION_FAILED`.
+
+**`BulkDataURI` on text and number VRs.** The annex allows a `BulkDataURI` on `DS`, `FL`, `FD`,
+`IS`, `LT`, `OB`, `OD`, `OF`, `OL`, `OV`, `OW`, `SL`, `SS`, `ST`, `SV`, `UC`, `UL`, `UN`, `US`,
+`UT` and `UV`, and `fromDicomJson` takes one on each: a US lookup table or an `FL` list by URI is
+handed to `resolveBulkData` with its VR, as a binary value is. On any other VR, or beside a
+`Value`, a `BulkDataURI` is refused with `INVALID_JSON`; `InlineBinary` stays with the seven binary
+VRs. Text fetched by URI is written as the resolver gives it, in the Data Set's character set.
+Bytes for a VR of numbers that are not a whole number of values are refused with
+`MALFORMED_VALUE`.
+
+**Byte order.** A DICOMweb service serves uncompressed bulk data in Little Endian byte order
+(PS3.18, in the retrieve section on bulk data), so `fromDicomJson` takes the resolver's bytes as
+Little Endian: under Explicit VR Big Endian it swaps each value of `OW`, `US` and `SS` (two
+bytes), `OF`, `OL`, `UL`, `SL` and `FL` (four) and `OD`, `OV`, `FD`, `SV` and `UV` (eight), and
+leaves `OB`, `UN` and text as they are. An `InlineBinary` is another matter: the annex defines it
+as the base64 of the Value Field and leaves its byte order to PS3.19, which names none, so an
+`OW`, `OF`, `OD`, `OL` or `OV` `InlineBinary` under Big Endian is still refused with
+`UNSUPPORTED_BYTE_ORDER` rather than guessed at. `toDicomJson` refuses those VRs under Big Endian
+too, by URI as well, since the bytes it would hand out are the Data Set's own.
 
 **Specific Character Sets carried.** One value of the default repertoire (no value, an empty one,
 or `ISO_IR 6`), of a single-byte set without code extensions (`ISO_IR 100`, `101`, `109`, `110`,
@@ -315,7 +349,9 @@ round trip is byte-identical only where the source already wrote what `fromDicom
 - **Sequence and Item lengths.** The model does not say whether a Sequence or Item had a defined
   or an undefined length. `fromDicomJson` writes defined lengths, or undefined lengths with
   `sequenceLength: "undefined"`; a source that mixed the two comes back with one of them.
-- **`DS` and `IS` text.** A number is written in JavaScript's shortest text for it, so `1.0`
+- **`DS` and `IS` text.** A `DS` or `IS` given as a JSON string is written as that text, so it
+  keeps its form; read back by `toDicomJson`, it comes out as a number. A number is written in
+  JavaScript's shortest text for it, so `1.0`
   comes back as `1`, `+5` as `5` and `-0` as `0`; where that text is past the 16 characters `DS`
   allows, the value is written as its significant digits and a power of ten, so `100E14` comes
   back as `1e16`. The decimal value never changes; a text whose value a JSON number does not hold
@@ -336,29 +372,31 @@ round trip is byte-identical only where the source already wrote what `fromDicom
 value, and the message carries no value. `UNSUPPORTED_VR`: `SV` and `UV` with a value.
 `BULK_DATA_URI_REQUIRED`: a bulk value with no URI and no `inlineBulkData`. `VR_MISMATCH`: an
 attribute whose VR the written Data Set does not read back with.
-`UNSUPPORTED_ELEMENT`: encapsulated Pixel Data and any other undefined-length value that is not a
-Sequence. `UNSUPPORTED_BYTE_ORDER`: `OW`, `OF`, `OD`, `OL` and `OV` under Explicit VR Big Endian.
+`UNSUPPORTED_ELEMENT`: encapsulated Pixel Data with no URI from `bulkDataUri`, and any other
+undefined-length value that is not a Sequence. `UNSUPPORTED_BYTE_ORDER`: `OW`, `OF`, `OD`, `OL`
+and `OV` under Explicit VR Big Endian, as an `InlineBinary` or from `toDicomJson`.
 `UNREPRESENTABLE_NUMBER`: NaN, an infinity, an `FL` or `FD` negative zero, a `DS` or `IS` that is
 not a number or whose value no JSON number holds exactly, or a number its VR cannot hold.
-`MALFORMED_VALUE`: a binary length that is not a whole number of values, a Person Name of more
-than three groups, text bytes the Specific Character Set does not decode, or a control character
+`MALFORMED_VALUE`: a binary length that is not a whole number of values, a `DS` or `IS` string
+that is not one or is longer than its VR allows, a Person Name of more than three groups, text bytes the Specific Character Set does not decode, or a control character
 the VR does not allow. `UNSUPPORTED_CHARACTER_SET`: a Specific Character Set of more than one value
 or one not carried, at any depth, or text `fromDicomJson` cannot encode, which is any character
 outside 7-bit ASCII under a set other than the default repertoire, `ISO_IR 100` and `ISO_IR 192`.
 `UNSUPPORTED_TRANSFER_SYNTAX`: `fromDicomJson` writes only the three uncompressed syntaxes and
 Deflated Explicit VR LE. `NESTING_TOO_DEEP`: Sequences nested more than 64 deep.
 `INVALID_OPTION`: a `fallbackCharacterSet` that is not a term of `FALLBACK_CHARACTER_SETS`.
-`CONVERSION_FAILED`: any other error. `INVALID_JSON` (another shape, or a delimiter inside one
-value), `BULK_DATA_UNRESOLVED` and `VALUE_TOO_LONG` cover the rest.
+`CONVERSION_FAILED`: any other error. `INVALID_JSON` (another shape, a delimiter inside one
+value, an `InlineBinary` on a VR that is not binary, or a `BulkDataURI` on a VR the annex does not
+allow one on), `BULK_DATA_UNRESOLVED` and `VALUE_TOO_LONG` cover the rest.
 
-**What we have not checked against the standard.** PS3.18 is not vendored in this repository, so
-these forms are what we write and read, not a conformance verdict. The cases we could not confirm
-are the ones refused above: the JSON form of `SV` and `UV` values, the byte order of an
-`InlineBinary` under Big Endian, and `DS` or `IS` carried as JSON strings, which `fromDicomJson`
-refuses as `INVALID_JSON`. The `null` for an empty value among several, and an Item written as
-`{}`, are also our reading, and so is which values count as bulk and the rounding of an `FL`
-number to float32. A JSON array of several Data Sets is not read; pass each Data Set in
-turn.
+**What the annex settles, and what it leaves open.** We read PS3.18 Annex F of the 2026d
+edition section by section. It settles the attribute order, `DS` and `IS` as JSON strings, the
+VRs a `BulkDataURI` may stand on, the `null` for an empty value among several and an Item written
+as `{}`, and the converters follow it there. It leaves the byte order of an `InlineBinary` open,
+which is why that refusal stays. PS3.18 is not yet vendored in this repository, so this page cites
+the annex by name and not clause by clause. Still our reading, not the annex's: the JSON form of
+`SV` and `UV` values, which we refuse, which values count as bulk, and the rounding of an `FL`
+number to float32. A JSON array of several Data Sets is not read; pass each Data Set in turn.
 
 ## Where to go next
 

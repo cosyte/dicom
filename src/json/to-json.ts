@@ -271,7 +271,13 @@ function attributeOf(
     if (items.length === 0) return { vr: "SQ" };
     return { vr: "SQ", Value: items.map((item) => datasetOf(item, options, fallback)) };
   }
-  if (el.length === UNDEFINED_LENGTH) refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_ELEMENT, el);
+  if (el.length === UNDEFINED_LENGTH) {
+    // Encapsulated Pixel Data has no inline form in PS3.18 Annex F: it goes out by URI, or not at
+    // all. The URI's resource carries the whole fragment stream, as the caller serves it.
+    const uri = el.tag === "7FE00010" ? options.bulkDataUri?.(el) : undefined;
+    if (uri === undefined) refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_ELEMENT, el);
+    return { vr: el.vr, BulkDataURI: uri };
+  }
   return scalarAttribute(el, options, fallback);
 }
 
@@ -281,7 +287,11 @@ function datasetOf(
   fallback: Fallback | undefined,
 ): DicomJsonDataset {
   const out: Record<string, DicomJsonAttribute> = {};
-  for (const el of ds.elements()) {
+  // PS3.18 F.2.2 orders the attributes by tag, ascending; the tags are added in that order, and
+  // `stringifyDicomJson` writes them so even where JavaScript lists an all-digit tag first.
+  // Stryker disable next-line EqualityOperator: equivalent, a Data Set holds each tag once, so no two compare equal
+  const elements = [...ds.elements()].sort((a, b) => (a.tag < b.tag ? -1 : 1));
+  for (const el of elements) {
     // Group Length (gggg,0000) is left out, as serializeDicom leaves it out (PS3.5 section 7.2).
     if (el.tag.endsWith("0000")) continue;
     // A Specific Character Set we do not carry is refused, whether or not any text follows it,
@@ -300,8 +310,8 @@ function datasetOf(
 
 /**
  * The DICOM JSON Model (PS3.18 Annex F) of a {@link Dataset}: one JSON object whose keys are the
- * tags, eight uppercase hex digits, in the order the Data Set holds them, each with its `vr` and
- * its value as `Value`, `InlineBinary` or `BulkDataURI`. Metadata only: no File Meta Information,
+ * tags, eight uppercase hex digits, added in ascending order at every depth as PS3.18 F.2.2 orders
+ * them, each with its `vr` and its value as `Value`, `InlineBinary` or `BulkDataURI`. Metadata only: no File Meta Information,
  * which the model does not carry, and no retired Group Length.
  *
  * How each VR is written: text VRs as JSON strings with their padding removed, `null` for an empty
@@ -309,7 +319,9 @@ function datasetOf(
  * `DS`, `IS`, `US`, `SS`, `UL`, `SL`, `FL` and `FD` as JSON numbers; `AT` as eight hex digits;
  * `SQ` as an array of nested Data Sets; and `OB`, `OD`, `OF`, `OL`, `OV`, `OW` and `UN` as base64
  * `InlineBinary`, or as a `BulkDataURI` where the `bulkDataUri` option gives one. Pixel Data and
- * the other bulk values are written inline only with the `inlineBulkData` option. An attribute
+ * the other bulk values are written inline only with the `inlineBulkData` option. Encapsulated
+ * Pixel Data, which the annex gives no inline form, is written only as the `BulkDataURI` the
+ * option gives it. An attribute
  * with an empty value has no value field. Text is decoded through `(0008,0005)` Specific Character
  * Set, by the decoder `Element.value` uses, and `(0008,0005)` is kept as it is. Only one value of
  * the default repertoire, a single-byte `ISO_IR` set or `ISO_IR 192` is carried. With the
@@ -318,15 +330,17 @@ function datasetOf(
  * `fallbackCharacterSetForUnknown` so is text under a term this build does not decode; no
  * `(0008,0005)` is added to the result.
  *
- * The result is a plain object: `JSON.stringify` writes it, and `fromDicomJson` reads it back.
+ * The result is a plain object, and `fromDicomJson` reads it back. Write its text with
+ * `stringifyDicomJson`: `JSON.stringify` puts an all-digit tag such as `60000010` before the
+ * others, out of the order F.2.2 requires, since JavaScript lists integer keys first.
  *
  * @param ds - The Data Set, usually from `parseDicom`.
  * @param options - Where to hand binary values out as a `BulkDataURI`, and whether bulk values may
  *   go inline.
  * @returns The Data Set as a DICOM JSON object.
  * @throws {@link DicomJsonError} rather than change or guess a value: `UNSUPPORTED_VR` for `SV`
- *   and `UV`, `UNSUPPORTED_ELEMENT` for encapsulated Pixel Data or another undefined-length value
- *   that is not a read Sequence, `UNSUPPORTED_BYTE_ORDER` for an `OW`, `OF`, `OD`, `OL` or `OV`
+ *   and `UV`, `UNSUPPORTED_ELEMENT` for encapsulated Pixel Data the `bulkDataUri` option gives no
+ *   URI, or another undefined-length value that is not a read Sequence, `UNSUPPORTED_BYTE_ORDER` for an `OW`, `OF`, `OD`, `OL` or `OV`
  *   value under Explicit VR Big Endian, `UNREPRESENTABLE_NUMBER` for NaN, an infinity, an `FL` or
  *   `FD` negative zero, or a `DS` or `IS` value that is not a number or that no JSON number holds
  *   exactly, `MALFORMED_VALUE` for a binary value whose length is not a whole number of values, a
@@ -339,12 +353,12 @@ function datasetOf(
  *   threw included.
  * @example
  * ```ts
- * import { parseDicom, toDicomJson } from "@cosyte/dicom";
+ * import { parseDicom, stringifyDicomJson, toDicomJson } from "@cosyte/dicom";
  * const json = toDicomJson(parseDicom(buf), {
  *   bulkDataUri: (el) => `https://example.com/bulk/${el.tag}`,
  * });
  * json["00100010"]; // { vr: "PN", Value: [{ Alphabetic: "DOE^JANE" }] }
- * JSON.stringify(json);
+ * stringifyDicomJson(json);
  * ```
  */
 export function toDicomJson(ds: Dataset, options: ToDicomJsonOptions = {}): DicomJsonDataset {

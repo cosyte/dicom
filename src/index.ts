@@ -106,6 +106,7 @@ export {
 
 export { toDicomJson } from "./json/to-json.js";
 export { fromDicomJson } from "./json/from-json.js";
+export { stringifyDicomJson } from "./json/stringify.js";
 export { DICOM_JSON_ERROR_CODES, type DicomJsonErrorCode, DicomJsonError } from "./json/errors.js";
 export type {
   DicomJsonAttribute,
