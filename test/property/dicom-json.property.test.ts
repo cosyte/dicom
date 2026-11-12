@@ -204,7 +204,7 @@ const cases = fc
     dataset(transferSyntaxUID === TS_EXPLICIT_BE, 2).map((json) => ({
       transferSyntaxUID,
       sequenceLength,
-      json: { "00080005": { vr: "CS", Value: ["ISO_IR 100"] }, ...json } as DicomJsonDataset,
+      json: { "00080005": { vr: "CS", Value: ["ISO_IR 100"] }, ...json },
     })),
   );
 
