@@ -65,8 +65,16 @@ function trimEnd(text: string): string {
  * `decodeText`, the reader's own decoder, gives under `(0008,0005)`, so the two never disagree.
  * Only Specific Character Sets without code extensions are carried. Bytes the set does not
  * decode are refused, never read as U+FFFD, and a leading byte order mark is kept.
+ * `fromDicomJson` reads back each text value it writes through this, so the two directions read
+ * text the same way.
+ *
+ * @internal
+ * @example
+ * ```ts
+ * textOf(parseDicom(buf).get("00100020") as Element); // "SYNTHETIC^ID "
+ * ```
  */
-function textOf(el: Element): string {
+export function textOf(el: Element): string {
   const bytes = el.rawBytes;
   if (!isCharsetVr(el.vr)) return bytes.toString("latin1");
   const terms = el.specificCharacterSet ?? [];

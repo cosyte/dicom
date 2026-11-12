@@ -15,8 +15,9 @@
  * VR reads back as another, a delimiter inside one value, a `DS` past what a double holds, an `FL`
  * below float32's normal range, a Person Name of four or five groups, bytes that are not UTF-8
  * under `ISO_IR 192`, a control character a VR does not allow, an `FL` or `FD` negative zero, and
- * Pixel Data with and without the inline opt-in. Each comes back exactly, or is refused with the
- * code for its shape; never anything else.
+ * Pixel Data with and without the inline opt-in, and text drawn with C1 characters and lone
+ * surrogates under every Specific Character Set we carry. Each comes back exactly, or is refused
+ * with the code for its shape; never anything else.
  *
  * A last property hands `fromDicomJson` hostile JSON, any JSON value and Data Sets of near-valid
  * shapes nested past the reader's limit, and holds that nothing but a `DicomJsonError` is thrown.
@@ -345,6 +346,63 @@ const numberCase: fc.Arbitrary<JsonCase> = fc
     code: "UNREPRESENTABLE_NUMBER",
   }));
 
+/** Every Specific Character Set we carry; `null` is an `(0008,0005)` with no value. */
+const CARRIED_SETS = [
+  undefined,
+  null,
+  "ISO_IR 6",
+  "ISO_IR 100",
+  "ISO_IR 101",
+  "ISO_IR 109",
+  "ISO_IR 110",
+  "ISO_IR 144",
+  "ISO_IR 127",
+  "ISO_IR 126",
+  "ISO_IR 138",
+  "ISO_IR 148",
+  "ISO_IR 203",
+  "ISO_IR 13",
+  "ISO_IR 166",
+  "ISO_IR 192",
+] as const;
+
+/**
+ * Characters text is drawn from: ASCII, Latin-1 letters, every C1 code point, lone surrogates of
+ * each half (two of which may draw a pair), a pair, and letters only some sets hold.
+ */
+const TEXT_UNITS = [
+  ..."AZaz09^.",
+  ...[0xe9, 0xff, 0x20ac, 0x0416, 0xff71, 0xfffd].map((c) => String.fromCharCode(c)),
+  ...Array.from({ length: 0x20 }, (_, i) => String.fromCharCode(0x80 + i)),
+  ...[0xd800, 0xdbff, 0xdc00, 0xdfff].map((c) => String.fromCharCode(c)),
+  String.fromCodePoint(0x1f600),
+];
+
+/**
+ * Text under any set we carry, in an `LO`, an `LT` or a Person Name, at the top or in an Item that
+ * inherits the set: it comes back exactly, or is refused because the set does not encode it or
+ * does not read it back as itself.
+ */
+const textCase: fc.Arbitrary<JsonCase> = fc
+  .record({
+    charset: fc.constantFrom(...CARRIED_SETS),
+    vr: fc.constantFrom("LO", "LT", "PN"),
+    text: fc.string({ unit: fc.constantFrom(...TEXT_UNITS), minLength: 1, maxLength: 8 }),
+    nested: fc.boolean(),
+    transferSyntaxUID: anySyntax,
+  })
+  .map(({ charset, vr, text, nested, transferSyntaxUID }) => {
+    const tags: Record<string, string> = { LO: "00100020", LT: "00104000", PN: "00100010" };
+    const attr: DicomJsonAttribute = { vr, Value: [vr === "PN" ? { Alphabetic: text } : text] };
+    const inner: DicomJsonDataset = { [tags[vr] as string]: attr };
+    const json: Record<string, DicomJsonAttribute> = {};
+    if (charset === null) json["00080005"] = { vr: "CS" };
+    else if (charset !== undefined) json["00080005"] = { vr: "CS", Value: [charset] };
+    if (nested) json["0040A730"] = { vr: "SQ", Value: [inner] };
+    else Object.assign(json, inner);
+    return { json, transferSyntaxUID, code: "UNSUPPORTED_CHARACTER_SET" };
+  });
+
 /** A decimal text as an exact rational: an integer and a power of ten, by BigInt arithmetic. */
 function exactDecimal(text: string): readonly [bigint, number] {
   const [mantissa = "", exponent = "0"] = text.trim().toLowerCase().split("e");
@@ -472,7 +530,7 @@ describe("dicom conformance: DICOM JSON Model, exact or refused", () => {
     checkProperty(
       "DICOM JSON exact or refused, from JSON",
       fc.property(
-        fc.oneof(implicitVrCase, delimiterCase, numberCase),
+        fc.oneof(implicitVrCase, delimiterCase, numberCase, textCase),
         ({ json, transferSyntaxUID, code }) => {
           let back: DicomJsonDataset | undefined;
           const refused = refusalOf(() => {

@@ -25,7 +25,8 @@
  *     `ST` and `UT`, none at all elsewhere, and so never ESC).
  *   - `INVALID_JSON` - the input to `fromDicomJson` is not a DICOM JSON Model object we read: a key
  *     that is not eight hex digits, a File Meta `(0002,xxxx)` or item delimitation `(FFFE,xxxx)`
- *     tag, an attribute with no `vr`, a value of the wrong JSON type for its VR, an attribute with
+ *     tag, a tag in group `0001`, `0003`, `0005` or `0007`, which PS3.5 section 7.8.1 says
+ *     shall not be used, an attribute with no `vr`, a value of the wrong JSON type for its VR, an attribute with
  *     more than one of `Value`, `InlineBinary` and `BulkDataURI`, or a delimiter inside one value
  *     (a backslash in a multi-valued string or a Person Name, an `=` in a Person Name group).
  *   - `BULK_DATA_UNRESOLVED` - a `BulkDataURI` that no `resolveBulkData` option resolved.
@@ -39,7 +40,11 @@
  *     more than one value or names a set other than the default repertoire, a single-byte
  *     `ISO_IR` set or `ISO_IR 192` (so no ISO 2022 code extensions, and no `GB18030` or `GBK`);
  *     or text `fromDicomJson` does not encode: a character outside 7-bit ASCII under a set other
- *     than the default repertoire, `ISO_IR 100` and `ISO_IR 192`, or one that set cannot hold.
+ *     than the default repertoire, `ISO_IR 100` and `ISO_IR 192`, one that set cannot hold, or
+ *     text that does not read back as itself. `fromDicomJson` reads every text value it writes
+ *     back through the reader's decoder: the reader decodes the default repertoire and
+ *     `ISO_IR 100` as windows-1252, so 27 of the C1 code points U+0080 to U+009F are refused, and
+ *     under `ISO_IR 192` a lone surrogate is.
  *   - `UNSUPPORTED_TRANSFER_SYNTAX` - `fromDicomJson` was asked for a Transfer Syntax other than
  *     Implicit VR Little Endian, Explicit VR Little Endian, Explicit VR Big Endian or Deflated
  *     Explicit VR Little Endian.
@@ -118,7 +123,7 @@ function messageOf(code: DicomJsonErrorCode): string {
     case "BULK_DATA_URI_REQUIRED":
       return "A bulk value such as Pixel Data is not written inline unless the inlineBulkData option is set: give it a URI through the bulkDataUri option.";
     case "UNSUPPORTED_CHARACTER_SET":
-      return "The Specific Character Set is not one we carry: only one value, the default repertoire, a single-byte ISO_IR set or ISO_IR 192, with no code extensions; and text outside 7-bit ASCII is written only under the default repertoire, ISO_IR 100 and ISO_IR 192.";
+      return "The Specific Character Set is not one we carry: only one value, the default repertoire, a single-byte ISO_IR set or ISO_IR 192, with no code extensions; and text outside 7-bit ASCII is written only under the default repertoire, ISO_IR 100 and ISO_IR 192, and only where it reads back as the same text.";
     case "UNSUPPORTED_TRANSFER_SYNTAX":
       return "fromDicomJson writes only Implicit VR Little Endian, Explicit VR Little Endian, Explicit VR Big Endian and Deflated Explicit VR Little Endian.";
     case "VALUE_TOO_LONG":

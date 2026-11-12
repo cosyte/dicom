@@ -235,7 +235,14 @@ ISO 2022 term, `GB18030`, `GBK`) with `UNSUPPORTED_CHARACTER_SET`, even when it 
 JSON Model has no place for the escape sequences of the code extensions of ISO 2022, and a converter that
 read them differently from the reader would change a name without a word. `fromDicomJson` writes
 text outside 7-bit ASCII only under the default repertoire and `ISO_IR 100` (as Latin-1) and
-`ISO_IR 192` (as UTF-8); under the other single-byte sets it writes 7-bit ASCII alone.
+`ISO_IR 192` (as UTF-8); under the other single-byte sets it writes 7-bit ASCII alone. It then
+reads every text value back through the reader's decoder, at every depth, and refuses with
+`UNSUPPORTED_CHARACTER_SET` any that does not read back as the text the JSON gave. Today that
+refuses text holding most C1 control characters (U+0080 to U+009F) under the default repertoire,
+`ISO_IR 6` and `ISO_IR 100`: the reader decodes those sets as windows-1252, which reads 27 of
+those 32 bytes as other characters (0x80 as the euro sign), and only U+0081, U+008D, U+008F,
+U+0090 and U+009D come back. Under `ISO_IR 192` a lone surrogate, which UTF-8 cannot encode, is
+refused too.
 
 **Bulk values are not written inline by default.** The model is for metadata, so Pixel Data
 `(7FE0,0010)`, Float and Double Float Pixel Data `(7FE0,0008)` and `(7FE0,0009)`, Overlay Data
@@ -274,7 +281,13 @@ code; it never writes a value it cannot carry faithfully:
   carried. `fromDicomJson` refuses text holding any other C0 control character (U+0000 to U+001F)
   with `MALFORMED_VALUE`, under every Specific Character Set, so no escape sequence written as JSON
   text can turn into other characters when it is read back. `toDicomJson` writes such a character
-  as it reads it.
+  as it reads it, so JSON it wrote from a value holding one is refused when it comes back to
+  `fromDicomJson`.
+- **Text that reads back as other text.** `fromDicomJson` reads back every text value it wrote and
+  refuses with `UNSUPPORTED_CHARACTER_SET` one that differs from the JSON's, such as a C1 code
+  point under a set the reader decodes as windows-1252, or a lone surrogate under `ISO_IR 192`.
+- **Odd groups below `0008`.** PS3.5 section 7.8.1 says elements in group `0001`, `0003`,
+  `0005` and `0007` "shall not be used", so `fromDicomJson` refuses a tag in one with `INVALID_JSON`.
 - **`FL` and `FD` negative zero.** JSON writes `-0` as `0`, which is another IEEE value, so
   `toDicomJson` refuses an `FL` or `FD` negative zero with `UNREPRESENTABLE_NUMBER`.
 - **Nesting.** `parseDicom` reads Sequences nested at most 64 deep (`NESTING_DEPTH_LIMIT`), so

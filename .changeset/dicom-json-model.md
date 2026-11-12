@@ -26,7 +26,10 @@ New `toDicomJson` and `fromDicomJson` convert a Data Set to the DICOM JSON Model
   Implicit VR would read back as another (`VR_MISMATCH`), a backslash or `=` inside one value, a
   control character the VR does not allow (ESC among them), a Person Name of more than three
   groups, text bytes the Specific Character Set does not decode, text it is not encoded under
-  here, Sequences nested more than 64 deep (`NESTING_TOO_DEEP`), and JSON of another shape. Any
+  here or that does not read back as itself (`fromDicomJson` reads every text value it writes back
+  through the reader's decoder, which reads the default repertoire and `ISO_IR 100` as
+  windows-1252, so text holding most C1 characters is refused, as is a lone surrogate under
+  `ISO_IR 192`), a tag in group `0001`, `0003`, `0005` or `0007`, Sequences nested more than 64 deep (`NESTING_TOO_DEEP`), and JSON of another shape. Any
   other error, one a callback throws included, is `CONVERSION_FAILED`: nothing but a
   `DicomJsonError` leaves either converter. PS3.18 is not vendored here, so the cases we could not
   confirm against it are among the refusals.

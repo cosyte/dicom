@@ -406,7 +406,10 @@ on the wire.
   `DicomJsonError`. So is every value that would change on the way: a VR Implicit VR reads back as
   another, a delimiter inside one value, a `DS` no double holds exactly, an `FL` below float32's
   normal range, an `FL` or `FD` negative zero, a Person Name of more than three groups, text bytes
-  its Specific Character Set does not decode, and a control character its VR does not allow. Only
+  its Specific Character Set does not decode, a control character its VR does not allow, and any
+  text that does not read back as itself. The reader decodes the default repertoire and
+  `ISO_IR 100` as windows-1252, so text holding most C1 characters (U+0080 to U+009F) is refused
+  by `fromDicomJson` today, as is a lone surrogate under `ISO_IR 192`. Only
   one Specific Character Set value is carried, the default repertoire, a single-byte set or
   `ISO_IR 192`: a Data Set with the code extensions of ISO 2022, `GB18030` or `GBK`, at any depth, is
   refused, even one the reader decodes. JSON nested more than 64 Sequences deep is refused, and

@@ -600,7 +600,7 @@ describe("DicomJsonError", () => {
       BULK_DATA_UNRESOLVED:
         "A BulkDataURI was not resolved to bytes by the resolveBulkData option.",
       UNSUPPORTED_CHARACTER_SET:
-        "The Specific Character Set is not one we carry: only one value, the default repertoire, a single-byte ISO_IR set or ISO_IR 192, with no code extensions; and text outside 7-bit ASCII is written only under the default repertoire, ISO_IR 100 and ISO_IR 192.",
+        "The Specific Character Set is not one we carry: only one value, the default repertoire, a single-byte ISO_IR set or ISO_IR 192, with no code extensions; and text outside 7-bit ASCII is written only under the default repertoire, ISO_IR 100 and ISO_IR 192, and only where it reads back as the same text.",
       UNSUPPORTED_TRANSFER_SYNTAX:
         "fromDicomJson writes only Implicit VR Little Endian, Explicit VR Little Endian, Explicit VR Big Endian and Deflated Explicit VR Little Endian.",
       VALUE_TOO_LONG: "A value is too long for the Value Length Field of its VR.",
