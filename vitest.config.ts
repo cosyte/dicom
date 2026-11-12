@@ -21,7 +21,7 @@ import { cosyteVitest } from "@cosyte/vitest-config";
  * one only with that reason, and never to make a reachable line pass, nor a lower number in the
  * file.
  *
- * `hookTimeout` IS ABSENT DELIBERATELY (2026-08-03, `PARSER-TESTTIMEOUT-ASSERTS-AN-IDLE-BOX`). The
+ * `hookTimeout` IS ABSENT DELIBERATELY (`PARSER-TESTTIMEOUT-ASSERTS-AN-IDLE-BOX`). The
  * line that used to sit under `testTimeout` set it to exactly Vitest's own default, measured rather
  * than read: on this repository's Vitest, a `beforeAll` that sleeps past it reds at "Hook timed out
  * in 10000ms" with no configuration at all. It was verbatim the default and said nothing, so it is
