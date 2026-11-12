@@ -3,7 +3,9 @@
 Small runnable programs, one per job the package does. Each one imports `@cosyte/dicom` by its
 published name, so it runs against the built package exactly as a consumer installs it, prints what
 it read or wrote, and checks its own output: a mismatch exits non-zero. The one object they read is
-synthetic: an invented patient, example-root UIDs, header attributes only.
+synthetic: an invented patient, example-root UIDs, header attributes only. What an example prints is
+what is safe to log (a modality, the geometry, counts, codes, tags and VRs); a name, an ID, a date or
+a UID it reads is asserted on, never printed.
 
 Build once, then run them all:
 
@@ -16,7 +18,7 @@ pnpm examples
 | File                                                         | What it shows                                                                                                                                    | Run                                             |
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
 | [`read-metadata.ts`](read-metadata.ts)                       | Read the patient, study, series and image views, name the SOP class from the dictionary, and convert the study date.                             | `pnpm tsx examples/read-metadata.ts`            |
-| [`walk-elements.ts`](walk-elements.ts)                       | Walk every element with its dictionary name and its typed, decoded value.                                                                        | `pnpm tsx examples/walk-elements.ts`            |
+| [`walk-elements.ts`](walk-elements.ts)                       | Walk every element with its dictionary name and the shape of its typed value: its kind, how many values and how many bytes, never the value.     | `pnpm tsx examples/walk-elements.ts`            |
 | [`tolerate-and-reserialize.ts`](tolerate-and-reserialize.ts) | Read an object saved without its preamble, see the stable warning code, and write it back as spec-clean Part 10 that reads back with no warning. | `pnpm tsx examples/tolerate-and-reserialize.ts` |
 | [`deidentify.ts`](deidentify.ts)                             | De-identify the header with the PS3.15 Annex E Basic Profile, print the audit report, and write the result out.                                  | `pnpm tsx examples/deidentify.ts`               |
 | [`dicom-json.ts`](dicom-json.ts)                             | Convert the object to the DICOM JSON Model and back, and write the same Part 10 bytes it started as.                                             | `pnpm tsx examples/dicom-json.ts`               |
