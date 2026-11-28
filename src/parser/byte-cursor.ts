@@ -1,11 +1,11 @@
 /**
- * Endian-aware cursor over a Node `Buffer` - the single byte-level read
+ * Endian-aware cursor over a Node `Buffer`: the single byte-level read
  * primitive shared by all four transfer-syntax parsers.
  *
  * Uses Node `Buffer.readUInt16LE/BE` and `Buffer.readUInt32LE/BE` rather
  * than `DataView`: the Buffer methods are faster and are this package's
  * idiom. Every read validates `position + N <= buffer.length` before
- * touching memory and throws a `RangeError` on under-read - this is the
+ * touching memory and throws a `RangeError` on under-read: this is the
  * cross-cutting truncation mitigation the parser's threat model requires.
  *
  * @module
@@ -21,7 +21,7 @@ import { Buffer } from "node:buffer";
  * copy from the shared internal Buffer pool, so its backing `ArrayBuffer`
  * can be shared with unrelated small allocations (including a small source
  * dataset buffer). That defeats the detachment guarantee `copyValues: true`
- * exists to provide - releasing the source buffer and not co-locating a PHI
+ * exists to provide: releasing the source buffer and not co-locating a PHI
  * value with foreign bytes. `Buffer.allocUnsafeSlow` always allocates a
  * dedicated `ArrayBuffer`; copying the exact length over it leaves no
  * uninitialised bytes exposed.

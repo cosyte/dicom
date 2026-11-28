@@ -1,5 +1,5 @@
 /**
- * File Meta Information group parser - hard-wired Explicit VR LE.
+ * File Meta Information group parser: hard-wired Explicit VR LE.
  *
  * Four rules govern it:
  *
@@ -15,7 +15,7 @@
  *
  * A repeated `(0002,xxxx)` tag is lossy here without being an overwrite. The
  * eight tags in `MODELED_FM_TAGS` are answered by a first-match search and are
- * excluded from `extraElements`, so a second copy of one is in neither - it left
+ * excluded from `extraElements`, so a second copy of one is in neither: it left
  * the object. Step 3.5 emits `DICOM_DUPLICATE_FILE_META_ELEMENT` for each such
  * copy at the moment the projection drops it; the reading does not move.
  *
@@ -131,12 +131,12 @@ export function parseFileMeta(
     if (cursor.position + declaredFmLength > buffer.length) {
       // NEITHER length is passed. The declared one is four document bytes; the
       // remaining count was `buffer.length - cursor.position`, which the factory
-      // no longer accepts - see `fileMetaGroupLengthOverruns` for why the bound
+      // no longer accepts; see `fileMetaGroupLengthOverruns` for why the bound
       // is its signature and not this call site's frame.
       throw fileMetaGroupLengthOverruns(ctx.frame, fmStart);
     }
   } else {
-    // (0002,0000) absent - emit warning and treat the first element as the start of the FM body.
+    // (0002,0000) absent: emit warning and treat the first element as the start of the FM body.
     emit(fileMetaGroupLengthMissing({ byteOffset: fmStart, fileMeta: true }));
     fmElements.push(firstElement);
     consumedAfterGroupLength = firstElement.bytesConsumed;
@@ -195,7 +195,7 @@ export function parseFileMeta(
 
   // Step 3.5: disclose every copy the projection below is about to drop.
   //
-  // The group is an array, so nothing is overwritten - but a MODELED tag is
+  // The group is an array, so nothing is overwritten, but a MODELED tag is
   // answered by a first-match search and is then EXCLUDED from `extraElements`,
   // so a second copy of one is in neither the typed fields nor the verbatim
   // residue. It simply left the object. `(0002,0010)` makes that the more
@@ -289,10 +289,10 @@ function readExplicitLeElement(cursor: ByteCursor): FmRawElement {
   let length: number;
   let headerLength: number;
   // A VR outside the 34 PS3.5 2026c defines is long-form too, per section 6.2's
-  // "shall" - the File Meta group is Explicit VR LE (PS3.10 section 7.1), so the
+  // "shall": the File Meta group is Explicit VR LE (PS3.10 section 7.1), so the
   // same structure rule governs it. See `readExplicitElementHeader`.
   if (LONG_FORM_VRS.has(vr) || !isRecognizedVr(vr)) {
-    // 2 reserved bytes - File Meta tolerates non-zero here; long-form check lives in dataset parsers.
+    // 2 reserved bytes: File Meta tolerates non-zero here; long-form check lives in dataset parsers.
     if (cursor.position + 2 > cursor.buffer.length) {
       throw new RangeError("ByteCursor: read past end of buffer");
     }
@@ -309,7 +309,7 @@ function readExplicitLeElement(cursor: ByteCursor): FmRawElement {
   const start = cursor.position;
   cursor.position += length;
   const bytesConsumed = cursor.position - headerStart;
-  // Sanity invariant - bytesConsumed must equal headerLength + length.
+  // Sanity invariant: bytesConsumed must equal headerLength + length.
   /* v8 ignore next 3 -- unreachable: every read above advanced the cursor by exactly its width. */
   if (bytesConsumed !== headerLength + length) {
     throw new RangeError("File Meta element accounting mismatch");
@@ -357,7 +357,7 @@ function trimText(e: FmRawElement): string {
 
 /**
  * A File Meta object with every field, kept for the life of the process so V8 keeps the hidden
- * classes each File Meta is built through: see `ELEMENT_SHAPES` in `../dataset/element.ts`.
+ * classes each File Meta is built through; see `ELEMENT_SHAPES` in `../dataset/element.ts`.
  *
  * @internal
  */

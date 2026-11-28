@@ -94,8 +94,8 @@ const HEADER = emptyExplicitElementHeader();
 /**
  * Shared Explicit-VR element loop used by both the LE and BE
  * strategies. The only TS-specific knobs are:
- *   - `mode.littleEndian` - drives ByteCursor + FFFE marker reads.
- *   - `mode.innerStrategy` - passed as `innerStrategy` when descending SQ
+ *   - `mode.littleEndian`: drives ByteCursor + FFFE marker reads.
+ *   - `mode.innerStrategy`: passed as `innerStrategy` when descending SQ
  *     and as the per-item parser for SQ-inner element bodies. (Each TS
  *     strategy passes itself in to break the circular import.)
  *
@@ -124,7 +124,7 @@ export function _parseExplicit(
       break;
     }
 
-    // Detect FFFE markers BEFORE the explicit-VR header read - FFFE
+    // Detect FFFE markers BEFORE the explicit-VR header read: FFFE
     // markers have no on-wire VR field and would mis-decode through
     // readExplicitElementHeader. Peek, then decide.
     let peekGroup: number;
@@ -160,7 +160,7 @@ export function _parseExplicit(
       }
       // `(FFFE,E00D)` Item Delimitation Item, compared as numbers.
       if (opts.stopOnItemDelim === true && grp === 0xfffe && ele === 0xe00d) {
-        // ItemDelim - cursor consumed past the 8-byte marker.
+        // ItemDelim: cursor consumed past the 8-byte marker.
         return table.closeSet(set, delta, cursor.position);
       }
       throw unexpectedFffeAtDatasetLevel(ctx.frame, headerStart);
@@ -200,7 +200,7 @@ export function _parseExplicit(
     }
 
     // Odd-length warning: emitted for explicit-length values whose declared
-    // length is odd. Don't pad - that is the serializer's job.
+    // length is odd. Don't pad: that is the serializer's job.
     if (length !== UNDEFINED_LENGTH && length % 2 === 1) {
       emit(oddLengthValuePadded((position ??= { byteOffset: headerStart }), tag));
     }
@@ -316,7 +316,7 @@ export function _parseExplicit(
         continue;
       }
       // Failure path: restore VR=UN with raw bytes preserved. UN with
-      // undefined length is malformed if it isn't a CP-246 SQ - we cannot
+      // undefined length is malformed if it isn't a CP-246 SQ: we cannot
       // reliably know where the value ends, so the conservative
       // interpretation is to consume the remainder of the input as the UN
       // value (best-effort). The cursor advances to end-of-buffer so the
@@ -371,7 +371,7 @@ export function _parseExplicit(
       emit(groupLengthInDataset((position ??= { byteOffset: headerStart })));
     }
 
-    // Private Creator slot (gggg,0010..00FF) - register into the stack.
+    // Private Creator slot (gggg,0010..00FF): register into the stack.
     if (groupNum % 2 === 1 && elementHexNum >= 0x0010 && elementHexNum <= 0x00ff) {
       registerPrivateCreator(tag, buffer.subarray(valueStart, valueEnd), ctx);
     }
