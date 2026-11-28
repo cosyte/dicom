@@ -1,9 +1,9 @@
 /**
  * Unit tests for the PS3.15 Annex E lookup helper (`annexE`).
  *
- * D-08 / D-09 / D-14 shipped the generated Annex E action table; this exercises the
- * thin lookup wrapper over it so the `src/dictionary/` coverage gate stays honest
- * (Phase 7's `anonymize()` is the production consumer, not yet landed).
+ * The generated Annex E action table ships in `src/dictionary/generated/`; this
+ * exercises the thin lookup wrapper over it so the `src/dictionary/` coverage gate
+ * stays honest. `deidentify()` is its production consumer.
  *
  * Tags asserted here are stable PS3.15 Table E.1-1 entries.
  */
@@ -72,7 +72,7 @@ describe("annexE (PS3.15 Annex E lookup)", () => {
  * attributes survived a call whose entire contract is that it does not, and the
  * report said nothing. These assertions are the ones that fail on the old table.
  */
-describe("PS3.15 normative overlay (DICOM-ANNEX-E-DEID-LAG)", () => {
+describe("PS3.15 normative overlay", () => {
   it("removes (0010,0012) Name to Use, a patient's preferred name", () => {
     const a = annexE("00100012");
     expect(a).toBeDefined();
@@ -148,7 +148,7 @@ describe("PS3.15 normative overlay (DICOM-ANNEX-E-DEID-LAG)", () => {
     expect(annexE("00321033")?.optionSet.CleanDescriptors).toBe("C");
   });
 
-  it("AC-12: carries every concrete row of PS3.15 2026d Table E.1-1", () => {
+  it("carries every concrete row of PS3.15 2026d Table E.1-1", () => {
     // 653 concrete tags: 2026c's 652 plus (3004,007F) Dose Calculation Model
     // Name. The four family rows Table E.1-1 states as a mask ((50xx,xxxx),
     // (60xx,3000), (60xx,4000), and the odd-group private row) cannot be keys in
@@ -296,7 +296,7 @@ describe("annexE (repeating-group family rows)", () => {
  * The two PS3.15 §E.3.6 temporal columns, resolved.
  *
  * Table E.1-1 gives the two Retain Longitudinal Temporal Information Options
- * separate columns, and until this slice the generated table carried only the
+ * separate columns, and until this change the generated table carried only the
  * full-dates one, so the modified-dates branch was unreachable. These rows read
  * the **generated table at run time** for which attributes the two columns
  * disagree about: the divergence is a property of the vendored PS3.15 edition
@@ -328,7 +328,7 @@ function divergentRows(): readonly AnnexEAction[] {
 }
 
 describe("PS3.15 E.3.6: the modified-dates column is carried and resolved", () => {
-  it("AC-1: resolves every attribute against the modified-dates column, not the full-dates one", () => {
+  it("resolves every attribute against the modified-dates column, not the full-dates one", () => {
     const wrongColumn: string[] = [];
     for (const row of everyRow()) {
       const resolved = effectiveCode(row, only(MODIFIED_DATES));
@@ -349,7 +349,7 @@ describe("PS3.15 E.3.6: the modified-dates column is carried and resolved", () =
     }
   });
 
-  it("AC-4: differs on every attribute whose two columns differ, agrees on every other", () => {
+  it("differs on every attribute whose two columns differ, agrees on every other", () => {
     // The differing set is derived from the generated table on this run. Nothing
     // here counts it, because the count is a fact about the vendored edition.
     const disagreed: string[] = [];
@@ -376,7 +376,7 @@ describe("PS3.15 E.3.6: the modified-dates column is carried and resolved", () =
     }
   });
 
-  it("AC-7: an attribute the modified-dates column is silent about falls to the Basic Profile", () => {
+  it("an attribute the modified-dates column is silent about falls to the Basic Profile", () => {
     // The real-table half of the fail-safe. The constructed row where the
     // full-dates column publishes a code and the modified-dates column does not
     // is in `annex-e-precedence.test.ts`; PS3.15 2026c publishes no such row, so

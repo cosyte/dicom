@@ -5,13 +5,12 @@ import { defineProfile, deidentify, parseDicom, serializeDicom } from "../src/in
 import { buildDicom } from "./helpers/build-dicom.js";
 
 /**
- * Refuter probe for S0058-dicom-1 (impl gate, loop 1).
+ * A regression probe for profile and de-identify behavior, kept as a script.
  *
  * NOT a shipped vitest test: this repo's vitest `include` is
- * `test/[*][*]/[*].test.ts` and the refuter guard only lets me write a
- * `regress_*` artifact with a single-dot extension, so the two patterns cannot
- * both be satisfied. It runs as a script instead, which is a reproducible
- * command under decision 26:
+ * `test/[*][*]/[*].test.ts`, and this file has a single-dot extension, so the
+ * suite does not pick it up. It runs as a script instead, a reproducible
+ * command:
  *
  *   pnpm exec tsx test/regress_0058_F1.ts
  *
