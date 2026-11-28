@@ -15,3 +15,9 @@ docs-content/api/
 # Names the synthetic violator values the PHI scan tests use; the scan leaves it out by this
 # path, and the commit hook would flag a rewrite of it, so it keeps its bytes.
 test/fixtures/phi-scan/README.md
+
+# The shared CI, release and mutation workflows check their tooling out inside the workspace for
+# the length of a job. Those checkouts are another repository's files, never formatted here.
+.cosyte-ci-tooling/
+.cosyte-mutation-tooling/
+.cosyte-release-tooling/
