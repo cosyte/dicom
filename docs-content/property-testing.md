@@ -84,7 +84,8 @@ run.failed; // => false
 
 ## The properties we run on this package
 
-Our round-trip, lenient and immutability properties run 100 cases on every pull request and 10,000
-each night. `COSYTE_PROPERTY_RUNS` sets the depth of a run, and each property prints its seed
+Our round-trip, idempotent normalize, lenient and immutability properties run 100 cases on every
+pull request and 10,000 each night. Idempotent normalize writes back what a lenient read returned,
+then reads and writes that output again, and requires the same bytes. `COSYTE_PROPERTY_RUNS` sets the depth of a run, and each property prints its seed
 before it runs; setting `COSYTE_PROPERTY_SEED`, and `COSYTE_PROPERTY_PATH` from a failure's report,
 replays a failing case already shrunk.
