@@ -1,5 +1,5 @@
 /**
- * Phase 3 capstone - end-to-end value decode through the public surface.
+ * End-to-end value decode through the public surface.
  *
  * Exercises `Element.value` + the `Dataset.get/has/elements/getAll`
  * navigation API over full Part 10 fixtures built by `build-dicom.ts`,
@@ -128,7 +128,7 @@ describe("Element.value - end-to-end decode", () => {
     expect(ds.get("00100020")?.value).toMatchObject({ kind: "strings", values: ["Müller"] });
   });
 
-  describe("AC-2: PS3.5 2026d's code-extension Person Name examples, byte for byte", () => {
+  describe("PS3.5 2026d's code-extension Person Name examples, byte for byte", () => {
     // Synthetic: each fixture is the standard's own published worked example,
     // copied from its encoded representation (PS3.5 2026d Examples H.3-1, H.3-2,
     // I.2-1 and K.2-1) and wrapped in a Part 10 buffer by `build-dicom`. The
@@ -178,7 +178,7 @@ describe("Element.value - end-to-end decode", () => {
     ] as const;
 
     it.each(EXAMPLES)(
-      "AC-2: Example $example reads as the component groups the standard shows, with no warning",
+      "Example $example reads as the component groups the standard shows, with no warning",
       ({ charset, bytes, shown, groups }) => {
         const value = hex(bytes);
         const ds = parseDicom(

@@ -1,19 +1,18 @@
 /**
- * Phase 2 capstone - security-vector sweep across plans 02-01..02-05.
+ * A security-vector sweep across the parser.
  *
- * Each `describe` block targets a STRIDE threat declared in a prior plan's
- * threat model and asserts that the documented mitigation activates
+ * Each `describe` block targets a STRIDE threat in the parser's threat model
+ * and asserts that the documented mitigation activates
  * correctly under adversarial input. All fixtures are programmatically
- * built - no curated `.dcm` PHI files (D-38).
+ * built - no curated `.dcm` PHI files.
  *
- * Coverage map (by threat ID):
- *   - T-02-01-06, T-02-02-01, T-02-04-01 - buffer over-read on truncated
- *     input (Implicit-LE / Explicit-LE / Explicit-BE / Deflated-LE).
- *   - T-02-04-02 - SQ stack-overflow protection at the 64-depth cap.
- *   - T-02-04-03 - CP-246 pathological-input bound (CPU DoS).
- *   - T-02-05-01 - decompression-bomb cap (256 MiB default; 1 KiB override).
- *   - T-02-01-04 / T-02-05-04 - `copyValues` opt-out for Buffer-slice
- *     retention (heap pressure).
+ * Coverage map:
+ *   - buffer over-read on truncated input (Implicit-LE / Explicit-LE /
+ *     Explicit-BE / Deflated-LE).
+ *   - SQ stack-overflow protection at the 64-depth cap.
+ *   - CP-246 pathological-input bound (CPU DoS).
+ *   - decompression-bomb cap (256 MiB default; 1 KiB override).
+ *   - `copyValues` opt-out for Buffer-slice retention (heap pressure).
  *
  * @module
  */
@@ -56,17 +55,17 @@ const TS_EXPLICIT_BE = "1.2.840.10008.1.2.2";
 const TS_DEFLATED_LE = "1.2.840.10008.1.2.1.99";
 
 // ===========================================================================
-// T-02-01-06 / T-02-02-01 / T-02-04-01 / T-02-05-02 - buffer over-read on
+//  + - buffer over-read on
 // truncated input. Every cursor read across all four parsers is wrapped
 // such that a buffer overflow surfaces as a typed `DicomParseError`,
 // never a raw `RangeError`.
 // ===========================================================================
 
-describe("Security: buffer over-read on truncated input (T-02-01-06, T-02-02-01, T-02-04-01)", () => {
+describe("Security: buffer over-read on truncated input", () => {
   it("truncated File Meta (declared > buffer remaining) throws INVALID_FILE_META", () => {
     // Fixture: declare a 10_000-byte File Meta group with only ~30 bytes
     // actually present after the group-length element. Mirrors the
-    // T-02-02-01 unit-test fixture in src/parser/file-meta.test.ts.
+    //  unit-test fixture in src/parser/file-meta.test.ts.
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
       elements: [{ tag: "00100010", vr: "PN", value: Buffer.from("DOE^JANE", "ascii") }],
@@ -140,7 +139,7 @@ describe("Security: buffer over-read on truncated input (T-02-01-06, T-02-02-01,
     expect((thrown as DicomParseError).code).toBe(FATAL_CODES.INVALID_FILE_META);
   });
 
-  it("truncated Deflated-LE buffer throws DicomParseError (T-02-05-02 stream corruption)", () => {
+  it("truncated Deflated-LE buffer throws DicomParseError (stream corruption)", () => {
     // Build a valid Deflated-LE buffer, then truncate inside the deflate
     // stream - `inflateRawSync` will raise, the parser converts to
     // INVALID_FILE_META.
@@ -161,13 +160,13 @@ describe("Security: buffer over-read on truncated input (T-02-01-06, T-02-02-01,
 });
 
 // ===========================================================================
-// T-02-04-02 - SQ stack-overflow protection. NESTING_DEPTH_LIMIT = 64 in
-// `parseSequence`. Plan 02-04 ships unit tests at the parseSequence level;
+// SQ stack-overflow protection. NESTING_DEPTH_LIMIT = 64 in
+// `parseSequence`. Unit tests cover it at the parseSequence level;
 // this end-to-end test asserts the cap activates for a real `parseDicom`
 // call carrying a 65-deep SQ tree.
 // ===========================================================================
 
-describe("Security: SQ stack-overflow protection - 64-depth cap (T-02-04-02)", () => {
+describe("Security: SQ stack-overflow protection - 64-depth cap", () => {
   /** Build an SQ-element JSON shape `depth` levels deep. */
   function buildNestedSqShape(depth: number): {
     tag: Tag;
@@ -214,12 +213,12 @@ describe("Security: SQ stack-overflow protection - 64-depth cap (T-02-04-02)", (
 });
 
 // ===========================================================================
-// T-02-04-03 - CP-246 pathological-input bound. tryParseUnAsSQ saves and
+// CP-246 pathological-input bound. tryParseUnAsSQ saves and
 // restores parser state on inner-parse failure; the descent must complete
 // in bounded time even for adversarial UN-undefined-length payloads.
 // ===========================================================================
 
-describe("Security: CP-246 pathological-input bound (T-02-04-03)", () => {
+describe("Security: CP-246 pathological-input bound", () => {
   it("UN-undefined-length with 1 KiB of adversarial random bytes parses cleanly within 1s", () => {
     // Build adversarial inner bytes: 1 KiB of pseudo-random content with
     // FFFE markers scattered throughout to confuse the SQ-descent path.
@@ -239,7 +238,7 @@ describe("Security: CP-246 pathological-input bound (T-02-04-03)", () => {
 
     // Build a valid Part 10 buffer + manually-appended UN-undefined-length
     // element carrying the adversarial payload. Use a private tag so the
-    // VR-mismatch check is skipped (TOL-08 only fires for standard tags).
+    // VR-mismatch check is skipped (it only fires for standard tags).
     const wrapper = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
       elements: [],
@@ -258,7 +257,7 @@ describe("Security: CP-246 pathological-input bound (T-02-04-03)", () => {
     // Bound: must complete well under 1s on commodity hardware.
     expect(elapsed).toBeLessThan(1000);
     // CP-246 descent on adversarial input fails → element stored as VR=UN
-    // per D-30 ("restore VR=UN with raw bytes preserved"). No
+    // ("restore VR=UN with raw bytes preserved"). No
     // DICOM_UN_PARSED_AS_SQ warning emitted on failure.
     expect(ds.warnings.some((w) => w.code === WARNING_CODES.DICOM_UN_PARSED_AS_SQ)).toBe(false);
     const el = elementsOf(ds).get("00091000");
@@ -268,14 +267,14 @@ describe("Security: CP-246 pathological-input bound (T-02-04-03)", () => {
 });
 
 // ===========================================================================
-// T-02-05-01 - Decompression bomb. Default cap is 256 MiB; the parser
+// Decompression bomb. Default cap is 256 MiB; the parser
 // re-exports `parseDeflatedLEWithCap` for tractable bomb-cap tests at a
-// 1 KiB cap. Plan 02-05 ships the unit-level test; this re-asserts the
+// 1 KiB cap. A unit-level test covers it; this re-asserts the
 // mitigation is reachable from the public surface and the typed throw
 // carries the expected fields.
 // ===========================================================================
 
-describe("Security: decompression-bomb cap (T-02-05-01)", () => {
+describe("Security: decompression-bomb cap", () => {
   it("1 KiB cap on a 2 KiB-inflated payload throws INVALID_FILE_META with 'exceeds' + cap value", () => {
     // Build a Deflated-LE buffer whose inflated size is ~2 KiB.
     const repeating = Buffer.alloc(2048, 0x41); // 2 KiB of 'A'
@@ -345,14 +344,14 @@ function findDatasetStart(buf: Buffer): number {
 }
 
 // ===========================================================================
-// T-02-01-04 / T-02-05-04 - Buffer-slice retention. Default `copyValues:
+// Buffer-slice retention. Default `copyValues:
 // false` makes Element.rawBytes a Buffer.subarray view that pins the source
 // ArrayBuffer; `copyValues: true` opts into Buffer.from(slice) so the
 // source can be released. Verified by mutating the source buffer post-parse
-// and observing whether parsed Elements see the change (D-16 / MODEL-03).
+// and observing whether parsed Elements see the change.
 // ===========================================================================
 
-describe("Security: Buffer-slice retention (T-02-01-04 / T-02-05-04 / D-16)", () => {
+describe("Security: Buffer-slice retention", () => {
   it("copyValues=false (default): rawBytes is a view; mutating the source mutates the parsed Element", () => {
     const value = Buffer.from("DOE^JANE", "ascii");
     const buf = buildDicom({
@@ -394,7 +393,7 @@ describe("Security: Buffer-slice retention (T-02-01-04 / T-02-05-04 / D-16)", ()
     expect(el.rawBytes.toString("ascii")).toBe("DOE^JANE");
   });
 
-  it("copyValues=true under Deflated-LE: rawBytes detached from inflated buffer (T-02-05-04)", () => {
+  it("copyValues=true under Deflated-LE: rawBytes detached from inflated buffer", () => {
     const value = Buffer.from("DEFLATE^TEST", "ascii");
     const buf = buildDicom({
       transferSyntax: TS_DEFLATED_LE,
@@ -419,12 +418,12 @@ describe("Security: Buffer-slice retention (T-02-01-04 / T-02-05-04 / D-16)", ()
 });
 
 // ===========================================================================
-// PHI-fixture invariant (D-38). Phase 2 commits zero curated DICOM fixtures.
-// The PHI-scan CI hook (Phase 1) gates against this on every commit; this
+// PHI-fixture invariant. The repository commits no curated DICOM fixtures.
+// The PHI-scan commit hook and CI gate against this on every commit; this
 // test re-asserts the structural rule for visibility.
 // ===========================================================================
 
-describe("Security: D-38 - Phase 2 ships zero curated DICOM fixtures", () => {
+describe("Security: the repository ships no curated DICOM fixtures", () => {
   it("no .dcm files exist under test/integration/", async () => {
     const { readdir } = await import("node:fs/promises");
     const here = import.meta.dirname;

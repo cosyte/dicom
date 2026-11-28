@@ -1,5 +1,5 @@
 /**
- * `DICOM-UNRECOGNIZED-VR-SHORT-FORM` - an Explicit VR this edition of PS3.5
+ * The unrecognized VR short-form fix - an Explicit VR this edition of PS3.5
  * does not define is read (and written) **long-form**, per section 6.2's
  * normative "shall".
  *
@@ -60,7 +60,7 @@
  * seven are the `UN` / `LO` control blocks, green on both trees by design - that
  * is what makes them controls. The seventh is the `removedPrivateTags`
  * disclosure, which is `PRE-EXISTING` and green on both trees on purpose: it
- * pins a channel this slice does **not** close.
+ * pins a channel this change does **not** close.
  *
  * A first version of this note said "every expectation except the controls" and
  * read 16/10, because the two refusal pins were asserting a bare `toThrow` that
@@ -92,7 +92,7 @@ const ROOT_NAME = "ROOT^PATIENT";
 const PATIENT_ID = "ID-000123";
 /**
  * A **name-bearing** carrier payload, used wherever a test makes a claim about
- * PHI. `#55` shipped a pinning test whose payload was the benign
+ * PHI. `dicom#55` shipped a pinning test whose payload was the benign
  * `"CARRIER-VALUE"`, so the assertion could not have failed either way: a PHI
  * claim tested on a fixture that cannot express the harm proves nothing.
  */
@@ -337,7 +337,7 @@ describe("the writer applies the same section 6.2 rule as the reader", () => {
     expect(reread.get(CARRIER_TAG)?.length).toBe(4);
     expect(reread.get(CARRIER_TAG)?.rawBytes.toString("latin1")).toBe("ABCD");
     // The same tags survive. The fixture writes (0009,0001) between (0010,0010)
-    // and (0010,0020); the writer emits ascending (S0361-dicom-5 AC-1), and
+    // and (0010,0020); the writer emits ascending, and
     // 8-hex uppercase tags sort lexicographically in numeric order.
     expect(reread.elements().map((e) => e.tag)).toEqual(
       ds
@@ -404,7 +404,7 @@ describe("the File Meta group reads an unrecognized VR long-form too", () => {
 
 describe("what the structure rule does to the fabricated-header shape", () => {
   /**
-   * The under-declare `#55` was raised about, on a **name-bearing** payload.
+   * The under-declare `dicom#55` was raised about, on a **name-bearing** payload.
    * `"MR BRAIN  SMITHSON"` under-declared by 6 leaves `"ITHSON"` to be read as
    * the next Data Element header: on `66f0c95` that produced a root element
    * `(5449,5348)` - the bytes `"ITHS"` in wire order, four letters of the
@@ -464,7 +464,7 @@ describe("what the structure rule does to the fabricated-header shape", () => {
   });
 
   it("emits no warning carrying the payload on the conformant shape", () => {
-    // The bound this slice must not break: no new Tier-2 code was minted, and
+    // The bound this change must not break: no new Tier-2 code was minted, and
     // the existing ones take structural tokens only, so a name in the carrier
     // cannot reach a warning message. Run on a name-bearing payload for the
     // same reason the test above is.
@@ -526,11 +526,11 @@ describe("what the structure rule does to the fabricated-header shape", () => {
   });
 
   it("still empties an unrecognized-VR value at the de-identify boundary", () => {
-    // `#55`'s rule is untouched, and this is the cost that moved: a section 6.2
+    // `dicom#55`'s rule is untouched, and this is the cost that moved: a section 6.2
     // conformant future-VR element now PARSES, so `deidentify()` reaches it and
     // empties it - where before the whole file was refused. Strictly better than
     // base (which returned nothing at all), and a real instance of the
-    // `DICOM-DEIDENT-OVER-REDACTION` trade rather than a hypothetical one.
+    // over-redaction trade rather than a hypothetical one.
     //
     // An **even** group is load-bearing here: `(0009,0001)` is private, and
     // private-by-default removal decides before `keepOrEmpty` is reached, so the
@@ -544,7 +544,7 @@ describe("what the structure rule does to the fabricated-header shape", () => {
       }),
     );
     expect(ds.get(EVEN_CARRIER_TAG)?.rawBytes.toString("latin1")).toBe(NAME_PAYLOAD);
-    // Trap #3, on the channel this shape does raise: the VR-mismatch warning
+    // Trap 3, on the channel this shape does raise: the VR-mismatch warning
     // fires here (an even tag has a dictionary VR), and its `{vr}` token is two
     // bytes the sender chose. It must render as withheld, not as `ZZ`.
     for (const w of ds.warnings) expect(w.message).not.toContain(FUTURE_VR);
