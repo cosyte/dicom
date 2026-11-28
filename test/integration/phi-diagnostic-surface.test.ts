@@ -57,7 +57,7 @@
  * **`DicomParseError.snippet` is 16 raw source bytes rendered as hex**, on every
  * Tier-3 fatal and on every strict-mode escalation. The runner walks it, but it
  * matches verbatim echoes and hex is a re-encoding, so no slot here can go red
- * on it. That is a deliberate, documented design (D-10) and the docs now name it
+ * on it. That is a deliberate, documented design and the docs now name it
  * as PHI rather than denying it exists; it is not something this table proves
  * away. The fatal slots below exist to prove the *message* is clean, not the
  * snippet.
@@ -232,10 +232,10 @@ function iso2022NameFixture(charset: string, familyName: string, tail: Buffer): 
  * instead (`src/dataset/vr/types.ts`). The VR-decode-time codes, the ISO 2022
  * charset codes among them, live only there, and the registry's size is
  * deliberately not written here: it was wrong
- * in this sentence ("twenty-six" against twenty-nine) before this slice made it
+ * in this sentence ("twenty-six" against twenty-nine) before this change made it
  * thirty, and the locked snapshot in `test/property/` measures it every run.
  * Reading `.value` here is what forces the lazy decode, so a selector
- * that only walked `ds.warnings` would report green for the entire Phase 3
+ * that only walked `ds.warnings` would report green for the entire value
  * decode surface.
  */
 function allDiagnostics(parsed: { readonly dataset: Dataset }): readonly unknown[] {
@@ -436,7 +436,7 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
       }),
     expectCode: WARNING_CODES.DICOM_BOM_IN_TEXT_VR,
   },
-  // AC-8: one slot per ISO 2022 code-extension code. The marker IS the patient's
+  // : one slot per ISO 2022 code-extension code. The marker IS the patient's
   // family name, decoded into `Element.value` ahead of the bytes that raise the
   // code, so a factory that interpolated the value would carry it.
   {
@@ -657,7 +657,7 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     // the slot. A fragment carrying the marker raises no warning at all, and
     // this fixture raises none: its empty Basic Offset Table is the conformant
     // encoding PS3.5 2026c section A.4 makes decoders accept, so it no longer
-    // raises `DICOM_EMPTY_ITEM_IN_SEQUENCE` (AC-10). Naming a code would satisfy
+    // raises `DICOM_EMPTY_ITEM_IN_SEQUENCE`. Naming a code would satisfy
     // the runner while proving nothing about the marker's own path, which is
     // the substitution `expectCode` exists to prevent. Reach is proven instead
     // by `markerReachesTheModelVerbatim`, which asserts the fragment bytes
@@ -679,10 +679,10 @@ const PARSE_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     expectCode: null,
   },
   {
-    // AC-9: the same fragment under a section A.4 syntax, with the stream ending
+    // : the same fragment under a section A.4 syntax, with the stream ending
     // on the marker's fragment and no Sequence Delimitation Item after it, so
     // the code this path emits is raised with the marker as the last bytes read.
-    name: "(7FE0,0010) encapsulated pixel data fragment, no Sequence Delimitation Item (AC-9)",
+    name: "(7FE0,0010) encapsulated pixel data fragment, no Sequence Delimitation Item",
     plant: (m) =>
       buildDicom({
         transferSyntax: "1.2.840.10008.1.2.4.50",
@@ -930,7 +930,7 @@ const DEID_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     // prior value is REPLACED rather than kept, so the marker is gone from the
     // output and the only thing left that could quote it is the disclosure of
     // its own removal. A diagnostic about a dropped value is itself a PHI
-    // surface - that is `#55`'s finding, and this slot is where the new code
+    // surface - that is `dicom#55`'s finding, and this slot is where the new code
     // pays it.
     name: "deidentify: (0012,0063) DeidentificationMethod under a non-LO VR, replaced",
     plant: (m) =>
@@ -941,7 +941,7 @@ const DEID_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     expectCode: WARNING_CODES.DICOM_DEIDENT_METHOD_NOT_LO,
   },
   {
-    // S0356-dicom-13 AC-7. The (0012,0064) sibling of the (0012,0063) slot
+    // The (0012,0064) sibling of the (0012,0063) slot
     // above: a prior Item's Code Meaning is a sender byte no Table E.1-1 rule
     // inspects, so it is KEPT into de-identified output, and this slot stops the
     // disclosure of that retention from quoting what it discloses.
@@ -968,7 +968,7 @@ const DEID_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     expectCode: WARNING_CODES.DICOM_DEIDENT_METHOD_CODES_PRIOR_RETAINED,
   },
   {
-    // S0356-dicom-13 AC-8. A (0012,0064) under a VR other than SQ is not Items
+    // A (0012,0064) under a VR other than SQ is not Items
     // this run can add to, so it is REPLACED; the marker leaves the output and
     // the only thing left that could quote it is the disclosure of its removal.
     name: "deidentify: (0012,0064) DeidentificationMethodCodeSequence under a non-SQ VR, replaced",
@@ -980,7 +980,7 @@ const DEID_SLOTS: readonly DiagnosticSlot<Buffer>[] = [
     expectCode: WARNING_CODES.DICOM_DEIDENT_METHOD_CODES_PRIOR_REPLACED,
   },
   {
-    // S0367-dicom-15 T5. `(4854,4F53)` has no PS3.6 2026d row and no Table E.1-1
+    // The unregistered element removal T5. `(4854,4F53)` has no PS3.6 2026d row and no Table E.1-1
     // row, so it is REMOVED; the marker leaves the output and the only thing
     // left that could quote it is the disclosure of its removal.
     name: "deidentify: (4854,4F53) unregistered standard element [LO], removed",
@@ -1186,12 +1186,12 @@ describe("PHI: the probes reach what they claim to", () => {
     (slot) => slot.expectCode !== null && ISO_2022_CODES.includes(slot.expectCode),
   );
 
-  it("AC-8: the table has one slot per ISO 2022 code", () => {
+  it("the table has one slot per ISO 2022 code", () => {
     expect(ISO_2022_SLOTS.map((slot) => slot.expectCode)).toStrictEqual(ISO_2022_CODES);
   });
 
   it.each(ISO_2022_SLOTS.map((slot) => [slot.name, slot] as const))(
-    "AC-8 mutation control: %s goes red when its warning interpolates the value",
+    "mutation control: %s goes red when its warning interpolates the value",
     (_name, slot) => {
       // The mutation a careless factory would make: append the decoded value to
       // the message of the code this slot raises. A slot that stayed green under
@@ -1214,7 +1214,7 @@ describe("PHI: the probes reach what they claim to", () => {
     },
   );
 
-  it("AC-8: each ISO 2022 code rides on the value once, however often it fires, as its bare registry message", () => {
+  it("each ISO 2022 code rides on the value once, however often it fires, as its bare registry message", () => {
     // Five repetitions of a segment that raises all three codes: an escape
     // sequence neither table carries, then an undeclared ESC $ B whose name
     // component ends at a lone ^ without switching back.
@@ -1342,7 +1342,7 @@ describe("PHI: the de-identified bytes", () => {
 // ---------------------------------------------------------------------------
 
 /**
- * Synthetic and deliberately fake. `#55` paid a blocker for a pinning test that
+ * Synthetic and deliberately fake. `dicom#55` paid a blocker for a pinning test that
  * was **vacuous by fixture** - its payload carried no name, so nothing it
  * asserted could have caught the leak it was written for.
  *
@@ -1426,20 +1426,20 @@ function firstContextSegment(raw: Buffer): string | undefined {
 }
 
 /**
- * ## ▶ WHAT THIS BLOCK MEASURES SINCE S0367-dicom-15, AND WHAT IT USED TO
+ * ## ▶ WHAT THIS BLOCK MEASURES SINCE the unregistered element removal, AND WHAT IT USED TO
  *
  * Through that item it measured the fabricated `(5348,4E4F)` header being
  * DESCENDED: `contextPath: ["53484E4F[0]"]` on the report with no diagnostic at
  * all, and `"HSON"` re-emitted into output stamped `(0012,0062) = YES`. That tag
  * has no PS3.6 2026d row and no Table E.1-1 row, so the unregistered-element
  * rule now removes the fabricated Sequence whole, before anything reads its VR
- * (AC-12), and the rows below assert that instead. **It is a statement about
+ *, and the rows below assert that instead. **It is a statement about
  * this fixture's shape and not a bound on the field**: a Sequence this run does
  * descend still contributes whatever tag the wire gave it, which is what
  * `DeidentifiedAttribute.contextPath` discloses.
  */
 describe("PHI: report contextPath and the fabricated Sequence header", () => {
-  it("S0367-dicom-15 AC-12: the fixture still fabricates (5348,4E4F) out of the surname, with items", () => {
+  it("the unregistered element removal : the fixture still fabricates (5348,4E4F) out of the surname, with items", () => {
     // The precondition every row below rests on: the PARSE still produces the
     // shape, so a clean de-identified result is the rule's doing, not the fixture's.
     const ds = parseDicom(fabricatedSequenceInsideAValue(CONTEXT_NAME));
@@ -1452,7 +1452,7 @@ describe("PHI: report contextPath and the fabricated Sequence header", () => {
     expect(ds.warnings).toEqual([]);
   });
 
-  it("S0367-dicom-15 AC-12: removes it whole, so no contextPath segment names it", () => {
+  it("the unregistered element removal : removes it whole, so no contextPath segment names it", () => {
     const ds = parseDicom(fabricatedSequenceInsideAValue(CONTEXT_NAME));
     const { report } = deidentify(ds);
 
@@ -1470,7 +1470,7 @@ describe("PHI: report contextPath and the fabricated Sequence header", () => {
     expect(report.removedPrivateTags).toEqual([]);
   });
 
-  it("S0367-dicom-15 AC-6: and no rendering of the fabricated tag is on the report", () => {
+  it("the unregistered element removal : and no rendering of the fabricated tag is on the report", () => {
     const { report } = deidentify(parseDicom(fabricatedSequenceInsideAValue(CONTEXT_NAME)));
     const rendered = JSON.stringify(report, (_key, value: unknown) =>
       value instanceof Map ? [...(value as Map<unknown, unknown>).entries()] : value,
@@ -1480,7 +1480,7 @@ describe("PHI: report contextPath and the fabricated Sequence header", () => {
     }
   });
 
-  it("S0367-dicom-15 AC-12: the de-identified OBJECT no longer re-emits the header, or the name inside it", () => {
+  it("the unregistered element removal : the de-identified OBJECT no longer re-emits the header, or the name inside it", () => {
     const { dataset } = deidentify(parseDicom(fabricatedSequenceInsideAValue(CONTEXT_NAME)));
     const out = serializeDicom(dataset);
 
@@ -1490,7 +1490,7 @@ describe("PHI: report contextPath and the fabricated Sequence header", () => {
     expect(dataset.get("00120062")?.rawBytes.toString("latin1")).toBe("YES");
   });
 
-  it("S0367-dicom-15 AC-12 mutation control: serialized WITHOUT de-identification, both are in the bytes", () => {
+  it("the unregistered element removal mutation control: serialized WITHOUT de-identification, both are in the bytes", () => {
     // Proves the byte searches above can go red: the same serializer and the same
     // search, on the parsed object the rule never touched, and on the control
     // surname, whose fabricated tag tracks the payload.
@@ -1530,7 +1530,7 @@ describe("PHI: report contextPath and the fabricated Sequence header", () => {
   it("and the fabricated tag never reaches attributes[].tag, which IS bound", () => {
     // `attributes[].tag` is only populated for a tag Annex E carries a row for -
     // membership in a closed table - so the fabricated header is absent from it.
-    // S0367-dicom-15 AC-12 moved the second half: the nested `(0010,0020)` is no
+    // The unregistered element removal moved the second half: the nested `(0010,0020)` is no
     // longer audited, because the Sequence carrying it is removed whole and not
     // walked ("none for anything inside it").
     const { report } = deidentify(parseDicom(fabricatedSequenceInsideAValue(CONTEXT_NAME)));
