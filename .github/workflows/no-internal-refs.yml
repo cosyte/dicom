@@ -1,47 +1,26 @@
 name: Public-surface gate
 
-# Founder directive of 2026-07-27: no internal project bookkeeping on any
-# surface a consumer of `@cosyte/dicom` reads. Work-item and roadmap ids, phase
-# and wave language, roadmap and plan citations, ADR numbers, meta-repo paths
-# and commentary about how the work is being run belong in the changelog, the
-# changesets, commit messages, pull request text, `test/`, and this repository's
-# own agent-context docs. This workflow is the CI half of that rule for dicom.
+# Keeps internal project bookkeeping off every surface a user of `@cosyte/dicom`
+# reads: the README, the docs pages, the source (the published sourcemaps carry
+# it, comments included), the tests, and these workflow files. Work-item and
+# decision ids, plan and roadmap names, private repository paths, and notes on
+# how the work is run belong in commit messages and pull request text instead.
 #
-# `cosyte-internal-refs`, the shared gate from `@cosyte/script-utils`, enforces
-# it, configured by `scripts/internal-refs.json`: what is a finding and where it
-# looks. This file only decides WHEN it runs. Run it locally with
-# `pnpm check:no-internal-refs`.
+# `cosyte-internal-refs`, the shared gate from `@cosyte/script-utils`, decides
+# what is a finding, configured by `scripts/internal-refs.json`: the project
+# prefixes, the standards designations (a DICOM Change Proposal such as `CP-246`
+# is not a work item), the surface, and dicom's own extra rules. This file only
+# decides when it runs. Run it locally with `pnpm check:no-internal-refs`.
 #
-# dicom was NOT already clean when this landed, and that is the thing worth
-# reading twice. Measured with the checker's own rules at `91b2c33`: 530
-# findings, 526 of them under `src/`, against 4 in the markdown a documentation
-# review actually reads. The build copies `src/` comment blocks verbatim into
-# the published `dist/index.d.ts` and `dist/index.d.cts`, so that is where the
-# rule regrows unseen and why a note would not have held. The change that added
-# this workflow rewrote all 530. The shared gate, configured by
-# `scripts/internal-refs.json`, reports every one of those 530 lines on the same
-# tree.
+# The job delegates the checkout, pnpm, Node, and the install to the shared gate
+# workflow, which carries no pattern, no allow-list, and no file selection of its
+# own: it prepares the tree, runs the command, and the command's exit status
+# decides the job. It is a separate workflow because the shared ci pipeline that
+# `ci.yml` calls runs a fixed list of steps and no repo script.
 #
-# WHAT IS SHARED AND WHAT IS NOT. The job below delegates the plumbing (checkout,
-# pnpm, Node, and the install the gate needs) to the shared gate workflow, which
-# carries no pattern, no allow-list and no file selection of its own: it prepares
-# the tree, runs the command, and lets the command's exit status decide the job.
-# The engine and its canonical rules are shared. What stays here, in
-# `scripts/internal-refs.json`, is what is a property of the package: the prefixes,
-# the standards designations, the surface, and dicom's own extra rules (here
-# `CP-246` is a DICOM Change Proposal and `MRN-42` is example patient-identifier
-# data, and neither is a work item).
-#
-# WHY A SEPARATE WORKFLOW, and not a job in ci.yml. dicom's `ci` job calls the
-# shared ci pipeline, which runs a fixed ladder and no arbitrary repo script.
-#
-#   Unlike `no-emdash.yml` this gate has NO pull-request-text half and wants no
-#   `edited` trigger. Commit messages and pull request text are surfaces the
-#   identifiers BELONG on, so there is nothing there to scan; the checker reads
-#   tracked files and nothing else.
-#
-# A checkout, an install from the committed lockfile and one scan is the whole
-# job, which is what keeps this cheap enough to run on every push.
+# It has no pull request text half, unlike `no-emdash.yml`, and so no `edited`
+# trigger: commit messages and pull request text are where these identifiers
+# belong, and the gate reads tracked files only.
 #
 # THE JOB ID IS LOAD-BEARING. A called job's check run is named
 # `<caller job id> / <inner job id>`, so the job id `no-internal-refs` below

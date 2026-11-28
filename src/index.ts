@@ -20,7 +20,7 @@
  * typeof VERSION; // => "string"
  * ```
  */
-export const VERSION: string = "0.1.16";
+export const VERSION: string = "0.1.17";
 
 export * as Dictionary from "./dictionary/index.js";
 

@@ -33,7 +33,7 @@ import {
   buildDicom,
   type BuildDicomElement,
   type BuildDicomSqElement,
-} from "../helpers/build-dicom.js";
+} from "../_helpers/build-dicom.js";
 import { SEED_CORPUS } from "../property/_seed-corpus.js";
 
 const TS_IMPLICIT_LE = "1.2.840.10008.1.2";
@@ -128,7 +128,7 @@ function syntheticObject(undefinedLength: boolean, swapped: boolean): AnyElement
     { tag: "00080060", vr: "CS", value: text("CT") },
     { tag: "00080081", vr: "ST", value: text("1 Synthetic Way") },
     { tag: "00080090", vr: "PN", value: text("TEST^PATIENT=TEST^PHONETIC") },
-    { tag: "00080119", vr: "UC", value: text("SYNTH-LONG-CODE") },
+    { tag: "00080119", vr: "UC", value: text("FICTIVELONGCODE") },
     { tag: "00080120", vr: "UR", value: text("urn:synth:1") },
     { tag: "00081030", vr: "LO", value: text("SYNTH STUDY") },
     {

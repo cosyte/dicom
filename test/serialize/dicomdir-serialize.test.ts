@@ -40,7 +40,7 @@ import {
   TS_IMPLICIT_LE,
   buildDicomdir,
   twoPatientRecords,
-} from "../helpers/build-dicomdir.js";
+} from "../_helpers/build-dicomdir.js";
 
 const SYNTAXES = [
   ["Implicit VR LE", TS_IMPLICIT_LE],

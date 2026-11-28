@@ -115,8 +115,8 @@ import {
 } from "../../src/index.js";
 import { MAX_UNAUDITABLE_SEQUENCE_FINDINGS } from "../../src/deident/deidentify.js";
 import { WARNING_MESSAGES } from "../../src/parser/warnings.js";
-import type { BuildDicomOptions } from "../helpers/build-dicom.js";
-import { buildDicom } from "../helpers/build-dicom.js";
+import type { BuildDicomOptions } from "../_helpers/build-dicom.js";
+import { buildDicom } from "../_helpers/build-dicom.js";
 
 const IMPLICIT_LE = "1.2.840.10008.1.2";
 const EXPLICIT_LE = "1.2.840.10008.1.2.1";

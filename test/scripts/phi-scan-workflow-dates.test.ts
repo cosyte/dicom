@@ -14,7 +14,7 @@
  * passed and which were caught, and the same bytes are scanned outside `.github/workflows/` as the
  * control.
  *
- * 🛑 EVERY VALUE IS ASSEMBLED AT RUNTIME, for the reason `test/helpers/phi-scan-violators.ts` gives:
+ * 🛑 EVERY VALUE IS ASSEMBLED AT RUNTIME, for the reason `test/_helpers/phi-scan-violators.ts` gives:
  * this file is under `test/`, so the gate scans it, and a spelled-out date run in it reds the suite.
  * Every date is synthetic.
  */
@@ -24,7 +24,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, copyFileSync, realpathSy
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { runRepoScript } from "../helpers/run-script.js";
+import { runRepoScript } from "../_helpers/run-script.js";
 
 const REPO_ROOT = join(import.meta.dirname, "..", "..");
 

@@ -11,7 +11,7 @@ import {
   REQUIRED_CALLER_PERMISSIONS,
   sharedReleaseRefs,
   SHARED_RELEASE_WORKFLOW,
-} from "../helpers/release-workflow-caller.js";
+} from "../_helpers/release-workflow-caller.js";
 
 /**
  * THE GUARD OVER `.github/workflows/release.yml`'s CALLER-SIDE PERMISSIONS PRECONDITION.

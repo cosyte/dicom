@@ -46,8 +46,8 @@ import {
   buildDicom,
   type BuildDicomElement,
   type BuildDicomSqElement,
-} from "../helpers/build-dicom.js";
-import { checkPropertyAtDepth } from "../helpers/property.js";
+} from "../_helpers/build-dicom.js";
+import { checkPropertyAtDepth } from "../_helpers/property.js";
 
 const SEED = 20_261_111;
 

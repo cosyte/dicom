@@ -2,7 +2,6 @@
 id: spec-notes-profiles
 title: Source and vendor profiles
 sidebar_label: Source profiles
-sidebar_position: 12
 description: What a source or vendor profile bundles, the five built-in profiles, and how to define your own.
 ---
 
@@ -89,16 +88,16 @@ never turn a right answer into a wrong one.
 ## The exported shapes
 
 | Export                   | What it is                                                                                                                                                        |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Profile`                | The frozen profile itself, as `parseDicom` and `deidentify` accept it.                                                                                            |
 | `defineProfile`          | Builds one from a validated options object.                                                                                                                       |
-| `DefineProfileOptions`   | Those options: `name` (the only required field), `description`, `escalate`, `suppress`, `privateTags`, and `extends` (one profile or several, composed in order).  |
-| `ProfilePrivateTags`     | The per-creator overlay: a map of canonical `"GGGGxxLL"` key to `PrivateTagDefinition`, keyed under the private-creator string it belongs to.                      |
+| `DefineProfileOptions`   | Those options: `name` (the only required field), `description`, `escalate`, `suppress`, `privateTags`, and `extends` (one profile or several, composed in order). |
+| `ProfilePrivateTags`     | The per-creator overlay: a map of canonical `"GGGGxxLL"` key to `PrivateTagDefinition`, keyed under the private-creator string it belongs to.                     |
 | `PrivateTagDefinition`   | One private element's declaration: its `vr`, `keyword` and human-readable `name`.                                                                                 |
-| `ProfileDefinitionError` | Thrown by `defineProfile` for an invalid definition (an unknown warning code to escalate, a malformed private-tag key). An author-time error, never a file error.  |
+| `ProfileDefinitionError` | Thrown by `defineProfile` for an invalid definition (an unknown warning code to escalate, a malformed private-tag key). An author-time error, never a file error. |
 
 **A profile's declared VR is a second authority, and it is not a license over what a value nests.**
-PS3.15 §E.3.10 lets a de-identifier retain a private *Attribute* it knows to be safe; it does not let
+PS3.15 §E.3.10 lets a de-identifier retain a private _Attribute_ it knows to be safe; it does not let
 one vouch for a Data Set a sender nested inside that attribute's value. See
 [De-identification](./deidentification.md) for what `RetainSafePrivate` plus a profile does and does not
 keep, and [Known limitations](./limitations.md) for the residuals around it.

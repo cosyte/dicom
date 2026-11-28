@@ -29,10 +29,10 @@ whether a patient identifier survives, the schedule has to be NEMA's.
 
 ## What each input is authoritative for
 
-| Input | Path | Authority |
-| ----- | ---- | --------- |
-| NEMA PS3.15 DocBook | `vendor/nema/part15/<sha256>/part15.xml` | **Normative.** Table E.1-1: attribute name, Basic Profile action code, and all nine metadata-affecting option columns, for every tag it publishes. |
-| Innolitics mirror | `vendor/innolitics/<short-sha>/confidentiality_profile_attributes.json` | Base rows. Supplies a tag PS3.15 does not publish, and nothing else. |
+| Input               | Path                                                                    | Authority                                                                                                                                          |
+| ------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| NEMA PS3.15 DocBook | `vendor/nema/part15/<sha256>/part15.xml`                                | **Normative.** Table E.1-1: attribute name, Basic Profile action code, and all nine metadata-affecting option columns, for every tag it publishes. |
+| Innolitics mirror   | `vendor/innolitics/<short-sha>/confidentiality_profile_attributes.json` | Base rows. Supplies a tag PS3.15 does not publish, and nothing else.                                                                               |
 
 The overlay is **per field, not wholesale**:
 
@@ -68,30 +68,30 @@ standard/references.json
 standard/sops.json
 ```
 
-| File                                       | Schema notes                                                                                                                                                                                                                                                                                                                                                                                  | Annex-E-suitable? |
-| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
-| `confidentiality_profile_attributes.json`  | JSON array, 621 entries. Each entry: `{ name, tag (paren-comma form), id (8-char hex), stdCompIOD, basicProfile, ...optionFields }`. Per-option-set fields: `cleanDescOpt, cleanGraphOpt, cleanStructContOpt, rtnDevIdOpt, rtnInstIdOpt, rtnLongFullDatesOpt, rtnLongModifDatesOpt, rtnPatCharsOpt, rtnSafePrivOpt, rtnUIDsOpt`. | YES (as the base) |
-| `attributes.json`                          | Part 6 attribute table: keyword/VR/VM/name. Not Annex E.                                                                                                                                                                                                                                                                                                                                      | NO                |
-| `uids.json`                                | UID dictionary. Not Annex E.                                                                                                                                                                                                                                                                                                                                                                  | NO                |
-| `ciods.json` / `modules.json` / `macros.json` / `*_to_*.json` | Composite IOD / module / macro composition tables. Not Annex E.                                                                                                                                                                                                                                                            | NO                |
+| File                                                          | Schema notes                                                                                                                                                                                                                                                                                                                     | Annex-E-suitable? |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| `confidentiality_profile_attributes.json`                     | JSON array, 621 entries. Each entry: `{ name, tag (paren-comma form), id (8-char hex), stdCompIOD, basicProfile, ...optionFields }`. Per-option-set fields: `cleanDescOpt, cleanGraphOpt, cleanStructContOpt, rtnDevIdOpt, rtnInstIdOpt, rtnLongFullDatesOpt, rtnLongModifDatesOpt, rtnPatCharsOpt, rtnSafePrivOpt, rtnUIDsOpt`. | YES (as the base) |
+| `attributes.json`                                             | Part 6 attribute table: keyword/VR/VM/name. Not Annex E.                                                                                                                                                                                                                                                                         | NO                |
+| `uids.json`                                                   | UID dictionary. Not Annex E.                                                                                                                                                                                                                                                                                                     | NO                |
+| `ciods.json` / `modules.json` / `macros.json` / `*_to_*.json` | Composite IOD / module / macro composition tables. Not Annex E.                                                                                                                                                                                                                                                                  | NO                |
 
 ## Coverage vs PS3.15 Annex E option sets
 
 The 11 option sets in `AnnexEOption` map to Table E.1-1 columns as follows.
 
-| `AnnexEOption` (E.3.x)                        | Table E.1-1 column           | Notes |
-| --------------------------------------------- | ---------------------------- | ----- |
-| `CleanPixelData` (E.3.1)                      | _none_ (pixel-level)         | E.3.1 acts on pixel data, not metadata; Table E.1-1 has no per-attribute column for it. Enforced at the pixel-decode layer. |
-| `CleanRecognizableVisual` (E.3.2)             | _none_ (pixel-level)         | Same: pixel/burned-in-text scrubbing, not per-attribute. |
-| `CleanGraphics` (E.3.3)                       | `Clean Graph. Opt.`          | Direct. |
-| `CleanStructuredContent` (E.3.4)              | `Clean Struct. Cont. Opt.`   | Direct. |
-| `CleanDescriptors` (E.3.5)                    | `Clean Desc. Opt.`           | Direct. |
-| `RetainLongitudinalTemporal` (E.3.6)          | `Rtn. Long. Full Dates Opt.` | **Collapsed.** See below. |
-| `RetainPatientCharacteristics` (E.3.7)        | `Rtn. Pat. Chars. Opt.`      | Direct. |
-| `RetainDeviceIdentity` (E.3.8)                | `Rtn. Dev. Id. Opt.`         | Direct. |
-| `RetainUIDs` (E.3.9)                          | `Rtn. UIDs Opt.`             | Direct. |
-| `RetainSafePrivate` (E.3.10)                  | `Rtn. Safe Priv. Opt.`       | Direct. |
-| `RetainInstitutionIdentity` (E.3.11)          | `Rtn. Inst. Id. Opt.`        | Direct. |
+| `AnnexEOption` (E.3.x)                 | Table E.1-1 column           | Notes                                                                                                                       |
+| -------------------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `CleanPixelData` (E.3.1)               | _none_ (pixel-level)         | E.3.1 acts on pixel data, not metadata; Table E.1-1 has no per-attribute column for it. Enforced at the pixel-decode layer. |
+| `CleanRecognizableVisual` (E.3.2)      | _none_ (pixel-level)         | Same: pixel/burned-in-text scrubbing, not per-attribute.                                                                    |
+| `CleanGraphics` (E.3.3)                | `Clean Graph. Opt.`          | Direct.                                                                                                                     |
+| `CleanStructuredContent` (E.3.4)       | `Clean Struct. Cont. Opt.`   | Direct.                                                                                                                     |
+| `CleanDescriptors` (E.3.5)             | `Clean Desc. Opt.`           | Direct.                                                                                                                     |
+| `RetainLongitudinalTemporal` (E.3.6)   | `Rtn. Long. Full Dates Opt.` | **Collapsed.** See below.                                                                                                   |
+| `RetainPatientCharacteristics` (E.3.7) | `Rtn. Pat. Chars. Opt.`      | Direct.                                                                                                                     |
+| `RetainDeviceIdentity` (E.3.8)         | `Rtn. Dev. Id. Opt.`         | Direct.                                                                                                                     |
+| `RetainUIDs` (E.3.9)                   | `Rtn. UIDs Opt.`             | Direct.                                                                                                                     |
+| `RetainSafePrivate` (E.3.10)           | `Rtn. Safe Priv. Opt.`       | Direct.                                                                                                                     |
+| `RetainInstitutionIdentity` (E.3.11)   | `Rtn. Inst. Id. Opt.`        | Direct.                                                                                                                     |
 
 ### The E.3.6 collapse, measured
 

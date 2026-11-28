@@ -135,9 +135,7 @@ async function headerCase(dicom, spec) {
     const rssBefore = status("VmRSS");
     const start = performance.now();
     const ds =
-      readIndex === 0
-        ? dicom.parseDicom(readFileSync(path))
-        : await dicom.readDicomHeader(path);
+      readIndex === 0 ? dicom.parseDicom(readFileSync(path)) : await dicom.readDicomHeader(path);
     const elapsed = performance.now() - start;
     const peak = status("VmHWM") - rssBefore;
     return {

@@ -29,8 +29,8 @@ import type {
   BuildDicomElement,
   BuildDicomSqElement,
   BuildDicomSqItem,
-} from "../helpers/build-dicom.js";
-import { buildDicom } from "../helpers/build-dicom.js";
+} from "../_helpers/build-dicom.js";
+import { buildDicom } from "../_helpers/build-dicom.js";
 
 const REPO_ROOT = join(import.meta.dirname, "..", "..");
 const EXPLICIT_LE = "1.2.840.10008.1.2.1";

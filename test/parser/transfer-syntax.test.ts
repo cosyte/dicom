@@ -23,7 +23,7 @@ import {
 } from "../../src/parser/transfer-syntax.js";
 import { DicomParseError, FATAL_CODES, OFFSET_FRAMES } from "../../src/parser/errors.js";
 import type { ParseContext } from "../../src/parser/types.js";
-import { buildDicom } from "../helpers/build-dicom.js";
+import { buildDicom } from "../_helpers/build-dicom.js";
 import {
   JPIP_SECTION_IDS,
   NATIVE_TRANSFER_SYNTAXES,
@@ -31,7 +31,7 @@ import {
   registeredTransferSyntaxes,
   sectionA4TransferSyntaxes,
   sectionById,
-} from "../helpers/ps35-section-a4.js";
+} from "../_helpers/ps35-section-a4.js";
 
 /** `true` when `parseDicom` gets past Transfer Syntax dispatch for `uid`. */
 function accepts(uid: string): boolean {

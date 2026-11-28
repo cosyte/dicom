@@ -1,5 +1,5 @@
 /**
- * Part 10 framing detection - preamble + DICM magic recognition.
+ * Part 10 framing detection: preamble + DICM magic recognition.
  *
  * Three rules govern it:
  *   - `stripPreamble` is tri-state (`"tolerate"` default, `"require"`
@@ -83,7 +83,7 @@ export function parsePart10Header(
  * form.
  *
  * Layout (12 bytes): group(2) + element(2) + VR='UL'(2) + length=0x0004(2) +
- * value(4). The value bytes themselves are not validated here - they are the
+ * value(4). The value bytes themselves are not validated here: they are the
  * declared File Meta group length, which `parseFileMeta` cross-checks.
  */
 function looksLikeFileMetaGroupLengthAtOffsetZero(buffer: Buffer): boolean {

@@ -51,7 +51,7 @@ import type { ParseContext } from "./types.js";
 import type { DicomParseWarning } from "./warnings.js";
 
 /**
- * Default decompression-bomb cap - 256 MiB, set by the parser's own
+ * Default decompression-bomb cap: 256 MiB, set by the parser's own
  * security threat model. Exposed via
  * {@link parseDeflatedLEWithCap} so the test suite can override the cap to
  * a small value (~1 KiB) for tractable bomb-cap tests; v1.x may expose
@@ -91,7 +91,7 @@ export function parseDeflatedLE(
 
 /**
  * Same as {@link parseDeflatedLE} but with a configurable inflated-output
- * cap. Test-only - used by the bomb-cap test to override
+ * cap. Test-only: used by the bomb-cap test to override
  * `DEFAULT_MAX_INFLATED_BYTES` to a tractable value (~1 KiB).
  *
  * @internal
@@ -112,7 +112,7 @@ export function parseDeflatedLEWithCap(
     const errAny = err as { code?: string; message?: string };
     const code = errAny.code;
     const message = errAny.message ?? String(err);
-    // Node's decompression-bomb signal - `ERR_BUFFER_TOO_LARGE` (Node 16.9+).
+    // Node's decompression-bomb signal: `ERR_BUFFER_TOO_LARGE` (Node 16.9+).
     // Older Node versions surface this via a different RangeError shape;
     // detect by class + message regex as a fallback.
     if (
@@ -139,7 +139,7 @@ export function parseDeflatedLEWithCap(
     frame: { buffer: inflated, name: OFFSET_FRAMES.INFLATED_DATASET },
   };
 
-  // Inner emit wrapper - tags every emitted warning's position with
+  // Inner emit wrapper: tags every emitted warning's position with
   // `deflated: true`, then forwards to the outer chokepoint
   // (which preserves strict-mode escalation + onWarning callback +
   // ds.warnings push semantics).
@@ -161,7 +161,7 @@ export function parseDeflatedLEWithCap(
 
   const result = parseExplicitLE(inflated, 0, innerCtx, innerEmit);
 
-  // The on-disk endOffset is the end of the source buffer - once the
+  // The on-disk endOffset is the end of the source buffer: once the
   // deflate body starts, all remaining bytes belong to it.
   return { ...result, endOffset: buffer.length };
 }

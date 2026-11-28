@@ -18,7 +18,7 @@
  *      `immutabilityProperty` directly.
  *
  * Depth and seed come from `COSYTE_PROPERTY_RUNS` and `COSYTE_PROPERTY_SEED`
- * (`test/helpers/property.ts`): 100 cases on a pull request, 10,000 nightly,
+ * (`test/_helpers/property.ts`): 100 cases on a pull request, 10,000 nightly,
  * each property's seed printed before it runs.
  *
  * @module
@@ -33,7 +33,7 @@ import { immutabilityProperty } from "@cosyte/test-utils";
 import { parseDicom, type Dataset, type DicomParseWarning, type Element } from "../../src/index.js";
 import type { Tag } from "../../src/dictionary/types.js";
 
-import { checkProperty, propertyRun } from "../helpers/property.js";
+import { checkProperty, propertyRun } from "../_helpers/property.js";
 
 import { encodeModel, recoverableInput, TS_DEFLATED_LE, wellFormedModel } from "./_arbitraries.js";
 

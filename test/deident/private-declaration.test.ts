@@ -28,8 +28,8 @@ import {
   parseDicom,
   serializeDicom,
 } from "../../src/index.js";
-import type { BuildDicomElement, BuildDicomSqItem } from "../helpers/build-dicom.js";
-import { buildDicom } from "../helpers/build-dicom.js";
+import type { BuildDicomElement, BuildDicomSqItem } from "../_helpers/build-dicom.js";
+import { buildDicom } from "../_helpers/build-dicom.js";
 
 const EXPLICIT_LE = "1.2.840.10008.1.2.1";
 

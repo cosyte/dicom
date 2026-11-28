@@ -4,7 +4,7 @@
  * Each `describe` block targets one of the five criteria. Tests
  * exercise the public surface (`parseDicom`, `Dataset`, `WARNING_CODES`,
  * `FATAL_CODES`, `DicomParseError`, `Dictionary.uid`) over programmatic
- * fixtures from `test/helpers/build-dicom.ts` (the repository ships no
+ * fixtures from `test/_helpers/build-dicom.ts` (the repository ships no
  * curated `.dcm` files).
  *
  * @module
@@ -23,7 +23,7 @@ import {
   type Element,
 } from "../../src/index.js";
 import type { Tag } from "../../src/dictionary/types.js";
-import { buildDicom } from "../helpers/build-dicom.js";
+import { buildDicom } from "../_helpers/build-dicom.js";
 
 // -- Test-only structural accessor for Dataset._elements ---------------------
 

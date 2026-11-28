@@ -4,7 +4,7 @@
  * `jpip-referenced.test.ts`).
  *
  * The expected sets are read out of the vendored PS3.5 and the generated PS3.6 registry by
- * `test/helpers/ps35-section-a4.ts`, never typed here, and every row runs over the WHOLE set, not a
+ * `test/_helpers/ps35-section-a4.ts`, never typed here, and every row runs over the WHOLE set, not a
  * sample. The oracle for the metadata is the Explicit-LE twin: the byte-identical Data Set under
  * `1.2.840.10008.1.2.1`, which the parser read before any section A.4 syntax was supported.
  *
@@ -30,7 +30,7 @@ import {
   encapsulatedObject,
   explicitLeTwin,
 } from "../fixtures/encapsulated/objects.js";
-import { ENCAPSULATION_SET, JPIP_SET, UNSUPPORTED_SET } from "../helpers/ps35-section-a4.js";
+import { ENCAPSULATION_SET, JPIP_SET, UNSUPPORTED_SET } from "../_helpers/ps35-section-a4.js";
 
 /** The metadata, read through the domain views. */
 function metadata(ds: Dataset): Record<string, unknown> {

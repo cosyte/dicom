@@ -3,7 +3,7 @@ import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
 import { parseDicom } from "../../../src/index.js";
-import { buildDicom } from "../../helpers/build-dicom.js";
+import { buildDicom } from "../../_helpers/build-dicom.js";
 
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
 
@@ -49,7 +49,7 @@ describe("buildPatient (wrong-patient class)", () => {
             items: [
               {
                 elements: [
-                  { tag: "00100020", vr: "LO", value: ascii("ALT-1") },
+                  { tag: "00100020", vr: "LO", value: ascii("ALT01") },
                   { tag: "00100021", vr: "LO", value: ascii("HOSP_B") },
                   { tag: "00100022", vr: "CS", value: ascii("TEXT") },
                 ],
@@ -59,7 +59,7 @@ describe("buildPatient (wrong-patient class)", () => {
         ],
       }),
     );
-    expect(ds.patient.otherIds).toEqual([{ id: "ALT-1", issuer: "HOSP_B", typeCode: "TEXT" }]);
+    expect(ds.patient.otherIds).toEqual([{ id: "ALT01", issuer: "HOSP_B", typeCode: "TEXT" }]);
   });
 
   it("surfaces Issuer Qualifiers Sequence items when present", () => {
@@ -85,12 +85,12 @@ describe("buildPatient (wrong-patient class)", () => {
         elements: [
           {
             tag: "00101002",
-            items: [{ elements: [{ tag: "00100020", vr: "LO", value: ascii("ALT-1") }] }],
+            items: [{ elements: [{ tag: "00100020", vr: "LO", value: ascii("ALT01") }] }],
           },
         ],
       }),
     );
-    expect(ds.patient.otherIds).toEqual([{ id: "ALT-1" }]);
+    expect(ds.patient.otherIds).toEqual([{ id: "ALT01" }]);
   });
 
   it("never invents an absent id/issuer - typed-absent, otherIds always []", () => {

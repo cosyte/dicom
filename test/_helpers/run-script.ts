@@ -38,7 +38,7 @@
  * the tree means running the COPY's script file, not this one with a different
  * working directory. `root` moves the script path; `cwd` moves only the child's
  * working directory, which neither generator reads. See
- * `test/helpers/generator-sandbox.ts` for what that relocation is for.
+ * `test/_helpers/generator-sandbox.ts` for what that relocation is for.
  */
 
 import { spawnSync } from "node:child_process";

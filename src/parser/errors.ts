@@ -21,10 +21,9 @@ import type { WarningCode } from "./warnings.js";
 /**
  * Stable string codes for every Tier-3 fatal the parser may throw.
  *
- * Locked at four codes per `PROJECT.md` "Fatal errors only for unrecoverable
- * structural corruption": anything less severe MUST be a Tier-2 warning
- * (see `./warnings.ts`). Consumers narrow on `err.code` to react to
- * specific structural failures.
+ * A fatal is kept for structural corruption the parser cannot recover from:
+ * anything less severe is a Tier-2 warning (see `./warnings.ts`). Callers
+ * narrow on `err.code` to react to a specific structural failure.
  *
  * @example
  * ```ts
@@ -84,10 +83,10 @@ export type FatalCode = (typeof FATAL_CODES)[keyof typeof FATAL_CODES];
  * A byte offset is a number and a number alone says nothing about where its
  * zero is. This parser reads a Data Set out of three different buffers over one
  * `parseDicom` call, so the same small integer means three different things
- * depending on which one is being read - and until the diagnostic
+ * depending on which one is being read, and until the diagnostic
  * PHI-residuals fix closed it, nothing on the thrown error said which. A consumer
  * cutting `input.subarray(err.byteOffset, err.byteOffset + 16)` to see what
- * upset the parser was, inside a Sequence Item, cutting an unrelated element -
+ * upset the parser was, inside a Sequence Item, cutting an unrelated element:
  * the exact defect the `{ strict: true }` snippet itself was once fixed for.
  *
  * **A frame NAME is published; a frame ORIGIN is not, and that asymmetry is
@@ -129,7 +128,7 @@ export const OFFSET_FRAMES = {
   /**
    * Byte 0 is byte 0 of a slice this parser cut from inside a Value Field: a
    * defined-length Sequence Item's value, or an `SQ`/`UN` value handed to a
-   * descent. **Where that cut begins is deliberately not published** - see
+   * descent. **Where that cut begins is deliberately not published**; see
    * this table's own note.
    */
   VALUE_SLICE: "value-slice",
@@ -163,7 +162,7 @@ export type OffsetFrame = (typeof OFFSET_FRAMES)[keyof typeof OFFSET_FRAMES];
  * They were two facts before this type existed: `ParseContext.buffer` held the
  * frame's bytes and nothing held its name, so every diagnostic that published
  * an offset published it unlabelled. Making the name a second sibling field
- * would have re-created the failure this parser has already paid for twice -
+ * would have re-created the failure this parser has already paid for twice:
  * an offset and the bytes cut at it drifting apart across a frame change. One
  * object with two readonly members means a frame change is a single
  * assignment: there is no way to swap the buffer and FORGET the name.
@@ -172,14 +171,14 @@ export type OffsetFrame = (typeof OFFSET_FRAMES)[keyof typeof OFFSET_FRAMES];
  * DELIBERATELY MISMATCHED PAIR IS STILL WRITABLE AND A GRADED PASS BUILT ONE.**
  * `{ buffer: itemSlice, name: OFFSET_FRAMES.INPUT }` type-checks, lints and
  * renders faithfully, so this is not an impossibility proof and must never be
- * described as one - the pair did not vanish, it moved from an argument list
+ * described as one: the pair did not vanish, it moved from an argument list
  * into an object literal at the sites that compose a frame. What it buys is
  * that composing one is a single assignment, so no site can half-update. Never
  * restate it as "a disagreement is not expressible".
  *
  * **🛑 AND WRITE NO COUNT OF THOSE SITES.** A first remedy said "exactly four"
  * in five artifacts and a graded pass measured five: the ROOT composition in
- * `parseDicom` is one, and it reads `"input"` - the very label a forged pair
+ * `parseDicom` is one, and it reads `"input"`: the very label a forged pair
  * would claim. A worker sweeping from that census reviews four of five and
  * reads clean. Derive it instead, in two seconds and never stale:
  * `grep -rn "OFFSET_FRAMES\." src/parser/`. **It OVER-reports, deliberately:
@@ -239,7 +238,7 @@ export function fileOffsetIn(frame: ParseFrame, offset: number): number | undefi
 
 /**
  * Thrown by `parseDicom` when the input violates one of the four
- * unrecoverable Tier-3 structural rules - or when a Tier-2 warning is
+ * unrecoverable Tier-3 structural rules, or when a Tier-2 warning is
  * escalated through the single `emit` chokepoint, which `{ strict: true }`
  * does for every warning and a profile's `escalate` list does for the codes
  * it names. Carries byte-offset positional context plus a short
@@ -257,13 +256,13 @@ export function fileOffsetIn(frame: ParseFrame, offset: number): number | undefi
  * between releases, so the union is open (see `WarningCode`).
  *
  * @remarks
- * Snippets may contain PHI when parsing real clinical files - redact at
+ * Snippets may contain PHI when parsing real clinical files: redact at
  * the call site if required by your compliance posture. The library does
  * not redact snippets itself.
  *
  * **`byteOffset` is only an index into your own buffer when `offsetFrame` is
- * `"input"`.** This parser reads a Data Set out of a slice in two situations -
- * a defined-length Sequence Item, and an `SQ`/`UN` descent - and out of an
+ * `"input"`.** This parser reads a Data Set out of a slice in two situations
+ * (a defined-length Sequence Item, and an `SQ`/`UN` descent) and out of an
  * inflated stream in a third, and an offset raised in any of them counts from
  * that buffer's byte 0. {@link OFFSET_FRAMES} names which; where a slice
  * begins is deliberately not published, because the distance between two
@@ -336,7 +335,7 @@ export class DicomParseError extends Error {
 
   /**
    * Construct a new `DicomParseError`. All fields except `contextPath` are
-   * required so every thrower populates positional context - and
+   * required so every thrower populates positional context, and
    * `offsetFrame` is required for the same reason `byteOffset` is, because an
    * offset whose frame is optional is an offset whose frame is usually
    * missing.

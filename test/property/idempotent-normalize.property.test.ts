@@ -17,7 +17,7 @@
  *
  * The wire form is a latin1 string, one code unit per byte, so the runner's default equality
  * compares bytes. Depth and seed come from `COSYTE_PROPERTY_RUNS` and `COSYTE_PROPERTY_SEED`
- * (`test/helpers/property.ts`).
+ * (`test/_helpers/property.ts`).
  *
  * @module
  */
@@ -28,7 +28,7 @@ import { idempotentNormalizeProperty } from "@cosyte/test-utils";
 import { describe, it } from "vitest";
 
 import { parseDicom, serializeDicom } from "../../src/index.js";
-import { propertyRun } from "../helpers/property.js";
+import { propertyRun } from "../_helpers/property.js";
 
 import { encodeModel, recoverableInput, wellFormedModel } from "./_arbitraries.js";
 

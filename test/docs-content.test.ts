@@ -13,7 +13,7 @@ import {
 } from "@cosyte/vitest-config/snippets";
 
 import { base64Object, compileErrors, fences, section } from "./_helpers/first-use.js";
-import { TSX_CLI } from "./helpers/run-script.js";
+import { TSX_CLI } from "./_helpers/run-script.js";
 import { FIRST_USE_CT_NO_PREAMBLE, FIRST_USE_CT_OBJECT } from "./fixtures/first-use/ct-object.js";
 
 /**

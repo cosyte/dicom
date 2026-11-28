@@ -28,7 +28,7 @@ SYNTHETIC^FIXTURE
 # --- Synthetic PN values in the TEST corpus (PHI-SCAN-WALK-ROOT-SCOPE) ---
 # The walk root moved from `test/fixtures/` to `test/`, which opened 81 tracked files this
 # gate had never read. Every fixture this package owns is BUILT IN A `.ts` SOURCE FILE by
-# `test/helpers/build-dicom.ts`, so its whole committed fixture corpus is PN literals in
+# `test/_helpers/build-dicom.ts`, so its whole committed fixture corpus is PN literals in
 # TypeScript rather than `.dcm` files on disk. Each value below was hand-read in place before
 # it was listed.
 #

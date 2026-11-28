@@ -34,7 +34,7 @@ import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-import { htmlBlockConditions } from "../helpers/commonmark-spec.js";
+import { htmlBlockConditions } from "../_helpers/commonmark-spec.js";
 
 const VENDOR = join(import.meta.dirname, "..", "..", "vendor", "commonmark", "spec");
 

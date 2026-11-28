@@ -2,7 +2,6 @@
 id: spec-notes-values
 title: Typed values and VR decode
 sidebar_label: Typed values
-sidebar_position: 9
 description: How an element's bytes decode into a typed value for each of the 34 VRs, including character sets and bulk data.
 ---
 

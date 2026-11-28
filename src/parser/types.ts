@@ -46,14 +46,14 @@ export interface PrivateTagDefinition {
 
 /**
  * A source/vendor tolerance preset. A `Profile` bundles three
- * things that only ever **tighten or annotate** a parse - never loosen it
+ * things that only ever **tighten or annotate** a parse: never loosen it
  * past the Postel's-Law default:
  *
- *  - `escalations` - Tier-2 warning codes promoted to a thrown
+ *  - `escalations`: Tier-2 warning codes promoted to a thrown
  *    `DicomParseError` (a stricter posture for known-unsafe deviations).
- *  - `suppressions` - Tier-2 warning codes silenced because they are a
+ *  - `suppressions`: Tier-2 warning codes silenced because they are a
  *    documented, benign quirk of the named source (annotation, not loss).
- *  - `privateDictionary` - a private-creator-keyed overlay resolving the
+ *  - `privateDictionary`: a private-creator-keyed overlay resolving the
  *    Implicit-VR of vendor private data elements via the file's **live**
  *    private-creator string (never a hard-coded block number).
  *
@@ -179,14 +179,14 @@ export interface ParseOptions {
    * number shifted by a constant the reader can compute is that raw number**: it
    * was the enclosing sequence's declared Value Length less the bytes of that
    * sequence already consumed. **The exceptions are named in one place that is
-   * not a record of a past change, and are deliberately not restated here** -
+   * not a record of a past change, and are deliberately not restated here**:
    * the `WARNING_MESSAGES` docblock in `./warnings.ts`, which this JSDoc used to
    * carry a copy of.
    * **This is a statement about `w.message` and about nothing else**: the two
    * byte counts still exist on `report.undefinedVrElements[].byteLength` and
    * `report.unauditableSequences[].byteLength`, model fields on a type whose own
    * docs say it is not a value-free surface. **No
-   * safe-to-log verdict is stated here** - that sentence was corrected twice and
+   * safe-to-log verdict is stated here**: that sentence was corrected twice and
    * is deleted rather than tried a third time; the mechanism is above and the
    * treatment is in the package's troubleshooting docs. The `DicomParseError`
    * this option raises in its place is a different and larger surface: it also
@@ -202,7 +202,7 @@ export interface ParseOptions {
    * Item, and into the inflated stream under Deflated Explicit VR LE. It was not
    * always: until the fatal-message registry the offset moved with the frame
    * while the cut was always taken from the whole file, so inside a
-   * defined-length Item the 16 bytes were **an unrelated element's** - a
+   * defined-length Item the 16 bytes were **an unrelated element's**: a
    * diagnostic disclosing data from a part of the document the reader was never
    * asked about. That is closed. **What is NOT closed, and never was a defect:
    * the bytes are still raw source bytes.** Reading them as safe because the
@@ -217,7 +217,7 @@ export interface ParseOptions {
    * into one here: where a slice begins is deliberately unpublished, because the
    * distance between two frames is a declared Value Length off the wire. The
    * escalated warning's own `position` is unchanged and still carries no frame
-   * beyond `deflated` - see `DicomPosition`.
+   * beyond `deflated`; see `DicomPosition`.
    *
    * Omit (do not pass `undefined`) to use the default.
    */
@@ -255,7 +255,7 @@ export interface ParseOptions {
    * Source/vendor tolerance preset. Applies the profile's
    * `escalations` / `suppressions` to warning emission and its
    * `privateDictionary` to Implicit-VR resolution of private data elements.
-   * A profile only tightens or annotates - it never makes the default
+   * A profile only tightens or annotates: it never makes the default
    * lenient parse throw outside the four Tier-3 fatals, and a private
    * creator the profile does not recognize degrades to generic UN handling
    * plus a `DICOM_PRIVATE_CREATOR_UNKNOWN` warning, never a wrong decode.
@@ -402,7 +402,7 @@ export interface ParseContext {
    * THAT MADE THE SNIPPET RETURN AN UNRELATED ELEMENT'S BYTES.** A warning
    * raised inside a defined-length Sequence Item carries an item-relative
    * offset, so cutting the file at it returned whatever happened to sit at that
-   * offset from byte 0 - a diagnostic handing back data from somewhere the
+   * offset from byte 0: a diagnostic handing back data from somewhere the
    * reader never looked. Do not "simplify" this back to a `readonly` field
    * holding the whole input: the swap is what keeps the offset and the bytes
    * talking about the same element.
@@ -439,12 +439,12 @@ export interface ParseContext {
    */
   creators: Map<number, Map<number, string>>;
   /**
-   * Sequence-encoding stack - the top entry determines FFFE-marker
+   * Sequence-encoding stack: the top entry determines FFFE-marker
    * semantics. Initial stack is `["Root"]`.
    */
   readonly encodingContextStack: Array<"Root" | "SqItem" | "EncapsulatedPixelData">;
   /**
-   * Hard-cap counter - incremented on SQ descent, decremented on ascent.
+   * Hard-cap counter: incremented on SQ descent, decremented on ascent.
    * `parseSequence` enforces the depth cap against it.
    */
   nestingDepth: number;

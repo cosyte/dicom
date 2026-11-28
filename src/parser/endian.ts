@@ -3,7 +3,7 @@
  *
  * Three rules the table encodes:
  *   - `0` means "no swap" (byte stream / ASCII / spec-defined). The `AT`
- *     special case has stride=2 and count=2 (group, then element - NEVER
+ *     special case has stride=2 and count=2 (group, then element, NEVER
  *     one 4-byte swap).
  *   - `OB` and `UN` are byte streams and are NEVER swapped, even under
  *     Explicit VR Big Endian. Both are pinned at 0 here.
@@ -20,7 +20,7 @@ import type { VR } from "../dictionary/types.js";
  * (1.2.840.10008.1.2.2). The parser swaps every value-buffer slice in
  * groups of `BE_VR_STRIDE[vr]` bytes; `0` means leave-as-is.
  *
- * **`AT` special case**: stride is 2 and count is 2 - group first,
+ * **`AT` special case**: stride is 2 and count is 2, group first,
  * then element. Two independent 2-byte swaps, NEVER one 4-byte swap.
  * Multi-valued AT therefore has stride=2 and count=N×2.
  *
@@ -47,7 +47,7 @@ export const BE_VR_STRIDE: Readonly<Record<VR, 0 | 2 | 4 | 8>> = Object.freeze({
   OV: 8,
   SV: 8,
   UV: 8,
-  // No swap - byte streams and ASCII / spec-defined VRs.
+  // No swap: byte streams and ASCII / spec-defined VRs.
   OB: 0,
   UN: 0,
   AE: 0,
@@ -71,13 +71,13 @@ export const BE_VR_STRIDE: Readonly<Record<VR, 0 | 2 | 4 | 8>> = Object.freeze({
 });
 
 /**
- * The closed set of VRs PS3.5 2026c section 6.2 defines - all 34 of them, taken
+ * The closed set of VRs PS3.5 2026c section 6.2 defines: all 34 of them, taken
  * from {@link BE_VR_STRIDE}'s keys so the two cannot drift.
  *
  * **This is the set section 6.2 is written against.** "All new VRs defined in
  * future versions of DICOM shall be of the same Data Element Structure as
  * defined in [section 7.1.2] with reserved bytes after the VR and a 32-bit
- * unsigned integer VL" - so a two-byte VR that is *not* in this set is, by the
+ * unsigned integer VL", so a two-byte VR that is *not* in this set is, by the
  * standard's own rule, long-form. Membership is therefore a structural decision
  * on the read path and on the write path, not just a rendering guard.
  *
@@ -98,7 +98,7 @@ export const KNOWN_VRS: ReadonlySet<string> = Object.freeze(
  * either a VR from an edition newer than the vendored pin, or two bytes that
  * were never a VR at all (a header fabricated out of the middle of somebody's
  * value). **PS3.5 gives both the same Data Element Structure**, so the reader
- * does not have to tell them apart to read the header - see
+ * does not have to tell them apart to read the header; see
  * `readExplicitElementHeader`.
  *
  * @internal
