@@ -5845,7 +5845,7 @@ VALUE_ERROR_CODES.FRAME_INDEX_OUT_OF_RANGE; // "FRAME_INDEX_OUT_OF_RANGE"
 
 ### VERSION
 
-> `const` **VERSION**: `string` = `"0.1.17"`
+> `const` **VERSION**: `string` = `"0.1.18"`
 
 The version of `@cosyte/dicom`, the same as its `package.json` `version`. The `version` script
 writes it with `cosyte-process sync-version` in the commit that bumps the package.

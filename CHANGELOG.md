@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.18
+
+### Patch Changes
+
+- 6c82fe6: `CHANGELOG.md` now marks 0.1.16 as a version that was tagged and never published to npm, and says its changes first ship in the next published version.
+- 0452f98: The parser's doc comments, and the API reference generated from them, no longer use a spaced hyphen as a pause: each such sentence uses a colon, a comma, a semicolon, or parentheses instead. No code changes.
+- 6760a64: **`VERSION` is declared in the package entry point.** It moved from a module of its own into `src/index.ts`, where the release writes it with the shared version tool, and it still equals the `version` in `package.json`. Nothing changes for a caller: the export, its type and its value are the same.
+
 ## 0.1.17
 
 ### Patch Changes
