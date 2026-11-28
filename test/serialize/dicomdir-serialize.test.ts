@@ -104,11 +104,11 @@ function expectRefused(write: () => Buffer, code: string, offending: readonly nu
   for (const value of offending) expect(err.message).not.toContain(String(value));
 }
 
-describe("[AC-6] serializeDicom writes each offset as the byte offset of the record it names", () => {
+describe("serializeDicom writes each offset as the byte offset of the record it names", () => {
   for (const [name, ts] of SYNTAXES) {
     for (const sequenceUndefinedLength of [false, true]) {
       const form = sequenceUndefinedLength ? "undefined-length" : "defined-length";
-      it(`[AC-6] ${name}, ${form} Directory Record Sequence`, () => {
+      it(`${name}, ${form} Directory Record Sequence`, () => {
         const built = buildDicomdir({
           transferSyntax: ts,
           sequenceUndefinedLength,
@@ -152,8 +152,8 @@ describe("[AC-6] serializeDicom writes each offset as the byte offset of the rec
   }
 });
 
-describe("[AC-7] an offset the writer cannot tie to a Directory Record is refused", () => {
-  it("[AC-7] a Dataset parsed with an unresolved offset", () => {
+describe("an offset the writer cannot tie to a Directory Record is refused", () => {
+  it("a Dataset parsed with an unresolved offset", () => {
     const built = buildDicomdir({
       transferSyntax: TS_EXPLICIT_LE,
       ...twoPatientRecords({ 8: { next: { midRecord: 5 } } }),
@@ -168,7 +168,7 @@ describe("[AC-7] an offset the writer cannot tie to a Directory Record is refuse
     ]);
   });
 
-  it("[AC-7] a Dataset whose Directory Record Sequence was removed while offsets remain", () => {
+  it("a Dataset whose Directory Record Sequence was removed while offsets remain", () => {
     const built = buildDicomdir({ transferSyntax: TS_EXPLICIT_LE, ...twoPatientRecords() });
     const ds = parseDicom(built.bytes);
     const elements = new Map<Tag, Element>(
@@ -185,7 +185,7 @@ describe("[AC-7] an offset the writer cannot tie to a Directory Record is refuse
     );
   });
 
-  it("[AC-7] a Dataset whose Directory Record Sequence was emptied while offsets remain", () => {
+  it("a Dataset whose Directory Record Sequence was emptied while offsets remain", () => {
     const built = buildDicomdir({ transferSyntax: TS_EXPLICIT_LE, ...twoPatientRecords() });
     const ds = parseDicom(built.bytes);
     const sequence = ds.get("00041220");
@@ -214,7 +214,7 @@ describe("[AC-7] an offset the writer cannot tie to a Directory Record is refuse
     );
   });
 
-  it("[AC-7] a Dataset whose Directory Record Sequence Items do not match its bytes", () => {
+  it("a Dataset whose Directory Record Sequence Items do not match its bytes", () => {
     // The writer places records by walking the Sequence against its Items; one
     // Item short, the walk cannot say where any record lands, so no offset can
     // be tied to a written record.
@@ -243,7 +243,7 @@ describe("[AC-7] an offset the writer cannot tie to a Directory Record is refuse
     );
   });
 
-  it("[AC-7] a hand-built Dataset declaring the DICOMDIR SOP Class with a non-zero offset and no records", () => {
+  it("a hand-built Dataset declaring the DICOMDIR SOP Class with a non-zero offset and no records", () => {
     const value = Buffer.alloc(4);
     value.writeUInt32LE(4242, 0);
     const offset = new Element({
@@ -267,7 +267,7 @@ describe("[AC-7] an offset the writer cannot tie to a Directory Record is refuse
     );
   });
 
-  it("[AC-7] an offset whose Value Length is not 4 is refused, not written through", () => {
+  it("an offset whose Value Length is not 4 is refused, not written through", () => {
     const built = buildDicomdir({
       transferSyntax: TS_EXPLICIT_LE,
       ...twoPatientRecords({ 8: { next: { raw: Buffer.alloc(8) } } }),
@@ -280,8 +280,8 @@ describe("[AC-7] an offset the writer cannot tie to a Directory Record is refuse
   });
 });
 
-describe("[AC-5] a Deflated DICOMDIR carrying a non-zero offset", () => {
-  it("[AC-5] parseDicom warns and resolves no record; serializeDicom throws and returns no bytes", () => {
+describe("a Deflated DICOMDIR carrying a non-zero offset", () => {
+  it("parseDicom warns and resolves no record; serializeDicom throws and returns no bytes", () => {
     const built = buildDicomdir({
       transferSyntax: TS_DEFLATED_LE,
       records: [
@@ -302,7 +302,7 @@ describe("[AC-5] a Deflated DICOMDIR carrying a non-zero offset", () => {
     expectRefused(() => serializeDicom(ds), SERIALIZE_ERROR_CODES.DIRECTORY_OFFSET_DEFLATED, []);
   });
 
-  it("[AC-5] a Deflated DICOMDIR whose offsets are all zero (an empty root) still writes", () => {
+  it("a Deflated DICOMDIR whose offsets are all zero (an empty root) still writes", () => {
     const built = buildDicomdir({ transferSyntax: TS_DEFLATED_LE, records: [] });
     const ds = parseDicom(built.bytes);
     expect(ds.warnings.filter((w) => DIRECTORY_CODES.includes(w.code))).toEqual([]);
@@ -313,7 +313,7 @@ describe("[AC-5] a Deflated DICOMDIR carrying a non-zero offset", () => {
     expect(again.directory?.root).toEqual([]);
   });
 
-  it("[AC-5] a Deflated DICOMDIR whose record carries no offset attribute at all still writes", () => {
+  it("a Deflated DICOMDIR whose record carries no offset attribute at all still writes", () => {
     const built = buildDicomdir({
       transferSyntax: TS_DEFLATED_LE,
       firstRoot: "zero",
