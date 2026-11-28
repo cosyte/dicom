@@ -534,11 +534,12 @@ describe("the Prettier pass, derived for this repo rather than copied", () => {
     // Asked of PRETTIER ITSELF rather than by pattern-matching the ignore file, because a
     // hand-rolled reading of ignore semantics is its own way to get this wrong.
     //
-    // `format:check` delegates to `cosyte-process format --check`, so the root markdown glob that
-    // puts CHANGELOG.md in the gate lives in cosyte-process.config.json's `format.globs`.
+    // `format:check` delegates to `cosyte-process format --check`, whose `format.globs` in
+    // cosyte-process.config.json is the whole tree, `.`, which puts CHANGELOG.md in the gate; the
+    // next case asks Prettier that `.prettierignore` does not take it back out.
     expect(config.prettier).toBeUndefined();
     expect(pkg.scripts?.["format:check"]).toBe("cosyte-process format --check");
-    expect(processConfig.format?.globs ?? []).toContain("*.{json,md,yml,yaml}");
+    expect(processConfig.format?.globs ?? []).toEqual(["."]);
   });
 
   it("has a .prettierignore that does not take CHANGELOG.md out of the formatting gate", async () => {

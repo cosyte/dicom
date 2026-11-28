@@ -62,12 +62,12 @@ Buffer.isBuffer(serializeDicom(dataset)); // => true
 
 ## The options surface
 
-| Export                | What it is                                                                                                                                                                          |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DeidentifyOptions`   | The options object: `retain`, `uidRoot`, `uidMap`, `profile`, `deidentificationMethod`. Every field is optional; the default is the Basic Profile with no Option active.             |
-| `DeidentifyOption`    | One Annex E option-set name. The two pixel-facing Options (`CleanPixelData`, `CleanRecognizableVisual`) are excluded by type, because this layer does not touch pixels.              |
-| `DEIDENTIFY_OPTIONS`  | The frozen registry of the metadata option-set names, validated at runtime. **It is the list**: read it rather than a count written anywhere.                                        |
-| `DeidentifyResult<T>` | What the call returns: `{ dataset, report }`, generic in the dataset type so the parsed type flows through.                                                                          |
+| Export                | What it is                                                                                                                                                                                |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DeidentifyOptions`   | The options object: `retain`, `uidRoot`, `uidMap`, `profile`, `deidentificationMethod`. Every field is optional; the default is the Basic Profile with no Option active.                  |
+| `DeidentifyOption`    | One Annex E option-set name. The two pixel-facing Options (`CleanPixelData`, `CleanRecognizableVisual`) are excluded by type, because this layer does not touch pixels.                   |
+| `DEIDENTIFY_OPTIONS`  | The frozen registry of the metadata option-set names, validated at runtime. **It is the list**: read it rather than a count written anywhere.                                             |
+| `DeidentifyResult<T>` | What the call returns: `{ dataset, report }`, generic in the dataset type so the parsed type flows through.                                                                               |
 | `AppliedAction`       | What actually happened to one attribute: `removed` (`X`), `emptied` (`Z`), `dummied` (`D`), `uid-remapped` (`U`), `cleaned` (`C`), or `kept`. The resolved outcome, not the table's code. |
 
 `cleaned` is a conservative blank: a zero-length value, or, for a Sequence, the attribute kept with no Items, at every
@@ -215,10 +215,10 @@ The limits of what these codes say, stated here rather than on a later page:
 - **Top level only.** A copy nested inside a Sequence Item is neither written nor read, the same
   reach `(0012,0062)` and `(0012,0063)` have.
 
-| Export                          | What it is                                                                                                                                         |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DEIDENTIFICATION_METHOD_CODES` | The CID 7050 rows as frozen data, with the context group UID and version, the Profile's code and the code each `DeidentifyOption` writes.          |
-| `DeidentificationMethodCode`    | One row: `codeValue`, `codingSchemeDesignator` (`DCM`) and `codeMeaning`, spelled exactly as CID 7050 spells them.                                 |
+| Export                          | What it is                                                                                                                                |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `DEIDENTIFICATION_METHOD_CODES` | The CID 7050 rows as frozen data, with the context group UID and version, the Profile's code and the code each `DeidentifyOption` writes. |
+| `DeidentificationMethodCode`    | One row: `codeValue`, `codingSchemeDesignator` (`DCM`) and `codeMeaning`, spelled exactly as CID 7050 spells them.                        |
 
 ## UID remapping
 
@@ -227,11 +227,11 @@ the source UID and the root, so the same source UID maps to the same replacement
 across files in a study set, with no shared state: cross-instance referential integrity (Study to
 Series to SOP, Frame of Reference, referenced instances) survives the scrub.
 
-| Export             | What it is                                                                                                                                              |
+| Export             | What it is                                                                                                                                                |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DEFAULT_UID_ROOT` | The DICOM-sanctioned UUID-derived arc (PS3.5 §B.2), which needs no registration. The default `uidRoot`.                                                 |
+| `DEFAULT_UID_ROOT` | The DICOM-sanctioned UUID-derived arc (PS3.5 §B.2), which needs no registration. The default `uidRoot`.                                                   |
 | `makeUidRemapper`  | Builds a remapper over a root and an optional caller-owned cache, for remapping UIDs outside a `deidentify` call. Throws `DeidentifyError` on a bad root. |
-| `UidRemapper`      | What it returns: `map(sourceUid)` plus the `cache` it fills, exposed for reporting and reuse.                                                            |
+| `UidRemapper`      | What it returns: `map(sourceUid)` plus the `cache` it fills, exposed for reporting and reuse.                                                             |
 
 ```ts runnable
 import { makeUidRemapper, DEFAULT_UID_ROOT } from "@cosyte/dicom";
@@ -296,24 +296,24 @@ report whole**, and read [Keeping PHI out of logs](./troubleshooting.md#keeping-
 mechanism. An emptied audit is not a performed one: a report that reads as a complete scrub it did
 not perform is the worse half of every residual on the limitations page.
 
-| Export                        | What it records                                                                                                                                                                                 |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DeidentifiedAttribute`       | One audited attribute: its tag, keyword, resolved Annex E action and the `AppliedAction` that action produced.                                                                                   |
-| `EmbeddedAttributeFinding`    | A carrier whose over-declared Value Length swallowed the element after it, emptied rather than kept. `hidden` lists only tags this run acted on that Table E.1-1 gives a literal row, so it can be empty on a real finding. |
-| `UnauditableSequenceFinding`  | An `SQ` that reached the run with no items, so its item stream could not be walked and it was emptied rather than passed through.                                                                |
-| `UndefinedVrFinding`          | An element whose on-wire VR is outside the set PS3.5 §6.2 defines, emptied because no Table E.1-1 row can say what its bytes mean. It names a byte offset and deliberately no tag.               |
-| `UnenumerablePrivateRemoval`  | A private attribute a `Profile` vouched for under `RetainSafePrivate` whose value this run did not enumerate, so §E.3.10's "known to be safe" was never established and it was **removed**, not emptied. |
-| `FileMetaDroppedElement`      | A non-modeled `(0002,xxxx)` element the source carried that is not in the output, with the VR and byte length that went with it. A deliberate fidelity loss, recorded because what was dropped is the audit value. |
-| `Group0004Removal`            | A `(0004,xxxx)` element removed under §E.1.1's unconditional group-0004 rule. No Option brings one back; the DICOMDIR carve-out is the one object it does not apply to.                          |
-| `UnregisteredElementRemoval`  | A non-private element removed because neither this build's PS3.6 registry nor Table E.1-1 carries its tag. It names a byte offset and deliberately no tag or VR, and a newer edition's conformant attribute lands here too. |
+| Export                       | What it records                                                                                                                                                                                                             |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DeidentifiedAttribute`      | One audited attribute: its tag, keyword, resolved Annex E action and the `AppliedAction` that action produced.                                                                                                              |
+| `EmbeddedAttributeFinding`   | A carrier whose over-declared Value Length swallowed the element after it, emptied rather than kept. `hidden` lists only tags this run acted on that Table E.1-1 gives a literal row, so it can be empty on a real finding. |
+| `UnauditableSequenceFinding` | An `SQ` that reached the run with no items, so its item stream could not be walked and it was emptied rather than passed through.                                                                                           |
+| `UndefinedVrFinding`         | An element whose on-wire VR is outside the set PS3.5 §6.2 defines, emptied because no Table E.1-1 row can say what its bytes mean. It names a byte offset and deliberately no tag.                                          |
+| `UnenumerablePrivateRemoval` | A private attribute a `Profile` vouched for under `RetainSafePrivate` whose value this run did not enumerate, so §E.3.10's "known to be safe" was never established and it was **removed**, not emptied.                    |
+| `FileMetaDroppedElement`     | A non-modeled `(0002,xxxx)` element the source carried that is not in the output, with the VR and byte length that went with it. A deliberate fidelity loss, recorded because what was dropped is the audit value.          |
+| `Group0004Removal`           | A `(0004,xxxx)` element removed under §E.1.1's unconditional group-0004 rule. No Option brings one back; the DICOMDIR carve-out is the one object it does not apply to.                                                     |
+| `UnregisteredElementRemoval` | A non-private element removed because neither this build's PS3.6 registry nor Table E.1-1 carries its tag. It names a byte offset and deliberately no tag or VR, and a newer edition's conformant attribute lands here too. |
 
 ## Errors
 
-| Export                   | What it is                                                                                                                             |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Export                   | What it is                                                                                                                                                                                                                                                                           |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `DEIDENTIFY_ERROR_CODES` | The frozen registry of codes this layer throws: `INVALID_OPTIONS` for an author-time misconfiguration of the call, and `UNSUPPORTED_TRANSFER_SYNTAX` for a `Dataset` under one of the four JPIP Referenced syntaxes, which is refused whatever the options (see Scope limits below). |
-| `DeidentifyErrorCode`    | The discriminant type over that registry.                                                                                              |
-| `DeidentifyError`        | The thrown class, distinct from `DicomParseError`, `DicomValueError` and `DicomSerializeError`. Its message carries only option names and the UID root, or a fixed string for `UNSUPPORTED_TRANSFER_SYNTAX`, never a decoded value. |
+| `DeidentifyErrorCode`    | The discriminant type over that registry.                                                                                                                                                                                                                                            |
+| `DeidentifyError`        | The thrown class, distinct from `DicomParseError`, `DicomValueError` and `DicomSerializeError`. Its message carries only option names and the UID root, or a fixed string for `UNSUPPORTED_TRANSFER_SYNTAX`, never a decoded value.                                                  |
 
 ```ts runnable throws
 import { makeUidRemapper } from "@cosyte/dicom";
