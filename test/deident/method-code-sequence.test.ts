@@ -338,13 +338,7 @@ describe("Tier 1: spec-clean (0012,0064) emission on a source without one", () =
 
   it("AC-12: the two new warning codes are in the frozen registry with messages and in the locked snapshot", () => {
     const snapshot = readFileSync(
-      join(
-        import.meta.dirname,
-        "..",
-        "property",
-        "__snapshots__",
-        "warning-codes.snapshot.test.ts.snap",
-      ),
+      join(import.meta.dirname, "..", "property", "warning-codes.snapshot.test.ts"),
       "utf8",
     );
     for (const code of [

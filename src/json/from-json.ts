@@ -15,6 +15,7 @@ import { Buffer } from "node:buffer";
 
 import { zlibModule } from "../builtins.js";
 import type { Dataset } from "../dataset/dataset.js";
+import type { FileMeta } from "../dataset/file-meta.js";
 import type { Element } from "../dataset/element.js";
 import { LONG_FORM_VRS } from "../parser/element-header.js";
 import { parseDicom } from "../parser/index.js";
@@ -655,7 +656,8 @@ function refuseChangedElements(json: Record<string, unknown>, ds: Dataset): void
 
 /**
  * A {@link Dataset} from a DICOM JSON Model object (PS3.18 Annex F), written under the File Meta
- * the caller gives and read back by `parseDicom`, so `serializeDicom` writes it as Part 10.
+ * the caller gives (Explicit VR Little Endian when it gives none) and read back by `parseDicom`,
+ * so `serializeDicom` writes it as Part 10.
  *
  * Each attribute is written from its `vr` and its `Value`, `InlineBinary` or `BulkDataURI`, the
  * inverse of `toDicomJson`: strings joined by backslashes and padded to even length (`UI` with a
@@ -674,7 +676,7 @@ function refuseChangedElements(json: Record<string, unknown>, ds: Dataset): void
  *
  * @param json - One Data Set of the DICOM JSON Model, as `JSON.parse` returns it.
  * @param options - The File Meta to write under, how to delimit Sequences, and how to resolve a
- *   `BulkDataURI`.
+ *   `BulkDataURI`. Optional: every field has a default.
  * @returns The Data Set, read by `parseDicom`.
  * @throws {@link DicomJsonError} rather than guess: `INVALID_JSON` for an object of another shape,
  *   `UNSUPPORTED_TRANSFER_SYNTAX` for a Transfer Syntax other than the four uncompressed and
@@ -713,7 +715,7 @@ function refuseChangedElements(json: Record<string, unknown>, ds: Dataset): void
  * serializeDicom(back);
  * ```
  */
-export function fromDicomJson(json: DicomJsonDataset, options: FromDicomJsonOptions): Dataset {
+export function fromDicomJson(json: DicomJsonDataset, options: FromDicomJsonOptions = {}): Dataset {
   try {
     return datasetFrom(json, options);
   } catch (err) {
@@ -722,7 +724,10 @@ export function fromDicomJson(json: DicomJsonDataset, options: FromDicomJsonOpti
 }
 
 function datasetFrom(json: DicomJsonDataset, options: FromDicomJsonOptions): Dataset {
-  const fileMeta = options.fileMeta;
+  // Built per call, not held in a module constant: a value made at import time runs before any
+  // test, so a mutation run would link its mutants to none. Explicit VR Little Endian, no other
+  // element, when the caller names no File Meta.
+  const fileMeta: FileMeta = options.fileMeta ?? { transferSyntaxUID: "1.2.840.10008.1.2.1" };
   const encoding = encodingOf(fileMeta.transferSyntaxUID);
   if (encoding === undefined) refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_TRANSFER_SYNTAX, undefined);
   if (!isRecord(json)) refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, undefined);
