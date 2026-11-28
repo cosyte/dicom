@@ -9,7 +9,7 @@ de-identification. Pixel data stays raw bytes; DIMSE and DICOMweb are out of sco
 ## Gate
 
 The gate is written once, under "The gate" in `AGENTS.md`, in CI's order. Run all of it before you
-push. Derive which checks are required from the ruleset, never from a file:
+push. Read the checks a merge waits on from the ruleset, never from a file:
 `gh api repos/cosyte/dicom/rules/branches/main`.
 
 ## Hazard
