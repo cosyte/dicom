@@ -1,11 +1,11 @@
 /**
- * `DICOM-CARRIER-LEAF-LEAKS`, mechanism (2) - an element whose **on-wire VR is
+ * The carrier leaf leaks, mechanism (2) - an element whose **on-wire VR is
  * not one of the 34 PS3.5 §6.2 defines** carried a source Patient ID into
  * de-identified output.
  *
  * ## The shape, and why it is not the over-declare defect
  *
- * `#53` closed the **over**-declare: a Value Length longer than the value that
+ * `dicom#53` closed the **over**-declare: a Value Length longer than the value that
  * was encoded, which swallows the following element into this one's value. This
  * is the **under**-declare, and it is not a swallow at all. The reader finishes
  * the short value early, and the leftover bytes of the value that was actually
@@ -13,7 +13,7 @@
  * length are all fragments of somebody's value, and the element that genuinely
  * followed is consumed as this fabricated element's "value".
  *
- * ## ▶ RE-CUT BY `DICOM-UNRECOGNIZED-VR-SHORT-FORM`, AND THE RE-CUT IS THE POINT
+ * ## ▶ RE-CUT BY the unrecognized VR short-form fix, AND THE RE-CUT IS THE POINT
  *
  * These fixtures used to under-declare a 14-byte `"CARRIER-VALUE "` by 6, whose
  * leftover `"VALUE "` read as tag `(4156,554C)` with the VR bytes `"E "`. That
@@ -24,7 +24,7 @@
  * *cheapest* producer did.
  *
  * So the fixtures now write a carrier whose leftover bytes are a **complete
- * §6.2-conformant header**: four tag bytes, an unrecognized VR, two zero
+ * PS3.5 §6.2-conformant header**: four tag bytes, an unrecognized VR, two zero
  * reserved bytes and a 32-bit VL of 18 - exactly the `(0010,0020)` header and
  * value that follow. The tag `(4854,4F53)` and the VR `"ZZ"` are therefore still
  * **derived from the fixture**, not chosen: change the carrier's value and they
@@ -34,7 +34,7 @@
  *
  * ## Why the string controls are here and not in a binary-only file
  *
- * Mechanism (1), the residual `#53` disclosed, is bounded to **binary** carriers
+ * Mechanism (1), the residual `dicom#53` disclosed, is bounded to **binary** carriers
  * because its detection turns on the carrier VR's repertoire. This one is not:
  * the carrier's own VR never enters the decision, so `LO` and `ST` carriers
  * reach it exactly as `OB` does. That is measured, not assumed - on the grid at
@@ -51,15 +51,15 @@
  *
  * Every behavioural expectation was run red against `35adc2d`.
  *
- * ## ▶ RE-POINTED BY S0367-dicom-15, AND WHY THE UNDEFINED-VR RULE KEEPS A POPULATION
+ * ## ▶ RE-POINTED BY the unregistered element removal, AND WHY THE UNDEFINED-VR RULE KEEPS A POPULATION
  *
  * The fabricated `(4854,4F53)` has no PS3.6 2026d row and no Table E.1-1 row, so
  * the unregistered-element rule now answers it first: it is **removed**, not
- * emptied, and recorded on `report.unregisteredElementRemovals` only (AC-4). The
+ * emptied, and recorded on `report.unregisteredElementRemovals` only. The
  * cases that asserted the emptying and the undefined-VR record on that fixture
- * assert AC-4 now. The undefined-VR rule is unchanged and still answers a
+ * assert now. The undefined-VR rule is unchanged and still answers a
  * **registered** tag Table E.1-1 does not list that carries a VR outside the 34
- * (AC-14), which is the population the cap test below and the AC-14 control run
+ *, which is the population the cap test below and the control run
  * on.
  */
 
@@ -185,7 +185,7 @@ function deidBytes(raw: Buffer): string {
   return serializeDicom(deidentify(parseDicom(raw)).dataset).toString("latin1");
 }
 
-describe("DICOM-CARRIER-LEAF-LEAKS: an on-wire VR that is not a VR", () => {
+describe("an on-wire VR that is not a VR", () => {
   // -------------------------------------------------------------------------
   // The defect, and the fixture's own preconditions.
   // -------------------------------------------------------------------------
@@ -193,7 +193,7 @@ describe("DICOM-CARRIER-LEAF-LEAKS: an on-wire VR that is not a VR", () => {
   it("the parser really does fabricate (4854,4F53) with the VR bytes 'ZZ'", () => {
     // The precondition every expectation below rests on. Without it a green
     // result could mean the remedy works OR that the fixture never produced the
-    // shape - the vacuity class `#50` shipped once and this repo now checks for.
+    // shape - the vacuity class `dicom#50` shipped once and this repo now checks for.
     const ds = parseDicom(underDeclare(LO_CARRIER, "LO"));
     const fabricated = ds.get(FABRICATED_TAG);
     expect(fabricated).toBeDefined();
@@ -209,8 +209,8 @@ describe("DICOM-CARRIER-LEAF-LEAKS: an on-wire VR that is not a VR", () => {
     expect(deidBytes(underDeclare(LO_CARRIER, "LO"))).not.toContain(PATIENT_ID);
   });
 
-  it("AC-4: removes the fabricated element rather than emptying it, header and all", () => {
-    // S0367-dicom-15. `(4854,4F53)` is unregistered, so removal - the stronger
+  it("removes the fabricated element rather than emptying it, header and all", () => {
+    // The unregistered element removal. `(4854,4F53)` is unregistered, so removal - the stronger
     // outcome - takes precedence over the emptying below, and leaves no
     // fabricated tag bytes in the output where emptying kept the header.
     expect(isRegisteredTag(FABRICATED_TAG)).toBe(false);
@@ -222,7 +222,7 @@ describe("DICOM-CARRIER-LEAF-LEAKS: an on-wire VR that is not a VR", () => {
     expect(out.includes(Buffer.from("THSO", "latin1"))).toBe(false);
   });
 
-  it("AC-4: records it on the unregistered-removal record only, by byte offset, and NOT as an undefined VR", () => {
+  it("records it on the unregistered-removal record only, by byte offset, and NOT as an undefined VR", () => {
     const ds = parseDicom(underDeclare(LO_CARRIER, "LO"));
     const offset = ds.get(FABRICATED_TAG)?.byteOffset;
     expect(offset).toBeGreaterThan(0);
@@ -256,7 +256,7 @@ describe("DICOM-CARRIER-LEAF-LEAKS: an on-wire VR that is not a VR", () => {
     expect(SURNAME).toContain(group + element);
   });
 
-  it("AC-4: puts no part of the surname in report.unregisteredElementRemovals", () => {
+  it("puts no part of the surname in report.unregisteredElementRemovals", () => {
     const { report } = deidentify(parseDicom(underDeclare(ST_CARRIER, "ST")));
     expect(report.unregisteredElementRemovals).toHaveLength(1);
     expect(report.undefinedVrElements).toEqual([]);
@@ -266,7 +266,7 @@ describe("DICOM-CARRIER-LEAF-LEAKS: an on-wire VR that is not a VR", () => {
     expect(rendered).not.toContain("THSO");
   });
 
-  it("AC-4: warns once, with a message that names no tag, no VR and no value", () => {
+  it("warns once, with a message that names no tag, no VR and no value", () => {
     const raw = underDeclare(ST_CARRIER, "ST");
     const { report } = deidentify(parseDicom(raw));
     const raised = report.warnings.filter(
@@ -286,7 +286,7 @@ describe("DICOM-CARRIER-LEAF-LEAKS: an on-wire VR that is not a VR", () => {
     expect(w?.message).not.toContain(fabricatedVr);
   });
 
-  it("AC-14: still empties a REGISTERED unlisted tag with a VR outside the 34, on the undefined-VR record", () => {
+  it("still empties a REGISTERED unlisted tag with a VR outside the 34, on the undefined-VR record", () => {
     // The control that keeps the undefined-VR rule a live population. `(2000,0050)`
     // Film Session Label has a PS3.6 row and no Table E.1-1 row, so the
     // unregistered-element rule does not take it and the pin's handling stands.
@@ -465,12 +465,12 @@ describe("DICOM-CARRIER-LEAF-LEAKS: an on-wire VR that is not a VR", () => {
    *
    * This is the cheapest amplification the format allows and it is worse than
    * the sibling rule's: an un-auditable `SQ` needs a value, but an undefined-VR
-   * element needs nothing at all past its header. `#54`'s first draft was
+   * element needs nothing at all past its header. `dicom#54`'s first draft was
    * measured at 58,255 findings from a 1 MiB input for exactly this reason.
    *
-   * The tags are REGISTERED and absent from Table E.1-1 (AC-14's population),
+   * The tags are REGISTERED and absent from Table E.1-1 ('s population),
    * read off the generated PS3.6 registry in ascending order. The group-`4000`
-   * tags this used to synthesize are mostly unregistered, so since S0367-dicom-15
+   * tags this used to synthesize are mostly unregistered, so since the unregistered element removal
    * they would be removed by the unregistered-element rule and never reach the
    * cap under test here.
    */
@@ -500,11 +500,11 @@ describe("DICOM-CARRIER-LEAF-LEAKS: an on-wire VR that is not a VR", () => {
     const ds = parseDicom(manyUndefinedVr(many));
     // Precondition: the fixture really did produce that many undefined-VR
     // elements. A cost test whose fixture cannot express the blow-up measures
-    // nothing - the lesson `#53`'s quadratic scan shipped on.
+    // nothing - the lesson `dicom#53`'s quadratic scan shipped on.
     expect(ds.elements().filter((el) => (el.vr as string) === "ZZ")).toHaveLength(many + 1);
 
     const { dataset, report } = deidentify(ds);
-    // None of them is the unregistered-element rule's (AC-14's population).
+    // None of them is the unregistered-element rule's ('s population).
     expect(report.unregisteredElementRemovalCount).toBe(0);
     expect(report.undefinedVrElements).toHaveLength(MAX_UNDEFINED_VR_FINDINGS);
     expect(
@@ -526,7 +526,7 @@ describe("DICOM-CARRIER-LEAF-LEAKS: an on-wire VR that is not a VR", () => {
     // 10 bytes or far larger, and the finding is two structural fields.
     //
     // The size here is deliberately PAST 65,534, and that is what
-    // `DICOM-UNRECOGNIZED-VR-SHORT-FORM` changed: an unrecognized VR used to be
+    // The unrecognized VR short-form fix changed: an unrecognized VR used to be
     // read short-form, so its length field was 16 bits and 65,534 was the
     // largest value that could reach the de-identifier at all. PS3.5 §6.2 gives
     // it a 32-bit VL, so this test now exercises a length the old reader could

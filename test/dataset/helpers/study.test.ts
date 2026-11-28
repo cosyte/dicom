@@ -12,7 +12,7 @@ function ascii(s: string): Buffer {
   return b.length % 2 === 0 ? b : Buffer.concat([b, Buffer.from(" ", "ascii")]);
 }
 
-describe("buildStudy (§4.1)", () => {
+describe("buildStudy", () => {
   it("surfaces the cross-system instanceUid, accessionNumber, date/time and description", () => {
     const ds = parseDicom(
       buildDicom({

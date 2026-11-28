@@ -191,10 +191,11 @@ Dictionary.uid("1.2.840.10008.1.2.2")?.retired; // => true
 
 ## Immutability
 
-A `Dataset` is immutable at the model boundary: `warnings` is frozen, and the element map is not
-exposed for mutation. Edits go through explicit methods (`setElement`, `addElement`, `removeElement`,
-and the sequence-item equivalents), each returning results rather than mutating shared parser output.
-This is the same discipline the serializer relies on. See [Serialization](./serialization.md).
+A `Dataset` is read-only at the model boundary: `warnings` is frozen, and the element map is not
+exposed for mutation. It has no edit methods: it is read through `get`, `has`, `elements`, `getAll`
+and the views. A changed object is made by a function that returns a new `Dataset` and leaves the
+one it read untouched, as `deidentify` and `fromDicomJson` do. The serializer relies on the same
+discipline. See [Serialization](./serialization.md).
 
 ## Where values come from
 

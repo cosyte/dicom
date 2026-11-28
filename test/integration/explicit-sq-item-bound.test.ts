@@ -1,8 +1,8 @@
 /**
- * `DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ` - an item inside a defined-length `SQ`
+ * The unbounded Explicit VR Item read - an item inside a defined-length `SQ`
  * read under an Explicit VR transfer syntax can declare a length that reaches
  * past the end the `SQ` itself declared, and take the enclosing Data Set's bytes
- * with it. **This slice discloses that. It does not re-frame the object.**
+ * with it. **This change discloses that. It does not re-frame the object.**
  *
  * `parseSequence` computes the sequence's `endLimit` from the declared length but
  * bounds each item's value read against `buffer.length`. The Explicit VR
@@ -24,7 +24,7 @@
  * Section **7.5.1** "Item Encoding Rules" governs each `(FFFE,E000)` Item's own
  * length field.
  *
- * ## 🛑 THE FACT THAT DECIDES THE SHAPE OF THIS SLICE, PROVEN BY A TEST RATHER
+ * ## 🛑 THE FACT THAT DECIDES THE SHAPE OF THIS CHANGE, PROVEN BY A TEST RATHER
  * THAN ARGUED
  *
  * A file where the **item over-declares** and a file where the **sequence
@@ -34,13 +34,13 @@
  * 7.5.2's extent for the first file imposes it on the second one too, because
  * there is no second file.
  *
- * That is why this slice adds no bound, and that one fact is sufficient on its
- * own. Five graded attempts at a bound are on `#51`; the last was refused on a
+ * That is why this change adds no bound, and that one fact is sufficient on its
+ * own. Five graded attempts at a bound are on `dicom#51`; the last was refused on a
  * **measured PHI leak** that the indistinguishability makes unavoidable rather
  * than incidental. Preferring 7.5.2 moves the disputed bytes out of the item and
  * into the enclosing Data Set, and when those bytes are a **Private Creator**
  * that crosses the PS3.5 section 7.8.1 block-reservation boundary
- * `DICOM-PARSE-CREATORS-SCOPE` established: the enclosing Data Set gains a
+ * The private-creator scope fix established: the enclosing Data Set gains a
  * reservation it did not have, `RetainSafePrivate` + `profiles.ge` then vouches
  * for a root private element that was previously removed, and a source value
  * ships inside output stamped `PatientIdentityRemoved=YES`. `privateCreatorLeak`
@@ -52,11 +52,11 @@
  * following the ITEM's field is the **fail-safe** half of the ambiguity, because
  * a Private Creator swallowed INTO an item leaves the enclosing block
  * **unclaimed** and an unclaimed block is removed. **That is false and it is
- * what refused this slice a sixth time.** Which direction leaks is a property of
+ * what refused this change a sixth time.** Which direction leaks is a property of
  * **where the sender put the Private Creator**, not of which length field a
  * reader follows. Move the creator into the item's genuine content and the
- * absorb direction leaks as well - `DICOM-PRIVATE-CREATOR-RESERVATION-LEAK`,
- * measured on `164eb39`, closed at the **de-identify boundary** by `#66` and
+ * absorb direction leaks as well - the private-creator reservation leak,
+ * measured on `164eb39`, closed at the **de-identify boundary** by `dicom#66` and
  * never in the parser. The eject direction is still open and still leaks
  * (`deident-private-reservation.test.ts` pins it as a residual).
  *
@@ -103,7 +103,7 @@
  * ## The fixture precision is the trap, and it is why this file exists
  *
  * An item over-declaring **past the end of the buffer** already threw
- * `INVALID_FILE_META` before this slice, so a test written that way is green
+ * `INVALID_FILE_META` before this change, so a test written that way is green
  * against the defect. The item must over-declare by **exactly** the on-wire size
  * of the element that follows the sequence, so the over-read lands on an element
  * boundary and the parse quietly succeeds with the wrong structure. That size is
@@ -126,7 +126,7 @@
  * its escalation posture, its offset frame and its amplification. The other 23
  * assert that the reading, the report, the depth cap, the one-pass cost and the
  * four no-loss controls are exactly what `origin/main` gives, which is the bar
- * this slice had to clear and the property that makes the pass-5 leak
+ * this change had to clear and the property that makes the pass-5 leak
  * impossible: the leak assertions are among them, green on both trees, which is
  * the whole claim.
  * **Re-measure that figure if you add a test rather than carrying it forward.**
@@ -232,7 +232,7 @@ function fixture(transferSyntax: string, itemDelta: number, sqDelta = 0): Buffer
  * a length. Four ASCII characters always read as a length past the end of the
  * buffer, so the parse then dies on the pre-existing truncation guard - the
  * warning reaches `onWarning` and never reaches `ds.warnings`. That asymmetry is
- * the D-03 ordering residual this repo already discloses, and it is exactly the
+ * the ordering residual this repo already discloses, and it is exactly the
  * channel an operator's log is wired to.
  */
 function fabricatedItemHeader(bytes: Buffer): Buffer {
@@ -278,8 +278,8 @@ function manyOverrunningSequences(count: number): Buffer {
 /**
  * The overrunning sequence one level down: an outer defined-length `SQ` whose
  * item holds the inner `SQ` plus a trailing element for the inner item to
- * swallow. `parseSequence` reads the inner one inside the outer item's slice, so
- * the warning's `position.byteOffset` is measured in that slice.
+ * swallow. `parseSequence` reads the inner one inside the outer item's bytes, so
+ * the warning's `position.byteOffset` is measured from the start of those bytes.
  */
 function nestedFixture(): Buffer {
   return buildDicom({
@@ -311,7 +311,7 @@ function nestedFixture(): Buffer {
   });
 }
 
-describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - one file, two stories, no way to tell", () => {
+describe("one file, two stories, no way to tell", () => {
   const UID = Buffer.from("1.2.826.0.1.3680043.10.1338.10", "ascii");
   /** `(0009,0010)` `LO` "GEMS_IDEN_01": 12 characters, 20 bytes on the wire. */
   const CREATOR = "00090010" as const;
@@ -383,7 +383,7 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - one file, two stories, no way 
   });
 });
 
-describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the PHI leak a bound would open", () => {
+describe("the PHI leak a bound would open", () => {
   const SECRET = "SECRET-PRIVATE-PHI";
   const PRIVATE_TAG = "00091001" as const;
 
@@ -448,8 +448,8 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the PHI leak a bound would ope
     // report saying nothing was removed, about a file that still carries the
     // value.
     //
-    // The **creator itself** is in this list too, and that is `#66` landing
-    // rather than anything this slice does. `origin/main` now refuses a private
+    // The **creator itself** is in this list too, and that is `dicom#66` landing
+    // rather than anything this change does. `origin/main` now refuses a private
     // block reservation an Item's disputed boundary never gave it, so
     // `(0009,0010)` is removed alongside `(0009,1001)`. Before the rebase this
     // pin read `[PRIVATE_TAG]` alone. Re-measure it rather than carrying it
@@ -474,7 +474,7 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the PHI leak a bound would ope
     // regardless of the options.
     //
     // 🩺 THE DISCRIMINATOR IS THE RECORD, NOT THE BYTES, SINCE
-    // `DICOM-DEIDENT-UNENUMERATED-PRIVATE`. A vouched-for value nothing walked
+    // The unenumerated private value fix. A vouched-for value nothing walked
     // is removed too, so both rows now remove the element; what tells them apart
     // is that a vouched-for removal is stamped `unenumerable` on
     // `report.unenumerablePrivateRemovals` while a refused reservation is not
@@ -502,7 +502,7 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the PHI leak a bound would ope
   });
 });
 
-describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the disagreement, disclosed", () => {
+describe("the disagreement, disclosed", () => {
   it("says so out loud instead of succeeding silently", () => {
     // The defect: `ds.warnings` was EMPTY on every released version. A
     // confident, wrong structural read with nothing to triage.
@@ -558,10 +558,10 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the disagreement, disclosed", 
     // refuted. The length is a verbatim 32-bit read, and the condition that
     // raises this code is exactly "these length fields are not what they claim
     // to be" - so on a desynchronized read those four bytes are somebody's
-    // value. The remedy is `#64`'s and `#55`'s: bind it out of the FACTORY
+    // value. The remedy is `dicom#64`'s and `dicom#55`'s: bind it out of the FACTORY
     // SIGNATURE, so no call site can put it back without changing the signature.
     //
-    // The fixture is NAME-BEARING on purpose. `#55`'s pinning test was vacuous
+    // The fixture is NAME-BEARING on purpose. `dicom#55`'s pinning test was vacuous
     // BY FIXTURE - its payload carried no name, so it could not have failed
     // either way. This one goes red the moment the binding is removed, because
     // the decimal it asserts absent is exactly what a `{n}` slot would render.
@@ -625,7 +625,7 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the disagreement, disclosed", 
     // 🛑 THIS ROW USED TO BE TITLED "`{n2}` stays because the emit site's own
     // conjunct bounds it by the buffer" AND ITS CONCLUSION IS RETRACTED. What it
     // measures is true and is kept; what it was read as concluding is refuted by
-    // the row directly below, which a graded pass required and this slice then
+    // the row directly below, which a graded pass required and this change then
     // acted on: `{n2}` is gone from the registry entirely.
     //
     // What it really shows: a fabricated SEQUENCE length composed of four
@@ -903,7 +903,7 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the disagreement, disclosed", 
   it("is UNCAPPED across sequences, and that is measured rather than claimed away", () => {
     // 🛑 "At most one per sequence" was shipped as "the amplification bound".
     // It is not one: a file may carry as many sequences as it can encode, and
-    // `ds.warnings` is uncapped - `#48`'s pre-existing, package-wide posture for
+    // `ds.warnings` is uncapped - `dicom#48`'s pre-existing, package-wide posture for
     // parser warnings, not something this code introduces. Asserting the GROWTH
     // is the honest pin; asserting a cap would pin a cap that does not exist.
     const few = parseDicom(manyOverrunningSequences(8));
@@ -951,7 +951,7 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the disagreement, disclosed", 
   });
 
   it("tells a streaming consumer exactly what the parsed result says", () => {
-    // `makeEmitter` hands a warning to `onWarning` BEFORE the push (D-03
+    // `makeEmitter` hands a warning to `onWarning` BEFORE the push (
     // ordering), so any primitive that emits from a reading it may abandon
     // leaves the two channels disagreeing. Nothing is abandoned here, because
     // nothing is tried.
@@ -964,7 +964,7 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the disagreement, disclosed", 
   });
 });
 
-describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the reading is untouched, which IS the bar", () => {
+describe("the reading is untouched, which IS the bar", () => {
   it("reads the over-declaring file exactly as every released version does", () => {
     // Not an aspiration - the whole safety argument. `deidentify()` sees the
     // object `origin/main` gives it, so no de-identification action can move.
@@ -1046,7 +1046,7 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the reading is untouched, whic
 
   it("still refuses an item declaring past the end of the buffer", () => {
     // Base threw `Item length=N exceeds remaining buffer` and still refuses on
-    // the same input; since `DICOM-FATAL-MESSAGE-REGISTRY` the message no longer
+    // the same input; since the fatal message registry the message no longer
     // prints `N`, because that field is four bytes of the document on precisely
     // the files this code fires for. The
     // disclosure fires first and is discarded with the object.
@@ -1054,7 +1054,7 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - the reading is untouched, whic
   });
 });
 
-describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - where it deliberately says nothing", () => {
+describe("where it deliberately says nothing", () => {
   it("says nothing when the sequence's declared end IS the end of its buffer", () => {
     // `endLimit === buffer.length` is the case with no enclosing Data Set bytes
     // to take. On the in-place path that means the `SQ` ends the Data Set and
@@ -1131,7 +1131,7 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - where it deliberately says not
     // buffer.length` inside it, so an item cannot reach anything and the descent
     // simply refuses. That asymmetry is deliberate: there `SQ` is this parser's
     // inference from PS3.6, not something the sender wrote. Unchanged by this
-    // slice; `#50`'s behaviour is the pin.
+    // change; `dicom#50`'s behaviour is the pin.
     const ds = parseDicom(fixture(IMPLICIT_LE, TRAILING_ON_WIRE));
 
     expect(ds.get(TRAILING)?.rawBytes.toString("latin1").trimEnd()).toBe(TRAILING_VALUE);
@@ -1143,7 +1143,7 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - where it deliberately says not
   });
 });
 
-describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - one pass, which is a security property", () => {
+describe("one pass, which is a security property", () => {
   /**
    * `depth` defined-length `SQ`s nested one inside the other, each declaring its
    * own length `sqDelta` bytes off, with a leaf `CS` at the bottom.
@@ -1182,7 +1182,7 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - one pass, which is a security 
     ["each SQ over-declaring by 2", 2],
     ["each SQ under-declaring by 2", -2],
   ] as const)("parses 20 nested sequences, %s, in one pass over each level", (_label, sqDelta) => {
-    // T-02-04-03, reached by a route the module header did not name. A
+    // , reached by a route the module header did not name. A
     // primitive that runs a reading, discards it and re-reads costs 2x at one
     // level and 2^depth across nested sequences: ~700 bytes of
     // attacker-controlled input against unbounded CPU, with
@@ -1206,7 +1206,7 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - one pass, which is a security 
   });
 
   it("still refuses the 65-level nest, because there is no catch to swallow it", () => {
-    // The depth cap is a resource guard (T-02-04-02), not a statement about the
+    // The depth cap is a resource guard, not a statement about the
     // bytes. A draft that tried a reading and fell back needed a distinguishable
     // error subclass to stop a catch-all rollback turning the guard into
     // "descend one level less and carry on". There is no catch in this path at
@@ -1226,7 +1226,7 @@ describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - one pass, which is a security 
   });
 });
 
-describe("DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ - no-loss controls (green on base by design)", () => {
+describe("no-loss controls (green on base by design)", () => {
   it("leaves a well-formed defined-length SQ exactly as it was", () => {
     const ds = parseDicom(fixture(EXPLICIT_LE, 0));
 

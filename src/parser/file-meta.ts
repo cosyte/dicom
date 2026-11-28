@@ -76,7 +76,11 @@ interface FmRawElement {
   readonly byteOffset: number;
 }
 
-/** Result of {@link parseFileMeta}. */
+/**
+ * Result of {@link parseFileMeta}.
+ *
+ * @internal
+ */
 export interface FileMetaResult {
   readonly fileMeta: FileMeta;
   /** Offset where the dataset (post-File-Meta) begins. */
@@ -354,6 +358,8 @@ function trimText(e: FmRawElement): string {
 /**
  * A File Meta object with every field, kept for the life of the process so V8 keeps the hidden
  * classes each File Meta is built through: see `ELEMENT_SHAPES` in `../dataset/element.ts`.
+ *
+ * @internal
  */
 export const FILE_META_SHAPES: readonly FileMeta[] = (() => {
   const value = Buffer.alloc(0);

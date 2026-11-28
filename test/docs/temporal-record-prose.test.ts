@@ -79,7 +79,7 @@ const DEIDENT_PAGES = [
 ] as const;
 
 describe("released prose: the temporal declaration the de-identified object carries", () => {
-  it("AC-16: names the attribute and ALL THREE states on every page that documents the de-identify path", () => {
+  it("names the attribute and ALL THREE states on every page that documents the de-identify path", () => {
     // Non-vacuity: the pages really are found and really are read by this reader.
     expect(prosePages().length).toBeGreaterThan(1);
 
@@ -94,7 +94,7 @@ describe("released prose: the temporal declaration the de-identified object carr
     }
   });
 
-  it("AC-16: says which option produces which state, so the three are not merely all mentioned", () => {
+  it("says which option produces which state, so the three are not merely all mentioned", () => {
     // 🛑 "Contains the word UNMODIFIED" is satisfied by a page that only quotes the standard.
     // A reader needs the mapping from the option set they pass to the value they will read, and
     // both option names are in the substring of the longer one, so the mapping sentences below are
@@ -114,7 +114,7 @@ describe("released prose: the temporal declaration the de-identified object carr
     expect(recipes).toContain("MODIFIED when RetainLongitudinalTemporalModifiedDates was");
   });
 
-  it("AC-16: records in the known-limitations material the condition under which MODIFIED is produced", () => {
+  it("records in the known-limitations material the condition under which MODIFIED is produced", () => {
     // 🛑 THIS ROW REPLACES THE "never produces it" ASSERTION. The claim it used to make became
     // false with the second E.3.6 column, so what is asserted now is the condition: the Option
     // whose name earns the state. Both limitations pages on the docs site carry it (the one moved out
@@ -129,7 +129,7 @@ describe("released prose: the temporal declaration the de-identified object carr
     }
   });
 
-  it("AC-16: records that this library performs no date transformation, beside the capability", () => {
+  it("records that this library performs no date transformation, beside the capability", () => {
     // The half of §E.3.6 the library does not deliver, stated on the same pages as the Option that
     // delivers the other half. A `MODIFIED` a reader believes means "the dates were shifted" is the
     // one failure of this attribute a recipient acts on and never re-derives, so the sentence is
@@ -142,7 +142,7 @@ describe("released prose: the temporal declaration the de-identified object carr
     }
   });
 
-  it("AC-16: tells a caller who shifts dates themselves that the output declaration is then wrong", () => {
+  it("tells a caller who shifts dates themselves that the output declaration is then wrong", () => {
     // The one action this limitation obliges. A limitation a reader cannot act on is a disclaimer.
     for (const name of ["docs-content/non-goals.md", "docs-content/limitations.md"]) {
       const page = prosePages().find((p) => p.name === name);

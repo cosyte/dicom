@@ -1,8 +1,8 @@
 /**
  * Private block reservations are scoped to one Data Set, on the READ path
- * (`DICOM-PARSE-CREATORS-SCOPE`).
+ *.
  *
- * The sibling defect on the de-identify path shipped in #48; this is the same
+ * The sibling defect on the de-identify path shipped in dicom#48; this is the same
  * rule where the parser resolves an Implicit VR, and the difference in harm is
  * the reason this is its own slice. There, an out-of-scope reservation retained
  * a private element it should have removed - an over-retention. Here, it feeds
@@ -36,7 +36,7 @@
  * the fail-safe direction on a read path: raw bytes and a warning, never a
  * borrowed VR.
  *
- * Fixtures are built in memory (D-38). The private-creator strings are invented
+ * Fixtures are built in memory. The private-creator strings are invented
  * for this test and name no real vendor: nothing here encodes a vendor quirk,
  * which would need a real de-identified document to ground it.
  *
@@ -133,7 +133,7 @@ function noCreatorWarnings(warnings: readonly { code: string }[]): number {
   return warnings.filter((w) => w.code === WARNING_CODES.DICOM_PRIVATE_TAG_NO_CREATOR).length;
 }
 
-describe("DICOM-PARSE-CREATORS-SCOPE: a root reservation does not reach into an Item", () => {
+describe("a root reservation does not reach into an Item", () => {
   // Root claims block 0x10 for ALPHA and uses it. The Item uses the same block
   // and claims nothing. PS3.5 section 7.8.1 Note 1: "Each item needs to claim
   // the corresponding private block of Elements."
@@ -164,7 +164,7 @@ describe("DICOM-PARSE-CREATORS-SCOPE: a root reservation does not reach into an 
   });
 });
 
-describe("DICOM-PARSE-CREATORS-SCOPE: an Item's reservation does not escape to the root", () => {
+describe("an Item's reservation does not escape to the root", () => {
   // The sharpest direction, and the one that produces a genuinely wrong value.
   // The Item claims block 0x11 for BETA. The root claims only block 0x10, then
   // writes (0029,1101) - a block it never reserved. With one reservation map
@@ -225,7 +225,7 @@ describe("DICOM-PARSE-CREATORS-SCOPE: an Item's reservation does not escape to t
   });
 });
 
-describe("DICOM-PARSE-CREATORS-SCOPE: an Item's reservation does not reach a sibling Item", () => {
+describe("an Item's reservation does not reach a sibling Item", () => {
   // Item 0 claims block 0x10 for BETA. Item 1 is a separate Data Set that
   // claims nothing and writes into the same block.
   const buf = buildDicom({
@@ -256,7 +256,7 @@ describe("DICOM-PARSE-CREATORS-SCOPE: an Item's reservation does not reach a sib
   });
 });
 
-describe("DICOM-PARSE-CREATORS-SCOPE: scoping holds at every depth, not just the first", () => {
+describe("scoping holds at every depth, not just the first", () => {
   // Root claims 0x10 for ALPHA. The outer Item re-claims 0x10 for BETA. The
   // inner Item claims nothing. Three Data Sets, three answers.
   const buf = buildDicom({
@@ -305,7 +305,7 @@ describe("DICOM-PARSE-CREATORS-SCOPE: scoping holds at every depth, not just the
   });
 });
 
-describe("DICOM-PARSE-CREATORS-SCOPE: degrading to UN must not cost the whole file", () => {
+describe("degrading to UN must not cost the whole file", () => {
   // The blast radius the scoping change opens, and the reason the CP-246
   // descent is now applied on the Implicit-VR-LE path too. Under this transfer
   // syntax an undefined length is only encodable for a sequence, and
@@ -405,7 +405,7 @@ describe("DICOM-PARSE-CREATORS-SCOPE: degrading to UN must not cost the whole fi
   });
 });
 
-describe("DICOM-PARSE-CREATORS-SCOPE: the model field is scoped too, under Explicit VR", () => {
+describe("the model field is scoped too, under Explicit VR", () => {
   // Under an Explicit VR transfer syntax the VR is on the wire, so there is no
   // wrong VR to be had. `Element.privateCreator` is still resolved from the
   // reservation map, and it is a public model field a consumer will treat as
@@ -429,7 +429,7 @@ describe("DICOM-PARSE-CREATORS-SCOPE: the model field is scoped too, under Expli
   });
 });
 
-describe("DICOM-PARSE-CREATORS-SCOPE: unprofiled parses are unchanged in VR, not in creator", () => {
+describe("unprofiled parses are unchanged in VR, not in creator", () => {
   const buf = buildDicom({
     transferSyntax: TS_IMPLICIT_LE,
     elements: [

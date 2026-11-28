@@ -1,8 +1,8 @@
 /**
- * Phase 5 serializer unit + round-trip tests.
+ * Serializer unit + round-trip tests.
  *
  * Everything is **synthetic** - fixtures are built in memory by the
- * `build-dicom` helper (D-38: the repo ships zero curated `.dcm` files). No
+ * `build-dicom` helper (the repo ships zero curated `.dcm` files). No
  * real PHI ever touches this suite.
  *
  * The central invariant is `parse → serialize → parse` structural fidelity
@@ -531,7 +531,7 @@ describe("serializeDicom - error taxonomy", () => {
   // The JPIP Referenced syntaxes are read, never written: outside both the
   // native and the section A.4 sets the writer accepts.
   it.each(JPIP_SET)(
-    "AC-13: throws UNSUPPORTED_TRANSFER_SYNTAX and returns no bytes for a Dataset parsed under JPIP %s",
+    "throws UNSUPPORTED_TRANSFER_SYNTAX and returns no bytes for a Dataset parsed under JPIP %s",
     (uid) => {
       const ds = parseDicom(jpipObject({ transferSyntax: uid }));
       expect(ds.fileMeta?.transferSyntaxUID).toBe(uid);
@@ -549,7 +549,7 @@ describe("serializeDicom - error taxonomy", () => {
   );
 });
 
-describe("AC-1, AC-14: serializeDicom writes every section A.4 encapsulation syntax", () => {
+describe("serializeDicom writes every section A.4 encapsulation syntax", () => {
   /** The writer's outcome: the bytes it returned, or the error it threw. */
   function attempt(ds: Dataset): { out: Buffer | undefined; err: unknown } {
     try {
@@ -559,7 +559,7 @@ describe("AC-1, AC-14: serializeDicom writes every section A.4 encapsulation syn
     }
   }
 
-  it.each(ENCAPSULATION_SET)("AC-1, AC-14: %s, as parsed and as de-identified", (uid) => {
+  it.each(ENCAPSULATION_SET)("%s, as parsed and as de-identified", (uid) => {
     const parsed = parseDicom(encapsulatedObject({ transferSyntax: uid }));
     const { dataset: deidentified } = deidentify(parsed);
     expect(deidentified.fileMeta?.transferSyntaxUID).toBe(uid);

@@ -40,6 +40,8 @@ import { matchesRepeatingPattern } from "./repeating-groups.js";
  *
  * @example
  *   const code: AnnexEActionCode = "Z";
+ *
+ * @internal
  */
 export type AnnexEActionCode =
   "D" | "Z" | "X" | "K" | "C" | "U" | "Z/D" | "X/Z" | "X/D" | "X/Z/D" | "X/Z/U*" | "C/X";
@@ -61,6 +63,8 @@ export type AnnexEActionCode =
  *
  * @example
  *   const opt: AnnexEOption = "RetainLongitudinalTemporalModifiedDates";
+ *
+ * @internal
  */
 export type AnnexEOption =
   | "CleanPixelData"
@@ -92,6 +96,8 @@ export type AnnexEOption =
  *     // action.basicProfile === "Z"
  *     // action.optionSet may carry e.g. { RetainPatientCharacteristics: "K" }
  *   }
+ *
+ * @internal
  */
 export interface AnnexEAction {
   readonly tag: Tag;
@@ -122,6 +128,8 @@ export interface AnnexEAction {
  * @example
  *   import { ANNEX_E_REPEATING } from "@cosyte/dicom/dictionary/generated/annex-e";
  *   ANNEX_E_REPEATING.map((r) => r.pattern); // ["50xxxxxx", "60xx3000", "60xx4000"]
+ *
+ * @internal
  */
 export interface AnnexERepeatingRule {
   readonly pattern: string;
@@ -160,6 +168,8 @@ export interface AnnexERepeatingRule {
  *   // a?.basicProfile === "Z"
  *   const overlay = annexE("60004000");
  *   // overlay?.basicProfile === "X", overlay?.repeatingGroup === "60xx4000"
+ *
+ * @internal
  */
 export function annexE(tag: Tag): AnnexEAction | undefined {
   if (typeof tag !== "string" || tag.length === 0) return undefined;

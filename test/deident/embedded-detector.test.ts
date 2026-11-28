@@ -25,7 +25,7 @@ const always = (): boolean => true;
  *
  * Most rows in this file grade the DECODER - which byte patterns are a swallow -
  * and `isActionable` is `always` in them, so `hidden` is the whole run and this
- * reads exactly as the pre-`DICOM-DIAGNOSTIC-PHI-RESIDUALS` return did. The
+ * reads exactly as the return did before the diagnostic leak fixes. The
  * filter itself is graded in its own describe block below, where `isActionable`
  * is not `always`.
  */
@@ -204,13 +204,13 @@ describe("findEmbeddedAttributes: what it refuses", () => {
 });
 
 // ---------------------------------------------------------------------------
-// `DICOM-DIAGNOSTIC-PHI-RESIDUALS`: what a reported run may NAME.
+// What a reported run may NAME.
 // ---------------------------------------------------------------------------
 
 describe("findEmbeddedAttributes: hidden carries only the tags the run acts on", () => {
   /**
    * The fixture the residual was measured on, rebuilt here as a unit. Synthetic
-   * and **name-bearing**: `#55` paid a blocker for a PHI pin whose payload
+   * and **name-bearing**: `` paid a blocker for a PHI pin whose payload
    * carried no name, so nothing it asserted could have caught the leak.
    *
    * `"SMIT"` is the surname's first four bytes wearing a Data Element header's
@@ -353,7 +353,7 @@ describe("findEmbeddedAttributes: hidden carries only the tags the run acts on",
   });
 
   it("the filter does not decide WHETHER a run is reported, only what it names", () => {
-    // `isActionable` was always the reportability test; this slice gave it a
+    // `isActionable` was always the reportability test; this change gave it a
     // second job. A run with nothing actionable in it is still not a finding.
     expect(
       findEmbeddedAttributes(fabricatedBesideGenuine(), "CS", "explicitLE", () => false),

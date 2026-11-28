@@ -1,5 +1,5 @@
 /**
- * S0350-dicom-6 impl-gate finding F1, as a runnable check.
+ * A review finding on file-declared private values, as a runnable check.
  *
  * The change makes a private value the FILE's own (0008,0300) declaration names
  * safe reach de-identified output. Five released surfaces still state the

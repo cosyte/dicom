@@ -20,8 +20,8 @@ recoverable quirk is **never** a silent change and never a throw.
   occurred (e.g. `DICOM_ODD_LENGTH_VALUE_PADDED`, `DICOM_MISSING_PREAMBLE`, `DICOM_VR_MISMATCH`,
   `DICOM_FILE_META_GROUP_LENGTH_MISMATCH`). **No count is written here.** One was, it read 25 while
   the registry held more, and the README's copy of the same numeral was corrected twice before being
-  deleted. `WARNING_CODES` is the list, and the locked snapshot under
-  `test/property/__snapshots__/` measures it on every run.
+  deleted. `WARNING_CODES` is the list, and the locked inline snapshot in
+  `test/property/warning-codes.snapshot.test.ts` measures it on every run.
 - **Unrecoverable structural corruption → a throw.** A Tier-3 condition throws a typed
   `DicomParseError`, and the whole set is `NOT_DICOM_PART_10`, `INVALID_FILE_META`,
   `UNSUPPORTED_TRANSFER_SYNTAX`, and `EMPTY_INPUT`. **No count is written here either**, for the same
@@ -260,7 +260,7 @@ high-volume codes for a known-quirky source, without ever loosening a correct de
 
 | Export              | What it is                                                                                                                                                        |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `WARNING_CODES`     | The frozen Tier-2 registry. **It is the list**, and the locked snapshot under `test/property/__snapshots__/` measures it on every run. Read it rather than a numeral written anywhere. |
+| `WARNING_CODES`     | The frozen Tier-2 registry. **It is the list**, and the locked inline snapshot in `test/property/warning-codes.snapshot.test.ts` measures it on every run. Read it rather than a numeral written anywhere. |
 | `WarningCode`       | The discriminant type over that registry. It widens with each new code, so treat it as open: [Compatibility](./compatibility.md#exports-that-grow-between-releases). |
 | `DicomParseWarning` | One recorded deviation: its `code`, its `position`, and a `message` looked up in the frozen registry.                                                              |
 | `FATAL_CODES`       | The frozen Tier-3 registry. Same rule: enumerate it, never count it.                                                                                              |

@@ -37,6 +37,8 @@ import type { Profile } from "../parser/types.js";
  *   }
  * }
  * ```
+ *
+ * @internal
  */
 export const strict: Profile = defineProfile({
   name: "strict",

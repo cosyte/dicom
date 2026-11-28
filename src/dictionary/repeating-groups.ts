@@ -72,7 +72,11 @@
 
 import { REPEATING_GROUP_PREFIXES, REPEATING_GROUP_RANGES } from "./generated/repeating-groups.js";
 
-/** Inclusive bounds on the low byte of a repeating group number, even values only. */
+/**
+ * Inclusive bounds on the low byte of a repeating group number, even values only.
+ *
+ * @internal
+ */
 export interface RepeatingGroupRange {
   /** The high byte of the group number, e.g. `0x60` for the `60xx` overlay mask. */
   readonly prefix: number;
@@ -104,6 +108,8 @@ export { REPEATING_GROUP_PREFIXES, REPEATING_GROUP_RANGES };
  * expandRepeatingGroups("60")[15];       // 0x601e
  * expandRepeatingGroups("7F");           // []
  * ```
+ *
+ * @internal
  */
 export function expandRepeatingGroups(prefix: string): readonly number[] {
   const range = REPEATING_GROUP_RANGES[prefix.toUpperCase()];
@@ -133,6 +139,8 @@ export function expandRepeatingGroups(prefix: string): readonly number[] {
  * matchesRepeatingPattern("60xx4000", "60204000"); // false - 0x6020 is out of range
  * matchesRepeatingPattern("60xx4000", "60014000"); // false - odd group, private
  * ```
+ *
+ * @internal
  */
 export function matchesRepeatingPattern(pattern: string, tag: string): boolean {
   if (pattern.length !== 8 || tag.length !== 8) return false;

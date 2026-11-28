@@ -170,6 +170,8 @@ function readAnimalAttributes(
  *   // do NOT treat p.id as globally unique
  * }
  * ```
+ *
+ * @internal
  */
 export function buildPatient(ds: Dataset): PatientView {
   const view: { -readonly [K in keyof PatientView]: PatientView[K] } = {

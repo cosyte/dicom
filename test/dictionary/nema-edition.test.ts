@@ -1,5 +1,5 @@
 /**
- * AC-1: the generators read PS3.5, PS3.6 and PS3.15 DocBook of ONE edition, 2026d or
+ * The generators read PS3.5, PS3.6 and PS3.15 DocBook of ONE edition, 2026d or
  * later, each re-hashed against its vendored `SHA.txt`.
  *
  * The three parts are pinned separately, one directory each under `vendor/nema/`, so
@@ -105,8 +105,8 @@ function headerOf(artifact: string): string {
 
 const vendored = new Map(PARTS.map((part) => [part.dir, readVendored(part)]));
 
-describe("the vendored PS3.5, PS3.6 and PS3.15 DocBook (AC-1)", () => {
-  it("AC-1: each document re-hashes to the SHA-256 in its SHA.txt", () => {
+describe("the vendored PS3.5, PS3.6 and PS3.15 DocBook", () => {
+  it("each document re-hashes to the SHA-256 in its SHA.txt", () => {
     for (const part of PARTS) {
       const v = vendored.get(part.dir);
       expect(v?.pinned, part.dir).toMatch(/^[0-9a-f]{64}$/);
@@ -114,7 +114,7 @@ describe("the vendored PS3.5, PS3.6 and PS3.15 DocBook (AC-1)", () => {
     }
   });
 
-  it("AC-1: all three documents name one edition, and it sorts at or after 2026d", () => {
+  it("all three documents name one edition, and it sorts at or after 2026d", () => {
     const ps35 = vendored.get("part05")?.edition;
     const ps36 = vendored.get("part06")?.edition;
     const ps315 = vendored.get("part15")?.edition;
@@ -126,7 +126,7 @@ describe("the vendored PS3.5, PS3.6 and PS3.15 DocBook (AC-1)", () => {
     expect(atOrAfter(ps36 ?? "", EDITION_FLOOR), `${String(ps36)} >= ${EDITION_FLOOR}`).toBe(true);
   });
 
-  it("AC-1: every generated header names the vendored edition and SHA-256", () => {
+  it("every generated header names the vendored edition and SHA-256", () => {
     for (const part of PARTS) {
       const v = vendored.get(part.dir);
       for (const artifact of part.artifacts) {

@@ -127,7 +127,7 @@ const BASIC_OFFSET_TABLE: Buffer = Buffer.concat([
   uint32(8 + 10 + 8 + 4),
 ]);
 
-/** The two fragment streams AC-3 names, as `encapsulatedObject`'s `items`. */
+/** The two well-formed fragment streams, as `encapsulatedObject`'s `items`. */
 const STREAMS: readonly { readonly name: string; readonly items: readonly Buffer[] }[] = [
   {
     name: "empty Basic Offset Table, one fragment",
@@ -143,12 +143,12 @@ const CASES = ENCAPSULATION_SET.flatMap((uid) =>
   STREAMS.map((stream) => ({ uid, name: stream.name, items: stream.items })),
 );
 
-describe("AC-1: serializeDicom accepts every section A.4 Transfer Syntax", () => {
-  it("AC-1: the set under test is the whole of section A.4", () => {
+describe("serializeDicom accepts every section A.4 Transfer Syntax", () => {
+  it("the set under test is the whole of section A.4", () => {
     expect(ENCAPSULATION_SET).toHaveLength(35);
   });
 
-  it.each(ENCAPSULATION_SET)("AC-1: %s returns a Part 10 buffer declaring the same UID", (uid) => {
+  it.each(ENCAPSULATION_SET)("%s returns a Part 10 buffer declaring the same UID", (uid) => {
     const { out, err } = attempt(parseDicom(encapsulatedObject({ transferSyntax: uid })));
     expect(err).toBeUndefined();
     expect(out).toBeInstanceOf(Buffer);
@@ -158,9 +158,9 @@ describe("AC-1: serializeDicom accepts every section A.4 Transfer Syntax", () =>
   });
 });
 
-describe("AC-2: the Data Set is written as Explicit VR Little Endian", () => {
+describe("the Data Set is written as Explicit VR Little Endian", () => {
   it.each(ENCAPSULATION_SET)(
-    "AC-2: %s writes the bytes the Explicit-LE twin writes after the File Meta group",
+    "%s writes the bytes the Explicit-LE twin writes after the File Meta group",
     (uid) => {
       const out = serializeDicom(parseDicom(encapsulatedObject({ transferSyntax: uid })));
       const twin = serializeDicom(parseDicom(explicitLeTwin({ transferSyntax: uid })));
@@ -171,8 +171,8 @@ describe("AC-2: the Data Set is written as Explicit VR Little Endian", () => {
   );
 });
 
-describe("AC-3: top-level encapsulated Pixel Data is written as an A.4 fragment stream", () => {
-  it.each(CASES)("AC-3: $uid, $name", ({ uid, items }) => {
+describe("top-level encapsulated Pixel Data is written as an A.4 fragment stream", () => {
+  it.each(CASES)("$uid, $name", ({ uid, items }) => {
     const source = parseDicom(encapsulatedObject({ transferSyntax: uid, items }));
     const out = serializeDicom(source);
     const start = parseDicom(out).get(PIXEL_DATA)?.byteOffset ?? -1;
@@ -190,7 +190,7 @@ describe("AC-3: top-level encapsulated Pixel Data is written as an A.4 fragment 
     ).toBe(true);
   });
 
-  it("AC-3: the header and delimiter are written spec-clean whatever VR the input span carried", () => {
+  it("the header and delimiter are written spec-clean whatever VR the input span carried", () => {
     const uid = "1.2.840.10008.1.2.4.50";
     const stream = [item(Buffer.alloc(0)), item(Buffer.alloc(16, 0xa5))];
     // An `OW` span with non-zero reserved bytes and a delimiter with a non-zero Item Length.
@@ -202,8 +202,8 @@ describe("AC-3: top-level encapsulated Pixel Data is written as an A.4 fragment 
   });
 });
 
-describe("AC-4: the output re-reads strictly and re-serializes byte-identically", () => {
-  it.each(CASES)("AC-4: $uid, $name", ({ uid, items }) => {
+describe("the output re-reads strictly and re-serializes byte-identically", () => {
+  it.each(CASES)("$uid, $name", ({ uid, items }) => {
     const written = parseDicom(encapsulatedObject({ transferSyntax: uid, items }));
     const out = serializeDicom(written);
     const reread = parseDicom(out, { strict: true });
@@ -246,8 +246,8 @@ function refusesUnderEveryUid(refusal: Refusal): void {
   for (const uid of ENCAPSULATION_SET) expectRefused(refusal.dataset(uid));
 }
 
-describe("AC-7: native top-level Pixel Data is refused", () => {
-  it("AC-7: a defined Value Length (Native Format) throws INVALID_ENCAPSULATED_PIXEL_DATA", () => {
+describe("native top-level Pixel Data is refused", () => {
+  it("a defined Value Length (Native Format) throws INVALID_ENCAPSULATED_PIXEL_DATA", () => {
     const native = parsed({
       pixelDataElements: [{ tag: PIXEL_DATA, vr: "OB", value: Buffer.alloc(16, 0x5a) }],
     });
@@ -258,8 +258,8 @@ describe("AC-7: native top-level Pixel Data is refused", () => {
   });
 });
 
-describe("AC-8: a stream not ended by its delimiter, or holding a non-Item, is refused", () => {
-  it("AC-8: a stream parseDicom read with DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED", () => {
+describe("a stream not ended by its delimiter, or holding a non-Item, is refused", () => {
+  it("a stream parseDicom read with DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED", () => {
     const undelimited = parsed({ omitSequenceDelim: true });
     // Control: the parse did flag it, so this is the stream the criterion names.
     expect(undelimited(ENCAPSULATION_SET[0] ?? "").warnings.map((w) => w.code)).toContain(
@@ -302,7 +302,7 @@ describe("AC-8: a stream not ended by its delimiter, or holding a non-Item, is r
         SEQUENCE_DELIMITATION,
       ),
     },
-    // Readings of AC-8 recorded in the implementation notes: each is a span that is not the
+    // The spans below are further readings of the same rule: each is a span that is not the
     // Item stream section A.4 describes, and emitting it would drop or invent bytes.
     {
       name: "bytes after the delimiter inside the span",
@@ -333,12 +333,12 @@ describe("AC-8: a stream not ended by its delimiter, or holding a non-Item, is r
     { name: "a span shorter than an element header", dataset: spanned(Buffer.from([0xe0, 0x7f])) },
   ];
 
-  it.each(cases)("AC-8: $name", (refusal) => {
+  it.each(cases)("$name", (refusal) => {
     refusesUnderEveryUid(refusal);
   });
 });
 
-describe("AC-9: an odd Item Length, or an empty fragment, is refused", () => {
+describe("an odd Item Length, or an empty fragment, is refused", () => {
   const cases: readonly Refusal[] = [
     {
       name: "an odd Basic Offset Table Item",
@@ -358,12 +358,12 @@ describe("AC-9: an odd Item Length, or an empty fragment, is refused", () => {
     },
   ];
 
-  it.each(cases)("AC-9: $name", (refusal) => {
+  it.each(cases)("$name", (refusal) => {
     refusesUnderEveryUid(refusal);
   });
 });
 
-describe("AC-10: absent top-level Pixel Data, or Float / Double Float Pixel Data, is refused", () => {
+describe("absent top-level Pixel Data, or Float / Double Float Pixel Data, is refused", () => {
   const cases: readonly Refusal[] = [
     { name: "no top-level (7FE0,0010)", dataset: parsed({ pixelDataElements: [] }) },
     {
@@ -388,21 +388,21 @@ describe("AC-10: absent top-level Pixel Data, or Float / Double Float Pixel Data
     },
   ];
 
-  it.each(cases)("AC-10: $name", (refusal) => {
+  it.each(cases)("$name", (refusal) => {
     refusesUnderEveryUid(refusal);
   });
 });
 
-describe("AC-11: a refusal's message is built from structural constants only", () => {
+describe("a refusal's message is built from structural constants only", () => {
   const uid = "1.2.840.10008.1.2.4.90";
 
-  it("AC-11: INVALID_ENCAPSULATED_PIXEL_DATA is a member of SERIALIZE_ERROR_CODES", () => {
+  it("INVALID_ENCAPSULATED_PIXEL_DATA is a member of SERIALIZE_ERROR_CODES", () => {
     expect(SERIALIZE_ERROR_CODES.INVALID_ENCAPSULATED_PIXEL_DATA).toBe(
       "INVALID_ENCAPSULATED_PIXEL_DATA",
     );
   });
 
-  it("AC-11: two inputs differing only in the offending length yield identical messages", () => {
+  it("two inputs differing only in the offending length yield identical messages", () => {
     const [a, b] = [15, 17].map((n) =>
       expectRefused(parsed({ items: [Buffer.alloc(0), Buffer.alloc(n, 0xa5)] })(uid)),
     );
@@ -410,7 +410,7 @@ describe("AC-11: a refusal's message is built from structural constants only", (
     expect(a?.message).not.toMatch(/\b1[57]\b/u);
   });
 
-  it("AC-11: a fragment carrying the planted patient name does not reach the message", () => {
+  it("a fragment carrying the planted patient name does not reach the message", () => {
     const name = Buffer.from(PATIENT_NAME, "latin1");
     // Odd on purpose (the name plus one byte), so the writer refuses this very fragment.
     const ds = parsed({ items: [Buffer.alloc(0), Buffer.concat([name, Buffer.from("X")])] })(uid);
@@ -422,7 +422,7 @@ describe("AC-11: a refusal's message is built from structural constants only", (
   });
 });
 
-describe("AC-12: UIDs outside the native and A.4 sets keep their published codes", () => {
+describe("UIDs outside the native and A.4 sets keep their published codes", () => {
   /** The fixture's Data Set, valid fragment stream included, under `transferSyntaxUID`. */
   function under(transferSyntaxUID: string | undefined): Dataset {
     const ds = parseDicom(encapsulatedObject({ transferSyntax: "1.2.840.10008.1.2.4.50" }));
@@ -434,7 +434,7 @@ describe("AC-12: UIDs outside the native and A.4 sets keep their published codes
   }
 
   it.each(["1.2.840.10008.1.2.4.94", "1.2.840.10008.1.2.4.52"])(
-    "AC-12: %s throws UNSUPPORTED_TRANSFER_SYNTAX",
+    "%s throws UNSUPPORTED_TRANSFER_SYNTAX",
     (outside) => {
       expect(ENCAPSULATION_SET).not.toContain(outside);
       const { out, err } = attempt(under(outside));
@@ -447,7 +447,7 @@ describe("AC-12: UIDs outside the native and A.4 sets keep their published codes
   );
 
   it.each([undefined, ""])(
-    "AC-12: a missing Transfer Syntax UID (%j) throws MISSING_TRANSFER_SYNTAX",
+    "a missing Transfer Syntax UID (%j) throws MISSING_TRANSFER_SYNTAX",
     (missing) => {
       const { out, err } = attempt(under(missing));
       expect(out).toBeUndefined();
@@ -457,7 +457,7 @@ describe("AC-12: UIDs outside the native and A.4 sets keep their published codes
   );
 });
 
-describe("AC-13: Pixel Data nested in a Sequence Item is written as read", () => {
+describe("Pixel Data nested in a Sequence Item is written as read", () => {
   const us = (n: number): Buffer => Buffer.from([n & 0xff, (n >> 8) & 0xff]);
   const NESTED = Buffer.from([0x01, 0x02, 0x03, 0x04]);
   /** An Icon Image Sequence Item carrying a native 2x2, 8-bit Pixel Data. */
@@ -480,7 +480,7 @@ describe("AC-13: Pixel Data nested in a Sequence Item is written as read", () =>
     ],
   };
 
-  it.each(ENCAPSULATION_SET)("AC-13: %s", (uid) => {
+  it.each(ENCAPSULATION_SET)("%s", (uid) => {
     const source = parseDicom(
       encapsulatedObject({
         transferSyntax: uid,

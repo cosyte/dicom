@@ -1,6 +1,6 @@
 /**
- * `renderTag`: the membership bound `DICOM-DIAGNOSTIC-PHI-RESIDUALS` closed its
- * fifth and sixth instances with.
+ * `renderTag`: the membership bound that closed the fifth and sixth cases of a
+ * diagnostic that could carry a value from the file.
  *
  * The integration rows in `test/integration/fatal-diagnostic-surface.test.ts`
  * prove the leak is gone off real fixtures. These are the direct unit rows for
@@ -89,7 +89,7 @@ describe("renderTag is a MEMBERSHIP test against PS3.6, not a shape test", () =>
     // their hand, which is what separates them from a shape test over 2^32.
     const literal = registryKeys().filter((k) => /^[0-9A-F]{8}$/u.test(k));
     const masked = registryKeys().filter((k) => !/^[0-9A-F]{8}$/u.test(k));
-    // PS3.6 2026d: 2026c's 5221 literal rows plus (3004,007F) (AC-12).
+    // PS3.6 2026d: 2026c's 5221 literal rows plus (3004,007F).
     expect(literal.length).toBe(5222);
     expect(masked.length).toBe(88);
     // Every masked key is flagged, and no literal key is: the two populations do

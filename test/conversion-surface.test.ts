@@ -672,7 +672,7 @@ describe("component bounds: a point no calendar has converts to nothing", () => 
   // a `DA`. The refusal is in the conversion surface and NOT in the decoders,
   // which keep the behaviour they were pinned at.
   //
-  // 🩺 THE FIXTURE YEARS ARE PRE-1906 ON PURPOSE. `scripts/phi-scan.ts` flags
+  // 🩺 THE FIXTURE YEARS ARE BEFORE 1906 ON PURPOSE. `scripts/phi-scan.ts` flags
   // any 8-digit `YYYYMMDD` run whose year is inside the last 120 years, and the
   // only ways past it are a date older than that or a line in
   // `scripts/phi-allow-list.txt`, which that file's own header calls a real,

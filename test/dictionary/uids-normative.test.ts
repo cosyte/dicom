@@ -243,7 +243,7 @@ describe("every shipped UID matches the normative Annex A text", () => {
   });
 
   it("covers every UID Annex A names, so the registry is the table and not a sample", () => {
-    // Before this slice the registry carried 268 of these and the absence was invisible: a
+    // Before this change the registry carried 268 of these and the absence was invisible: a
     // Transfer Syntax the current standard defines resolved to `undefined` with no signal.
     const missing = named.filter((row) => !UIDS[row.uid]).map((r) => r.uid);
     expect(missing).toEqual([]);
@@ -444,7 +444,7 @@ describe("the UIDs a current DICOM file can actually carry now resolve", () => {
    * The consumer-visible half of the coverage gap, named one by one rather than as a count.
    *
    * Every one of these is a Transfer Syntax the CURRENT edition defines and none of them was in
-   * the registry before this slice: a Part 10 file encoded in any of them had its Transfer
+   * the registry before this change: a Part 10 file encoded in any of them had its Transfer
    * Syntax UID resolve to `undefined`. Nothing mis-read a value (dispatch is by UID value, and
    * this package refuses a transfer syntax it cannot decode by value too), but a caller asking
    * the dictionary what it was holding got no answer.

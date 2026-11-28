@@ -8,8 +8,8 @@ import { extractRunnableSnippets } from "@cosyte/vitest-config/snippets";
 
 /**
  * Structural conformance gate for `docs-content/`, the narrative bundle
- * `cosyte-process pack-docs` (the `pack:docs` script) tars into the release artifact that
- * `cosyte/docs` ingests.
+ * `cosyte-process pack-docs` (the `pack:docs` script) tars into the release artifact that the
+ * docs site ingests.
  *
  * The sibling `docs-content.test.ts` gate proves the documented CODE still runs.
  * This one proves the documented SITE still holds together: every public export

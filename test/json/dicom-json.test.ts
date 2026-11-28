@@ -624,3 +624,19 @@ describe("refusals", () => {
     expect(err?.message).not.toContain("00091001");
   });
 });
+
+describe("fromDicomJson with no options", () => {
+  it("writes the Data Set under Explicit VR Little Endian with no other File Meta", () => {
+    const ds = fromDicomJson({ "00080060": { vr: "CS", Value: ["CT"] } });
+    expect(ds.fileMeta?.transferSyntaxUID).toBe("1.2.840.10008.1.2.1");
+    expect(ds.fileMeta?.mediaStorageSOPInstanceUID).toBeUndefined();
+    expect(ds.get("00080060")?.value).toMatchObject({ kind: "strings", values: ["CT"] });
+  });
+
+  it("writes the same bytes as an empty options object", () => {
+    const json = { "00100020": { vr: "LO", Value: ["SYN-000123"] } } as const;
+    expect(
+      serializeDicom(fromDicomJson(json)).equals(serializeDicom(fromDicomJson(json, {}))),
+    ).toBe(true);
+  });
+});

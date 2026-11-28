@@ -144,6 +144,8 @@ const FFFE_GROUP = 0xfffe;
  * bytes cannot be shown by content to have swallowed anything, so including them
  * would trade a measured guarantee for a coin-flip that removes real pixel and
  * lookup-table data.
+ *
+ * @internal
  */
 export const SCANNABLE_CARRIER_VRS: ReadonlySet<VR> = new Set<VR>([
   "AE",
@@ -214,6 +216,8 @@ const ESC_ONLY_VRS: ReadonlySet<VR> = new Set<VR>(["LO", "SH", "UC", "PN"]);
  * Trailing window scanned on an over-long value. A swallow ends at the end of
  * the value, so the window is at the tail; the bound exists so the memo arrays
  * are sized by this module and not by a declared length.
+ *
+ * @internal
  */
 export const MAX_SCAN_BYTES = 1 << 20;
 
@@ -370,7 +374,11 @@ function isTableBound(tag: Tag): boolean {
   return action !== undefined && action.repeatingGroup === undefined;
 }
 
-/** What a scan found: the run's size, and only the tags the run acted on. */
+/**
+ * What a scan found: the run's size, and only the tags the run acted on.
+ *
+ * @internal
+ */
 export interface EmbeddedRun {
   /**
    * The tags in the run that `isActionable` answered `true` for, in wire order.
@@ -440,6 +448,8 @@ export interface EmbeddedRun {
  *   // el's value ends with a whole (0010,0020) Patient ID - do not keep it
  * }
  * ```
+ *
+ * @internal
  */
 export function findEmbeddedAttributes(
   value: Buffer,

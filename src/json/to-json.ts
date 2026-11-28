@@ -354,7 +354,7 @@ function datasetOf(
  * @param options - Where to hand binary values out as a `BulkDataURI`, and whether bulk values may
  *   go inline.
  * @returns The Data Set as a DICOM JSON object.
- * @throws {@link DicomJsonError} rather than change or guess a value: `UNSUPPORTED_VR` for `SV`
+ * @throws {DicomJsonError} rather than change or guess a value: `UNSUPPORTED_VR` for `SV`
  *   and `UV` values, whose form we have not read in a pinned copy of PS3.18, `UNSUPPORTED_ELEMENT` for encapsulated Pixel Data the `bulkDataUri` option gives no
  *   URI, or another undefined-length value that is not a read Sequence, `UNSUPPORTED_BYTE_ORDER` for an `OW`, `OF`, `OD`, `OL` or `OV`
  *   value under Explicit VR Big Endian, `UNREPRESENTABLE_NUMBER` for NaN, an infinity, an `FL` or

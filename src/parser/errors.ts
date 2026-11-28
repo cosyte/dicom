@@ -46,9 +46,12 @@ export const FATAL_CODES = {
 } as const;
 
 /**
- * The four Tier-3 fatal codes, the type over the `FATAL_CODES` registry.
- * `FATAL_CODES` is locked, so an exhaustive `switch` over a `FatalCode`
- * value stays exhaustive.
+ * The Tier-3 fatal codes, the type over the `FATAL_CODES` registry.
+ *
+ * **Treat the union as open.** A release can add a code, which widens this
+ * union, so a `switch` that lists every current member stops compiling, or
+ * misses the new code, on an upgrade. Handle the codes you care about by name
+ * and give the `switch` a `default` branch for the rest.
  *
  * **It is not the whole type of `DicomParseError.code`.** A Tier-2 warning
  * escalated by `{ strict: true }` or by a profile's `escalate` list is
@@ -66,10 +69,8 @@ export const FATAL_CODES = {
  *       return "input was empty";
  *     case "NOT_DICOM_PART_10":
  *       return "input is not a DICOM Part 10 file";
- *     case "INVALID_FILE_META":
- *       return "File Meta group or Data Set is cut short or unreadable";
- *     case "UNSUPPORTED_TRANSFER_SYNTAX":
- *       return "Transfer Syntax UID is not supported by v1";
+ *     default:
+ *       return `cannot read: ${code}`;
  *   }
  * }
  * ```
@@ -371,13 +372,7 @@ export class DicomParseError extends Error {
  * Used by the strict-mode escalation chokepoint to attach a short source
  * snippet to every thrown `DicomParseError`.
  *
- * @example
- * ```ts
- * import { Buffer } from "node:buffer";
- * import { buildSnippet } from "@cosyte/dicom";
- * buildSnippet(Buffer.from([0x44, 0x49, 0x43, 0x4d]), 0);
- * // → "44 49 43 4d"
- * ```
+ * @internal
  */
 export function buildSnippet(buffer: Buffer, offset: number): string {
   if (offset < 0 || offset >= buffer.length) return "";

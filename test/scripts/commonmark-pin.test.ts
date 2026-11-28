@@ -9,8 +9,8 @@
  * closes (section 4.5), and which lines an HTML block covers (section 4.6).
  *
  * 🛑 EVERY ONE OF THOSE WAS AN ASSERTED SECTION NUMBER UNTIL THIS FILE EXISTED, AND THIS REPOSITORY
- * HAS PAID FOR THAT SHAPE BEFORE. `#80` cited PS3.5 section 7.5 twice when the sentence is in
- * 7.5.2, and the override log's lone-`CR` divergence once had a figure that could not be re-taken,
+ * HAS PAID FOR THAT SHAPE BEFORE. An earlier change cited PS3.5 section 7.5 twice when the
+ * sentence is in 7.5.2, and the override log's lone-`CR` divergence once had a figure that could not be re-taken,
  * because grounding it needed a CommonMark oracle this repository did not vendor. This is that
  * oracle.
  *
@@ -23,7 +23,7 @@
  *    and read `Fenced code blocks` as section 14.1 if you let them count);
  * 4. each cited sentence occurs EXACTLY ONCE in the whole document and inside the section claimed
  *    for it. Zero and two are both refusals: a first match reads whichever candidate comes first,
- *    which is the trap the meta-repo's rule about locating a spec section names.
+ *    which is the trap our rule about locating a spec section by its normative sentence names.
  *
  * The spec is hard-wrapped, so every search here folds whitespace first. A line-based `grep` for
  * any of these sentences finds nothing, which would read as absence.
@@ -199,7 +199,7 @@ describe("the vendored CommonMark spec is a precondition, not a citation", () =>
 
     // 🔴 THE THREE RULES THIS PARSER DOES NOT TAKE, located rather than asserted, for the same
     // reason kind 7 is above: a divergence located in the document is a measured gap, and one
-    // asserted in a comment is a preference. Each is a `DICOM-RESIDUALS` row.
+    // asserted in a comment is a preference. Each is a known, recorded residual.
     //
     // The STRIP is the one to read carefully. Its sentence says spaces or tabs; `commonmark@0.31.2`,
     // the reference implementation of THIS pinned version, strips with `String.prototype.trim`,

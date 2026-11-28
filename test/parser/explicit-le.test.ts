@@ -1,13 +1,13 @@
 /**
- * Tests for `parseExplicitLE` - Phase 2 plan 02-04 task 2.
+ * Tests for `parseExplicitLE`.
  *
- * Covers TS-02 end-to-end through `parseDicom`, plus the per-VR Explicit-LE
- * header layout (short-form / long-form), TOL-07 (odd-length-padded),
- * TOL-08 (VR mismatch), DICOM_NONZERO_RESERVED_BYTES, undefined-length-SQ
+ * Covers Explicit VR LE end-to-end through `parseDicom`, plus the per-VR Explicit-LE
+ * header layout (short-form / long-form), odd-length values padded, VR mismatch,
+ * DICOM_NONZERO_RESERVED_BYTES, undefined-length-SQ
  * (read with no warning), CP-246 success + failure
  * (DICOM_UN_PARSED_AS_SQ + cp246Promoted hint), encapsulated pixel data
- * structural recognition (D-31), private-creator block-reservation, and
- * truncation throws (T-02-04-01).
+ * structural recognition, private-creator block-reservation, and
+ * truncation throws.
  */
 
 import { Buffer } from "node:buffer";
@@ -31,7 +31,7 @@ function elementsOf(ds: Dataset): ReadonlyMap<Tag, Element> {
 
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
 
-describe("parseExplicitLE - TS-02 short-form happy path", () => {
+describe("parseExplicitLE - Explicit VR LE short-form happy path", () => {
   it("parses (0010,0010) PN with 8-byte short-form header", () => {
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
@@ -46,7 +46,7 @@ describe("parseExplicitLE - TS-02 short-form happy path", () => {
   });
 });
 
-describe("parseExplicitLE - TS-02 long-form happy path (D-22)", () => {
+describe("parseExplicitLE - Explicit VR LE long-form happy path", () => {
   it("parses (7FE0,0010) OB with 12-byte long-form header", () => {
     const pixel = Buffer.from([0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
     const buf = buildDicom({
@@ -62,7 +62,7 @@ describe("parseExplicitLE - TS-02 long-form happy path (D-22)", () => {
   });
 });
 
-describe("parseExplicitLE - TOL-07 odd-length value", () => {
+describe("parseExplicitLE - odd-length value", () => {
   it("emits DICOM_ODD_LENGTH_VALUE_PADDED for odd-length SH; element parsed with declared length", () => {
     // SH with 5-byte value "12345" (odd-length on wire).
     const buf = buildDicom({
@@ -78,7 +78,7 @@ describe("parseExplicitLE - TOL-07 odd-length value", () => {
   });
 });
 
-describe("parseExplicitLE - TOL-08 VR mismatch", () => {
+describe("parseExplicitLE - VR mismatch", () => {
   it("emits DICOM_VR_MISMATCH when in-file VR differs from dictionary", () => {
     // (0010,0010) is dictionary VR=PN; encode with on-wire VR=LO.
     const buf = buildDicom({
@@ -286,7 +286,7 @@ describe("parseExplicitLE - undefined-length SQ", () => {
   });
 });
 
-describe("parseExplicitLE - CP-246 (D-30)", () => {
+describe("parseExplicitLE - CP-246", () => {
   it("UN-undefined-length carrying valid Implicit-LE SQ → promoted to SQ + cp246Promoted=true", () => {
     // Construct an Implicit-LE-encoded SQ payload (one undefined-length
     // item with empty body + SeqDelim) and stuff it into a UN
@@ -384,7 +384,7 @@ describe("parseExplicitLE - CP-246 (D-30)", () => {
   });
 });
 
-describe("parseExplicitLE - encapsulated pixel data (D-31)", () => {
+describe("parseExplicitLE - encapsulated pixel data", () => {
   it("(7FE0,0010) OB undefined-length with fragments parses structurally; vr stays OB", () => {
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
@@ -426,7 +426,7 @@ describe("parseExplicitLE - private-creator block-reservation", () => {
   });
 });
 
-describe("parseExplicitLE - truncation (T-02-04-01)", () => {
+describe("parseExplicitLE - truncation", () => {
   it("throws DicomParseError(INVALID_FILE_META) on truncated header", () => {
     // Build a valid buffer, then chop the last 4 bytes off mid-element.
     const buf = buildDicom({
@@ -446,7 +446,7 @@ describe("parseExplicitLE - truncation (T-02-04-01)", () => {
   });
 });
 
-describe("parseExplicitLE - TOL-10 group-length element in dataset", () => {
+describe("parseExplicitLE - group-length element in dataset", () => {
   it("(0009,0000) private-group length in the dataset emits DICOM_GROUP_LENGTH_IN_DATASET", () => {
     // A (gggg,0000) group-length element outside File Meta (group != 0002) is
     // legal-but-discouraged; the parser keeps the element and warns. Using an
@@ -543,7 +543,7 @@ describe("parseExplicitLE - undefined-length SQ with an undefined-length item", 
   });
 });
 
-describe("parseExplicitLE - truncation points (T-02-04-01)", () => {
+describe("parseExplicitLE - truncation points", () => {
   it("throws INVALID_FILE_META when the buffer ends with a single dangling byte (peek overrun)", () => {
     // Build a clean buffer, then leave exactly one trailing byte where the
     // next element header would start. The 2-byte group peek overruns ->
@@ -593,7 +593,7 @@ describe("parseExplicitLE - truncation points (T-02-04-01)", () => {
   });
 });
 
-describe("parseExplicitLE - D-16 copyValues on composite values", () => {
+describe("parseExplicitLE - copyValues on composite values", () => {
   it("copyValues=true isolates an undefined-length SQ element's rawBytes", () => {
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,

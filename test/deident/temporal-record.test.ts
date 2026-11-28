@@ -42,7 +42,7 @@
  *
  * ## Why the last describe block exists
  *
- * Two §E.1.1 rules landed on this same de-identify path from another slice - the
+ * Two PS3.15 §E.1.1 rules landed on this same de-identify path from another change - the
  * File Meta group is replaced, and group 0004 is removed from everything that is
  * not a DICOMDIR. Neither touches `(0028,0303)`: one rewrites `(0002,xxxx)`,
  * which is not the Data Set, and the other tests a Group Number this attribute
@@ -198,7 +198,7 @@ function wantedState(retain: readonly DeidentifyOption[]): string {
 }
 
 describe("(0028,0303): the three states PS3.15 defines, and which option earns each", () => {
-  it("AC-6: writes REMOVED, VR CS, when no temporal option is active", () => {
+  it("writes REMOVED, VR CS, when no temporal option is active", () => {
     const { dataset } = deidentify(buildDated());
     const el = dataset.get(TEMPORAL);
     expect(el).toBeDefined();
@@ -207,7 +207,7 @@ describe("(0028,0303): the three states PS3.15 defines, and which option earns e
     expect(countHeaders(serializeDicom(dataset), TEMPORAL, "CS")).toBe(1);
   });
 
-  it("AC-5: writes UNMODIFIED, VR CS, with the full-dates option active", () => {
+  it("writes UNMODIFIED, VR CS, with the full-dates option active", () => {
     const { dataset } = deidentify(buildDated(), { retain: [TEMPORAL_OPTION] });
     const el = dataset.get(TEMPORAL);
     expect(el).toBeDefined();
@@ -216,7 +216,7 @@ describe("(0028,0303): the three states PS3.15 defines, and which option earns e
     expect(countHeaders(serializeDicom(dataset), TEMPORAL, "CS")).toBe(1);
   });
 
-  it("AC-2: writes MODIFIED, VR CS, with the modified-dates option active", () => {
+  it("writes MODIFIED, VR CS, with the modified-dates option active", () => {
     const { dataset } = deidentify(buildDated(), { retain: [TEMPORAL_MODIFIED_OPTION] });
     const el = dataset.get(TEMPORAL);
     expect(el).toBeDefined();
@@ -225,7 +225,7 @@ describe("(0028,0303): the three states PS3.15 defines, and which option earns e
     expect(countHeaders(serializeDicom(dataset), TEMPORAL, "CS")).toBe(1);
   });
 
-  it("AC-6: the states are distinguishable, and each matches what the run did to the dates", () => {
+  it("the states are distinguishable, and each matches what the run did to the dates", () => {
     // The non-vacuity row: if the branches emitted the same value the assertions
     // above would still pass and the attribute would carry no information. This
     // pins that the declaration tracks the run - `REMOVED` beside an output with
@@ -251,7 +251,7 @@ describe("(0028,0303): the three states PS3.15 defines, and which option earns e
     expect(modified.get(STUDY_TIME)?.rawBytes.toString("latin1").trim()).not.toBe("101500");
   });
 
-  it("AC-5: the published temporal option is unchanged in both respects", () => {
+  it("the published temporal option is unchanged in both respects", () => {
     // The criterion is that adding the second name moved nothing about the
     // first: it still resolves the full-dates column (the real dates survive)
     // and it still writes UNMODIFIED.
@@ -269,7 +269,7 @@ describe("(0028,0303): the three states PS3.15 defines, and which option earns e
 });
 
 describe("(0028,0303): the whole option domain, swept rather than sampled", () => {
-  it("AC-2 AC-5 AC-6: every legal subset, and the temporal options alone decide the value", () => {
+  it("every legal subset, and the temporal options alone decide the value", () => {
     let swept = 0;
     let skipped = 0;
     const unexpected: string[] = [];
@@ -294,7 +294,7 @@ describe("(0028,0303): the whole option domain, swept rather than sampled", () =
     expect(unexpected).toStrictEqual([]);
   });
 
-  it("AC-2 AC-5 AC-6: every legal subset produces exactly the three defined values", () => {
+  it("every legal subset produces exactly the three defined values", () => {
     // 🩺 The whole vocabulary, asserted over the entire domain because a wrong
     // value here is the one a recipient cannot detect from their own output. The
     // `seen` set is also the non-vacuity half - a sweep that produced nothing at
@@ -307,7 +307,7 @@ describe("(0028,0303): the whole option domain, swept rather than sampled", () =
     expect([...seen].sort()).toStrictEqual(["MODIFIED", "REMOVED", "UNMODIFIED"]);
   });
 
-  it("AC-6: no option name other than the two temporal ones moves the value", () => {
+  it("no option name other than the two temporal ones moves the value", () => {
     // The mutation control for the sweep: every other name, alone, must leave
     // the Basic Profile state in place. A sweep whose measurement was blind to
     // `retain` would pass the two rows above and fail this one.
@@ -319,7 +319,7 @@ describe("(0028,0303): the whole option domain, swept rather than sampled", () =
 });
 
 describe("(0028,0303) = MODIFIED: the transformation this library did not perform", () => {
-  it("AC-10: records a stable code on the de-identify report saying no date was transformed", () => {
+  it("records a stable code on the de-identify report saying no date was transformed", () => {
     const { report } = deidentify(buildDated(), { retain: [TEMPORAL_MODIFIED_OPTION] });
     const codes = report.warnings.map((w) => w.code);
     expect(codes).toContain(WARNING_CODES.DICOM_DEIDENT_DATES_NOT_TRANSFORMED);
@@ -339,7 +339,7 @@ describe("(0028,0303) = MODIFIED: the transformation this library did not perfor
     expect(warning?.message).not.toContain("DOE");
   });
 
-  it("AC-10: the code is not on the parse warnings, so a strict parse is unaffected", () => {
+  it("the code is not on the parse warnings, so a strict parse is unaffected", () => {
     // 🛑 A Tier-2 code raised for a CONFORMANT file would throw for every
     // `{ strict: true }` caller on exactly that file. This one is a statement
     // about the run's options, so it belongs to the report and nowhere else.
@@ -371,7 +371,7 @@ describe("(0028,0303) = MODIFIED: the transformation this library did not perfor
     expect(() => parseDicom(serializeDicom(dataset), { strict: true })).not.toThrow();
   });
 
-  it("AC-10: neither other branch records it (the code names the branch it belongs to)", () => {
+  it("neither other branch records it (the code names the branch it belongs to)", () => {
     for (const retain of [[], [TEMPORAL_OPTION]] as readonly (readonly DeidentifyOption[])[]) {
       const { report } = deidentify(buildDated(), { retain });
       expect(
@@ -381,7 +381,7 @@ describe("(0028,0303) = MODIFIED: the transformation this library did not perfor
     }
   });
 
-  it("AC-10: it is raised on the option set, not on the input carrying a date", () => {
+  it("it is raised on the option set, not on the input carrying a date", () => {
     // Same reasoning as the declaration it qualifies: a dateless Data Set under
     // the modified-dates Option still produces an object stamped MODIFIED, so
     // the residual behind that stamp is the same size and is still disclosed.
@@ -396,7 +396,7 @@ describe("(0028,0303) = MODIFIED: the transformation this library did not perfor
 });
 
 describe("(0028,0303): a value the source already carried is REPLACED, never joined", () => {
-  it("AC-9: every prior value, written at either depth, leaves the Data Set's own declaration this run's", () => {
+  it("every prior value, written at either depth, leaves the Data Set's own declaration this run's", () => {
     // 🩺 The criterion swept rather than sampled: each of the standard's three
     // Values plus an out-of-vocabulary one, written at the root and written only
     // inside a Sequence Item, against each of the three states a run can be in.
@@ -567,7 +567,7 @@ describe("(0028,0303): a nested occurrence does not become the object's declarat
 });
 
 describe("(0028,0303): what the run was permitted to do, not what the input held", () => {
-  it("AC-6: writes REMOVED on a Data Set that carries no date or time attribute at all", () => {
+  it("writes REMOVED on a Data Set that carries no date or time attribute at all", () => {
     const ds = buildUndated();
     expect(hasAnyDateOrTime(ds)).toBe(false);
 
@@ -576,7 +576,7 @@ describe("(0028,0303): what the run was permitted to do, not what the input held
     expect(countHeaders(serializeDicom(dataset), TEMPORAL, "CS")).toBe(1);
   });
 
-  it("AC-5: writes UNMODIFIED on the same dateless Data Set when the option is active", () => {
+  it("writes UNMODIFIED on the same dateless Data Set when the option is active", () => {
     // The attribute records the run's permission, so a dateless input under the
     // temporal option says UNMODIFIED: there was nothing to modify and nothing
     // was. A recipient reading it learns that any dates present are real.
@@ -584,7 +584,7 @@ describe("(0028,0303): what the run was permitted to do, not what the input held
     expect(decodedValues(dataset, TEMPORAL)).toStrictEqual(["UNMODIFIED"]);
   });
 
-  it("AC-8: writes MODIFIED on the same dateless Data Set under the modified-dates option", () => {
+  it("writes MODIFIED on the same dateless Data Set under the modified-dates option", () => {
     // 🩺 The attribute records what the run was PERMITTED to do, so a dateless
     // input still gets MODIFIED. Conditioning it on the input carrying a date
     // would make "this study had no dates" and "this run was allowed to keep
@@ -663,7 +663,7 @@ describe("(0028,0303): survives serialize-then-reparse, with no pad in the compa
     expect(el?.rawBytes.toString("latin1")).toBe("UNMODIFIED");
   });
 
-  it("AC-2: MODIFIED compares equal after a round trip, and needs no pad", () => {
+  it("MODIFIED compares equal after a round trip, and needs no pad", () => {
     const { dataset } = deidentify(buildDated(), { retain: [TEMPORAL_MODIFIED_OPTION] });
     const reparsed = parseDicom(serializeDicom(dataset));
     const el = reparsed.get(TEMPORAL);

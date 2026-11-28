@@ -96,6 +96,10 @@ jobs:
   # process wiring: the verb scripts, cosyte-process.config.json, and the direct vitest pin.
   # `check:docs-content` (cosyte-docs-content, @cosyte/script-utils) grades docs-content/ against
   # the docs standard: the sidebar, each page's front matter and kind, and what a sample prints.
+  # `check:docs-reference` (cosyte-docs-reference, @cosyte/process) compares the API reference
+  # committed under docs-content/api/ with a fresh generation from the TSDoc of both entry points.
+  # It fails when a page differs, when an export has no TSDoc summary, or when a TSDoc comment holds
+  # a Markdown heading: regenerate with `pnpm docs:reference` and commit the pages with the change.
   standards:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -112,3 +116,4 @@ jobs:
       - run: pnpm check:catalog
       - run: pnpm check:docs-content
       - run: pnpm check:process
+      - run: pnpm check:docs-reference

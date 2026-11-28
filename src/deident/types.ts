@@ -368,7 +368,7 @@ export interface UnauditableSequenceFinding {
  * value - the record that discharges the audit half of the fail-safe, and the
  * one report surface that is complete at any input size.
  *
- * ## What "enumerated" means here, and what it deliberately does not
+ * **What "enumerated" means here, and what it deliberately does not**
  *
  * A run has enumerated a private value when it **walked it as DICOM Data
  * Elements** and put each of them through the Annex E action table (a private
@@ -388,7 +388,7 @@ export interface UnauditableSequenceFinding {
  * the predicate is **what the run did with the value**, never the VR and never
  * the scanner's reach.
  *
- * ## The cost, stated at its real size
+ * **The cost, stated at its real size**
  *
  * With `RetainSafePrivate` plus a `Profile`, three classes of private value
  * reach the output on something this run enumerated: an instance the run walked
@@ -404,7 +404,7 @@ export interface UnauditableSequenceFinding {
  * however ordinary it looks. Through `0.0.19` such a value was **kept** and
  * disclosed instead; the disclosure said outright that it was not a fix.
  *
- * ## 🩺 The fourth class, which this record never names
+ * **🩺 The fourth class, which this record never names**
  *
  * A private value reaches the output on one more route, and it is the one that
  * rests on no enumeration at all: the **file's own** Private Data Element
@@ -417,7 +417,7 @@ export interface UnauditableSequenceFinding {
  * open: the caller who does not trust the sender leaves `RetainSafePrivate` off,
  * which is the one mitigation §E.3.10 offers.
  *
- * ## Per INSTANCE, never per tag
+ * **Per INSTANCE, never per tag**
  *
  * An entry names one **occurrence**: a tag together with the Data Set it lived
  * in, which `contextPath` identifies (absent means the root Data Set). Private
@@ -425,7 +425,7 @@ export interface UnauditableSequenceFinding {
  * occur several times in one object with different enumerability, and removing
  * one occurrence never removes a sibling one.
  *
- * ## Uncapped, and that is a decision rather than an oversight
+ * **Uncapped, and that is a decision rather than an oversight**
  *
  * Every consumer-controlled **diagnostic** in this package is capped, because a
  * finding emitted per element is amplified by an element count the input
@@ -436,7 +436,7 @@ export interface UnauditableSequenceFinding {
  * here would silently take the guarantee away exactly on the files that need it
  * most. The matching warnings stay bounded; this array does not.
  *
- * ## What it carries, and what that is worth logging
+ * **What it carries, and what that is worth logging**
  *
  * `tag` is composed from four bytes of the source. On a well-formed file it is
  * the sender's own private tag number and carries nothing, but on a file whose
@@ -492,7 +492,7 @@ export interface UnenumerablePrivateRemoval {
  * PS3.5 section 6.2 defines**, so nothing this library did to its bytes counts
  * as decoding a Value Field.
  *
- * ## Why such an element exists at all
+ * **Why such an element exists at all**
  *
  * Under an Explicit VR Transfer Syntax the VR is two bytes the sender wrote, and
  * this parser trusts them (Postel's Law on the read path). The routine way two
@@ -507,7 +507,7 @@ export interface UnenumerablePrivateRemoval {
  * `(0010,0020)` Patient ID in full. It reaches **string** carriers exactly as it
  * reaches binary ones, because the carrier's own VR is not what decides it.
  *
- * ## Why emptying, and why it is not a guess
+ * **Why emptying, and why it is not a guess**
  *
  * PS3.5 2026c section 6.2 requires every VR not yet defined to use the long-form
  * Data Element Structure - "with reserved bytes after the VR and a 32-bit
@@ -528,7 +528,7 @@ export interface UnenumerablePrivateRemoval {
  * and the CP-246 shape - never reaches here. That is the line the sibling
  * `SQ`-with-no-items rule could not draw.
  *
- * ## Why this finding names no tag, when every sibling finding does
+ * **Why this finding names no tag, when every sibling finding does**
  *
  * Because the tag **may be content**, and nothing here can tell. The paragraph
  * above is the whole argument: when an under-declare desynchronized the reader,
@@ -607,7 +607,7 @@ export interface UndefinedVrFinding {
  * One non-modeled `(0002,xxxx)` File Meta element `deidentify()` **dropped**
  * rather than re-emitting into de-identified output.
  *
- * ## Why the drop is unconditional
+ * **Why the drop is unconditional**
  *
  * PS3.15 2026c §E.1.1 requires the File Meta Information of a de-identified
  * DICOM File to "be replaced with a description of the de-identifying
@@ -622,7 +622,7 @@ export interface UndefinedVrFinding {
  * cannot be described, so no Annex E Option and no parse quality changes the
  * outcome.
  *
- * ## Capped record, complete count
+ * **Capped record, complete count**
  *
  * The array is bounded per run (`MAX_FILE_META_DROP_FINDINGS`) because the
  * number of elements a crafted File Meta group can carry is chosen by the input.
@@ -631,7 +631,7 @@ export interface UndefinedVrFinding {
  * complete total at any input size. An array exactly the cap's length means "at
  * least this many"; read the count, not the length.
  *
- * ## What it carries
+ * **What it carries**
  *
  * `tag` and `vr` come off the wire. The File Meta pre-pass stops at the first
  * element whose group is not `0002`, so a tag reaching this record always has
@@ -665,7 +665,7 @@ export interface FileMetaDroppedElement {
  * One Data Element whose Group Number is `0004`, **removed** from de-identified
  * output.
  *
- * ## The rule, and the one object it does not apply to
+ * **The rule, and the one object it does not apply to**
  *
  * PS3.15 2026c §E.1.1: "All Data Elements with a Group Number of 0004 shall be
  * removed from any SOP Instance or DICOM File other than a DICOMDIR File." The
@@ -681,7 +681,7 @@ export interface FileMetaDroppedElement {
  * array is empty and `DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED` says what
  * else the run did not do.
  *
- * ## Every depth, and the removal decides nothing below it
+ * **Every depth, and the removal decides nothing below it**
  *
  * The test runs on each element of each Data Set the run reaches, root and
  * Sequence Item alike, so a `(0004,xxxx)` planted inside an item is removed
@@ -691,14 +691,14 @@ export interface FileMetaDroppedElement {
  * that is itself a Sequence removes its items with it, exactly as a Table E.1-1
  * `X` action does.
  *
- * ## Capped record, complete count
+ * **Capped record, complete count**
  *
  * Bounded per run at `MAX_GROUP_0004_FINDINGS`, on its own counter so a flood of
  * one diagnostic class cannot spend another's budget. The removal itself is not
  * bounded, and {@link DeidentifyReport.group0004RemovalCount} is complete at any
  * input size.
  *
- * ## What it carries
+ * **What it carries**
  *
  * `tag` is composed from four bytes of the source and `contextPath` from four
  * more per segment - the standing exception
@@ -740,7 +740,7 @@ export interface Group0004Removal {
  * One non-private Data Element **removed** because this build's PS3.6 2026d
  * registry does not carry its tag and PS3.15 2026d Table E.1-1 does not list it.
  *
- * ## The rule
+ * **The rule**
  *
  * A Table E.1-1 miss used to mean "keep": an attribute the table does not list
  * went into de-identified output verbatim with a report that said nothing about
@@ -760,14 +760,14 @@ export interface Group0004Removal {
  * group lengths `(gggg,0000)` and every tag Table E.1-1 lists are not decided by
  * this rule.
  *
- * ## What it costs
+ * **What it costs**
  *
  * **A conformant attribute from a PS3.6 edition newer than this build's pin is
  * removed too**, because nothing separates it from an invented one. That is
  * over-redaction and it is deliberate; a caller who needs such an attribute back
  * has no switch for it in this release.
  *
- * ## What it carries, and what it deliberately does not
+ * **What it carries, and what it deliberately does not**
  *
  * **No tag and no VR.** The trigger is "no registry row carries this tag", and
  * four bytes an under-declared length upstream made the reader take as a header
@@ -781,7 +781,7 @@ export interface Group0004Removal {
  * element, never the removed element itself, and carries the caveat every
  * finding's `contextPath` carries: see {@link DeidentifiedAttribute.contextPath}.
  *
- * ## Capped record, complete count
+ * **Capped record, complete count**
  *
  * Bounded per run at `MAX_UNREGISTERED_ELEMENT_FINDINGS`, on its own counter so
  * a flood of one diagnostic class cannot spend another's budget. The removal

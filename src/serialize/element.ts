@@ -63,7 +63,7 @@ const FILE_META_TOO_LONG_MESSAGE =
  * File Meta Information element (any tag `(0002,xxxx)`). The message names which of the two, and
  * nothing else.
  *
- * @throws {@link DicomSerializeError} `VALUE_TOO_LONG_FOR_VR`, always.
+ * @throws {DicomSerializeError} `VALUE_TOO_LONG_FOR_VR`, always.
  *
  * @internal
  */

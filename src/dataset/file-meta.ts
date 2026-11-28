@@ -85,7 +85,7 @@ export interface FileMeta {
    * do not model, preserved in tag order so a round-trip re-emits the File Meta
    * group byte-for-byte. Omitted when the group held only modeled elements.
    *
-   * ## 🛑 The byte-for-byte round trip does NOT hold for `deidentify()` output
+   * **🛑 The byte-for-byte round trip does NOT hold for `deidentify()` output**
    *
    * That promise is about **parse then serialize**, and it is scoped to it
    * deliberately rather than by omission. `deidentify()` rebuilds this group to

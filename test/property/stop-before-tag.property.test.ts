@@ -26,6 +26,7 @@ import {
 } from "../helpers/build-dicom.js";
 import { buildDicomdir, twoPatientRecords, type OffsetSpec } from "../helpers/build-dicomdir.js";
 import { readHeaderFrom } from "../../src/parser/read-header.js";
+import { checkPropertyAtDepth } from "../helpers/property.js";
 
 const IMPLICIT_LE = "1.2.840.10008.1.2";
 const EXPLICIT_LE = "1.2.840.10008.1.2.1";
@@ -225,19 +226,21 @@ const dicomdirArb = fc.record({
 
 describe("stopBeforeTag keeps everything before the stop byte for byte", () => {
   it("matches a full parse's elements before the stop, and its warnings up to it", () => {
-    fc.assert(
+    checkPropertyAtDepth(
+      "matches a full parse's elements before the stop, and its warnings up to it",
       fc.property(shapeArb, fc.constantFrom(...STOPS), (shape, stopTag) => {
         const bytes = buildDicom({ transferSyntax: shape.ts, elements: elementsOf(shape) });
         expectStoppedMatchesFull(bytes, stopTag);
       }),
-      { numRuns: 300 },
+      300,
     );
   });
 
   it("matches a full parse on a DICOMDIR, whose record offsets are checked after the walk", () => {
     // A stop inside group 0004 can fall before the Directory Record Sequence the root offsets
     // name; the stopped parse must not report those offsets against records it never read.
-    fc.assert(
+    checkPropertyAtDepth(
+      "matches a full parse on a DICOMDIR, whose record offsets are checked after the walk",
       fc.property(dicomdirArb, fc.constantFrom(...DICOMDIR_STOPS), (dir, stopTag) => {
         const { bytes } = buildDicomdir({
           transferSyntax: dir.ts,
@@ -248,7 +251,7 @@ describe("stopBeforeTag keeps everything before the stop byte for byte", () => {
         });
         expectStoppedMatchesFull(bytes, stopTag);
       }),
-      { numRuns: 200 },
+      200,
     );
   });
 
