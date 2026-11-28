@@ -1,8 +1,8 @@
 /**
- * Phase 6 capstone - source/vendor profile behaviour end-to-end (D-45).
+ * Source and vendor profile behaviour, end-to-end.
  *
- * Verifies the four acceptance pillars of DICOM-6 against programmatic
- * fixtures (D-38 - no curated `.dcm` files):
+ * Verifies the four acceptance pillars of the profile system against programmatic
+ * fixtures (no curated `.dcm` files):
  *   1. A vendor profile's private-dictionary overlay resolves the Implicit VR
  *      of a private data element from the LIVE creator string (not a block).
  *   2. Selecting a profile NEVER changes a correct decode - unprofiled and
@@ -78,7 +78,7 @@ describe("profile pillar 1: private-dictionary overlay resolves Implicit VR from
     );
   });
 
-  it("degrades to UN with no profile (Phase 2 baseline unchanged)", () => {
+  it("degrades to UN with no profile (the unprofiled baseline is unchanged)", () => {
     const buf = buildPrivateFixture("SIEMENS CSA HEADER");
     const ds = parseDicom(buf);
     const el = elementsOf(ds).get("00291010");

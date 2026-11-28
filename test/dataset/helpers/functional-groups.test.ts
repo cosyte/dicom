@@ -86,7 +86,7 @@ function enhanced(opts: {
   return parseDicom(buildDicom({ transferSyntax: TS_EXPLICIT_LE, elements }));
 }
 
-describe("resolveFrame (§4.4 enhanced multi-frame, Per-Frame-else-Shared)", () => {
+describe("resolveFrame (enhanced multi-frame, Per-Frame-else-Shared)", () => {
   it("resolves geometry macros per-frame, falling back to shared", () => {
     const ds = enhanced({
       numberOfFrames: "2",

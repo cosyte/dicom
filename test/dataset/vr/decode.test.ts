@@ -7,6 +7,7 @@ import type { Tag, VR } from "../../../src/dictionary/types.js";
 import { Element } from "../../../src/dataset/element.js";
 import { Item } from "../../../src/dataset/item.js";
 import { decodeElementValue } from "../../../src/dataset/vr/decode.js";
+import { checkPropertyAtDepth } from "../../helpers/property.js";
 
 function el(
   vr: VR,
@@ -280,7 +281,8 @@ describe("decodeElementValue - linear time on a long run (polynomial backtrackin
 
 describe("decodeElementValue - the rewrite agrees with the shipped patterns", () => {
   it("trims every value of a multi-valued string VR exactly as the shipped regex did", () => {
-    fc.assert(
+    checkPropertyAtDepth(
+      "trims every value of a multi-valued string VR exactly as the shipped regex did",
       fc.property(
         fc.constantFrom<VR>("LO", "CS"),
         fc.array(fc.constantFrom(" ", "a", "b", "\\"), { minLength: 1, maxLength: 24 }),
@@ -290,12 +292,13 @@ describe("decodeElementValue - the rewrite agrees with the shipped patterns", ()
           expect(decodeElementValue(el(vr, ascii(text)))).toMatchObject({ values: expected });
         },
       ),
-      { numRuns: 2_000 },
+      2_000,
     );
   });
 
   it("accepts and refuses exactly the DS literals the shipped grammar did", () => {
-    fc.assert(
+    checkPropertyAtDepth(
+      "accepts and refuses exactly the DS literals the shipped grammar did",
       fc.property(
         fc.array(fc.constantFrom("0", "7", ".", "e", "E", "+", "-", " ", "x", "\\"), {
           minLength: 1,
@@ -307,7 +310,7 @@ describe("decodeElementValue - the rewrite agrees with the shipped patterns", ()
           expect(decodeElementValue(el("DS", ascii(text)))).toMatchObject({ values: expected });
         },
       ),
-      { numRuns: 4_000 },
+      4_000,
     );
   });
 });

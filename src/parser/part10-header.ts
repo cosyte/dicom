@@ -22,7 +22,11 @@ import { missingPreamble } from "./warnings.js";
 
 const DICM_MAGIC = Buffer.from("DICM", "ascii");
 
-/** Result of {@link parsePart10Header}. */
+/**
+ * Result of {@link parsePart10Header}.
+ *
+ * @internal
+ */
 export interface Part10HeaderResult {
   /** Offset where the File Meta group begins (132 with preamble; 0 without). */
   readonly datasetStart: number;

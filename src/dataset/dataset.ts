@@ -3,9 +3,9 @@
  * `parseDicom`.
  *
  * Only `fileMeta` and `warnings` are public data; the element map is held
- * internally and reached through the `get` / `has` / `elements` / `getAll` /
- * `setElement` / `addElement` / `removeElement` / `addItem` / `removeItem`
- * navigation surface.
+ * internally and reached through `get`, `has`, `elements`, and `getAll`. There
+ * are no edit methods: a changed object is a new `Dataset`, as `deidentify`
+ * returns.
  *
  * The `warnings` array is frozen at the constructor boundary (mirrors
  * `@cosyte/hl7` sibling `model/message.ts`) so consumers receive
@@ -369,6 +369,8 @@ export function setDatasetWarnings(ds: Dataset, warnings: readonly DicomParseWar
  * outweighs the parse of a small file. These instances hold the chain. They are built with the
  * field kinds a parse stores (a number or nothing, a string or nothing, an object or nothing), so
  * later instances share their hidden classes rather than branching from them.
+ *
+ * @internal
  */
 export const DATASET_SHAPES: readonly Dataset[] = [
   new Dataset({ warnings: [], elements: new Map() }),

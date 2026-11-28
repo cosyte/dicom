@@ -8,3 +8,6 @@ src/dictionary/generated/
 vendor/
 reports/
 .stryker-tmp/
+
+# Generated, and compared byte for byte with what its generator writes
+docs-content/api/

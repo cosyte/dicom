@@ -1,5 +1,5 @@
 /**
- * `DICOM-OVERDECLARE-SWALLOWS-INTO-VALUE` - an element that over-declares its
+ * An element that over-declares its
  * **own** Value Length swallows the element that follows it into its value,
  * where PS3.15 Table E.1-1 cannot see it.
  *

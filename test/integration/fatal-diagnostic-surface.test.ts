@@ -1,5 +1,5 @@
 /**
- * `DICOM-FATAL-MESSAGE-REGISTRY`: the Tier-3 half of "a diagnostic about a PHI
+ * The fatal message registry: the Tier-3 half of "a diagnostic about a PHI
  * leak is itself a PHI surface".
  *
  * Three things are proved here.
@@ -21,7 +21,7 @@
  *
  * ## 2. The `{ strict: true }` snippet is cut in the frame its offset names
  *
- * Folded in from `#75`, where it was found and disclosed rather than fixed. The
+ * Folded in from `dicom#75`, where it was found and disclosed rather than fixed. The
  * snippet was always cut from the **whole file** while the offset it was cut at
  * moved with the frame, so inside a defined-length Sequence Item the 16 bytes
  * came back from wherever that item-relative number happened to land measured
@@ -30,7 +30,7 @@
  * right reason rather than by luck.
  *
  * **Neither half makes `DicomParseError` safe to log.** `snippet` is still 16 raw
- * source bytes (D-10). What changed is that it is now the bytes at the offset the
+ * source bytes. What changed is that it is now the bytes at the offset the
  * error names, instead of an unrelated element's.
  *
  * @module
@@ -58,7 +58,7 @@ const TS_IMPLICIT_LE = "1.2.840.10008.1.2";
 const TS_DEFLATED = "1.2.840.10008.1.2.1.99";
 
 /**
- * Synthetic and name-bearing. `#55` paid a blocker for a pinning test that was
+ * Synthetic and name-bearing. `dicom#55` paid a blocker for a pinning test that was
  * **vacuous by fixture** - its payload carried no name, so nothing it asserted
  * could have caught the leak it was written for.
  */
@@ -115,7 +115,7 @@ const ITEM_HEADER_BYTES = 8;
  *   typed read, which is why "it is only a number" was never an argument.
  * - **vr**: two bytes as ASCII, in a `VR=` slot.
  * - **byte**: ONE byte as a decimal, in a slot that carries a raw header byte.
- *   Added by the sixth instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`, which this
+ *   Added by the sixth case of a diagnostic that could carry a value from the file, which this
  *   detector could not see for the whole of its previous life:
  *   `DICOM_NONZERO_RESERVED_BYTES` printed the two reserved bytes as
  *   `first byte 78, second byte 32` - two letters of a surname - and nothing
@@ -123,7 +123,7 @@ const ITEM_HEADER_BYTES = 8;
  *   has not cleared it.**
  *
  * **🛑 THE `length` ARM'S 7-DIGIT FLOOR IS GONE, AND ITS REMOVAL IS WHY THE
- * SEVENTH INSTANCE OF `DICOM-DIAGNOSTIC-PHI-RESIDUALS` BECAME VISIBLE.** The
+ * SEVENTH CASE OF A DIAGNOSTIC THAT COULD CARRY A VALUE FROM THE FILE BECAME VISIBLE.** The
  * floor read "a short decimal could collide with a legitimate byte count", and
  * the sentence beside it - "every 4-byte window of a printable-ASCII payload
  * exceeds 1,000,000,000, so nothing in this fixture set is skipped" - was true
@@ -316,7 +316,7 @@ function isRegistryEntry(message: string): boolean {
 /**
  * An `ST` carrier whose Value Length under-declares by `delta`, desynchronizing
  * the reader onto a fabricated header **inside the name**. This is the shape
- * every measured leak came from: `#55`'s, `#64`'s, and all four of this item's.
+ * every measured leak came from: `dicom#55`'s, `dicom#64`'s, and all four of this item's.
  */
 function desynchronized(transferSyntax: string, delta: number): Buffer {
   return buildDicom({
@@ -414,7 +414,7 @@ const DECLARED_ITEM_LENGTH = ITEM_LEN_BYTES.readUInt32LE(0);
  * Length field is {@link ITEM_LEN_BYTES}, with an element inside the Item that
  * over-declares past the Item's end.
  *
- * This is the frame the ninth instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`
+ * This is the frame the ninth case of a diagnostic that could carry a value from the file
  * lives in. `parseSequence` parses a defined-length Item from a **slice**, so
  * inside it `buffer.length` is the Item's own 32-bit declared length, and
  * `ELEMENT_LENGTH_EXCEEDS_BUFFER` rendered `buffer.length - cursor.position`.
@@ -635,7 +635,7 @@ function errorFrom(raw: Buffer, strict = false): DicomParseError {
  * true }` escalation of a Tier-2 warning.
  *
  * The distinction is the scope of this file, and it is not a convenience.
- * `makeEmitter` throws the SAME class for an escalated Tier-2 code (D-35), so a
+ * `makeEmitter` throws the SAME class for an escalated Tier-2 code, so a
  * sweep that did not separate them would be grading `./warnings.ts`'s registry
  * under this item's name - and one of those messages is measured leaking here,
  * `PRE-EXISTING`. See `tierTwoEscalationStillNamesAFabricatedTag` below, which
@@ -686,7 +686,7 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
   });
 
   it("tierTwoEscalationNoLongerNamesAFabricatedTag", () => {
-    // 🩺 CLOSED by `DICOM-DIAGNOSTIC-PHI-RESIDUALS`. Through `0.0.13` this row
+    // 🩺 CLOSED by the diagnostic leak fixes. Through `0.0.13` this row
     // asserted the leak: the same desynchronized read that used to put `"RAIN"`
     // into a Tier-3 message lands on an ODD group, so `resolveImplicitVR` calls
     // the fabricated header a private element and `DICOM_PRIVATE_TAG_NO_CREATOR`
@@ -722,7 +722,7 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
   });
 
   it("bothPrivateTagCodesAreClosed, not just the one that was named", () => {
-    // The trap this slice would otherwise have walked into. `resolveImplicitVR`
+    // The trap this change would otherwise have walked into. `resolveImplicitVR`
     // emits `DICOM_PRIVATE_TAG_NO_CREATOR` and
     // `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR` from the SAME branch on the
     // SAME element, so the fixture above rendered `"IN S"` into both messages on
@@ -756,7 +756,7 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
 
   it("oddLengthValuePaddedNoLongerNamesAFabricatedTagOrLength", () => {
     // 🩺 CLOSED. This is the FIFTH instance the sibling half of
-    // `DICOM-DIAGNOSTIC-PHI-RESIDUALS` measured open and deliberately left,
+    // The diagnostic leak fixes measured open and deliberately left,
     // because closing it needed a package-wide change rather than a rider.
     // Through `0.0.14` this row ASSERTED the leak.
     //
@@ -814,7 +814,7 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
   });
 
   it("nonzeroReservedBytesNoLongerNamesItsTwoRawHeaderBytes", () => {
-    // 🔴 THE SIXTH INSTANCE, FILED NOWHERE BEFORE THIS SLICE AND FOUND ONLY
+    // 🔴 THE SIXTH INSTANCE, FILED NOWHERE BEFORE THIS CHANGE AND FOUND ONLY
     // BECAUSE THE DETECTOR WAS WIDENED BEFORE THE CODE WAS TOUCHED.
     //
     // `DICOM_NONZERO_RESERVED_BYTES` already withheld its tag, and the reason it
@@ -966,7 +966,7 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
     // published on the MODEL. `report.undefinedVrElements[].byteLength` and
     // `report.unauditableSequences[].byteLength` are model fields on the same
     // standing product call as `removedPrivateTags` and `contextPath` - a bound
-    // there empties the field on every well-formed file - so this slice moved
+    // there empties the field on every well-formed file - so this change moved
     // the number off the message and left the fields alone, and says so.
     const fixtures = unauditableFixtures();
     const undefinedVrReport = fixtures["DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE"]?.report;
@@ -1084,7 +1084,7 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
     );
 
     // 🛑 AND WHAT THE DETECTOR CAN AND CANNOT SEE HERE, MEASURED RATHER THAN
-    // ASSUMED. `#92`'s `length-less-item-header` arm subtracts exactly
+    // ASSUMED. `dicom#92`'s `length-less-item-header` arm subtracts exactly
     // {@link ITEM_HEADER_BYTES}, so it catches the shape where the
     // over-declaring element is the Item's first and NOTHING else. The other two
     // shapes are the same leak, on the same fixture, invisible to every arm.
@@ -1114,14 +1114,14 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
 
   it("the deidentify() channel is swept, with the floor off, and the only tags left are PS3.6 rows", () => {
     // 🩺 THE SWEEP THE `parseDicom` ONE ABOVE STATES IT CANNOT DO, AND THE
-    // REASON THIS SLICE EXISTS. Every code these two producers raise travels on
+    // REASON THIS CHANGE EXISTS. Every code these two producers raise travels on
     // `report.warnings` and on nothing else, so no `onWarning` sweep reaches
     // them; the desync family dies at a Tier-3 fatal before `deidentify()` ever
     // runs. Pointed here with the seven-digit floor removed, the detector
-    // returned exactly the two `{n}` slots this slice closed and nothing else.
+    // returned exactly the two `{n}` slots this change closed and nothing else.
     //
     // 🛑 A `tag` HIT WHOSE FOUR BYTES ARE A LITERAL PS3.6 ROW IS OUT OF SCOPE,
-    // BY THE DECISION `#90` RATIFIED, and it is excluded here rather than
+    // BY THE DECISION `dicom#90` RATIFIED, and it is excluded here rather than
     // quietly passing. `renderTag` is a MEMBERSHIP test: a tag PS3.6 carries a
     // literal row for is rendered on every file, deliberately, because refusing
     // it would cost every message its tag while withholding nothing an attacker
@@ -1162,7 +1162,7 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
   });
 
   it("embeddedAttributesHiddenNoLongerCarriesValueBytes", () => {
-    // 🩺 CLOSED by `DICOM-DIAGNOSTIC-PHI-RESIDUALS`. Through `0.0.13`
+    // 🩺 CLOSED by the diagnostic leak fixes. Through `0.0.13`
     // `report.embeddedAttributes[].hidden` listed EVERY tag in the run the
     // scanner found inside a kept carrier's Value Field, and a run needs only
     // ONE actionable attribute to be reported - so a fabricated header sitting
@@ -1418,7 +1418,7 @@ const ITEM_SLICE_STARTS_AT = ITEM_LENGTH_FIELD_AT + 4;
 
 describe("PHI: a byteOffset names the frame it is counted in", () => {
   it("is value-slice inside a defined-length Item, on all three shapes", () => {
-    // 🩺 THE TENTH INSTANCE OF `DICOM-DIAGNOSTIC-PHI-RESIDUALS`. `#93` bound the
+    // 🩺 THE TENTH CASE OF A DIAGNOSTIC THAT COULD CARRY A VALUE FROM THE FILE. `dicom#93` bound the
     // last wire-derived number out of this message and left `err.byteOffset` as
     // its SOLE locator - while that offset is counted from the Item's slice, not
     // from the file. Nothing on `DicomParseError` said so, so the honest reading
@@ -1523,7 +1523,7 @@ describe("PHI: a byteOffset names the frame it is counted in", () => {
     // The origin, searched for over EVERY digit run of the message rather than
     // over a slot this test names, so it cannot pass by looking at the wrong
     // number. The search does not cover `snippet`: that is 16 raw document bytes
-    // rendered as hex and already disclosed as PHI (D-10), not a place this
+    // rendered as hex and already disclosed as PHI, not a place this
     // library publishes anything.
     const { raw } = overDeclareInsideAnItem(24);
     const err = fatalFrom(raw);
@@ -1538,9 +1538,9 @@ describe("PHI: a byteOffset names the frame it is counted in", () => {
     expect(digitRuns(wouldPublish).map(Number)).toContain(ITEM_SLICE_STARTS_AT);
   });
 
-  it("AC-11: the snippet agrees with the frame on every fatal BUT UNSUPPORTED_TRANSFER_SYNTAX", () => {
+  it("the snippet agrees with the frame on every fatal BUT UNSUPPORTED_TRANSFER_SYNTAX", () => {
     // 🛑 A UNIVERSAL ABOUT `snippet` WRITTEN WITHOUT THIS EXCEPTION IS FALSE,
-    // AND A GRADED PASS CAUGHT ONE IN THIS SLICE'S OWN CLASS JSDOC. The claim
+    // AND A GRADED PASS CAUGHT ONE IN THIS CHANGE'S OWN CLASS JSDOC. The claim
     // "the snippet is already cut in the frame `offsetFrame` names, so a
     // consumer that only wants the bytes does not need the frame" reads as a
     // convenience and is a false universal: `unsupportedTransferSyntax` puts
@@ -1657,13 +1657,13 @@ describe("PHI: the {strict:true} snippet is cut in the frame its offset names", 
   });
 
   it("and now SAYS which frame, on the one fixture where the wrong reading is a name", () => {
-    // 🩺 THE TENTH INSTANCE, ON THE HARM. `#80` fixed the snippet so it stopped
+    // 🩺 THE TENTH INSTANCE, ON THE HARM. `dicom#80` fixed the snippet so it stopped
     // returning the root Patient Name at an item-relative offset. It did not fix
     // the OFFSET: `err.byteOffset` still carries that item-relative number, and
     // the row above measures that reading it in the file lands inside
     // `"SMITHSON"`. A consumer who logs the error and then cuts its own buffer
-    // at that number reproduces `#80`'s defect in its own code, and until this
-    // slice nothing on the error warned it not to.
+    // at that number reproduces `dicom#80`'s defect in its own code, and until this
+    // change nothing on the error warned it not to.
     const err = errorFrom(raw, true);
     expect(err.offsetFrame).toBe(OFFSET_FRAMES.VALUE_SLICE);
     expect(err.message).toContain("frame=value-slice");
@@ -1683,8 +1683,8 @@ describe("PHI: the {strict:true} snippet is cut in the frame its offset names", 
   });
 
   it("still carries raw source bytes, and the docs must keep saying so", () => {
-    // The claim this slice does NOT make. `snippet` is 16 unredacted bytes
-    // (D-10); making the frame honest made it MORE certainly the element's own
+    // The claim this change does NOT make. `snippet` is 16 unredacted bytes
+    //; making the frame honest made it MORE certainly the element's own
     // content, not less. A future reader who takes "the frame is fixed" for "the
     // snippet is safe" is the failure this test exists to name.
     const err = errorFrom(raw, true);

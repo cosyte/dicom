@@ -44,7 +44,8 @@
       "js-yaml@>=3.0.0 <3.15.2": "3.15.2",
       "minimatch@>=7.0.0 <11.0.1": "11.0.5",
       "postcss@>=8.0.0 <8.5.23": "8.5.23",
-      "qs@>=6.0.0 <6.16.1": "6.16.1"
+      "qs@>=6.0.0 <6.16.1": "6.16.1",
+      "typedoc>minimatch": "10.2.6"
     }
   },
   "main": "./dist/index.cjs",
@@ -133,6 +134,8 @@
     "check:claude-card": "cosyte-claude-card",
     "check:catalog": "cosyte-catalog",
     "check:process": "cosyte-process check",
+    "check:docs-reference": "cosyte-docs-reference --check",
+    "docs:reference": "cosyte-docs-reference",
     "measure:phi-scan-unread": "tsx scripts/measure-phi-scan-unread.ts",
     "measure:phi-scan-retention": "node scripts/measure-phi-scan-retention.ts",
     "measure:phi-scan-monotonicity": "node scripts/measure-phi-scan-monotonicity.ts",

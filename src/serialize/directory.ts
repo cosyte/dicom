@@ -60,7 +60,11 @@ export interface PlacedElement {
   readonly placements: readonly ItemPlacement[] | undefined;
 }
 
-/** The root tags the rewrite reads, and the only ones `planBody` records. */
+/**
+ * The root tags the rewrite reads, and the only ones `planBody` records.
+ *
+ * @internal
+ */
 export const PLACED_TAGS: ReadonlySet<Tag> = new Set<Tag>([
   DIRECTORY_TAGS.FIRST_ROOT_RECORD,
   DIRECTORY_TAGS.LAST_ROOT_RECORD,
@@ -114,7 +118,7 @@ function readValue(body: Buffer, at: number, littleEndian: boolean): OffsetValue
  * `bodyFileOffset` is the file offset of the body's first byte (the preamble,
  * `DICM` and File Meta group come before it).
  *
- * @throws {@link DicomSerializeError} `DIRECTORY_OFFSET_UNRESOLVED` or
+ * @throws {DicomSerializeError} `DIRECTORY_OFFSET_UNRESOLVED` or
  *   `DIRECTORY_OFFSET_DEFLATED`, before any byte of `body` is changed.
  *
  * @internal

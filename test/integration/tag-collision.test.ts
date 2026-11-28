@@ -1,6 +1,6 @@
 /**
- * `DICOM-TAG-COLLISION-DESTROYS-ELEMENT` - a Data Set that holds one tag twice
- * loses the first element's value at parse time, and until this slice it lost it
+ * The tag collision fix - a Data Set that holds one tag twice
+ * loses the first element's value at parse time, and until this change it lost it
  * in silence.
  *
  * A parsed Data Set is a `Map<Tag, Element>`. `Map.set` on a key the map already
@@ -137,7 +137,7 @@ describe("a Data Set that holds one tag twice", () => {
 
   it("the count follows the file: three collisions on one tag report three times", () => {
     // Not a bound, and deliberately not asserted as one. `ds.warnings` is
-    // uncapped package-wide (#48's disclosed, pre-existing posture), so this
+    // uncapped package-wide (dicom#48's disclosed, pre-existing posture), so this
     // pins the growth rather than a cap.
     const ds = parseDicom(
       buildDicom({
@@ -196,12 +196,12 @@ describe("a Data Set that holds one tag twice", () => {
 describe("the collision an under-declared length produces, which is the ordinary one", () => {
   // An `(FFFE,E000)` Item that declares FEWER bytes than its contents occupy
   // ends early, so the elements the sender encoded as Item content are read as
-  // elements of the ENCLOSING Data Set. #69 closed the private-retention leak
-  // that route opens; the element it lands on top of is what this slice is
+  // elements of the ENCLOSING Data Set. dicom#69 closed the private-retention leak
+  // that route opens; the element it lands on top of is what this change is
   // about. The root's own element is written BEFORE the sequence, so the file's
   // tag ordering is otherwise conformant and the length lie is the only defect.
   //
-  // 🛑 THE TWO SYNTAXES NEED DIFFERENT LIES, and the difference is #69's second
+  // 🛑 THE TWO SYNTAXES NEED DIFFERENT LIES, and the difference is dicom#69's second
   // predicate rather than a fixture detail. Under Explicit VR the item stream is
   // bounded against the buffer, so the SQ's own field and the Item's both give
   // way and the trailing element is read at the root. Under Implicit VR LE the
@@ -251,7 +251,7 @@ describe("the collision an under-declared length produces, which is the ordinary
 
       const lying = parseDicom(ejectFixture(ts, sqDelta, itemDelta));
       expect(collisions(lying)).toBe(1);
-      // The substitution itself, unchanged by this slice: the root now reads the
+      // The substitution itself, unchanged by this change: the root now reads the
       // Item's value. What is new is that the object says so.
       expect(lying.get(PATIENT_ID)?.rawBytes.toString("latin1")).toBe(
         val(SECOND).toString("latin1"),
@@ -278,7 +278,7 @@ describe("the collision an under-declared length produces, which is the ordinary
   );
 
   it("an ejected element carrying the SEQUENCE's own tag replaces the whole sequence, and that is reported too", () => {
-    // The shape #51's pass-4 refuter graded a blocker (F1): the `SQ` element is
+    // The shape dicom#51's pass-4 refuter graded a blocker (F1): the `SQ` element is
     // inserted AFTER its own descent returns, so an element ejected out of it
     // whose tag is the sequence's own tag lands on top of the sequence itself.
     // Everything nested inside it leaves the object at once - `items` goes from
@@ -411,8 +411,8 @@ describe("the diagnostic itself", () => {
     // `tryParseDefinedLengthSQ` roll the parse back: the map that took the
     // collision is discarded, and both values survive in `Element.rawBytes`.
     // `makeEmitter` streams to `onWarning` BEFORE the pop that undoes it (the
-    // pre-existing D-03 ordering), so the two channels disagree. Pinned rather
-    // than described, because this is exactly the disclosure a later slice would
+    // pre-existing ordering), so the two channels disagree. Pinned rather
+    // than described, because this is exactly the disclosure a later change would
     // otherwise have to rediscover.
     const trailing = { tag: "00080060" as const, vr: "CS" as VR, value: val("MR") };
     const buf = buildDicom({
@@ -477,16 +477,16 @@ describe("the diagnostic itself", () => {
     }
   });
 
-  it("🩺 the message names no tag, but the STRICT channel's snippet carries one (D-10, pre-existing)", () => {
+  it("🩺 the message names no tag, but the STRICT channel's snippet carries one (pre-existing)", () => {
     // The sentence this pins is "the MESSAGE names no tag", never "this code
     // cannot surface one". `makeEmitter`'s escalate path builds
     // `DicomParseError.snippet` from 16 raw source bytes at the same offset -
     // the replacing element's header - and renders them as hex, which the
-    // PHI-diagnostic runner structurally cannot match. That is D-10, package-wide
+    // PHI-diagnostic runner structurally cannot match. That is , package-wide
     // and reachable on `0ead071` through other codes - this file does not throw
     // there at all, but the same file without its even-length padding gives the
     // identical bytes via `DICOM_ODD_LENGTH_VALUE_PADDED`, one length byte apart
-    // (`0d` for `0e`). So it is NOT this slice's to fix; it is asserted so the
+    // (`0d` for `0e`). So it is NOT this change's to fix; it is asserted so the
     // guarantee cannot drift into the wider claim.
     //
     // The WHOLE 16 bytes are pinned, not two substrings around the interesting

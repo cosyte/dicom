@@ -1,10 +1,8 @@
 /**
  * Immutability property tests for the parsed `Dataset` model.
  *
- * Phase 2 NOTE - dicom's mutation API (`setElement` / `addElement` /
- * `removeElement` / `addItem` / `removeItem`, copy-on-write returning a NEW
- * document) is a Phase 3 surface and does not exist yet. The two immutability
- * guarantees the model makes TODAY are:
+ * `Dataset` has no mutation API: a changed object is a new one. The two
+ * immutability guarantees the model makes are:
  *
  *   1. `Dataset.warnings` is frozen at the constructor boundary - a mutation
  *      attempt (e.g. `Array.prototype.push`) throws and leaves it unchanged.
@@ -16,8 +14,8 @@
  *      buffer - so mutating the source post-parse never perturbs a parsed
  *      Element (the byte-parser analogue of "the original stays byte-identical").
  *      This is the closest standing invariant to the prompt's copy-on-write
- *      requirement; the full new-document COW lands with the Phase 3 mutation
- *      API and should adopt `immutabilityProperty` directly then.
+ *      requirement. A mutation API, if one is ever added, should adopt
+ *      `immutabilityProperty` directly.
  *
  * Depth and seed come from `COSYTE_PROPERTY_RUNS` and `COSYTE_PROPERTY_SEED`
  * (`test/helpers/property.ts`): 100 cases on a pull request, 10,000 nightly,
@@ -120,7 +118,7 @@ describe("dicom conformance: parsed-model immutability", () => {
     // store, so `.buffer` identity is not a reliable copy-vs-view discriminator.)
     //
     // Scoped to NON-deflated syntaxes: under Deflated Explicit VR LE the view is
-    // over the inflated dataset buffer (D-27), not the on-disk source, so
+    // over the inflated dataset buffer, not the on-disk source, so
     // flipping the source bytes legitimately does not reach it. The
     // copyValues:true detachment test above covers Deflated correctly (copy
     // detaches from whatever buffer it views).

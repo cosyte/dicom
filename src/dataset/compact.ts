@@ -605,6 +605,8 @@ export function tableOf(ctx: ParseContext): CompactTable {
 /**
  * A table kept for the life of the process so V8 keeps this class's hidden classes, and the Dataset
  * and Item shapes kept over it so theirs hold a table too: see `ELEMENT_SHAPES` in `./element.ts`.
+ *
+ * @internal
  */
 export const TABLE_SHAPES: readonly CompactTable[] = (() => {
   const narrow = new CompactTable(false);

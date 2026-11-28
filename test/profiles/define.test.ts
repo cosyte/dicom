@@ -1,5 +1,5 @@
 /**
- * Unit tests for the Phase 6 profile factory (`defineProfile`), the canonical
+ * Unit tests for the profile factory (`defineProfile`), the canonical
  * private-key helpers (`canonicalPrivateKey` / `resolvePrivateTag`), and the
  * `ProfileDefinitionError` failure surface.
  *

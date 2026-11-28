@@ -71,14 +71,7 @@ export function uint32At(buffer: Buffer, at: number, littleEndian: boolean): num
  * orientation. Reads at `position` advance the cursor; reads at an
  * explicit offset (`*At`) do not.
  *
- * @example
- * ```ts
- * import { Buffer } from "node:buffer";
- * import { ByteCursor } from "@cosyte/dicom";
- * const cur = new ByteCursor(Buffer.from([0x10, 0x00, 0x10, 0x00]), true);
- * cur.readUInt16(); // 0x0010 - group
- * cur.readUInt16(); // 0x0010 - element
- * ```
+ * @internal
  */
 export class ByteCursor {
   public readonly buffer: Buffer;
@@ -162,6 +155,8 @@ export class ByteCursor {
  * outweighs the parse of a small file. These instances hold the chain. They are built with the
  * field kinds a parse stores (a number or nothing, a string or nothing, an object or nothing), so
  * later instances share their hidden classes rather than branching from them.
+ *
+ * @internal
  */
 export const BYTE_CURSOR_SHAPES: readonly ByteCursor[] = [
   new ByteCursor(Buffer.alloc(0), true, 0),

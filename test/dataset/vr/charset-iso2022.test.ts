@@ -119,7 +119,7 @@ const eucJp = (bytes: readonly number[]): string =>
   new TextDecoder("euc-jp").decode(Uint8Array.from(bytes));
 const iso2022jp = (bytes: Buffer): string => new TextDecoder("iso-2022-jp").decode(bytes);
 
-describe("AC-1: every escape sequence of PS3.3 Tables C.12-3 and C.12-4 designates its set", () => {
+describe("every escape sequence of PS3.3 Tables C.12-3 and C.12-4 designates its set", () => {
   // One row per escape sequence: the declaring (0008,0005), the value bytes,
   // and the oracle's reading of the character those bytes encode.
   const ROWS: readonly (readonly [string, string, string, () => string])[] = [
@@ -225,7 +225,7 @@ describe("AC-1: every escape sequence of PS3.3 Tables C.12-3 and C.12-4 designat
     ["1B 24 29 41 ISO-IR 58 into G1", "\\ISO 2022 IR 58", "1B 24 29 41 D5 C5", () => "张"],
   ];
 
-  it.each(ROWS)("AC-1: %s", (_row, charset, bytes, oracle) => {
+  it.each(ROWS)("%s", (_row, charset, bytes, oracle) => {
     const expected = oracle();
     // The oracle itself must name one real character, or the row proves nothing.
     expect([...expected]).toHaveLength(1);
@@ -239,8 +239,8 @@ describe("AC-1: every escape sequence of PS3.3 Tables C.12-3 and C.12-4 designat
   });
 });
 
-describe("AC-3: a reset point brings back the Value 1 designations", () => {
-  it("AC-3(a): after a PN ^, G1 is Value 1's ISO-IR 13 again, not KS X 1001", () => {
+describe("a reset point brings back the Value 1 designations", () => {
+  it("after a PN ^, G1 is Value 1's ISO-IR 13 again, not KS X 1001", () => {
     const value = parsed(
       "ISO 2022 IR 13\\ISO 2022 IR 149",
       "PN",
@@ -254,13 +254,13 @@ describe("AC-3: a reset point brings back the Value 1 designations", () => {
     expect(codes(value)).toStrictEqual([]);
   });
 
-  it("AC-3(b): in an LT value a backslash is literal and does not reset", () => {
+  it("in an LT value a backslash is literal and does not reset", () => {
     const value = parsed("\\ISO 2022 IR 149", "LT", hex("1B 24 29 43 C8 AB 5C C8 AB")).value;
     expect(textOf(value)).toBe("홍\\홍");
     expect(codes(value)).toStrictEqual([]);
   });
 
-  it("AC-3(c): in an LT value the bytes after CR LF decode from Value 1", () => {
+  it("in an LT value the bytes after CR LF decode from Value 1", () => {
     const charset = "ISO 2022 IR 100\\ISO 2022 IR 149";
     const bytes = hex("1B 24 29 43 C8 AB 0D 0A C8 AB");
     const expected = `홍\r\n${twin("ISO_IR 100", "C8 AB")}`;
@@ -268,14 +268,14 @@ describe("AC-3: a reset point brings back the Value 1 designations", () => {
     expect(decodeText(bytes, terms(charset))).toBe(expected);
   });
 
-  it("AC-3: after FF the bytes decode from Value 1 too", () => {
+  it("after FF the bytes decode from Value 1 too", () => {
     const charset = "ISO 2022 IR 100\\ISO 2022 IR 149";
     const value = parsed(charset, "UT", hex("1B 24 29 43 C8 AB 0C C8 AB")).value;
     expect(textOf(value)).toBe(`홍\f${twin("ISO_IR 100", "C8 AB")}`);
   });
 
   it.each(["LO", "SH", "UC"] as const)(
-    "AC-3: in %s the backslash value delimiter resets to Value 1",
+    "in %s the backslash value delimiter resets to Value 1",
     (vr) => {
       const charset = "ISO 2022 IR 100\\ISO 2022 IR 149";
       const value = parsed(charset, vr, hex("1B 24 29 43 C8 AB 5C C8 AB")).value;
@@ -284,7 +284,7 @@ describe("AC-3: a reset point brings back the Value 1 designations", () => {
     },
   );
 
-  it("AC-3: in PN the = and \\ delimiters reset to Value 1 as ^ does", () => {
+  it("in PN the = and \\ delimiters reset to Value 1 as ^ does", () => {
     const charset = "ISO 2022 IR 100\\ISO 2022 IR 149";
     const value = parsed(
       charset,
@@ -302,14 +302,14 @@ describe("AC-3: a reset point brings back the Value 1 designations", () => {
     expect(codes(value)).toStrictEqual([]);
   });
 
-  it("AC-3: ST decodes with the text reset rules, like LT", () => {
+  it("ST decodes with the text reset rules, like LT", () => {
     const value = parsed("\\ISO 2022 IR 149", "ST", hex("1B 24 29 43 C8 AB 5C C8 AB")).value;
     expect(textOf(value)).toBe("홍\\홍");
   });
 });
 
-describe("AC-4: in a 94x94 G0 set, 5C, 5E and 3D inside a character are not delimiters", () => {
-  it("AC-4: PN 1B 24 42 49 3D 1B 28 42 is one component group whose family name is one character", () => {
+describe("in a 94x94 G0 set, 5C, 5E and 3D inside a character are not delimiters", () => {
+  it("PN 1B 24 42 49 3D 1B 28 42 is one component group whose family name is one character", () => {
     const bytes = hex("1B 24 42 49 3D 1B 28 42");
     const expected = iso2022jp(bytes);
     expect(expected).toBe("表");
@@ -322,21 +322,21 @@ describe("AC-4: in a 94x94 G0 set, 5C, 5E and 3D inside a character are not deli
     expect(codes(value)).toStrictEqual([]);
   });
 
-  it("AC-4: a PN 5E inside JIS X 0208 24 5E (Example H.3-1's phonetic character) is not a component delimiter", () => {
+  it("a PN 5E inside JIS X 0208 24 5E (Example H.3-1's phonetic character) is not a component delimiter", () => {
     const bytes = hex("1B 24 42 24 5E 1B 28 42");
     const names = namesOf(parsed("\\ISO 2022 IR 87", "PN", bytes).value);
     expect(names[0]?.alphabetic.familyName).toBe(iso2022jp(bytes));
     expect(names[0]?.alphabetic.givenName).toBe("");
   });
 
-  it("AC-4: an LO 5C inside a JIS X 0208 character is not the value delimiter", () => {
+  it("an LO 5C inside a JIS X 0208 character is not the value delimiter", () => {
     const bytes = hex("1B 24 42 30 5C 1B 28 42");
     const value = parsed("\\ISO 2022 IR 87", "LO", bytes).value;
     expect(stringsOf(value)).toStrictEqual([iso2022jp(bytes)]);
     expect(iso2022jp(bytes)).not.toContain("\\");
   });
 
-  it("AC-4: a SPACE between two-byte characters is SPACE, and the GL pair after it is still one character", () => {
+  it("a SPACE between two-byte characters is SPACE, and the GL pair after it is still one character", () => {
     // 0x20 is in no 94-character set, so it reads as SPACE whatever G0 holds
     // (Node's iso-2022-jp decoder refuses it there, so it is no oracle here).
     // 3B 33 and 45 44 are Example H.3-1's two ideographs.
@@ -346,22 +346,22 @@ describe("AC-4: in a 94x94 G0 set, 5C, 5E and 3D inside a character are not deli
   });
 });
 
-describe("AC-5: an escape for a set (0008,0005) does not declare is decoded and flagged", () => {
-  it("AC-5: PN ESC $ B yamada ESC ( B under \\ISO 2022 IR 149 is the family name with the warning", () => {
+describe("an escape for a set (0008,0005) does not declare is decoded and flagged", () => {
+  it("PN ESC $ B yamada ESC ( B under \\ISO 2022 IR 149 is the family name with the warning", () => {
     const value = parsed("\\ISO 2022 IR 149", "PN", hex("1B 24 42 3B 33 45 44 1B 28 42")).value;
     expect(namesOf(value)[0]?.alphabetic.familyName).toBe("山田");
     expect(codes(value)).toStrictEqual(["DICOM_CHARSET_ESCAPE_UNDECLARED"]);
   });
 
-  it("AC-5: an undeclared single-byte G1 escape is decoded in its set and flagged", () => {
+  it("an undeclared single-byte G1 escape is decoded in its set and flagged", () => {
     const value = parsed("\\ISO 2022 IR 87", "LO", hex("1B 2D 41 E9")).value;
     expect(stringsOf(value)).toStrictEqual([twin("ISO_IR 100", "E9")]);
     expect(codes(value)).toStrictEqual(["DICOM_CHARSET_ESCAPE_UNDECLARED"]);
   });
 });
 
-describe("AC-6: bytes no designated set decodes are U+FFFD, never another set's reading", () => {
-  it("AC-6(a): ESC $ ( Q (JIS X 0213, in neither table) and what follows it read as U+FFFD", () => {
+describe("bytes no designated set decodes are U+FFFD, never another set's reading", () => {
+  it("ESC $ ( Q (JIS X 0213, in neither table) and what follows it read as U+FFFD", () => {
     const bytes = hex("1B 24 28 51 30 21");
     const element = parsed("\\ISO 2022 IR 87", "LT", bytes);
     expect(textOf(element.value)).toBe(REPLACEMENT);
@@ -370,7 +370,7 @@ describe("AC-6: bytes no designated set decodes are U+FFFD, never another set's 
     expect(decodeText(bytes, terms("\\ISO 2022 IR 87"))).toBe(REPLACEMENT);
   });
 
-  it("AC-6(b): Example I.2-1 missing its second ESC $ ) C: the given name holds no Hangul or Hanja", () => {
+  it("Example I.2-1 missing its second ESC $ ) C: the given name holds no Hangul or Hanja", () => {
     // PS3.5 Example I.2-1 with the 1B 24 29 43 before D1 CE D4 D7 removed, so
     // those GR bytes arrive in a component where G1 holds no set.
     const bytes = hex(
@@ -391,13 +391,13 @@ describe("AC-6: bytes no designated set decodes are U+FFFD, never another set's 
     expect(element.rawBytes.equals(bytes)).toBe(true);
   });
 
-  it("AC-6(c): a lone E at a character boundary of ISO-IR 87 is U+FFFD after the whole character", () => {
+  it("a lone E at a character boundary of ISO-IR 87 is U+FFFD after the whole character", () => {
     const value = parsed("\\ISO 2022 IR 87", "PN", hex("1B 24 42 3B 33 45 1B 28 42")).value;
     expect(namesOf(value)[0]?.alphabetic.familyName).toBe(`山${REPLACEMENT}`);
     expect(codes(value)).toStrictEqual(["DICOM_CHARSET_BYTES_UNDECODABLE"]);
   });
 
-  it("AC-6: after an unrecognized ESC every byte up to the next recognized escape sequence is U+FFFD, delimiters included", () => {
+  it("after an unrecognized ESC every byte up to the next recognized escape sequence is U+FFFD, delimiters included", () => {
     const value = parsed(
       "\\ISO 2022 IR 87",
       "PN",
@@ -409,7 +409,7 @@ describe("AC-6: bytes no designated set decodes are U+FFFD, never another set's 
     expect(names[0]?.alphabetic.givenName).toBe("");
   });
 
-  it("AC-6: an unrecognized ESC's run also ends at CR, LF or FF, and Value 1 decodes after it", () => {
+  it("an unrecognized ESC's run also ends at CR, LF or FF, and Value 1 decodes after it", () => {
     const bytes = hex("1B 24 28 51 30 21 0D 0A 41");
     expect(decodeText(bytes, terms("\\ISO 2022 IR 87"))).toBe(`${REPLACEMENT}\r\nA`);
     expect(decodeText(hex("1B 24 28 51 30 21 0C 41"), terms("\\ISO 2022 IR 87"))).toBe(
@@ -443,7 +443,7 @@ describe("AC-6: bytes no designated set decodes are U+FFFD, never another set's 
     // One GR byte of a two-byte set with no second GR byte after it.
     ["a lone ISO-IR 149 byte", "\\ISO 2022 IR 149", "1B 24 29 43 C8", undefined],
   ] as const)(
-    "AC-6: a code the designated set does not define is U+FFFD: %s",
+    "a code the designated set does not define is U+FFFD: %s",
     (_name, charset, bytes, supersetLabel) => {
       if (supersetLabel !== undefined) {
         // The runtime's own decoder reads a character here: refusing it is a choice.
@@ -463,7 +463,7 @@ describe("AC-6: bytes no designated set decodes are U+FFFD, never another set's 
     ["ISO-IR 149", "\\ISO 2022 IR 149", [0x1b, 0x24, 0x29, 0x43], 0xa1, 8224],
     ["ISO-IR 58", "\\ISO 2022 IR 58", [0x1b, 0x24, 0x29, 0x41], 0xa1, 7445],
   ] as const)(
-    "AC-6: %s decodes exactly its own repertoire, every other cell is U+FFFD",
+    "%s decodes exactly its own repertoire, every other cell is U+FFFD",
     (_name, charset, escape, base, size) => {
       let decoded = 0;
       for (let row = 0; row < 94; row += 1) {
@@ -478,13 +478,13 @@ describe("AC-6: bytes no designated set decodes are U+FFFD, never another set's 
   );
 });
 
-describe("AC-6: a set this build has no decoder for", () => {
+describe("a set this build has no decoder for", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.resetModules();
   });
 
-  it("AC-6: with no euc-kr decoder in the runtime, KS X 1001 bytes read as U+FFFD with the warning", async () => {
+  it("with no euc-kr decoder in the runtime, KS X 1001 bytes read as U+FFFD with the warning", async () => {
     // A double for the runtime's ICU, which is outside the library: it refuses
     // one label, as a small-ICU Node build does.
     const Real = globalThis.TextDecoder;
@@ -514,8 +514,8 @@ describe("AC-6: a set this build has no decoder for", () => {
   });
 });
 
-describe("AC-7: a line, value or PN component that ends without switching back", () => {
-  it("AC-7(a): an ideographic family name that omits its switch back before ^", () => {
+describe("a line, value or PN component that ends without switching back", () => {
+  it("an ideographic family name that omits its switch back before ^", () => {
     const bytes = Buffer.concat([
       Buffer.from("Yamada^Tarou=", "latin1"),
       hex("1B 24 42 3B 33 45 44 5E 1B 24 42 42 40 4F 3A 1B 28 42"),
@@ -527,27 +527,27 @@ describe("AC-7: a line, value or PN component that ends without switching back",
     expect(codes(value)).toStrictEqual(["DICOM_CHARSET_EXTENSION_NOT_RESET"]);
   });
 
-  it("AC-7(b): 1B 24 42 3B 33 45 44 ending the value", () => {
+  it("1B 24 42 3B 33 45 44 ending the value", () => {
     const value = parsed("\\ISO 2022 IR 87", "PN", hex("1B 24 42 3B 33 45 44")).value;
     expect(namesOf(value)[0]?.alphabetic.familyName).toBe("山田");
     expect(codes(value)).toStrictEqual(["DICOM_CHARSET_EXTENSION_NOT_RESET"]);
   });
 
-  it("AC-7: a lone backslash at a character boundary of ISO-IR 87 ends an LO value, and the next decodes from Value 1", () => {
+  it("a lone backslash at a character boundary of ISO-IR 87 ends an LO value, and the next decodes from Value 1", () => {
     // 5C then ESC: nothing after it could complete a character, so it is the
-    // delimiter. (5C then a GL byte would be half of one, per AC-4.)
+    // delimiter. (5C then a GL byte would be half of one,.)
     const value = parsed("\\ISO 2022 IR 87", "LO", hex("1B 24 42 3B 33 5C 1B 28 42 41")).value;
     expect(stringsOf(value)).toStrictEqual(["山", "A"]);
     expect(codes(value)).toStrictEqual(["DICOM_CHARSET_EXTENSION_NOT_RESET"]);
   });
 
-  it("AC-7: an LT line that ends at CR LF still in ISO-IR 87", () => {
+  it("an LT line that ends at CR LF still in ISO-IR 87", () => {
     const value = parsed("\\ISO 2022 IR 87", "LT", hex("1B 24 42 3B 33 0D 0A 41")).value;
     expect(textOf(value)).toBe("山\r\nA");
     expect(codes(value)).toStrictEqual(["DICOM_CHARSET_EXTENSION_NOT_RESET"]);
   });
 
-  it("AC-7: a G1 left designated at a delimiter is reset silently (Example K.2-1's note)", () => {
+  it("a G1 left designated at a delimiter is reset silently (Example K.2-1's note)", () => {
     const value = parsed("\\ISO 2022 IR 149", "PN", hex("1B 24 29 43 C8 AB 5E 41")).value;
     expect(namesOf(value)[0]?.alphabetic.givenName).toBe("A");
     expect(codes(value)).toStrictEqual([]);
@@ -585,7 +585,7 @@ describe("JIS X 0201 under code extensions: ISO-IR 14 in G0 and ISO-IR 13 in G1"
   );
 });
 
-describe("AC-9: every other (0008,0005) decodes exactly as the pin's single-label path", () => {
+describe("every other (0008,0005) decodes exactly as the pin's single-label path", () => {
   const pin = (bytes: Buffer, t: readonly string[]): string =>
     new TextDecoder(resolveDecoderLabel(t)).decode(bytes);
 
@@ -595,7 +595,7 @@ describe("AC-9: every other (0008,0005) decodes exactly as the pin's single-labe
     ["GB18030\\ISO 2022 IR 149", hex("D5 C5")],
     ["GBK\\ISO 2022 IR 149", hex("D5 C5")],
     ["ISO 2022 IR 87", hex("1B 24 42 3B 33 45 44 1B 28 42")],
-  ] as const)("AC-9: %s", (charset, bytes) => {
+  ] as const)("%s", (charset, bytes) => {
     const t = terms(charset);
     expect(decodeText(bytes, t)).toBe(pin(bytes, t));
     expect(textOf(parsed(charset, "LT", bytes).value)).toBe(pin(bytes, t));

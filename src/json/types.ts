@@ -137,9 +137,10 @@ export interface FromDicomJsonOptions {
   /**
    * The File Meta Information the Data Set is written under; its `transferSyntaxUID` picks the
    * encoding. The JSON Model holds no File Meta, so a round trip passes the source's
-   * `Dataset.fileMeta` back here.
+   * `Dataset.fileMeta` back here. Left out, the Data Set is written under Explicit VR Little
+   * Endian (`1.2.840.10008.1.2.1`) with no other File Meta element.
    */
-  readonly fileMeta: FileMeta;
+  readonly fileMeta?: FileMeta;
   /**
    * How each Sequence and each Item is delimited: `"defined"` (the default) writes explicit
    * lengths, `"undefined"` writes undefined lengths closed by delimitation items. The JSON Model

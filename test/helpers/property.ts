@@ -10,8 +10,10 @@
  *   printed before the property runs, so a run that hangs or dies still names its seed, and a
  *   failure prints the seed and the path again beside fast-check's report.
  *
- * A property passes no case count of its own, so the environment decides the depth of each one.
- * The fuzz targets (`*-fuzz.property.test.ts`) keep their own budget in `_fuzz-config.ts`.
+ * A standard property passes no case count of its own, so the environment decides the depth of each
+ * one. An equivalence check that compares a rewrite with the code it replaced runs through
+ * `checkPropertyAtDepth` instead, at a floor of its own that the environment can only raise. The
+ * fuzz targets (`*-fuzz.property.test.ts`) keep their own budget in `_fuzz-config.ts`.
  */
 
 import { assertProperty, PROPERTY_ENV, resolvePropertyRun } from "@cosyte/test-utils";
@@ -48,4 +50,36 @@ export function propertyRun(name: string): { readonly seed: number; readonly num
 export function checkProperty<Ts>(name: string, property: fc.IProperty<Ts>): void {
   const { seed } = propertyRun(name);
   assertProperty(name, property, { seed });
+}
+
+/**
+ * Run a fast-check property through the shared runner at no fewer than `minimumRuns` cases: the
+ * larger of that floor and `COSYTE_PROPERTY_RUNS` when it is set, so the nightly depth still
+ * raises it and the 100 cases of a mutation run never lower it. The seed is `COSYTE_PROPERTY_SEED`
+ * when set and a fresh one otherwise, printed with the depth before the run, and
+ * `COSYTE_PROPERTY_PATH` replays one case of it.
+ *
+ * @param name - The property's name.
+ * @param property - The property.
+ * @param minimumRuns - The fewest cases the property runs, 100 or more.
+ */
+export function checkPropertyAtDepth<Ts>(
+  name: string,
+  property: fc.IProperty<Ts>,
+  minimumRuns: number,
+): void {
+  const run = resolvePropertyRun({});
+  const fromEnv = process.env[PROPERTY_ENV.runs] === undefined ? 0 : run.numRuns;
+  const numRuns = Math.max(minimumRuns, fromEnv);
+  const seed = run.seed ?? freshSeed();
+  process.stdout.write(
+    `[property] ${name}: ${PROPERTY_ENV.seed}=${String(seed)} ${PROPERTY_ENV.runs}=${String(numRuns)}\n`,
+  );
+  // The environment is already folded in above, so the runner is handed none of its own.
+  assertProperty(
+    name,
+    property,
+    { numRuns, seed, ...(run.path === undefined ? {} : { path: run.path }) },
+    {},
+  );
 }

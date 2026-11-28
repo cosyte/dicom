@@ -1,5 +1,5 @@
 /**
- * S0350-dicom-6 impl-gate finding F4, as a runnable check.
+ * A review finding on the troubleshooting page, as a runnable check.
  *
  * `docs-content/troubleshooting.md` still tells a consumer, in the remedy cell
  * for `DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE`, that "everything else

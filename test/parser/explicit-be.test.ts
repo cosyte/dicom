@@ -1,16 +1,16 @@
 /**
- * Tests for `parseExplicitBE` - Phase 2 plan 02-04 task 3.
+ * Tests for `parseExplicitBE`.
  *
- * Covers TS-03 (`1.2.840.10008.1.2.2`):
+ * Covers Explicit VR BE (`1.2.840.10008.1.2.2`):
  *   - Short-form / long-form happy paths under BE.
- *   - rawBytes preserved on-wire (Phase 2 does NOT swap; Phase 3's lazy
- *     decoders use BE_VR_STRIDE - D-44).
- *   - AT special case (D-23): rawBytes is 4 bytes verbatim (two
+ *   - rawBytes preserved on-wire (the parser does NOT swap; the lazy value
+ *     decoders use BE_VR_STRIDE).
+ *   - AT special case: rawBytes is 4 bytes verbatim (two
  *     independent 2-byte BE swaps at decode time, NOT one 4-byte swap).
- *   - OB / UN never swap (D-24).
- *   - FFFE under BE bug closure (D-25 + PITFALLS §2.3).
- *   - TOL-08 / TOL-07 / DICOM_NONZERO_RESERVED_BYTES under BE.
- *   - CP-246 under BE - STILL uses Implicit-LE inner per D-30.
+ *   - OB / UN never swap.
+ *   - FFFE under BE bug closure.
+ *   - DICOM_NONZERO_RESERVED_BYTES under BE.
+ *   - CP-246 under BE - STILL uses Implicit-LE inner.
  */
 
 import { Buffer } from "node:buffer";
@@ -32,7 +32,7 @@ function elementsOf(ds: Dataset): ReadonlyMap<Tag, Element> {
 
 const TS_EXPLICIT_BE = "1.2.840.10008.1.2.2";
 
-describe("parseExplicitBE - TS-03 short-form happy path", () => {
+describe("parseExplicitBE - Explicit VR BE short-form happy path", () => {
   it("parses (0010,0010) PN under BE", () => {
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_BE,
@@ -47,7 +47,7 @@ describe("parseExplicitBE - TS-03 short-form happy path", () => {
   });
 });
 
-describe("parseExplicitBE - TS-03 long-form (D-22 + D-25)", () => {
+describe("parseExplicitBE - Explicit VR BE long-form", () => {
   it("parses (7FE0,0010) OB with 12-byte long-form BE header", () => {
     const pixel = Buffer.from([0x01, 0x02, 0x03, 0x04]);
     const buf = buildDicom({
@@ -59,12 +59,12 @@ describe("parseExplicitBE - TS-03 long-form (D-22 + D-25)", () => {
     expect(el).toBeDefined();
     expect(el?.vr).toBe("OB");
     expect(el?.length).toBe(4);
-    // OB never swaps (D-24).
+    // OB never swaps.
     expect(el?.rawBytes.equals(pixel)).toBe(true);
   });
 });
 
-describe("parseExplicitBE - numeric rawBytes preserved on-wire (D-23 + D-44)", () => {
+describe("parseExplicitBE - numeric rawBytes preserved on-wire", () => {
   it("US value 0x0005 (LE caller bytes) is stored as on-wire BE bytes 0x05 0x00", () => {
     // Caller passes value bytes in native/LE order: 0x05, 0x00 = 5.
     // The BE encoder swaps to 0x00, 0x05 on-wire.
@@ -75,13 +75,13 @@ describe("parseExplicitBE - numeric rawBytes preserved on-wire (D-23 + D-44)", (
     const ds = parseDicom(buf);
     const el = elementsOf(ds).get("00280010");
     expect(el).toBeDefined();
-    // Phase 2 does NOT swap on read (per CONTEXT D-44); rawBytes is
+    // The parser does NOT swap on read; rawBytes is
     // verbatim on-wire BE bytes.
     expect(el?.rawBytes.equals(Buffer.from([0x00, 0x05]))).toBe(true);
   });
 });
 
-describe("parseExplicitBE - AT special case (D-23)", () => {
+describe("parseExplicitBE - AT special case", () => {
   it("AT value (group, element) tag(0010,0020) - rawBytes is 4 bytes verbatim BE", () => {
     // AT carries a tag value: pass caller-side bytes in LE format
     // (0x10 0x00 0x20 0x00 = (0010,0020) when read LE-pair-wise).
@@ -97,7 +97,7 @@ describe("parseExplicitBE - AT special case (D-23)", () => {
   });
 });
 
-describe("parseExplicitBE - OB never swaps (D-24)", () => {
+describe("parseExplicitBE - OB never swaps", () => {
   it("OB rawBytes is verbatim on-wire (no per-VR swap)", () => {
     const data = Buffer.from([0x01, 0x02, 0x03, 0x04]);
     const buf = buildDicom({
@@ -110,7 +110,7 @@ describe("parseExplicitBE - OB never swaps (D-24)", () => {
   });
 });
 
-describe("parseExplicitBE - UN never swaps (D-24)", () => {
+describe("parseExplicitBE - UN never swaps", () => {
   it("UN rawBytes is verbatim on-wire (no per-VR swap)", () => {
     const data = Buffer.from([0x01, 0x02, 0x03, 0x04]);
     const buf = buildDicom({
@@ -123,7 +123,7 @@ describe("parseExplicitBE - UN never swaps (D-24)", () => {
   });
 });
 
-describe("parseExplicitBE - FFFE under BE (D-25 + PITFALLS §2.3)", () => {
+describe("parseExplicitBE - FFFE under BE", () => {
   it("undefined-length SQ in BE terminates correctly via FFFE,E0DD SeqDelim", () => {
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_BE,
@@ -151,7 +151,7 @@ describe("parseExplicitBE - FFFE under BE (D-25 + PITFALLS §2.3)", () => {
   });
 });
 
-describe("parseExplicitBE - TOL-08 + TOL-07 + DICOM_NONZERO_RESERVED_BYTES under BE", () => {
+describe("parseExplicitBE - DICOM_NONZERO_RESERVED_BYTES under BE", () => {
   it("emits DICOM_VR_MISMATCH when on-wire VR != dict VR", () => {
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_BE,
@@ -173,7 +173,7 @@ describe("parseExplicitBE - TOL-08 + TOL-07 + DICOM_NONZERO_RESERVED_BYTES under
   });
 });
 
-describe("parseExplicitBE - CP-246 under BE (D-30)", () => {
+describe("parseExplicitBE - CP-246 under BE", () => {
   it("UN-undefined-length carrying valid Implicit-LE SQ → STILL uses Implicit-LE inner; promoted to SQ", () => {
     // Inner SQ payload encoded as Implicit-VR-LE bytes: empty defined-length
     // item + SeqDelim (LE byte order - that's the spec for CP-246 inner).
@@ -187,14 +187,14 @@ describe("parseExplicitBE - CP-246 under BE (D-30)", () => {
     seqDelim.writeUInt32LE(0, 4);
     const sqPayload = Buffer.concat([itemHdr, seqDelim]);
 
-    // Hand-build the OUTER UN element header - written BIG-ENDIAN per TS-03.
+    // Hand-build the OUTER UN element header - written BIG-ENDIAN.
     const tag = Buffer.from([0x00, 0x40, 0xa7, 0x30]); // (0040,A730) BE
     const unVr = Buffer.from("UN", "ascii");
     const reserved = Buffer.from([0x00, 0x00]);
     const undefLen = Buffer.from([0xff, 0xff, 0xff, 0xff]);
     const unElement = Buffer.concat([tag, unVr, reserved, undefLen, sqPayload]);
 
-    // File Meta - always Explicit VR LE per FM-01 / D-17.
+    // File Meta - always Explicit VR LE.
     const preamble = Buffer.alloc(128, 0x00);
     const dicm = Buffer.from("DICM", "ascii");
     const fmTsValue = Buffer.from(`${TS_EXPLICIT_BE}\0`, "ascii");

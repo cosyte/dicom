@@ -38,7 +38,7 @@ const SAFE_CREATOR = "ACME SAFE BLOCK";
 const MIXED_CREATOR = "ACME MIXED BLOCK";
 const UNDECLARED_CREATOR = "ACME UNDECLARED";
 const UNSAFE_CREATOR = "ACME UNSAFE BLOCK";
-/** Named by no reservation in the fixture, which is AC-5's fourth malformed Item. */
+/** Named by no reservation in the fixture, which is 's fourth malformed Item. */
 const GHOST_CREATOR = "ACME GHOST BLOCK";
 
 /** Retained-side values: ordinary non-zero-length string scalars, no Private Creator among them. */
@@ -71,7 +71,7 @@ const DECLARATION_NOT_RESOLVED = WARNING_CODES.DICOM_DEIDENT_PRIVATE_DECLARATION
 const RETAIN: DeidentifyOptions = { retain: ["RetainSafePrivate"] };
 
 /**
- * A profile vouching for the block the declaration calls `UNSAFE`, so AC-4 can
+ * A profile vouching for the block the declaration calls `UNSAFE`, so can
  * show the two routes are independent.
  */
 const VOUCHING_PROFILE = defineProfile({
@@ -135,7 +135,7 @@ const WELL_FORMED_ITEMS: readonly BuildDicomSqItem[] = [
   ]),
 ];
 
-/** AC-5's four shapes, each of which resolves to no block of private Data Elements. */
+/** 's four shapes, each of which resolves to no block of private Data Elements. */
 const MALFORMED_ITEMS: readonly BuildDicomSqItem[] = [
   declarationItem([groupReference(PRIVATE_GROUP), creatorReference(SAFE_CREATOR)]),
   declarationItem([
@@ -155,7 +155,7 @@ const MALFORMED_ITEMS: readonly BuildDicomSqItem[] = [
   ]),
 ];
 
-/** AC-4's second case: an Item whose Private Group Reference names an EVEN group. */
+/** 's second case: an Item whose Private Group Reference names an EVEN group. */
 const EVEN_GROUP_ITEMS: readonly BuildDicomSqItem[] = [
   declarationItem([groupReference(0x0010), creatorReference(SAFE_CREATOR), blockStatus("SAFE")]),
 ];
@@ -219,7 +219,7 @@ function run(buf: Buffer, options: DeidentifyOptions): Outcome {
 }
 
 describe("deidentify: the file's own Private Data Element Characteristics Sequence (0008,0300)", () => {
-  it("[AC-1] retains every element of a block declared SAFE, plus its Private Creator, with no caller profile", () => {
+  it("retains every element of a block declared SAFE, plus its Private Creator, with no caller profile", () => {
     const out = run(DECLARED, RETAIN);
 
     expect(out.privateTags.has(SAFE_CREATOR_TAG)).toBe(true);
@@ -233,7 +233,7 @@ describe("deidentify: the file's own Private Data Element Characteristics Sequen
     expect(out.warningCodes).not.toContain(DECLARATION_NOT_RESOLVED);
   });
 
-  it("[AC-2] treats exactly the elements a MIXED block lists in (0008,0304) as known safe", () => {
+  it("treats exactly the elements a MIXED block lists in (0008,0304) as known safe", () => {
     const out = run(DECLARED, RETAIN);
 
     expect(out.privateTags.has(MIXED_CREATOR_TAG)).toBe(true);
@@ -244,7 +244,7 @@ describe("deidentify: the file's own Private Data Element Characteristics Sequen
     expect(out.bytes.includes(ascii(MIXED_UNLISTED_NAME))).toBe(false);
   });
 
-  it("[AC-3] removes a private attribute neither the declaration nor a profile covers, and records it", () => {
+  it("removes a private attribute neither the declaration nor a profile covers, and records it", () => {
     const out = run(DECLARED, RETAIN);
 
     // The SET of private tags in the output, asserted whole so nothing rides along.
@@ -270,7 +270,7 @@ describe("deidentify: the file's own Private Data Element Characteristics Sequen
     expect(out.bytes.includes(ascii(UNSAFE_NAME))).toBe(false);
   });
 
-  it("[AC-4] only ADDS: a profile still vouches for a block the declaration calls UNSAFE", () => {
+  it("only ADDS: a profile still vouches for a block the declaration calls UNSAFE", () => {
     const vouched = run(DECLARED, { retain: ["RetainSafePrivate"], profile: VOUCHING_PROFILE });
     const unvouched = run(DECLARED, RETAIN);
 
@@ -290,7 +290,7 @@ describe("deidentify: the file's own Private Data Element Characteristics Sequen
     expect(vouched.bytes.includes(ascii(UNSAFE_NAME))).toBe(false);
   });
 
-  it("[AC-4] retains nothing on account of an Item whose (0008,0301) names an even group", () => {
+  it("retains nothing on account of an Item whose (0008,0301) names an even group", () => {
     const out = run(EVEN_GROUP, RETAIN);
 
     expect(out.privateTags).toEqual(new Set<string>());
@@ -301,7 +301,7 @@ describe("deidentify: the file's own Private Data Element Characteristics Sequen
     expect(out.bytes.includes(ascii(PATIENT_NAME))).toBe(false);
   });
 
-  it("[AC-5] retains nothing on account of an Item that does not resolve, and discloses each one", () => {
+  it("retains nothing on account of an Item that does not resolve, and discloses each one", () => {
     const out = run(MALFORMED, RETAIN);
 
     expect(out.privateTags).toEqual(new Set<string>());
@@ -327,14 +327,14 @@ describe("deidentify: the file's own Private Data Element Characteristics Sequen
     }
   });
 
-  it("[AC-6] retains no private attribute when the Data Set carries no (0008,0300)", () => {
+  it("retains no private attribute when the Data Set carries no (0008,0300)", () => {
     const out = run(NO_DECLARATION, RETAIN);
 
     expect(out.privateTags).toEqual(new Set<string>());
     expect(out.warningCodes).not.toContain(DECLARATION_NOT_RESOLVED);
   });
 
-  it("[AC-6] retains no private attribute when the Retain Safe Private Option is not active", () => {
+  it("retains no private attribute when the Retain Safe Private Option is not active", () => {
     const out = run(DECLARED, {});
 
     expect(out.privateTags).toEqual(new Set<string>());
@@ -342,7 +342,7 @@ describe("deidentify: the file's own Private Data Element Characteristics Sequen
     expect(out.bytes.includes(ascii(PITCH))).toBe(false);
   });
 
-  it("[AC-1, AC-3] mutation control: every payload these assertions turn on is in the input", () => {
+  it("mutation control: every payload these assertions turn on is in the input", () => {
     const out = run(DECLARED, RETAIN);
 
     // A retention that ignored the declaration would put each of these in the

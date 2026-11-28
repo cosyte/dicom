@@ -195,7 +195,11 @@ export interface ItemPlacement {
   readonly elements: readonly PlacedSpan[];
 }
 
-/** How the writer emits one root Data Element. */
+/**
+ * How the writer emits one root Data Element.
+ *
+ * @internal
+ */
 export interface ElementEmission {
   /**
    * Stands in for the element's `rawBytes` (same representation) when the Data

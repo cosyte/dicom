@@ -1,6 +1,6 @@
 name: Dictionary Regen
 
-# Standalone byte-identical regen gate (D-11, DICT-05).
+# Standalone byte-identical regen gate.
 # Runs `pnpm generate:all && git diff --exit-code src/dictionary/generated/`
 # to ensure the committed generated dictionary + Annex E artifacts stay
 # byte-for-byte equivalent to what the pinned vendor inputs would produce.

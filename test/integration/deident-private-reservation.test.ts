@@ -1,6 +1,6 @@
 /**
- * `DICOM-PRIVATE-CREATOR-RESERVATION-LEAK` - a private value retained on a
- * §7.8.1 block reservation the file does not unambiguously give it.
+ * The private-creator reservation leak - a private value retained on a
+ * PS3.5 §7.8.1 block reservation the file does not unambiguously give it.
  *
  * ## The defect, as it shipped (measured on the published `0.0.8` tarball)
  *
@@ -15,14 +15,14 @@
  * outruns the redaction**, which is the worst shape this class has: a consumer
  * trusting the attestation has no signal at all.
  *
- * Found by `#51`'s pass-6 `conformance-refuter` and measured **identical on
+ * Found by `dicom#51`'s pass-6 `conformance-refuter` and measured **identical on
  * `origin/main`**, so the leak is `PRE-EXISTING` and was never introduced by that
  * branch. It needs the opt-in `RetainSafePrivate` plus a vendor profile.
  *
  * ## What the remedy is, and what it is NOT
  *
  * It is **not a parser bound.** An over-declaring Item and an under-declaring
- * Sequence are byte-identical - `#51` established that three times, and its
+ * Sequence are byte-identical - `dicom#51` established that three times, and its
  * refuter could construct no input-derived predicate separating them. Nothing
  * here changes a reading: the grid reads **0 cells whose READING differs** and
  * **0 cells differing in any PARSE respect** across 83,037 cells.
@@ -44,17 +44,17 @@
  * is the branch available here (`(0008,0307)` is not implemented). So the
  * standard's own default applies and the value goes.
  *
- * ## The EJECT direction, closed by `DICOM-ITEM-EJECT-ROUTE`
+ * ## The EJECT direction, closed by the Item eject route fix
  *
- * `#66` shipped with two routes open, both found by its pass-1
+ * `dicom#66` shipped with two routes open, both found by its pass-1
  * `conformance-refuter` grade and both pinned here as residual tests that
  * asserted the **leaking** behaviour. The **eject** direction - an Item that
  * *under*-declares pushing its trailing elements out into the enclosing Data
- * Set, which `#66` did not narrow - is now closed by `settledBound`, and those two
+ * Set, which `dicom#66` did not narrow - is now closed by `settledBound`, and those two
  * residuals were rewritten to assert the closure. The
  * **private-`SQ` carve-out** (`keepsPrivate` decided before the descent, so a
  * vouched-for private `SQ` was kept verbatim and never walked) is closed too, by
- * `DICOM-PRIVATE-SQ-CARVE-OUT`, and its residual at the bottom of this file was
+ * The private SQ carve-out fix, and its residual at the bottom of this file was
  * rewritten the same way. Read the headline as "these three routes are closed",
  * never as "the class is closed" - `docs-content/limitations.md` is the census,
  * and the undefined-length `UN` whose CP-246 descent was refused is still on it.
@@ -72,12 +72,12 @@
  *
  * ## The direction argument is FALSE and is not restated
  *
- * `#51` asserted in five artifacts that following §7.5.1 is the *fail-safe* half
+ * `dicom#51` asserted in five artifacts that following PS3.5 §7.5.1 is the *fail-safe* half
  * of the ambiguity. It is not: the direction is a property of **where the sender
  * put the Private Creator relative to the disputed bytes**, not of the two
  * readings. Both **absorb** placements are pinned below (`creator in the Item`
  * and `creator at the root`) and both are refused, as is the **eject** placement
- * since `DICOM-ITEM-EJECT-ROUTE`. **That is still not "the ambiguity is safe in
+ * since the Item eject route fix. **That is still not "the ambiguity is safe in
  * one direction"** - each direction was closed by its own measured remedy, and
  * the private-`SQ` carve-out needed a third one on top of both.
  *
@@ -92,7 +92,7 @@
  * reservation was real, so those 20 pay for the guarantee and gain nothing.
  * Retention on files that do **not** contradict themselves is unchanged: 6 -> 6
  * inside an Item, 9 -> 9 at the root, and 0 -> 0 rows kept with no creator in
- * scope. 0 Implicit VR LE cells changed (a free control - that path slices the
+ * scope. 0 Implicit VR LE cells changed (a free control - that path cuts the
  * item stream, so no Item can over-run its sequence).
  *
  * @module
@@ -249,7 +249,7 @@ function bothInItem(ts: string, itemDelta = 0, sqDelta = 0): Buffer {
   });
 }
 
-describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
+describe("the private-creator reservation leak", () => {
   describe("the reproduction: a Private Creator inside an Item's genuine content", () => {
     it.each([
       ["Explicit VR LE", EXPLICIT_LE],
@@ -277,14 +277,14 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       expect(out.parseWarnings).toEqual([]);
     });
 
-    it("the lying file now announces itself, and `#66` still did not rely on that", () => {
+    it("the lying file now announces itself, and `dicom#66` still did not rely on that", () => {
       // 🛑 THIS TEST USED TO ASSERT `parseWarnings` WAS EMPTY, and that was true
-      // when `#66` shipped: nothing about the file announced itself, so
+      // when `dicom#66` shipped: nothing about the file announced itself, so
       // `report.removedPrivateTags` had to be the audit channel and the remedy
-      // had to be structural. `DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ` then added
+      // had to be structural. The unbounded Explicit VR Item read then added
       // `DICOM_ITEM_CROSSES_SEQUENCE_END`, which fires on exactly this shape.
       //
-      // `#66`'s argument is unchanged by that and deliberately so: it reads two
+      // `dicom#66`'s argument is unchanged by that and deliberately so: it reads two
       // fields the parser recorded, never `ds.warnings`. What moved is the
       // operator's visibility, not the remedy.
       const out = run(creatorInItem(EXPLICIT_LE, wireSize(SECRET)));
@@ -293,7 +293,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
     });
   });
 
-  describe("the mirror direction, which the refused `#51` claimed was fail-safe", () => {
+  describe("the mirror direction, which the refused `dicom#51` claimed was fail-safe", () => {
     it.each([
       ["Explicit VR LE", EXPLICIT_LE],
       ["Explicit VR BE", EXPLICIT_BE],
@@ -315,7 +315,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
   /**
    * 🛑 **THESE CONTROLS NOW READ "the reservation was ACCEPTED", NOT "the value
    * ships".** An ordinary vendor scalar a profile vouches for is removed since
-   * `DICOM-DEIDENT-UNENUMERATED-PRIVATE`, because nothing enumerated its value,
+   * The unenumerated private value fix, because nothing enumerated its value,
    * so "the value is in the output" is no longer available as the control for a
    * reservation this rule must not break. The discriminator is
    * `report.unenumerablePrivateRemovals`: a reservation this run REFUSED removes
@@ -575,7 +575,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
   });
 
   /**
-   * `DICOM-ITEM-EJECT-ROUTE`: the mirror direction, closed here.
+   * The Item eject route fix: the mirror direction, closed here.
    *
    * These tests were the **residuals** this file shipped with. They asserted the
    * leaking behaviour so that closing the route would turn them red, and it did;
@@ -594,7 +594,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
         // value in the serialized output, `(0012,0062) = YES`. The creator the
         // sender wrote as Item content lands at the root, where the private data
         // element genuinely is, and vouches for it on a reservation PS3.5 2026c
-        // §7.8.1 scopes to the Item it was written in.
+        // PS3.5 §7.8.1 scopes to the Item it was written in.
         const buf = buildDicom({
           transferSyntax: ts,
           elements: [
@@ -619,11 +619,11 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
         // The stamp stays YES because the redaction it attests to now happens.
         expect(out.identityRemoved).toBe("YES");
 
-        // The posture of the file itself is unchanged by this slice - nothing
+        // The posture of the file itself is unchanged by this change - nothing
         // here touches the parser. Pinned because the item filed for this route
         // described it as silent on every channel including `{ strict: true }`,
-        // which was true when `#66` filed it and is not true now:
-        // `DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ` added the disclosure that
+        // which was true when `dicom#66` filed it and is not true now:
+        // The unbounded Explicit VR Item read added the disclosure that
         // fires on this shape. Do not carry the old sentence forward.
         expect(out.parseWarnings).toEqual(["DICOM_ITEM_CROSSES_SEQUENCE_END"]);
         expect(() => parseDicom(buf, { strict: true })).toThrow(DicomParseError);
@@ -631,7 +631,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
     );
 
     it("Implicit VR LE ejects the same way with NO over-run recorded, which is why it is a second predicate", () => {
-      // 🩺 THE MECHANISM THAT MADE THIS ITS OWN SLICE RATHER THAN A WIDENING OF
+      // 🩺 THE MECHANISM THAT MADE THIS ITS OWN CHANGE RATHER THAN A WIDENING OF
       // THE ABSORB RULE. `itemStreamOverrunsSequence` reads `false` here: the
       // Implicit VR LE path slices the item stream to the sequence's declared
       // Value Length, so `rawBytes.length === length` and nothing over-runs.
@@ -768,10 +768,10 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
         // 🩺 AND IT DESTROYS THE ROOT'S OWN VALUE ON THE WAY IN. The overwrite
         // replaces the reservation's genuine root element with the Item's, at
         // parse time - the `Map<Tag, Element>` substitution already recorded for
-        // `(0010,0020)`, reached here on the private path. `#69` did not fix it
+        // `(0010,0020)`, reached here on the private path. `dicom#69` did not fix it
         // and it is asserted below so it cannot be mistaken for something that
         // remedy handled. **It is no longer SILENT:**
-        // `DICOM-TAG-COLLISION-DESTROYS-ELEMENT` made the parse report it as
+        // The tag collision fix made the parse report it as
         // `DICOM_DUPLICATE_TAG_IN_DATA_SET`, asserted here as well, and the
         // substitution itself is unchanged. Full coverage of the disclosure is
         // in `test/integration/tag-collision.test.ts`.
@@ -861,7 +861,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
     });
 
     it("THE PRICE, pinned: a genuine ROOT reservation written AFTER the sequence is refused too", () => {
-      // 🩺 THE COST OF THIS SLICE, AND IT IS NOT ZERO. Both the creator and its
+      // 🩺 THE COST OF THIS CHANGE, AND IT IS NOT ZERO. Both the creator and its
       // data element are at the root and the reservation is real, but they were
       // read from bytes the file's own contents do not settle the ownership of,
       // so they are refused. Over-removal, in the fail-safe direction, and named
@@ -880,7 +880,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       // `deident-unauditable-sequence.test.ts`, which belongs to a different
       // item). NOT this test, which passes under that variant. Count it over the
       // suite, never over this file.
-      // Re-measured on this tree after `DICOM-PRIVATE-SQ-CARVE-OUT` rewrote two
+      // Re-measured on this tree after the private SQ carve-out fix rewrote two
       // of those five from asserting the leak to asserting the closure: still
       // exactly 5, and still the same five. The figure is quoted per-sha because
       // its base moves - it was taken again rather than reworded.
@@ -912,8 +912,8 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
   });
 
   /**
-   * `DICOM-PRIVATE-SQ-CARVE-OUT`, closed. These two tests asserted the
-   * **leaking** behaviour until this slice; they assert the closure now, and the
+   * The private SQ carve-out fix, closed. These two tests asserted the
+   * **leaking** behaviour until this change; they assert the closure now, and the
    * rewrite is the argument, not a flip.
    *
    * What was live on `0.0.10`: `keepsPrivate` decided before the descent, so a
@@ -934,7 +934,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
    * contained in the top level Data Set or embedded in an Item of a Sequence of
    * Items", which a private carrier is.
    */
-  describe("DICOM-PRIVATE-SQ-CARVE-OUT: the descent runs inside a vouched-for private SQ", () => {
+  describe("the descent runs inside a vouched-for private SQ", () => {
     it("a private element the file pulls INTO a vouched-for private SQ is refused there", () => {
       // `keepsPrivate` decides before `descendSequence` and used to end the
       // matter; `reservationsUsable` is now carried into this carrier's items,
@@ -978,7 +978,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       // shipped. It is NOT silent, and it is not silent now either: an Explicit VR
       // LE defined-length `SQ` whose item over-declares with a trailing root
       // element is exactly `DICOM_ITEM_CROSSES_SEQUENCE_END`'s trigger. The
-      // warning is unchanged by this slice - nothing here touches a reading - so
+      // warning is unchanged by this change - nothing here touches a reading - so
       // it is still the parse-side signal, and the de-identify side no longer
       // contradicts it.
       expect(lying.parseWarnings).toEqual(["DICOM_ITEM_CROSSES_SEQUENCE_END"]);
@@ -1054,14 +1054,14 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
     });
 
     it("THE PRICE, pinned: a nested private block reserved INSIDE the item survives, one reserved only OUTSIDE does not", () => {
-      // 🩺 THE COST OF THIS SLICE. Walking the carrier means PS3.5 §7.8.1's
+      // 🩺 THE COST OF THIS CHANGE. Walking the carrier means PS3.5 §7.8.1's
       // per-Data-Set reservation scope now applies inside it, and items do not
       // inherit the enclosing Data Set's reservations. So a vendor who nests a
       // private element inside a private `SQ` and reserves its block only at the
       // root loses it. That is the standard's rule and not a choice made here,
       // but it is over-removal against what `0.0.10` did, it is named on
       // `report.removedPrivateTags` rather than dropped silently, and it is
-      // pinned so the next slice cannot rediscover it as a surprise.
+      // pinned so the next change cannot rediscover it as a surprise.
       const build = (reserveInsideItem: boolean): Buffer =>
         buildDicom({
           transferSyntax: EXPLICIT_LE,
@@ -1081,7 +1081,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
           ] as never,
         });
 
-      // §7.8.1-conformant: the Item carries its own Private Creator, so the
+      // PS3.5 §7.8.1-conformant: the Item carries its own Private Creator, so the
       // reservation is real inside the Item and the nested element is judged
       // rather than refused. Its value goes for being unenumerable - nothing
       // walked a `SH` scalar - and the record says so from inside the Item.
@@ -1107,7 +1107,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
     });
 
     it("a profile that arrives only at deidentify() no longer leaks the carrier it declared SQ", () => {
-      // 🩺 `DICOM-PRIVATE-SQ-PARSE-VR`, CLOSED. This test asserted the LEAK until
+      // 🩺 The private SQ parse VR fix, CLOSED. This test asserted the LEAK until
       // the slice that closed it; it now asserts the closure, and the row that
       // changed is `unresolved.leaks`.
       //
@@ -1225,7 +1225,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
     });
 
     it("the honest-length carrier surface is a MATRIX, and only a profile-declared SQ empties it", () => {
-      // 🩺 THE SECOND SHAPE OF THE SAME RETAIN ROUTE (pass-1 `F2` of `#77`), and
+      // 🩺 THE SECOND SHAPE OF THE SAME RETAIN ROUTE (pass-1 `F2` of `dicom#77`), and
       // the residual it leaves - measured across the whole surface rather than
       // enumerated in a sentence. Nothing in any cell is malformed: the
       // carrier's Value Length is HONEST and its value is a well-formed
@@ -1239,7 +1239,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       //
       // 🛑 THE AXES ARE NOT SYMMETRIC, AND A GRADED PASS CAUGHT A DRAFT THAT
       // PRETENDED THEY WERE. **Implicit VR LE writes no VR at all** (PS3.5 2026c
-      // §7.1.3), so there is no wire-VR axis there: crossing one in would have
+      // PS3.5 §7.1.3), so there is no wire-VR axis there: crossing one in would have
       // measured a single file four times and billed it as four cells. The
       // Implicit rows vary only the profile, which is the whole point of them,
       // and they say so in their key.
@@ -1255,7 +1255,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       // (so this branch does not answer it) **and** the embedded-attribute
       // scanner cannot read the value (so `keepOrEmpty` does not empty it). That
       // scanner reads string carriers only and decodes tiles in the file's own
-      // encoding. `#78` was refused on exactly this shape of defect, where the
+      // encoding. `dicom#78` was refused on exactly this shape of defect, where the
       // enumeration was the defect and the guard was right; the fixture is the
       // enumeration now, and no artifact carries a list.
       //
@@ -1265,7 +1265,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       // does not need one - refusing retention wherever the profile's declared
       // VR and the parse tree disagree - would drop the vendor value out of every
       // ordinary `UN`-converted private element, which is over-redaction and a
-      // PRODUCT call (`DICOM-DEIDENT-OVER-REDACTION`), not a bug fix. Open,
+      // PRODUCT call, not a bug fix. Open,
       // disclosed and undecided. Do not close a row here by widening the guard.
       const NESTED_NAME = "BOND^JAMES";
       const itemStream = ((): Buffer => {
@@ -1381,7 +1381,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
         expect(cell.rawLength, cell.key).toBe(itemStream.length);
       }
 
-      // The closure (`DICOM-PRIVATE-SQ-PARSE-VR`), now proven on every wire VR
+      // The closure, now proven on every wire VR
       // the Explicit axis can present and on the VR-less Implicit encoding,
       // rather than on the single `OB`/Explicit cell that opened it: a
       // profile-declared `SQ` is emptied to zero bytes and named, every time.
@@ -1410,7 +1410,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       // carriers too, reached by the identical route with the identical
       // options - and the embedded-attribute scanner READ their values and
       // EMPTIED them before the removal rule could be reached. No value of
-      // theirs is in the output either, so they are outside the class this slice
+      // theirs is in the output either, so they are outside the class this change
       // converts, and they keep the code and the outcome they always had. A rule
       // that fired on every cell would measure nothing.
       const scannerCaught = cells.filter(
@@ -1436,7 +1436,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       }
 
       // 🩺 THE EMPTIED SET, AS A MEASURED SET, AND IT IS UNCHANGED BY THIS
-      // SLICE. These ten cells leave an element bearing the tag in the output
+      // CHANGE. These ten cells leave an element bearing the tag in the output
       // carrying a ZERO-LENGTH value: the five the profile declares `SQ`, and
       // the five the embedded-attribute scanner could read and caught. They are
       // NOT removals, and AC4's distinction is exactly that - `present` is still
@@ -1456,8 +1456,8 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
         "decl=UN wire=LO ELE",
       ]);
       for (const cell of emptied) {
-        // No value of theirs reached the output before this slice either, so
-        // none of them is in the removal record: the class this slice converts
+        // No value of theirs reached the output before this change either, so
+        // none of them is in the removal record: the class this change converts
         // is the one that SHIPPED a value.
         expect(cell.removals, cell.key).toEqual([]);
       }
@@ -1527,7 +1527,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       // 🛑 A DIAGNOSTIC ABOUT A PHI LEAK IS ITSELF A PHI SURFACE, and this
       // fixture is name-bearing, so the question is answerable here rather than
       // in prose. No message on any cell may quote the payload, any run of it,
-      // or the byte count the carrier's header declared - `#91` bound that
+      // or the byte count the carrier's header declared - `dicom#91` bound that
       // number out of the two sibling factories and a new one must not reopen
       // it. The tag is a private one, so `renderTag`'s membership test renders
       // `<withheld>` and no element number is published either.
@@ -1551,7 +1551,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       // 🛑 THE MATRIX ABOVE IS SATISFIABLE BY AN ASSERTION EDIT AND THIS TEST IS
       // WHY IT IS NOT SATISFIED BY ONE. It takes the acceptance predicate the
       // matrix applies to each of its twenty converted cells, feeds it the
-      // outcome the package produced BEFORE this slice - the carrier retained,
+      // outcome the package produced BEFORE this change - the carrier retained,
       // its value verbatim in the output, and no removal recorded - and requires
       // that predicate to THROW. If the retention decision is ever reverted, the
       // matrix reds; if the matrix's assertions are ever weakened to something a
@@ -1630,7 +1630,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
     });
 
     it("a FABRICATED header keeps the tag-free diagnostic only when its VR is outside the 34", () => {
-      // 🩺 THE BOUND A GRADED PASS CAUGHT THIS SLICE BREAKING, AND THE HALF OF
+      // 🩺 THE BOUND A GRADED PASS CAUGHT THIS CHANGE BREAKING, AND THE HALF OF
       // IT THAT IS STILL OPEN. `emptyUndefinedVrElement` is the one path in the
       // module that deliberately names NO TAG, because the condition raising it
       // is that the header was fabricated from bytes inside some element's
@@ -1736,7 +1736,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
       // carrier verbatim and shipped the name.
       expect(inside.leaks).toBe(false);
       // The bound DID move, deliberately, and this row records which half moved.
-      // `DICOM-DIAGNOSTIC-PHI-RESIDUALS` made `renderTag` a MEMBERSHIP test, so
+      // The diagnostic leak fixes made `renderTag` a MEMBERSHIP test, so
       // no message renders a tag PS3.6's registry does not carry a literal row
       // for - and `00091001` is private, so no closed table can vouch for it.
       // The REPORT field is untouched: `report.unauditableSequences[].tag` still
@@ -1800,7 +1800,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
 
     it("de-identifying the output again reports no second drop", () => {
       // `deidentify()` is a fixed point on its own output
-      // (`DICOM-DEIDENT-NOT-A-FIXED-POINT`), and that has to include the AUDIT
+      //, and that has to include the AUDIT
       // and not just the bytes: the emptied carrier still satisfies every other
       // conjunct of the new branch, so without the `el.length > 0` test pass two
       // reports a drop where there is nothing left to drop. A report claiming
@@ -1840,7 +1840,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
     });
 
     it("a declared LO the profile vouches for is REMOVED, and emptying stays reserved for a declared SQ", () => {
-      // 🛑 THE ORDINARY VENDOR VALUE, AND THE SIZE OF THIS SLICE IN ONE ROW.
+      // 🛑 THE ORDINARY VENDOR VALUE, AND THE SIZE OF THIS CHANGE IN ONE ROW.
       // `profiles.ge` documents `(0009,xx01)` as `LO`, the file writes `LO`,
       // there is nothing hidden in the value, and it is REMOVED - because
       // nothing enumerated it, and decoding a value under the VR the profile
@@ -1906,7 +1906,7 @@ describe("DICOM-PRIVATE-CREATOR-RESERVATION-LEAK", () => {
   /**
    * Two costs the pass-2 gate found that the priced 20 does not include. Both are
    * over-removal (fail-safe), both are named on `report.removedPrivateTags`, and
-   * both are pinned because a sentence would not survive the next slice that adds
+   * both are pinned because a sentence would not survive the next change that adds
    * a transfer syntax or a second item shape.
    */
   describe("costs outside the priced 20, pinned", () => {
@@ -2051,7 +2051,7 @@ describe("DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE", () => {
     const { dataset, report } = deidentify(ds, { retain: ["RetainSafePrivate"], profile: acme });
 
     // The file is fully conformant: the Value Length is honest on every element,
-    // so the PARSE says nothing. It did not before this slice either, and adding
+    // so the PARSE says nothing. It did not before this change either, and adding
     // a Tier-2 code here would throw under `{ strict: true }` on a conformant
     // file.
     expect(ds.warnings).toEqual([]);
@@ -2084,7 +2084,7 @@ describe("DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE", () => {
     );
 
     // The diagnostic is not itself a PHI surface: no payload, no run of it, and
-    // not the byte count off the carrier's own header (`#91` bound that number
+    // not the byte count off the carrier's own header (`dicom#91` bound that number
     // out of the two sibling factories). The tag is private, so `renderTag`'s
     // membership test publishes `<withheld>` rather than an element number.
     const message =
@@ -2362,7 +2362,7 @@ describe("DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE", () => {
   });
 
   it("removes the same attribute on its own output only once, so the audit is a fixed point too", () => {
-    // `DICOM-DEIDENT-NOT-A-FIXED-POINT` is about the bytes; this is the audit
+    // The fixed-point fix is about the bytes; this is the audit
     // half of it. The carrier is gone after pass one, so pass two has nothing to
     // remove and must say nothing - a record that reproduced itself over an
     // object that no longer holds the attribute would be describing the first
@@ -2414,7 +2414,7 @@ describe("DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE", () => {
   });
 
   it("a sequence whose item stream contradicts its declared length still removes and NAMES, unchanged", () => {
-    // AC13's shape, pinned against this slice rather than by it: the private
+    // AC13's shape, pinned against this change rather than by it: the private
     // element is reached inside a sequence the file does not settle the extent
     // of, so the reservation is refused and the Basic Profile removes it under
     // PS3.15 §E.3.10's other branch. It is named in `removedPrivateTags`, it is

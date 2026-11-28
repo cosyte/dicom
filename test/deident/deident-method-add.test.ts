@@ -1,5 +1,5 @@
 /**
- * `DICOM-FILE-META-DROPS-DUPLICATE`, second half - `deidentify()` **replaced**
+ * The second half of the File Meta duplicate fix: `deidentify()` **replaced**
  * `(0012,0063)` De-identification Method where PS3.15 says it is "inserted in or
  * added to" it.
  *
@@ -93,7 +93,7 @@ function buildWithPriorMethod(prior?: { readonly vr: VR; readonly value: Buffer 
  *
  * 🛑 **THIS HELPER STRIPS TRAILING `[NUL SP]`, SO IT CANNOT SEE A PAD-BYTE
  * DEFECT AND MUST NEVER CARRY A FIXED-POINT ASSERTION.** A row titled for the
- * fixed point asserted through it and shipped `#73`'s growth regression. Use
+ * fixed point asserted through it and shipped an earlier fix's growth regression. Use
  * {@link rawMethod} for anything about length, growth or idempotence.
  */
 function methodOf(ds: Dataset): string {
@@ -236,7 +236,7 @@ describe("(0012,0063) is added to, never replaced", () => {
     expect(method).not.toContain(BACKSLASH);
     // 🩺 AND IT IS NO LONGER SILENT. The replacement is deliberate - the join is
     // a text operation over `5CH`-delimited `LO` values and these are arbitrary
-    // octets - but until `DICOM-LO-LENGTH-AND-SILENT-REPLACE` it happened with
+    // octets - but until the `LO` length fix it happened with
     // `report.warnings` empty, which made this row a test of the loss and not of
     // the disclosure. The full shape, with a name-bearing payload, is in
     // `deident-method-lo-length.test.ts`.
@@ -327,10 +327,10 @@ describe("🩺 the join is bounded, because an unencodable value takes the whole
     // which it reaches only while `prior` carries every value this run would
     // add. A quoted literal of the default stops doing that silently the day the
     // default changes - and it did change, in
-    // `DICOM-LO-LENGTH-AND-SILENT-REPLACE`: the row stayed green through the
+    // the `LO` length fix: the row stayed green through the
     // ceiling branch instead, testing the case next door. That is the same
     // "named for the property, exercised somewhere else" shape that shipped
-    // `#73`'s regression.
+    // the earlier fix's regression.
     const method = methodOf(deidentify(buildWithPriorMethod()).dataset);
     const filler = "F".repeat(65_535 - method.length - 1);
     const prior = `${method}${BACKSLASH}${filler}`;
@@ -372,7 +372,7 @@ describe("🩺 the join is bounded, because an unencodable value takes the whole
 });
 
 /**
- * 🩺 `DICOM-DEIDENT-NOT-A-FIXED-POINT` - the regression `#73` (`287efae`)
+ * 🩺 De-identify not reaching a fixed point: the regression an earlier fix (`287efae`)
  * introduced, found by a fourth graded pass after three `REFUTED` verdicts had
  * already been answered.
  *
@@ -382,7 +382,7 @@ describe("🩺 the join is bounded, because an unencodable value takes the whole
  * pad absorbed the trailing byte, the next parse trimmed it off and the next
  * pass appended the whole method again. Growth ends at the 65,534-byte ceiling,
  * where the guard **replaces the entire prior provenance chain** - the exact
- * loss `#73` existed to prevent, reached from a benign caller string.
+ * loss that fix existed to prevent, reached from a benign caller string.
  *
  * **Every row here asserts RAW BYTES, never through `methodOf`,** and runs at
  * least three passes. Measured on `287efae` in memory: `"ACME Anonymizer v3 "`
@@ -403,7 +403,7 @@ describe("🩺 the join is bounded, because an unencodable value takes the whole
  *
  * PS3.5 2026c Table 6.2-1, `LO` row: "A character string that may be padded with
  * leading and/or trailing spaces." `LO` is `1-n` and that row describes a
- * **Value**, so the trim at the comparison is **per value**; §6.4's "single
+ * **Value**, so the trim at the comparison is **per value**; PS3.5 §6.4's "single
  * padding character … to the end of the Value Field (to the last Value)" is
  * about where the encoder writes its pad, which is why the value WRITTEN is
  * trimmed once, over the field.
@@ -614,10 +614,10 @@ describe("what adding rather than replacing costs, disclosed", () => {
   });
 
   it("🩺 and the retention is REPORTED, so the stamp does not outrun the redaction", () => {
-    // The second half of `DICOM-DEIDENT-NOT-A-FIXED-POINT`. On `287efae` the
+    // The second half of the fixed-point fix. On `287efae` the
     // name above reached output stamped `(0012,0062) = YES` with
     // `report.warnings` EMPTY and `report.retained` `[]` - an audit reading as a
-    // scrub it did not perform, which is the failure `#66` and `#69` were each
+    // scrub it did not perform, which is the failure two earlier fixes were each
     // opened for. Nothing about the retention changes; the silence does.
     const abused = `Anonymized by hand: removed ${PATIENT}`;
     expect(abused).toContain("SMITHSON");

@@ -1,6 +1,6 @@
 /**
  * Dose Calculation Model Name (3004,007F), the attribute PS3.6 and PS3.15 2026d add:
- * AC-2, AC-3 and AC-5 to AC-8.
+ * , and to .
  *
  * Until the 2026d re-pin neither the dictionary nor Table E.1-1 carried this tag, so
  * `annexE()` returned `undefined` and `deidentify()` kept the value verbatim under
@@ -12,8 +12,8 @@
  * carrying an invented person's name, because a PHI test whose payload names nobody
  * proves nothing, and it is spelled without a `^` so it is not a PN-shaped value.
  *
- * Tiers (`standards-conformance` S4): AC-2, AC-3 and AC-5 to AC-8 are Tier 1, a
- * spec-clean object read and de-identified; the serialized half of AC-5 is Tier 3.
+ * Tiers (`standards-conformance` S4): , and to are Tier 1, a
+ * spec-clean object read and de-identified; the serialized half of is Tier 3.
  */
 
 import { Buffer } from "node:buffer";
@@ -37,9 +37,9 @@ const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
 const TS_IMPLICIT_LE = "1.2.840.10008.1.2";
 
 const DOSE_MODEL: Tag = "3004007F";
-/** Study Description, the reference Table E.1-1 row for AC-7: Basic X, Clean Descriptors C. */
+/** Study Description, the reference Table E.1-1 row for : Basic X, Clean Descriptors C. */
 const STUDY_DESCRIPTION: Tag = "00081030";
-/** Manufacturer, which Table E.1-1 does not list: the AC-5 mutation control. */
+/** Manufacturer, which Table E.1-1 does not list: the mutation control. */
 const UNLISTED: Tag = "00080070";
 /** Referenced RT Plan Sequence and Referenced Structure Set Sequence, both unlisted. */
 const OUTER_SQ: Tag = "300C0002";
@@ -113,7 +113,7 @@ function legalCombinations(): DeidentifyOption[][] {
 }
 
 describe("Dose Calculation Model Name (3004,007F) under the Basic Profile", () => {
-  it("AC-2: removes it", () => {
+  it("removes it", () => {
     expect(annexE(DOSE_MODEL)?.basicProfile).toBe("X");
     const { dataset } = deidentify(buildFixture());
     expect(dataset.has(DOSE_MODEL)).toBe(false);
@@ -121,7 +121,7 @@ describe("Dose Calculation Model Name (3004,007F) under the Basic Profile", () =
 });
 
 describe("Dose Calculation Model Name (3004,007F) under Clean Descriptors", () => {
-  it("AC-3: applies the C action Table E.1-1 assigns it under that Option", () => {
+  it("applies the C action Table E.1-1 assigns it under that Option", () => {
     expect(annexE(DOSE_MODEL)?.optionSet.CleanDescriptors).toBe("C");
     const { dataset } = deidentify(buildFixture(), { retain: ["CleanDescriptors"] });
     expect(dataset.has(DOSE_MODEL)).toBe(true);
@@ -129,7 +129,7 @@ describe("Dose Calculation Model Name (3004,007F) under Clean Descriptors", () =
   });
 });
 
-describe("the audit and the serialized output (AC-5)", () => {
+describe("the audit and the serialized output", () => {
   const cases = [
     { label: "Basic Profile", retain: [] as DeidentifyOption[], action: "X", applied: "removed" },
     {
@@ -141,7 +141,7 @@ describe("the audit and the serialized output (AC-5)", () => {
   ] as const;
 
   for (const c of cases) {
-    it(`AC-5: under ${c.label}, audits ${c.action} ${c.applied} and serializes none of the name`, () => {
+    it(`under ${c.label}, audits ${c.action} ${c.applied} and serializes none of the name`, () => {
       const { dataset, report } = deidentify(buildFixture(), { retain: [...c.retain] });
       expect(auditsFor(report.attributes, DOSE_MODEL)).toEqual([
         {
@@ -158,7 +158,7 @@ describe("the audit and the serialized output (AC-5)", () => {
     });
   }
 
-  it("AC-5: the mutation control, the same value under an unlisted tag, is found in the output", () => {
+  it("the mutation control, the same value under an unlisted tag, is found in the output", () => {
     // Proves the absence assertion above can go red: the serializer and the byte
     // search are the same, only the tag differs, and a tag Table E.1-1 does not
     // list is kept.
@@ -173,7 +173,7 @@ describe("the audit and the serialized output (AC-5)", () => {
   });
 });
 
-describe("inside Sequence Items (AC-6)", () => {
+describe("inside Sequence Items", () => {
   const cases = [
     { label: "Basic Profile", retain: [] as DeidentifyOption[], action: "X", applied: "removed" },
     {
@@ -185,7 +185,7 @@ describe("inside Sequence Items (AC-6)", () => {
   ] as const;
 
   for (const c of cases) {
-    it(`AC-6: under ${c.label}, acts on it one and two Items down as at the top level`, () => {
+    it(`under ${c.label}, acts on it one and two Items down as at the top level`, () => {
       expect(annexE(OUTER_SQ)).toBeUndefined();
       expect(annexE(INNER_SQ)).toBeUndefined();
       const { dataset, report } = deidentify(buildFixture({ nested: true }), {
@@ -221,8 +221,8 @@ describe("inside Sequence Items (AC-6)", () => {
   }
 });
 
-describe("every legal combination of Options (AC-7)", () => {
-  it("AC-7: removes it without CleanDescriptors, and treats it as Study Description with it", () => {
+describe("every legal combination of Options", () => {
+  it("removes it without CleanDescriptors, and treats it as Study Description with it", () => {
     const combos = legalCombinations();
     // 2^10 subsets, less the 2^8 that carry both E.3.6 temporal Options.
     expect(combos).toHaveLength(768);
@@ -255,8 +255,8 @@ describe("every legal combination of Options (AC-7)", () => {
   });
 });
 
-describe("parsing under Implicit VR Little Endian (AC-8)", () => {
-  it("AC-8: gives (3004,007F) VR LO from the dictionary", () => {
+describe("parsing under Implicit VR Little Endian", () => {
+  it("gives (3004,007F) VR LO from the dictionary", () => {
     const ds = buildFixture({ transferSyntax: TS_IMPLICIT_LE });
     const el = ds.get(DOSE_MODEL);
     expect(el).toBeDefined();

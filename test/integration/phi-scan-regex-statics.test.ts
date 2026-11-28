@@ -4,8 +4,8 @@
  * V8 keeps the last successful match on the `RegExp` constructor: `RegExp.input` (`$_`) is the
  * whole subject string and `RegExp.lastMatch` (`$&`) is the matched text verbatim, with
  * `leftContext`, `rightContext`, `lastParen` and `$1` to `$9` beside them. They are ordinary
- * readable properties of a global object. `DICOM-RESIDUALS` bounded what a hit line PRINTS and
- * what a hit HOLDS; this is the third carrier of the same payload, and `scripts/phi-scan.ts` now
+ * readable properties of a global object. Earlier fixes bounded what a hit line PRINTS and what a
+ * hit HOLDS; this is the third carrier of the same payload, and `scripts/phi-scan.ts` now
  * hands a target's bytes to no regex at all.
  *
  * 🛑 WHY THIS IS A SUBPROCESS AND NOT AN ASSERTION IN THIS FILE. The statics are overwritten by

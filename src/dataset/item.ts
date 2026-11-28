@@ -82,6 +82,8 @@ export class Item extends Dataset {
  * outweighs the parse of a small file. These instances hold the chain. They are built with the
  * field kinds a parse stores (a number or nothing, a string or nothing, an object or nothing), so
  * later instances share their hidden classes rather than branching from them.
+ *
+ * @internal
  */
 export const ITEM_SHAPES: readonly Item[] = [
   new Item({ warnings: [], elements: new Map(), index: 0 }),

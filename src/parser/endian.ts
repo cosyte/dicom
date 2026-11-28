@@ -27,13 +27,7 @@ import type { VR } from "../dictionary/types.js";
  * **`OB` / `UN`**: byte streams; never swapped under any TS
  * including Explicit VR BE.
  *
- * @example
- * ```ts
- * import { BE_VR_STRIDE } from "@cosyte/dicom";
- * BE_VR_STRIDE.OB; // 0 - never swap
- * BE_VR_STRIDE.AT; // 2 - group then element
- * BE_VR_STRIDE.FD; // 8 - 64-bit float
- * ```
+ * @internal
  */
 export const BE_VR_STRIDE: Readonly<Record<VR, 0 | 2 | 4 | 8>> = Object.freeze({
   // 2-byte swaps

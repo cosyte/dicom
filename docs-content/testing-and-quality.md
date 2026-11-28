@@ -26,7 +26,7 @@ what leaves the library, not only that the parser did not throw.
 | Unit and integration tests | each documented behavior and failure path of the parser, the dataset model, the value decoders, the writer, the profiles and `deidentify`, run against the source | an input nobody thought to write down |
 | Synthetic corpora | a regression on a known object shape: synthetic Part 10 objects under every supported transfer syntax, every fatal input, nested and undefined-length Sequences, DICOMDIR files, encapsulated and JPIP Referenced objects | behavior on real vendor files, since every fixture is synthetic |
 | Output equivalence | any change to what a caller can observe, for a fixed corpus: each read, decoded value, warning, view, write and de-identification is hashed and compared with digests captured from an earlier commit | a wrong output that was already wrong when the digests were captured |
-| Property-based tests | a whole class of input breaking a stated rule: a parsed object writes back and reads the same, lenient reading never throws except on a fatal code, the model cannot be mutated, and a parse stopped before a tag matches the whole parse up to it | a rule nobody stated; a case outside the cases run; a gap in what the generators produce |
+| Property-based tests | a whole class of input breaking a stated rule: a parsed object writes back and reads the same, writing back a written file changes no byte, lenient reading never throws except on a fatal code, the model cannot be mutated, and a parse stopped before a tag matches the whole parse up to it | a rule nobody stated; a case outside the cases run; a gap in what the generators produce |
 | Differential testing | a value we read differently from another implementation: a synthetic corpus is read with `parseDicom` and with dcmjs, and every tag, VR and value is compared at every depth | a defect both implementations share |
 | Fuzzing | a crash or an unexpected throw on hostile input: arbitrary bytes, and synthetic objects with lengths, tags and values mutated | a wrong but plausible result, unless a property states what right is |
 | Coverage gate | code no test runs: lines, branches, functions and statements, held at a floor that only rises | a test that runs code without checking what it returns |
@@ -41,7 +41,9 @@ what leaves the library, not only that the parser did not throw.
 
 - **Unit tests, corpora, output equivalence, properties and doc samples** run in one Vitest suite
   on every pull request and on `main`, on Node.js 22, 24 and 26. Each property runs 100 cases on a
-  pull request and 10,000 in a nightly run, from a new seed each time. Each prints its seed before
+  pull request and 10,000 in a nightly run, from a new seed each time. A check that compares a
+  rewritten function with the code it replaced runs more cases than that on every run, its own
+  count, which the nightly depth raises and nothing lowers. Each prints its seed before
   it runs, and a failure prints the seed and path that replay it (`COSYTE_PROPERTY_SEED`,
   `COSYTE_PROPERTY_PATH`). The properties draw from the generators we publish at
   `@cosyte/dicom/arbitraries`; [Property-test your code](./property-testing.md) shows them on code

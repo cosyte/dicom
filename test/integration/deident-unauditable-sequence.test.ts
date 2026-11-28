@@ -1,5 +1,5 @@
 /**
- * `DICOM-DEIDENT-RAWBYTES-PASSTHROUGH` - `deidentify()` must not pass the raw
+ * The raw-bytes passthrough fix - `deidentify()` must not pass the raw
  * bytes of a sequence it could not walk into de-identified output.
  *
  * ## The defect
@@ -8,7 +8,7 @@
  * and the defined-length value turns out not to be a valid `(FFFE,E000)` item
  * stream, it refuses the descent: `Element.items` stays `undefined`, the
  * declared span stays on `Element.rawBytes`, and `DICOM_SQ_NOT_DESCENDED` goes
- * on `Dataset.warnings` (`DICOM-IMPLICIT-SQ-NOT-DESCENDED`, `#50`). That is the
+ * on `Dataset.warnings` (the Implicit VR SQ descent fix, `dicom#50`). That is the
  * right posture for a parser.
  *
  * `deidentify()` then kept those bytes verbatim, because it recurses into a
@@ -17,7 +17,7 @@
  * straight into `serializeDicom()` output, next to the
  * `(0012,0062) PatientIdentityRemoved = YES` this function inserts, with a
  * report that named it nowhere. Measured on `scripts/measure-sq-bound-grid.ts`
- * at `d1031f5` (published `0.0.6` plus `#53`): **1,155 of the 6,348 cells that
+ * at `d1031f5` (published `0.0.6` plus `dicom#53`): **1,155 of the 6,348 cells that
  * parse**, every one of them Implicit VR LE and carrying exactly
  * `["DICOM_SQ_NOT_DESCENDED"]`.
  *
@@ -83,7 +83,7 @@ const ITEM_VALUE = "ORIGINAL";
  * `(0008,1115)` Referenced Series Sequence: `SQ` in PS3.6 with **no** Table
  * E.1-1 row, so `deidentify()` resolves "keep" for the carrier itself. That is
  * what makes it the sharp case - nothing about the sequence is redacted, and
- * before this slice nothing inside it was either.
+ * before this change nothing inside it was either.
  */
 const CARRIER = "00081115" as const;
 
@@ -141,7 +141,7 @@ function fixture(transferSyntax: string, sqDelta: number, carrier: string = CARR
 /**
  * A carrier whose value is **maximally adversarial for a scan**: filled with the
  * two bytes `FE FF`, so *every even offset* in it reads as group `0xFFFE` and
- * would be a tiling candidate. That is precisely the shape `#53`'s first round
+ * would be a tiling candidate. That is precisely the shape `dicom#53`'s first round
  * was refused on, where re-scanning the tail once per candidate turned 256 KiB
  * into 22.5 s inside `deidentify()` - and its cost test was green because its
  * fixture produced exactly **one** candidate. The property is asserted below
@@ -162,12 +162,12 @@ function adversarialCarrier(size: number): Buffer {
   });
 }
 
-describe("DICOM-DEIDENT-RAWBYTES-PASSTHROUGH: an undescended sequence is not passed through", () => {
+describe("an undescended sequence is not passed through", () => {
   it("the parse this all rests on: the descent is refused and the identifier is inside the span", () => {
     // Not a behaviour claim about the remedy - a check that the fixture builds
     // the situation at all. If this ever goes green for the wrong reason (the
     // sequence descends, or nothing is swallowed) every assertion below becomes
-    // vacuous, which is the failure mode `#50`'s "explicit-length SQ also
+    // vacuous, which is the failure mode `dicom#50`'s "explicit-length SQ also
     // descends" shipped with.
     const ds = parseDicom(fixture(IMPLICIT_LE, 18));
     expect(ds.warnings.map((w) => w.code)).toEqual([WARNING_CODES.DICOM_SQ_NOT_DESCENDED]);
@@ -277,7 +277,7 @@ describe("DICOM-DEIDENT-RAWBYTES-PASSTHROUGH: an undescended sequence is not pas
   });
 
   it("a listed sequence kept by a Retain option is emptied, and the audit says emptied", () => {
-    // Before this slice `descendSequence` rebuilt the element from
+    // Before this change `descendSequence` rebuilt the element from
     // `el.items ?? []`, so the content vanished anyway - while the report said
     // `kept`. A report claiming an attribute was retained when its content was
     // dropped is the same class of false audit as one claiming a scrub it did
@@ -292,7 +292,7 @@ describe("DICOM-DEIDENT-RAWBYTES-PASSTHROUGH: an undescended sequence is not pas
   });
 });
 
-describe("DICOM-DEIDENT-RAWBYTES-PASSTHROUGH: a sequence a Clean option keeps", () => {
+describe("a sequence a Clean option keeps", () => {
   it("a listed sequence cleaned by a Clean option is emptied, and the audit says emptied", () => {
     // `(0008,1084)` Admitting Diagnoses Code Sequence is `X`, and `C` under
     // CleanDescriptors. Cleaning means walking the Items, which this run cannot do.
@@ -311,7 +311,7 @@ describe("DICOM-DEIDENT-RAWBYTES-PASSTHROUGH: a sequence a Clean option keeps", 
   });
 });
 
-describe("DICOM-DEIDENT-RAWBYTES-PASSTHROUGH: the no-loss controls", () => {
+describe("the no-loss controls", () => {
   it("a well-formed defined-length sequence is descended and kept, not emptied", () => {
     // The whole risk of this remedy is over-removal, so this is the control that
     // has to stay green: a healthy file must be untouched by it.
@@ -381,7 +381,7 @@ describe("DICOM-DEIDENT-RAWBYTES-PASSTHROUGH: the no-loss controls", () => {
   it("is inert on a well-formed Explicit VR LE file", () => {
     // The Explicit VR path reads a defined-length SQ in place, so nothing is
     // ever refused there and this remedy has nothing to act on. (That path has
-    // its own open defect, `DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ`; this slice
+    // its own open defect, the unbounded Explicit VR Item read; this change
     // neither fixes nor touches it.)
     const ds = parseDicom(fixture(EXPLICIT_LE, 0));
     expect(ds.get(CARRIER)?.items).toHaveLength(1);
@@ -391,15 +391,15 @@ describe("DICOM-DEIDENT-RAWBYTES-PASSTHROUGH: the no-loss controls", () => {
   });
 });
 
-describe("DICOM-PRIVATE-SQ-CARVE-OUT: the rule reaches a vouched-for private SQ too", () => {
+describe("the rule reaches a vouched-for private SQ too", () => {
   it("🩺 a private SQ vouched for by RetainSafePrivate is emptied when its items cannot be walked", () => {
-    // This test asserted the LEAK until `DICOM-PRIVATE-SQ-CARVE-OUT`. On
+    // This test asserted the LEAK until the private SQ carve-out fix. On
     // `0.0.10` `keepsPrivate` decided before this rule was consulted, so a
     // profile naming the element by creator and tag kept its bytes unaudited,
     // `report.unauditableSequences` read `[]`, and the payload went into
     // de-identified output whole.
     //
-    // The vouching is still the profile's to give, and this slice does not
+    // The vouching is still the profile's to give, and this change does not
     // second-guess it with a content test. What it withdraws is the *implication*
     // that vouching for a private attribute also vouches for whatever Data Set
     // the sender encoded inside it. PS3.15 2026c §E.3.10's licence is for
@@ -470,9 +470,9 @@ describe("DICOM-PRIVATE-SQ-CARVE-OUT: the rule reaches a vouched-for private SQ 
   });
 });
 
-describe("DICOM-DEIDENT-RAWBYTES-PASSTHROUGH: cost, on a fixture that can actually blow up", () => {
+describe("cost, on a fixture that can actually blow up", () => {
   it("the cost fixture is maximally adversarial: EVERY even offset is a candidate", () => {
-    // `#53` shipped a cost claim backed by a fixture that produced exactly one
+    // `dicom#53` shipped a cost claim backed by a fixture that produced exactly one
     // candidate offset, which is why it was green while the code was quadratic.
     // This asserts the property that makes the two timing tests below mean
     // something, so the fixture cannot silently stop being the worst case.
@@ -502,7 +502,7 @@ describe("DICOM-DEIDENT-RAWBYTES-PASSTHROUGH: cost, on a fixture that can actual
   });
 
   it("the diagnostic is bounded by the element count, not by the value length", () => {
-    // The discipline `#48` established, and the one `#53`'s own
+    // The discipline `dicom#48` established, and the one `dicom#53`'s own
     // `embeddedAttributes[].hidden` missed: a consumer-controlled diagnostic
     // must not grow with attacker-chosen input. One un-auditable element yields
     // exactly one finding whether its value is 42 bytes or a megabyte.
@@ -514,8 +514,8 @@ describe("DICOM-DEIDENT-RAWBYTES-PASSTHROUGH: cost, on a fixture that can actual
   });
 
   it("caps the RECORD across the run, and never the removal", () => {
-    // `#48` bound every consumer-controlled diagnostic in this package, and
-    // `#53` then shipped a new unbounded one (`embeddedAttributes[].hidden`).
+    // `dicom#48` bound every consumer-controlled diagnostic in this package, and
+    // `dicom#53` then shipped a new unbounded one (`embeddedAttributes[].hidden`).
     // The element COUNT is attacker-chosen just as a value's length is, so a
     // finding-per-element is an amplification even though each finding is small.
     //

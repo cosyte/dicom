@@ -1,8 +1,8 @@
 /**
- * S0367-dicom-15: a non-private Data Element whose tag this build's PS3.6 2026d
+ * A non-private Data Element whose tag this build's PS3.6 2026d
  * registry does not carry, and which Table E.1-1 does not list, is REMOVED by
  * `deidentify()` at every depth, recorded without its tag, and announced once per
- * run. AC-1 to AC-3 and AC-5 to AC-13; AC-4 and AC-14 are in
+ * run. to and to ; and are in
  * `test/integration/deident-undefined-vr.test.ts`.
  *
  * Until this rule a Table E.1-1 miss read as "keep", so such an element went into
@@ -14,10 +14,10 @@
  * payload names nobody proves nothing, and every absence assertion on it has a
  * mutation control that turns it red.
  *
- * Tiers (`standards-conformance` S4): AC-1 and AC-9 to AC-11 are Tier 1, a
+ * Tiers (`standards-conformance` S4): and to are Tier 1, a
  * spec-clean object read and de-identified (a tag no edition registers is
- * encoded conformantly all the same); AC-2 to AC-4, AC-6 and AC-12 are Tier 2,
- * fabricated or vendor-shaped. The serialize-and-re-parse halves of AC-1 and AC-2
+ * encoded conformantly all the same); to , and are Tier 2,
+ * fabricated or vendor-shaped. The serialize-and-re-parse halves of and
  * are Tier 3.
  */
 
@@ -59,7 +59,7 @@ const SURNAME = "SMITHSON";
 /**
  * `(4854,4F53)`: no PS3.6 2026d row, literal or masked, and no Table E.1-1 row.
  * Its four wire bytes, both halves little-endian, are `"THSO"`: four letters of
- * {@link SURNAME}. That is what makes the AC-6 renderings a PHI question rather
+ * {@link SURNAME}. That is what makes the renderings a PHI question rather
  * than a formality.
  */
 const UNREGISTERED: Tag = "48544F53";
@@ -148,7 +148,7 @@ function wireText(tag: Tag): string {
 }
 
 /**
- * Every rendering AC-6 names: eight hex digits in upper and lower case,
+ * Every rendering names: eight hex digits in upper and lower case,
  * `(gggg,eeee)` in both cases, and the four raw tag bytes read as Latin-1.
  */
 function renderings(tag: Tag): string[] {
@@ -185,12 +185,12 @@ const PROFILE: Profile = defineProfile({
   },
 });
 
-describe("AC-1: the root Data Set", () => {
+describe("the root Data Set", () => {
   it.each([
     ["Explicit VR Little Endian", TS_EXPLICIT_LE],
     ["Implicit VR Little Endian", TS_IMPLICIT_LE],
   ])(
-    "AC-1: under %s, omits it, and the serialized re-parse carries neither tag nor name",
+    "under %s, omits it, and the serialized re-parse carries neither tag nor name",
     (_label, ts) => {
       expect(annexE(UNREGISTERED)).toBeUndefined();
       expect(isRegisteredTag(UNREGISTERED)).toBe(false);
@@ -209,7 +209,7 @@ describe("AC-1: the root Data Set", () => {
     },
   );
 
-  it("AC-1: the mutation control, the same value under a registered unlisted tag, is found in the output", () => {
+  it("the mutation control, the same value under a registered unlisted tag, is found in the output", () => {
     // Proves the byte search above can go red: the serializer and the search are
     // the same, only the tag differs, and a registered tag Table E.1-1 does not
     // list is kept.
@@ -306,9 +306,9 @@ function expectDescended(c: Container): void {
   expect(annexE(c.tag)?.optionSet[option]).toBe(c.listedAs);
 }
 
-describe("AC-2: one and two Sequence Items down", () => {
+describe("one and two Sequence Items down", () => {
   it.each(CONTAINERS.map((c) => [c.label, c] as const))(
-    "AC-2: inside %s, omits it at both depths, in the object and in the serialized re-parse",
+    "inside %s, omits it at both depths, in the object and in the serialized re-parse",
     (_label, c) => {
       const raw = build(nestedIn(c.tag, c.privateCarrier));
       const parsed = parseDicom(raw, { profile: PROFILE });
@@ -331,7 +331,7 @@ describe("AC-2: one and two Sequence Items down", () => {
     },
   );
 
-  it("AC-2: the mutation control, the same nesting under a registered unlisted tag, reaches the output", () => {
+  it("the mutation control, the same nesting under a registered unlisted tag, reaches the output", () => {
     for (const c of CONTAINERS) {
       const raw = build(
         containing(c.tag, c.privateCarrier, [leaf(REGISTERED_UNLISTED, "LO")], true),
@@ -346,8 +346,8 @@ describe("AC-2: one and two Sequence Items down", () => {
   });
 });
 
-describe("AC-2: inside a listed SQ cleaned under CleanStructuredContent", () => {
-  it("AC-2: omits it at both depths, because the cleaned Sequence keeps no Item at all", () => {
+describe("inside a listed SQ cleaned under CleanStructuredContent", () => {
+  it("omits it at both depths, because the cleaned Sequence keeps no Item at all", () => {
     expect(annexE(LISTED_CLEAN_SQ)?.optionSet.CleanStructuredContent).toBe("C");
     const parsed = parseDicom(build(nestedIn(LISTED_CLEAN_SQ, false)));
     expect(holders(parsed, UNREGISTERED)).toHaveLength(2);
@@ -364,7 +364,7 @@ describe("AC-2: inside a listed SQ cleaned under CleanStructuredContent", () => 
     for (const part of NAME_PARTS) expect(carries(out, part), part).toBe(false);
   });
 
-  it("AC-2: and a registered unlisted attribute in the same place, which a walk would keep, is gone too", () => {
+  it("and a registered unlisted attribute in the same place, which a walk would keep, is gone too", () => {
     const raw = build(containing(LISTED_CLEAN_SQ, false, [leaf(REGISTERED_UNLISTED, "LO")], true));
     // The control: the payload is in the input's bytes.
     for (const part of NAME_PARTS) expect(carries(raw, part), part).toBe(true);
@@ -374,8 +374,8 @@ describe("AC-2: inside a listed SQ cleaned under CleanStructuredContent", () => 
   });
 });
 
-describe("AC-3: keyed on the tag, never on the VR", () => {
-  it("AC-3: removes one carried with explicit VR UN", () => {
+describe("keyed on the tag, never on the VR", () => {
+  it("removes one carried with explicit VR UN", () => {
     const parsed = parseDicom(build([leaf(UNREGISTERED, "UN")]));
     expect(parsed.get(UNREGISTERED)?.vr).toBe("UN");
     const { dataset, report } = deidentify(parsed);
@@ -384,7 +384,7 @@ describe("AC-3: keyed on the tag, never on the VR", () => {
     for (const part of NAME_PARTS) expect(carries(serializeDicom(dataset), part), part).toBe(false);
   });
 
-  it("AC-3: removes one read as UN under Implicit VR Little Endian", () => {
+  it("removes one read as UN under Implicit VR Little Endian", () => {
     const parsed = parseDicom(build([leaf(UNREGISTERED, "LO")], TS_IMPLICIT_LE));
     // No VR on the wire and no registry row, so the parser can only say UN.
     expect(parsed.get(UNREGISTERED)?.vr).toBe("UN");
@@ -394,8 +394,8 @@ describe("AC-3: keyed on the tag, never on the VR", () => {
   });
 });
 
-describe("AC-5: the removal record", () => {
-  it("AC-5: counts every removal and lists each by byte offset, with a context path only when nested", () => {
+describe("the removal record", () => {
+  it("counts every removal and lists each by byte offset, with a context path only when nested", () => {
     const raw = build([leaf(UNREGISTERED, "LO"), ...nestedIn(UNLISTED_SQ, false)]);
     const parsed = parseDicom(raw);
     const rootOffset = parsed.get(UNREGISTERED)?.byteOffset;
@@ -422,7 +422,7 @@ describe("AC-5: the removal record", () => {
     }
   });
 
-  it("AC-5: is a record apart from the Table E.1-1 audit, the private, group-0004 and undefined-VR records", () => {
+  it("is a record apart from the Table E.1-1 audit, the private, group-0004 and undefined-VR records", () => {
     const { report } = deidentify(parseDicom(build([leaf(UNREGISTERED, "LO")])));
     expect(report.unregisteredElementRemovalCount).toBe(1);
     expect(report.attributes.map((a) => a.tag)).not.toContain(UNREGISTERED);
@@ -431,35 +431,35 @@ describe("AC-5: the removal record", () => {
     expect(report.undefinedVrElements).toEqual([]);
   });
 
-  it("AC-5: a run that removes none reports a count of zero and an empty list", () => {
+  it("a run that removes none reports a count of zero and an empty list", () => {
     const { report } = deidentify(parseDicom(build([leaf(REGISTERED_UNLISTED, "LO")])));
     expect(report.unregisteredElementRemovalCount).toBe(0);
     expect(report.unregisteredElementRemovals).toEqual([]);
   });
 });
 
-describe("AC-6: the tag is on no warning and in no field of the report", () => {
+describe("the tag is on no warning and in no field of the report", () => {
   function run(): { readonly haystack: string; readonly report: DeidentifyReport } {
     const raw = build([leaf(UNREGISTERED, "LO"), ...nestedIn(UNLISTED_SQ, false)]);
     const { dataset, report } = deidentify(parseDicom(raw));
     return { haystack: surface(report, dataset.warnings), report };
   }
 
-  it("AC-6: the tag's four wire bytes really are letters of the patient's surname", () => {
+  it("the tag's four wire bytes really are letters of the patient's surname", () => {
     // The precondition. Without it the absence below is decoration.
     expect(wireText(UNREGISTERED)).toBe(UNREGISTERED_WIRE_TEXT);
     expect(SURNAME).toContain(UNREGISTERED_WIRE_TEXT);
     expect(PATIENT_NAME.startsWith(SURNAME)).toBe(true);
   });
 
-  it("AC-6: renders it in none of the five forms, anywhere on the report or its warnings", () => {
+  it("renders it in none of the five forms, anywhere on the report or its warnings", () => {
     const { haystack, report } = run();
     expect(report.unregisteredElementRemovalCount).toBe(3);
     expect(codes(report)).toContain(CODE);
     expect(renderingsIn(haystack, UNREGISTERED)).toEqual([]);
   });
 
-  it("AC-6: the mutation control, each rendering planted on the report, is found", () => {
+  it("the mutation control, each rendering planted on the report, is found", () => {
     // Proves every arm of the search can go red: the same report and the same
     // search, with a warning that renders the tag the way an implementation that
     // passed it to a message would.
@@ -477,8 +477,8 @@ describe("AC-6: the tag is on no warning and in no field of the report", () => {
   });
 });
 
-describe("AC-7: one warning per run, from the registry", () => {
-  it("AC-7: adds exactly one, however many were removed, whose message is its registry template", () => {
+describe("one warning per run, from the registry", () => {
+  it("adds exactly one, however many were removed, whose message is its registry template", () => {
     const raw = build([leaf(UNREGISTERED, "LO"), ...nestedIn(UNLISTED_SQ, false)]);
     const { report } = deidentify(parseDicom(raw));
     expect(report.unregisteredElementRemovalCount).toBe(3);
@@ -487,17 +487,17 @@ describe("AC-7: one warning per run, from the registry", () => {
     expect(raised[0]?.message).toBe(WARNING_MESSAGES[CODE]);
   });
 
-  it("AC-7: the template carries no {tag}, {vr} or {vr2} token", () => {
+  it("the template carries no {tag}, {vr} or {vr2} token", () => {
     expect(WARNING_MESSAGES[CODE]).not.toMatch(/\{tag\}|\{vr\}|\{vr2\}/u);
   });
 
-  it("AC-7: a run that removes none adds none", () => {
+  it("a run that removes none adds none", () => {
     const { report } = deidentify(parseDicom(build([leaf(REGISTERED_UNLISTED, "LO")])));
     expect(codes(report)).not.toContain(CODE);
   });
 });
 
-describe("AC-8: past the findings cap", () => {
+describe("past the findings cap", () => {
   /** `n` distinct unregistered tags in group 4854, none of them a group length. */
   function unregisteredRun(n: number, start: number): BuildDicomElement[] {
     return Array.from({ length: n }, (_, i) => {
@@ -506,7 +506,7 @@ describe("AC-8: past the findings cap", () => {
     });
   }
 
-  it("AC-8: removes every one across the root and several Items, counts them all, and lists exactly the cap", () => {
+  it("removes every one across the root and several Items, counts them all, and lists exactly the cap", () => {
     const perDataSet = 40;
     const items = 3;
     const raw = build([
@@ -542,8 +542,8 @@ describe("AC-8: past the findings cap", () => {
   });
 });
 
-describe("AC-9: a registered attribute Table E.1-1 does not list", () => {
-  it("AC-9: is kept byte for byte, with no finding, no count and no new warning", () => {
+describe("a registered attribute Table E.1-1 does not list", () => {
+  it("is kept byte for byte, with no finding, no count and no new warning", () => {
     const parsed = parseDicom(build([leaf(REGISTERED_UNLISTED, "LO")]));
     const before = parsed.get(REGISTERED_UNLISTED)?.rawBytes;
     const { dataset, report } = deidentify(parsed);
@@ -554,7 +554,7 @@ describe("AC-9: a registered attribute Table E.1-1 does not list", () => {
   });
 });
 
-describe("AC-10: masked registry families", () => {
+describe("masked registry families", () => {
   const OVERLAY_ROWS_IN_BOUND: Tag = "60020010";
   const OVERLAY_ROWS_TOP_OF_BOUND: Tag = "601E0010";
   const OVERLAY_ROWS_PAST_BOUND: Tag = "60200010";
@@ -578,23 +578,23 @@ describe("AC-10: masked registry families", () => {
     };
   }
 
-  it("AC-10: keeps (60xx,0010) inside PS3.5 7.6's bound, at both ends of it", () => {
+  it("keeps (60xx,0010) inside PS3.5 7.6's bound, at both ends of it", () => {
     for (const tag of [OVERLAY_ROWS_IN_BOUND, OVERLAY_ROWS_TOP_OF_BOUND]) {
       expect(run(tag), tag).toEqual({ kept: true, same: true, count: 0 });
     }
   });
 
-  it("AC-10: removes the same element one group past the bound", () => {
+  it("removes the same element one group past the bound", () => {
     expect(run(OVERLAY_ROWS_PAST_BOUND)).toEqual({ kept: false, same: false, count: 1 });
   });
 
-  it("AC-10: keeps a member of a masked row outside 7.6, (0028,0410) under (0028,04x0)", () => {
+  it("keeps a member of a masked row outside 7.6, (0028,0410) under (0028,04x0)", () => {
     expect(run(NTH_ORDER_ROWS)).toEqual({ kept: true, same: true, count: 0 });
   });
 });
 
-describe("AC-11: a registered element carried as UN", () => {
-  it("AC-11: is not removed under this rule, and its value is kept byte for byte", () => {
+describe("a registered element carried as UN", () => {
+  it("is not removed under this rule, and its value is kept byte for byte", () => {
     const parsed = parseDicom(build([leaf(REGISTERED_UNLISTED, "UN")]));
     expect(parsed.get(REGISTERED_UNLISTED)?.vr).toBe("UN");
     const before = parsed.get(REGISTERED_UNLISTED)?.rawBytes;
@@ -605,8 +605,8 @@ describe("AC-11: a registered element carried as UN", () => {
   });
 });
 
-describe("AC-12: an unregistered Sequence", () => {
-  it("AC-12: with materialized Items, is removed whole with exactly one finding and nothing for its contents", () => {
+describe("an unregistered Sequence", () => {
+  it("with materialized Items, is removed whole with exactly one finding and nothing for its contents", () => {
     const raw = build([
       {
         tag: UNREGISTERED_SQ,
@@ -628,7 +628,7 @@ describe("AC-12: an unregistered Sequence", () => {
     for (const part of NAME_PARTS) expect(carries(serializeDicom(dataset), part), part).toBe(false);
   });
 
-  it("AC-12: with no Items materialized, built through the public Element constructor, is removed the same way", () => {
+  it("with no Items materialized, built through the public Element constructor, is removed the same way", () => {
     const value = text(PAYLOAD);
     const unwalked = new Element({
       tag: UNREGISTERED_SQ,
@@ -652,8 +652,8 @@ describe("AC-12: an unregistered Sequence", () => {
   });
 });
 
-describe("AC-13: group lengths and group 0004 are not this rule's", () => {
-  it("AC-13: keeps a (gggg,0000) group length for an even group other than 0002, value unchanged", () => {
+describe("group lengths and group 0004 are not this rule's", () => {
+  it("keeps a (gggg,0000) group length for an even group other than 0002, value unchanged", () => {
     const GROUP_LENGTH: Tag = "00080000";
     // Unregistered, so the exemption is what keeps it rather than the registry.
     expect(isRegisteredTag(GROUP_LENGTH)).toBe(false);
@@ -668,7 +668,7 @@ describe("AC-13: group lengths and group 0004 are not this rule's", () => {
     expect(report.unregisteredElementRemovalCount).toBe(0);
   });
 
-  it("AC-13: leaves a (0004,xxxx) element in a non-DICOMDIR object on the group-0004 record", () => {
+  it("leaves a (0004,xxxx) element in a non-DICOMDIR object on the group-0004 record", () => {
     const GROUP_0004: Tag = "00049990";
     // Unregistered as well, so were this rule consulted first it would claim it.
     expect(isRegisteredTag(GROUP_0004)).toBe(false);

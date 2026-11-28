@@ -30,7 +30,7 @@ function pad(s: string): Buffer {
   return b.length % 2 === 0 ? b : Buffer.concat([b, Buffer.from([0x20])]);
 }
 
-const CODE_VALUE = "SYNTH-CODE-77";
+const CODE_VALUE = "SYNTH_CODE_77";
 const CODE_SCHEME = "99SYNTH";
 const CODE_MEANING = "FAKE FINDING FOR DOE^JANE";
 

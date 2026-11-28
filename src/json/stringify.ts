@@ -130,7 +130,7 @@ function write(
  * @param space - Indentation, as `JSON.stringify` takes it: a number of spaces up to 10, or a
  *   string of up to 10 characters.
  * @returns The JSON text.
- * @throws `DicomJsonError` with `CONVERSION_FAILED` for a value `JSON.stringify` cannot
+ * @throws {DicomJsonError} with `CONVERSION_FAILED` for a value `JSON.stringify` cannot
  *   write, such as a `bigint` or a cycle, for an error a `toJSON` method throws, and where the
  *   Data Set's own `toJSON` leaves no text; the error it replaces is not kept.
  * @example
