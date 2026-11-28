@@ -8,8 +8,8 @@ import {
   buildSnippet,
 } from "../../src/parser/errors.js";
 
-describe("FATAL_CODES (D-09)", () => {
-  it("has exactly 4 codes (D-09 - locked at 4, no expansion)", () => {
+describe("FATAL_CODES", () => {
+  it("has exactly 4 codes (locked at 4, no expansion)", () => {
     expect(Object.keys(FATAL_CODES)).toHaveLength(4);
   });
 
@@ -21,7 +21,7 @@ describe("FATAL_CODES (D-09)", () => {
   });
 });
 
-describe("DicomParseError (D-10)", () => {
+describe("DicomParseError", () => {
   it("carries code, byteOffset, offsetFrame, snippet, contextPath after construction", () => {
     const err = new DicomParseError(
       FATAL_CODES.NOT_DICOM_PART_10,
@@ -54,7 +54,7 @@ describe("DicomParseError (D-10)", () => {
   });
 
   it("puts the frame in the message, because a logged offset is the whole risk", () => {
-    // The tenth instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`: `byteOffset` was
+    // The tenth instance of a diagnostic that could carry a value from the file: `byteOffset` was
     // the sole locator and no field named its coordinate system, so a consumer
     // logging `err.message` and indexing its own buffer by that number was, in
     // a Sequence Item, reading somebody else's element. A field alone would not
@@ -101,7 +101,7 @@ describe("DicomParseError (D-10)", () => {
   });
 });
 
-describe("buildSnippet (D-10 - up to 16 bytes, lowercase hex, space-separated)", () => {
+describe("buildSnippet (up to 16 bytes, lowercase hex, space-separated)", () => {
   it("renders bytes as space-separated lowercase 2-char hex", () => {
     const buf = Buffer.from([0x44, 0x49, 0x43, 0x4d]);
     expect(buildSnippet(buf, 0)).toBe("44 49 43 4d");

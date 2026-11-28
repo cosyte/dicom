@@ -13,9 +13,9 @@
  * the edit, and `vendor/nema/`'s generators refuse to run on a mismatch for the same reason.
  *
  * 🛑 EVERY ANCHOR IS REQUIRED TO OCCUR EXACTLY ONCE, in the section AND in the whole document. A
- * first match reads whichever candidate comes first, which is the trap the meta-repo's rule about
- * locating a spec section names, and this repository has paid for it: `#80` cited PS3.5 section 7.5
- * twice when the sentence is in 7.5.2.
+ * first match reads whichever candidate comes first, which is the trap our rule about locating a
+ * spec section by its normative sentence names, and this repository has paid for it: an earlier
+ * change cited PS3.5 section 7.5 twice when the sentence is in 7.5.2.
  *
  * The spec is hard-wrapped, so everything here folds whitespace first. A line-based search for any
  * of these anchors finds nothing, which would read as absence.

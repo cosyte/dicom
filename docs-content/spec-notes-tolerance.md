@@ -21,8 +21,8 @@ recoverable quirk is **never** a silent change and never a throw.
   occurred (e.g. `DICOM_ODD_LENGTH_VALUE_PADDED`, `DICOM_MISSING_PREAMBLE`, `DICOM_VR_MISMATCH`,
   `DICOM_FILE_META_GROUP_LENGTH_MISMATCH`). **No count is written here.** One was, it read 25 while
   the registry held more, and the README's copy of the same numeral was corrected twice before being
-  deleted. `WARNING_CODES` is the list, and the locked snapshot under
-  `test/property/__snapshots__/` measures it on every run.
+  deleted. `WARNING_CODES` is the list, and the locked inline snapshot in
+  `test/property/warning-codes.snapshot.test.ts` measures it on every run.
 - **Unrecoverable structural corruption → a throw.** A Tier-3 condition throws a typed
   `DicomParseError`, and the whole set is `NOT_DICOM_PART_10`, `INVALID_FILE_META`,
   `UNSUPPORTED_TRANSFER_SYNTAX`, and `EMPTY_INPUT`. **No count is written here either**, for the same
@@ -259,14 +259,14 @@ high-volume codes for a known-quirky source, without ever loosening a correct de
 
 ## The exported diagnostic types
 
-| Export              | What it is                                                                                                                                                                                          |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `WARNING_CODES`     | The frozen Tier-2 registry. **It is the list**, and the locked snapshot under `test/property/__snapshots__/` measures it on every run. Read it rather than a numeral written anywhere.              |
-| `WarningCode`       | The discriminant type over that registry. It widens with each new code, so treat it as open: [Compatibility](./compatibility.md#exports-that-grow-between-releases).                                |
-| `DicomParseWarning` | One recorded deviation: its `code`, its `position`, and a `message` looked up in the frozen registry.                                                                                               |
-| `FATAL_CODES`       | The frozen Tier-3 registry. Same rule: enumerate it, never count it.                                                                                                                                |
-| `FatalCode`         | The discriminant type over that registry. `DicomParseError.code` is a `FatalCode` or, for an [escalated warning](./error-handling.md#when-a-warning-becomes-a-throw), that warning's `WarningCode`. |
-| `DicomParseError`   | The thrown class, for a fatal and for an escalated warning. Carries `code`, `byteOffset`, `offsetFrame`, `message` and a raw hex `snippet` of the source. **Treat `snippet` as PHI.**               |
-| `DicomPosition`     | Where a diagnostic happened: `byteOffset`, plus `fileMeta` / `deflated` flags and a `contextPath` for a nested Sequence Item. Read the frame note below before indexing anything with it.           |
-| `OFFSET_FRAMES`     | The frozen set of frames a `byteOffset` may be counted in: the caller's own input, the inflated Data Set of a Deflated object, or a slice this parser cut from inside a Value Field.                |
-| `OffsetFrame`       | The discriminant type over that set. **Only the input frame's offsets index the buffer you passed in**, and `DicomParseError.offsetFrame` is what says which frame you have.                        |
+| Export              | What it is                                                                                                                                                                                                 |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WARNING_CODES`     | The frozen Tier-2 registry. **It is the list**, and the locked inline snapshot in `test/property/warning-codes.snapshot.test.ts` measures it on every run. Read it rather than a numeral written anywhere. |
+| `WarningCode`       | The discriminant type over that registry. It widens with each new code, so treat it as open: [Compatibility](./compatibility.md#exports-that-grow-between-releases).                                       |
+| `DicomParseWarning` | One recorded deviation: its `code`, its `position`, and a `message` looked up in the frozen registry.                                                                                                      |
+| `FATAL_CODES`       | The frozen Tier-3 registry. Same rule: enumerate it, never count it.                                                                                                                                       |
+| `FatalCode`         | The discriminant type over that registry. `DicomParseError.code` is a `FatalCode` or, for an [escalated warning](./error-handling.md#when-a-warning-becomes-a-throw), that warning's `WarningCode`.        |
+| `DicomParseError`   | The thrown class, for a fatal and for an escalated warning. Carries `code`, `byteOffset`, `offsetFrame`, `message` and a raw hex `snippet` of the source. **Treat `snippet` as PHI.**                      |
+| `DicomPosition`     | Where a diagnostic happened: `byteOffset`, plus `fileMeta` / `deflated` flags and a `contextPath` for a nested Sequence Item. Read the frame note below before indexing anything with it.                  |
+| `OFFSET_FRAMES`     | The frozen set of frames a `byteOffset` may be counted in: the caller's own input, the inflated Data Set of a Deflated object, or a slice this parser cut from inside a Value Field.                       |
+| `OffsetFrame`       | The discriminant type over that set. **Only the input frame's offsets index the buffer you passed in**, and `DicomParseError.offsetFrame` is what says which frame you have.                               |

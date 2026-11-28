@@ -264,6 +264,8 @@ function csValues(el: Element | undefined): readonly string[] | undefined {
  * ```ts
  * stripTrailingPad("IMAGE \0"); // "IMAGE"
  * ```
+ *
+ * @internal
  */
 export function stripTrailingPad(text: string): string {
   let end = text.length;
@@ -284,6 +286,8 @@ export function stripTrailingPad(text: string): string {
  * ```ts
  * trimSpaces("  IMAGE "); // "IMAGE"
  * ```
+ *
+ * @internal
  */
 export function trimSpaces(value: string): string {
   let start = 0;

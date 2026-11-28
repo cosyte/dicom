@@ -13,7 +13,7 @@
  * the full CLI path (argv parsing, exit code, stderr capture).
  *
  * SECURITY: All subprocess calls in these tests use spawnSync with array args.
- * No exec, no execSync, no shell-form. (D-15/T-01-04-07.)
+ * No exec, no execSync, no shell-form.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -57,8 +57,8 @@ import {
  * so a `vitest` invoked from anywhere other than the package root planted seven
  * synthetic `.dcm`/`.json`/`.txt` files in **that** directory instead - outside
  * the tree `.gitignore` exempts them in, where they are untracked and un-ignored
- * and the next `git add -A` sweeps them up. Measured: a run whose cwd was the
- * enclosing meta-repo left them at `<meta-repo>/test/fixtures/phi-scan/`.
+ * and the next `git add -A` sweeps them up. Measured: a run whose cwd was an
+ * enclosing checkout left them at `<parent>/test/fixtures/phi-scan/`.
  *
  * `test/helpers/run-script.ts` already derives its root this way and defaults the
  * child's `cwd` to it, so the scanner subprocess was always rooted correctly;
@@ -279,7 +279,7 @@ beforeAll(() => {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("phi-scan: synthetic / allow-listed fixtures (D-15 + TEST-09)", () => {
+describe("phi-scan: synthetic / allow-listed fixtures", () => {
   it("synthetic-pn-anon.dcm exits 0", () => {
     const r = runScanner([join(FIX_DIR, "synthetic-pn-anon.dcm")]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(0);
@@ -296,7 +296,7 @@ describe("phi-scan: synthetic / allow-listed fixtures (D-15 + TEST-09)", () => {
   });
 });
 
-describe("phi-scan: recent-date / non-allow-listed-PN violations (TEST-09)", () => {
+describe("phi-scan: recent-date / non-allow-listed-PN violations", () => {
   it("recent-date-violator.dcm exits 1 with structured stderr", () => {
     const path = join(FIX_DIR, "recent-date-violator.dcm");
     const r = runScanner([path]);
@@ -462,7 +462,7 @@ describe("phi-scan: doc fixtures (base64 DICOM inside markdown)", () => {
   });
 });
 
-describe("phi-scan: --allow-fixture override (D-17)", () => {
+describe("phi-scan: --allow-fixture override", () => {
   it("rejects --allow-fixture without an override-log entry (exit 2)", () => {
     const r = runScanner(["--allow-fixture", join(FIX_DIR, "recent-date-violator.dcm")]);
     expect(r.code).toBe(2);
@@ -1093,7 +1093,7 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
 });
 
 // ---------------------------------------------------------------------------
-// A PREAMBLE-LESS OBJECT ON DISK (DICOM-SCANTARGET-PREAMBLELESS)
+// A PREAMBLE-LESS OBJECT ON DISK
 // ---------------------------------------------------------------------------
 //
 // `scanTarget` gated a `.dcm`/`.bin`/unknown-extension file on `isDicom` before
@@ -1207,7 +1207,7 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
     // 🛑 THE MECHANISM CHANGED AND THE PROPERTY DID NOT. This wrote the same bytes
     // as `.txt` and expected exit 0, on the reasoning that a text EXTENSION sent a
     // file to the text route. That was true, and it was the defect
-    // `DICOM-PHI-SCAN-RESIDUALS` closed: nothing is dispatched by name any more,
+    // The PHI scan residuals fix closed: nothing is dispatched by name any more,
     // so a `.txt` whose bytes are a Part 10 object now reaches `scanDicom` like
     // any other. Using the extension to disable the DICOM route would be asserting
     // the leak, so the route is disabled by CONTENT instead - one byte in front of
@@ -1330,7 +1330,7 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
   // and the finding reproduced: `scanDicom` gives up quietly at the first header it
   // cannot read, and an undefined-length `SQ` (PS3.5 2026c §7.5.2 - one of two
   // delimitations, both of which decoders shall support) is one of those. A file
-  // carrying one is conformant, not malformed. §7.1 orders tags ascending, so a
+  // carrying one is conformant, not malformed. PS3.5 §7.1 orders tags ascending, so a
   // conformant file puts `(0008,1110) SQ` BEFORE `(0010,0010)`. Measured on the
   // refused draft: exit 1 on base `5ae8fe4`, exit 0 and `OK - no hits` on the
   // draft, over a name-bearing PatientName. The branch runs BOTH routes now, and
@@ -1392,7 +1392,7 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
   });
 
   it("a PREAMBLE-FUL object gets BOTH routes now, and the DICOM one is unchanged", () => {
-    // 🛑 THIS TEST PINNED THE OPPOSITE UNTIL `DICOM-SCANDICOM-SILENT-HALT`. It read
+    // 🛑 THIS TEST PINNED THE OPPOSITE UNTIL the silent scan halt fix. It read
     // "scanned by the DICOM route ALONE, byte-for-byte as before" and asserted exit
     // 0 over the first fixture below, on the reasoning that sweeping every Part 10
     // object as text was a separate product call. It was, it has been taken, and
@@ -1430,7 +1430,7 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
 });
 
 // ---------------------------------------------------------------------------
-// A PREAMBLE-FUL OBJECT'S SILENT HALT (DICOM-SCANDICOM-SILENT-HALT)
+// A PREAMBLE-FUL OBJECT'S SILENT HALT
 // ---------------------------------------------------------------------------
 //
 // `scanDicom` gives up quietly - its walk `break`s at the first header it cannot
@@ -1441,7 +1441,7 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
 //
 // Measured on `21e25a0`, one object per row, `(0008,1110)` undefined-length `SQ`
 // (PS3.5 2026c §7.5.2: one of two delimitations, both of which decoders shall
-// support) before a name-bearing `(0010,0010)` (§7.1 orders tags ascending, so
+// support) before a name-bearing `(0010,0010)` (PS3.5 §7.1 orders tags ascending, so
 // that is the conformant order):
 //
 //   | target                                     | base | here |
@@ -1556,7 +1556,7 @@ describe("phi-scan: a preamble-FUL object's silent halt", () => {
     // undefined-length `SQ`, so the tag walk stopped in front of the two elements
     // below it and the word `OK` was a clearance of bytes it never read. The run
     // still exits 0. What it no longer does is claim to be clean about them.
-    // `DICOM-PHI-SCAN-RESIDUALS`; see the block at the end of this file.
+    // The PHI scan residuals fix; see the block at the end of this file.
     expect(r.stdout).not.toMatch(/OK - no hits/);
     expect(r.stdout).toContain("This run is not an all-clear.");
     expect(r.stderr).toContain("[phi-scan] PARTIAL:");
@@ -1667,7 +1667,7 @@ describe("phi-scan: a preamble-FUL object's silent halt", () => {
 });
 
 // ---------------------------------------------------------------------------
-// A TEXT EXTENSION WAS DISPATCHED BY NAME (DICOM-PHI-SCAN-RESIDUALS)
+// A TEXT EXTENSION WAS DISPATCHED BY NAME
 // ---------------------------------------------------------------------------
 //
 // `scanTarget` branched on the file's EXTENSION before it read a byte: `.json`,
@@ -1695,7 +1695,7 @@ describe("phi-scan: a preamble-FUL object's silent halt", () => {
 // the detector already caught on base, so a green here would be a GAP rather
 // than a clearance, and the other is a clean result pinned beside it.
 //
-// 🛑 THE REMEDY IS A DELETION, WHICH IS WHY IT IS NOT THE NET LEAK `#97` PAID
+// 🛑 THE REMEDY IS A DELETION, WHICH IS WHY IT IS NOT THE NET LEAK `dicom#97` PAID
 // FOR. The removed branch's two calls were `scanText` and `scanEmbeddedObjects`;
 // the branch that replaces it makes the SAME two unconditionally and adds
 // `scanDicom`, and `hits` is only ever appended to. The three NOT-SUBTRACTED
@@ -1815,8 +1815,8 @@ describe("phi-scan: a target is dispatched by CONTENT, never by its extension", 
   });
 
   it("NOT SUBTRACTED: a .md whose name hides behind an undefined-length SQ is still reported", () => {
-    // 🛑 THIS IS `#97`'s CASE, ON THIS BRANCH. `scanDicom` gives up quietly at an
-    // undefined-length `SQ` (PS3.5 2026c §7.5.2), and §7.1 orders tags ascending,
+    // 🛑 THIS IS `dicom#97`'s CASE, ON THIS BRANCH. `scanDicom` gives up quietly at an
+    // undefined-length `SQ` (PS3.5 2026c §7.5.2), and PS3.5 §7.1 orders tags ascending,
     // so `(0008,1110)` sits before `(0010,0010)` in a conformant file. Routing
     // this file to `scanDicom` INSTEAD of the text sweep would have taken it from
     // exit 1 to exit 0 - the fix making the leak worse. It is an addition, so it
@@ -2018,7 +2018,7 @@ describe("phi-scan: an embedded base64 object is decoded outside markdown too", 
     // Measured on base `8982a16`: the identical object was found as `probe.md`
     // and as `probe.dcm`, and printed `OK - no hits` as `probe.ts`, because
     // `scanEmbeddedObjects` ran only for a name in the text-extension set that
-    // `DICOM-PHI-SCAN-RESIDUALS` has since deleted. Widening the walk root
+    // The PHI scan residuals fix has since deleted. Widening the walk root
     // without this would have opened 81 `.ts` files and still read past every
     // object encoded in one.
     const root = makeRepo();
@@ -2196,7 +2196,7 @@ describe("phi-scan: the walk is reconciled against git ls-files", () => {
 // The hit report's per-file print cap
 // ---------------------------------------------------------------------------
 //
-// `DICOM-SCANDICOM-SILENT-HALT` made the text sweep run over every Part 10
+// The silent scan halt fix made the text sweep run over every Part 10
 // object's bytes, and its recognizers fire on image noise at a rate that is a
 // property of the payload's byte histogram. Re-measured on `b784c38`: 8 MiB of
 // synthetic `(7FE0,0010) OW` pixel data uniform over `0x41-0x60` produced tens of
@@ -2536,7 +2536,7 @@ describe("phi-scan: the print budget is spent PER RECOGNIZER, so no class spends
   });
 
   it("🛑 A TAG-ROUTE FLOOD DOES NOT SPEND THE TEXT SWEEP'S BUDGET", () => {
-    // The route pair `#105` named. `scanDicom` appends before `scanText`, so
+    // The route pair `dicom#105` named. `scanDicom` appends before `scanText`, so
     // with one shared budget an object carrying more typed hits than the cap
     // withheld every text-route line in the same file - including the PN token
     // sweep, which is the only route that can see a name in bytes the tag walk
@@ -2820,14 +2820,14 @@ describe("phi-scan: the report's TAIL survives a stderr pipe the reader is not d
 });
 
 // ---------------------------------------------------------------------------
-// What the DICOM sweep did NOT read (DICOM-PHI-SCAN-RESIDUALS)
+// What the DICOM sweep did NOT read
 // ---------------------------------------------------------------------------
 //
 // `scanDicom` stops at the first header it cannot read and used to say nothing,
 // so a run printed `OK - no hits` over a file whose tag table it had abandoned
 // partway through. The commonest way in is CONFORMANT: PS3.5 2026c §7.5.2 makes
 // `0xFFFFFFFF` one of two Sequence delimitations, both of which decoders shall
-// support, and §7.1 orders tags ascending, so `(0008,1110)` sits before
+// support, and PS3.5 §7.1 orders tags ascending, so `(0008,1110)` sits before
 // `(0010,0010)`.
 //
 // 🛑 EVERY CLEAN RESULT BELOW IS PINNED BESIDE A POSITIVE ON THE SAME RUN. A
@@ -3004,7 +3004,7 @@ describe("phi-scan: the DICOM sweep reports the bytes it never read", () => {
     // Transfer Syntax "was retired in 2006", the UID `1.2.840.10008.1.2.2` does
     // not appear in the document at all, and this package's own generated UID
     // registry marks it `retired: true`. A lenient parser's silence is not a
-    // spec verdict. The conformance leg of this slice rests on §7.5.2's
+    // spec verdict. The conformance leg of this change rests on PS3.5 §7.5.2's
     // undefined-length Sequence, which is cited and measured on its own.
     const be = part10(
       Buffer.concat([
@@ -3019,7 +3019,7 @@ describe("phi-scan: the DICOM sweep reports the bytes it never read", () => {
 
   it("aggregates PER FILE, so a page of halting objects is one line with a count", () => {
     // The output is bounded by the number of FILES, never by anything an object
-    // can choose. That is what keeps this clear of the cap `#104` had to add for
+    // can choose. That is what keeps this clear of the cap `dicom#104` had to add for
     // hits: there is no flooding shape to cap.
     const page =
       "# page\n\n" +
@@ -3036,7 +3036,7 @@ describe("phi-scan: the DICOM sweep reports the bytes it never read", () => {
   });
 
   it("🛑 THE NET-LEAK CONTROL: a file loud enough to bury its own hits cannot bury this line", () => {
-    // `#104` capped hit lines per file and `#105` found `report` is not monotone
+    // `dicom#104` capped hit lines per file and `dicom#105` found `report` is not monotone
     // in `hits` at that cap, because `scanDicom`'s hits append before
     // `scanText`'s. Neither can touch this: the disclosure is not a hit, is
     // printed by a different function, and is in no budget. Pinned at a cap of
@@ -3063,7 +3063,7 @@ describe("phi-scan: the DICOM sweep reports the bytes it never read", () => {
     // verdict and `scanDicom` appends to it exactly as it did before, so a
     // halting object with a hit still refuses and a halting object without one
     // still exits 0. A disclosure that could turn 1 into 0 would be the net leak
-    // `#97` paid for; one that turned 0 into 1 would red CI on conformant files.
+    // `dicom#97` paid for; one that turned 0 into 1 would red CI on conformant files.
     // The violator sits BEFORE the halt, so the tag table reaches it. A name behind
     // the halt is exactly the one the tag table cannot see, which is the case above.
     const withHit = runScanner([

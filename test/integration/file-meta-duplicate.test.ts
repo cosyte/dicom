@@ -1,11 +1,11 @@
 /**
- * `DICOM-FILE-META-DROPS-DUPLICATE` - a second copy of a MODELED `(0002,xxxx)`
+ * The File Meta duplicate fix - a second copy of a MODELED `(0002,xxxx)`
  * element left the parsed object with no warning and no residue, and
  * `(0002,xxxx)` is the group that decides how every following byte is read.
  *
- * This is `#70`'s shape one group over, and it is lossy by a different route.
+ * This is `dicom#70`'s shape one group over, and it is lossy by a different route.
  * `parseFileMeta` collects the group into an **array**, so nothing is
- * overwritten and `DICOM_DUPLICATE_TAG_IN_DATA_SET` never fires here - `#70`'s
+ * overwritten and `DICOM_DUPLICATE_TAG_IN_DATA_SET` never fires here - `dicom#70`'s
  * JSDoc said exactly that, and reading it as an all-clear was the defect. The
  * eight tags in `MODELED_FM_TAGS` are answered by a **first-match** search and
  * are **excluded** from `extraElements`, the verbatim residue that gives the
@@ -13,7 +13,7 @@
  *
  * So the two codes resolve a repeat the opposite way round, deliberately,
  * because the two readings do: the **FIRST** copy wins in the File Meta group,
- * the **LAST** read wins in a Data Set. Neither reading moves in this slice.
+ * the **LAST** read wins in a Data Set. Neither reading moves in this change.
  * `DICOM_DUPLICATE_FILE_META_ELEMENT` is a disclosure at the site that drops,
  * and nothing else - no value is guessed for the copy that lost, no residue is
  * invented for it (that would make the conservative serializer re-emit a group
@@ -22,7 +22,7 @@
  * **Why this half is the more dangerous one.** `(0002,0010)` Transfer Syntax UID
  * selects the encoding of every byte after the group. Two copies carrying
  * different UIDs are two different readings of the same file, and until this
- * slice the library picked one and said nothing. `the stakes` below pins that:
+ * change the library picked one and said nothing. `the stakes` below pins that:
  * the same dataset bytes, with only the ORDER of the two UIDs swapped, parse to
  * two different trees, and on base both files were silent.
  *
@@ -67,7 +67,7 @@ const PRIVATE_INFORMATION = "00020102" as Tag;
 const PATIENT_NAME = "00100010" as Tag;
 
 /**
- * Synthetic and deliberately fake. `#55` shipped a PHI claim whose payload
+ * Synthetic and deliberately fake. `dicom#55` shipped a PHI claim whose payload
  * carried no name at all, which made its pinning test vacuous BY FIXTURE; every
  * PHI assertion below runs against this string and asserts it is really present
  * before asserting it is absent from a diagnostic.
@@ -139,7 +139,7 @@ describe("a File Meta group that carries one modeled (0002,xxxx) tag twice", () 
     expect(ds.fileMeta?.transferSyntaxUID).toBe(EXPLICIT_LE);
 
     // And nothing anywhere in the object carries the copy that lost. This is the
-    // half `#70` did not cover: an array cannot overwrite, but the projection
+    // half `dicom#70` did not cover: an array cannot overwrite, but the projection
     // never asks it for a second copy and `extraElements` excludes the tag.
     const residue = (ds.fileMeta?.extraElements ?? []).map((e) => e.tag);
     expect(residue).not.toContain(TS_UID);
@@ -173,7 +173,7 @@ describe("a File Meta group that carries one modeled (0002,xxxx) tag twice", () 
     // Both files disclose the drop now, and the disclosure precedes the reading
     // that fails, so it is collected through `onWarning` rather than off an
     // object one of these two parses never returns. Both were silent before this
-    // slice, and that silence is the defect: a reader could not tell them apart.
+    // change, and that silence is the defect: a reader could not tell them apart.
     expect(disclosures(explicitFirst)).toBe(1);
     expect(disclosures(implicitFirst)).toBe(1);
   });
@@ -283,7 +283,7 @@ describe("a File Meta group that carries one modeled (0002,xxxx) tag twice", () 
     expect(warning?.position.fileMeta).toBe(true);
 
     // Not the survivor's offset, and this is the structural difference from
-    // `#70`: there the offset IS the survivor's, because the survivor is the
+    // `dicom#70`: there the offset IS the survivor's, because the survivor is the
     // element that replaced. Here the survivor came first.
     expect(droppedOffset).toBeGreaterThan(survivorOffset);
 
@@ -321,7 +321,7 @@ describe("a File Meta group that carries one modeled (0002,xxxx) tag twice", () 
  * so no frame ambiguity can reach it, that offset is the header of the element
  * that was dropped. So the snippet renders the first bytes of the value the
  * message deliberately withholds. A claim that big, tested that narrowly, is the
- * shape `#55` shipped and `#64` repeated.
+ * shape `dicom#55` shipped and `dicom#64` repeated.
  *
  * So the claim is cut to what the rows prove and the rest is pinned as the
  * measured residual it is, in `the strict-mode escalation` block below. **That
@@ -331,7 +331,7 @@ describe("a File Meta group that carries one modeled (0002,xxxx) tag twice", () 
  * stream under Deflated Explicit VR LE), while the snippet is cut from whichever
  * buffer the parse is holding, so which element a snippet's bytes belong to is
  * **not contracted** anywhere in this package. The snippet is a documented,
- * package-wide design (D-10) rather than a defect in this code, and redacting it
+ * package-wide design rather than a defect in this code, and redacting it
  * is a decision about every Tier-3 fatal in the library, not a rider on a File
  * Meta disclosure.
  */
@@ -341,13 +341,13 @@ describe("the warning MESSAGE is not itself a PHI surface", () => {
     const ds = parseDicom(
       withFileMeta([
         tsElement(EXPLICIT_LE),
-        { tag: SOURCE_AE, vr: "AE", value: val("CT-SCANNER-1") },
+        { tag: SOURCE_AE, vr: "AE", value: val("CT_SCANNER_1") },
         { tag: SOURCE_AE, vr: "AE", value: dropped },
       ]),
     );
 
     // NON-VACUITY, first: the fixture really does carry the name, in the very
-    // element that is dropped, and in the dataset. `#55`'s pinning test asserted
+    // element that is dropped, and in the dataset. `dicom#55`'s pinning test asserted
     // an absence over a payload with no name in it and proved nothing.
     expect(dropped.toString("latin1")).toContain("SMITHSON");
     expect(ds.get(PATIENT_NAME)?.rawBytes.toString("latin1")).toContain("SMITHSON");
@@ -357,7 +357,7 @@ describe("the warning MESSAGE is not itself a PHI surface", () => {
     );
     expect(warning).toBeDefined();
 
-    // Not "does not contain the whole name" - `#55` rendered FOUR letters of a
+    // Not "does not contain the whole name" - `dicom#55` rendered FOUR letters of a
     // surname. Every 4-character window of the payload is refused.
     for (const window of windows(PATIENT, 4)) {
       expect(warning?.message).not.toContain(window);
@@ -419,7 +419,7 @@ describe("the strict-mode escalation of THIS diagnostic DOES carry source bytes"
   const named = (): Buffer =>
     withFileMeta([
       tsElement(EXPLICIT_LE),
-      { tag: SOURCE_AE, vr: "AE", value: val("CT-SCANNER-1") },
+      { tag: SOURCE_AE, vr: "AE", value: val("CT_SCANNER_1") },
       { tag: SOURCE_AE, vr: "AE", value: val(`AE-${AE_TITLE}`) },
     ]);
 
@@ -427,7 +427,7 @@ describe("the strict-mode escalation of THIS diagnostic DOES carry source bytes"
     // NON-VACUITY FIRST, and by fixture: the lenient parse of these same bytes
     // produces a warning whose message holds no window of the name. Without this
     // the row below could pass against a build that never carried the name at
-    // all - which is exactly how `#55`'s pin proved nothing.
+    // all - which is exactly how `dicom#55`'s pin proved nothing.
     const lenient = parseDicom(named());
     const warning = lenient.warnings.find(
       (w) => w.code === WARNING_CODES.DICOM_DUPLICATE_FILE_META_ELEMENT,
@@ -463,13 +463,13 @@ describe("the strict-mode escalation of THIS diagnostic DOES carry source bytes"
       Buffer.from([0x02, 0x00, 0x16, 0x00, 0x41, 0x45, 0x0c, 0x00]),
     );
     expect(decoded.subarray(8).toString("latin1")).toBe("AE-SMITH");
-    // Five letters of the surname, from a value the message withholds. `#55`
+    // Five letters of the surname, from a value the message withholds. `dicom#55`
     // shipped on four.
     expect(decoded.toString("latin1")).toContain("SMITH");
   });
 
   it("the lenient path carries no snippet at all, which is what makes the two paths differ", () => {
-    // The control. `DicomParseWarning` has no `snippet` field by design (D-07),
+    // The control. `DicomParseWarning` has no `snippet` field by design,
     // so "review the message" is a complete review of the lenient path and an
     // incomplete one of the strict path. That asymmetry is the finding.
     const warning = parseDicom(named()).warnings.find(

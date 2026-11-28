@@ -23,11 +23,7 @@ import type { DicomDate, DicomTime, PersonName } from "../vr/types.js";
 /**
  * First non-empty string of a `strings`/`text` VR, else `undefined`.
  *
- * @example
- * ```ts
- * import { parseDicom, readString } from "@cosyte/dicom";
- * const modality = readString(parseDicom(buf), "00080060"); // "CT"
- * ```
+ * @internal
  */
 export function readString(ds: Dataset, tag: Tag): string | undefined {
   const v = ds.get(tag)?.value;
@@ -45,11 +41,7 @@ export function readString(ds: Dataset, tag: Tag): string | undefined {
  * (`DS`), or `integerString` (`IS`) VR. A `null` (malformed) first element
  * or a non-numeric VR yields `undefined`.
  *
- * @example
- * ```ts
- * import { parseDicom, readNumber } from "@cosyte/dicom";
- * const rows = readNumber(parseDicom(buf), "00280010"); // 512
- * ```
+ * @internal
  */
 export function readNumber(ds: Dataset, tag: Tag): number | undefined {
   const v = ds.get(tag)?.value;
@@ -67,11 +59,7 @@ export function readNumber(ds: Dataset, tag: Tag): number | undefined {
  * malformed component (`DS`/`IS`) so the caller sees the deviation rather
  * than a coerced value. `undefined` when the tag is absent or not numeric.
  *
- * @example
- * ```ts
- * import { parseDicom, readNumberArray } from "@cosyte/dicom";
- * const spacing = readNumberArray(parseDicom(buf), "00280030"); // [0.7, 0.7]
- * ```
+ * @internal
  */
 export function readNumberArray(ds: Dataset, tag: Tag): readonly (number | null)[] | undefined {
   const v = ds.get(tag)?.value;
@@ -84,12 +72,7 @@ export function readNumberArray(ds: Dataset, tag: Tag): readonly (number | null)
 /**
  * A `PN` VR's first {@link PersonName}, keeping its component structure.
  *
- * @example
- * ```ts
- * import { parseDicom, readPersonName } from "@cosyte/dicom";
- * const name = readPersonName(parseDicom(buf), "00100010");
- * name?.alphabetic.familyName; // "Doe"
- * ```
+ * @internal
  */
 export function readPersonName(ds: Dataset, tag: Tag): PersonName | undefined {
   const v = ds.get(tag)?.value;
@@ -99,11 +82,7 @@ export function readPersonName(ds: Dataset, tag: Tag): PersonName | undefined {
 /**
  * A `dates` VR's first {@link DicomDate}, else `undefined`.
  *
- * @example
- * ```ts
- * import { parseDicom, readDate } from "@cosyte/dicom";
- * const birth = readDate(parseDicom(buf), "00100030"); // { year, month, day }
- * ```
+ * @internal
  */
 export function readDate(ds: Dataset, tag: Tag): DicomDate | undefined {
   const v = ds.get(tag)?.value;
@@ -113,11 +92,7 @@ export function readDate(ds: Dataset, tag: Tag): DicomDate | undefined {
 /**
  * A `times` VR's first {@link DicomTime}, else `undefined`.
  *
- * @example
- * ```ts
- * import { parseDicom, readTime } from "@cosyte/dicom";
- * const t = readTime(parseDicom(buf), "00080030"); // { hour, minute, second }
- * ```
+ * @internal
  */
 export function readTime(ds: Dataset, tag: Tag): DicomTime | undefined {
   const v = ds.get(tag)?.value;
@@ -127,11 +102,7 @@ export function readTime(ds: Dataset, tag: Tag): DicomTime | undefined {
 /**
  * The items of an `SQ` element, or `undefined` when absent / not a sequence.
  *
- * @example
- * ```ts
- * import { parseDicom, readItems } from "@cosyte/dicom";
- * const items = readItems(parseDicom(buf), "00101002"); // Other Patient IDs Seq
- * ```
+ * @internal
  */
 export function readItems(ds: Dataset, tag: Tag): readonly Item[] | undefined {
   const v = ds.get(tag)?.value;

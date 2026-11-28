@@ -92,7 +92,7 @@ export interface PixelDataFragments {
  * fragments read may not be all the sender wrote. Read the warnings before
  * treating the list as complete.
  *
- * @throws `DicomParseError` with code `INVALID_FILE_META` when the element's
+ * @throws {DicomParseError} with code `INVALID_FILE_META` when the element's
  *   bytes are not an Item stream (an Item header cut short, an Item reaching past
  *   the bytes, or a tag other than `(FFFE,E000)` / `(FFFE,E0DD)`). `parseDicom`
  *   refuses such bytes itself, so only a hand-built `Element` reaches this; the

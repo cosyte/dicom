@@ -22,12 +22,7 @@ import { joinTag } from "../tag.js";
  * Decode `US UL SS SL FL FD` to a `number[]` (endianness from `littleEndian`;
  * signedness from the VR). A non-numeric VR yields `[]` (defensive).
  *
- * @example
- * ```ts
- * import { Buffer } from "node:buffer";
- * import { decodeNumbers } from "@cosyte/dicom";
- * decodeNumbers(Buffer.from([0x05, 0x00]), "US", true); // [5]
- * ```
+ * @internal
  */
 export function decodeNumbers(bytes: Buffer, vr: VR, littleEndian: boolean): number[] {
   return decodeNumbersIn(bytes, 0, bytes.length, vr, littleEndian);
@@ -73,14 +68,7 @@ export function decodeNumbersIn(
  * Decode the 64-bit VRs `SV` (signed) / `UV` (unsigned) to a `bigint[]` so no
  * precision is lost above 2^53.
  *
- * @example
- * ```ts
- * import { Buffer } from "node:buffer";
- * import { decodeBigInts } from "@cosyte/dicom";
- * const b = Buffer.alloc(8);
- * b.writeBigUInt64LE(42n, 0);
- * decodeBigInts(b, "UV", true); // [42n]
- * ```
+ * @internal
  */
 export function decodeBigInts(bytes: Buffer, vr: VR, littleEndian: boolean): bigint[] {
   const out: bigint[] = [];
@@ -97,12 +85,7 @@ export function decodeBigInts(bytes: Buffer, vr: VR, littleEndian: boolean): big
 /**
  * Decode an `AT` value (group/element uint16 pairs) to 8-hex tag strings.
  *
- * @example
- * ```ts
- * import { Buffer } from "node:buffer";
- * import { decodeAttributeTags } from "@cosyte/dicom";
- * decodeAttributeTags(Buffer.from([0x10, 0x00, 0x10, 0x00]), true); // ["00100010"]
- * ```
+ * @internal
  */
 export function decodeAttributeTags(bytes: Buffer, littleEndian: boolean): Tag[] {
   const out: Tag[] = [];

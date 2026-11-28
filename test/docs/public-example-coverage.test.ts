@@ -6,9 +6,9 @@ import { describe, expect, test } from "vitest";
 /**
  * The `@example` coverage gate.
  *
- * This package has required "JSDoc (with `@example`) on every public export" since Phase 1, and the
- * roadmap finalizes that rule in Phase 8. Until now it was a convention, which means it held exactly
- * as long as whoever added the next export remembered it. This test makes it a gate.
+ * This package has required "JSDoc (with `@example`) on every public export" from its first
+ * release. Until this test it was a convention, which means it held exactly as long as whoever
+ * added the next export remembered it. This test makes it a gate.
  *
  * IT WALKS THE PUBLIC BARREL, NOT `src/`. The bar is about what an installer sees in their editor,
  * so the set under test is the export set of `src/index.ts` resolved through the compiler: an alias

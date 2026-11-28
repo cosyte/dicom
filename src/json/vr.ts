@@ -13,6 +13,8 @@
  * ```ts
  * isMultiStringVr("CS"); // true
  * ```
+ *
+ * @internal
  */
 export function isMultiStringVr(vr: string): boolean {
   return ["AE", "AS", "CS", "DA", "DT", "LO", "SH", "TM", "UC", "UI"].includes(vr);
@@ -25,6 +27,8 @@ export function isMultiStringVr(vr: string): boolean {
  * ```ts
  * isSingleStringVr("LT"); // true
  * ```
+ *
+ * @internal
  */
 export function isSingleStringVr(vr: string): boolean {
   return ["LT", "ST", "UT", "UR"].includes(vr);
@@ -38,6 +42,8 @@ export function isSingleStringVr(vr: string): boolean {
  * ```ts
  * isCharsetVr("PN"); // true
  * ```
+ *
+ * @internal
  */
 export function isCharsetVr(vr: string): boolean {
   return ["SH", "LO", "UC", "ST", "LT", "UT", "PN"].includes(vr);
@@ -53,6 +59,8 @@ export function isCharsetVr(vr: string): boolean {
  * isCarriedCharsetTerm("ISO_IR 100"); // true
  * isCarriedCharsetTerm("ISO 2022 IR 100"); // false
  * ```
+ *
+ * @internal
  */
 export function isCarriedCharsetTerm(term: unknown): boolean {
   return [
@@ -83,6 +91,8 @@ export function isCarriedCharsetTerm(term: unknown): boolean {
  * carriesCharset(["ISO_IR 192"]); // true
  * carriesCharset(["", "ISO 2022 IR 87"]); // false
  * ```
+ *
+ * @internal
  */
 export function carriesCharset(terms: readonly unknown[]): boolean {
   return terms.length <= 1 && terms.every(isCarriedCharsetTerm);
@@ -98,6 +108,8 @@ export function carriesCharset(terms: readonly unknown[]): boolean {
  * hasForbiddenControl("A\r\nB", "LT"); // false
  * hasForbiddenControl("A\u001bB", "LO"); // true
  * ```
+ *
+ * @internal
  */
 export function hasForbiddenControl(text: string, vr: string): boolean {
   const formatted = vr === "LT" || vr === "ST" || vr === "UT";
@@ -117,6 +129,8 @@ export function hasForbiddenControl(text: string, vr: string): boolean {
  * ```ts
  * numberWidth("US"); // 2
  * ```
+ *
+ * @internal
  */
 export function numberWidth(vr: string): 2 | 4 | 8 | undefined {
   if (vr === "US" || vr === "SS") return 2;
@@ -132,6 +146,8 @@ export function numberWidth(vr: string): 2 | 4 | 8 | undefined {
  * ```ts
  * isBinaryVr("OB"); // true
  * ```
+ *
+ * @internal
  */
 export function isBinaryVr(vr: string): boolean {
   return vr === "OB" || vr === "UN" || isSwappedBinaryVr(vr);
@@ -145,6 +161,8 @@ export function isBinaryVr(vr: string): boolean {
  * ```ts
  * isSwappedBinaryVr("OW"); // true
  * ```
+ *
+ * @internal
  */
 export function isSwappedBinaryVr(vr: string): boolean {
   return ["OD", "OF", "OL", "OV", "OW"].includes(vr);
@@ -160,6 +178,8 @@ export function isSwappedBinaryVr(vr: string): boolean {
  * takesBulkDataUri("US"); // true
  * takesBulkDataUri("LO"); // false
  * ```
+ *
+ * @internal
  */
 export function takesBulkDataUri(vr: string): boolean {
   return (
@@ -180,6 +200,8 @@ export function takesBulkDataUri(vr: string): boolean {
  * bulkDataWidth("UV"); // 8
  * bulkDataWidth("OB"); // 1
  * ```
+ *
+ * @internal
  */
 export function bulkDataWidth(vr: string): 1 | 2 | 4 | 8 {
   if (vr === "OW" || vr === "US" || vr === "SS") return 2;
@@ -199,6 +221,8 @@ export function bulkDataWidth(vr: string): 1 | 2 | 4 | 8 {
  * isBulkTag("7FE00010"); // true
  * isBulkTag("00282000"); // false
  * ```
+ *
+ * @internal
  */
 export function isBulkTag(tag: string): boolean {
   if (["7FE00008", "7FE00009", "7FE00010", "54001010", "56000020", "00420011"].includes(tag)) {
@@ -217,6 +241,8 @@ export function isBulkTag(tag: string): boolean {
  * ```ts
  * decimalKey("+0012.50"); // "125e-1"
  * ```
+ *
+ * @internal
  */
 export function decimalKey(text: string): string {
   const match = /^[+-]?(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/u.exec(text) as RegExpExecArray;
@@ -237,6 +263,8 @@ export function decimalKey(text: string): string {
  * ```ts
  * isDecimalString("-1.5e3"); // true
  * ```
+ *
+ * @internal
  */
 export function isDecimalString(text: string): boolean {
   return /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/u.test(text);
@@ -249,6 +277,8 @@ export function isDecimalString(text: string): boolean {
  * ```ts
  * isIntegerString("+42"); // true
  * ```
+ *
+ * @internal
  */
 export function isIntegerString(text: string): boolean {
   return /^[+-]?\d+$/u.test(text);

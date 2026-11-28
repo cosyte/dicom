@@ -1,24 +1,20 @@
 /**
- * Phase 2 capstone - strict-mode escalation pair-test gate (D-36, TOL-01).
+ * The strict-mode escalation pair-test gate.
  *
- * D-36: every Tier-2 code that Phase 2 *actively emits* (the D-08 active-emit
- * list - 13 codes)
- * MUST have a strict-mode pair test. Lenient mode emits the warning AND
- * parsing continues; strict mode throws a `DicomParseError` carrying the
- * matching code through the single emit chokepoint shipped in plan 02-01.
+ * Every Tier-2 code the structural parse *actively emits* (the active-emit
+ * list below) MUST have a strict-mode pair test. Lenient mode emits the
+ * warning AND parsing continues; strict mode throws a `DicomParseError`
+ * carrying the matching code through the single emit chokepoint.
  *
- * Phase 2 fails CI if any actively-emitted code lacks the pair.
+ * CI fails if any actively-emitted code lacks the pair.
  *
- * Status of the 13 codes in this plan (02-06):
- *   - 12 are real pair tests authored below.
- *   - 1 is `it.todo` - `DICOM_PIXEL_DATA_LENGTH_MISMATCH`. Per CONTEXT D-32
- *     the post-pass that emits this code was specified but is not yet
- *     implemented (the factory and registry slot exist, but no emission
- *     site fires under any Phase-2 input). Tracked as a Phase-2 deferred
- *     post-pass; does not block plan 02-06 per the plan's <active_emit_codes>
- *     note.
+ * Status of the codes:
+ *   - Most are real pair tests authored below.
+ *   - `DICOM_PIXEL_DATA_LENGTH_MISMATCH` is `it.todo`: the post-pass that
+ *     emits this code is not yet implemented (the factory and registry slot
+ *     exist, but no emission site fires under any input).
  *
- * Plan-defined acceptance: a "no missing fixtures" gate test verifies the
+ * A "no missing fixtures" gate test verifies the
  * authored fixture list covers every code in `ACTIVE_CODES` (less the
  * documented `it.todo` exception); regressions surface immediately.
  *
@@ -32,7 +28,7 @@ import { describe, expect, it } from "vitest";
 import { DicomParseError, parseDicom, WARNING_CODES, type WarningCode } from "../../src/index.js";
 import { buildDicom } from "../helpers/build-dicom.js";
 
-// -- Active-emit list (D-08) --------------------------------------------------
+// -- Active-emit list --------------------------------------------------
 
 const ACTIVE_CODES: readonly WarningCode[] = [
   WARNING_CODES.DICOM_MISSING_PREAMBLE,
@@ -45,18 +41,18 @@ const ACTIVE_CODES: readonly WarningCode[] = [
   WARNING_CODES.DICOM_NONZERO_RESERVED_BYTES,
   WARNING_CODES.DICOM_UN_PARSED_AS_SQ,
   WARNING_CODES.DICOM_EMPTY_ITEM_IN_SEQUENCE,
-  WARNING_CODES.DICOM_PIXEL_DATA_LENGTH_MISMATCH, // see it.todo below - D-32 post-pass deferred
+  WARNING_CODES.DICOM_PIXEL_DATA_LENGTH_MISMATCH, // see it.todo below - post-pass deferred
   WARNING_CODES.DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR,
 ] as const;
 
 /**
  * Codes that intentionally do not have a real strict-mode pair test in
- * this plan. Every entry must reference a documented decision in the plan
- * or CONTEXT.md and have an `it.todo` placeholder below so the gap is
+ * this file. Every entry must say why in a comment and have an `it.todo`
+ * placeholder below so the gap is
  * visible at every test-suite run.
  */
 const DEFERRED_CODES: ReadonlySet<WarningCode> = new Set<WarningCode>([
-  // CONTEXT D-32 post-pass not yet implemented (no emit site exists in src/).
+  //  post-pass not yet implemented (no emit site exists in src/).
   WARNING_CODES.DICOM_PIXEL_DATA_LENGTH_MISMATCH,
   // CP-246 strict-mode escalation regression: `tryParseUnAsSQ` (sequence.ts)
   // wraps the descent in a try/catch that swallows ANY thrown error,
@@ -64,7 +60,6 @@ const DEFERRED_CODES: ReadonlySet<WarningCode> = new Set<WarningCode>([
   // Under strict mode the parser therefore falls back to UN silently instead
   // of escalating `DICOM_UN_PARSED_AS_SQ` to a throw. Lenient-mode emission
   // works correctly (the `lenient mode` half of this pair is a real test).
-  // Tracked as a Phase-2 minor follow-up - see `02-06-SUMMARY.md` deviations.
   WARNING_CODES.DICOM_UN_PARSED_AS_SQ,
 ]);
 
@@ -121,11 +116,11 @@ function buildNonzeroReservedBytesFixture(): Buffer {
  * Build a Part-10 buffer with a CP-246 fixture: a UN-undefined-length
  * element wrapping a valid Implicit-VR-LE-encoded SQ payload (one empty
  * defined-length item + SeqDelim). Parser must descend successfully and
- * emit `DICOM_UN_PARSED_AS_SQ` per D-30.
+ * emit `DICOM_UN_PARSED_AS_SQ`.
  *
  * Uses a **private** outer tag `(0009,1000)` instead of a standard SQ tag
  * like `(0040,A730)` - private tags have no dictionary entry, so the
- * VR-mismatch check (TOL-08) is skipped. Under strict mode the parser
+ * VR-mismatch check is skipped. Under strict mode the parser
  * therefore throws on the CP-246 emit (the only Tier-2 it sees) rather
  * than on a preceding `DICOM_VR_MISMATCH`. Private-creator tracking is
  * Implicit-only - Explicit-VR parsers don't emit `DICOM_PRIVATE_TAG_NO_CREATOR`
@@ -202,7 +197,7 @@ const FIXTURES: readonly PairFixture[] = [
   },
   {
     code: WARNING_CODES.DICOM_ODD_LENGTH_VALUE_PADDED,
-    // Odd-length SH (5 bytes) under Explicit-LE → emits TOL-07 warning.
+    // Odd-length SH (5 bytes) under Explicit-LE → emits warning.
     buildBuffer: () =>
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
@@ -220,7 +215,7 @@ const FIXTURES: readonly PairFixture[] = [
   },
   {
     code: WARNING_CODES.DICOM_PRIVATE_TAG_NO_CREATOR,
-    // Private element (0019,1000) under Implicit-LE with no creator slot → TOL-09.
+    // Private element (0019,1000) under Implicit-LE with no creator slot → .
     buildBuffer: () =>
       buildDicom({
         transferSyntax: TS_IMPLICIT_LE,
@@ -229,7 +224,7 @@ const FIXTURES: readonly PairFixture[] = [
   },
   {
     code: WARNING_CODES.DICOM_GROUP_LENGTH_IN_DATASET,
-    // (0008,0000) Group Length element in non-FM dataset → TOL-10.
+    // (0008,0000) Group Length element in non-FM dataset → .
     buildBuffer: () =>
       buildDicom({
         transferSyntax: TS_IMPLICIT_LE,
@@ -246,7 +241,7 @@ const FIXTURES: readonly PairFixture[] = [
   {
     code: WARNING_CODES.DICOM_EMPTY_ITEM_IN_SEQUENCE,
     // SQ element containing exactly one defined-length item with elements=[]
-    // (length=0) → emits the warning per D-28.
+    // (length=0) → emits the warning.
     buildBuffer: () =>
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
@@ -261,9 +256,9 @@ const FIXTURES: readonly PairFixture[] = [
   {
     code: WARNING_CODES.DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR,
     // Private element (0019,1000) under Implicit-LE WITH a registered
-    // creator at (0019,0010). Per plan 02-03 the IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR
-    // warning is ALWAYS emitted for private non-creator-slot tags so Phase 6
-    // can wire profile VR overrides; PRIVATE_TAG_NO_CREATOR is suppressed
+    // creator at (0019,0010). The IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR
+    // warning is ALWAYS emitted for private non-creator-slot tags so a
+    // profile can supply the VR; PRIVATE_TAG_NO_CREATOR is suppressed
     // when a creator is registered, leaving this code as the only Tier-2
     // emission. Under strict mode, that means the parser throws on this code
     // first (the only one it sees), which is what this test verifies.
@@ -282,8 +277,8 @@ const FIXTURES: readonly PairFixture[] = [
 
 // -- Tests --------------------------------------------------------------------
 
-describe("Strict-mode escalation gate (D-36, TOL-01) - every actively-emitted Tier-2 code paired", () => {
-  it("D-36 enforcement: every active code has a fixture (or is documented as deferred)", () => {
+describe("Strict-mode escalation gate - every actively-emitted Tier-2 code paired", () => {
+  it("enforcement: every active code has a fixture (or is documented as deferred)", () => {
     const codesWithFixtures = new Set(FIXTURES.map((f) => f.code));
     const missing: WarningCode[] = [];
     for (const code of ACTIVE_CODES) {
@@ -327,7 +322,7 @@ describe("Strict-mode escalation gate (D-36, TOL-01) - every actively-emitted Ti
   }
 });
 
-describe("DICOM_UN_PARSED_AS_SQ - CP-246 detection (D-30)", () => {
+describe("DICOM_UN_PARSED_AS_SQ - CP-246 detection", () => {
   it("lenient mode: emits DICOM_UN_PARSED_AS_SQ for a private UN-undefined-length wrapping a valid Implicit-LE SQ", () => {
     const ds = parseDicom(buildCp246Fixture());
     expect(ds.warnings.some((w) => w.code === WARNING_CODES.DICOM_UN_PARSED_AS_SQ)).toBe(true);
@@ -345,14 +340,10 @@ describe("DICOM_UN_PARSED_AS_SQ - CP-246 detection (D-30)", () => {
   });
 });
 
-describe("DICOM_PIXEL_DATA_LENGTH_MISMATCH - D-32 post-pass status", () => {
-  // Per CONTEXT D-32 the post-pass that emits this code was specified but
-  // never wired into Phase-2 source - `pixelDataLengthMismatch` exists as a
-  // factory in src/parser/warnings.ts and is registered in WARNING_CODES,
-  // but no emission site fires under any current input. The factory will be
-  // activated when D-32's post-pass lands (Phase-2 minor commit or Phase-3
-  // pixel-data work - see Phase-2 deviations in 02-06-SUMMARY.md).
-  it.todo(
-    "pair test pending D-32 post-pass implementation (factory exists; emission site deferred)",
-  );
+describe("DICOM_PIXEL_DATA_LENGTH_MISMATCH - post-pass status", () => {
+  // The post-pass that emits this code is not wired into the parser yet:
+  // `pixelDataLengthMismatch` exists as a factory in src/parser/warnings.ts
+  // and is registered in WARNING_CODES, but no emission site fires under any
+  // current input. The factory will be activated when that post-pass lands.
+  it.todo("pair test pending post-pass implementation (factory exists; emission site deferred)");
 });

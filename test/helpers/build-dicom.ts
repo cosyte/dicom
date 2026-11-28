@@ -1,20 +1,16 @@
 /**
  * Programmatic Part 10 fixture builder - internal test utility.
  *
- * D-37 / D-38: this helper lives in `test/helpers/` and is NOT exported from
- * `src/index.ts`.
- * Phase 2 ships zero curated `.dcm` fixture files; everything is built in
- * memory by this helper. Phase 5's serializer eventually subsumes the
- * production version of this code.
+ * This helper lives in `test/helpers/` and is NOT exported from
+ * `src/index.ts`. The repository ships no curated `.dcm` fixture files;
+ * everything is built in memory by this helper.
  *
- * Phase 2 plan 02-02 implements Implicit VR LE and Explicit VR LE encoders.
- * Plan 02-04 extends `encodeElement` with the Explicit VR BE branch (with
- * per-VR byte-swap) plus SQ item encoding (FFFE markers, defined- and
- * undefined-length forms, encapsulated pixel data fragments).
- * Plan 02-05 adds the Deflated Explicit VR LE branch (`zlib.deflateRawSync`
- * applied to an Explicit-LE-encoded element body - symmetric counterpart
- * to `parseDeflatedLE`'s `zlib.inflateRawSync` per CONTEXT D-26 /
- * PITFALLS §1.4).
+ * It encodes Implicit VR LE and Explicit VR LE, the Explicit VR BE branch
+ * (with per-VR byte-swap), SQ items (FFFE markers, defined- and
+ * undefined-length forms, encapsulated pixel data fragments), and the
+ * Deflated Explicit VR LE branch (`zlib.deflateRawSync` applied to an
+ * Explicit-LE-encoded element body, the symmetric counterpart to
+ * `parseDeflatedLE`'s `zlib.inflateRawSync`).
  *
  * @module
  */
@@ -99,7 +95,7 @@ const BE_VR_STRIDE_LOCAL: Readonly<Record<VR, 0 | 2 | 4 | 8>> = {
  * unsigned integer VL" - and it is here so that a fixture written with an
  * unrecognized VR is a **conformant** file rather than one no conformant reader
  * would accept. A test that needs the *non*-conformant short form (the shape
- * `DICOM-UNRECOGNIZED-VR-SHORT-FORM` refuses) hand-assembles it; see
+ * the parser refuses) hand-assembles it; see
  * `test/integration/unrecognized-vr-structure.test.ts`.
  *
  * `BE_VR_STRIDE_LOCAL`'s keys are the 34, mirroring the production set the same
@@ -132,7 +128,7 @@ export interface BuildDicomElement {
    * well-formed element.
    *
    * Use it only to construct a length field that disagrees with the bytes
-   * present - the class of input `DICOM-EXPLICIT-VR-UNBOUNDED-ITEM-READ` is
+   * present, the class of input an unbounded Explicit VR item read is
    * about. A test asserting tolerant behaviour on such a file has to be able to
    * build one, and hand-assembling raw buffers in the test hides which byte is
    * the lie.
@@ -142,7 +138,7 @@ export interface BuildDicomElement {
 
 /**
  * One item inside an SQ element, encoded with FFFE,E000 + length + nested
- * elements + (optional) FFFE,E00D ItemDelim. Plan 02-04 only.
+ * elements + (optional) FFFE,E00D ItemDelim.
  */
 export interface BuildDicomSqItem {
   readonly elements: readonly (BuildDicomElement | BuildDicomSqElement)[];
@@ -173,7 +169,7 @@ export interface BuildDicomSqItem {
  * An SQ-typed element (or encapsulated-pixel-data element when
  * `encapsulatedPixelData === true`). The encoder writes the SQ header
  * with VR=SQ (or VR=OB for encapsulated pixel data), the items, and the
- * FFFE,E0DD SeqDelim if `undefinedLength === true`. Plan 02-04 only.
+ * FFFE,E0DD SeqDelim if `undefinedLength === true`.
  */
 export interface BuildDicomSqElement {
   readonly tag: Tag;
@@ -194,7 +190,7 @@ export interface BuildDicomSqElement {
   readonly encapsulatedFragments?: readonly Buffer[];
   /**
    * When `encapsulatedPixelData === true`, override the on-wire VR. Defaults
-   * to `OB` (per D-31). Setting to `UN` (with `undefinedLength: true`) lets
+   * to `OB`. Setting to `UN` (with `undefinedLength: true`) lets
    * the test helper produce a CP-246 fixture: a UN-undefined-length value
    * containing Implicit-VR-LE-encoded SQ bytes.
    */
@@ -240,7 +236,7 @@ export interface BuildDicomOptions {
   readonly fileMetaGroupLength?: number | "omit" | "wrong";
   /** When `true`, omits the `(0002,0010)` Transfer Syntax UID element. */
   readonly skipTransferSyntaxUID?: boolean;
-  /** Optional File Meta extras (FM-02 fields beyond TS UID). */
+  /** Optional File Meta extras (fields beyond the Transfer Syntax UID). */
   readonly mediaStorageSOPClassUID?: string;
   readonly mediaStorageSOPInstanceUID?: string;
   readonly implementationClassUID?: string;
@@ -298,7 +294,7 @@ export function buildDicom(opts: BuildDicomOptions): Buffer {
     parts.push(Buffer.from("DICM", "ascii"));
   }
 
-  // Build File Meta body (Explicit VR LE - hard-wired per FM-01 / D-17).
+  // Build File Meta body (Explicit VR LE - hard-wired).
   const fileMetaElements: Buffer[] = [];
   if (opts.skipTransferSyntaxUID !== true) {
     fileMetaElements.push(buildExplicitLeElement("00020010", "UI", padUI(opts.transferSyntax)));
@@ -338,7 +334,7 @@ export function buildDicom(opts: BuildDicomOptions): Buffer {
     if (opts.fileMetaGroupLength === "wrong") {
       // Under-report by 8 bytes: parser reads forward until first non-(0002,xxxx)
       // group, observes actual > declared, emits MISMATCH, and trusts actual.
-      // (Over-reporting can collide with the truncated-buffer fatal in T-02-02-01.)
+      // (Over-reporting can collide with the truncated-buffer fatal.)
       declared = Math.max(0, fileMetaBody.length - 8);
     } else if (typeof opts.fileMetaGroupLength === "number") {
       declared = opts.fileMetaGroupLength;
@@ -352,11 +348,10 @@ export function buildDicom(opts: BuildDicomOptions): Buffer {
   parts.push(fileMetaBody);
 
   // Dataset elements per the requested transfer syntax.
-  // TS-04 (Deflated Explicit VR LE) is the symmetric counterpart of
+  // Deflated Explicit VR LE is the symmetric counterpart of
   // `parseDeflatedLE` - encode as Explicit VR LE first, then deflate
   // the concatenation via `zlib.deflateRawSync` (RFC 1951 raw deflate,
-  // matching `inflateRawSync` on the parser side per CONTEXT D-26 /
-  // PITFALLS §1.4). File Meta is NOT deflated (FM-01). The JPIP Referenced
+  // matching `inflateRawSync` on the parser side). File Meta is NOT deflated. The JPIP Referenced
   // Deflate syntaxes deflate the same Explicit VR LE Data Set the same way.
   if (opts.dataSetBytes !== undefined) {
     parts.push(opts.dataSetBytes);
@@ -456,13 +451,13 @@ function buildExplicitBeElement(tag: Tag, vr: VR, value: Buffer, delta = 0): Buf
   const elementBuf = Buffer.alloc(2);
   elementBuf.writeUInt16BE(element, 0);
   const vrBuf = Buffer.from(vr, "ascii");
-  // Per D-23 / D-24: swap value bytes per the per-VR stride before emit.
-  // OB / UN stride = 0 → no swap (D-24).
+  // Swap value bytes per the per-VR stride before emit.
+  // OB / UN stride = 0 → no swap.
   // AT stride=2: caller-supplied bytes are interpreted as a contiguous run
   // of group/element 16-bit halves, each emitted BE - total swap count is
   // value.length/2.
   // An unrecognized VR has no published stride; a byte stream is the only safe
-  // reading, so it is never swapped (the same answer `OB` / `UN` get, D-24).
+  // reading, so it is never swapped (the same answer `OB` / `UN` get).
   const swapped = swapBytes(value, BE_VR_STRIDE_LOCAL[vr] ?? 0);
   const declared = swapped.length + delta;
   if (writesLongForm(vr)) {
@@ -477,7 +472,7 @@ function buildExplicitBeElement(tag: Tag, vr: VR, value: Buffer, delta = 0): Buf
 }
 
 // ---------------------------------------------------------------------------
-// FFFE markers + SQ encoders (D-25, D-28, D-29)
+// FFFE markers + SQ encoders
 // ---------------------------------------------------------------------------
 
 const ITEM_TAG_GROUP = 0xfffe;
@@ -488,10 +483,10 @@ const UNDEFINED_LENGTH = 0xffffffff;
 
 /**
  * Build a 4-byte FFFE marker tag. Identical layout under Implicit/Explicit
- * LE (group/element 16-bit LE); mirrored to BE under Explicit BE per D-25.
+ * LE (group/element 16-bit LE); mirrored to BE under Explicit BE.
  *
  * The `littleEndian` flag matches the dataset cursor's endianness - the
- * canonical FFFE-under-BE bug per PITFALLS §2.3 is exactly the case where
+ * canonical FFFE-under-BE bug is exactly the case where
  * a parser fails to honor this rule.
  */
 function buildFffeTagBytes(elementCode: number, littleEndian: boolean): Buffer {
@@ -565,7 +560,7 @@ function encodeSqItem(item: BuildDicomSqItem, ts: string): Buffer {
 function encodeSqElement(sq: BuildDicomSqElement, ts: string): Buffer {
   const littleEndian = tsLittleEndian(ts);
 
-  // Encapsulated pixel data path (D-31): VR=OB undefined-length + raw
+  // Encapsulated pixel data path: VR=OB undefined-length + raw
   // fragment items (no nested elements). The first fragment is the Basic
   // Offset Table per PS3.5 §A.4. Use undefinedLength=true unconditionally.
   if (sq.encapsulatedPixelData === true) {
@@ -685,9 +680,9 @@ function encodeElement(el: BuildDicomElement, ts: string): Buffer {
   if (ts === "1.2.840.10008.1.2") return buildImplicitLeElement(el.tag, el.value, delta);
   if (ts === "1.2.840.10008.1.2.1") return buildExplicitLeElement(el.tag, el.vr, el.value, delta);
   if (ts === "1.2.840.10008.1.2.2") return buildExplicitBeElement(el.tag, el.vr, el.value, delta);
-  // TS-04 (Deflated Explicit VR LE) is handled at the buildDicom level:
+  // Deflated Explicit VR LE is handled at the buildDicom level:
   // dataset elements are encoded as Explicit VR LE, then the entire
-  // dataset is deflated. encodeElement is never reached for TS-04.
+  // dataset is deflated. encodeElement is never reached for it.
   throw new Error(
     `buildDicom: encodeElement is not used for transferSyntax="${ts}" - Deflated TS encodes at the buildDicom level (caller bug).`,
   );

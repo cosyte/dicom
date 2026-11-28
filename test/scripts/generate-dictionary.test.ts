@@ -1,5 +1,5 @@
 /**
- * AC-9: IF the vendored PS3.6 document does not hash to the value in
+ * IF the vendored PS3.6 document does not hash to the value in
  * `vendor/nema/part06/SHA.txt` THEN `scripts/generate-dictionary.ts` exits non-zero
  * and leaves every committed generated artifact byte-identical.
  *
@@ -73,7 +73,7 @@ function expectCommittedArtifactsUnchanged(): void {
   }
 }
 
-describe("generate-dictionary refuses an unverified PS3.6 document (AC-9)", () => {
+describe("generate-dictionary refuses an unverified PS3.6 document", () => {
   beforeAll(() => {
     sandbox = createGeneratorSandbox("dictionary");
     GENERATED = join(sandbox.root, "src", "dictionary", "generated");
@@ -88,7 +88,7 @@ describe("generate-dictionary refuses an unverified PS3.6 document (AC-9)", () =
   });
 
   it(
-    "AC-9: exits non-zero when the document at the pinned path is not the pinned bytes",
+    "exits non-zero when the document at the pinned path is not the pinned bytes",
     () => {
       const pinned = pinnedSha();
       const path = join(NEMA_ROOT, pinned, "part06.xml");
@@ -127,7 +127,7 @@ describe("generate-dictionary refuses an unverified PS3.6 document (AC-9)", () =
   );
 
   it(
-    "AC-9: exits non-zero when SHA.txt names a hash the document under that name does not have",
+    "exits non-zero when SHA.txt names a hash the document under that name does not have",
     () => {
       const originalSha = readFileSync(NEMA_SHA_FILE, "utf8");
       const pinned = pinnedSha();

@@ -33,6 +33,8 @@ type Tag = string;
  * s.instanceUid;     // "1.2.840.113619..." - the cross-system study key
  * s.accessionNumber; // "ACC123"
  * ```
+ *
+ * @internal
  */
 export function buildStudy(ds: Dataset): StudyView {
   const view: { -readonly [K in keyof StudyView]: StudyView[K] } = {};

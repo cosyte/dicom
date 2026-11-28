@@ -103,6 +103,8 @@ const TO_ITEM_DELIMITER = Object.freeze({ stopOnItemDelim: true });
 /**
  * Hard cap on SQ nesting depth. Exceeding this throws
  * `DicomParseError(INVALID_FILE_META, 'SQ nesting depth exceeds 64', ...)`.
+ *
+ * @internal
  */
 export const NESTING_DEPTH_LIMIT = 64;
 
@@ -148,7 +150,11 @@ export interface ParseSequenceOptions {
   readonly encapsulatedPixelData?: boolean;
 }
 
-/** Result shape returned by {@link parseSequence}. */
+/**
+ * Result shape returned by {@link parseSequence}.
+ *
+ * @internal
+ */
 export interface ParseSequenceResult {
   /** The Data Set record of the first Item in the parse's compact table. */
   readonly itemFirst: number;

@@ -1,6 +1,5 @@
 /**
- * `(0012,0064)` De-identification Method Code Sequence, written by `deidentify()`
- * (S0356-dicom-13).
+ * `(0012,0064)` De-identification Method Code Sequence, written by `deidentify()`.
  *
  * PS3.15 2026c §E.1.1, read from the SHA-pinned `vendor/nema/part15/`: "one or
  * more codes from CID 7050 "De-identification Method" corresponding to the Profile
@@ -221,7 +220,7 @@ function warningsLeakName(warnings: readonly unknown[]): boolean {
 }
 
 describe("Tier 1: spec-clean (0012,0064) emission on a source without one", () => {
-  it("AC-1: every subset of the legal domain, the empty one included, writes a top-level SQ led by 113100", () => {
+  it("every subset of the legal domain, the empty one included, writes a top-level SQ led by 113100", () => {
     expect(DOMAIN.length).toBe(
       2 ** DEIDENTIFY_OPTIONS.length - 2 ** (DEIDENTIFY_OPTIONS.length - 2),
     );
@@ -239,7 +238,7 @@ describe("Tier 1: spec-clean (0012,0064) emission on a source without one", () =
     }
   });
 
-  it("AC-2: one further Item per active Option, in DEIDENTIFY_OPTIONS order, whatever order retain names them in", () => {
+  it("one further Item per active Option, in DEIDENTIFY_OPTIONS order, whatever order retain names them in", () => {
     for (const retain of DOMAIN) {
       const forward = deidentify(DATED, { retain }).dataset;
       const reversed = deidentify(DATED, { retain: [...retain].reverse() }).dataset;
@@ -252,7 +251,7 @@ describe("Tier 1: spec-clean (0012,0064) emission on a source without one", () =
     }
   });
 
-  it("AC-3: over the whole legal domain the codes are exactly 113100 plus the active Options', each Item exactly three attributes", () => {
+  it("over the whole legal domain the codes are exactly 113100 plus the active Options', each Item exactly three attributes", () => {
     const allowedTags = [CODE_VALUE, CODING_SCHEME_DESIGNATOR, CODE_MEANING];
     for (const retain of DOMAIN) {
       const { dataset } = deidentify(DATED, { retain });
@@ -273,7 +272,7 @@ describe("Tier 1: spec-clean (0012,0064) emission on a source without one", () =
     }
   });
 
-  it("AC-4: 113106 under full dates, 113107 under modified dates, neither under neither, dated or not", () => {
+  it("113106 under full dates, 113107 under modified dates, neither under neither, dated or not", () => {
     for (const input of [DATED, UNDATED]) {
       for (const retain of DOMAIN) {
         const { dataset, report } = deidentify(input, { retain });
@@ -293,7 +292,7 @@ describe("Tier 1: spec-clean (0012,0064) emission on a source without one", () =
     expect(neither).toStrictEqual(["113100"]);
   });
 
-  it("AC-10: a caller deidentificationMethod does not change the codes, even one naming an Option", () => {
+  it("a caller deidentificationMethod does not change the codes, even one naming an Option", () => {
     for (const retain of DOMAIN) {
       const plain = deidentify(DATED, { retain }).dataset.get(CODE_SEQUENCE)?.rawBytes;
       const named = deidentify(DATED, {
@@ -304,7 +303,7 @@ describe("Tier 1: spec-clean (0012,0064) emission on a source without one", () =
     }
   });
 
-  it("AC-9: (0012,0062) is still YES and (0012,0063) is still the pin's text, over the whole legal domain", () => {
+  it("(0012,0062) is still YES and (0012,0063) is still the pin's text, over the whole legal domain", () => {
     for (const retain of DOMAIN) {
       const { dataset } = deidentify(DATED, { retain });
       expect(dataset.has(CODE_SEQUENCE)).toBe(true);
@@ -315,7 +314,7 @@ describe("Tier 1: spec-clean (0012,0064) emission on a source without one", () =
     }
   });
 
-  it("AC-12: the package carries the thirteen CID 7050 rows, UID and version exactly as quoted", () => {
+  it("the package carries the thirteen CID 7050 rows, UID and version exactly as quoted", () => {
     expect(DEIDENTIFICATION_METHOD_CODES.contextGroupUid).toBe("1.2.840.10008.6.1.925");
     expect(DEIDENTIFICATION_METHOD_CODES.contextGroupVersion).toBe("20170914");
     expect(
@@ -336,15 +335,9 @@ describe("Tier 1: spec-clean (0012,0064) emission on a source without one", () =
     }
   });
 
-  it("AC-12: the two new warning codes are in the frozen registry with messages and in the locked snapshot", () => {
+  it("the two new warning codes are in the frozen registry with messages and in the locked snapshot", () => {
     const snapshot = readFileSync(
-      join(
-        import.meta.dirname,
-        "..",
-        "property",
-        "__snapshots__",
-        "warning-codes.snapshot.test.ts.snap",
-      ),
+      join(import.meta.dirname, "..", "property", "warning-codes.snapshot.test.ts"),
       "utf8",
     );
     for (const code of [
@@ -367,7 +360,7 @@ const PRIOR_ITEMS: readonly PriorItem[] = [
 ];
 
 describe("Tier 1: a spec-clean prior (0012,0064) is added to, never replaced", () => {
-  it("AC-5: every prior Item is kept, in order and byte-identical, ahead of this run's codes", () => {
+  it("every prior Item is kept, in order and byte-identical, ahead of this run's codes", () => {
     for (const ts of ENCODINGS) {
       const input = source({ ts, extra: [priorSequence(PRIOR_ITEMS)] });
       const sourceItems = input.get(CODE_SEQUENCE)?.items ?? [];
@@ -392,7 +385,7 @@ describe("Tier 1: a spec-clean prior (0012,0064) is added to, never replaced", (
     }
   });
 
-  it("AC-6: a code already carried under the same designator and value is not added again, whatever its meaning or pad", () => {
+  it("a code already carried under the same designator and value is not added again, whatever its meaning or pad", () => {
     const { dataset } = deidentify(
       source({
         extra: [
@@ -413,7 +406,7 @@ describe("Tier 1: a spec-clean prior (0012,0064) is added to, never replaced", (
     ]);
   });
 
-  it("AC-6: a prior Item missing its designator or its value carries no code, so the code is still added", () => {
+  it("a prior Item missing its designator or its value carries no code, so the code is still added", () => {
     const { dataset } = deidentify(
       source({
         extra: [
@@ -447,7 +440,7 @@ describe("Tier 1: a spec-clean prior (0012,0064) is added to, never replaced", (
     ]);
   });
 
-  it("AC-7: a kept prior is disclosed under its own code, which never quotes it and never reaches the parse warnings", () => {
+  it("a kept prior is disclosed under its own code, which never quotes it and never reaches the parse warnings", () => {
     const named = `Anonymized by hand, removed ${NAME}`;
     const input = source({ extra: [priorSequence([["99001", "99SYN", named]])] });
     const { dataset, report } = deidentify(input);
@@ -477,7 +470,7 @@ describe("Tier 1: a spec-clean prior (0012,0064) is added to, never replaced", (
     expect(WARNING_MESSAGES.DICOM_DEIDENT_METHOD_PRIOR_RETAINED).not.toContain("(0012,0064)");
   });
 
-  it("AC-7: a prior (0012,0064) with zero Items raises no such warning", () => {
+  it("a prior (0012,0064) with zero Items raises no such warning", () => {
     const input = source({ extra: [priorSequence([])] });
     expect(input.get(CODE_SEQUENCE)?.items).toStrictEqual([]);
     const { dataset, report } = deidentify(input);
@@ -539,7 +532,7 @@ describe("Tier 2: an unreadable prior (0012,0064) is replaced, and said", () => 
     expect(codesIn(dataset.warnings)).not.toContain(replacedCode);
   }
 
-  it("AC-8: a (0012,0064) encoded under a VR other than SQ is replaced by this run's Items only", () => {
+  it("a (0012,0064) encoded under a VR other than SQ is replaced by this run's Items only", () => {
     for (const vr of ["LO", "UT", "OB", "UN"] as const) {
       const input = source({
         extra: [{ tag: CODE_SEQUENCE, vr: vr as VR, value: pad(`removed ${NAME}`) }],
@@ -550,7 +543,7 @@ describe("Tier 2: an unreadable prior (0012,0064) is replaced, and said", () => 
     expect(deidentMethodCodesPriorReplaced).toHaveLength(1);
   });
 
-  it("AC-8: an SQ whose items the parse did not produce is replaced by this run's Items only", () => {
+  it("an SQ whose items the parse did not produce is replaced by this run's Items only", () => {
     // Implicit VR LE: the dictionary says SQ, and a defined-length value that is
     // not an item stream is kept as opaque bytes with items undefined.
     const input = source({
@@ -564,7 +557,7 @@ describe("Tier 2: an unreadable prior (0012,0064) is replaced, and said", () => 
     expectReplacedAndSaid(input);
   });
 
-  it("AC-8: a padding-only or empty prior raises nothing, and is still replaced", () => {
+  it("a padding-only or empty prior raises nothing, and is still replaced", () => {
     const shapes: readonly Dataset[] = [
       source({ extra: [{ tag: CODE_SEQUENCE, vr: "LO" as VR, value: Buffer.alloc(0) }] }),
       source({
@@ -591,7 +584,7 @@ describe("Tier 2: an unreadable prior (0012,0064) is replaced, and said", () => 
 });
 
 describe("Tier 3: the round trip and the fixed point", () => {
-  it("AC-11: Implicit LE, Explicit LE and Explicit BE each re-parse the same Items and add no warning of their own", () => {
+  it("Implicit LE, Explicit LE and Explicit BE each re-parse the same Items and add no warning of their own", () => {
     const retain: readonly DeidentifyOption[] = [
       "CleanDescriptors",
       "RetainLongitudinalTemporalModifiedDates",
@@ -630,7 +623,7 @@ describe("Tier 3: the round trip and the fixed point", () => {
     }
   });
 
-  it("AC-6: re-running on the parsed, serialized output is a fixed point, over the whole legal domain", () => {
+  it("re-running on the parsed, serialized output is a fixed point, over the whole legal domain", () => {
     for (const retain of DOMAIN) {
       const once = deidentify(DATED, { retain }).dataset;
       let current = once;
@@ -644,7 +637,7 @@ describe("Tier 3: the round trip and the fixed point", () => {
     }
   });
 
-  it("AC-6: a second run that adds one further Option appends exactly that Option's Item", () => {
+  it("a second run that adds one further Option appends exactly that Option's Item", () => {
     let pairs = 0;
     for (const base of DOMAIN) {
       const once = parseDicom(serializeDicom(deidentify(DATED, { retain: base }).dataset));

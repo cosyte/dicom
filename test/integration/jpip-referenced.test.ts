@@ -116,14 +116,14 @@ function attempt<T>(fn: () => T): { result: T | undefined; thrown: unknown } {
   }
 }
 
-describe("AC-11 precondition: the JPIP set under test is read from PS3.5, not typed", () => {
-  it("AC-1, AC-2: the vendored sections name exactly the four UIDs these rows split into pairs", () => {
+describe("precondition: the JPIP set under test is read from PS3.5, not typed", () => {
+  it("the vendored sections name exactly the four UIDs these rows split into pairs", () => {
     expect([...JPIP_SET].sort()).toStrictEqual([...EXPLICIT_PAIR, ...DEFLATE_PAIR].sort());
   });
 });
 
-describe("AC-1: sections A.6 and A.11 parse under Explicit VR LE rules and read as the twin", () => {
-  it.each(EXPLICIT_PAIR)("AC-1: %s", (uid) => {
+describe("sections A.6 and A.11 parse under Explicit VR LE rules and read as the twin", () => {
+  it.each(EXPLICIT_PAIR)("%s", (uid) => {
     const bytes = jpipObject({ transferSyntax: uid });
     // The fixture is what the criterion says: the Explicit VR LE Data Set, uncompressed.
     expect(bytes.subarray(bytes.length - jpipDataSet({}).length).equals(jpipDataSet({}))).toBe(
@@ -138,8 +138,8 @@ describe("AC-1: sections A.6 and A.11 parse under Explicit VR LE rules and read 
   });
 });
 
-describe("AC-2: sections A.7 and A.12 inflate per RFC 1951 and read as the sibling and the twin", () => {
-  it.each(DEFLATE_PAIR)("AC-2: %s", (uid) => {
+describe("sections A.7 and A.12 inflate per RFC 1951 and read as the sibling and the twin", () => {
+  it.each(DEFLATE_PAIR)("%s", (uid) => {
     const bytes = jpipObject({ transferSyntax: uid });
     // The Data Set after the uncompressed File Meta is a raw-deflate stream of the A.6 encoding.
     const deflated = deflateRawSync(jpipDataSet({}));
@@ -157,8 +157,8 @@ describe("AC-2: sections A.7 and A.12 inflate per RFC 1951 and read as the sibli
   });
 });
 
-describe("AC-3: Pixel Data Provider URL (0028,7FE0) is surfaced exactly as the file carries it", () => {
-  it("AC-3: the fixture URL carries a path, a query with ?, & and =, a %-escape, and odd length", () => {
+describe("Pixel Data Provider URL (0028,7FE0) is surfaced exactly as the file carries it", () => {
+  it("the fixture URL carries a path, a query with ?, & and =, a %-escape, and odd length", () => {
     const url = new URL(DEFAULT_PROVIDER_URL);
     expect(url.pathname.split("/").length).toBeGreaterThan(2);
     expect(DEFAULT_PROVIDER_URL).toContain("?");
@@ -170,7 +170,7 @@ describe("AC-3: Pixel Data Provider URL (0028,7FE0) is surfaced exactly as the f
     expect(urValueField(DEFAULT_PROVIDER_URL).length).toBe(DEFAULT_PROVIDER_URL.length + 1);
   });
 
-  it.each(JPIP_SET)("AC-3: %s", (uid) => {
+  it.each(JPIP_SET)("%s", (uid) => {
     const el = parseDicom(jpipObject({ transferSyntax: uid })).get(PIXEL_DATA_PROVIDER_URL_TAG);
     expect(el?.vr).toBe("UR");
     // Byte-identical to the Value Field the fixture wrote, as inflated for the Deflate pair.
@@ -179,8 +179,8 @@ describe("AC-3: Pixel Data Provider URL (0028,7FE0) is surfaced exactly as the f
   });
 });
 
-describe("AC-4: nothing opens a connection to the host the URL names", () => {
-  it("AC-4: parse, decode, deidentify and serializeDicom under all four UIDs reach no listener", async () => {
+describe("nothing opens a connection to the host the URL names", () => {
+  it("parse, decode, deidentify and serializeDicom under all four UIDs reach no listener", async () => {
     let connections = 0;
     const server = createServer((_req, res) => {
       res.end();
@@ -221,8 +221,8 @@ describe("AC-4: nothing opens a connection to the host the URL names", () => {
   });
 });
 
-describe("AC-5: a conformant JPIP fixture raises nothing, strict or profiled", () => {
-  it.each(JPIP_SET)("AC-5: %s", (uid) => {
+describe("a conformant JPIP fixture raises nothing, strict or profiled", () => {
+  it.each(JPIP_SET)("%s", (uid) => {
     const bytes = jpipObject({ transferSyntax: uid });
     const strict = parseDicom(bytes, { strict: true });
     expect(strict.fileMeta?.transferSyntaxUID).toBe(uid);
@@ -233,8 +233,8 @@ describe("AC-5: a conformant JPIP fixture raises nothing, strict or profiled", (
   });
 });
 
-describe("AC-6: a missing URL or a forbidden Pixel Data still parses, and nothing is invented", () => {
-  it.each(JPIP_SET)("AC-6: %s with no (0028,7FE0)", (uid) => {
+describe("a missing URL or a forbidden Pixel Data still parses, and nothing is invented", () => {
+  it.each(JPIP_SET)("%s with no (0028,7FE0)", (uid) => {
     const conformant = parseDicom(jpipObject({ transferSyntax: uid }));
     const ds = parseDicom(jpipObject({ transferSyntax: uid, omitUrl: true }));
     expect(metadata(ds)).toStrictEqual(metadata(conformant));
@@ -250,7 +250,7 @@ describe("AC-6: a missing URL or a forbidden Pixel Data still parses, and nothin
     );
   });
 
-  it.each(JPIP_SET)("AC-6: %s with a top-level Pixel Data section A.6 forbids", (uid) => {
+  it.each(JPIP_SET)("%s with a top-level Pixel Data section A.6 forbids", (uid) => {
     const conformant = parseDicom(jpipObject({ transferSyntax: uid }));
     const ds = parseDicom(jpipObject({ transferSyntax: uid, withPixelData: true }));
     expect(metadata(ds)).toStrictEqual(metadata(conformant));
@@ -261,7 +261,7 @@ describe("AC-6: a missing URL or a forbidden Pixel Data still parses, and nothin
   });
 });
 
-describe("AC-7: a Deflate-pair Data Set that is not a raw-deflate stream is a fatal that quotes no zlib text", () => {
+describe("a Deflate-pair Data Set that is not a raw-deflate stream is a fatal that quotes no zlib text", () => {
   const valid = deflateRawSync(jpipDataSet({}));
   const corrupted = Buffer.from(valid);
   // BFINAL=1 with BTYPE=11, the block type RFC 1951 section 3.2.3 reserves as an error.
@@ -275,7 +275,7 @@ describe("AC-7: a Deflate-pair Data Set that is not a raw-deflate stream is a fa
     streams.map(([label, tail]) => [uid, label, tail] as const),
   );
 
-  it.each(cases)("AC-7: %s, %s", (uid, _label, tail) => {
+  it.each(cases)("%s, %s", (uid, _label, tail) => {
     // zlib's own message for exactly these bytes: what must not surface.
     const zlib = attempt(() => inflateRawSync(tail)).thrown;
     expect(zlib).toBeInstanceOf(Error);
@@ -320,11 +320,11 @@ function deflateBomb(): Buffer {
   ]);
 }
 
-describe("AC-8: the decompression cap binds the path parseDicom dispatches the Deflate pair to", () => {
+describe("the decompression cap binds the path parseDicom dispatches the Deflate pair to", () => {
   const bomb = deflateBomb();
 
   it.each(DEFLATE_PAIR)(
-    "AC-8: %s past DEFAULT_MAX_INFLATED_BYTES is INVALID_FILE_META at that cap",
+    "%s past DEFAULT_MAX_INFLATED_BYTES is INVALID_FILE_META at that cap",
     (uid) => {
       const { result, thrown } = attempt(() => parseDicom(jpipObjectWithDataSetBytes(uid, bomb)));
       // A boolean, not the Dataset: a returned one holds the whole inflated stream, and handing it
@@ -346,7 +346,7 @@ describe("AC-8: the decompression cap binds the path parseDicom dispatches the D
   );
 });
 
-describe("AC-9: deidentify refuses every JPIP object with one typed code", () => {
+describe("deidentify refuses every JPIP object with one typed code", () => {
   const TS_TWIN = "1.2.840.10008.1.2.1";
   const OPTION_SETS = [undefined, { retain: [...DEIDENTIFY_OPTIONS] }] as const;
 
@@ -375,7 +375,7 @@ describe("AC-9: deidentify refuses every JPIP object with one typed code", () =>
     shapes.map(([label, make]) => [uid, label, make] as const),
   );
 
-  it.each(cases)("AC-9: %s, %s", (uid, _label, make) => {
+  it.each(cases)("%s, %s", (uid, _label, make) => {
     const ds = make(uid);
     for (const options of OPTION_SETS) {
       const { result, thrown } = attempt(() => deidentify(ds, options));
@@ -389,7 +389,7 @@ describe("AC-9: deidentify refuses every JPIP object with one typed code", () =>
     }
   });
 
-  it("AC-9: every member of DEIDENTIFY_OPTIONS at once is a set deidentify would otherwise refuse as INVALID_OPTIONS", () => {
+  it("every member of DEIDENTIFY_OPTIONS at once is a set deidentify would otherwise refuse as INVALID_OPTIONS", () => {
     // So the refusal above is not INVALID_OPTIONS only because it is checked first: on a non-JPIP
     // object the same options are rejected as a misconfiguration.
     const { thrown } = attempt(() =>
@@ -402,7 +402,7 @@ describe("AC-9: deidentify refuses every JPIP object with one typed code", () =>
   });
 });
 
-describe("AC-10: the refusal carries no value from the object it refused", () => {
+describe("the refusal carries no value from the object it refused", () => {
   const url = DEFAULT_PROVIDER_URL;
   const needles: readonly string[] = [
     url,
@@ -414,7 +414,7 @@ describe("AC-10: the refusal carries no value from the object it refused", () =>
     SERIES_INSTANCE_UID,
   ];
 
-  it.each(JPIP_SET)("AC-10: %s", (uid) => {
+  it.each(JPIP_SET)("%s", (uid) => {
     const { thrown } = attempt(() =>
       deidentify(parseDicom(jpipObject({ transferSyntax: uid, url }))),
     );
@@ -425,7 +425,7 @@ describe("AC-10: the refusal carries no value from the object it refused", () =>
     }
   });
 
-  it("AC-10: control: the same search finds each value when an error does carry it", () => {
+  it("control: the same search finds each value when an error does carry it", () => {
     const code = DEIDENTIFY_ERROR_CODES.UNSUPPORTED_TRANSFER_SYNTAX;
     for (const needle of needles) {
       expect(carries(new DeidentifyError(`refused ${needle}`, code), needle), needle).toBe(true);

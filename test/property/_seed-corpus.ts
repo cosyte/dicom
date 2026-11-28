@@ -1,7 +1,7 @@
 /**
  * The seed corpus for the mutation fuzz targets, and the dictionary of tokens they splice in.
  *
- * Built in memory from `.ts` specs like every other fixture here (D-38: the repository ships no
+ * Built in memory from `.ts` specs like every other fixture here (the repository ships no
  * curated `.dcm` file), so `pnpm phi-scan` reads every value. Everything is synthetic: the
  * patients are the allow-listed `DOE^JANE`, `Doe^...` and PS3.5's own `Yamada^Tarou`, every
  * date is the 1900-01-01 placeholder, and every UID sits under the

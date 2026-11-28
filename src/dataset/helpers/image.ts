@@ -84,6 +84,8 @@ function readRealWorldValueMaps(ds: Dataset): readonly RealWorldValueMap[] | und
  * img.rescaleSlope; // undefined ⇒ caller MUST NOT assume 1
  * img.signed;       // undefined ⇒ signedness unknown, never guess
  * ```
+ *
+ * @internal
  */
 export function buildImage(ds: Dataset): ImageView {
   const isEnhancedMultiFrame = hasFunctionalGroups(ds);

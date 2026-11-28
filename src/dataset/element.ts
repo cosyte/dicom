@@ -260,6 +260,8 @@ export function elementValueEnd(el: Element): number {
  * outweighs the parse of a small file. These instances hold the chain. They are built with the
  * field kinds a parse stores (a number or nothing, a string or nothing, an object or nothing), so
  * later instances share their hidden classes rather than branching from them.
+ *
+ * @internal
  */
 export const ELEMENT_SHAPES: readonly Element[] = (() => {
   const empty = Buffer.alloc(0);

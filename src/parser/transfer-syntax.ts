@@ -49,6 +49,8 @@ export { parseImplicitLE, parseExplicitLE, parseExplicitBE, parseDeflatedLE };
  * it (the dataset is parsed to end-of-buffer), but SQ-inner descents
  * (via the {@link InnerParser} contract in `parser/sequence.ts`) require
  * it. Every shipped implementation populates it.
+ *
+ * @internal
  */
 export type ParserStrategy = (
   buffer: Buffer,
@@ -69,13 +71,6 @@ function entriesFor(uids: readonly string[], strategy: ParserStrategy): [string,
  * ones on that reader and the two Deflate ones on the Deflated reader. Any other
  * UID, including the SMPTE ST 2110 syntaxes and every retired UID, is a fatal
  * `UNSUPPORTED_TRANSFER_SYNTAX` from `parseDicom`.
- *
- * @example
- * ```ts
- * import { TRANSFER_SYNTAX_PARSERS } from "@cosyte/dicom";
- * const strategy = TRANSFER_SYNTAX_PARSERS["1.2.840.10008.1.2.1"];
- * ```
- *
  * @internal
  */
 export const TRANSFER_SYNTAX_PARSERS: Readonly<Record<string, ParserStrategy>> = Object.freeze({

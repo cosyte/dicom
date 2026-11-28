@@ -76,8 +76,12 @@ export const SERIALIZE_ERROR_CODES = {
 } as const;
 
 /**
- * Discriminant for {@link DicomSerializeError.code}, enabling exhaustive
- * `switch` narrowing (the `switch-exhaustiveness-check` lint rule).
+ * Discriminant for {@link DicomSerializeError.code}.
+ *
+ * **Treat the union as open.** A release can add a code, which widens this
+ * union, so a `switch` that lists every current member stops compiling, or
+ * misses the new code, on an upgrade. Handle the codes you care about by name
+ * and give the `switch` a `default` branch for the rest.
  *
  * @example
  * ```ts
@@ -90,12 +94,8 @@ export const SERIALIZE_ERROR_CODES = {
  *       return "Transfer Syntax UID is neither native nor a section A.4 one";
  *     case "INVALID_ENCAPSULATED_PIXEL_DATA":
  *       return "top-level Pixel Data is not a section A.4 fragment stream";
- *     case "DIRECTORY_OFFSET_UNRESOLVED":
- *       return "a DICOMDIR offset names no Directory Record the dataset holds";
- *     case "DIRECTORY_OFFSET_DEFLATED":
- *       return "a Deflated DICOMDIR carries a non-zero Directory Record offset";
- *     case "VALUE_TOO_LONG_FOR_VR":
- *       return "a Private Creator or File Meta value is too long for its VR";
+ *     default:
+ *       return `cannot serialize: ${code}`;
  *   }
  * }
  * ```

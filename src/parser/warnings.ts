@@ -25,10 +25,10 @@ import type { DicomPosition } from "./types.js";
  * Stable string codes for every Tier-2 warning the parser may emit.
  *
  * The registry is frozen via `as const` so TypeScript infers the exact
- * string-literal union for `WarningCode` - there is zero runtime cost and
- * no magic-string comparisons for consumers. Reserved-but-not-emitted
- * codes carry inline comments documenting which stage activates them; the
- * union is declared whole so the schema is stable for consumers.
+ * string-literal union for `WarningCode`, at no run-time cost. The set is
+ * open: a release can add a code, and a code once published keeps its name.
+ * Reserved codes that no stage emits yet carry inline comments naming the
+ * stage that will.
  *
  * @example
  * ```ts
@@ -238,6 +238,8 @@ export interface DicomParseWarning {
  * They still carry a registry entry so the record stays total over
  * `WarningCode`, which is what makes "every message comes from here" checkable
  * by the type system rather than by reading.
+ *
+ * @internal
  */
 export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.freeze({
   DICOM_MISSING_PREAMBLE: "No DICM magic at offset 128; falling back to offset-0 dataset.",
@@ -602,6 +604,8 @@ function build(
  * ```ts
  * const w = missingPreamble({ byteOffset: 0 });
  * ```
+ *
+ * @internal
  */
 export function missingPreamble(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_MISSING_PREAMBLE, position);
@@ -617,6 +621,8 @@ export function missingPreamble(position: DicomPosition): DicomParseWarning {
  * ```ts
  * const w = fileMetaGroupLengthMissing({ byteOffset: 132, fileMeta: true });
  * ```
+ *
+ * @internal
  */
 export function fileMetaGroupLengthMissing(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_FILE_META_GROUP_LENGTH_MISSING, position);
@@ -649,6 +655,8 @@ export function fileMetaGroupLengthMissing(position: DicomPosition): DicomParseW
  * ```ts
  * const w = fileMetaGroupLengthMismatch({ byteOffset: 132, fileMeta: true }, 200, 208);
  * ```
+ *
+ * @internal
  */
 export function fileMetaGroupLengthMismatch(
   position: DicomPosition,
@@ -674,6 +682,8 @@ export function fileMetaGroupLengthMismatch(
  * ```ts
  * const w = undefinedLengthInExplicitVR({ byteOffset: 512 }, "0040A730");
  * ```
+ *
+ * @internal
  */
 export function undefinedLengthInExplicitVR(position: DicomPosition, tag: Tag): DicomParseWarning {
   return build(WARNING_CODES.DICOM_UNDEFINED_LENGTH_IN_EXPLICIT_VR, position, { tag });
@@ -718,6 +728,8 @@ export function undefinedLengthInExplicitVR(position: DicomPosition, tag: Tag): 
  * ```ts
  * const w = oddLengthValuePadded({ byteOffset: 240 }, "00100010");
  * ```
+ *
+ * @internal
  */
 export function oddLengthValuePadded(position: DicomPosition, tag: Tag): DicomParseWarning {
   return build(WARNING_CODES.DICOM_ODD_LENGTH_VALUE_PADDED, position, { tag });
@@ -734,6 +746,8 @@ export function oddLengthValuePadded(position: DicomPosition, tag: Tag): DicomPa
  * ```ts
  * const w = vrMismatch({ byteOffset: 300 }, "00100010", "PN", "LO");
  * ```
+ *
+ * @internal
  */
 export function vrMismatch(
   position: DicomPosition,
@@ -791,6 +805,8 @@ export function vrMismatch(
  * ```ts
  * const w = privateTagNoCreator({ byteOffset: 800 });
  * ```
+ *
+ * @internal
  */
 export function privateTagNoCreator(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_PRIVATE_TAG_NO_CREATOR, position);
@@ -822,6 +838,8 @@ export function privateTagNoCreator(position: DicomPosition): DicomParseWarning 
  * ```ts
  * const w = groupLengthInDataset({ byteOffset: 400 });
  * ```
+ *
+ * @internal
  */
 export function groupLengthInDataset(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_GROUP_LENGTH_IN_DATASET, position);
@@ -881,6 +899,8 @@ export function groupLengthInDataset(position: DicomPosition): DicomParseWarning
  * ```ts
  * const w = nonzeroReservedBytes({ byteOffset: 500 });
  * ```
+ *
+ * @internal
  */
 export function nonzeroReservedBytes(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_NONZERO_RESERVED_BYTES, position);
@@ -907,6 +927,8 @@ export function nonzeroReservedBytes(position: DicomPosition): DicomParseWarning
  * ```ts
  * const w = unParsedAsSQ({ byteOffset: 600 }, "0040A730");
  * ```
+ *
+ * @internal
  */
 export function unParsedAsSQ(position: DicomPosition, tag: Tag): DicomParseWarning {
   return build(WARNING_CODES.DICOM_UN_PARSED_AS_SQ, position, { tag });
@@ -953,6 +975,8 @@ export function unParsedAsSQ(position: DicomPosition, tag: Tag): DicomParseWarni
  * ```ts
  * const w = sqNotDescended({ byteOffset: 320 }, "00081115");
  * ```
+ *
+ * @internal
  */
 export function sqNotDescended(position: DicomPosition, tag: Tag): DicomParseWarning {
   return build(WARNING_CODES.DICOM_SQ_NOT_DESCENDED, position, { tag });
@@ -1074,6 +1098,8 @@ export function sqNotDescended(position: DicomPosition, tag: Tag): DicomParseWar
  * ```ts
  * const w = itemCrossesSequenceEnd({ byteOffset: 320 }, "FFFEE000");
  * ```
+ *
+ * @internal
  */
 export function itemCrossesSequenceEnd(position: DicomPosition, tag: Tag): DicomParseWarning {
   return build(WARNING_CODES.DICOM_ITEM_CROSSES_SEQUENCE_END, position, { tag });
@@ -1088,6 +1114,8 @@ export function itemCrossesSequenceEnd(position: DicomPosition, tag: Tag): Dicom
  * ```ts
  * const w = emptyItemInSequence({ byteOffset: 700 }, "0040A730");
  * ```
+ *
+ * @internal
  */
 export function emptyItemInSequence(position: DicomPosition, tag: Tag): DicomParseWarning {
   return build(WARNING_CODES.DICOM_EMPTY_ITEM_IN_SEQUENCE, position, { tag });
@@ -1117,6 +1145,8 @@ export function emptyItemInSequence(position: DicomPosition, tag: Tag): DicomPar
  * ```ts
  * const w = parseStoppedBeforeTag({ byteOffset: 1024 }, "7FE00010");
  * ```
+ *
+ * @internal
  */
 export function parseStoppedBeforeTag(position: DicomPosition, tag: Tag): DicomParseWarning {
   return build(WARNING_CODES.DICOM_PARSE_STOPPED_BEFORE_TAG, position, { tag });
@@ -1149,6 +1179,8 @@ export function parseStoppedBeforeTag(position: DicomPosition, tag: Tag): DicomP
  * ```ts
  * const w = pixelDataFragmentsNotDelimited({ byteOffset: 312 });
  * ```
+ *
+ * @internal
  */
 export function pixelDataFragmentsNotDelimited(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_PIXEL_DATA_FRAGMENTS_NOT_DELIMITED, position);
@@ -1240,6 +1272,8 @@ export function pixelDataFragmentsNotDelimited(position: DicomPosition): DicomPa
  * ```ts
  * const w = duplicateTagInDataSet({ byteOffset: 274 });
  * ```
+ *
+ * @internal
  */
 export function duplicateTagInDataSet(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DUPLICATE_TAG_IN_DATA_SET, position);
@@ -1330,6 +1364,8 @@ export function duplicateTagInDataSet(position: DicomPosition): DicomParseWarnin
  * ```ts
  * const w = duplicateFileMetaElement({ byteOffset: 152, fileMeta: true });
  * ```
+ *
+ * @internal
  */
 export function duplicateFileMetaElement(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DUPLICATE_FILE_META_ELEMENT, position);
@@ -1357,6 +1393,8 @@ export function duplicateFileMetaElement(position: DicomPosition): DicomParseWar
  * ```ts
  * const w = pixelDataLengthMismatch({ byteOffset: 1024 }, 524300);
  * ```
+ *
+ * @internal
  */
 export function pixelDataLengthMismatch(
   position: DicomPosition,
@@ -1385,6 +1423,8 @@ export function pixelDataLengthMismatch(
  * ```ts
  * const w = implicitVRForPrivateTagWithoutVR({ byteOffset: 900 });
  * ```
+ *
+ * @internal
  */
 export function implicitVRForPrivateTagWithoutVR(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR, position);
@@ -1418,6 +1458,8 @@ export function implicitVRForPrivateTagWithoutVR(position: DicomPosition): Dicom
  * ```ts
  * const w = privateCreatorUnknown({ byteOffset: 900 });
  * ```
+ *
+ * @internal
  */
 export function privateCreatorUnknown(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_PRIVATE_CREATOR_UNKNOWN, position);
@@ -1435,6 +1477,8 @@ export function privateCreatorUnknown(position: DicomPosition): DicomParseWarnin
  * ```ts
  * const w = burnedInAnnotationNotRemoved({ byteOffset: 4096, fileMeta: false });
  * ```
+ *
+ * @internal
  */
 export function burnedInAnnotationNotRemoved(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED, position);
@@ -1470,6 +1514,8 @@ export function burnedInAnnotationNotRemoved(position: DicomPosition): DicomPars
  * ```ts
  * const w = fileMetaReplaced({ byteOffset: 0, fileMeta: true });
  * ```
+ *
+ * @internal
  */
 export function fileMetaReplaced(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DEIDENT_FILE_META_REPLACED, position);
@@ -1496,6 +1542,8 @@ export function fileMetaReplaced(position: DicomPosition): DicomParseWarning {
  * ```ts
  * const w = group0004Removed({ byteOffset: 0, fileMeta: false });
  * ```
+ *
+ * @internal
  */
 export function group0004Removed(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DEIDENT_GROUP_0004_REMOVED, position);
@@ -1529,6 +1577,8 @@ export function group0004Removed(position: DicomPosition): DicomParseWarning {
  * ```ts
  * const w = dicomdirFileSetNotDischarged({ byteOffset: 0, fileMeta: true });
  * ```
+ *
+ * @internal
  */
 export function dicomdirFileSetNotDischarged(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED, position);
@@ -1554,6 +1604,8 @@ export function dicomdirFileSetNotDischarged(position: DicomPosition): DicomPars
  * ```ts
  * const w = directoryOffsetUnresolved({ byteOffset: 480, contextPath: ["00041220", "2", "00041400"] });
  * ```
+ *
+ * @internal
  */
 export function directoryOffsetUnresolved(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DIRECTORY_OFFSET_UNRESOLVED, position);
@@ -1573,6 +1625,8 @@ export function directoryOffsetUnresolved(position: DicomPosition): DicomParseWa
  * ```ts
  * const w = directoryOffsetMalformed({ byteOffset: 480, contextPath: ["00041220", "2", "00041400"] });
  * ```
+ *
+ * @internal
  */
 export function directoryOffsetMalformed(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DIRECTORY_OFFSET_MALFORMED, position);
@@ -1594,6 +1648,8 @@ export function directoryOffsetMalformed(position: DicomPosition): DicomParseWar
  * ```ts
  * const w = directoryRecordRevisited({ byteOffset: 480, contextPath: ["00041220", "2", "00041400"] });
  * ```
+ *
+ * @internal
  */
 export function directoryRecordRevisited(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DIRECTORY_RECORD_REVISITED, position);
@@ -1615,6 +1671,8 @@ export function directoryRecordRevisited(position: DicomPosition): DicomParseWar
  * ```ts
  * const w = directoryOffsetDeflated({ byteOffset: 190 });
  * ```
+ *
+ * @internal
  */
 export function directoryOffsetDeflated(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DIRECTORY_OFFSET_DEFLATED, position);
@@ -1651,6 +1709,8 @@ export function directoryOffsetDeflated(position: DicomPosition): DicomParseWarn
  * ```ts
  * const w = datesNotTransformed({ byteOffset: 0, fileMeta: false });
  * ```
+ *
+ * @internal
  */
 export function datesNotTransformed(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DEIDENT_DATES_NOT_TRANSFORMED, position);
@@ -1692,6 +1752,8 @@ export function datesNotTransformed(position: DicomPosition): DicomParseWarning 
  * ```ts
  * const w = deidentMethodNotAdded({ byteOffset: 4096, fileMeta: false });
  * ```
+ *
+ * @internal
  */
 export function deidentMethodNotAdded(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DEIDENT_METHOD_NOT_ADDED, position);
@@ -1734,6 +1796,8 @@ export function deidentMethodNotAdded(position: DicomPosition): DicomParseWarnin
  * ```ts
  * const w = deidentMethodNotLo({ byteOffset: 4096, fileMeta: false });
  * ```
+ *
+ * @internal
  */
 export function deidentMethodNotLo(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DEIDENT_METHOD_NOT_LO, position);
@@ -1777,6 +1841,8 @@ export function deidentMethodNotLo(position: DicomPosition): DicomParseWarning {
  * ```ts
  * const w = deidentMethodPriorRetained({ byteOffset: 4096, fileMeta: false });
  * ```
+ *
+ * @internal
  */
 export function deidentMethodPriorRetained(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DEIDENT_METHOD_PRIOR_RETAINED, position);
@@ -1838,6 +1904,8 @@ export function deidentMethodPriorRetained(position: DicomPosition): DicomParseW
  * ```ts
  * const w = deidentMethodValueOverLength({ byteOffset: 4096, fileMeta: false });
  * ```
+ *
+ * @internal
  */
 export function deidentMethodValueOverLength(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH, position);
@@ -1878,6 +1946,8 @@ export function deidentMethodValueOverLength(position: DicomPosition): DicomPars
  * ```ts
  * const w = deidentMethodCodesPriorRetained({ byteOffset: 4096, fileMeta: false });
  * ```
+ *
+ * @internal
  */
 export function deidentMethodCodesPriorRetained(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DEIDENT_METHOD_CODES_PRIOR_RETAINED, position);
@@ -1911,6 +1981,8 @@ export function deidentMethodCodesPriorRetained(position: DicomPosition): DicomP
  * ```ts
  * const w = deidentMethodCodesPriorReplaced({ byteOffset: 4096, fileMeta: false });
  * ```
+ *
+ * @internal
  */
 export function deidentMethodCodesPriorReplaced(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DEIDENT_METHOD_CODES_PRIOR_REPLACED, position);
@@ -1929,6 +2001,8 @@ export function deidentMethodCodesPriorReplaced(position: DicomPosition): DicomP
  * ```ts
  * const w = embeddedAttributeRemoved({ byteOffset: 320 }, "00080008", "CS", 1);
  * ```
+ *
+ * @internal
  */
 export function embeddedAttributeRemoved(
   position: DicomPosition,
@@ -2021,6 +2095,8 @@ export function embeddedAttributeRemoved(
  * ```ts
  * const w = privateCarrierNotAuditable({ byteOffset: 320 }, "00091001");
  * ```
+ *
+ * @internal
  */
 export function privateCarrierNotAuditable(position: DicomPosition, tag: Tag): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE, position, { tag });
@@ -2064,6 +2140,8 @@ export function privateCarrierNotAuditable(position: DicomPosition, tag: Tag): D
  * ```ts
  * const w = privateDeclarationNotResolved({ byteOffset: 220, fileMeta: false });
  * ```
+ *
+ * @internal
  */
 export function privateDeclarationNotResolved(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DEIDENT_PRIVATE_DECLARATION_NOT_RESOLVED, position);
@@ -2128,6 +2206,8 @@ export function privateDeclarationNotResolved(position: DicomPosition): DicomPar
  * ```ts
  * const w = sequenceNotAuditable({ byteOffset: 320 }, "00081115");
  * ```
+ *
+ * @internal
  */
 export function sequenceNotAuditable(position: DicomPosition, tag: Tag): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DEIDENT_SEQUENCE_NOT_AUDITABLE, position, { tag });
@@ -2188,6 +2268,8 @@ export function sequenceNotAuditable(position: DicomPosition, tag: Tag): DicomPa
  * ```ts
  * const w = undefinedVrNotAuditable({ byteOffset: 320 });
  * ```
+ *
+ * @internal
  */
 export function undefinedVrNotAuditable(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE, position, {
@@ -2232,6 +2314,8 @@ export function undefinedVrNotAuditable(position: DicomPosition): DicomParseWarn
  * ```ts
  * const w = unregisteredElementRemoved({ byteOffset: 0, fileMeta: false });
  * ```
+ *
+ * @internal
  */
 export function unregisteredElementRemoved(position: DicomPosition): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DEIDENT_UNREGISTERED_ELEMENT_REMOVED, position);
@@ -2250,6 +2334,8 @@ export function unregisteredElementRemoved(position: DicomPosition): DicomParseW
  * ```ts
  * const w = bomInTextVR({ byteOffset: 320 }, "00081030", "LO");
  * ```
+ *
+ * @internal
  */
 export function bomInTextVR(position: DicomPosition, tag: Tag, vr: VR): DicomParseWarning {
   return build(WARNING_CODES.DICOM_BOM_IN_TEXT_VR, position, { tag, vr });
@@ -2264,6 +2350,8 @@ export function bomInTextVR(position: DicomPosition, tag: Tag, vr: VR): DicomPar
  * ```ts
  * const w = trailingNullInTextVR({ byteOffset: 320 }, "00080060", "CS");
  * ```
+ *
+ * @internal
  */
 export function trailingNullInTextVR(position: DicomPosition, tag: Tag, vr: VR): DicomParseWarning {
   return build(WARNING_CODES.DICOM_TRAILING_NULL_IN_TEXT_VR, position, { tag, vr });
@@ -2278,6 +2366,8 @@ export function trailingNullInTextVR(position: DicomPosition, tag: Tag, vr: VR):
  * ```ts
  * const w = uiTrailingSpace({ byteOffset: 132 }, "00080016");
  * ```
+ *
+ * @internal
  */
 export function uiTrailingSpace(position: DicomPosition, tag: Tag): DicomParseWarning {
   return build(WARNING_CODES.DICOM_UI_TRAILING_SPACE, position, { tag });
@@ -2293,6 +2383,8 @@ export function uiTrailingSpace(position: DicomPosition, tag: Tag): DicomParseWa
  * ```ts
  * const w = nonAsciiInAsciiVR({ byteOffset: 200 }, "00080060", "CS");
  * ```
+ *
+ * @internal
  */
 export function nonAsciiInAsciiVR(position: DicomPosition, tag: Tag, vr: VR): DicomParseWarning {
   return build(WARNING_CODES.DICOM_NON_ASCII_IN_ASCII_VR, position, { tag, vr });
@@ -2308,6 +2400,8 @@ export function nonAsciiInAsciiVR(position: DicomPosition, tag: Tag, vr: VR): Di
  * ```ts
  * const w = isNonintegerValue({ byteOffset: 240 }, "00200013");
  * ```
+ *
+ * @internal
  */
 export function isNonintegerValue(position: DicomPosition, tag: Tag): DicomParseWarning {
   return build(WARNING_CODES.DICOM_IS_NONINTEGER_VALUE, position, { tag });
@@ -2322,6 +2416,8 @@ export function isNonintegerValue(position: DicomPosition, tag: Tag): DicomParse
  * ```ts
  * const w = daLegacyFormat({ byteOffset: 260 }, "00080020");
  * ```
+ *
+ * @internal
  */
 export function daLegacyFormat(position: DicomPosition, tag: Tag): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DA_LEGACY_FORMAT, position, { tag });
@@ -2336,6 +2432,8 @@ export function daLegacyFormat(position: DicomPosition, tag: Tag): DicomParseWar
  * ```ts
  * const w = dtNonstandardOffset({ byteOffset: 280 }, "0040A120");
  * ```
+ *
+ * @internal
  */
 export function dtNonstandardOffset(position: DicomPosition, tag: Tag): DicomParseWarning {
   return build(WARNING_CODES.DICOM_DT_NONSTANDARD_OFFSET, position, { tag });
@@ -2357,6 +2455,8 @@ export function dtNonstandardOffset(position: DicomPosition, tag: Tag): DicomPar
  * ```ts
  * const w = unsupportedCharset({ byteOffset: 180, fileMeta: false }, 2);
  * ```
+ *
+ * @internal
  */
 export function unsupportedCharset(position: DicomPosition, valueIndex: number): DicomParseWarning {
   return build(WARNING_CODES.DICOM_UNSUPPORTED_CHARSET, position, { n: valueIndex });
@@ -2380,6 +2480,8 @@ export function unsupportedCharset(position: DicomPosition, valueIndex: number):
  * ```ts
  * const w = charsetAssumed({ byteOffset: 320 }, "00100010");
  * ```
+ *
+ * @internal
  */
 export function charsetAssumed(position: DicomPosition, tag: Tag): DicomParseWarning {
   return build(WARNING_CODES.DICOM_CHARSET_ASSUMED, position, { tag });
@@ -2401,6 +2503,8 @@ export function charsetAssumed(position: DicomPosition, tag: Tag): DicomParseWar
  * ```ts
  * const w = charsetEscapeUndeclared({ byteOffset: 320 }, "00100010", "PN");
  * ```
+ *
+ * @internal
  */
 export function charsetEscapeUndeclared(
   position: DicomPosition,
@@ -2426,6 +2530,8 @@ export function charsetEscapeUndeclared(
  * ```ts
  * const w = charsetBytesUndecodable({ byteOffset: 320 }, "00100010", "PN");
  * ```
+ *
+ * @internal
  */
 export function charsetBytesUndecodable(
   position: DicomPosition,
@@ -2450,6 +2556,8 @@ export function charsetBytesUndecodable(
  * ```ts
  * const w = charsetExtensionNotReset({ byteOffset: 320 }, "00100010", "PN");
  * ```
+ *
+ * @internal
  */
 export function charsetExtensionNotReset(
   position: DicomPosition,

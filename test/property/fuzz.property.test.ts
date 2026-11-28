@@ -75,7 +75,7 @@ function parseIsRobust(bytes: Buffer): boolean {
         { cause: err },
       );
     }
-    // A thrown fatal must still carry positional context (TOL-02).
+    // A thrown fatal must still carry positional context.
     if (typeof err.byteOffset !== "number" || !Number.isFinite(err.byteOffset)) {
       throw new Error(`fuzz: fatal ${err.code} has a non-finite byteOffset`, { cause: err });
     }
@@ -136,7 +136,7 @@ describe("dicom conformance: fuzz - arbitrary bytes never crash, hang, or OOM th
     "strict mode on arbitrary bytes also only throws DicomParseError (escalation stays typed)",
     () => {
       // Strict mode escalates every Tier-2 warning to a throw; the thrown error is
-      // still a DicomParseError (carrying the warning code per D-35). So under
+      // still a DicomParseError (carrying the warning code). So under
       // fuzz, strict mode must never produce a non-DicomParseError either.
       fc.assert(
         fc.property(dicomShapedGarbage(), (bytes) => {

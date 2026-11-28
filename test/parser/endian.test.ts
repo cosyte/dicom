@@ -3,8 +3,8 @@ import { describe, it, expect } from "vitest";
 import { LONG_FORM_VRS } from "../../src/parser/element-header.js";
 import { BE_VR_STRIDE } from "../../src/parser/endian.js";
 
-describe("BE_VR_STRIDE (D-23, D-24)", () => {
-  it("OB and UN are byte streams - never swapped (D-24)", () => {
+describe("BE_VR_STRIDE", () => {
+  it("OB and UN are byte streams - never swapped", () => {
     expect(BE_VR_STRIDE.OB).toBe(0);
     expect(BE_VR_STRIDE.UN).toBe(0);
   });
@@ -69,7 +69,7 @@ describe("BE_VR_STRIDE (D-23, D-24)", () => {
     expect(BE_VR_STRIDE.SQ).toBe(0);
   });
 
-  it("table is frozen (Object.freeze applied per D-23)", () => {
+  it("table is frozen (Object.freeze applied)", () => {
     expect(Object.isFrozen(BE_VR_STRIDE)).toBe(true);
   });
 
@@ -81,7 +81,7 @@ describe("BE_VR_STRIDE (D-23, D-24)", () => {
   });
 });
 
-describe("LONG_FORM_VRS (D-22)", () => {
+describe("LONG_FORM_VRS", () => {
   it("contains exactly the 13 long-form VRs (incl. OV/SV/UV per CP-2199)", () => {
     expect(LONG_FORM_VRS.size).toBe(13);
     for (const vr of [

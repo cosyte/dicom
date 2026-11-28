@@ -1,8 +1,6 @@
 /**
- * Tests for `parsePart10Header` - Phase 2 plan 02-02 task 1.
- *
- * Covers CONTEXT.md D-13 / D-14 / D-15 + threat T-02-02-02 / T-02-02-03 from
- * the plan threat model.
+ * Tests for `parsePart10Header`: the preamble and `DICM` prefix, and short
+ * buffers.
  */
 
 import { Buffer } from "node:buffer";
@@ -111,7 +109,7 @@ describe("parsePart10Header - non-DICOM input", () => {
     }
   });
 
-  it("throws NOT_DICOM_PART_10 (not RangeError) for buffers shorter than 12 bytes - T-02-02-02", () => {
+  it("throws NOT_DICOM_PART_10 (not RangeError) for buffers shorter than 12 bytes", () => {
     const buf = Buffer.from([0x02, 0x00]);
     const { ctx } = makeCtx(buf);
     expect(() => parsePart10Header(buf, ctx, (w) => ctx.warnings.push(w))).toThrowError(

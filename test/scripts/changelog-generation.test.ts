@@ -257,7 +257,7 @@ function shapeViolation(text: string): string | undefined {
  * The header block of the archived half: from its heading down to its first entry section.
  *
  * The heading is located as a WHOLE LINE, never with `indexOf`. A changeset summary may quote
- * it (this slice's own does), and the quoted copy sits ABOVE the real heading in generated
+ * it (this change's own does), and the quoted copy sits ABOVE the real heading in generated
  * output, so a substring search would slice a few characters out of a release section instead.
  */
 function archivePreamble(text: string): string {
@@ -391,7 +391,7 @@ function renderedHeadings(region: readonly string[]): {
  * group spliced a fabricated `## 0.0.99` in at `lines.indexOf(ARCHIVE_HEADING)` - the BOTTOM of
  * the generated region - and asserted the `package.json says` violation. That is only the
  * violation you get while the region is EMPTY. The moment the first `changeset version` this
- * slice enables writes a real `## 0.0.13` above it, the fabricated section is no longer the
+ * change enables writes a real `## 0.0.13` above it, the fabricated section is no longer the
  * topmost heading and the rule reports the ORDERING violation instead, so three cases go red on
  * the Version PR. `.github/workflows/ci.yml` runs on that PR and `prepublishOnly` runs this same
  * suite under `changeset publish`, so it would have wedged the release AND the publish.
@@ -588,7 +588,7 @@ describe("the archived history is frozen", () => {
    * WHY A DIGEST AND NOT A SHAPE RULE. Every other case here compares an archive a release
    * PRODUCED against the archive in the working tree, which is exactly the comparison a
    * hand-edit cancels out of: edit the committed file and both sides move together and the
-   * suite stays green while the defect this slice exists to remove walks back in. This is the
+   * suite stays green while the defect this change exists to remove walks back in. This is the
    * one assertion whose other side is a constant.
    *
    * IF THIS REDS, the archived history changed. That is almost certainly either a hand-edit

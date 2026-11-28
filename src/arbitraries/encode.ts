@@ -13,29 +13,57 @@
 import { Buffer } from "node:buffer";
 import { deflateRawSync } from "node:zlib";
 
-/** Implicit VR Little Endian. */
+/**
+ * Implicit VR Little Endian.
+ *
+ * @internal
+ */
 export const IMPLICIT_LE = "1.2.840.10008.1.2";
-/** Explicit VR Little Endian. */
+/**
+ * Explicit VR Little Endian.
+ *
+ * @internal
+ */
 export const EXPLICIT_LE = "1.2.840.10008.1.2.1";
-/** Explicit VR Big Endian, retired but still read. */
+/**
+ * Explicit VR Big Endian, retired but still read.
+ *
+ * @internal
+ */
 export const EXPLICIT_BE = "1.2.840.10008.1.2.2";
-/** Deflated Explicit VR Little Endian. */
+/**
+ * Deflated Explicit VR Little Endian.
+ *
+ * @internal
+ */
 export const DEFLATED_LE = "1.2.840.10008.1.2.1.99";
 
-/** One leaf element. `value` is in little-endian order; a big-endian file swaps it on write. */
+/**
+ * One leaf element. `value` is in little-endian order; a big-endian file swaps it on write.
+ *
+ * @internal
+ */
 export interface LeafElement {
   readonly tag: string;
   readonly vr: string;
   readonly value: Buffer;
 }
 
-/** A sequence of undefined length; each item is a defined-length list of leaf elements. */
+/**
+ * A sequence of undefined length; each item is a defined-length list of leaf elements.
+ *
+ * @internal
+ */
 export interface SequenceElement {
   readonly tag: string;
   readonly items: readonly (readonly LeafElement[])[];
 }
 
-/** What {@link writePart10} writes. Every flag left out writes the conformant form. */
+/**
+ * What {@link writePart10} writes. Every flag left out writes the conformant form.
+ *
+ * @internal
+ */
 export interface Part10Spec {
   readonly transferSyntax: string;
   readonly elements: readonly (LeafElement | SequenceElement)[];
@@ -174,6 +202,8 @@ const FILE_META: Layout = { explicit: true, littleEndian: true };
  * ```ts
  * writePart10({ transferSyntax: EXPLICIT_LE, elements: [], noPreamble: true }).length; // 40
  * ```
+ *
+ * @internal
  */
 export function writePart10(spec: Part10Spec): Buffer {
   const parts: Buffer[] = [];

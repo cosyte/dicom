@@ -68,7 +68,7 @@ function elements(pixelBytes: number): (BuildDicomElement | BuildDicomSqElement)
       ],
     },
     { tag: "00100010", vr: "PN", value: text("TEST^PATIENT") },
-    { tag: "00100020", vr: "LO", value: text("FAKE-0001") },
+    { tag: "00100020", vr: "LO", value: text("FAKE_0001") },
     { tag: "0020000D", vr: "UI", value: text("2.25.222") },
     { tag: "00280010", vr: "US", value: us(4) },
     { tag: "00280011", vr: "US", value: us(4) },

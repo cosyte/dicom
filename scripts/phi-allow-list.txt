@@ -108,6 +108,11 @@ DATE:60000102
 # identifier has the `YYYYMMDD` shape and the compact-date pass matches it.
 DATE:20170914
 
+# NOT A REAL DATE. `2024-02-30` is the impossible calendar date the doc comment of `toISO`
+# names as the output it refuses, and the generated API reference under `docs-content/api/`
+# carries that comment, so the text sweep's date pass matches it there. February has no 30th.
+DATE:20240230
+
 # --- Notes ---
 # A vendored standard needs no entry here. The scanner skips a file under
 # `vendor/.../<sha256>/` once its bytes hash to its pin (`isVerifiedVendorPin` in

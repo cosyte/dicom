@@ -7,8 +7,7 @@ import { describe, expect, test } from "vitest";
 /**
  * The documentation citation gate.
  *
- * Phase 8 of this package's roadmap requires that every cookbook recipe "cites the PS3 clause for
- * the attributes it reads". A citation nobody re-derives is a claim, and this repository's refusals
+ * Every cookbook recipe cites the PS3 clause for the attributes it reads. A citation nobody re-derives is a claim, and this repository's refusals
  * have overwhelmingly been claim defects, so the citations are checked mechanically against the
  * SHA-pinned normative documents under `vendor/nema/` rather than read once by a human.
  *
@@ -33,8 +32,8 @@ import { describe, expect, test } from "vitest";
  *  3. 🛑 A LABEL PROVES THE LABEL EXISTS, NOT THAT ITS BODY CARRIES THE SENTENCE. For every clause
  *     the docs lean on for a normative statement, `LOAD_BEARING` names the sentence the text relies
  *     on, and the check requires the cited section's own body to carry it, and requires that exactly
- *     one candidate section does. A prior slice in this package cited PS3.5 §7.5 twice when the
- *     sentence it needed lives in §7.5.2; this is the net for that class.
+ *     one candidate section does. An earlier change in this package cited PS3.5 §7.5 twice when
+ *     the sentence it needed lives in PS3.5 §7.5.2; this is the net for that class.
  *
  *  4. AN ATTRIBUTE IS NAMED THE WAY THE REGISTRY NAMES IT. Every `(gggg,eeee) Some Name` pair
  *     written in `README.md` or `docs-content/` is looked up in the shipped data dictionary, which
@@ -113,7 +112,7 @@ function readSections(text: string): Section[] {
  *
  * 🛑 IT MUST NOT INCLUDE SUBSECTIONS, AND A FIRST DRAFT OF THIS FILE DID. Running to the next
  * same-or-shallower division makes a parent's body a superset of every child's, so `PS3.5 §7.5`
- * passes for a sentence that lives in §7.5.2 and `PS3.15 §E.1` passes for one that lives in §E.1.1:
+ * passes for a sentence that lives in PS3.5 §7.5.2 and `PS3.15 §E.1` passes for one in PS3.15 §E.1.1:
  * verbatim the two confusions `CLAUDE.md` records as having each cost a refusal here, certified
  * green by the very check written to catch them. Own-text-only is what makes "the CITED clause
  * carries the sentence" mean the cited clause. Both parent cases are pinned as controls below.
@@ -220,8 +219,8 @@ const LOAD_BEARING: readonly { part: VendoredPart; clause: string; sentence: str
   },
   {
     // The `REMOVED` half of the temporal declaration. The docs state this as an obligation on the
-    // Basic Profile, so the Basic Profile's own clause has to carry it: §E.3.6 carries the other two
-    // states and citing it for this one would be the §7.5/§7.5.2 confusion again.
+    // Basic Profile, so the Basic Profile's own clause has to carry it: PS3.15 §E.3.6 carries the
+    // other two states, and citing it for this one would be the parent-for-child confusion again.
     part: "PS3.15",
     clause: "E.2",
     sentence: 'shall be added to the Data Set with a Value of "REMOVED"',
@@ -434,15 +433,16 @@ describe("documentation spec citations", () => {
 
   test("a PARENT clause is refused for a sentence that lives in its subsection", () => {
     // The control for `bodyOf` reading own text only. Both pairs are the exact confusions
-    // `CLAUDE.md` records as having cost a refusal in this package: §7.5 quoted for a §7.5.2 fact,
-    // and §E.1 quoted for an §E.1.1 one. A body that swallowed subsections would pass both.
+    // `CLAUDE.md` records as having cost a refusal in this package: PS3.5 §7.5 quoted for a
+    // PS3.5 §7.5.2 fact, and PS3.15 §E.1 quoted for a PS3.15 §E.1.1 one. A body that swallowed
+    // subsections would pass both.
     //
     // 🛑 THE CHILD MUST REALLY BE THE PARENT'S SUBSECTION, OR THE CONTROL IS INERT. A first draft
-    // paired §7.5 with §7.8.1, which is not under §7.5 at all, so the WIDE body a revert restores
-    // stops at §7.6 and answers `0` for it too: the case could not go red on a revert while three
-    // artifacts described it as the net for that class. Check the labels, not the story. Re-measure
-    // it by reverting `bodyOf` to same-or-shallower; with §7.5.2 this case reds, with §7.8.1 it did
-    // not.
+    // paired PS3.5 §7.5 with PS3.5 §7.8.1, which is not under it at all, so the WIDE body a revert
+    // restores stops at PS3.5 §7.6 and answers `0` for it too: the case could not go red on a
+    // revert while three artifacts described it as the net for that class. Check the labels, not
+    // the story. Re-measure it by reverting `bodyOf` to same-or-shallower; with PS3.5 §7.5.2 this
+    // case reds, with PS3.5 §7.8.1 it did not.
     const cases: readonly {
       part: VendoredPart;
       parent: string;

@@ -9,6 +9,9 @@ vendor/
 reports/
 .stryker-tmp/
 
+# Generated, and compared byte for byte with what its generator writes
+docs-content/api/
+
 # Names the synthetic violator values the PHI scan tests use; the scan leaves it out by this
 # path, and the commit hook would flag a rewrite of it, so it keeps its bytes.
 test/fixtures/phi-scan/README.md

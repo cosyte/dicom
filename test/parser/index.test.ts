@@ -1,8 +1,6 @@
 /**
- * Tests for `parseDicom` entry - Phase 2 plan 02-02 task 3.
- *
- * Covers PARSE-01..06, FM-04, TOL-02, TOL-04, TOL-05, TOL-06 + CONTEXT.md
- * D-01 / D-13 / D-14 / D-15 / D-19 / D-20 + threat model T-02-02-01..05.
+ * Tests for the `parseDicom` entry: input forms, the fatal codes, the
+ * preamble and File Meta warnings, and warning delivery.
  */
 
 import { Buffer } from "node:buffer";
@@ -14,7 +12,7 @@ import { parseDicom } from "../../src/parser/index.js";
 import type { DicomParseWarning } from "../../src/parser/warnings.js";
 import { WARNING_CODES } from "../../src/parser/warnings.js";
 
-describe("parseDicom - PARSE-01 happy path", () => {
+describe("parseDicom - happy path", () => {
   it("returns a Dataset with fileMeta.transferSyntaxUID for valid Part 10 input", () => {
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2.1",
@@ -25,7 +23,7 @@ describe("parseDicom - PARSE-01 happy path", () => {
   });
 });
 
-describe("parseDicom - PARSE-04 input variants", () => {
+describe("parseDicom - input variants", () => {
   it("Buffer / Uint8Array / ArrayBuffer all yield equivalent Datasets", () => {
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2.1",
@@ -43,7 +41,7 @@ describe("parseDicom - PARSE-04 input variants", () => {
   });
 });
 
-describe("parseDicom - PARSE-06 + D-13 EMPTY_INPUT dual check", () => {
+describe("parseDicom - EMPTY_INPUT dual check", () => {
   it("empty Buffer throws EMPTY_INPUT", () => {
     expect(() => parseDicom(Buffer.alloc(0))).toThrow(DicomParseError);
     try {
@@ -60,7 +58,7 @@ describe("parseDicom - PARSE-06 + D-13 EMPTY_INPUT dual check", () => {
     expect(() => parseDicom(new Uint8Array(0))).toThrow(DicomParseError);
   });
 
-  it("empty ArrayBuffer throws EMPTY_INPUT (D-13 corner case)", () => {
+  it("empty ArrayBuffer throws EMPTY_INPUT (corner case)", () => {
     expect(() => parseDicom(new ArrayBuffer(0))).toThrow(DicomParseError);
     try {
       parseDicom(new ArrayBuffer(0));
@@ -88,7 +86,7 @@ describe("parseDicom - PARSE-06 + D-13 EMPTY_INPUT dual check", () => {
   });
 });
 
-describe("parseDicom - PARSE-05 + D-15 NOT_DICOM_PART_10", () => {
+describe("parseDicom - NOT_DICOM_PART_10", () => {
   it("random binary blob throws NOT_DICOM_PART_10 with non-empty hex snippet", () => {
     const buf = Buffer.alloc(200);
     for (let i = 0; i < buf.length; i++) buf[i] = (i * 13 + 7) & 0xff;
@@ -106,11 +104,11 @@ describe("parseDicom - PARSE-05 + D-15 NOT_DICOM_PART_10", () => {
   });
 });
 
-describe("parseDicom - FM-04 + D-20 UNSUPPORTED_TRANSFER_SYNTAX", () => {
-  it("AC-12: dispatch table miss for SMPTE ST 2110-20 → throws UNSUPPORTED_TRANSFER_SYNTAX with the registry name, never the UID, in message and snippet", () => {
+describe("parseDicom - UNSUPPORTED_TRANSFER_SYNTAX", () => {
+  it("dispatch table miss for SMPTE ST 2110-20 → throws UNSUPPORTED_TRANSFER_SYNTAX with the registry name, never the UID, in message and snippet", () => {
     const name = "SMPTE ST 2110-20 Uncompressed Progressive Active Video";
     const buf = buildDicom({
-      // SMPTE ST 2110-20: PS3.5 section A.8, a DICOM-RTV Metadata Flow syntax
+      // SMPTE ST 2110-20: PS3.5 section A.8, a DICOM Real-Time Video Metadata Flow syntax
       // that stays outside the supported set.
       transferSyntax: "1.2.840.10008.1.2.7.1",
       elements: [],
@@ -129,7 +127,7 @@ describe("parseDicom - FM-04 + D-20 UNSUPPORTED_TRANSFER_SYNTAX", () => {
       expect(err.message).not.toContain("1.2.840.10008.1.2.7.1");
       expect(err.message).toContain(name);
       expect(err.message).toContain("(0002,0010)");
-      // Human-readable name comes from Dictionary.uid (D-20): PS3.6's own label.
+      // Human-readable name comes from Dictionary.uid: PS3.6's own label.
       expect(err.snippet).toBe(name);
     }
   });
@@ -148,7 +146,7 @@ describe("parseDicom - FM-04 + D-20 UNSUPPORTED_TRANSFER_SYNTAX", () => {
   });
 });
 
-describe("parseDicom - TOL-04 / TOL-05 / TOL-06", () => {
+describe("parseDicom - warnings", () => {
   it("ds.warnings is always a (frozen) array, even when empty", () => {
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2.1",
@@ -159,7 +157,7 @@ describe("parseDicom - TOL-04 / TOL-05 / TOL-06", () => {
     expect(ds.warnings).toHaveLength(0);
   });
 
-  it("onWarning fires per warning AND ds.warnings collects it (D-03 ordering)", () => {
+  it("onWarning fires per warning AND ds.warnings collects it (in that order)", () => {
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2.1",
       elements: [],
@@ -175,7 +173,7 @@ describe("parseDicom - TOL-04 / TOL-05 / TOL-06", () => {
     );
   });
 
-  it("PARSE-02 + TOL-06: missing preamble emits DICOM_MISSING_PREAMBLE with byteOffset=0 in lenient mode", () => {
+  it("missing preamble emits DICOM_MISSING_PREAMBLE with byteOffset=0 in lenient mode", () => {
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2.1",
       elements: [],
@@ -188,7 +186,7 @@ describe("parseDicom - TOL-04 / TOL-05 / TOL-06", () => {
     expect(ds.fileMeta?.transferSyntaxUID).toBe("1.2.840.10008.1.2.1");
   });
 
-  it("PARSE-02 + D-14: stripPreamble='require' on missing preamble throws NOT_DICOM_PART_10 (NOT INVALID_FILE_META)", () => {
+  it("stripPreamble='require' on missing preamble throws NOT_DICOM_PART_10 (NOT INVALID_FILE_META)", () => {
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2.1",
       elements: [],
@@ -222,7 +220,7 @@ describe("parseDicom - strict mode escalation", () => {
   });
 });
 
-describe("parseDicom - D-19 INVALID_FILE_META", () => {
+describe("parseDicom - INVALID_FILE_META", () => {
   it("missing (0002,0010) Transfer Syntax UID throws INVALID_FILE_META even in lenient mode", () => {
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2.1",

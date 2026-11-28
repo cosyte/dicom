@@ -89,6 +89,8 @@ function matchesMaskedRow(pattern: string, tag: string): boolean {
  * isRegisteredTag("00280410"); // true  - (0028,04x0), read as printed
  * isRegisteredTag("48544F53"); // false - no row carries it
  * ```
+ *
+ * @internal
  */
 export function isRegisteredTag(tag: Tag): boolean {
   if (typeof tag !== "string") return false;

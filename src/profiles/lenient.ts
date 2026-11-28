@@ -34,6 +34,8 @@ import type { Profile } from "../parser/types.js";
  * // ds.warnings holds only integrity-relevant deviations; padding/preamble
  * // noise is suppressed.
  * ```
+ *
+ * @internal
  */
 export const lenient: Profile = defineProfile({
   name: "lenient",

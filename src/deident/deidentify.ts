@@ -412,6 +412,8 @@ const MEDIA_STORAGE_DIRECTORY_STORAGE_UID = "1.2.840.10008.1.3.10";
  *
  * Counted on its own budget line, so a flood of one diagnostic class cannot
  * spend another's and silence it.
+ *
+ * @internal
  */
 export const MAX_FILE_META_DROP_FINDINGS = 64;
 
@@ -424,6 +426,8 @@ export const MAX_FILE_META_DROP_FINDINGS = 64;
  * finding count is chosen by the sender. The removals themselves are not
  * bounded, and {@link DeidentifyReport.group0004RemovalCount} is complete at any
  * input size. An array exactly this long means "at least this many".
+ *
+ * @internal
  */
 export const MAX_GROUP_0004_FINDINGS = 64;
 
@@ -439,6 +443,8 @@ export const MAX_GROUP_0004_FINDINGS = 64;
  * total. An array exactly this long means "at least this many". Counted on its
  * own budget line, so a flood of one diagnostic class cannot spend another's
  * and silence it.
+ *
+ * @internal
  */
 export const MAX_UNREGISTERED_ELEMENT_FINDINGS = 64;
 
@@ -513,6 +519,8 @@ const BODY_ENCODING: Readonly<Record<string, BodyEncoding>> = {
  *
  * A report whose findings array is exactly this long means "at least this many";
  * treat it as truncated.
+ *
+ * @internal
  */
 export const MAX_UNAUDITABLE_SEQUENCE_FINDINGS = 64;
 
@@ -529,6 +537,8 @@ export const MAX_UNAUDITABLE_SEQUENCE_FINDINGS = 64;
  * It is a bound on the **record**, never on the action - every such element is
  * emptied whether or not it is listed. A report whose array is exactly this long
  * means "at least this many"; treat it as truncated.
+ *
+ * @internal
  */
 export const MAX_UNDEFINED_VR_FINDINGS = 64;
 
@@ -546,6 +556,8 @@ export const MAX_UNDEFINED_VR_FINDINGS = 64;
  *
  * Counted on its own budget line, so a flood of one diagnostic class cannot
  * spend another's and silence it.
+ *
+ * @internal
  */
 export const MAX_PRIVATE_DECLARATION_WARNINGS = 64;
 
@@ -3326,15 +3338,15 @@ function hasUncleanedBurnedIn(ds: Dataset): boolean {
  * by omission. The refusal keys on the File Meta alone: a non-JPIP object that
  * carries `(0028,7FE0)` is de-identified like any other, and keeps it.
  *
- * @throws {@link DeidentifyError} (`UNSUPPORTED_TRANSFER_SYNTAX`) for a `Dataset`
+ * @throws {DeidentifyError} (`UNSUPPORTED_TRANSFER_SYNTAX`) for a `Dataset`
  *   whose File Meta Transfer Syntax UID is one of the four JPIP Referenced
  *   syntaxes, whatever the options; its message is a fixed string. Checked
  *   first, so it is the code such a call gets even when its options are
  *   invalid too.
- * @throws {@link DeidentifyError} (`INVALID_OPTIONS`) for an unknown Retain option,
+ * @throws {DeidentifyError} (`INVALID_OPTIONS`) for an unknown Retain option,
  *   for both PS3.15 §E.3.6 temporal Options in one call, or for a malformed
  *   `uidRoot`.
- * @throws `DicomSerializeError` (`VALUE_TOO_LONG_FOR_VR`) when the run
+ * @throws {DicomSerializeError} (`VALUE_TOO_LONG_FOR_VR`) when the run
  *   re-encodes a Sequence Item, under an Explicit VR syntax, that keeps a Private
  *   Creator Data Element whose value is longer than 65,534 bytes. Only a
  *   `RetainSafePrivate` run whose `Profile` names a creator that long keeps one;

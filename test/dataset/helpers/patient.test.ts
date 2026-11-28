@@ -12,7 +12,7 @@ function ascii(s: string): Buffer {
   return b.length % 2 === 0 ? b : Buffer.concat([b, Buffer.from(" ", "ascii")]);
 }
 
-describe("buildPatient (§4.1 wrong-patient class)", () => {
+describe("buildPatient (wrong-patient class)", () => {
   it("surfaces the {id, issuerOfId} tuple, structured PN, birthDate and sex", () => {
     const ds = parseDicom(
       buildDicom({

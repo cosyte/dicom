@@ -43,6 +43,7 @@ import {
   type BuildDicomSqElement,
 } from "../helpers/build-dicom.js";
 import { buildDicomdir } from "../helpers/build-dicomdir.js";
+import { checkPropertyAtDepth } from "../helpers/property.js";
 
 const EXPLICIT_LE = "1.2.840.10008.1.2.1";
 
@@ -147,15 +148,17 @@ describe("each linear trim returns exactly what the pattern it replaced returned
   const RUNS = 10_000;
 
   it("stripTrailingNulls matches /\\0+$/", () => {
-    fc.assert(
+    checkPropertyAtDepth(
+      "stripTrailingNulls matches /\\0+$/",
       fc.property(padded, (s) => stripTrailingNulls(s) === s.replace(/\0+$/, "")),
-      { numRuns: RUNS },
+      RUNS,
     );
   });
 
   it("remapUidBytes and uidValueMultiplicity match the /\\0+$/ versions", () => {
     const remap = (uid: string): string => `9.${uid}`;
-    fc.assert(
+    checkPropertyAtDepth(
+      "remapUidBytes and uidValueMultiplicity match the /\\0+$/ versions",
       fc.property(padded, (s) => {
         const bytes = Buffer.from(s, "latin1");
         const raw = s.replace(/\0+$/, "");
@@ -173,21 +176,23 @@ describe("each linear trim returns exactly what the pattern it replaced returned
           uidValueMultiplicity(bytes) === (raw.length === 0 ? 0 : raw.split("\\").length)
         );
       }),
-      { numRuns: RUNS },
+      RUNS,
     );
   });
 
   it("stripTrailingPad matches /[\\0 ]+$/u", () => {
-    fc.assert(
+    checkPropertyAtDepth(
+      "stripTrailingPad matches /[\\0 ]+$/u",
       fc.property(padded, (s) => stripTrailingPad(s) === s.replace(/[\0 ]+$/u, "")),
-      { numRuns: RUNS },
+      RUNS,
     );
   });
 
   it("trimSpaces matches /^ +| +$/gu", () => {
-    fc.assert(
+    checkPropertyAtDepth(
+      "trimSpaces matches /^ +| +$/gu",
       fc.property(padded, (s) => trimSpaces(s) === s.replace(/^ +| +$/gu, "")),
-      { numRuns: RUNS },
+      RUNS,
     );
   });
 });

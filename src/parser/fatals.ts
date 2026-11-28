@@ -445,6 +445,8 @@ function at(
  * ```ts
  * throw emptyInput();
  * ```
+ *
+ * @internal
  */
 export function emptyInput(): DicomParseError {
   // The one frame that exists before a `ParseContext` does. There are no bytes
@@ -459,6 +461,8 @@ export function emptyInput(): DicomParseError {
  * ```ts
  * throw emptyInputAfterNormalization();
  * ```
+ *
+ * @internal
  */
 export function emptyInputAfterNormalization(): DicomParseError {
   return build("EMPTY_INPUT_AFTER_NORMALIZATION", 0, OFFSET_FRAMES.INPUT, "");
@@ -472,6 +476,8 @@ export function emptyInputAfterNormalization(): DicomParseError {
  * ```ts
  * throw notDicomPart10Required(ctx.frame, 0);
  * ```
+ *
+ * @internal
  */
 export function notDicomPart10Required(frame: ParseFrame, offset: number): DicomParseError {
   return at("NOT_DICOM_PART_10_REQUIRED", frame, offset);
@@ -485,6 +491,8 @@ export function notDicomPart10Required(frame: ParseFrame, offset: number): Dicom
  * ```ts
  * throw notDicomPart10(ctx.frame, 0);
  * ```
+ *
+ * @internal
  */
 export function notDicomPart10(frame: ParseFrame, offset: number): DicomParseError {
   return at("NOT_DICOM_PART_10", frame, offset);
@@ -508,6 +516,8 @@ export function notDicomPart10(frame: ParseFrame, offset: number): DicomParseErr
  * ```ts
  * throw unsupportedTransferSyntax(ctx.frame, fileMetaEnd, "1.2.840.10008.1.2.7.1");
  * ```
+ *
+ * @internal
  */
 export function unsupportedTransferSyntax(
   frame: ParseFrame,
@@ -531,6 +541,8 @@ export function unsupportedTransferSyntax(
  * ```ts
  * throw fileMetaTruncated(ctx.frame, fmStart);
  * ```
+ *
+ * @internal
  */
 export function fileMetaTruncated(frame: ParseFrame, offset: number): DicomParseError {
   return at("FILE_META_TRUNCATED", frame, offset);
@@ -568,6 +580,8 @@ export function fileMetaTruncated(frame: ParseFrame, offset: number): DicomParse
  * ```ts
  * throw fileMetaGroupLengthOverruns(ctx.frame, fmStart);
  * ```
+ *
+ * @internal
  */
 export function fileMetaGroupLengthOverruns(frame: ParseFrame, offset: number): DicomParseError {
   return at("FILE_META_GROUP_LENGTH_OVERRUNS", frame, offset);
@@ -580,6 +594,8 @@ export function fileMetaGroupLengthOverruns(frame: ParseFrame, offset: number): 
  * ```ts
  * throw fileMetaTransferSyntaxMissing(ctx.frame, fmStart);
  * ```
+ *
+ * @internal
  */
 export function fileMetaTransferSyntaxMissing(frame: ParseFrame, offset: number): DicomParseError {
   return at("FILE_META_TRANSFER_SYNTAX_MISSING", frame, offset);
@@ -593,6 +609,8 @@ export function fileMetaTransferSyntaxMissing(frame: ParseFrame, offset: number)
  * ```ts
  * throw truncatedDatasetHeader(ctx.frame, headerStart);
  * ```
+ *
+ * @internal
  */
 export function truncatedDatasetHeader(frame: ParseFrame, offset: number): DicomParseError {
   return at("TRUNCATED_DATASET_HEADER", frame, offset);
@@ -605,6 +623,8 @@ export function truncatedDatasetHeader(frame: ParseFrame, offset: number): Dicom
  * ```ts
  * throw truncatedFffeHeader(ctx.frame, headerStart);
  * ```
+ *
+ * @internal
  */
 export function truncatedFffeHeader(frame: ParseFrame, offset: number): DicomParseError {
   return at("TRUNCATED_FFFE_HEADER", frame, offset);
@@ -617,6 +637,8 @@ export function truncatedFffeHeader(frame: ParseFrame, offset: number): DicomPar
  * ```ts
  * throw truncatedExplicitVrHeader(ctx.frame, headerStart);
  * ```
+ *
+ * @internal
  */
 export function truncatedExplicitVrHeader(frame: ParseFrame, offset: number): DicomParseError {
   return at("TRUNCATED_EXPLICIT_VR_HEADER", frame, offset);
@@ -629,6 +651,8 @@ export function truncatedExplicitVrHeader(frame: ParseFrame, offset: number): Di
  * ```ts
  * throw sqItemHeaderTruncated(ctx.frame, itemHeaderStart);
  * ```
+ *
+ * @internal
  */
 export function sqItemHeaderTruncated(frame: ParseFrame, offset: number): DicomParseError {
   return at("SQ_ITEM_HEADER_TRUNCATED", frame, offset);
@@ -648,6 +672,8 @@ export function sqItemHeaderTruncated(frame: ParseFrame, offset: number): DicomP
  * ```ts
  * throw unexpectedFffeAtDatasetLevel(ctx.frame, headerStart);
  * ```
+ *
+ * @internal
  */
 export function unexpectedFffeAtDatasetLevel(frame: ParseFrame, offset: number): DicomParseError {
   return at("UNEXPECTED_FFFE_AT_DATASET_LEVEL", frame, offset);
@@ -662,6 +688,8 @@ export function unexpectedFffeAtDatasetLevel(frame: ParseFrame, offset: number):
  * ```ts
  * throw unexpectedFffeAtDatasetRoot(ctx.frame, headerStart);
  * ```
+ *
+ * @internal
  */
 export function unexpectedFffeAtDatasetRoot(frame: ParseFrame, offset: number): DicomParseError {
   return at("UNEXPECTED_FFFE_AT_DATASET_ROOT", frame, offset);
@@ -683,6 +711,8 @@ export function unexpectedFffeAtDatasetRoot(frame: ParseFrame, offset: number): 
  * ```ts
  * throw undefinedLengthOnNonSqExplicit(ctx.frame, headerStart, "LO");
  * ```
+ *
+ * @internal
  */
 export function undefinedLengthOnNonSqExplicit(
   frame: ParseFrame,
@@ -706,6 +736,8 @@ export function undefinedLengthOnNonSqExplicit(
  * ```ts
  * throw undefinedLengthOnNonSqImplicit(ctx.frame, headerStart, "UN");
  * ```
+ *
+ * @internal
  */
 export function undefinedLengthOnNonSqImplicit(
   frame: ParseFrame,
@@ -743,6 +775,8 @@ export function undefinedLengthOnNonSqImplicit(
  * ```ts
  * throw elementLengthExceedsBuffer(ctx.frame, headerStart);
  * ```
+ *
+ * @internal
  */
 export function elementLengthExceedsBuffer(frame: ParseFrame, offset: number): DicomParseError {
   return at("ELEMENT_LENGTH_EXCEEDS_BUFFER", frame, offset);
@@ -761,6 +795,8 @@ export function elementLengthExceedsBuffer(frame: ParseFrame, offset: number): D
  * ```ts
  * throw unexpectedTagInsideSequence(ctx.frame, itemHeaderStart);
  * ```
+ *
+ * @internal
  */
 export function unexpectedTagInsideSequence(frame: ParseFrame, offset: number): DicomParseError {
   return at("UNEXPECTED_TAG_INSIDE_SEQUENCE", frame, offset);
@@ -774,6 +810,8 @@ export function unexpectedTagInsideSequence(frame: ParseFrame, offset: number): 
  * ```ts
  * throw encapsulatedFragmentExceedsBuffer(ctx.frame, itemHeaderStart);
  * ```
+ *
+ * @internal
  */
 export function encapsulatedFragmentExceedsBuffer(
   frame: ParseFrame,
@@ -794,6 +832,8 @@ export function encapsulatedFragmentExceedsBuffer(
  * ```ts
  * throw itemLengthExceedsBuffer(ctx.frame, itemHeaderStart);
  * ```
+ *
+ * @internal
  */
 export function itemLengthExceedsBuffer(frame: ParseFrame, offset: number): DicomParseError {
   return at("ITEM_LENGTH_EXCEEDS_BUFFER", frame, offset);
@@ -810,6 +850,8 @@ export function itemLengthExceedsBuffer(frame: ParseFrame, offset: number): Dico
  * ```ts
  * throw sqNestingDepthExceeded(ctx.frame, valueStart, 64);
  * ```
+ *
+ * @internal
  */
 export function sqNestingDepthExceeded(
   frame: ParseFrame,
@@ -826,6 +868,8 @@ export function sqNestingDepthExceeded(
  * ```ts
  * throw inflatedPayloadExceedsCap(ctx.frame, datasetStart, 268435456);
  * ```
+ *
+ * @internal
  */
 export function inflatedPayloadExceedsCap(
   frame: ParseFrame,
@@ -846,6 +890,8 @@ export function inflatedPayloadExceedsCap(
  * ```ts
  * throw inflateFailed(ctx.frame, datasetStart, "Z_DATA_ERROR");
  * ```
+ *
+ * @internal
  */
 export function inflateFailed(
   frame: ParseFrame,
