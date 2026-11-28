@@ -1,5 +1,5 @@
 /**
- * Tests for the Phase 2 structural `Sequence` wrapper (02-CONTEXT D-04).
+ * Tests for the structural `Sequence` wrapper.
  *
  * The class is a thin, immutable container: `items` (frozen at the
  * constructor boundary) + the on-wire `length`. These tests pin that

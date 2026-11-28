@@ -1,7 +1,7 @@
 /**
  * Tests for scripts/generate-repeating-groups.ts.
  *
- * The property under test is the one this slice exists to create: **the PS3.5
+ * The property under test is the one this change exists to create: **the PS3.5
  * repeating-group bound is read out of pinned normative documents, not
  * transcribed into the source tree.** A transcribed bound and a derived bound
  * look identical when they agree, which is exactly why agreeing is not evidence.
@@ -35,8 +35,8 @@
  * `test/docs/spec-citations.test.ts` reads `part05` at module load, and the shipped
  * library plus the Annex E generator read `src/dictionary/generated/`.
  * `part05-2004` is opened by nothing else in this repository except the generator
- * this suite invokes, so no live reader was ever exposed to it. That is
- * `DICOM-ANNEX-E-TEST-RACE`;
+ * this suite invokes, so no live reader was ever exposed to it. That is the
+ * race between test files;
  * `test/helpers/generator-sandbox.ts` carries the measurement and the reason the
  * remedy is relocation rather than a softer pin on either side. Do not reach back
  * into `REPO_ROOT` for anything this suite writes.
@@ -248,7 +248,7 @@ describe("generate-repeating-groups", () => {
     expect(happy.stdout).toContain("50xx [Curves (retired)] 5000-501E even (16 groups)");
     expect(happy.stdout).toContain("60xx [Overlay Planes] 6000-601E even (16 groups)");
     expect(happy.stdout).toContain("2 repeating-group masks covering 32 concrete group numbers");
-    // Which document supplied which half is the asymmetry this slice closed.
+    // Which document supplied which half is the asymmetry this change closed.
     expect(happy.stdout).toMatch(/50xx \[Curves \(retired\)\].*from PS3\.5-2004 section 7\.6/);
     // The overlay half comes from the edition the run names, whichever edition is pinned.
     const edition = /PS3\.5 edition: (\d{4}[a-z]?) /.exec(happy.stdout)?.[1];

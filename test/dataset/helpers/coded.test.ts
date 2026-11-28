@@ -12,7 +12,7 @@ function ascii(s: string): Buffer {
   return b.length % 2 === 0 ? b : Buffer.concat([b, Buffer.from(" ", "ascii")]);
 }
 
-describe("codingSchemeOid (§4.6, CP-730)", () => {
+describe("codingSchemeOid", () => {
   it("resolves the four standard designators to their canonical OIDs", () => {
     expect(codingSchemeOid("DCM")).toBe(CODING_SCHEME_OIDS.DCM);
     expect(codingSchemeOid("SCT")).toBe("2.16.840.1.113883.6.96");
@@ -32,7 +32,7 @@ describe("codingSchemeOid (§4.6, CP-730)", () => {
   });
 });
 
-describe("readCode (§4.6 coded triplet)", () => {
+describe("readCode (coded triplet)", () => {
   it("reads the triplet and resolves schemeUid for a standard designator", () => {
     const ds = parseDicom(
       buildDicom({

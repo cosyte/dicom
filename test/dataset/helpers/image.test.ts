@@ -22,7 +22,7 @@ function fd(n: number): Buffer {
   return b;
 }
 
-describe("buildImage (§4.2 wrong-pixels class)", () => {
+describe("buildImage (wrong-pixels class)", () => {
   it("surfaces a signed CT with rescale slope/intercept/type and dimensions", () => {
     const ds = parseDicom(
       buildDicom({
@@ -56,7 +56,7 @@ describe("buildImage (§4.2 wrong-pixels class)", () => {
     expect(img.isEnhancedMultiFrame).toBe(false);
   });
 
-  it("§4.2 PROHIBITION: rescaleSlope is absent (NOT defaulted to 1) when the tag is absent", () => {
+  it("PROHIBITION: rescaleSlope is absent (NOT defaulted to 1) when the tag is absent", () => {
     const ds = parseDicom(
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
@@ -67,7 +67,7 @@ describe("buildImage (§4.2 wrong-pixels class)", () => {
     expect(ds.image.rescaleIntercept).toBeUndefined();
   });
 
-  it("§4.2 PROHIBITION: signed is absent (never guessed) unless (0028,0103) is present", () => {
+  it("PROHIBITION: signed is absent (never guessed) unless (0028,0103) is present", () => {
     const noRep = parseDicom(
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
@@ -87,7 +87,7 @@ describe("buildImage (§4.2 wrong-pixels class)", () => {
     expect(unsigned.image.signed).toBe(false);
   });
 
-  it("§4.2 PROHIBITION: MONOCHROME1 is preserved, never defaulted to MONOCHROME2; absent ⇒ undefined", () => {
+  it("PROHIBITION: MONOCHROME1 is preserved, never defaulted to MONOCHROME2; absent ⇒ undefined", () => {
     const mono1 = parseDicom(
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
@@ -143,7 +143,7 @@ describe("buildImage (full surface - present-arm coverage)", () => {
     expect(img.units).toBe("HU");
   });
 
-  it("§4.2 PROHIBITION: a non-binary pixelRepresentation leaves signed unguessed", () => {
+  it("PROHIBITION: a non-binary pixelRepresentation leaves signed unguessed", () => {
     const ds = parseDicom(
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
@@ -188,8 +188,8 @@ describe("buildImage (full surface - present-arm coverage)", () => {
   });
 });
 
-describe("buildImage (§4.3 looks-fine-measures-wrong class)", () => {
-  it("§4.3 PROHIBITION: the three pixel-spacing tags are distinct and never aliased", () => {
+describe("buildImage (looks-fine-measures-wrong class)", () => {
+  it("PROHIBITION: the three pixel-spacing tags are distinct and never aliased", () => {
     const ds = parseDicom(
       buildDicom({
         transferSyntax: TS_EXPLICIT_LE,
@@ -221,7 +221,7 @@ describe("buildImage (§4.3 looks-fine-measures-wrong class)", () => {
   });
 });
 
-describe("buildImage (§4.5 units/quantitation)", () => {
+describe("buildImage (units/quantitation)", () => {
   it("binds a Real World Value Map's slope/intercept to its UCUM units code", () => {
     const ds = parseDicom(
       buildDicom({
