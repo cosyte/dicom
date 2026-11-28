@@ -55,6 +55,6 @@ and every diagnostic as a route out.
 - Locate a spec section by its normative sentence (#40) and cite the clause that holds it, which
   `test/docs/spec-citations.test.ts` checks (#50, #54, #66).
 - `pnpm attw` runs `cosyte-attw`, never the bare `attw` CLI, which exits 0 with no types (#59).
-- Changesets write `CHANGELOG.md`: never hand-edit it or add an `[Unreleased]` heading (#82), and
-  keep a changeset's opening sentence under 200 characters (#42, #57).
+- Never hand-edit `CHANGELOG.md` or add `[Unreleased]` (#82). A changeset is a patch, its first
+  sentence at most 400 characters (#42, #57), with `What a caller must change:` only when needed.
 - `packageManager` is the only pnpm pin in CI (#34).

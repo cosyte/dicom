@@ -13,8 +13,9 @@ Add a changeset for every change that reaches the published package:
 pnpm changeset
 ```
 
-The package is on the 0.1 line and publishes to npm through trusted publishing. Below 1.0, a
-breaking change takes **minor** and its summary says how to migrate; everything else takes
-**patch**. Keep the opening sentence under 200 characters: the release gate refuses a longer one
-after the version commit, and nothing publishes. The release standard (Changesets writes the
-changelog of every published package) is in the umbrella's `plans/standards.md`.
+The package is on the 0.1 line and publishes to npm through trusted publishing. Every changeset
+is a **patch**, a breaking change included. A change a caller must act on has a paragraph that
+opens `What a caller must change:` and says what to edit; a change that needs nothing from callers
+carries no such paragraph. The opening sentence becomes one bullet of the GitHub release, so it
+stands alone and is at most 400 characters: the release gate refuses a longer one after the version
+commit, and nothing publishes.
