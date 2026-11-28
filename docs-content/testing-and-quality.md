@@ -2,7 +2,6 @@
 id: testing-and-quality
 title: Testing and quality
 sidebar_label: Testing and quality
-sidebar_position: 20
 description: "How we test @cosyte/dicom: unit tests, corpora, property tests, fuzzing, mutation testing and the PHI scan, with what each one catches and misses."
 ---
 

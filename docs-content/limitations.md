@@ -2,7 +2,6 @@
 id: limitations
 title: Known limitations
 sidebar_label: Known limitations
-sidebar_position: 18
 description: The do-not-over-trust list of what the package does not do, the PHI residuals it discloses, and what it never defaults.
 ---
 

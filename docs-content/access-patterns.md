@@ -2,7 +2,6 @@
 id: access-patterns
 title: Access patterns
 sidebar_label: Access patterns
-sidebar_position: 8
 description: How a DICOM Part 10 file is laid out, and the ways to read it with safety-critical views, tags, typed values, and dates and times.
 ---
 

@@ -2,7 +2,6 @@
 id: spec-notes-model
 title: The object model
 sidebar_label: The object model
-sidebar_position: 7
 description: How a Part 10 object is framed (preamble, File Meta, and the dataset) and how the package models each part.
 ---
 

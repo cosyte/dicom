@@ -2,7 +2,6 @@
 id: troubleshooting
 title: "Troubleshooting: symptoms and causes"
 sidebar_label: Symptoms and causes
-sidebar_position: 19
 description: From symptom to cause, covering when the parser throws or warns, keeping PHI out of logs, and the boundaries behind each symptom.
 ---
 

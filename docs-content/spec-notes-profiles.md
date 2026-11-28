@@ -2,7 +2,6 @@
 id: spec-notes-profiles
 title: Source and vendor profiles
 sidebar_label: Source profiles
-sidebar_position: 12
 description: What a source or vendor profile bundles, the five built-in profiles, and how to define your own.
 ---
 

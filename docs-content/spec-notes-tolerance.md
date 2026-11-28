@@ -2,7 +2,6 @@
 id: spec-notes-tolerance
 title: Tolerance and the warning model
 sidebar_label: Tolerance and warnings
-sidebar_position: 11
 description: The two warning tiers, the small fatal set, what a diagnostic carries and leaves out, and how to make a parse stricter.
 ---
 

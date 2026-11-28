@@ -2,7 +2,6 @@
 id: property-testing
 title: Property-test your code with our generators
 sidebar_label: Property testing
-sidebar_position: 6
 description: The fast-check generators at @cosyte/dicom/arbitraries, what each one draws, and how to use them to test code built on the parser.
 ---
 

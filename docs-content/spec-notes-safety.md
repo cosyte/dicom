@@ -2,7 +2,6 @@
 id: spec-notes-safety
 title: Safety-critical views
 sidebar_label: Safety-critical views
-sidebar_position: 10
 description: The four typed views over the safety-critical attributes (patient, study, series, and image) and why an absent value stays absent.
 ---
 

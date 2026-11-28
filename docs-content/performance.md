@@ -2,7 +2,6 @@
 id: performance
 title: Performance
 sidebar_label: Performance
-sidebar_position: 21
 description: "What we measure on @cosyte/dicom (throughput, latency, memory, import cost) and how, the CI gate on scaling, and how to run the benchmarks yourself."
 ---
 

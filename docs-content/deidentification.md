@@ -2,7 +2,6 @@
 id: deidentification
 title: Metadata de-identification
 sidebar_label: De-identification
-sidebar_position: 14
 description: How deidentify() applies the PS3.15 Annex E profile to header metadata, what its options do, and what its report records.
 ---
 

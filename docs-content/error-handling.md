@@ -2,7 +2,6 @@
 id: error-handling
 title: Error handling
 sidebar_label: Error handling
-sidebar_position: 17
 description: The six typed errors the package throws, what each one carries, and when a warning becomes a throw.
 ---
 
