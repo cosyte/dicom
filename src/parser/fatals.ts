@@ -136,7 +136,7 @@ const NATIVE_TRANSFER_SYNTAXES: readonly string[] = Object.freeze([
 
 /**
  * The supported list, rendered for the one message that carries it. It names
- * the native UIDs and SUMMARISES the section A.4 syntaxes and the four JPIP
+ * the native UIDs and SUMMARIZES the section A.4 syntaxes and the four JPIP
  * Referenced syntaxes rather than enumerating them, so the message stays short
  * and names no UID a caller could mistake for the refused one: the refused UID
  * is never printed at all. The JPIP sections are cited in the edition the A.4
@@ -507,7 +507,7 @@ export function notDicomPart10(frame: ParseFrame, offset: number): DicomParseErr
  * @remarks
  * The UID is a parameter and is **not** printed: `renderTransferSyntax` replaces
  * it with the PS3.6 registry's name for it, or with a fixed phrase. The snippet
- * follows the same rule and keeps the behaviour every released version has: the
+ * follows the same rule and keeps the behavior every released version has: the
  * registry name when there is one, and 16 raw bytes at `offset` when there is
  * not. **That makes this the one fatal whose `snippet` may not be hex**, which
  * is worth knowing before writing code that parses it.

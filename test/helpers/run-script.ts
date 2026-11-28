@@ -10,7 +10,7 @@
  * wide enough margin to be visible in the suite's wall clock. NO RATIO IS QUOTED
  * HERE, deliberately - independent re-takes on one box do not agree with each
  * other, and the gap moves with the workload as well as with the box, `tsx`'s cost
- * being a fixed process start that amortises over whatever the script then does.
+ * being a fixed process start that amortizes over whatever the script then does.
  * Re-measure on the script you care about rather than carrying a number to one
  * that runs longer.
  *

@@ -189,7 +189,7 @@ describe("the vendored CommonMark spec is a precondition, not a citation", () =>
   it("puts the ATX separator rule in 4.2, which is what `tripleHashValue` implements", () => {
     // 🩺 THE SENTENCE THAT DECIDES WHETHER AN INVISIBLE CHARACTER CAN EXEMPT A PHI TARGET. The
     // parser separated the `###` run with the whole of `\s`, so a `###` followed by an `NBSP` -
-    // which renders as a PARAGRAPH - was a live allow entry that `--allow-fixture` honoured at
+    // which renders as a PARAGRAPH - was a live allow entry that `--allow-fixture` honored at
     // exit 0.
     const separator = theSectionCarrying(
       "The opening sequence of `#` characters must be followed by spaces or tabs, or by the end " +
@@ -252,7 +252,7 @@ describe("the vendored CommonMark spec is a precondition, not a citation", () =>
     expect(`${inert.number} ${inert.title}`).toBe("4.6 HTML blocks");
 
     // 🛑 THE SCOPING SENTENCE. Kind 7 is the one `phi-scan` does not model, and this is the clause
-    // that says modelling it needs paragraph state: the divergence is scoped against the document
+    // that says modeling it needs paragraph state: the divergence is scoped against the document
     // rather than against a preference.
     const seven = theSectionCarrying(
       "All types of [HTML blocks] except type 7 may interrupt a paragraph. Blocks of type 7 may " +
@@ -269,7 +269,7 @@ describe("the vendored CommonMark spec is a precondition, not a citation", () =>
   });
 
   it("carries the two tag lists section 4.6 closes over, and they are read from it", () => {
-    // 🛑 THE TABLES IN `scripts/phi-scan.ts` ARE CHECKED AGAINST THESE, BEHAVIOURALLY, IN
+    // 🛑 THE TABLES IN `scripts/phi-scan.ts` ARE CHECKED AGAINST THESE, BEHAVIORALLY, IN
     // `test/scripts/phi-scan-matchers.test.ts`: one `--allow-fixture` per name through the
     // membership oracle. What is claimed HERE is only that the reader resolves to section 4.6 and
     // produces two non-vacuous, disjoint lists. NO COUNT IS WRITTEN, in this file or in the script.
@@ -281,7 +281,7 @@ describe("the vendored CommonMark spec is a precondition, not a citation", () =>
     expect(c.literalTags).toEqual(["pre", "script", "style", "textarea"]);
     expect(c.blockTags.length).toBeGreaterThan(50);
     expect(c.blockTags.filter((t) => c.literalTags.includes(t))).toEqual([]);
-    // Spot checks in both directions, chosen because the behavioural cases use exactly these.
+    // Spot checks in both directions, chosen because the behavioral cases use exactly these.
     expect(c.blockTags).toContain("div");
     expect(c.blockTags).toContain("p");
     expect(c.blockTags).not.toContain("span");

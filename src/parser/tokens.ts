@@ -134,7 +134,7 @@ const TAG_SHAPE = /^[0-9A-F]{8}$/u;
  * counterexample cost a graded pass on the sibling half of this item; the closed
  * set here is the 5,221 tags the registry names one at a time.
  *
- * ## What it costs, stated rather than minimised
+ * ## What it costs, stated rather than minimized
  *
  * A tag PS3.6 does not name one at a time stops appearing in every message. Three
  * classes lose their name on a well-formed file: **private** tags, **Group

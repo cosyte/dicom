@@ -10,7 +10,7 @@
 import { Dataset, type DatasetInit } from "./dataset.js";
 
 /**
- * Initialiser shape for an `Item` - extends `DatasetInit` with `index`,
+ * Initializer shape for an `Item` - extends `DatasetInit` with `index`,
  * the 0-based position of the item inside its parent `Sequence`, and the
  * optional `fileOffset` the parser records (see {@link Item.fileOffset}).
  *

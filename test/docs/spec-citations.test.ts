@@ -95,7 +95,7 @@ function readPinned(part: string): string {
   return bytes.toString("utf8");
 }
 
-/** Every labelled DocBook division, in document order. */
+/** Every labeled DocBook division, in document order. */
 function readSections(text: string): Section[] {
   const out: Section[] = [];
   const re = /<(?:section|chapter|appendix)\b[^>]*\blabel="([^"]*)"[^>]*>/g;

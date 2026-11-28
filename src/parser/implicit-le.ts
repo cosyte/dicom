@@ -188,7 +188,7 @@ export function parseImplicitLE(
       //
       // The descent restores parser state and drops its warnings on failure,
       // so a `UN` that is genuinely not a sequence still reaches the throw
-      // below with the base behaviour unchanged.
+      // below with the base behavior unchanged.
       if (vr === "UN") {
         const cp246 = tryParseUnAsSQ(
           buffer,
@@ -292,7 +292,7 @@ export function parseImplicitLE(
       }
       // Descent refused: `tryParseDefinedLengthSQ` has already rolled the parser
       // back and emitted `DICOM_SQ_NOT_DESCENDED`. Fall through to the scalar
-      // construction below, which is byte-for-byte the pre-fix behaviour - the
+      // construction below, which is byte-for-byte the pre-fix behavior - the
       // element keeps its declared value span with no `items`.
     }
 

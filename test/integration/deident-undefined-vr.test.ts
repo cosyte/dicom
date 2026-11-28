@@ -49,7 +49,7 @@
  * larger set than "not a VR", and a rule keyed on the former would empty every
  * `UN` element in every file.
  *
- * Every behavioural expectation was run red against `35adc2d`.
+ * Every behavioral expectation was run red against `35adc2d`.
  *
  * ## ▶ RE-POINTED BY the unregistered element removal, AND WHY THE UNDEFINED-VR RULE KEEPS A POPULATION
  *

@@ -260,7 +260,7 @@ export interface ParseOptions {
    * creator the profile does not recognize degrades to generic UN handling
    * plus a `DICOM_PRIVATE_CREATOR_UNKNOWN` warning, never a wrong decode.
    *
-   * Omit (do not pass `undefined`) for the unprofiled default behaviour.
+   * Omit (do not pass `undefined`) for the unprofiled default behavior.
    */
   readonly profile?: Profile;
   /**
@@ -451,7 +451,7 @@ export interface ParseContext {
   /**
    * The `(0008,0005)` Specific Character Set terms resolved so far during
    * this parse, threaded onto each `Element` so the text decoders can
-   * honour the dataset's charset. Mutable: set when `(0008,0005)` is read,
+   * honor the dataset's charset. Mutable: set when `(0008,0005)` is read,
    * inherited into SQ items and restored per-item by `parseSequence`.
    * `undefined` means the Default Repertoire (ISO_IR 6). Restored by
    * assignment rather than `delete`, so the context keeps one shape.

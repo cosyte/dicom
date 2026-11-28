@@ -79,7 +79,7 @@ function shortEl(group: number, element: number, vr: string, value: string): Buf
 
 /**
  * One short-form Explicit VR **Big Endian** element. Written out rather than reusing the LE writer
- * with a different `(0002,0010)`: a fixture LABELLED big-endian while carrying little-endian bytes
+ * with a different `(0002,0010)`: a fixture LABELED big-endian while carrying little-endian bytes
  * is read happily by the tag walk and passes for the wrong reason.
  */
 function shortElBE(group: number, element: number, vr: string, value: string): Buffer {

@@ -387,7 +387,7 @@ export interface EmbeddedRun {
    * BACK.** Every tag in this run was composed from four bytes sitting *inside*
    * another element's value - that is the position this module exists to
    * distrust - so a run needing only ONE actionable attribute to be reported
-   * dragged its neighbours' four-byte windows onto the report with it. Measured
+   * dragged its neighbors' four-byte windows onto the report with it. Measured
    * through `0.0.13`: a `CS` carrier over-declaring across a fabricated
    * `"SMIT"` header beside a genuine `(0010,0020)` reported
    * `hidden: ["4D535449", "00100020"]`, and `4D535449` is four letters of the

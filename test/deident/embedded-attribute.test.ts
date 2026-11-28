@@ -3,7 +3,7 @@
  * **own** Value Length swallows the element that follows it into its value,
  * where PS3.15 Table E.1-1 cannot see it.
  *
- * Every behavioural expectation below was run red against `0.0.6` (`244a372`)
+ * Every behavioral expectation below was run red against `0.0.6` (`244a372`)
  * before the remedy existed. The shape that makes them red is precise and is the
  * trap this family has been caught by twice: the carrier must over-declare by
  * **exactly** the on-wire size of the element that follows it. Over-declaring

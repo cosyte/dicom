@@ -162,7 +162,7 @@ export type OffsetFrame = (typeof OFFSET_FRAMES)[keyof typeof OFFSET_FRAMES];
  *
  * They were two facts before this type existed: `ParseContext.buffer` held the
  * frame's bytes and nothing held its name, so every diagnostic that published
- * an offset published it unlabelled. Making the name a second sibling field
+ * an offset published it unlabeled. Making the name a second sibling field
  * would have re-created the failure this parser has already paid for twice -
  * an offset and the bytes cut at it drifting apart across a frame change. One
  * object with two readonly members means a frame change is a single

@@ -14,7 +14,7 @@ import { describe, expect, it } from "vitest";
  *
  * ## Why these three strings
  *
- * Each was a load-bearing claim of the behaviour this release replaced, and each would read as a
+ * Each was a load-bearing claim of the behavior this release replaced, and each would read as a
  * lie in a shipped package: `"disclosure, not a fix"` was the package conceding that a retained
  * private value still shipped, `applied: "kept"` was the report field that said so, and
  * `KEPT unchanged` was the warning message that said so. A prose surface still carrying one of them

@@ -6,7 +6,7 @@
  * (zero-copy), pinning the source ArrayBuffer until every Element is GC'd.
  * The `parseDicom` `{ copyValues: true }` option flips production to
  * `Buffer.from(slice)` so the source can be released; every producer in the
- * parser honours it.
+ * parser honors it.
  *
  * @module
  */
@@ -19,7 +19,7 @@ import { decodeElementValue } from "./vr/decode.js";
 import type { DicomValue } from "./vr/types.js";
 
 /**
- * Initialiser shape accepted by the `Element` constructor.
+ * Initializer shape accepted by the `Element` constructor.
  *
  * `privateCreator` is omitted (not `undefined`) for standard tags;
  * present only when the parser resolved a `(gggg,EEFF)` private element
@@ -82,7 +82,7 @@ let rangeEnd: (el: Element) => number;
  * `byteOffset`, `privateCreator`. On top of it sits a lazy, memoized
  * `.value` getter backed by the VR-aware decoders under `src/dataset/vr/`.
  *
- * `rawBytes` retention behaviour: zero-copy `Buffer.subarray` view by
+ * `rawBytes` retention behavior: zero-copy `Buffer.subarray` view by
  * default (pins source ArrayBuffer); pass `{ copyValues: true }` to
  * `parseDicom` for `Buffer.from(slice)` per element when the source
  * needs to be released.

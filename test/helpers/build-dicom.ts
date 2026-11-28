@@ -129,7 +129,7 @@ export interface BuildDicomElement {
    *
    * Use it only to construct a length field that disagrees with the bytes
    * present, the class of input an unbounded Explicit VR item read is
-   * about. A test asserting tolerant behaviour on such a file has to be able to
+   * about. A test asserting tolerant behavior on such a file has to be able to
    * build one, and hand-assembling raw buffers in the test hides which byte is
    * the lie.
    */
@@ -227,7 +227,7 @@ export interface BuildDicomOptions {
   /** When `true`, omits the 128-byte preamble + DICM magic. */
   readonly skipPreamble?: boolean;
   /**
-   * `(0002,0000)` FileMetaInformationGroupLength behaviour:
+   * `(0002,0000)` FileMetaInformationGroupLength behavior:
    *   - `undefined` (default): emit with the actual byte count.
    *   - `"omit"`: omit the element entirely.
    *   - `"wrong"`: emit with an intentionally incorrect byte count.

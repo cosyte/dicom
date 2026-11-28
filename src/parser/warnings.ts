@@ -265,7 +265,7 @@ export const WARNING_MESSAGES: Readonly<Record<WarningCode, string>> = Object.fr
   DICOM_PRIVATE_TAG_NO_CREATOR:
     "A private element has no Private Creator registered for its block; treating as VR=UN. Its tag is withheld; the byte offset identifies the element.",
   // No tag, and it is the membership bound in `renderTag` that made the slot
-  // dead rather than a judgement here: this code fires on a (gggg,0000), the
+  // dead rather than a judgment here: this code fires on a (gggg,0000), the
   // element number is a constant of the code, and PS3.6 carries a literal row
   // for exactly one such tag - (0002,0000), which is File Meta and never
   // reaches this code. So every tag this slot could ever have rendered was one
@@ -719,7 +719,7 @@ export function undefinedLengthInExplicitVR(position: DicomPosition, tag: Tag): 
  *   factory cannot be handed the value, so no future call site can put it back
  *   without changing this signature.
  *
- * **What it costs, stated rather than minimised.** On a well-formed file the
+ * **What it costs, stated rather than minimized.** On a well-formed file the
  * message no longer says *how* odd the length was. The element is in the Data
  * Set under the tag this message still prints, its `rawBytes` carry the value
  * the length described, and `position.byteOffset` locates the header.
@@ -794,7 +794,7 @@ export function vrMismatch(
  * absence of a slot refuses what a future edition might start naming, and it
  * survives a call site being added by someone who has not read this paragraph.
  *
- * **What it costs, stated rather than minimised.** On a well-formed file the tag
+ * **What it costs, stated rather than minimized.** On a well-formed file the tag
  * this message used to carry was the sender's own private tag number, and it is
  * no longer in the message. It has not left the object: the element is in the
  * Data Set under that tag, and `position.byteOffset` - a count this parser kept -
@@ -819,7 +819,7 @@ export function privateTagNoCreator(position: DicomPosition): DicomParseWarning 
  * encoders still emit them.
  *
  * ## The tag is bound out of this signature, and the membership rule is what
- * emptied the slot rather than a judgement taken here
+ * emptied the slot rather than a judgment taken here
  *
  * `renderTag` renders a tag PS3.6's registry carries a literal row for.
  * Group Length elements were retired, and the registry carries exactly one row
@@ -1013,7 +1013,7 @@ export function sqNotDescended(position: DicomPosition, tag: Tag): DicomParseWar
  * ## Slots, and what is input
  *
  * `{tag}` carries the Item tag `FFFEE000`, matching {@link emptyItemInSequence}:
- * a constant this parser recognised, not four bytes echoed back. It is the only
+ * a constant this parser recognized, not four bytes echoed back. It is the only
  * slot left.
  *
  * `position.byteOffset` is the item header's offset **in the buffer
@@ -1044,7 +1044,7 @@ export function sqNotDescended(position: DicomPosition, tag: Tag): DicomParseWar
  * `Math.max(0, endLimit - cursor.position)` into a `{n2}` slot reading "`{n2}`
  * bytes remained inside the sequence", and both the code comment and a pinning
  * test said it was safe **because the emit site's `endLimit < buffer.length`
- * conjunct bounds it by the buffer**. That defence is retracted.
+ * conjunct bounds it by the buffer**. That defense is retracted.
  *
  * `endLimit` is `valueStart + explicitLength`, the enclosing **sequence's**
  * declared Value Length off its own header, and `cursor.position` is the
@@ -1062,7 +1062,7 @@ export function sqNotDescended(position: DicomPosition, tag: Tag): DicomParseWar
  * it is just a different addition: `position.byteOffset` names the item header
  * and the sequence's own start is in the parsed object.
  *
- * **Its pinning test and its defence were both green BY FIXTURE**, which is the
+ * **Its pinning test and its defense were both green BY FIXTURE**, which is the
  * transferable half. They only ever fabricated the sequence length out of four
  * **printable** bytes; every such window exceeds 538,976,288, so `endLimit`
  * landed past the buffer and the conjunct refused. A length that big is
@@ -1084,7 +1084,7 @@ export function sqNotDescended(position: DicomPosition, tag: Tag): DicomParseWar
  * **`profiles.strict` does not escalate it.** The `{ strict: true }` option
  * does, through the `makeEmitter` chokepoint, but the preset's escalation list
  * is unchanged: adding a code to a shipped preset moves every `profiles.strict`
- * consumer's parse and is a measured behaviour change of its own, not a side
+ * consumer's parse and is a measured behavior change of its own, not a side
  * effect of adding a code. Pinned by a test.
  *
  * **It is not bounded, and "at most one per sequence" is not a bound.** The

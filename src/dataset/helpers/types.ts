@@ -25,7 +25,7 @@ import type { PatientIssueCode } from "./patient-issues.js";
 
 /**
  * One entry of Other Patient IDs Sequence `(0010,1002)` - a `{id, issuer,
- * typeCode}` triple (PS3.3 §10.15, the DICOM analogue of an HL7 v2 CX
+ * typeCode}` triple (PS3.3 §10.15, the DICOM analog of an HL7 v2 CX
  * repetition). Surfaced so a caller never matches on a bare `(0010,0020)`.
  *
  * @example

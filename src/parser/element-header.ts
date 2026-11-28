@@ -232,7 +232,7 @@ export function resolveImplicitVR(
  * does not answer for a sibling item, and neither survives back out to the
  * enclosing Data Set. A private element in a Data Set that never claimed its
  * block therefore resolves to `undefined` here and degrades to `UN` plus
- * `DICOM_PRIVATE_TAG_NO_CREATOR`, rather than borrowing a neighbour's VR. That
+ * `DICOM_PRIVATE_TAG_NO_CREATOR`, rather than borrowing a neighbor's VR. That
  * warning names no tag: see `privateTagNoCreator` for why an odd group is the
  * one class of tag this package has no closed table to vouch for.
  *

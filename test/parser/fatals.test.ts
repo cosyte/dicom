@@ -122,7 +122,7 @@ describe("the Tier-3 fatal registry", () => {
     // The tenth instance. Every factory's first parameter is the `ParseFrame`
     // pair, never a bare `Buffer` beside a frame name, because two parameters
     // are two chances to half-update - and the disagreement is silent: a snippet
-    // cut from the Item's slice and an offset labelled `"input"` both look
+    // cut from the Item's slice and an offset labeled `"input"` both look
     // right on their own.
     //
     // 🛑 THIS IS THE OMISSION MODE AND NOT AN IMPOSSIBILITY PROOF, WHICH A
@@ -183,7 +183,7 @@ describe("the Tier-3 fatal registry", () => {
     // `fatals.ts`, so the edge would close a cycle. The native list is therefore
     // a copy, and this is what keeps a copy honest: the table is exactly those
     // four plus the generated section A.4 list and the four JPIP Referenced
-    // UIDs, the message names the four native ones, and summarises the rest by
+    // UIDs, the message names the four native ones, and summarizes the rest by
     // the sections and edition they were read from.
     const units = (xs: Iterable<string>): string[] =>
       [...xs].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));

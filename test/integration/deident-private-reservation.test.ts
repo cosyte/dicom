@@ -48,7 +48,7 @@
  *
  * `dicom#66` shipped with two routes open, both found by its pass-1
  * `conformance-refuter` grade and both pinned here as residual tests that
- * asserted the **leaking** behaviour. The **eject** direction - an Item that
+ * asserted the **leaking** behavior. The **eject** direction - an Item that
  * *under*-declares pushing its trailing elements out into the enclosing Data
  * Set, which `dicom#66` did not narrow - is now closed by `settledBound`, and those two
  * residuals were rewritten to assert the closure. The
@@ -578,7 +578,7 @@ describe("the private-creator reservation leak", () => {
    * The Item eject route fix: the mirror direction, closed here.
    *
    * These tests were the **residuals** this file shipped with. They asserted the
-   * leaking behaviour so that closing the route would turn them red, and it did;
+   * leaking behavior so that closing the route would turn them red, and it did;
    * what follows is the same fixtures with the outcome inverted, plus the two
    * shapes the residual never covered. The private-`SQ` carve-out below is
    * untouched and still leaks.
@@ -913,7 +913,7 @@ describe("the private-creator reservation leak", () => {
 
   /**
    * The private SQ carve-out fix, closed. These two tests asserted the
-   * **leaking** behaviour until this change; they assert the closure now, and the
+   * **leaking** behavior until this change; they assert the closure now, and the
    * rewrite is the argument, not a flip.
    *
    * What was live on `0.0.10`: `keepsPrivate` decided before the descent, so a
@@ -1962,7 +1962,7 @@ describe("the private-creator reservation leak", () => {
         elements: [nameEl, { tag: CARRIER, items: [{ elements: [creatorEl, secretEl] }] }] as never,
       });
       const ds = parseDicom(buf);
-      // Honestly labelled: the reservation is ACCEPTED, so the only removal is
+      // Honestly labeled: the reservation is ACCEPTED, so the only removal is
       // the unenumerable one and the creator survives.
       const honest = deidentify(ds, GE_RETAIN).report;
       expect(honest.removedPrivateTags).toEqual([PRIVATE_TAG]);
@@ -1975,7 +1975,7 @@ describe("the private-creator reservation leak", () => {
         elements: new Map(ds.elements().map((el) => [el.tag, el])),
         fileMeta: { ...fileMeta, transferSyntaxUID: IMPLICIT_LE },
       });
-      // Re-labelled: the block is REFUSED, which is the over-removal this test
+      // Re-labeled: the block is REFUSED, which is the over-removal this test
       // exists to disclose, and the empty record is how the two are told apart.
       const mislabelled = deidentify(relabelled, GE_RETAIN).report;
       expect(mislabelled.removedPrivateTags).toEqual([CREATOR_TAG, PRIVATE_TAG]);
@@ -2308,7 +2308,7 @@ describe("DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE", () => {
     // Annex E action table on its own merits. That is an enumeration performed,
     // so the attribute is retained as an attribute - it keeps its tag, its VR
     // and its items - while the nested name is taken by the descent rather than
-    // by a removal. Retaining the attribute is not a licence for a Table E.1-1
+    // by a removal. Retaining the attribute is not a license for a Table E.1-1
     // row inside it.
     const asSq = defineProfile({
       name: "acme-walked-sq",
@@ -2418,7 +2418,7 @@ describe("DICOM_DEIDENT_PRIVATE_CARRIER_NOT_AUDITABLE", () => {
     // element is reached inside a sequence the file does not settle the extent
     // of, so the reservation is refused and the Basic Profile removes it under
     // PS3.15 §E.3.10's other branch. It is named in `removedPrivateTags`, it is
-    // NOT recorded as unenumerable - nothing was vouched for - and the behaviour
+    // NOT recorded as unenumerable - nothing was vouched for - and the behavior
     // is the pin's.
     const buf = buildDicom({
       transferSyntax: EXPLICIT_LE,

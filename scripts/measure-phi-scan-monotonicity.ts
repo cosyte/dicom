@@ -152,7 +152,7 @@ function part10(dataset: Buffer): Buffer {
  * 🛑 A REASON IS NOT A SWEEP, AND THE LAST THREE COUNTERS INHERIT THAT. `scanText`'s ISO pass and
  * its compact pass print the same reason, and `scanText` runs again on every embedded object, so
  * `rescued` and `at cap` cannot see one of those starving another. THE SUPERSET COMPARISON USES NO
- * LABELLING AT ALL - it is a multiset over the raw hit lines - so the violation count does not
+ * LABELING AT ALL - it is a multiset over the raw hit lines - so the violation count does not
  * inherit this.
  */
 type Klass = "tag-pn" | "tag-date" | "text-pn" | "text-date";

@@ -372,7 +372,7 @@ function temporalState(active: ReadonlySet<DeidentifyOption>): string {
  *
  * A prefix test rather than a numeric parse: `Tag` is documented as an 8-char
  * uppercase hex string, the parsers compose it that way, and comparing the first
- * four characters cannot mis-classify a neighbouring group the way an off-by-one
+ * four characters cannot mis-classify a neighboring group the way an off-by-one
  * mask can. This is the whole predicate - it is deliberately NOT related to
  * `matchRepeatingGroup` or to `src/dictionary/repeating-groups.ts`, neither of
  * which is about group 0004.
@@ -452,7 +452,7 @@ export const MAX_UNREGISTERED_ELEMENT_FINDINGS = 64;
  * The Transfer Syntaxes `deidentify` refuses outright: the four JPIP Referenced
  * syntaxes of PS3.5 2026c sections A.6, A.7, A.11 and A.12.
  *
- * 🩺 **This refusal is the whole defence, not a courtesy.** Such an object
+ * 🩺 **This refusal is the whole defense, not a courtesy.** Such an object
  * references its pixels through Pixel Data Provider URL `(0028,7FE0)`, a `UR`
  * PS3.6 registers and PS3.15 Table E.1-1 has no row for, so the per-element pass
  * would keep it as the source wrote it: a de-identified object would leave with
@@ -664,7 +664,7 @@ interface DeidentifyContext {
  * Two refusals, one code. An unknown name is an author-time typo. Both
  * {@link TEMPORAL_OPTIONS} in one call is the misconfiguration PS3.15 §E.3.6
  * makes possible by defining two alternatives: they select different Table
- * E.1-1 columns and different `(0028,0303)` Values, so a run honouring both
+ * E.1-1 columns and different `(0028,0303)` Values, so a run honoring both
  * would have to pick one silently and stamp the object with a declaration the
  * caller did not choose.
  *
@@ -912,7 +912,7 @@ function actsOnTag(tag: Tag, ctx: DeidentifyContext): boolean {
  * that is a decision.** An earlier release published "on a file conformant to
  * PS3.5 2026c the cost is zero"; it was never true. Three further attempts were
  * made while fixing the short-form read to say what *was* true in
- * one sentence, and its gate refuted all three. The behaviour is shape-specific
+ * one sentence, and its gate refuted all three. The behavior is shape-specific
  * and no sentence covers it. `scripts/measure-unrecognized-vr.ts` prints what
  * each named shape does on each tree - **add a shape rather than a sentence.**
  *
@@ -1974,7 +1974,7 @@ function itemStreamOverrunsSequence(el: Element, encoding: BodyEncoding): boolea
  * corroborate the boundary the enclosing Data Set resumed at, so which elements
  * that Data Set holds from there on is not established by the file. Such a
  * sequence is **already** emptied by {@link emptyUnauditableSequence}; this adds
- * that its neighbours' membership is not settled either.
+ * that its neighbors' membership is not settled either.
  *
  * ## Why a prefix and not the whole Data Set
  *
@@ -2701,7 +2701,7 @@ interface RebuiltFileMeta {
  * `(0002,0002)` Media Storage SOP Class UID and `(0002,0010)` Transfer Syntax
  * UID identify the object and its encoding, not its sender, and removing them
  * would break the file for every reader. `(0002,0003)` Media Storage SOP
- * Instance UID keeps the behaviour it already had: remapped through
+ * Instance UID keeps the behavior it already had: remapped through
  * {@link UidRemapper} unless `RetainUIDs` is active.
  *
  * ## Unconditional on how well the source parsed
@@ -2900,11 +2900,11 @@ function hasValueOverLoMaximum(field: Buffer): boolean {
  * silently, on a file whose prior pass may have been the one a recipient was
  * relying on.
  *
- * The neighbouring obligation in the same paragraph is worded differently on
+ * The neighboring obligation in the same paragraph is worded differently on
  * purpose and is left alone: `(0012,0062)` Patient Identity Removed "shall be
  * **replaced or added to** the Data Set with a value of YES". It is a CS of VM 1
  * whose only conformant value here is YES, so `deidentify` still replaces it.
- * The asymmetry is the standard's, not a judgement call.
+ * The asymmetry is the standard's, not a judgment call.
  *
  * `(0012,0063)` is **not in Table E.1-1**, so the Basic Profile never acted on
  * it and the incoming value reaches this point untouched: the replacement was
@@ -2955,7 +2955,7 @@ function hasValueOverLoMaximum(field: Buffer): boolean {
  *
  * PS3.5 2026c Table 6.2-1, `LO` row: "A character string that **may be padded
  * with leading and/or trailing spaces**" - so a trailing space in an `LO` Value
- * is padding, not content, and a comparison that honours that on one side only
+ * is padding, not content, and a comparison that honors that on one side only
  * is not a comparison.
  *
  * **🛑 AND THE TRIM IS AT THE `equals`, PER VALUE - A FIFTH GRADED PASS REFUTED

@@ -11,7 +11,7 @@
  *
  * It exits non-zero while a surface that says an ordinary vendor scalar under an
  * ordinary string VR is removed, or that the enumeration set has exactly three
- * members, is still present beside the shipped behaviour that contradicts it.
+ * members, is still present beside the shipped behavior that contradicts it.
  */
 
 import { Buffer } from "node:buffer";
@@ -56,7 +56,7 @@ function plain(text: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// 1. The shipped behaviour.
+// 1. The shipped behavior.
 // ---------------------------------------------------------------------------
 
 const buf = buildDicom({

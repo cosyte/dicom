@@ -95,7 +95,7 @@ const ALLOW_LIST = readFileSync(join(REPO_ROOT, "scripts", "phi-allow-list.txt")
  *
  * The oracle below does not model the allow-list, so a token that happens to be on it would be
  * expected here and withheld by the scanner, and the case would fail for a reason that has nothing
- * to do with the matchers. Refusing is better than quietly modelling a second thing.
+ * to do with the matchers. Refusing is better than quietly modeling a second thing.
  */
 function assertNotExcused(values: readonly string[]): void {
   const lines = ALLOW_LIST.split("\n")
@@ -277,7 +277,7 @@ describe("phi-scan text recognizers match what the patterns they replaced matche
 
   it("agrees with the patterns over a seeded fuzz dense in near misses", () => {
     // Assembled, not written. A literal eight-digit seed IS a standalone date run, and the gate
-    // reported this file when the first draft spelled it out. Which is the behaviour working.
+    // reported this file when the first draft spelled it out. Which is the behavior working.
     let s = Number(["2026", "08", "09"].join("")) >>> 0;
     const rand = (): number => {
       s = (s * 1664525 + 1013904223) >>> 0;
@@ -448,7 +448,7 @@ const heading = (line: string): string | null => /^###\s+(.+?)\s*$/.exec(line)?.
  * NOT SOMETHING A CASE HERE PROVES**, and a case that asserted it over this oracle would be true by
  * construction and could not go red. A draft of this file shipped exactly that and a gate deleted
  * it. What stands behind the property is the comment-stripped diff (one added early return, nothing
- * else) and, behaviourally, the per-log relation
+ * else) and, behaviorally, the per-log relation
  * `scripts/measure-phi-scan-atx-heading.ts` prints against a base.
  */
 const atxSeparator = (line: string): string | null => {
@@ -773,7 +773,7 @@ describe.skipIf(WINDOWS_PATHS)(
      * `tripleHashValue` separated the `###` run with the whole of `\s`, where section 4.2 admits a
      * space or a tab. Every character in the gap renders as blank or as nothing at all, so each was a
      * way to write a line that a human reviewing the RENDERED log sees as a PARAGRAPH and that
-     * `--allow-fixture` honoured at exit 0. Measured live on `58c9f2e`, `8139687` and `94069e8`
+     * `--allow-fixture` honored at exit 0. Measured live on `58c9f2e`, `8139687` and `94069e8`
      * before it was changed; `scripts/measure-phi-scan-atx-heading.ts` prints the same grid against
      * any other tree.
      *
@@ -875,7 +875,7 @@ describe.skipIf(WINDOWS_PATHS)(
      *
      * Each unchanged by this change and each `PRE-EXISTING`, and each is a case rather
      * than a sentence because a divergence nothing asserts is a divergence a later reader takes for
-     * an accepted behaviour:
+     * an accepted behavior:
      *
      * * section 4.2's optional CLOSING sequence. "The optional closing sequence of `#`s must be
      *   preceded by spaces or tabs and may be followed by spaces or tabs only", so `### x ###` is a
@@ -884,7 +884,7 @@ describe.skipIf(WINDOWS_PATHS)(
      * * INLINE parsing. The heading's contents are "parsed as inline content", so a backslash escape
      *   and an emphasis run render as something other than themselves. This parser names the RAW
      *   contents, so what it exempts and what a reviewer reads can differ by those characters;
-     * * CONTAINER blocks. A `###` is only ever recognised at column 0, so a heading a reviewer sees
+     * * CONTAINER blocks. A `###` is only ever recognized at column 0, so a heading a reviewer sees
      *   inside a block quote or a list item is a DROPPED entry - a refusal at exit 2, the direction
      *   that does not exempt anything.
      *
@@ -1037,7 +1037,7 @@ describe.skipIf(WINDOWS_PATHS)(
  * 🩺 SECTION 4.6 HTML BLOCKS, THE OTHER WAY A RENDERED DOCUMENT HIDES A HEADING.
  *
  * A fenced code block SHOWS its contents; an HTML comment shows nothing at all. So a
- * `### <path>` written inside `<!-- -->` was a live allow entry that `--allow-fixture` honoured at
+ * `### <path>` written inside `<!-- -->` was a live allow entry that `--allow-fixture` honored at
  * exit 0 while no human reviewing the rendered log could see it, which is the one direction this
  * parser exists to refuse. `overrideLogPaths` models kinds 1 to 6 now.
  *
@@ -1259,13 +1259,13 @@ describe.skipIf(WINDOWS_PATHS)(
      * 🔴 THE DIVERGENCE THIS CHANGE SCOPES OUT, PINNED RATHER THAN DESCRIBED.
      *
      * Start condition 7 is a complete open or closing tag alone on a line, and section 4.6 says
-     * blocks of type 7 may not interrupt a paragraph. Modelling it needs paragraph state, which this
+     * blocks of type 7 may not interrupt a paragraph. Modeling it needs paragraph state, which this
      * parser does not have; guessing at it is the parity trap. So a heading under `<span>` on its own
      * line is still a LIVE allow entry here where CommonMark hides it.
      *
      * The agreeing arm is asserted beside it, because only one of the two is a divergence: after a
      * PARAGRAPH line, condition 7 cannot fire, so the heading is live in CommonMark too and the
-     * parsers agree. A case asserting the divergence alone would read as an accepted behaviour rather
+     * parsers agree. A case asserting the divergence alone would read as an accepted behavior rather
      * than as a measured gap.
      *
      * 🔴 AND THE THIRD ARM IS THIS CHANGE WIDENING THE HOLE, DISCLOSED AGAINST ITSELF. A gate found it;

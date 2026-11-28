@@ -2,7 +2,7 @@
  * Unit coverage for the embedded-Data-Element detector itself
  * (`src/deident/embedded.ts`).
  *
- * The integration behaviour lives in `embedded-attribute.test.ts`; this file
+ * The integration behavior lives in `embedded-attribute.test.ts`; this file
  * exercises the decoder's refusals one at a time. Every refusal here is a case
  * where the bytes *nearly* look like a swallowed element, and each one exists so
  * that a value is never emptied on a coincidence: the cost of a false positive
@@ -180,7 +180,7 @@ describe("findEmbeddedAttributes: what it refuses", () => {
       PATIENT_ID_TAG,
     ]);
     // The same bytes read little-endian are tag (1000,2000), which nothing here
-    // recognises - the endianness is not guessed.
+    // recognizes - the endianness is not guessed.
     expect(findEmbeddedAttributes(value, "CS", "explicitLE", (t) => t === PATIENT_ID_TAG)).toBe(
       undefined,
     );

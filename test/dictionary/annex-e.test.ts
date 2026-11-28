@@ -339,7 +339,7 @@ describe("PS3.15 E.3.6: the modified-dates column is carried and resolved", () =
 
     // The discriminating half. On every row where the two columns disagree, the
     // full-dates code must NOT come back: a resolver that fell through to the
-    // neighbouring column would satisfy the loop above on every row the
+    // neighboring column would satisfy the loop above on every row the
     // modified-dates column is silent about, and fail here on the rest.
     const divergent = divergentRows();
     expect(divergent.length).toBeGreaterThan(0);

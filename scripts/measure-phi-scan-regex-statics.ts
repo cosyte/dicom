@@ -468,7 +468,7 @@ interface ConfigRoute {
    * are enumerated on that function, some of them moving entries in BOTH directions rather than
    * only dropping them. Comparing that route byte for byte would report
    * the fix as a violation, and suppressing the violation without saying so would hide the only
-   * behaviour this pass deliberately changed.
+   * behavior this pass deliberately changed.
    */
   equivalent: boolean;
 }
@@ -503,7 +503,7 @@ const CONFIG_ROUTES: ConfigRoute[] = [
     equivalent: true,
   },
   {
-    // The one deliberate behaviour change: base honours the fenced TEMPLATE line as an entry.
+    // The one deliberate behavior change: base honors the fenced TEMPLATE line as an entry.
     name: "--allow-fixture <the template placeholder>",
     args: ["--allow-fixture", "<path>"],
     stage: false,
@@ -570,7 +570,7 @@ function configReading(scanner: string, route: ConfigRoute): ConfigReading {
  * at once is the shape that has refused three earlier slices in this lineage.
  *
  * So both scanners are run over byte-identical corpora and their WHOLE output is compared, stdout
- * and stderr and exit code, byte for byte. No labelling, no counting of classes, no interpretation:
+ * and stderr and exit code, byte for byte. No labeling, no counting of classes, no interpretation:
  * a single differing byte is a violation.
  *
  * 🛑 THE FUZZ ALPHABET IS THE EVIDENCE, NOT THE VOLUME. It is drawn from exactly the characters the

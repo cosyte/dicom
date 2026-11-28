@@ -83,7 +83,7 @@
  * Modes:
  *   --staged                 - scan only files staged in `git diff --cached`
  *   --allow-fixture <path>   - bypass for one path; rejected if not logged in phi-scan-overrides.md,
- *                              and an honoured one WITHHOLDS the run's verdict (exit 3) rather
+ *                              and an honored one WITHHOLDS the run's verdict (exit 3) rather
  *                              than letting the surviving targets report clean on its behalf
  *   --max-hit-lines <n>      - print at most n hit lines PER RECOGNIZER PER FILE; `0` prints
  *                              every one
@@ -136,7 +136,7 @@
  * the walk root is `test/` rather than `test/fixtures/`.
  *
  * NOTHING HAS MOVED THE OTHER WAY, AND A DRAFT THAT MOVED ONE WAS REFUTED. The one
- * corpus exemption belongs to the `all` route alone; teaching `--staged` to honour
+ * corpus exemption belongs to the `all` route alone; teaching `--staged` to honor
  * it would have subtracted a detection the base had on the route the pre-commit
  * hook runs. So the two routes disagree about exactly one file, they disagreed
  * about it on base too, and `--staged` is the stricter of the two.
@@ -304,7 +304,7 @@ const SCAN_SCOPE = SCAN_ROOTS.map((r) => r.rel);
  * disagree about exactly one file, and they did on base too. `PRE-EXISTING`, and it fails
  * closed: staging that README reds the hook.
  *
- * It never reaches an entry that is not a regular file. This exemption is a judgement about a
+ * It never reaches an entry that is not a regular file. This exemption is a judgment about a
  * file whose bytes the walk could have read; a link's NAME is no evidence at all about what is
  * on the other side of it.
  *
@@ -653,7 +653,7 @@ function isAllDigits(text: string): boolean {
  * `text.split(/\r?\n/)`, which is `scripts/phi-allow-list.txt`'s format and NOT markdown's.
  *
  * A separator is an `LF`, together with a `CR` immediately before it. A lone `CR` is NOT a
- * separator and stays in the line, which is the pattern's behaviour and not an approximation of it:
+ * separator and stays in the line, which is the pattern's behavior and not an approximation of it:
  * `"a\rb"` is one line, and `"a\r\r\nb"` is `["a\r", "b"]`.
  *
  * The `CR` test is against the raw index rather than against the current line's start. A `CR` at
@@ -1269,7 +1269,7 @@ function parseArgs(argv: string[]): Args {
       // and `Infinity`, and a cap silently read off one of those is a cap nobody
       // set. A bad value REFUSES (exit 2) rather than falling back to the
       // default, because a run that quietly printed a different amount than it
-      // was told to is the same shape of unobservable behaviour this whole
+      // was told to is the same shape of unobservable behavior this whole
       // script is written against.
       if (!isAllDigits(next)) {
         throw new InvocationError(
@@ -1599,10 +1599,10 @@ function isBlankLine(line: string): boolean {
  * SPACES, exactly as `fenceRun` allows: a tab anywhere in the indentation reaches column four or
  * beyond, where section 4.6 admits no start condition at all.
  *
- * 🔴 START CONDITION 7 IS NOT MODELLED, AND THAT IS A SCOPE, NOT AN OVERSIGHT. It needs a complete
+ * 🔴 START CONDITION 7 IS NOT MODELED, AND THAT IS A SCOPE, NOT AN OVERSIGHT. It needs a complete
  * open or closing tag AND the knowledge that the line does not interrupt a paragraph ("Blocks of
  * type 7 may not interrupt a paragraph"), which is paragraph state this parser does not have and
- * cannot acquire without modelling every other leaf block. Its cost is measured in both directions
+ * cannot acquire without modeling every other leaf block. Its cost is measured in both directions
  * and pinned by tests: a heading under `<span>` on its own line stays a LIVE allow entry here where
  * CommonMark hides it, and a heading under `<span>` on the line after a paragraph line is live in
  * both. Guessing paragraph state is the parity trap above, so it is scoped rather than approximated.
@@ -1719,9 +1719,9 @@ function htmlBlockCloses(line: string, kind: HtmlBlockKind): boolean {
  * 4. **What a BLOCK is. BLOCK STRUCTURE.** Fenced code blocks were the whole of the block structure here, so a
  *    `### <path>` a human sees inside an HTML block was a LIVE allow entry: an `<!-- -->` log
  *    exempted its target at exit 0, invisibly, since a comment renders as nothing at all. Section
- *    4.6's HTML blocks are modelled now, kinds 1 to 6 (`htmlBlockStart`, `htmlBlockCloses`). Like
+ *    4.6's HTML blocks are modeled now, kinds 1 to 6 (`htmlBlockStart`, `htmlBlockCloses`). Like
  *    the line ending this has NO DIRECTION: an HTML block hides a fence delimiter as readily as a
- *    heading, so entries move both ways, and the relation is printed rather than summarised by
+ *    heading, so entries move both ways, and the relation is printed rather than summarized by
  *    `scripts/measure-phi-scan-html-blocks.ts`. **Kind 7 is out of scope and its cost is measured,
  *    not assumed**: `htmlBlockStart` says why.
  *
@@ -1731,12 +1731,12 @@ function htmlBlockCloses(line: string, kind: HtmlBlockKind): boolean {
  *    pattern, so `tripleHashValue` returns the pattern's answer or nothing. **THAT IS A PROPERTY OF
  *    THE SOURCE AND NO CASE HERE PROVES IT** - a draft that claimed one did, and the case was true
  *    by construction over a test-local oracle and could not go red. What stands behind it is the
- *    comment-stripped diff, which is a single added early return, and behaviourally the per-log
+ *    comment-stripped diff, which is a single added early return, and behaviorally the per-log
  *    relation the instrument prints against a base. **Section 4.2's
  *    optional CLOSING sequence, its INLINE parsing, and the STRIP are all out of scope with their
  *    cost measured rather than assumed** - the strip because the prose and the reference
  *    implementation of the pinned document disagree about it, and a draft that took the prose
- *    exempted at exit 0 a target this parser refuses at exit 2. Container blocks are not modelled
+ *    exempted at exit 0 a target this parser refuses at exit 2. Container blocks are not modeled
  *    either: a `### <path>` inside a block quote or a list item, or one whose text holds `LS` or
  *    `PS`, is a dropped entry, which refuses at exit 2.
  *    `scripts/measure-phi-scan-atx-heading.ts` prints the relation against any tree.
@@ -1753,7 +1753,7 @@ function overrideLogPaths(raw: string): string[] {
   let open: Fence | null = null;
   let html: HtmlBlockKind | null = null;
   for (const line of splitCommonMarkLines(raw)) {
-    // Section 4.6: "any HTML within an HTML block that might otherwise be recognised as a start
+    // Section 4.6: "any HTML within an HTML block that might otherwise be recognized as a start
     // condition will be ignored by the parser". So is a fence, and so is a heading.
     if (html !== null) {
       if (htmlBlockCloses(line, html)) html = null;
@@ -2805,7 +2805,7 @@ function scanEmbeddedObjects(
  *   - `isDicom` true  -> `scanDicom` AND `scanText` AND `scanEmbeddedObjects`. The DICOM sweep is what
  *                        it always got; the other two are the addition, and nothing can be lost.
  *   - preamble-less   -> the same three. Both halves since `DICOM-SCANTARGET-PREAMBLELESS`.
- *   - neither         -> `scanText` AND `scanEmbeddedObjects`. Byte-for-byte the old behaviour.
+ *   - neither         -> `scanText` AND `scanEmbeddedObjects`. Byte-for-byte the old behavior.
  *
  * (`scanEmbeddedObjects` is named in every row on purpose. A table that stopped at `scanText` read as
  * though the base64 decode were a markdown feature, and this file already records what scoping it that
@@ -3211,7 +3211,7 @@ function run(): number {
  * nothing about the corpus" into a confident wrong answer, and printing an uncaught-exception
  * stack that the `run()` JSDoc above forbids.
  *
- * The error is DISCARDED rather than reported, and that is base parity rather than a judgement
+ * The error is DISCARDED rather than reported, and that is base parity rather than a judgment
  * that it does not matter: `process.exit()` made every late stdio error unreachable, so the exit
  * code was always exactly what `run()` returned. It stays exactly that. There is also nowhere to
  * report it - the stream that failed is the one a diagnostic would go to.

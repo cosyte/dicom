@@ -16,7 +16,7 @@
  *      list the parser dispatches), an Explicit VR LE body whose top-level
  *      Pixel Data is an encapsulated fragment stream (see `./encapsulated.ts`).
  *
- * Conservative behaviour (PS3.5): scalar values are padded to even length on
+ * Conservative behavior (PS3.5): scalar values are padded to even length on
  * write (PS3.5 §6.2); retired `(gggg,0000)` group-length elements are omitted from
  * the dataset (PS3.5 §7.2); short/long-form headers are chosen by VR (PS3.5 §7.1.2); the
  * Data Elements of the root Data Set, and of every Sequence Item the writer can

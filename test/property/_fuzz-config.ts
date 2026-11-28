@@ -131,7 +131,7 @@ const CONFIRMING_RUNS = 3;
 /**
  * Run one fuzz case and hold it to the resource half of the contract: it returns within
  * {@link caseBudgetMs} and grows memory by no more than {@link CASE_ALLOCATION_BYTES}, on its
- * best of {@link CONFIRMING_RUNS} runs. The behavioural half (which throws are sanctioned) is the
+ * best of {@link CONFIRMING_RUNS} runs. The behavioral half (which throws are sanctioned) is the
  * caller's `run`.
  */
 export function withinBudget(input: Buffer | string, run: () => void): void {

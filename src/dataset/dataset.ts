@@ -28,7 +28,7 @@ import { tagNumber } from "./tag.js";
 import type { ImageView, PatientView, SeriesView, StudyView } from "./helpers/types.js";
 
 /**
- * Initialiser shape accepted by the `Dataset` (and `Item`) constructor.
+ * Initializer shape accepted by the `Dataset` (and `Item`) constructor.
  *
  * `fileMeta` is optional because nested `Item` datasets do not carry
  * their own File Meta - only the root `Dataset` returned by
@@ -84,12 +84,12 @@ export class Dataset {
   /** `_elements`, once a subclass has asked for it. */
   #elementMap: ReadonlyMap<Tag, Element> | undefined;
 
-  /** Memoised domain views (built once, on first access). */
+  /** Memoized domain views (built once, on first access). */
   private _patient?: PatientView;
   private _study?: StudyView;
   private _series?: SeriesView;
   private _image?: ImageView;
-  /** Boxed so a memoised "not a DICOMDIR" is told apart from "not read yet". */
+  /** Boxed so a memoized "not a DICOMDIR" is told apart from "not read yet". */
   private _directory?: { readonly value: DicomDirectory | undefined };
 
   /**
@@ -158,7 +158,7 @@ export class Dataset {
   }
 
   /**
-   * Look up a single element by tag. Tags are normalised to 8-char
+   * Look up a single element by tag. Tags are normalized to 8-char
    * uppercase hex, so `"7fe00010"` and `"7FE00010"` resolve to the same
    * element. Returns `undefined` when the tag is absent.
    *
@@ -244,7 +244,7 @@ export class Dataset {
   /**
    * Patient-identity view. Fail-safe typed-absent fields; `id` is
    * **not** globally unique - match on the `{id, issuerOfId, ...}` tuple
-   * plus `otherIds`, never on a bare `(0010,0020)`. Memoised on first read.
+   * plus `otherIds`, never on a bare `(0010,0020)`. Memoized on first read.
    *
    * @example
    * ```ts
@@ -259,7 +259,7 @@ export class Dataset {
 
   /**
    * Study-identity view. `instanceUid` is the cross-system study
-   * key; `accessionNumber` ties it to the order. Memoised on first read.
+   * key; `accessionNumber` ties it to the order. Memoized on first read.
    *
    * @example
    * ```ts
@@ -275,7 +275,7 @@ export class Dataset {
   /**
    * Series-identity & co-registration view. A shared
    * `frameOfReferenceUid` means images are spatially co-registered.
-   * Memoised on first read.
+   * Memoized on first read.
    *
    * @example
    * ```ts
@@ -292,7 +292,7 @@ export class Dataset {
    * Pixel-interpretation + geometry view. Surfaces exactly
    * what a renderer needs without guessing: `rescaleSlope`/`signed`/
    * `photometricInterpretation` stay absent rather than defaulted, and the
-   * three pixel-spacing tags are distinct. Memoised on first read.
+   * three pixel-spacing tags are distinct. Memoized on first read.
    *
    * @example
    * ```ts
@@ -316,7 +316,7 @@ export class Dataset {
    * `(0004,1220)`; one that is not names no record, and `parseDicom` warns
    * (`DICOM_DIRECTORY_OFFSET_UNRESOLVED`, `DICOM_DIRECTORY_OFFSET_MALFORMED`,
    * `DICOM_DIRECTORY_RECORD_REVISITED`, `DICOM_DIRECTORY_OFFSET_DEFLATED`).
-   * Memoised on first read.
+   * Memoized on first read.
    *
    * Limits: record keys are not checked against PS3.3 F.5, the File-set
    * Consistency Flag and `(0004,1202)`'s agreement with the end of the root

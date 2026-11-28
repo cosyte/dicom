@@ -12,7 +12,7 @@
  *   2. Copy-on-read detachment: with `{ copyValues: true }`, each
  *      `Element.rawBytes` is `Buffer.from(slice)` - independent of the source
  *      buffer - so mutating the source post-parse never perturbs a parsed
- *      Element (the byte-parser analogue of "the original stays byte-identical").
+ *      Element (the byte-parser analog of "the original stays byte-identical").
  *      This is the closest standing invariant to the prompt's copy-on-write
  *      requirement. A mutation API, if one is ever added, should adopt
  *      `immutabilityProperty` directly.

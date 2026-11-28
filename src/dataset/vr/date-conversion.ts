@@ -32,7 +32,7 @@
  * None of the three throws, for any input.
  *
  * The refusal lives HERE and not in `parseDate` / `parseTime` / `parseDateTime`:
- * those keep the behaviour they were pinned at, so a caller that wants the
+ * those keep the behavior they were pinned at, so a caller that wants the
  * sender's bytes still reads them off the decoded value and off `raw`. What is
  * refused is the PROJECTION of a value onto a calendar that has no such day.
  *

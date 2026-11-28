@@ -21,7 +21,7 @@
  * A rule that decided a heading's TEXT rather than only whether there is one would be parity, and
  * two readings' entry sets could be DISJOINT rather than nested with neither the conservative one.
  * A draft of this slice was exactly that and was refused. So this reports `equal`,
- * `a-subset-of-b`, `b-subset-of-a`, `disjoint` or `overlapping` and refuses to summarise them as
+ * `a-subset-of-b`, `b-subset-of-a`, `disjoint` or `overlapping` and refuses to summarize them as
  * safer or less safe: what says the shipped change only ever REFUSES is that every differing row
  * prints as a subset, measured here rather than argued on the function.
  *
