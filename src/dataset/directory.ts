@@ -27,10 +27,10 @@
  * @module
  */
 
-import type { Tag } from "../dictionary/types.js";
-import type { Element } from "./element.js";
-import type { FileMeta } from "./file-meta.js";
-import type { Item } from "./item.js";
+import { type Tag } from "../dictionary/types.js";
+import { type Element } from "./element.js";
+import { type FileMeta } from "./file-meta.js";
+import { type Item } from "./item.js";
 
 /**
  * Media Storage Directory Storage: the SOP Class a DICOMDIR declares in

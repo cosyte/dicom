@@ -8,9 +8,9 @@
  * @module
  */
 
-import type { Dataset } from "../dataset.js";
+import { type Dataset } from "../dataset.js";
 import { readNumber, readString } from "./read.js";
-import type { SeriesView } from "./types.js";
+import { type SeriesView } from "./types.js";
 
 const SERIES_INSTANCE_UID: Tag = "0020000E";
 const SERIES_NUMBER: Tag = "00200011";

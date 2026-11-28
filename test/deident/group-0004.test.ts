@@ -30,7 +30,7 @@ import {
   serializeDicom,
   type DeidentifyOption,
 } from "../../src/index.js";
-import type { Tag } from "../../src/dictionary/types.js";
+import { type Tag } from "../../src/dictionary/types.js";
 import { MAX_GROUP_0004_FINDINGS } from "../../src/deident/deidentify.js";
 import {
   buildDicom,

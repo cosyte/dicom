@@ -18,9 +18,8 @@ import {
   resolvePrivateCreator,
 } from "../../src/parser/element-header.js";
 import { OFFSET_FRAMES } from "../../src/parser/errors.js";
-import type { ParseContext } from "../../src/parser/types.js";
-import type { DicomParseWarning } from "../../src/parser/warnings.js";
-import { WARNING_CODES } from "../../src/parser/warnings.js";
+import { type ParseContext } from "../../src/parser/types.js";
+import { WARNING_CODES, type DicomParseWarning } from "../../src/parser/warnings.js";
 
 function makeCtx(): ParseContext {
   return {

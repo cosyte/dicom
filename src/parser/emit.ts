@@ -31,7 +31,7 @@
  * @module
  */
 
-import type { ParseContext } from "./types.js";
+import { type ParseContext } from "./types.js";
 import { WARNING_CODES, type DicomParseWarning } from "./warnings.js";
 import { DicomParseError, buildSnippet } from "./errors.js";
 

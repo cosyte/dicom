@@ -28,12 +28,12 @@ import { describe, expect, it } from "vitest";
 import { Dataset } from "../../src/dataset/dataset.js";
 import { Element } from "../../src/dataset/element.js";
 import { MAX_UNREGISTERED_ELEMENT_FINDINGS, deidentify } from "../../src/deident/deidentify.js";
-import type { DeidentifyOption, DeidentifyReport } from "../../src/deident/types.js";
+import { type DeidentifyOption, type DeidentifyReport } from "../../src/deident/types.js";
 import { annexE } from "../../src/dictionary/annex-e.js";
 import { isRegisteredTag } from "../../src/dictionary/registered.js";
-import type { Tag, VR } from "../../src/dictionary/types.js";
+import { type Tag, type VR } from "../../src/dictionary/types.js";
 import { parseDicom } from "../../src/parser/index.js";
-import type { Profile } from "../../src/parser/types.js";
+import { type Profile } from "../../src/parser/types.js";
 import {
   WARNING_CODES,
   WARNING_MESSAGES,

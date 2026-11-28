@@ -5,11 +5,11 @@
  * @module
  */
 
-import type { Buffer } from "node:buffer";
+import { type Buffer } from "node:buffer";
 
-import type { Element } from "../dataset/element.js";
-import type { FileMeta } from "../dataset/file-meta.js";
-import type { FallbackCharacterSet } from "../dataset/vr/charset.js";
+import { type Element } from "../dataset/element.js";
+import { type FileMeta } from "../dataset/file-meta.js";
+import { type FallbackCharacterSet } from "../dataset/vr/charset.js";
 
 /**
  * One Person Name value: its alphabetic, ideographic and phonetic component groups, each the

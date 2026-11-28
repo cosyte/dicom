@@ -20,7 +20,7 @@
  * @module
  */
 
-import type { Buffer } from "node:buffer";
+import { type Buffer } from "node:buffer";
 
 import { WITHHELD } from "../../parser/tokens.js";
 import { decodeWithCodeExtensions, usesCodeExtensions } from "./iso2022.js";

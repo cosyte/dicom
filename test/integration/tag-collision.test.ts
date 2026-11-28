@@ -55,7 +55,7 @@ import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
 import { DicomParseError, WARNING_CODES, parseDicom } from "../../src/index.js";
-import type { Tag, VR } from "../../src/dictionary/types.js";
+import { type Tag, type VR } from "../../src/dictionary/types.js";
 import { strict as strictProfile } from "../../src/profiles/index.js";
 import { buildDicom } from "../helpers/build-dicom.js";
 

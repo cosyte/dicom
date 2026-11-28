@@ -43,7 +43,7 @@ import {
   type DeidentifyOption,
   type DicomParseWarning,
 } from "../../src/index.js";
-import type { Tag, VR } from "../../src/dictionary/types.js";
+import { type Tag, type VR } from "../../src/dictionary/types.js";
 import {
   WARNING_MESSAGES,
   deidentMethodCodesPriorReplaced,

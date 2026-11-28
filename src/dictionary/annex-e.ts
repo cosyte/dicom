@@ -20,7 +20,7 @@
  * Both names remain in `AnnexEOption` for completeness and for that API.
  */
 
-import type { Tag } from "./types.js";
+import { type Tag } from "./types.js";
 import { ANNEX_E_REPEATING, ANNEX_E_ROWS } from "./generated/annex-e.js";
 import { matchesRepeatingPattern } from "./repeating-groups.js";
 

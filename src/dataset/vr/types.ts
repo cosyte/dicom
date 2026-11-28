@@ -33,11 +33,11 @@
  * @module
  */
 
-import type { Buffer } from "node:buffer";
+import { type Buffer } from "node:buffer";
 
-import type { Tag } from "../../dictionary/types.js";
-import type { DicomParseWarning } from "../../parser/warnings.js";
-import type { Item } from "../item.js";
+import { type Tag } from "../../dictionary/types.js";
+import { type DicomParseWarning } from "../../parser/warnings.js";
+import { type Item } from "../item.js";
 
 /**
  * One of the three component groups of a `PN` value (PS3.5 §6.2.1.1):

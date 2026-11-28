@@ -24,8 +24,8 @@
 
 import { Buffer } from "node:buffer";
 
-import type { FileMeta, FileMetaRawElement } from "../dataset/file-meta.js";
-import type { Tag, VR } from "../dictionary/types.js";
+import { type FileMeta, type FileMetaRawElement } from "../dataset/file-meta.js";
+import { type Tag, type VR } from "../dictionary/types.js";
 import { ByteCursor, uint32At } from "./byte-cursor.js";
 import { LONG_FORM_VRS } from "./element-header.js";
 import { isRecognizedVr } from "./endian.js";
@@ -34,13 +34,13 @@ import {
   fileMetaTransferSyntaxMissing,
   fileMetaTruncated,
 } from "./fatals.js";
-import type { ParseContext } from "./types.js";
+import { type ParseContext } from "./types.js";
 import { tagOf, vrAt } from "./wire-tokens.js";
-import type { DicomParseWarning } from "./warnings.js";
 import {
   duplicateFileMetaElement,
   fileMetaGroupLengthMismatch,
   fileMetaGroupLengthMissing,
+  type DicomParseWarning,
 } from "./warnings.js";
 
 /**

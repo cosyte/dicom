@@ -24,7 +24,7 @@ import {
   serializeDicom,
   WARNING_CODES,
 } from "../../src/index.js";
-import type { BuildDicomSqElement } from "../helpers/build-dicom.js";
+import { type BuildDicomSqElement } from "../helpers/build-dicom.js";
 import {
   PATIENT_NAME,
   encapsulatedObject,

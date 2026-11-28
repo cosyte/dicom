@@ -14,15 +14,15 @@
 import { Buffer } from "node:buffer";
 
 import { zlibModule } from "../builtins.js";
-import type { Dataset } from "../dataset/dataset.js";
-import type { FileMeta } from "../dataset/file-meta.js";
-import type { Element } from "../dataset/element.js";
+import { type Dataset } from "../dataset/dataset.js";
+import { type FileMeta } from "../dataset/file-meta.js";
+import { type Element } from "../dataset/element.js";
 import { LONG_FORM_VRS } from "../parser/element-header.js";
 import { parseDicom } from "../parser/index.js";
 import { NESTING_DEPTH_LIMIT } from "../parser/sequence.js";
 import { renderTag } from "../parser/tokens.js";
 import { encodeFileMeta } from "../serialize/file-meta.js";
-import type { VR } from "../dictionary/types.js";
+import { type VR } from "../dictionary/types.js";
 import {
   codedError,
   DICOM_JSON_ERROR_CODES,
@@ -30,7 +30,7 @@ import {
   type DicomJsonErrorCode,
 } from "./errors.js";
 import { hasValueForm, textOf } from "./to-json.js";
-import type { DicomJsonDataset, FromDicomJsonOptions } from "./types.js";
+import { type DicomJsonDataset, type FromDicomJsonOptions } from "./types.js";
 import {
   bulkDataWidth,
   carriesCharset,

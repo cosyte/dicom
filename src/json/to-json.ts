@@ -6,8 +6,8 @@
 
 import { Buffer } from "node:buffer";
 
-import type { Dataset } from "../dataset/dataset.js";
-import type { Element } from "../dataset/element.js";
+import { type Dataset } from "../dataset/dataset.js";
+import { type Element } from "../dataset/element.js";
 import {
   decodeText,
   fallbackApplies,
@@ -24,12 +24,12 @@ import {
   DicomJsonError,
   type DicomJsonErrorCode,
 } from "./errors.js";
-import type {
-  DicomJsonAttribute,
-  DicomJsonDataset,
-  DicomJsonPersonName,
-  DicomJsonValue,
-  ToDicomJsonOptions,
+import {
+  type DicomJsonAttribute,
+  type DicomJsonDataset,
+  type DicomJsonPersonName,
+  type DicomJsonValue,
+  type ToDicomJsonOptions,
 } from "./types.js";
 import {
   carriesCharset,

@@ -95,10 +95,10 @@ import {
   elementValueSource,
   elementValueStart,
 } from "../dataset/element.js";
-import type { Item } from "../dataset/item.js";
+import { type Item } from "../dataset/item.js";
 import { splitTag } from "../dataset/tag.js";
 import { tagEntry } from "../dictionary/registry.js";
-import type { Tag } from "../dictionary/types.js";
+import { type Tag } from "../dictionary/types.js";
 import { LONG_FORM_VRS, matchRepeatingGroup } from "../parser/element-header.js";
 import { isRecognizedVr } from "../parser/endian.js";
 import { tagOf, vrAt } from "../parser/wire-tokens.js";

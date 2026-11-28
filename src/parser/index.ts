@@ -28,8 +28,8 @@ import { Buffer } from "node:buffer";
 
 import { CompactTable } from "../dataset/compact.js";
 import { Dataset, datasetOverTable, setDatasetWarnings } from "../dataset/dataset.js";
-import type { Element } from "../dataset/element.js";
-import type { Tag } from "../dictionary/types.js";
+import { type Element } from "../dataset/element.js";
+import { type Tag } from "../dictionary/types.js";
 import { copyValueBytes } from "./byte-cursor.js";
 import { emitDirectoryFindings } from "./directory.js";
 import { makeEmitter } from "./emit.js";
@@ -40,14 +40,14 @@ import { parsePart10Header } from "./part10-header.js";
 import { TRANSFER_SYNTAX_PARSERS } from "./transfer-syntax.js";
 import { fallbackStateOf } from "./fallback.js";
 import { stopTagNumber } from "./stop.js";
-import type {
-  FallbackState,
-  OnWarningCallback,
-  ParseContext,
-  ParseOptions,
-  StopState,
+import {
+  type FallbackState,
+  type OnWarningCallback,
+  type ParseContext,
+  type ParseOptions,
+  type StopState,
 } from "./types.js";
-import type { DicomParseWarning } from "./warnings.js";
+import { type DicomParseWarning } from "./warnings.js";
 
 /** File Preamble (128 bytes) plus the `DICM` prefix (4 bytes), PS3.10 section 7.1. */
 const PREAMBLE_AND_PREFIX_LENGTH = 132;

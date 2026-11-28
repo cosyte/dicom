@@ -19,7 +19,7 @@ import {
   type DirectoryFinding,
   type DirectorySource,
 } from "../dataset/directory.js";
-import type { DicomPosition } from "./types.js";
+import { type DicomPosition } from "./types.js";
 import {
   directoryOffsetDeflated,
   directoryOffsetMalformed,

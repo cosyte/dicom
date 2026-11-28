@@ -11,7 +11,7 @@
 //
 // Re-generate via `pnpm gen:dictionary`. CI gates byte-identical output.
 // See vendor/innolitics/README.md and vendor/nema/README.md for re-pinning.
-import type { UidEntry } from "../types.js";
+import { type UidEntry } from "../types.js";
 
 export const UIDS: { readonly [uid: string]: UidEntry } = {
   "1.2.840.10008.1.1": { uid: "1.2.840.10008.1.1", name: "Verification SOP Class", type: "SOPClass", retired: false },

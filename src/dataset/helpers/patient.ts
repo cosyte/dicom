@@ -10,17 +10,17 @@
  * @module
  */
 
-import type { Dataset } from "../dataset.js";
-import type { DicomValue } from "../vr/types.js";
+import { type Dataset } from "../dataset.js";
+import { type DicomValue } from "../vr/types.js";
 import { readCode } from "./coded.js";
 import { PATIENT_ISSUE_CODES, patientIssue } from "./patient-issues.js";
 import { readDate, readItems, readPersonName, readString } from "./read.js";
-import type {
-  CodedConcept,
-  OtherPatientId,
-  PatientIssue,
-  PatientView,
-  ResponsiblePerson,
+import {
+  type CodedConcept,
+  type OtherPatientId,
+  type PatientIssue,
+  type PatientView,
+  type ResponsiblePerson,
 } from "./types.js";
 
 const PATIENT_ID: Tag = "00100020";

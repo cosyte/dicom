@@ -3,13 +3,18 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { parseDate, parseDateTime, parseTime, toDate, toISO, toObject } from "../src/index.js";
-import type {
-  DateParts,
-  DicomDate,
-  DicomDateTime,
-  DicomTime,
-  ToDateOptions,
+import {
+  parseDate,
+  parseDateTime,
+  parseTime,
+  toDate,
+  toISO,
+  toObject,
+  type DateParts,
+  type DicomDate,
+  type DicomDateTime,
+  type DicomTime,
+  type ToDateOptions,
 } from "../src/index.js";
 
 /**

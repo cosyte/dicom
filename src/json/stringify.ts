@@ -7,7 +7,7 @@
 
 import { WITHHELD } from "../parser/tokens.js";
 import { codedError, DICOM_JSON_ERROR_CODES, DicomJsonError } from "./errors.js";
-import type { DicomJsonDataset } from "./types.js";
+import { type DicomJsonDataset } from "./types.js";
 
 /**
  * What a value is where it sits: a Data Set, one attribute, or a Sequence's Items. `undefined` is

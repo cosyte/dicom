@@ -50,11 +50,11 @@
 import { Buffer } from "node:buffer";
 
 import { zlibModule } from "../builtins.js";
-import type { Dataset } from "../dataset/dataset.js";
+import { type Dataset } from "../dataset/dataset.js";
 import { DIRECTORY_TAGS, isDicomdir } from "../dataset/directory.js";
-import type { Element } from "../dataset/element.js";
+import { type Element } from "../dataset/element.js";
 import { ENCAPSULATED_TRANSFER_SYNTAX_UIDS } from "../dictionary/generated/encapsulated-transfer-syntaxes.js";
-import type { Tag } from "../dictionary/types.js";
+import { type Tag } from "../dictionary/types.js";
 import { PLACED_TAGS, rewriteDirectoryOffsets, type PlacedElement } from "./directory.js";
 import { type BodyEncoding, tagParts, writeDatasetElement } from "./element.js";
 import { encapsulatedPixelData, PIXEL_DATA } from "./encapsulated.js";

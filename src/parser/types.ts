@@ -16,11 +16,11 @@
  * @module
  */
 
-import type { CompactTable } from "../dataset/compact.js";
-import type { Fallback, FallbackCharacterSet } from "../dataset/vr/charset.js";
-import type { VR } from "../dictionary/types.js";
-import type { ParseFrame } from "./errors.js";
-import type { DicomParseWarning, WarningCode } from "./warnings.js";
+import { type CompactTable } from "../dataset/compact.js";
+import { type Fallback, type FallbackCharacterSet } from "../dataset/vr/charset.js";
+import { type VR } from "../dictionary/types.js";
+import { type ParseFrame } from "./errors.js";
+import { type DicomParseWarning, type WarningCode } from "./warnings.js";
 
 /**
  * One private-data attribute definition supplied by a {@link Profile}'s

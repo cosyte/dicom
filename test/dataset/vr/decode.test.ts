@@ -3,7 +3,7 @@ import { Buffer } from "node:buffer";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 
-import type { Tag, VR } from "../../../src/dictionary/types.js";
+import { type Tag, type VR } from "../../../src/dictionary/types.js";
 import { Element } from "../../../src/dataset/element.js";
 import { Item } from "../../../src/dataset/item.js";
 import { decodeElementValue } from "../../../src/dataset/vr/decode.js";

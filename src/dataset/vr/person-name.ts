@@ -10,7 +10,7 @@
  * @module
  */
 
-import type { PersonName, PersonNameGroup } from "./types.js";
+import { type PersonName, type PersonNameGroup } from "./types.js";
 
 function toGroup(raw: string): PersonNameGroup {
   const parts = raw.split("^");

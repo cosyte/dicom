@@ -22,8 +22,8 @@
 
 import { Buffer } from "node:buffer";
 
-import type { Tag, VR } from "../../src/dictionary/types.js";
-import type { DicomModel, ModelElement } from "../../src/arbitraries/index.js";
+import { type Tag, type VR } from "../../src/dictionary/types.js";
+import { type DicomModel, type ModelElement } from "../../src/arbitraries/index.js";
 
 export {
   arbitraryBytes,

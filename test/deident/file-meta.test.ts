@@ -37,7 +37,7 @@ import {
   serializeDicom,
   type DeidentifyOption,
 } from "../../src/index.js";
-import type { Tag, VR } from "../../src/dictionary/types.js";
+import { type Tag, type VR } from "../../src/dictionary/types.js";
 import { MAX_FILE_META_DROP_FINDINGS } from "../../src/deident/deidentify.js";
 import {
   COSYTE_IMPLEMENTATION_CLASS_UID,

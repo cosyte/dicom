@@ -8,8 +8,7 @@ import { Buffer } from "node:buffer";
 
 import { describe, expect, it } from "vitest";
 
-import { PATIENT_ISSUE_CODES, parseDicom } from "../../../src/index.js";
-import type { PatientIssueCode } from "../../../src/index.js";
+import { PATIENT_ISSUE_CODES, parseDicom, type PatientIssueCode } from "../../../src/index.js";
 import {
   buildDicom,
   type BuildDicomElement,

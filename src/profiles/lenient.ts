@@ -22,7 +22,7 @@
 
 import { defineProfile } from "./define.js";
 import { WARNING_CODES } from "../parser/warnings.js";
-import type { Profile } from "../parser/types.js";
+import { type Profile } from "../parser/types.js";
 
 /**
  * The lenient preset. Suppresses cosmetic, high-volume Tier-2 codes.

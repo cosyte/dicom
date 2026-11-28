@@ -15,10 +15,10 @@
  * @module
  */
 
-import type { Tag } from "../../dictionary/types.js";
-import type { Dataset } from "../dataset.js";
-import type { Item } from "../item.js";
-import type { DicomDate, DicomTime, PersonName } from "../vr/types.js";
+import { type Tag } from "../../dictionary/types.js";
+import { type Dataset } from "../dataset.js";
+import { type Item } from "../item.js";
+import { type DicomDate, type DicomTime, type PersonName } from "../vr/types.js";
 
 /**
  * First non-empty string of a `strings`/`text` VR, else `undefined`.

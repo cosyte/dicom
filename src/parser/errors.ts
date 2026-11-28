@@ -14,9 +14,9 @@
  * @module
  */
 
-import type { Buffer } from "node:buffer";
+import { type Buffer } from "node:buffer";
 
-import type { WarningCode } from "./warnings.js";
+import { type WarningCode } from "./warnings.js";
 
 /**
  * Stable string codes for every Tier-3 fatal the parser may throw.

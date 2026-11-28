@@ -19,7 +19,7 @@ import type * as Builtins from "../../src/builtins.js";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { ParseContext } from "../../src/parser/types.js";
+import { type ParseContext } from "../../src/parser/types.js";
 
 const inflate = vi.hoisted(() => ({ impl: undefined as (() => never) | undefined }));
 

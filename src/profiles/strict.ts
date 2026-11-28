@@ -21,7 +21,7 @@
 
 import { defineProfile } from "./define.js";
 import { WARNING_CODES } from "../parser/warnings.js";
-import type { Profile } from "../parser/types.js";
+import { type Profile } from "../parser/types.js";
 
 /**
  * The strict conformance preset. Escalates integrity-relevant Tier-2 codes.

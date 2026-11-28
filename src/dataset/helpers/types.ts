@@ -19,9 +19,9 @@
  * @module
  */
 
-import type { Item } from "../item.js";
-import type { DicomDate, DicomTime, PersonName } from "../vr/types.js";
-import type { PatientIssueCode } from "./patient-issues.js";
+import { type Item } from "../item.js";
+import { type DicomDate, type DicomTime, type PersonName } from "../vr/types.js";
+import { type PatientIssueCode } from "./patient-issues.js";
 
 /**
  * One entry of Other Patient IDs Sequence `(0010,1002)` - a `{id, issuer,

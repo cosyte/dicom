@@ -31,7 +31,7 @@ import fc from "fast-check";
 import { immutabilityProperty } from "@cosyte/test-utils";
 
 import { parseDicom, type Dataset, type DicomParseWarning, type Element } from "../../src/index.js";
-import type { Tag } from "../../src/dictionary/types.js";
+import { type Tag } from "../../src/dictionary/types.js";
 
 import { checkProperty, propertyRun } from "../helpers/property.js";
 

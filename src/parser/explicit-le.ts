@@ -38,11 +38,11 @@
  * @module
  */
 
-import type { Buffer } from "node:buffer";
+import { type Buffer } from "node:buffer";
 
 import { tableOf, type ParsedDataSet } from "../dataset/compact.js";
 import { tagEntry } from "../dictionary/registry.js";
-import type { Tag } from "../dictionary/types.js";
+import { type Tag } from "../dictionary/types.js";
 import { ByteCursor } from "./byte-cursor.js";
 import { defineRow } from "./data-set-map.js";
 import {
@@ -70,7 +70,7 @@ import {
   type ParseSequenceOptions,
 } from "./sequence.js";
 import { stopsHere } from "./stop.js";
-import type { DicomPosition, ParseContext } from "./types.js";
+import { type DicomPosition, type ParseContext } from "./types.js";
 import {
   groupLengthInDataset,
   oddLengthValuePadded,

@@ -14,7 +14,7 @@
 import { describe, expect, it } from "vitest";
 
 import { Dictionary, profiles } from "../../src/index.js";
-import type { Dataset } from "../../src/dataset/dataset.js";
+import { type Dataset } from "../../src/dataset/dataset.js";
 import { DicomParseError, FATAL_CODES } from "../../src/parser/errors.js";
 import { parseDicom } from "../../src/parser/index.js";
 import {

@@ -16,7 +16,7 @@ import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
 import { MAX_PRIVATE_DECLARATION_WARNINGS } from "../../src/deident/deidentify.js";
-import type { DeidentifyOptions } from "../../src/deident/types.js";
+import { type DeidentifyOptions } from "../../src/deident/types.js";
 import {
   Dataset,
   Element,
@@ -25,8 +25,11 @@ import {
   parseDicom,
   serializeDicom,
 } from "../../src/index.js";
-import type { BuildDicomElement, BuildDicomSqItem } from "../helpers/build-dicom.js";
-import { buildDicom } from "../helpers/build-dicom.js";
+import {
+  buildDicom,
+  type BuildDicomElement,
+  type BuildDicomSqItem,
+} from "../helpers/build-dicom.js";
 
 const EXPLICIT_LE = "1.2.840.10008.1.2.1";
 const EXPLICIT_BE = "1.2.840.10008.1.2.2";

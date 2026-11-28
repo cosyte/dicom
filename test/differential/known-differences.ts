@@ -13,7 +13,7 @@
  * @module
  */
 
-import type { DifferenceKind } from "./_compare.js";
+import { type DifferenceKind } from "./_compare.js";
 
 /** One known difference. */
 export interface KnownDifference {

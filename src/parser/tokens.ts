@@ -55,9 +55,9 @@
  */
 
 import { tagEntry } from "../dictionary/registry.js";
-import type { Tag, VR } from "../dictionary/types.js";
+import { type Tag, type VR } from "../dictionary/types.js";
 import { KNOWN_VRS } from "./endian.js";
-import type { Profile } from "./types.js";
+import { type Profile } from "./types.js";
 
 /**
  * What a message or a model field prints in place of a token it may not echo.

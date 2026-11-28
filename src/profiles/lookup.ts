@@ -13,8 +13,8 @@
  * @module
  */
 
-import type { PrivateTagDefinition, Profile } from "../parser/types.js";
-import type { Tag } from "../dictionary/types.js";
+import { type PrivateTagDefinition, type Profile } from "../parser/types.js";
+import { type Tag } from "../dictionary/types.js";
 
 /**
  * Build the canonical private-tag key for a concrete tag - the group, the

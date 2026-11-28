@@ -14,7 +14,7 @@
 
 import { Buffer } from "node:buffer";
 import { createServer } from "node:http";
-import type { AddressInfo } from "node:net";
+import { type AddressInfo } from "node:net";
 import { constants, deflateRawSync, deflateSync, inflateRawSync } from "node:zlib";
 
 import { describe, expect, it } from "vitest";

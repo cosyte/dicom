@@ -39,7 +39,7 @@
  * @module
  */
 
-import type { DicomDate, DicomDateTime, DicomTime } from "./types.js";
+import { type DicomDate, type DicomDateTime, type DicomTime } from "./types.js";
 
 /**
  * The decoded temporal values this surface accepts: a `DA`, a `TM` or a `DT`.

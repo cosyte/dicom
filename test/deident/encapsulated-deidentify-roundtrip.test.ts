@@ -16,8 +16,8 @@ import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
 import { deidentify, parseDicom, readPixelDataFragments, serializeDicom } from "../../src/index.js";
-import type { Dataset } from "../../src/dataset/dataset.js";
-import type { Element } from "../../src/dataset/element.js";
+import { type Dataset } from "../../src/dataset/dataset.js";
+import { type Element } from "../../src/dataset/element.js";
 import { PATIENT_ID, PATIENT_NAME, encapsulatedObject } from "../fixtures/encapsulated/objects.js";
 import { ENCAPSULATION_SET } from "../helpers/ps35-section-a4.js";
 

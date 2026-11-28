@@ -17,9 +17,9 @@
  * @module
  */
 
-import type { Tag, VR } from "../dictionary/types.js";
+import { type Tag, type VR } from "../dictionary/types.js";
 import { renderTag, renderVr } from "./tokens.js";
-import type { DicomPosition } from "./types.js";
+import { type DicomPosition } from "./types.js";
 
 /**
  * Stable string codes for every Tier-2 warning the parser may emit.

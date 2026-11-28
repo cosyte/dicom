@@ -7,7 +7,7 @@
  * @module
  */
 
-import type { Tag } from "../dictionary/types.js";
+import { type Tag } from "../dictionary/types.js";
 
 const TAG_HEX_RE = /^[0-9A-F]{8}$/;
 

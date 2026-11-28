@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { parseDicom } from "../../../src/index.js";
 import { buildDicom, type BuildDicomElement } from "../../helpers/build-dicom.js";
-import type { Dataset } from "../../../src/dataset/dataset.js";
+import { type Dataset } from "../../../src/dataset/dataset.js";
 import {
   readDate,
   readItems,

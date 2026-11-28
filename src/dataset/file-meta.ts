@@ -9,9 +9,9 @@
  * @module
  */
 
-import type { Buffer } from "node:buffer";
+import { type Buffer } from "node:buffer";
 
-import type { Tag, VR } from "../dictionary/types.js";
+import { type Tag, type VR } from "../dictionary/types.js";
 
 /**
  * A non-modeled `(0002,xxxx)` File Meta element, preserved verbatim so the

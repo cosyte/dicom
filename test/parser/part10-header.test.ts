@@ -8,9 +8,8 @@ import { describe, expect, it } from "vitest";
 
 import { DicomParseError, OFFSET_FRAMES } from "../../src/parser/errors.js";
 import { parsePart10Header } from "../../src/parser/part10-header.js";
-import type { ParseContext } from "../../src/parser/types.js";
-import type { DicomParseWarning } from "../../src/parser/warnings.js";
-import { WARNING_CODES } from "../../src/parser/warnings.js";
+import { type ParseContext } from "../../src/parser/types.js";
+import { WARNING_CODES, type DicomParseWarning } from "../../src/parser/warnings.js";
 
 function makeCtx(
   buffer: Buffer,

@@ -33,10 +33,10 @@
  * @module
  */
 
-import type { Buffer } from "node:buffer";
+import { type Buffer } from "node:buffer";
 
-import type { VR } from "../../dictionary/types.js";
-import type { DicomPosition } from "../../parser/types.js";
+import { type VR } from "../../dictionary/types.js";
+import { type DicomPosition } from "../../parser/types.js";
 import {
   bomInTextVR,
   charsetBytesUndecodable,
@@ -62,7 +62,13 @@ import { decodeWithCodeExtensions, usesCodeExtensions, type DelimiterClass } fro
 import { decodeAttributeTags, decodeBigInts, decodeNumbersIn } from "./numeric.js";
 import { parsePersonName } from "./person-name.js";
 import { decodeSingleByte } from "./single-byte.js";
-import type { DicomDate, DicomDateTime, DicomTime, DicomValue, PersonName } from "./types.js";
+import {
+  type DicomDate,
+  type DicomDateTime,
+  type DicomTime,
+  type DicomValue,
+  type PersonName,
+} from "./types.js";
 
 const BINARY_VRS: ReadonlySet<VR> = new Set<VR>(["OB", "OD", "OF", "OL", "OV", "OW", "UN"]);
 const NUMBER_VRS: ReadonlySet<VR> = new Set<VR>(["US", "UL", "SS", "SL", "FL", "FD"]);

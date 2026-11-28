@@ -19,7 +19,7 @@
  */
 
 import { TAG_ROWS } from "./generated/tags.js";
-import type { DictionaryEntry, Tag, VR } from "./types.js";
+import { type DictionaryEntry, type Tag, type VR } from "./types.js";
 
 /** Where each row starts in `TAG_ROWS`, by its key, built on first use. */
 let rowAt: Map<string, number> | undefined;

@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { Item } from "../../src/dataset/item.js";
+import { type Item } from "../../src/dataset/item.js";
 import { Sequence } from "../../src/dataset/sequence.js";
 
 describe("Sequence - structural wrapper", () => {

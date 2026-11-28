@@ -13,7 +13,7 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
 import { Element } from "../../src/dataset/element.js";
-import type { VR } from "../../src/dictionary/types.js";
+import { type VR } from "../../src/dictionary/types.js";
 import {
   type BodyEncoding,
   encodeDatasetElement,

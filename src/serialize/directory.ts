@@ -31,17 +31,17 @@
  * @module
  */
 
-import type { Buffer } from "node:buffer";
+import { type Buffer } from "node:buffer";
 
-import type { Dataset } from "../dataset/dataset.js";
+import { type Dataset } from "../dataset/dataset.js";
 import {
   DIRECTORY_TAGS,
   directoryRecords,
   readOffsetValue,
   type OffsetValue,
 } from "../dataset/directory.js";
-import type { Element } from "../dataset/element.js";
-import type { Tag } from "../dictionary/types.js";
+import { type Element } from "../dataset/element.js";
+import { type Tag } from "../dictionary/types.js";
 import { type BodyEncoding, isFullSpanElement } from "./element.js";
 import { DicomSerializeError, SERIALIZE_ERROR_CODES } from "./errors.js";
 import { type ItemPlacement, tagNumber } from "./order.js";

@@ -12,10 +12,10 @@
  * @module
  */
 
-import type { Buffer } from "node:buffer";
+import { type Buffer } from "node:buffer";
 
 import { joinTag } from "../dataset/tag.js";
-import type { Tag, VR } from "../dictionary/types.js";
+import { type Tag, type VR } from "../dictionary/types.js";
 import { KNOWN_VRS } from "./endian.js";
 
 /** At most this many distinct tags are kept: well past the 5,310 rows of PS3.6's registry. */

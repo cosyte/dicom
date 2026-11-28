@@ -11,9 +11,9 @@
  * @module
  */
 
-import type { Buffer } from "node:buffer";
+import { type Buffer } from "node:buffer";
 
-import type { ParseContext } from "./types.js";
+import { type ParseContext } from "./types.js";
 import { parseStoppedBeforeTag, type DicomParseWarning } from "./warnings.js";
 import { tagOf } from "./wire-tokens.js";
 

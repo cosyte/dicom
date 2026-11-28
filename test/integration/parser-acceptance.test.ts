@@ -22,7 +22,7 @@ import {
   WARNING_CODES,
   type Element,
 } from "../../src/index.js";
-import type { Tag } from "../../src/dictionary/types.js";
+import { type Tag } from "../../src/dictionary/types.js";
 import { buildDicom } from "../helpers/build-dicom.js";
 
 // -- Test-only structural accessor for Dataset._elements ---------------------

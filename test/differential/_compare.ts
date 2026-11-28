@@ -27,10 +27,15 @@
 
 import { Buffer } from "node:buffer";
 
-import type { DcmjsDict, DcmjsElement } from "dcmjs";
+import { type DcmjsDict, type DcmjsElement } from "dcmjs";
 
-import type { Dataset, Element, FileMeta } from "../../src/index.js";
-import { decodeText, readPixelDataFragments } from "../../src/index.js";
+import {
+  decodeText,
+  readPixelDataFragments,
+  type Dataset,
+  type Element,
+  type FileMeta,
+} from "../../src/index.js";
 
 /** The value of one element, reduced. */
 export type Value =

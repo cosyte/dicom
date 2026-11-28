@@ -19,11 +19,11 @@
  * @module
  */
 
-import type { Dataset } from "../dataset.js";
-import type { Item } from "../item.js";
+import { type Dataset } from "../dataset.js";
+import { type Item } from "../item.js";
 import { DicomValueError } from "./errors.js";
 import { readNumber, readNumberArray, readItems, readString } from "./read.js";
-import type { FrameFunctionalGroups } from "./types.js";
+import { type FrameFunctionalGroups } from "./types.js";
 
 const PER_FRAME_FG_SEQ: Tag = "52009230";
 const SHARED_FG_SEQ: Tag = "52009229";

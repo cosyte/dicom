@@ -1135,7 +1135,7 @@ function buildUidsTs(
       innoSha,
       { ...nema, tables: NEMA_UID_TABLES_LABEL, subject: "UID" },
     ) +
-    `import type { UidEntry } from "../types.js";\n\n` +
+    `import { type UidEntry } from "../types.js";\n\n` +
     `export const UIDS: { readonly [uid: string]: UidEntry } = {\n` +
     lines.join("\n") +
     `\n};\n`;

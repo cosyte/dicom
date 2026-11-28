@@ -15,7 +15,7 @@ import { describe, expect, it } from "vitest";
 
 import { findEmbeddedAttributes, MAX_SCAN_BYTES } from "../../src/deident/embedded.js";
 import { annexE, annexETags } from "../../src/dictionary/annex-e.js";
-import type { Tag, VR } from "../../src/dictionary/types.js";
+import { type Tag, type VR } from "../../src/dictionary/types.js";
 
 const PATIENT_ID_TAG: Tag = "00100020";
 const always = (): boolean => true;

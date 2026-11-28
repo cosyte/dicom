@@ -28,7 +28,7 @@
  * @module
  */
 
-import type { Buffer } from "node:buffer";
+import { type Buffer } from "node:buffer";
 
 import { g1Character } from "./single-byte.js";
 

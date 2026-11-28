@@ -33,7 +33,7 @@
  * @module
  */
 
-import type { Buffer } from "node:buffer";
+import { type Buffer } from "node:buffer";
 
 /** A byte the set does not define. No G1 set holds U+0000. */
 const NONE = 0;

@@ -7,8 +7,13 @@
  */
 
 import { fallbackOf } from "../dataset/vr/charset.js";
-import type { Tag, VR } from "../dictionary/types.js";
-import type { DicomPosition, FallbackState, ParseContext, ParseOptions } from "./types.js";
+import { type Tag, type VR } from "../dictionary/types.js";
+import {
+  type DicomPosition,
+  type FallbackState,
+  type ParseContext,
+  type ParseOptions,
+} from "./types.js";
 import { charsetAssumed, type DicomParseWarning } from "./warnings.js";
 
 /**

@@ -31,9 +31,9 @@
 
 import { Buffer } from "node:buffer";
 
-import type { Element } from "../dataset/element.js";
+import { type Element } from "../dataset/element.js";
 import { splitTag } from "../dataset/tag.js";
-import type { VR } from "../dictionary/types.js";
+import { type VR } from "../dictionary/types.js";
 import { LONG_FORM_VRS } from "../parser/element-header.js";
 import { BE_VR_STRIDE, isRecognizedVr } from "../parser/endian.js";
 import { DicomSerializeError, SERIALIZE_ERROR_CODES } from "./errors.js";

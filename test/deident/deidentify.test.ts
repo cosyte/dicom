@@ -24,8 +24,8 @@ import {
   parseDicom,
   serializeDicom,
 } from "../../src/index.js";
-import type { AnnexEActionCode } from "../../src/dictionary/annex-e.js";
-import type { Tag } from "../../src/dictionary/types.js";
+import { type AnnexEActionCode } from "../../src/dictionary/annex-e.js";
+import { type Tag } from "../../src/dictionary/types.js";
 import {
   resolveAction,
   dummyBytes,

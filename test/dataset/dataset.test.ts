@@ -2,7 +2,7 @@ import { Buffer } from "node:buffer";
 
 import { describe, expect, it } from "vitest";
 
-import type { Tag } from "../../src/dictionary/types.js";
+import { type Tag } from "../../src/dictionary/types.js";
 import { Dataset } from "../../src/dataset/dataset.js";
 import { Element } from "../../src/dataset/element.js";
 import { Item } from "../../src/dataset/item.js";

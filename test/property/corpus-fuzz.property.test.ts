@@ -66,7 +66,7 @@ import {
   type ParseOptions,
   type Profile,
 } from "../../src/index.js";
-import type { Tag, VR } from "../../src/dictionary/types.js";
+import { type Tag, type VR } from "../../src/dictionary/types.js";
 import {
   buildDicom,
   type BuildDicomElement,

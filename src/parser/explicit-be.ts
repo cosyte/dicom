@@ -19,12 +19,12 @@
  * @module
  */
 
-import type { Buffer } from "node:buffer";
+import { type Buffer } from "node:buffer";
 
-import type { ParsedDataSet } from "../dataset/compact.js";
+import { type ParsedDataSet } from "../dataset/compact.js";
 import { _parseExplicit, explicitMode } from "./explicit-le.js";
-import type { ParseContext } from "./types.js";
-import type { DicomParseWarning } from "./warnings.js";
+import { type ParseContext } from "./types.js";
+import { type DicomParseWarning } from "./warnings.js";
 
 /**
  * Public Explicit VR Big Endian strategy - wraps `_parseExplicit` from

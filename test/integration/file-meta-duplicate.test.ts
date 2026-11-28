@@ -51,7 +51,7 @@ import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
 import { DicomParseError, WARNING_CODES, parseDicom, serializeDicom } from "../../src/index.js";
-import type { Tag, VR } from "../../src/dictionary/types.js";
+import { type Tag, type VR } from "../../src/dictionary/types.js";
 import { WARNING_MESSAGES, duplicateFileMetaElement } from "../../src/parser/warnings.js";
 import { buildDicom, type BuildDicomElement } from "../helpers/build-dicom.js";
 
