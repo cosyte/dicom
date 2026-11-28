@@ -44,7 +44,11 @@ import type { Dataset } from "../dataset/dataset.js";
 import type { Tag } from "../dictionary/types.js";
 import { DicomSerializeError, SERIALIZE_ERROR_CODES } from "./errors.js";
 
-/** `(7FE0,0010)` Pixel Data. */
+/**
+ * `(7FE0,0010)` Pixel Data.
+ *
+ * @internal
+ */
 export const PIXEL_DATA: Tag = "7FE00010";
 /** `(7FE0,0008)` Float Pixel Data. */
 const FLOAT_PIXEL_DATA: Tag = "7FE00008";
@@ -141,7 +145,7 @@ function itemStreamEnd(raw: Buffer): number {
  * Table Item and fragment Items byte for byte (a view, not a copy), then a
  * zero-length Sequence Delimitation Item. Reads `ds`, never changes it.
  *
- * @throws {@link DicomSerializeError} with code
+ * @throws {DicomSerializeError} with code
  *   `INVALID_ENCAPSULATED_PIXEL_DATA` when the top-level Data Set is not one a
  *   section A.4 Transfer Syntax may carry (see the module doc).
  *

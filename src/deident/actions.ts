@@ -19,7 +19,11 @@ import type { AnnexEAction, AnnexEActionCode } from "../dictionary/annex-e.js";
 import type { VR } from "../dictionary/types.js";
 import { DEIDENTIFY_OPTIONS, type DeidentifyOption } from "./types.js";
 
-/** A resolved, non-conditional Annex E action. */
+/**
+ * A resolved, non-conditional Annex E action.
+ *
+ * @internal
+ */
 export type ResolvedAction = "D" | "Z" | "X" | "K" | "C" | "U";
 
 /**
@@ -44,6 +48,8 @@ export type ResolvedAction = "D" | "Z" | "X" | "K" | "C" | "U";
  * effectiveCode(row!, new Set(["RetainLongitudinalTemporalModifiedDates"])); // "C"
  * effectiveCode(row!, new Set()); // the Basic Profile code
  * ```
+ *
+ * @internal
  */
 export function effectiveCode(
   action: AnnexEAction,
@@ -66,6 +72,8 @@ export function effectiveCode(
  * effectiveOption(row!, new Set(["CleanDescriptors"])); // "CleanDescriptors"
  * effectiveOption(row!, new Set()); // undefined
  * ```
+ *
+ * @internal
  */
 export function effectiveOption(
   action: AnnexEAction,
@@ -86,6 +94,8 @@ export function effectiveOption(
  * resolveAction("X/Z/U*"); // "X"
  * resolveAction("Z");      // "Z"
  * ```
+ *
+ * @internal
  */
 export function resolveAction(code: AnnexEActionCode): ResolvedAction {
   /* v8 ignore next -- unreachable: `split` always returns at least one element. */
@@ -123,6 +133,8 @@ const TEXT_DUMMIES: Partial<Record<VR, string>> = {
  * dummyBytes("DA")?.toString("latin1"); // "10000101"
  * dummyBytes("US"); // null - no safe textual dummy; caller empties instead
  * ```
+ *
+ * @internal
  */
 export function dummyBytes(vr: VR): Buffer | null {
   const text = TEXT_DUMMIES[vr];
@@ -140,6 +152,8 @@ export function dummyBytes(vr: VR): Buffer | null {
  * ```ts
  * stripTrailingNulls("1.2.3\0\0"); // "1.2.3"
  * ```
+ *
+ * @internal
  */
 export function stripTrailingNulls(text: string): string {
   let end = text.length;
@@ -157,6 +171,8 @@ export function stripTrailingNulls(text: string): string {
  * import { Buffer } from "node:buffer";
  * remapUidBytes(Buffer.from("1.2.3"), (uid) => `9.${uid}`); // <Buffer "9.1.2.3\0">
  * ```
+ *
+ * @internal
  */
 export function remapUidBytes(rawBytes: Buffer, remap: (uid: string) => string): Buffer {
   const raw = stripTrailingNulls(rawBytes.toString("latin1"));
@@ -176,6 +192,8 @@ export function remapUidBytes(rawBytes: Buffer, remap: (uid: string) => string):
  * import { Buffer } from "node:buffer";
  * uidValueMultiplicity(Buffer.from("1.2\\3.4")); // 2
  * ```
+ *
+ * @internal
  */
 export function uidValueMultiplicity(rawBytes: Buffer): number {
   const raw = stripTrailingNulls(rawBytes.toString("latin1"));

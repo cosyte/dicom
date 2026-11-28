@@ -371,13 +371,7 @@ export class DicomParseError extends Error {
  * Used by the strict-mode escalation chokepoint to attach a short source
  * snippet to every thrown `DicomParseError`.
  *
- * @example
- * ```ts
- * import { Buffer } from "node:buffer";
- * import { buildSnippet } from "@cosyte/dicom";
- * buildSnippet(Buffer.from([0x44, 0x49, 0x43, 0x4d]), 0);
- * // → "44 49 43 4d"
- * ```
+ * @internal
  */
 export function buildSnippet(buffer: Buffer, offset: number): string {
   if (offset < 0 || offset >= buffer.length) return "";

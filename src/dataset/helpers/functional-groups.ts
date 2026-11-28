@@ -52,11 +52,7 @@ type Tag = string;
  * (Per-Frame `(5200,9230)` or Shared `(5200,9229)`) - i.e. it is an
  * Enhanced multi-frame object.
  *
- * @example
- * ```ts
- * import { parseDicom, hasFunctionalGroups } from "@cosyte/dicom";
- * hasFunctionalGroups(parseDicom(enhancedBuf)); // true
- * ```
+ * @internal
  */
 export function hasFunctionalGroups(ds: Dataset): boolean {
   return ds.has(PER_FRAME_FG_SEQ) || ds.has(SHARED_FG_SEQ);
@@ -151,7 +147,7 @@ function buildFrameVoiLut(item: Item): NonNullable<FrameFunctionalGroups["frameV
  * Resolve the {@link FrameFunctionalGroups} for frame `index` of an
  * Enhanced multi-frame object, Per-Frame-else-Shared.
  *
- * @throws {@link DicomValueError} `FRAME_INDEX_OUT_OF_RANGE` when `index`
+ * @throws {DicomValueError} `FRAME_INDEX_OUT_OF_RANGE` when `index`
  *   is outside `[0, numberOfFrames)`, and `MISSING_REQUIRED_FUNCTIONAL_GROUP`
  *   when a required geometry macro (Pixel Measures / Plane Position / Plane
  *   Orientation) is absent from both the per-frame and shared groups.
@@ -163,6 +159,8 @@ function buildFrameVoiLut(item: Item): NonNullable<FrameFunctionalGroups["frameV
  * f.planePosition?.imagePositionPatient; // this frame's [x,y,z]
  * f.pixelMeasures?.pixelSpacing;         // this frame's [row,col] mm
  * ```
+ *
+ * @internal
  */
 export function resolveFrame(
   ds: Dataset,

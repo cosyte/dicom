@@ -66,6 +66,8 @@ import type { Profile } from "./types.js";
  * structural metadata" would leak the length of a withheld value, which is
  * itself derivable content, and no other withheld token in the `@cosyte/*` set
  * reports one.
+ *
+ * @internal
  */
 export const WITHHELD = "<withheld>";
 

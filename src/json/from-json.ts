@@ -676,7 +676,7 @@ function refuseChangedElements(json: Record<string, unknown>, ds: Dataset): void
  * @param options - The File Meta to write under, how to delimit Sequences, and how to resolve a
  *   `BulkDataURI`.
  * @returns The Data Set, read by `parseDicom`.
- * @throws {@link DicomJsonError} rather than guess: `INVALID_JSON` for an object of another shape,
+ * @throws {DicomJsonError} rather than guess: `INVALID_JSON` for an object of another shape,
  *   `UNSUPPORTED_TRANSFER_SYNTAX` for a Transfer Syntax other than the four uncompressed and
  *   Deflated ones, `UNSUPPORTED_VR` for an `SV` or `UV` `Value`, whose form we have not read in a
  *   pinned copy of PS3.18 and which a JSON number does not hold past 2^53, or a VR PS3.5 does not

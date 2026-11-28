@@ -369,6 +369,8 @@ export function setDatasetWarnings(ds: Dataset, warnings: readonly DicomParseWar
  * outweighs the parse of a small file. These instances hold the chain. They are built with the
  * field kinds a parse stores (a number or nothing, a string or nothing, an object or nothing), so
  * later instances share their hidden classes rather than branching from them.
+ *
+ * @internal
  */
 export const DATASET_SHAPES: readonly Dataset[] = [
   new Dataset({ warnings: [], elements: new Map() }),

@@ -33,6 +33,8 @@ import type { Profile } from "../parser/types.js";
  * import { parseDicom, profiles } from "@cosyte/dicom";
  * const ds = parseDicom(buf, { profile: profiles.siemens });
  * ```
+ *
+ * @internal
  */
 export const siemens: Profile = defineProfile({
   name: "siemens",
