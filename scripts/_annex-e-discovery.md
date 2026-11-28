@@ -120,7 +120,7 @@ generator does not close.
 
 ## Generator behavior
 
-`pnpm gen:annex-e` reads `vendor/innolitics/SHA.txt` for the mirror path and
+`pnpm generate:annex-e` reads `vendor/innolitics/SHA.txt` for the mirror path and
 `vendor/nema/part15/SHA.txt` for the normative one, verifies the PS3.15 SHA-256 against the
 bytes on disk, reads the edition from the document's own `<subtitle>`, parses Table E.1-1,
 overlays, and writes `src/dictionary/generated/annex-e.ts`. Output is deterministic. CI
@@ -135,5 +135,5 @@ header row, and at least 600 concrete rows. The header check is the one that cat
 **reorder**: a cell count cannot, and a reorder would read one option's action code as another's.
 
 Re-pinning either input is documented in `vendor/nema/README.md` and
-`vendor/innolitics/README.md`; both end in `pnpm gen:all` plus a review of the printed
+`vendor/innolitics/README.md`; both end in `pnpm generate:all` plus a review of the printed
 overlay summary.

@@ -10,7 +10,17 @@
  *    serializer, the source/vendor profile system, and de-identification.
  */
 
-export { VERSION } from "./version.js";
+/**
+ * The version of `@cosyte/dicom`, the same as its `package.json` `version`. The `version` script
+ * writes it with `cosyte-process sync-version` in the commit that bumps the package.
+ *
+ * @example
+ * ```ts
+ * import { VERSION } from "@cosyte/dicom";
+ * typeof VERSION; // => "string"
+ * ```
+ */
+export const VERSION: string = "0.1.16";
 
 export * as Dictionary from "./dictionary/index.js";
 

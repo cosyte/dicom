@@ -52,7 +52,7 @@ CI's other jobs run beside it:
   `pnpm check:process`.
 - The dash and internal-reference gates: `pnpm check:no-emdash`, `pnpm check:no-internal-refs`.
 - A change under `vendor/`, to the generators in `scripts/`, to `src/dictionary/generated/`, or to
-  `package.json` also runs the regen check: `pnpm gen:clean`, `pnpm gen:all`, then
+  `package.json` also runs the regen check: `pnpm clean:generated`, `pnpm generate:all`, then
   `git diff --exit-code src/dictionary/generated/` must print nothing.
 
 ## Rules

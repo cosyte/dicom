@@ -72,7 +72,7 @@ pnpm test:property        # the properties, at the depth COSYTE_PROPERTY_RUNS se
 pnpm fuzz                 # the fuzz targets
 pnpm test:perf            # the scaling gates
 pnpm phi-scan             # the PHI scan over the repository
-pnpm gen:clean && pnpm gen:all && git diff --exit-code src/dictionary/generated/
+pnpm clean:generated && pnpm generate:all && git diff --exit-code src/dictionary/generated/
 ```
 
 ## Current numbers
