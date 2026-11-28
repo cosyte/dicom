@@ -137,10 +137,14 @@ function wordsLike(like: Words, n: number): Words {
   return like instanceof Float64Array ? new Float64Array(n) : new Uint32Array(n);
 }
 
-/** `words`, or a copy of it at least `need` words long. */
+/**
+ * `words`, or a copy of it at least `need` words long. The copy is twice `need`, so a run of
+ * appends copies each word a bounded number of times, and its size follows `need` alone: never the
+ * length of `words`, which would double on every call if the length check above it were wrong.
+ */
 function ensure(words: Words, need: number): Words {
   if (need <= words.length) return words;
-  const grown = wordsLike(words, Math.max(need, words.length * 2));
+  const grown = wordsLike(words, need * 2);
   grown.set(words);
   return grown;
 }

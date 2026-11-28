@@ -45,6 +45,31 @@ describe("CompactTable", () => {
     expect(table.source).toBe(source);
     expect(table.deltaOf(source.subarray(16))).toBe(16);
   });
+
+  // An empty source starts the scratch rows at their smallest, 16 rows of 6 words.
+  const filled = (rows: number): CompactTable => {
+    const table = new CompactTable(false);
+    table.begin(Buffer.alloc(0));
+    const set = table.openSet();
+    for (let i = 0; i < rows; i++) table.addRow(set, 0x00100010 + i, 0, 0, 0, 0, 0);
+    return table;
+  };
+
+  it("keeps the scratch rows it has when they are exactly full", () => {
+    const table = new CompactTable(false);
+    table.begin(Buffer.alloc(0));
+    const start = table.scratch;
+    expect(start.length).toBe(16 * 6);
+    const set = table.openSet();
+    for (let i = 0; i < 16; i++) table.addRow(set, 0x00100010 + i, 0, 0, 0, 0, 0);
+    expect(table.scratch).toBe(start);
+  });
+
+  it("grows the scratch rows to twice the words the next row needs", () => {
+    const table = filled(17);
+    expect(table.scratch.length).toBe(17 * 6 * 2);
+    for (let i = 0; i < 17; i++) expect(table.scratch[i * 6]).toBe(0x00100010 + i);
+  });
 });
 
 describe("character sets kept by identity", () => {
