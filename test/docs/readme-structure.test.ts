@@ -351,8 +351,13 @@ function structureProblems(md: string, description: string): string[] {
   const installIndex = all.findIndex((h) => h.level === 2 && h.text === "Install");
   if (installIndex !== -1) {
     const body = bodyOf(md, all, installIndex);
-    if (!/^pnpm add @cosyte\/dicom$/m.test(body)) {
-      problems.push('section "Install": no copy-pasteable `pnpm add @cosyte/dicom` command');
+    if (!/^pnpm add --save-exact @cosyte\/dicom$/m.test(body)) {
+      problems.push(
+        'section "Install": no copy-pasteable `pnpm add --save-exact @cosyte/dicom` command',
+      );
+    }
+    if (!body.includes("Pin the exact version.")) {
+      problems.push('section "Install": does not tell the reader to pin the exact version');
     }
     if (!body.includes("Node.js 22 or later, tested on 22, 24, and 26")) {
       problems.push(

@@ -30,7 +30,7 @@ taken).
 ## Install
 
 ```bash
-npm install @cosyte/dicom
+npm install --save-exact @cosyte/dicom
 ```
 
 ## Smoke test

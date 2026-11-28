@@ -43,9 +43,11 @@ Most software that touches medical imaging needs a handful of header fields and 
 ## Install
 
 ```bash
-# pnpm (recommended). Also works with: npm install @cosyte/dicom  |  yarn add @cosyte/dicom
-pnpm add @cosyte/dicom
+# pnpm (recommended). Also works with: npm install --save-exact @cosyte/dicom  |  yarn add --exact @cosyte/dicom
+pnpm add --save-exact @cosyte/dicom
 ```
+
+Pin the exact version. Below 1.0 every release is a patch, a breaking change included, so a caret range such as `^0.1.0` does not protect you from one: `--save-exact` writes the version itself into `package.json`, and you move it on purpose after reading the [changelog](https://github.com/cosyte/dicom/blob/main/CHANGELOG.md). An entry for a change you must act on has a paragraph that opens `What a caller must change:`.
 
 - **Node.js 22 or later, tested on 22, 24, and 26.** `engines.node` is `>=22.0.0`.
 - **Module format: dual ESM and CJS**, with per-condition type declarations, so `import` and `require` both resolve against the type that matches them.
