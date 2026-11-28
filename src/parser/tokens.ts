@@ -30,7 +30,7 @@
  *   exist is the active {@link Profile}'s private-dictionary overlay: a creator
  *   the profile names is one this package put there itself, and every other
  *   creator is a string the parser cannot vouch for.
- * - A **tag** has a shape - four bytes, eight hex characters - and a shape test
+ * - A **tag** has a shape (four bytes, eight hex characters), and a shape test
  *   admits every one of the 2^32 of them, so it cannot refuse a tag composed out
  *   of somebody's value. The closed set that does exist is **PS3.6's element
  *   registry**, and {@link renderTag} tests membership in it.
@@ -112,13 +112,13 @@ const TAG_SHAPE = /^[0-9A-F]{8}$/u;
  *
  * ## 🛑 THIS IS A MEMBERSHIP TEST AND MUST NOT BE WEAKENED BACK TO A SHAPE ONE
  *
- * Through `0.0.14` this was a shape test - eight uppercase hex characters - and a
+ * Through `0.0.14` this was a shape test (eight uppercase hex characters), and a
  * shape test admits all 2^32 tags, so it could not refuse a tag a lying Value
  * Length composed out of somebody's value. Measured on a synthetic name-bearing
  * payload: an `ST` carrier holding `"MR BRAIN SMITHSON "` whose Value Length
  * under-declares by 12 desynchronizes the Explicit VR LE reader onto a fabricated
  * header, and `DICOM_ODD_LENGTH_VALUE_PADDED` rendered its four tag bytes as
- * `4E495320` - `"IN S"` in wire order - beside four more as a decimal length.
+ * `4E495320` (`"IN S"` in wire order) beside four more as a decimal length.
  * `renderVr` bounds two bytes against the 34 VRs PS3.5 section 6.2 defines; this
  * is the same trade against a set of 5,221.
  *
@@ -143,7 +143,7 @@ const TAG_SHAPE = /^[0-9A-F]{8}$/u;
  * docstring is a claim nothing re-measures; the per-code measurement is kept
  * with the repository's own notes, pinned to the sha that took it. The tag
  * has not left the object in any of those cases: the element is in the Data Set
- * under it, and `position.byteOffset` - a count this parser kept - locates the
+ * under it, and `position.byteOffset`, a count this parser kept, locates the
  * header, with the frame-of-reference caveat every offset here carries.
  *
  * @internal

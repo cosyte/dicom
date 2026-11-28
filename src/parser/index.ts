@@ -1,5 +1,5 @@
 /**
- * Public parser entry - `parseDicom`.
+ * Public parser entry: `parseDicom`.
  *
  * Pipeline:
  *   1. Dual EMPTY_INPUT check (raw input + post-normalize).
@@ -55,17 +55,17 @@ const PREAMBLE_AND_PREFIX_LENGTH = 132;
 /**
  * Parse a DICOM Part 10 buffer into a structural {@link Dataset}.
  *
- * Lenient by default - recoverable deviations (missing preamble, File Meta
+ * Lenient by default: recoverable deviations (missing preamble, File Meta
  * group-length mismatch, odd-length value, etc.) are pushed into
  * `ds.warnings` with stable codes from `WARNING_CODES`. Four unrecoverable
  * structural failures throw `DicomParseError`:
  *
- *   - `EMPTY_INPUT` - empty `Buffer | Uint8Array | ArrayBuffer`.
- *   - `NOT_DICOM_PART_10` - input lacks both `DICM` magic at offset 128 and
+ *   - `EMPTY_INPUT`: empty `Buffer | Uint8Array | ArrayBuffer`.
+ *   - `NOT_DICOM_PART_10`: input lacks both `DICM` magic at offset 128 and
  *     a recognizable `(0002,0000)` File Meta Group Length at offset 0.
- *   - `INVALID_FILE_META` - File Meta is truncated or `(0002,0010)`
+ *   - `INVALID_FILE_META`: File Meta is truncated or `(0002,0010)`
  *     Transfer Syntax UID is missing.
- *   - `UNSUPPORTED_TRANSFER_SYNTAX` - Transfer Syntax UID is none of the
+ *   - `UNSUPPORTED_TRANSFER_SYNTAX`: Transfer Syntax UID is none of the
  *     supported ones: the four native syntaxes (`1.2.840.10008.1.2`,
  *     `…1.2.1`, `…1.2.2`, `…1.2.1.99`), every encapsulated Pixel Data
  *     syntax PS3.5 2026c section A.4 names (JPEG, JPEG-LS, JPEG 2000, HTJ2K,
@@ -132,7 +132,7 @@ export function parseDicom(
   input: Buffer | Uint8Array | ArrayBuffer,
   options: ParseOptions,
 ): Dataset;
-/** @internal - implementation signature. Public JSDoc lives on the overloads above. */
+/** @internal Implementation signature. Public JSDoc lives on the overloads above. */
 export function parseDicom(
   input: Buffer | Uint8Array | ArrayBuffer,
   options: ParseOptions = {},
@@ -158,14 +158,14 @@ export function parseDicomStopping(
   // So is a fallback character set the option does not take.
   const fallback = fallbackStateOf(options);
 
-  // First EMPTY_INPUT check - raw input length (dual check, first half).
+  // First EMPTY_INPUT check: raw input length (dual check, first half).
   if (rawInputIsEmpty(input)) {
     throw emptyInput();
   }
 
   const buffer = normalizeInput(input);
 
-  // Second EMPTY_INPUT check - after normalization (the corner case for views).
+  // Second EMPTY_INPUT check: after normalization (the corner case for views).
   if (buffer.length === 0) {
     throw emptyInputAfterNormalization();
   }

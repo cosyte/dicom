@@ -27,7 +27,7 @@ import type { ParseContext } from "./types.js";
 import type { DicomParseWarning } from "./warnings.js";
 
 /**
- * Public Explicit VR Big Endian strategy - wraps `_parseExplicit` from
+ * Public Explicit VR Big Endian strategy: wraps `_parseExplicit` from
  * `./explicit-le.js` with `littleEndian: false`. Inner SQ elements are
  * parsed BE (innerStrategy: parseExplicitBE itself); CP-246 fallback is
  * routed through `parseImplicitLE` from inside `_parseExplicit`
