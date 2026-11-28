@@ -32,7 +32,7 @@ import {
 } from "../fixtures/encapsulated/objects.js";
 import { ENCAPSULATION_SET, JPIP_SET, UNSUPPORTED_SET } from "../helpers/ps35-section-a4.js";
 
-/** The AC-1 metadata, read through the domain views. */
+/** The metadata, read through the domain views. */
 function metadata(ds: Dataset): Record<string, unknown> {
   return {
     patientName: ds.patient.name,
@@ -55,12 +55,12 @@ function errorStrings(err: DicomParseError): string[] {
   return [...own, err.message, err.stack ?? "", err.name];
 }
 
-describe("AC-1: every section A.4 syntax parses under Explicit VR LE rules and reads as its twin", () => {
-  it("AC-1: the set under test is the whole of section A.4, not a sample", () => {
+describe("every section A.4 syntax parses under Explicit VR LE rules and reads as its twin", () => {
+  it("the set under test is the whole of section A.4, not a sample", () => {
     expect(ENCAPSULATION_SET).toHaveLength(35);
   });
 
-  it.each(ENCAPSULATION_SET)("AC-1: %s", (uid) => {
+  it.each(ENCAPSULATION_SET)("%s", (uid) => {
     const ds = parseDicom(encapsulatedObject({ transferSyntax: uid }));
     const twin = parseDicom(explicitLeTwin({ transferSyntax: uid }));
 
@@ -81,8 +81,8 @@ describe("AC-1: every section A.4 syntax parses under Explicit VR LE rules and r
   });
 });
 
-describe("AC-2: a conformant encapsulated fixture raises nothing, strict or profiled", () => {
-  it.each(ENCAPSULATION_SET)("AC-2: %s", (uid) => {
+describe("a conformant encapsulated fixture raises nothing, strict or profiled", () => {
+  it.each(ENCAPSULATION_SET)("%s", (uid) => {
     const bytes = encapsulatedObject({ transferSyntax: uid });
     const strict = parseDicom(bytes, { strict: true });
     expect(strict.fileMeta?.transferSyntaxUID).toBe(uid);
@@ -93,8 +93,8 @@ describe("AC-2: a conformant encapsulated fixture raises nothing, strict or prof
   });
 });
 
-describe("AC-12: every registered Transfer Syntax outside the supported set is refused by name, never by UID", () => {
-  it("AC-12: the refused set is every registered UID neither native, nor in section A.4, nor JPIP Referenced", () => {
+describe("every registered Transfer Syntax outside the supported set is refused by name, never by UID", () => {
+  it("the refused set is every registered UID neither native, nor in section A.4, nor JPIP Referenced", () => {
     // Pinned to its size at `755e408` so an extraction that silently shrank the
     // supported sets cannot pass; the set itself is derived, never typed.
     expect(UNSUPPORTED_SET).toHaveLength(20);
@@ -104,7 +104,7 @@ describe("AC-12: every registered Transfer Syntax outside the supported set is r
     expect(UNSUPPORTED_SET).toContain("1.2.840.10008.1.2.7.1");
   });
 
-  it.each(UNSUPPORTED_SET)("AC-12: %s", (uid) => {
+  it.each(UNSUPPORTED_SET)("%s", (uid) => {
     const name = Dictionary.uid(uid)?.name ?? "";
     expect(name.length).toBeGreaterThan(0);
 
@@ -126,7 +126,7 @@ describe("AC-12: every registered Transfer Syntax outside the supported set is r
     }
   });
 
-  it("AC-12: SMPTE ST 2110-20 Uncompressed Progressive Active Video is named as PS3.6 names it", () => {
+  it("SMPTE ST 2110-20 Uncompressed Progressive Active Video is named as PS3.6 names it", () => {
     const name = "SMPTE ST 2110-20 Uncompressed Progressive Active Video";
     try {
       parseDicom(encapsulatedObject({ transferSyntax: "1.2.840.10008.1.2.7.1" }));
