@@ -37,7 +37,7 @@ import {
   twoPatientRecords,
   type OffsetSpec,
   type RecordSpec,
-} from "../helpers/build-dicomdir.js";
+} from "../_helpers/build-dicomdir.js";
 
 /** The DICOMDIR parse codes this file tests. */
 const DIRECTORY_CODES: readonly string[] = [

@@ -24,7 +24,7 @@ import {
   serializeDicom,
   WARNING_CODES,
 } from "../../src/index.js";
-import { type BuildDicomSqElement } from "../helpers/build-dicom.js";
+import { type BuildDicomSqElement } from "../_helpers/build-dicom.js";
 import {
   PATIENT_NAME,
   encapsulatedObject,
@@ -32,7 +32,7 @@ import {
   pixelData,
   type EncapsulatedObjectOptions,
 } from "../fixtures/encapsulated/objects.js";
-import { ENCAPSULATION_SET } from "../helpers/ps35-section-a4.js";
+import { ENCAPSULATION_SET } from "../_helpers/ps35-section-a4.js";
 
 const PIXEL_DATA = "7FE00010";
 const UNDEFINED_LENGTH = 0xffffffff;

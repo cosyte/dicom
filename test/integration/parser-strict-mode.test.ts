@@ -26,7 +26,7 @@ import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
 import { DicomParseError, parseDicom, WARNING_CODES, type WarningCode } from "../../src/index.js";
-import { buildDicom } from "../helpers/build-dicom.js";
+import { buildDicom } from "../_helpers/build-dicom.js";
 
 // -- Active-emit list --------------------------------------------------
 

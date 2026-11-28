@@ -15,13 +15,13 @@
  * under-declares desynchronizes the reader onto a fabricated header inside the
  * name. The old messages then rendered it:
  *
- * - `Element 41524E49 declared length=1330858068 exceeds remaining buffer` -
+ * - `Element 41524E49 declared length=1330858068 exceeds remaining buffer`:
  *   `41524E49` is `"RAIN"` and `1330858068` is `"THSO"`, both in wire order and
  *   both reversible with one `readUInt16LE` / `readUInt32LE` pair. Explicit VR
  *   LE at delta `-14`, Implicit VR LE at delta `-12`.
- * - `Unexpected tag 524D4220 inside sequence` - `"MR B"`.
- * - `Item length=1109414477 exceeds remaining buffer` - `"MR B"`.
- * - `Unexpected FFFE marker FFFEE00D (length=1109414477)` - `"MR B"`.
+ * - `Unexpected tag 524D4220 inside sequence`: `"MR B"`.
+ * - `Item length=1109414477 exceeds remaining buffer`: `"MR B"`.
+ * - `Unexpected FFFE marker FFFEE00D (length=1109414477)`: `"MR B"`.
  *
  * A released version shipped that shape under a *"safe to log"* claim and paid a
  * blocker for it; the same defect recurred through `DICOM_NONZERO_RESERVED_BYTES`
@@ -51,7 +51,7 @@
  * it is not document content. But `parseSequence` hands a defined-length
  * Sequence Item's descent a **slice**, so inside one the buffer *is* that Item
  * and `buffer.length` *is* the Item's 32-bit Value (Item) Length off its own
- * header - a raw wire field a sender wrote, which is the class this registry
+ * header: a raw wire field a sender wrote, which is the class this registry
  * already refuses everywhere else. The message publishes `byteOffset` beside the
  * count and `cursor.position` is that offset plus the header just read, so an
  * addition returns the declared length.
@@ -63,7 +63,7 @@
  * the detector in `test/integration/fatal-diagnostic-surface.test.ts` can hunt
  * it: that arm covers the 8-byte case and says so on its own constant. The
  * remedy does not depend on the shift's size, because the bound is the
- * signature - the same conclusion every earlier pass over this surface reached.
+ * signature: the same conclusion every earlier pass over this surface reached.
  *
  * **There is no string parameter for a value to travel through.** The two
  * exceptions look like one and are not: {@link unsupportedTransferSyntax} takes
@@ -85,9 +85,9 @@
  *
  * An earlier pass bound the last wire-derived number out of these signatures and left
  * `err.byteOffset` as the sole locator for the two messages it changed. That
- * offset is **slice-relative inside a defined-length Sequence Item** - it reads
+ * offset is **slice-relative inside a defined-length Sequence Item**: it reads
  * `0`, `24`, `40` for the same file depending on where in the Item the element
- * sits - and nothing on `DicomParseError` said so. A locator that looks
+ * sits, and nothing on `DicomParseError` said so. A locator that looks
  * absolute and is not is not a smaller defect than a locator that leaks; it is
  * a diagnostic pointing a consumer at somebody else's bytes, which is how the
  * `{ strict: true }` snippet itself once went wrong.
@@ -95,7 +95,7 @@
  * So every factory here takes a {@link ParseFrame} rather than a `Buffer`: one
  * object carrying the frame's bytes AND the frame's name, so no call site can
  * pass a snippet source and forget to update the label beside it. **That is the
- * omission mode and it is the only one the type closes** - a call site that
+ * omission mode and it is the only one the type closes**: a call site that
  * deliberately writes `{ buffer: itemSlice, name: "input" }` still type-checks,
  * a graded pass built one, and this is not an impossibility proof. **The name is
  * published and the frame's ORIGIN is not.** The distance between two nested
@@ -220,7 +220,7 @@ const FATAL_MESSAGES = Object.freeze({
       "Input is not a DICOM Part 10 file (no DICM magic at offset 128 and no recognizable File Meta group at offset 0).",
   },
   // `{ts}` is NOT the UID. It is the PS3.6 registry's own name for the UID, or a
-  // fixed phrase when PS3.6 does not publish one - see `renderTransferSyntax`.
+  // fixed phrase when PS3.6 does not publish one; see `renderTransferSyntax`.
   UNSUPPORTED_TRANSFER_SYNTAX: {
     code: FATAL_CODES.UNSUPPORTED_TRANSFER_SYNTAX,
     message: `{ts} in (0002,0010) is not supported by @cosyte/dicom v1 (supported: ${SUPPORTED_TRANSFER_SYNTAXES}).`,
@@ -231,8 +231,8 @@ const FATAL_MESSAGES = Object.freeze({
   },
   // The declared group length is deliberately absent. It is four bytes of the
   // document read as a 32-bit integer. **NOT because this code fires only when
-  // those four bytes are fabricated** - an honestly truncated file raises it
-  // with a perfectly correct group length, measured - but because they are four
+  // those four bytes are fabricated**: an honestly truncated file raises it
+  // with a perfectly correct group length, measured, but because they are four
   // bytes a sender wrote in either reading, and in the other one they are part
   // of somebody's value.
   FILE_META_GROUP_LENGTH_OVERRUNS: {
@@ -326,7 +326,7 @@ const FATAL_MESSAGES = Object.freeze({
  *
  * **There is no `tag` field and no wire-length field, and that is the design.**
  * `renderTag` in `./warnings.ts` is a membership test against PS3.6's registry
- * now, and it would refuse a fabricated tag - but a Tier-3 fatal is raised where
+ * now, and it would refuse a fabricated tag, but a Tier-3 fatal is raised where
  * the structure has already failed, so the absence of the slot is the bound that
  * does not depend on a table. A **wire length** has no such test available at
  * all, in either registry, and neither has a number derived from one: a count of
@@ -338,7 +338,7 @@ const FATAL_MESSAGES = Object.freeze({
  * count of the bytes remaining in the frame no longer accept one, and that the two which still
  * pass an `n` pass a value this library or its caller chose. Their signatures
  * say which is which, and `fatals.test.ts` asserts the **declared parameter
- * list** of all four - not `Function.prototype.length`, which stops counting at
+ * list** of all four: not `Function.prototype.length`, which stops counting at
  * the first defaulted or rest parameter and would therefore have read `2` for a
  * factory that had grown exactly the slot the pin exists to refuse.
  *
@@ -419,7 +419,7 @@ function build(
  * snippet source without the label that belongs to it. It does not make a
  * mismatched pair impossible: composing one by hand still type-checks. What it
  * buys is that composing a frame is a single assignment, so no site can
- * half-update. **No count of those sites is written here** - see
+ * half-update. **No count of those sites is written here**; see
  * {@link ParseFrame}, which says why and how to derive it.
  */
 function at(
@@ -569,7 +569,7 @@ export function fileMetaTruncated(frame: ParseFrame, offset: number): DicomParse
  *
  * **So is the count of bytes left in the buffer, which this message printed
  * through `0.0.14`.** File Meta is read at the root today, where that count is
- * the caller's own input less a cursor and leaks nothing - but that is a fact
+ * the caller's own input less a cursor and leaks nothing, but that is a fact
  * about the one call site, not about the factory, and the sibling that shares
  * the expression is raised inside a Sequence Item's slice where the same
  * subtraction publishes the Item's declared length. A bound that holds only
@@ -757,7 +757,7 @@ export function undefinedLengthOnNonSqImplicit(
  * it printed *both*: on `"MR BRAIN SMITHSON "` under Explicit VR LE at
  * under-declare delta `-14` the message read
  * `Element 41524E49 declared length=1330858068`, which is `"RAIN"` followed by
- * `"THSO"` - eight consecutive bytes of the payload, in two fields, each
+ * `"THSO"`: eight consecutive bytes of the payload, in two fields, each
  * reversible with a single typed read. Identical remedy and reasoning to
  * `nonzeroReservedBytes`, `itemCrossesSequenceEnd` and `duplicateTagInDataSet`.
  *
@@ -768,7 +768,7 @@ export function undefinedLengthOnNonSqImplicit(
  * own 32-bit declared length less a `cursor.position` the message publishes as
  * `byteOffset` plus the header just read. Measured with a declared Item Length
  * of `21320`: `21312` first in the Item, `21288` behind one 24-byte element,
- * `21272` behind one 40-byte element - **a variable shift**, which is why the
+ * `21272` behind one 40-byte element: **a variable shift**, which is why the
  * bound is the signature and not a filter.
  *
  * @example

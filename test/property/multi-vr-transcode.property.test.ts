@@ -28,8 +28,8 @@ import {
   type BuildDicomElement,
   type BuildDicomSqElement,
   buildDicom,
-} from "../helpers/build-dicom.js";
-import { checkProperty } from "../helpers/property.js";
+} from "../_helpers/build-dicom.js";
+import { checkProperty } from "../_helpers/property.js";
 
 const TS_IMPLICIT_LE = "1.2.840.10008.1.2";
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";

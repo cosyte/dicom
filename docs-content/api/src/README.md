@@ -443,7 +443,7 @@ The element's tag when PS3.6 registers it one at a time, otherwise `"<withheld>"
 ### DicomParseError
 
 Thrown by `parseDicom` when the input violates one of the four
-unrecoverable Tier-3 structural rules - or when a Tier-2 warning is
+unrecoverable Tier-3 structural rules, or when a Tier-2 warning is
 escalated through the single `emit` chokepoint, which `{ strict: true }`
 does for every warning and a profile's `escalate` list does for the codes
 it names. Carries byte-offset positional context plus a short
@@ -462,13 +462,13 @@ between releases, so the union is open (see `WarningCode`).
 
 #### Remarks
 
-Snippets may contain PHI when parsing real clinical files - redact at
+Snippets may contain PHI when parsing real clinical files: redact at
 the call site if required by your compliance posture. The library does
 not redact snippets itself.
 
 **`byteOffset` is only an index into your own buffer when `offsetFrame` is
-`"input"`.** This parser reads a Data Set out of a slice in two situations -
-a defined-length Sequence Item, and an `SQ`/`UN` descent - and out of an
+`"input"`.** This parser reads a Data Set out of a slice in two situations
+(a defined-length Sequence Item, and an `SQ`/`UN` descent) and out of an
 inflated stream in a third, and an offset raised in any of them counts from
 that buffer's byte 0. [OFFSET\_FRAMES](#offset_frames) names which; where a slice
 begins is deliberately not published, because the distance between two
@@ -537,7 +537,7 @@ try {
 **`Internal`**
 
 Construct a new `DicomParseError`. All fields except `contextPath` are
-required so every thrower populates positional context - and
+required so every thrower populates positional context, and
 `offsetFrame` is required for the same reason `byteOffset` is, because an
 offset whose frame is optional is an offset whose frame is usually
 missing.
@@ -3531,7 +3531,7 @@ Omit to skip the callback entirely.
 Source/vendor tolerance preset. Applies the profile's
 `escalations` / `suppressions` to warning emission and its
 `privateDictionary` to Implicit-VR resolution of private data elements.
-A profile only tightens or annotates - it never makes the default
+A profile only tightens or annotates: it never makes the default
 lenient parse throw outside the four Tier-3 fatals, and a private
 creator the profile does not recognize degrades to generic UN handling
 plus a `DICOM_PRIVATE_CREATOR_UNKNOWN` warning, never a wrong decode.
@@ -3600,14 +3600,14 @@ from a fabricated header, and both slots are gone. So is
 number shifted by a constant the reader can compute is that raw number**: it
 was the enclosing sequence's declared Value Length less the bytes of that
 sequence already consumed. **The exceptions are named in one place that is
-not a record of a past change, and are deliberately not restated here** -
+not a record of a past change, and are deliberately not restated here**:
 the `WARNING_MESSAGES` docblock in `./warnings.ts`, which this JSDoc used to
 carry a copy of.
 **This is a statement about `w.message` and about nothing else**: the two
 byte counts still exist on `report.undefinedVrElements[].byteLength` and
 `report.unauditableSequences[].byteLength`, model fields on a type whose own
 docs say it is not a value-free surface. **No
-safe-to-log verdict is stated here** - that sentence was corrected twice and
+safe-to-log verdict is stated here**: that sentence was corrected twice and
 is deleted rather than tried a third time; the mechanism is above and the
 treatment is in the package's troubleshooting docs. The `DicomParseError`
 this option raises in its place is a different and larger surface: it also
@@ -3623,7 +3623,7 @@ root, relative to the enclosing slice inside a defined-length Sequence or
 Item, and into the inflated stream under Deflated Explicit VR LE. It was not
 always: until the fatal-message registry the offset moved with the frame
 while the cut was always taken from the whole file, so inside a
-defined-length Item the 16 bytes were **an unrelated element's** - a
+defined-length Item the 16 bytes were **an unrelated element's**: a
 diagnostic disclosing data from a part of the document the reader was never
 asked about. That is closed. **What is NOT closed, and never was a defect:
 the bytes are still raw source bytes.** Reading them as safe because the
@@ -3638,7 +3638,7 @@ is still not a key you can look up against the root**, and it is not made
 into one here: where a slice begins is deliberately unpublished, because the
 distance between two frames is a declared Value Length off the wire. The
 escalated warning's own `position` is unchanged and still carries no frame
-beyond `deflated` - see `DicomPosition`.
+beyond `deflated`; see `DicomPosition`.
 
 Omit (do not pass `undefined`) to use the default.
 
@@ -3939,14 +3939,14 @@ const def: PrivateTagDefinition = {
 ### Profile
 
 A source/vendor tolerance preset. A `Profile` bundles three
-things that only ever **tighten or annotate** a parse - never loosen it
+things that only ever **tighten or annotate** a parse: never loosen it
 past the Postel's-Law default:
 
- - `escalations` - Tier-2 warning codes promoted to a thrown
+ - `escalations`: Tier-2 warning codes promoted to a thrown
    `DicomParseError` (a stricter posture for known-unsafe deviations).
- - `suppressions` - Tier-2 warning codes silenced because they are a
+ - `suppressions`: Tier-2 warning codes silenced because they are a
    documented, benign quirk of the named source (annotation, not loss).
- - `privateDictionary` - a private-creator-keyed overlay resolving the
+ - `privateDictionary`: a private-creator-keyed overlay resolving the
    Implicit-VR of vendor private data elements via the file's **live**
    private-creator string (never a hard-coded block number).
 
@@ -4129,7 +4129,7 @@ Omit to skip the callback entirely.
 Source/vendor tolerance preset. Applies the profile's
 `escalations` / `suppressions` to warning emission and its
 `privateDictionary` to Implicit-VR resolution of private data elements.
-A profile only tightens or annotates - it never makes the default
+A profile only tightens or annotates: it never makes the default
 lenient parse throw outside the four Tier-3 fatals, and a private
 creator the profile does not recognize degrades to generic UN handling
 plus a `DICOM_PRIVATE_CREATOR_UNKNOWN` warning, never a wrong decode.
@@ -4206,14 +4206,14 @@ from a fabricated header, and both slots are gone. So is
 number shifted by a constant the reader can compute is that raw number**: it
 was the enclosing sequence's declared Value Length less the bytes of that
 sequence already consumed. **The exceptions are named in one place that is
-not a record of a past change, and are deliberately not restated here** -
+not a record of a past change, and are deliberately not restated here**:
 the `WARNING_MESSAGES` docblock in `./warnings.ts`, which this JSDoc used to
 carry a copy of.
 **This is a statement about `w.message` and about nothing else**: the two
 byte counts still exist on `report.undefinedVrElements[].byteLength` and
 `report.unauditableSequences[].byteLength`, model fields on a type whose own
 docs say it is not a value-free surface. **No
-safe-to-log verdict is stated here** - that sentence was corrected twice and
+safe-to-log verdict is stated here**: that sentence was corrected twice and
 is deleted rather than tried a third time; the mechanism is above and the
 treatment is in the package's troubleshooting docs. The `DicomParseError`
 this option raises in its place is a different and larger surface: it also
@@ -4229,7 +4229,7 @@ root, relative to the enclosing slice inside a defined-length Sequence or
 Item, and into the inflated stream under Deflated Explicit VR LE. It was not
 always: until the fatal-message registry the offset moved with the frame
 while the cut was always taken from the whole file, so inside a
-defined-length Item the 16 bytes were **an unrelated element's** - a
+defined-length Item the 16 bytes were **an unrelated element's**: a
 diagnostic disclosing data from a part of the document the reader was never
 asked about. That is closed. **What is NOT closed, and never was a defect:
 the bytes are still raw source bytes.** Reading them as safe because the
@@ -4244,7 +4244,7 @@ is still not a key you can look up against the root**, and it is not made
 into one here: where a slice begins is deliberately unpublished, because the
 distance between two frames is a declared Value Length off the wire. The
 escalated warning's own `position` is unchanged and still carries no frame
-beyond `deflated` - see `DicomPosition`.
+beyond `deflated`; see `DicomPosition`.
 
 Omit (do not pass `undefined`) to use the default.
 
@@ -5610,10 +5610,9 @@ FALLBACK_CHARACTER_SETS.includes("ISO_IR 100"); // true
 
 Stable string codes for every Tier-3 fatal the parser may throw.
 
-Locked at four codes per `PROJECT.md` "Fatal errors only for unrecoverable
-structural corruption": anything less severe MUST be a Tier-2 warning
-(see `./warnings.ts`). Consumers narrow on `err.code` to react to
-specific structural failures.
+A fatal is kept for structural corruption the parser cannot recover from:
+anything less severe is a Tier-2 warning (see `./warnings.ts`). Callers
+narrow on `err.code` to react to a specific structural failure.
 
 #### Type Declaration
 
@@ -5658,10 +5657,10 @@ in.
 A byte offset is a number and a number alone says nothing about where its
 zero is. This parser reads a Data Set out of three different buffers over one
 `parseDicom` call, so the same small integer means three different things
-depending on which one is being read - and until the diagnostic
+depending on which one is being read, and until the diagnostic
 PHI-residuals fix closed it, nothing on the thrown error said which. A consumer
 cutting `input.subarray(err.byteOffset, err.byteOffset + 16)` to see what
-upset the parser was, inside a Sequence Item, cutting an unrelated element -
+upset the parser was, inside a Sequence Item, cutting an unrelated element:
 the exact defect the `{ strict: true }` snippet itself was once fixed for.
 
 **A frame NAME is published; a frame ORIGIN is not, and that asymmetry is
@@ -5698,7 +5697,7 @@ which indexing the caller's own input by `byteOffset` is meaningful.
 
 Byte 0 is byte 0 of a slice this parser cut from inside a Value Field: a
 defined-length Sequence Item's value, or an `SQ`/`UN` value handed to a
-descent. **Where that cut begins is deliberately not published** - see
+descent. **Where that cut begins is deliberately not published**; see
 this table's own note.
 
 #### Example
@@ -5846,7 +5845,7 @@ VALUE_ERROR_CODES.FRAME_INDEX_OUT_OF_RANGE; // "FRAME_INDEX_OUT_OF_RANGE"
 
 ### VERSION
 
-> `const` **VERSION**: `string` = `"0.1.16"`
+> `const` **VERSION**: `string` = `"0.1.17"`
 
 Package version string for `@cosyte/dicom`. Synchronized with `package.json#version` by
 `scripts/sync-version.mjs`, which the `version` script runs after `changeset version`
@@ -6559,7 +6558,7 @@ parseDateTime("20240115133015+0100").value.offsetMinutes; // 60
 
 **`Internal`**
 
-- implementation signature. Public JSDoc lives on the overloads above.
+Implementation signature. Public JSDoc lives on the overloads above.
 
 #### Call Signature
 
@@ -6567,17 +6566,17 @@ parseDateTime("20240115133015+0100").value.offsetMinutes; // 60
 
 Parse a DICOM Part 10 buffer into a structural [Dataset](#dataset).
 
-Lenient by default - recoverable deviations (missing preamble, File Meta
+Lenient by default: recoverable deviations (missing preamble, File Meta
 group-length mismatch, odd-length value, etc.) are pushed into
 `ds.warnings` with stable codes from `WARNING_CODES`. Four unrecoverable
 structural failures throw `DicomParseError`:
 
-  - `EMPTY_INPUT` - empty `Buffer | Uint8Array | ArrayBuffer`.
-  - `NOT_DICOM_PART_10` - input lacks both `DICM` magic at offset 128 and
+  - `EMPTY_INPUT`: empty `Buffer | Uint8Array | ArrayBuffer`.
+  - `NOT_DICOM_PART_10`: input lacks both `DICM` magic at offset 128 and
     a recognizable `(0002,0000)` File Meta Group Length at offset 0.
-  - `INVALID_FILE_META` - File Meta is truncated or `(0002,0010)`
+  - `INVALID_FILE_META`: File Meta is truncated or `(0002,0010)`
     Transfer Syntax UID is missing.
-  - `UNSUPPORTED_TRANSFER_SYNTAX` - Transfer Syntax UID is none of the
+  - `UNSUPPORTED_TRANSFER_SYNTAX`: Transfer Syntax UID is none of the
     supported ones: the four native syntaxes (`1.2.840.10008.1.2`,
     `…1.2.1`, `…1.2.2`, `…1.2.1.99`), every encapsulated Pixel Data
     syntax PS3.5 2026c section A.4 names (JPEG, JPEG-LS, JPEG 2000, HTJ2K,
@@ -6656,17 +6655,17 @@ try {
 
 Parse a DICOM Part 10 buffer into a structural [Dataset](#dataset).
 
-Lenient by default - recoverable deviations (missing preamble, File Meta
+Lenient by default: recoverable deviations (missing preamble, File Meta
 group-length mismatch, odd-length value, etc.) are pushed into
 `ds.warnings` with stable codes from `WARNING_CODES`. Four unrecoverable
 structural failures throw `DicomParseError`:
 
-  - `EMPTY_INPUT` - empty `Buffer | Uint8Array | ArrayBuffer`.
-  - `NOT_DICOM_PART_10` - input lacks both `DICM` magic at offset 128 and
+  - `EMPTY_INPUT`: empty `Buffer | Uint8Array | ArrayBuffer`.
+  - `NOT_DICOM_PART_10`: input lacks both `DICM` magic at offset 128 and
     a recognizable `(0002,0000)` File Meta Group Length at offset 0.
-  - `INVALID_FILE_META` - File Meta is truncated or `(0002,0010)`
+  - `INVALID_FILE_META`: File Meta is truncated or `(0002,0010)`
     Transfer Syntax UID is missing.
-  - `UNSUPPORTED_TRANSFER_SYNTAX` - Transfer Syntax UID is none of the
+  - `UNSUPPORTED_TRANSFER_SYNTAX`: Transfer Syntax UID is none of the
     supported ones: the four native syntaxes (`1.2.840.10008.1.2`,
     `…1.2.1`, `…1.2.2`, `…1.2.1.99`), every encapsulated Pixel Data
     syntax PS3.5 2026c section A.4 names (JPEG, JPEG-LS, JPEG 2000, HTJ2K,

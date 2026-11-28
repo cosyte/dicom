@@ -2,7 +2,6 @@
 id: non-goals
 title: Scope and non-goals
 sidebar_label: Scope and non-goals
-sidebar_position: 15
 description: What this package does not do, the de-identification residuals it discloses rather than closes, and the companion packages it leaves room for.
 ---
 

@@ -26,7 +26,7 @@ import {
   encapsulatedObject,
   explicitLeTwin,
 } from "../fixtures/encapsulated/objects.js";
-import { ENCAPSULATION_SET } from "../helpers/ps35-section-a4.js";
+import { ENCAPSULATION_SET } from "../_helpers/ps35-section-a4.js";
 
 /** One element as the comparison sees it: tag, VR and value bytes, with its items at every depth. */
 interface Shape {

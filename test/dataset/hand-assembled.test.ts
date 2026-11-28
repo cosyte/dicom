@@ -26,7 +26,7 @@ import {
   parseDicom,
   readPixelDataFragments,
 } from "../../src/index.js";
-import { buildDicomdir, TS_EXPLICIT_LE } from "../helpers/build-dicomdir.js";
+import { buildDicomdir, TS_EXPLICIT_LE } from "../_helpers/build-dicomdir.js";
 
 const PIXEL_DATA = "7FE00010";
 const UNDEFINED_LENGTH = 0xffffffff;

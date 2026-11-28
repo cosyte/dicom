@@ -18,7 +18,7 @@
  * real sender can produce, **Tier 3** is the round trip and the fixed point.
  *
  * FIXTURES ARE SYNTHETIC. Every Data Set here is built in memory by
- * `test/helpers/build-dicom.ts` or constructed directly. `DOE^JANE` and
+ * `test/_helpers/build-dicom.ts` or constructed directly. `DOE^JANE` and
  * `SMITHSON^BRAIN` are allow-listed synthetic names, `99SYN` is an invented coding
  * scheme, the dates are `19000101`, and no real object or patient data is used.
  *
@@ -49,7 +49,7 @@ import {
   deidentMethodCodesPriorReplaced,
   deidentMethodCodesPriorRetained,
 } from "../../src/parser/warnings.js";
-import { buildDicom, type BuildDicomOptions } from "../helpers/build-dicom.js";
+import { buildDicom, type BuildDicomOptions } from "../_helpers/build-dicom.js";
 
 const TS_IMPLICIT_LE = "1.2.840.10008.1.2";
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";

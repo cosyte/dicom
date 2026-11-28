@@ -5,7 +5,7 @@ import {
   encodeBuiltElement,
   type BuildDicomElement,
   type BuildDicomSqElement,
-} from "../../helpers/build-dicom.js";
+} from "../../_helpers/build-dicom.js";
 
 /**
  * Synthetic encapsulated Pixel Data objects for the PS3.5 2026c section A.4 tests, and synthetic

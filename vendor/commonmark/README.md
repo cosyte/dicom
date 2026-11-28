@@ -9,7 +9,7 @@ paragraph a live allow entry.
 Runtime has zero dependency on this file, and it is not published: `package.json`'s `files` list
 ships `dist` only. It is read by `test/scripts/commonmark-pin.test.ts`, which re-hashes it, reads
 the version out of the document itself, and locates the normative sentences the gate cites, and by
-`test/helpers/commonmark-spec.ts`, which re-hashes it again and reads section 4.6's two TAG LISTS
+`test/_helpers/commonmark-spec.ts`, which re-hashes it again and reads section 4.6's two TAG LISTS
 out of it. A list is the one thing a cited sentence cannot carry, and a table nobody checked against
 the document is a table somebody typed.
 
@@ -62,4 +62,4 @@ PRs (the same rule `vendor/nema/` states).
   `overrideLogPaths` (section 4.5, fenced code blocks), `htmlBlockStart` and `htmlBlockCloses`
   (section 4.6, HTML blocks).
 - `test/scripts/commonmark-pin.test.ts`: the precondition, the version, and the section locator.
-- `test/helpers/commonmark-spec.ts`: section 4.6's tag lists, read out of the document.
+- `test/_helpers/commonmark-spec.ts`: section 4.6's tag lists, read out of the document.

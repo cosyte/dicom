@@ -17,7 +17,7 @@
  * `scripts/measure-phi-scan-regex-statics.ts`, which needs a base tree and therefore cannot run in
  * CI. What is here needs none.
  *
- * 🛑 EVERY VALUE IS ASSEMBLED AT RUNTIME, for the reason `test/helpers/phi-scan-violators.ts`
+ * 🛑 EVERY VALUE IS ASSEMBLED AT RUNTIME, for the reason `test/_helpers/phi-scan-violators.ts`
  * gives at length: this file is under `test/`, so the gate scans it, and a spelled-out name or
  * date run in it reds the suite that proves the gate works.
  */
@@ -27,8 +27,8 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, copyFileSync, readFileSy
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { runRepoScript } from "../helpers/run-script.js";
-import { htmlBlockConditions } from "../helpers/commonmark-spec.js";
+import { runRepoScript } from "../_helpers/run-script.js";
+import { htmlBlockConditions } from "../_helpers/commonmark-spec.js";
 
 /**
  * The override-log cases below ask the scanner which `--allow-fixture` paths its parser produced,
@@ -1046,7 +1046,7 @@ describe.skipIf(WINDOWS_PATHS)(
  * lineage has been refused three times for arguing that dropping more is the safer error.
  *
  * The tag tables are checked against the PINNED SPEC rather than against whoever typed them:
- * `test/helpers/commonmark-spec.ts` reads condition 6's list out of the document and every name in
+ * `test/_helpers/commonmark-spec.ts` reads condition 6's list out of the document and every name in
  * it is driven through the membership oracle. `scripts/measure-phi-scan-html-blocks.ts` prints the
  * same relation against any other tree.
  */

@@ -14,7 +14,7 @@
 
 import { Buffer } from "node:buffer";
 
-import { buildDicom } from "../helpers/build-dicom.js";
+import { buildDicom } from "../_helpers/build-dicom.js";
 import { SEED_CORPUS } from "../property/_seed-corpus.js";
 
 /** One document of the corpus. */
@@ -49,7 +49,7 @@ function charsetDocument(term: string, letters: readonly number[]): Buffer {
         items: [
           {
             elements: [
-              { tag: "00080100", vr: "SH", value: raw("SYN-1") },
+              { tag: "00080100", vr: "SH", value: raw("SYN01") },
               { tag: "00080102", vr: "SH", value: raw("99SYNTH") },
               { tag: "00080104", vr: "LO", value: raw("Synthetic code ", letters) },
             ],

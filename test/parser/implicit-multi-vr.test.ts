@@ -21,7 +21,7 @@ import {
   type BuildDicomElement,
   type BuildDicomSqElement,
   buildDicom,
-} from "../helpers/build-dicom.js";
+} from "../_helpers/build-dicom.js";
 
 const TS_IMPLICIT_LE = "1.2.840.10008.1.2";
 

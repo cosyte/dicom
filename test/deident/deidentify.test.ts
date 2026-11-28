@@ -32,7 +32,7 @@ import {
   remapUidBytes,
   uidValueMultiplicity,
 } from "../../src/deident/actions.js";
-import { buildDicom, type BuildDicomOptions } from "../helpers/build-dicom.js";
+import { buildDicom, type BuildDicomOptions } from "../_helpers/build-dicom.js";
 
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
 const TS_IMPLICIT_LE = "1.2.840.10008.1.2";

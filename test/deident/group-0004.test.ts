@@ -36,7 +36,7 @@ import {
   buildDicom,
   type BuildDicomElement,
   type BuildDicomOptions,
-} from "../helpers/build-dicom.js";
+} from "../_helpers/build-dicom.js";
 
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
 

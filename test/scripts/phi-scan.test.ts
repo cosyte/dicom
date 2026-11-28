@@ -34,7 +34,7 @@ import {
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { UNDER_DENO, runRepoScript } from "../helpers/run-script.js";
+import { UNDER_DENO, runRepoScript } from "../_helpers/run-script.js";
 import {
   VIOLATOR_PN,
   CARET_PN,
@@ -46,7 +46,7 @@ import {
   OVERRIDE_LOG_DATE,
   ALLOWED_DA,
   TARGET_NAME,
-} from "../helpers/phi-scan-violators.js";
+} from "../_helpers/phi-scan-violators.js";
 
 /**
  * This repository's root, from **this file's own location** rather than from
@@ -60,7 +60,7 @@ import {
  * and the next `git add -A` sweeps them up. Measured: a run whose cwd was an
  * enclosing checkout left them at `<parent>/test/fixtures/phi-scan/`.
  *
- * `test/helpers/run-script.ts` already derives its root this way and defaults the
+ * `test/_helpers/run-script.ts` already derives its root this way and defaults the
  * child's `cwd` to it, so the scanner subprocess was always rooted correctly;
  * this line is what made the two disagree.
  */
@@ -1468,7 +1468,7 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
 //
 // 🛑 AND THE SHAPE IS NAMED, NEVER SPELLED. A draft of this paragraph wrote the
 // two-component token out and `pnpm phi-scan` reported it against this very file,
-// which is the gate working: `test/` is its walk root. `test/helpers/
+// which is the gate working: `test/` is its walk root. `test/_helpers/
 // phi-scan-violators.ts` exists so this suite carries no literal THE SCANNER MUST
 // REJECT - allow-listed ones like `ANON^PATIENT` are here in plain sight, and the
 // distinction is the whole point of that helper's header.
@@ -2213,7 +2213,7 @@ describe("phi-scan: the walk is reconciled against git ls-files", () => {
  * A PN-shaped token the text sweep matches, distinct per index.
  *
  * Assembled from parts, never written as a literal, for the reason
- * `test/helpers/phi-scan-violators.ts` gives at length: every tracked file under
+ * `test/_helpers/phi-scan-violators.ts` gives at length: every tracked file under
  * `test/` is in this scanner's own corpus, so a caret-joined person-name token in
  * this source would red the gate on the suite that proves the gate works. The PN
  * recognizer admits letters only, so the index is spelled in letters.
@@ -3258,6 +3258,23 @@ describe("phi-scan: a hit names the place and the rule, never the matched text",
 // once per file, with `hits` live, and forces a full GC first so that transient
 // garbage is never counted as retention.
 //
+// 🛑 RETAINED IS WHAT IS STILL HELD ONE FILE LATER. A retained page stays live
+// for the rest of the scan, so it shows at every sample after the file that
+// kept it. Bun's engine (JavaScriptCore) can report one extra page at a single
+// sample even after a forced full GC, with the same object counts as the samples
+// around it, and gone again at the next sample: measured on Bun 1.4.4, at the
+// third sample of the run, in about half of the runs, whatever the file count.
+// The peak of the samples counted that page in one arm and not the other. So a
+// run's figure is the highest level it held at two samples in a row, which a
+// retained page always reaches and a one-sample reading never does.
+//
+// 🛑 EACH BYTE IS COUNTED ONCE. V8 reports a Buffer's bytes in `external` and
+// not in `heapUsed`, so on Node the sample is their sum. Bun's `heapUsed` is
+// JavaScriptCore's heap size, which already includes the bytes it reports as
+// `external` (`bun:jsc` `heapStats()` gives `heapSize` equal to `heapUsed` and
+// `extraMemorySize` equal to `external`), so on Bun the sample is `heapUsed`
+// alone, and one page reads as one page on both runtimes.
+//
 // 🛑 THE CASE ASSERTS A SHAPE, NOT A SIZE. What is claimed is that retention
 // does not GROW with the number of hit-bearing files, so nothing here writes
 // down how many bytes a run may hold. `pnpm measure:phi-scan-retention` prints
@@ -3277,12 +3294,22 @@ function retainFiller(): string {
 interface RetainRun {
   code: number;
   hits: number;
-  peak: number;
+  /** The highest level the run held at two samples in a row. */
+  held: number;
   samples: number;
 }
 
+/** The highest level `samples` held at two samples in a row: a one-sample reading drops out. */
+function heldLevel(samples: readonly number[]): number {
+  let held = -1;
+  for (let i = 1; i < samples.length; i += 1) {
+    held = Math.max(held, Math.min(samples[i - 1] ?? -1, samples[i] ?? -1));
+  }
+  return held;
+}
+
 /**
- * Scan `files` copies of one big page and report what the run was holding at its peak.
+ * Scan `files` copies of one big page and report what the run went on holding at its highest.
  *
  * The observer writes to a FILE rather than to stderr, so it cannot perturb the stream this
  * suite asserts on elsewhere.
@@ -3296,29 +3323,28 @@ function retainedPeak(files: number, withHit: boolean): RetainRun {
       withHit ? `${CARET_PN}\n${body}` : body,
     );
   }
-  // The observer writes `peak.txt` beside itself. Its source is fixed text that finds the report
+  // The observer writes `samples.txt` beside itself. Its source is fixed text that finds the report
   // through `__dirname`, so no path is spliced into the code it runs.
-  const report = join(root, "peak.txt");
+  const report = join(root, "samples.txt");
   const observer = join(root, "observer.cjs");
   writeFileSync(
     observer,
     [
       'const fs = require("node:fs");',
       "const real = fs.readFileSync;",
-      "let peak = 0;",
-      "let samples = 0;",
+      'const onBun = typeof process.versions.bun === "string";',
+      "const samples = [];",
       "fs.readFileSync = function (...args) {",
       "  const r = real.apply(this, args);",
       `  if (Buffer.isBuffer(r) && r.length >= ${String(RETAIN_FILE_BYTES)}) {`,
       "    global.gc();",
       "    global.gc();",
       "    const m = process.memoryUsage();",
-      "    samples += 1;",
-      "    if (m.heapUsed + m.external > peak) peak = m.heapUsed + m.external;",
+      "    samples.push(onBun ? m.heapUsed : m.heapUsed + m.external);",
       "  }",
       "  return r;",
       "};",
-      'process.on("exit", () => { require("node:fs").writeFileSync(require("node:path").join(__dirname, "peak.txt"), peak + " " + samples); });',
+      'process.on("exit", () => { require("node:fs").writeFileSync(require("node:path").join(__dirname, "samples.txt"), samples.join(" ")); });',
       "",
     ].join("\n"),
   );
@@ -3326,18 +3352,19 @@ function retainedPeak(files: number, withHit: boolean): RetainRun {
     cwd: root,
     nodeArgs: ["--expose-gc", "--require", observer],
   });
-  const [peak, samples] = readFileSync(report, "utf8").split(" ").map(Number);
+  const text = readFileSync(report, "utf8");
+  const samples = text === "" ? [] : text.split(" ").map(Number);
   const total = /\[phi-scan\] (\d+) hits across/.exec(r.stderr);
   return {
     code: r.code,
     hits: total === null ? 0 : Number(total[1]),
-    peak: peak ?? -1,
-    samples: samples ?? -1,
+    held: heldLevel(samples),
+    samples: samples.length,
   };
 }
 
 // Skipped under Deno: the observer is preloaded with Node's `--require` and `--expose-gc`, which a
-// Deno child does not take. See `UNDER_DENO` in `test/helpers/run-script.ts`.
+// Deno child does not take. See `UNDER_DENO` in `test/_helpers/run-script.ts`.
 describe.skipIf(UNDER_DENO)(
   "phi-scan: a hit does NOT retain the payload of the file it was found in",
   () => {
@@ -3359,8 +3386,8 @@ describe.skipIf(UNDER_DENO)(
       expect(many.samples).toBe(9);
 
       expect(
-        many.peak - few.peak,
-        `retention grew by ${String(many.peak - few.peak)} bytes over six more files`,
+        many.held - few.held,
+        `retention grew by ${String(many.held - few.held)} bytes over six more files`,
       ).toBeLessThan(RETAIN_FILE_BYTES);
     });
 

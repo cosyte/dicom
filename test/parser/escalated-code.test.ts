@@ -23,7 +23,7 @@ import {
   type ParseOptions,
   type WarningCode,
 } from "../../src/index.js";
-import { buildDicom } from "../helpers/build-dicom.js";
+import { buildDicom } from "../_helpers/build-dicom.js";
 
 /** A synthetic object with no preamble: its only deviation is `DICOM_MISSING_PREAMBLE`. */
 function noPreamble(): Buffer {

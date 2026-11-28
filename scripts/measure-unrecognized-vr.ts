@@ -37,7 +37,7 @@
  * `../src/index.js`, and Node's ESM resolver will not rewrite that `.js`
  * specifier onto the `.ts` file: under `node`, with or without
  * `--experimental-strip-types`, it exits 1 with `ERR_MODULE_NOT_FOUND` before
- * reading a byte. `test/helpers/run-script.ts` records the same fact for
+ * reading a byte. `test/_helpers/run-script.ts` records the same fact for
  * `scripts/generate-annex-e.ts`. A first draft of this header prescribed `node`
  * and could not be run as written.
  *
@@ -68,7 +68,7 @@ import { Buffer } from "node:buffer";
 import { readFileSync, writeFileSync } from "node:fs";
 
 import { deidentify, parseDicom, serializeDicom } from "../src/index.js";
-import { buildDicom } from "../test/helpers/build-dicom.js";
+import { buildDicom } from "../test/_helpers/build-dicom.js";
 
 const EXPLICIT_LE = "1.2.840.10008.1.2.1";
 const EXPLICIT_BE = "1.2.840.10008.1.2.2";

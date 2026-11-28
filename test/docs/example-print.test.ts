@@ -55,12 +55,19 @@ function markdownFiles(): string[] {
   ];
 }
 
-/** Each runnable script at the top of `examples/`, whole. */
+/**
+ * Each runnable script in `examples/`, whole: at the top, and one folder down, as
+ * `scripts/run-examples.ts` runs them. `examples/data/` holds their inputs, which are not run.
+ */
 function exampleScripts(): Sample[] {
   const dir = join(root, "examples");
-  return readdirSync(dir, { withFileTypes: true })
+  const top = readdirSync(dir, { withFileTypes: true });
+  const folders = top
+    .filter((d) => d.isDirectory() && d.name !== "data")
+    .flatMap((d) => readdirSync(join(dir, d.name), { withFileTypes: true }));
+  return [...top, ...folders]
     .filter((d) => d.isFile() && d.name.endsWith(".ts"))
-    .map((d) => join(dir, d.name))
+    .map((d) => join(d.parentPath, d.name))
     .sort()
     .map((file) => ({ where: relative(root, file), code: readFileSync(file, "utf8") }));
 }

@@ -13,7 +13,7 @@
  *
  * Element layout: `group(2 LE) + element(2 LE) + length(4 LE) + value`.
  * No on-wire VR; VR is inferred. Length `0xFFFFFFFF` is only valid on
- * tags whose resolved VR is `SQ` - the parser delegates SQ descent to
+ * tags whose resolved VR is `SQ`: the parser delegates SQ descent to
  * `parseSequence` (`./sequence.js`).
  *
  * **Both sequence-delimitation forms are descended, and only one of them used to
@@ -24,7 +24,7 @@
  * decoders of the Sequence of Items." (Section 7.5.1 "Item Encoding Rules" says
  * the same of each Item's own length field; the two choices are independent.)
  * Only the `0xFFFFFFFF` branch called `parseSequence`, so `Element.items` was
- * `undefined` for every defined-length sequence under this transfer syntax - a
+ * `undefined` for every defined-length sequence under this transfer syntax: a
  * PHI defect rather than a navigation gap, because `deidentify()` recurses only
  * into a sequence whose items exist.
  * The two branches differ in one respect that is deliberate: a defined length
@@ -32,7 +32,7 @@
  * through `tryParseDefinedLengthSQ`, while undefined length has none and throws.
  *
  * `parseImplicitLE` accepts an optional `stopOnItemDelim` flag and returns
- * `endOffset` - both required by the InnerParser contract the SQ parser
+ * `endOffset`: both required by the InnerParser contract the SQ parser
  * invokes for undefined-length item bodies.
  *
  * Threat model: all `RangeError`s from the
@@ -80,7 +80,7 @@ const SPECIFIC_CHARACTER_SET_TAG: Tag = "00080005";
  * `Dataset`.
  *
  * When `opts.stopOnItemDelim === true`, the loop terminates immediately
- * upon reading `(FFFE,E00D)` ItemDelim - the cursor is advanced past the
+ * upon reading `(FFFE,E00D)` ItemDelim: the cursor is advanced past the
  * 4-byte length field (which is always 0) and the post-delim offset is
  * returned. This contract is consumed by `parseSequence` for
  * undefined-length item bodies.
@@ -126,7 +126,7 @@ export function parseImplicitLE(
 
     // FFFE markers under Implicit VR LE are item / item-delim / seq-delim
     // markers. ItemDelim (FFFE,E00D) terminates an undefined-length SQ
-    // item body - when invoked as inner parser (opts.stopOnItemDelim ===
+    // item body: when invoked as inner parser (opts.stopOnItemDelim ===
     // true) we exit cleanly with the post-delim offset. Other FFFE
     // markers at the dataset root are structurally malformed.
     if (group === 0xfffe) {
@@ -141,7 +141,7 @@ export function parseImplicitLE(
     const position = { byteOffset: headerStart };
     const vr = resolveImplicitVR(tag, ctx, emit, position, length);
 
-    // length === 0xFFFFFFFF - under Implicit VR LE, only valid for SQ
+    // length === 0xFFFFFFFF: under Implicit VR LE, only valid for SQ
     // (delegate to parseSequence). For non-SQ
     // resolved VRs, this is a malformed file (Implicit-LE has no on-wire
     // VR, so UN cannot be encoded explicitly with undefined length).
@@ -227,7 +227,7 @@ export function parseImplicitLE(
       throw undefinedLengthOnNonSqImplicit(ctx.frame, headerStart, vr);
     }
 
-    // Over-read mitigation - bounds-check declared length before slice.
+    // Over-read mitigation: bounds-check declared length before slice.
     if (cursor.position + length > buffer.length) {
       // Same bound as the Explicit VR loop's, and for the same reason: neither
       // the declared length nor the count of bytes left in this frame has a
@@ -240,8 +240,8 @@ export function parseImplicitLE(
     cursor.position = valueEnd;
 
     // Defined-length SQ. PS3.5 section 7.5.2 gives an encoder two ways to delimit
-    // a Sequence of Items - a defined length, or undefined length with a Sequence
-    // Delimitation Item - and then says: "The encoder of a Sequence of Items may
+    // a Sequence of Items (a defined length, or undefined length with a Sequence
+    // Delimitation Item) and then says: "The encoder of a Sequence of Items may
     // choose either one of the two ways of encoding. Both ways of encoding shall
     // be supported by decoders of the Sequence of Items." This branch is the
     // defined-length half; only the undefined-length half existed, so
@@ -292,7 +292,7 @@ export function parseImplicitLE(
       }
       // Descent refused: `tryParseDefinedLengthSQ` has already rolled the parser
       // back and emitted `DICOM_SQ_NOT_DESCENDED`. Fall through to the scalar
-      // construction below, which is byte-for-byte the pre-fix behaviour - the
+      // construction below, which is byte-for-byte the pre-fix behaviour: the
       // element keeps its declared value span with no `items`.
     }
 
@@ -301,7 +301,7 @@ export function parseImplicitLE(
       emit(groupLengthInDataset(position));
     }
 
-    // Private Creator slot (gggg,0010..00FF) - register into the stack.
+    // Private Creator slot (gggg,0010..00FF): register into the stack.
     if (group % 2 === 1 && element >= 0x0010 && element <= 0x00ff) {
       registerPrivateCreator(tag, buffer.subarray(valueStart, valueEnd), ctx);
     }

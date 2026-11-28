@@ -17,7 +17,7 @@
  * moves a VR, the second moves the SHA-256 every generated header prints.
  *
  * 🛑 EVERY BYTE THIS FILE WRITES GOES INTO A SANDBOX, AND THE WORKING TREE IS READ ONLY.
- * `test/helpers/generator-sandbox.ts` carries the measurement and the reason; the
+ * `test/_helpers/generator-sandbox.ts` carries the measurement and the reason; the
  * committed artifacts are read from the real tree as the baseline and never opened for
  * writing.
  */
@@ -27,8 +27,8 @@ import { createHash } from "node:crypto";
 import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { createGeneratorSandbox, REPO_ROOT, type Sandbox } from "../helpers/generator-sandbox.js";
-import { runRepoScript, type ScriptResult } from "../helpers/run-script.js";
+import { createGeneratorSandbox, REPO_ROOT, type Sandbox } from "../_helpers/generator-sandbox.js";
+import { runRepoScript, type ScriptResult } from "../_helpers/run-script.js";
 
 /** The committed artifacts, in the real tree. READ ONLY. */
 const COMMITTED_GENERATED = join(REPO_ROOT, "src", "dictionary", "generated");

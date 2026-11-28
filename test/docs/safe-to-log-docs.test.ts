@@ -33,15 +33,29 @@ function pages(): [string, string][] {
   return out;
 }
 
+/**
+ * The runnable scripts in `examples/`: at the top, and one folder down, as
+ * `scripts/run-examples.ts` runs them. `examples/data/` is read above, by name.
+ */
+function exampleScripts(): string[] {
+  const dir = join(root, "examples");
+  const top = readdirSync(dir, { withFileTypes: true });
+  const folders = top
+    .filter((d) => d.isDirectory() && d.name !== "data")
+    .flatMap((d) => readdirSync(join(dir, d.name), { withFileTypes: true }));
+  return [...top, ...folders]
+    .filter((d) => d.isFile() && d.name.endsWith(".ts"))
+    .map((d) => join(d.parentPath, d.name))
+    .sort();
+}
+
 /** The `.ts` files that hold or build the synthetic objects the pages and examples read. */
 function fixtureSources(): [string, string][] {
   const files = [
     join(root, "examples", "data", "ct-object.ts"),
     join(root, "test", "fixtures", "first-use", "ct-object.ts"),
     join(root, "test", "fixtures", "encapsulated", "objects.ts"),
-    ...readdirSync(join(root, "examples"))
-      .filter((name) => name.endsWith(".ts"))
-      .map((name) => join(root, "examples", name)),
+    ...exampleScripts(),
   ];
   return files.map((file) => [relative(root, file), readFileSync(file, "utf8")]);
 }

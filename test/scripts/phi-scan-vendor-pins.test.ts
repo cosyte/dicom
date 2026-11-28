@@ -7,7 +7,7 @@
  * `docs-content/` too. The scanner now skips a file under `vendor/.../<sha256>/` whose bytes hash
  * to that directory's name and to the `SHA.txt` beside it, and the values are out of the list.
  *
- * Every value here is assembled at runtime, for the reason `test/helpers/phi-scan-violators.ts`
+ * Every value here is assembled at runtime, for the reason `test/_helpers/phi-scan-violators.ts`
  * gives: this file is under `test/`, so the gate scans it. The planted names and dates are the
  * standard's published examples or plainly synthetic ones.
  */
@@ -28,7 +28,7 @@ import {
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { runRepoScript } from "../helpers/run-script.js";
+import { runRepoScript } from "../_helpers/run-script.js";
 
 const REPO_ROOT = join(import.meta.dirname, "..", "..");
 

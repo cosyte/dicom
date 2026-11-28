@@ -25,8 +25,8 @@ import {
   encodeBuiltElement,
   type BuildDicomElement,
   type BuildDicomSqElement,
-} from "../helpers/build-dicom.js";
-import { buildDicomdir, twoPatientRecords } from "../helpers/build-dicomdir.js";
+} from "../_helpers/build-dicom.js";
+import { buildDicomdir, twoPatientRecords } from "../_helpers/build-dicomdir.js";
 import { encapsulatedObject, jpipObject } from "../fixtures/encapsulated/objects.js";
 import { FIRST_USE_CT_NO_PREAMBLE, FIRST_USE_CT_OBJECT } from "../fixtures/first-use/ct-object.js";
 
@@ -154,7 +154,7 @@ function richElements(): AnyElement[] {
     { tag: "00080060", vr: "CS", value: text("CT") },
     { tag: "00080081", vr: "ST", value: text("1 Synthetic Way") },
     { tag: "00080090", vr: "PN", value: text("TEST^PATIENT") },
-    { tag: "00080119", vr: "UC", value: text("SYNTH-LONG-CODE") },
+    { tag: "00080119", vr: "UC", value: text("FICTIVELONGCODE") },
     { tag: "00080120", vr: "UR", value: text("urn:synth:1") },
     { tag: "0008040C", vr: "UV", value: u64(1024n) },
     { tag: "00081030", vr: "LO", value: text("SYNTH STUDY") },

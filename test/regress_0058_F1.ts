@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
 
 import { defineProfile, deidentify, parseDicom, serializeDicom } from "../src/index.js";
-import { buildDicom } from "./helpers/build-dicom.js";
+import { buildDicom } from "./_helpers/build-dicom.js";
 
 /**
  * A regression probe for profile and de-identify behavior, kept as a script.

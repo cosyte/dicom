@@ -57,7 +57,7 @@ import {
   type Profile,
 } from "../../src/index.js";
 import { type Tag } from "../../src/dictionary/types.js";
-import { buildDicom, type BuildDicomSqItem } from "../helpers/build-dicom.js";
+import { buildDicom, type BuildDicomSqItem } from "../_helpers/build-dicom.js";
 
 const TS_IMPLICIT_LE = "1.2.840.10008.1.2";
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";

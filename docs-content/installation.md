@@ -2,7 +2,6 @@
 id: installation
 title: Install and verify
 sidebar_label: Install and verify
-sidebar_position: 2
 description: Install @cosyte/dicom, check it from ESM or CommonJS, and keep PHI out of your setup.
 ---
 

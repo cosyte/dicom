@@ -7,7 +7,7 @@
  * every Option, with a clean report. These tests are the ones that fail on the
  * 2026c tables.
  *
- * Every fixture here is SYNTHETIC, built in memory by `test/helpers/build-dicom.ts`;
+ * Every fixture here is SYNTHETIC, built in memory by `test/_helpers/build-dicom.ts`;
  * nothing is real and nothing is anonymised. The payload is an invented model name
  * carrying an invented person's name, because a PHI test whose payload names nobody
  * proves nothing, and it is spelled without a `^` so it is not a PN-shaped value.
@@ -31,7 +31,7 @@ import {
 } from "../../src/index.js";
 import { annexE } from "../../src/dictionary/annex-e.js";
 import { type Tag } from "../../src/dictionary/types.js";
-import { buildDicom, type BuildDicomOptions } from "../helpers/build-dicom.js";
+import { buildDicom, type BuildDicomOptions } from "../_helpers/build-dicom.js";
 
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
 const TS_IMPLICIT_LE = "1.2.840.10008.1.2";

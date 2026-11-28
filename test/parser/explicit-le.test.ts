@@ -13,7 +13,7 @@
 import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
-import { buildDicom } from "../helpers/build-dicom.js";
+import { buildDicom } from "../_helpers/build-dicom.js";
 import { type Dataset } from "../../src/dataset/dataset.js";
 import { type Element } from "../../src/dataset/element.js";
 import { type Tag } from "../../src/dictionary/types.js";

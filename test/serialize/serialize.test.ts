@@ -28,8 +28,8 @@ import {
 } from "../../src/index.js";
 import { type Tag, type VR } from "../../src/dictionary/types.js";
 import { encapsulatedObject, jpipObject } from "../fixtures/encapsulated/objects.js";
-import { buildDicom, type BuildDicomOptions } from "../helpers/build-dicom.js";
-import { ENCAPSULATION_SET, JPIP_SET } from "../helpers/ps35-section-a4.js";
+import { buildDicom, type BuildDicomOptions } from "../_helpers/build-dicom.js";
+import { ENCAPSULATION_SET, JPIP_SET } from "../_helpers/ps35-section-a4.js";
 import { COSYTE_IMPLEMENTATION_CLASS_UID } from "../../src/serialize/file-meta.js";
 
 const TS_IMPLICIT_LE = "1.2.840.10008.1.2";

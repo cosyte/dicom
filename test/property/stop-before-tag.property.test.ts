@@ -23,10 +23,10 @@ import {
   buildDicom,
   type BuildDicomElement,
   type BuildDicomSqElement,
-} from "../helpers/build-dicom.js";
-import { buildDicomdir, twoPatientRecords, type OffsetSpec } from "../helpers/build-dicomdir.js";
+} from "../_helpers/build-dicom.js";
+import { buildDicomdir, twoPatientRecords, type OffsetSpec } from "../_helpers/build-dicomdir.js";
 import { readHeaderFrom } from "../../src/parser/read-header.js";
-import { checkPropertyAtDepth } from "../helpers/property.js";
+import { checkPropertyAtDepth } from "../_helpers/property.js";
 
 const IMPLICIT_LE = "1.2.840.10008.1.2";
 const EXPLICIT_LE = "1.2.840.10008.1.2.1";
@@ -45,7 +45,7 @@ const HEADER: readonly (readonly [string, BuildDicomElement["vr"], string])[] = 
   ["00080018", "UI", "2.25.4444"],
   ["00080060", "CS", "CT"],
   ["00100010", "PN", "TEST^PATIENT"],
-  ["00100020", "LO", "FAKE-0003"],
+  ["00100020", "LO", "FAKE00003"],
   ["00100030", "DA", "19000101"],
   ["0020000D", "UI", "2.25.5555"],
   ["0020000E", "UI", "2.25.6666"],

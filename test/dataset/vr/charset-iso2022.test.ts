@@ -25,7 +25,7 @@ import { decodeText, resolveDecoderLabel } from "../../../src/dataset/vr/charset
 import { type DicomValue, type PersonNameGroup } from "../../../src/dataset/vr/types.js";
 import { type VR } from "../../../src/dictionary/types.js";
 import { parseDicom } from "../../../src/index.js";
-import { buildDicom } from "../../helpers/build-dicom.js";
+import { buildDicom } from "../../_helpers/build-dicom.js";
 
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
 const REPLACEMENT = String.fromCharCode(0xfffd);

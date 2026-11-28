@@ -14,7 +14,7 @@
  *   - The reader takes a value at the odd length `FFFFH` (tolerated, `DICOM_ODD_LENGTH_VALUE_PADDED`)
  *     and the writer pads it to 65,536 bytes.
  *
- * Every object here is synthetic: built by `test/helpers/build-dicom.ts` from fill bytes and
+ * Every object here is synthetic: built by `test/_helpers/build-dicom.ts` from fill bytes and
  * backslashes, with no name, date or identifier in it.
  *
  * @module
@@ -25,7 +25,7 @@ import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
 import { deidentify, parseDicom, serializeDicom } from "../../src/index.js";
-import { buildDicom } from "../helpers/build-dicom.js";
+import { buildDicom } from "../_helpers/build-dicom.js";
 
 const TS_IMPLICIT_LE = "1.2.840.10008.1.2";
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";

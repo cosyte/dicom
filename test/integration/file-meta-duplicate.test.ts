@@ -53,7 +53,7 @@ import { describe, expect, it } from "vitest";
 import { DicomParseError, WARNING_CODES, parseDicom, serializeDicom } from "../../src/index.js";
 import { type Tag, type VR } from "../../src/dictionary/types.js";
 import { WARNING_MESSAGES, duplicateFileMetaElement } from "../../src/parser/warnings.js";
-import { buildDicom, type BuildDicomElement } from "../helpers/build-dicom.js";
+import { buildDicom, type BuildDicomElement } from "../_helpers/build-dicom.js";
 
 const EXPLICIT_LE = "1.2.840.10008.1.2.1";
 const IMPLICIT_LE = "1.2.840.10008.1.2";

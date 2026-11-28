@@ -13,7 +13,7 @@ import {
   buildDicom,
   type BuildDicomElement,
   type BuildDicomSqElement,
-} from "../../helpers/build-dicom.js";
+} from "../../_helpers/build-dicom.js";
 
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
 const TS_IMPLICIT_LE = "1.2.840.10008.1.2";
@@ -33,12 +33,12 @@ function code(value: string, meaning: string): BuildDicomElement[] {
 
 const ANIMAL: readonly (BuildDicomElement | BuildDicomSqElement)[] = [
   { tag: "00100010", vr: "PN", value: ascii("SYNTHETIC^PET") },
-  { tag: "00100020", vr: "LO", value: ascii("SYNTH-PET-1") },
+  { tag: "00100020", vr: "LO", value: ascii("FICTPET0001") },
   { tag: "00102201", vr: "LO", value: ascii("SYNTHETIC SPECIES") },
-  { tag: "00102202", items: [{ elements: code("SYN-SP-1", "Synthetic species") }] },
+  { tag: "00102202", items: [{ elements: code("SPECIES1", "Synthetic species") }] },
   { tag: "00102203", vr: "CS", value: ascii("ALTERED") },
   { tag: "00102292", vr: "LO", value: ascii("SYNTHETIC BREED") },
-  { tag: "00102293", items: [{ elements: code("SYN-BR-1", "Synthetic breed") }] },
+  { tag: "00102293", items: [{ elements: code("BREED001", "Synthetic breed") }] },
   { tag: "00102297", vr: "PN", value: ascii("SYNTHETIC^OWNER") },
   { tag: "00102298", vr: "CS", value: ascii("OWNER") },
   { tag: "00102299", vr: "LO", value: ascii("SAMPLE CLINIC") },
@@ -61,14 +61,14 @@ describe("the patient view on a non-human patient", () => {
       const p = parse(ANIMAL, ts).patient;
       expect(p.speciesDescription).toBe("SYNTHETIC SPECIES");
       expect(p.speciesCode).toEqual({
-        codeValue: "SYN-SP-1",
+        codeValue: "SPECIES1",
         codingSchemeDesignator: "99SYNTH",
         codeMeaning: "Synthetic species",
       });
       expect(p.sexNeutered).toBe("ALTERED");
       expect(p.breedDescription).toBe("SYNTHETIC BREED");
       expect(p.breedCode).toEqual({
-        codeValue: "SYN-BR-1",
+        codeValue: "BREED001",
         codingSchemeDesignator: "99SYNTH",
         codeMeaning: "Synthetic breed",
       });
@@ -87,7 +87,7 @@ describe("the patient view on a non-human patient", () => {
         items: [
           {
             elements: [
-              { tag: "00080100", vr: "SH", value: ascii("SYN-SP-2") },
+              { tag: "00080100", vr: "SH", value: ascii("SPECIES2") },
               { tag: "00080102", vr: "SH", value: ascii("SCT") },
               { tag: "00080104", vr: "LO", value: ascii("Synthetic species") },
             ],
@@ -101,7 +101,7 @@ describe("the patient view on a non-human patient", () => {
   it("shows nothing new on a human patient", () => {
     const p = parse([
       { tag: "00100010", vr: "PN", value: ascii("SYNTHETIC^PERSON") },
-      { tag: "00100020", vr: "LO", value: ascii("SYNTH-1") },
+      { tag: "00100020", vr: "LO", value: ascii("FICT001") },
       { tag: "00100040", vr: "CS", value: ascii("O") },
     ]).patient;
     expect(Object.keys(p).sort()).toEqual(["id", "name", "otherIds", "sex"]);
@@ -160,7 +160,7 @@ describe("malformed non-human attributes never throw and are reported by code", 
   });
 
   it("reports a code sequence written as a leaf", () => {
-    const ds = parse([{ tag: "00102202", vr: "OB", value: ascii("SYN-SP-1") }]);
+    const ds = parse([{ tag: "00102202", vr: "OB", value: ascii("SPECIES1") }]);
     expect(ds.patient.speciesCode).toBeUndefined();
     expect(issueCodes(ds)).toEqual([
       [PATIENT_ISSUE_CODES.DICOM_PATIENT_VALUE_WRONG_TYPE, "00102202"],
@@ -180,12 +180,12 @@ describe("malformed non-human attributes never throw and are reported by code", 
       {
         tag: "00102202",
         items: [
-          { elements: code("SYN-SP-1", "Synthetic species") },
-          { elements: code("SYN-SP-2", "Another synthetic species") },
+          { elements: code("SPECIES1", "Synthetic species") },
+          { elements: code("SPECIES2", "Another synthetic species") },
         ],
       },
     ]);
-    expect(ds.patient.speciesCode?.codeValue).toBe("SYN-SP-1");
+    expect(ds.patient.speciesCode?.codeValue).toBe("SPECIES1");
     expect(issueCodes(ds)).toEqual([
       [PATIENT_ISSUE_CODES.DICOM_PATIENT_CODE_SEQUENCE_EXTRA_ITEMS, "00102202"],
     ]);

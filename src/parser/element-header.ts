@@ -110,7 +110,7 @@ export const LONG_FORM_VRS: ReadonlySet<VR> = new Set<VR>([
 ]);
 
 // ---------------------------------------------------------------------------
-// Implicit VR LE - VR resolution
+// Implicit VR LE: VR resolution
 // ---------------------------------------------------------------------------
 
 /**
@@ -138,7 +138,7 @@ export const LONG_FORM_VRS: ReadonlySet<VR> = new Set<VR>([
  *          recognize the creator, plus
  *          `DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR`.
  *   5. Unknown standard tag (not in dict, not a repeating-group family)
- *      → fallback UN silently - the standard explicitly allows this.
+ *      → fallback UN silently: the standard explicitly allows this.
  *
  * @internal
  */
@@ -149,14 +149,14 @@ export function resolveImplicitVR(
   position: DicomPosition,
   length = 0,
 ): VR {
-  // Case 4 first - private (odd-group) tags never resolve via dictionary
+  // Case 4 first: private (odd-group) tags never resolve via dictionary
   // tag lookup (they're vendor-specific) other than the creator-slot path.
   const group = parseInt(tag.slice(0, 4), 16);
   const isPrivate = group % 2 === 1;
   if (isPrivate) {
     const element = parseInt(tag.slice(4, 8), 16);
     if (element >= 0x0010 && element <= 0x00ff) {
-      // Private Creator slot - VR is always LO per PS3.5 §7.8.
+      // Private Creator slot: VR is always LO per PS3.5 §7.8.
       return "LO";
     }
     const creator = resolvePrivateCreator(tag, ctx);
@@ -169,7 +169,7 @@ export function resolveImplicitVR(
     // resolve the VR from the live creator string. A hit returns the
     // vendor-documented VR with no warning; otherwise we degrade to UN. When
     // the profile does not recognize the creator at all, that degrade is
-    // flagged with DICOM_PRIVATE_CREATOR_UNKNOWN - never a wrong decode.
+    // flagged with DICOM_PRIVATE_CREATOR_UNKNOWN: never a wrong decode.
     if (ctx.profile !== undefined) {
       const def = resolvePrivateTag(ctx.profile, tag, creator);
       if (def !== undefined) return def.vr;
@@ -181,7 +181,7 @@ export function resolveImplicitVR(
     return "UN";
   }
 
-  // Cases 1, 2, 3, 5 - standard (even-group) tag.
+  // Cases 1, 2, 3, 5: standard (even-group) tag.
   const direct = tagEntry(tag);
   if (direct !== undefined) {
     // Case 1 / 2: dict has a direct entry. A row listing more than one VR
@@ -203,7 +203,7 @@ export function resolveImplicitVR(
     /* v8 ignore next -- unreachable: every repeating-group family entry in the dictionary lists a VR. */
     return family.vr[0] ?? "UN";
   }
-  // Case 5: unknown standard tag - silent UN fallback.
+  // Case 5: an unknown standard tag falls back to UN silently.
   return "UN";
 }
 
@@ -226,14 +226,14 @@ export function resolveImplicitVR(
  * registered for the element's block.
  *
  * **The lookup is scoped to one Data Set.** `ctx.creators` holds the
- * reservations of the Data Set currently being parsed and nothing else -
+ * reservations of the Data Set currently being parsed and nothing else:
  * `parseSequence` swaps a fresh map in per Sequence Item, so a block claimed
  * at the root does not answer for an element inside an item, an item's claim
  * does not answer for a sibling item, and neither survives back out to the
  * enclosing Data Set. A private element in a Data Set that never claimed its
  * block therefore resolves to `undefined` here and degrades to `UN` plus
  * `DICOM_PRIVATE_TAG_NO_CREATOR`, rather than borrowing a neighbour's VR. That
- * warning names no tag: see `privateTagNoCreator` for why an odd group is the
+ * warning names no tag; see `privateTagNoCreator` for why an odd group is the
  * one class of tag this package has no closed table to vouch for.
  *
  * @internal
@@ -356,11 +356,11 @@ function matchesFamilyPattern(pattern: string, concrete: Tag): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Explicit VR LE / BE - element-header reader
+// Explicit VR LE / BE: element-header reader
 // ---------------------------------------------------------------------------
 
 /**
- * Result of reading an Explicit-VR element header (LE or BE - endianness
+ * Result of reading an Explicit-VR element header (LE or BE; endianness
  * is determined by the supplied `ByteCursor`'s `littleEndian` field).
  *
  * @internal
@@ -384,7 +384,7 @@ export interface ExplicitElementHeader {
  *   - Short-form: group(2) + element(2) + VR(2 ASCII) + length(2).
  *   - Long-form (when VR ∈ {@link LONG_FORM_VRS}, **or when the VR is not one
  *     of the 34 this edition of PS3.5 defines**): group(2) + element(2) +
- *     VR(2 ASCII) + reserved(2 - must be `0x00 0x00`) + length(4).
+ *     VR(2 ASCII) + reserved(2, must be `0x00 0x00`) + length(4).
  *
  * **The unrecognized-VR half is normative, not tolerance.** PS3.5 2026c section
  * 6.2: "All new VRs defined in future versions of DICOM **shall** be of the
@@ -401,13 +401,13 @@ export interface ExplicitElementHeader {
  * and the same undefined-length refusal that `OB` / `UT` / `UN` already take.
  * This is one more VR class routed into an existing bound, not a new bound.
  *
- * Endianness comes from the cursor - group / element / length use
+ * Endianness comes from the cursor: group / element / length use
  * `cursor.readUInt16` / `readUInt32`. The 2-byte VR field is ASCII and
  * never byte-swapped; reserved bytes are read directly from the buffer
- * (also endian-agnostic - they're a 2-byte zero-pad regardless).
+ * (also endian-agnostic, since they are a 2-byte zero-pad regardless).
  *
  * Non-zero reserved bytes emit `DICOM_NONZERO_RESERVED_BYTES`
- * and parsing continues - length is read from the explicit 4-byte field
+ * and parsing continues: length is read from the explicit 4-byte field
  * regardless of the reserved-byte payload.
  *
  * Caller is responsible for catching `RangeError` from the cursor and

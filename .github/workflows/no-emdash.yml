@@ -1,73 +1,44 @@
 name: Em-dash gate
 
-# The brand rule (founder directive 2026-07-24, written down in the knowledgebase
-# repo at 06-brand/voice-and-tone.md, and widened on 2026-11-07) bans the em dash
-# (U+2014) and the en dash (U+2013) outright across every Cosyte surface, and names
-# commit messages explicitly. This workflow is the CI half of that rule for dicom:
-# the tracked files, and the text that is not a file.
+# We do not use the em dash (U+2014) or the en dash (U+2013) in any file, commit
+# message, or pull request text. This workflow checks both for dicom: the tracked
+# files, and the text that is not a file.
 #
-# dicom was NOT already clean when this landed, which is the one thing worth reading
-# twice. An earlier survey measured markdown only (0 of 25 `.md` files) and concluded
-# no content churn was needed. Measuring all 178 tracked files found six live em
-# dashes in four non-markdown files (`.github/CODEOWNERS`, this directory's
-# `release.yml`, the npm `description` in `package.json`, and `vendor/nema/SHA.txt`).
-# The slice that added this workflow removed all six. Beyond that the gate exists to
-# stop a regression, and a green run on a clean tree proves nothing on its own, which
-# is exactly why the script it calls refuses to print OK from a scan that did not read
-# everything it was handed.
+# The file half runs `pnpm check:no-emdash`, which is `cosyte-no-emdash` from the
+# `@cosyte/script-utils` devDependency. What it leaves out here is declared in
+# `scripts/check-no-emdash.exclude` (the frozen CHANGELOG.md archive and the
+# pinned vendor documents). The gate refuses to report clean from a scan that did
+# not read everything it was handed. One tracked file holds a functional NUL byte
+# (`src/dataset/vr/charset.ts`, in a regex that strips DICOM's padding); the gate
+# reads it as text, so a dash in it would still fail the check.
 #
-# dicom also holds one tracked file with a functional NUL byte
-# (`src/dataset/vr/charset.ts`, DICOM's own padding stripped by a regex whose character
-# class holds the byte). grep classifies it binary. It carries no em dash today so it
-# scans green; a NUL-bearing file that carries one reds the gate. Measured, not
-# assumed.
+# The jobs below delegate the checkout, pnpm, Node, and the install to the shared
+# gate workflow, which carries no pattern, no allow-list, and no file selection of
+# its own: it prepares the tree, runs the command, and the command's exit status
+# decides the job.
 #
-# WHAT ACTUALLY SCANS, AND WHERE THE RULE LIVES. `pnpm check:no-emdash`, which runs
-# `cosyte-no-emdash` from the `@cosyte/script-utils` devDependency: the one dash gate
-# every Cosyte repository runs. What it leaves out here is declared in
-# `scripts/check-no-emdash.exclude` (the frozen CHANGELOG.md archive and the pinned
-# vendor documents). The jobs below delegate the plumbing (checkout, pnpm, Node, and the
-# install the gate needs) to the shared gate workflow, and that workflow carries no
-# pattern, no allow-list and no file selection of its own: it prepares the tree, runs
-# the command, and lets the command's exit status decide the job.
-#
-# TWO CONTEXTS, NOT ONE, AND THE JOB ID IS LOAD-BEARING. A called job's check run is
-# named `<caller job id> / <inner job id>`, so the job id `no-emdash` below publishes
+# TWO CONTEXTS, AND THE JOB ID IS LOAD-BEARING. A called job's check run is named
+# `<caller job id> / <inner job id>`, so the job id `no-emdash` below publishes
 # `no-emdash / tracked-files` and `no-emdash / messages`. A branch ruleset binds to
 # those exact strings: renaming the job detaches the requirement with no error
 # anywhere, and a required context nothing emits blocks every pull request. Do not
 # rename it.
 #
-#   `no-emdash / tracked-files` is REQUIRED and is the one that blocks a merge.
-#   `no-emdash / messages` runs, reds its own context, and is deliberately NOT required.
-#   Dependabot composes a pull request body out of upstream release notes, em dashes
-#   included, and a gate that fails on someone else's clock becomes a tax. The detection
-#   is unchanged either way; only what blocks is narrowed.
+#   `no-emdash / tracked-files` is required and is the one that blocks a merge.
+#   `no-emdash / messages` runs and reds its own context, and is not required:
+#   Dependabot writes a pull request body from upstream release notes, dashes
+#   included, and a required check that fails on text we did not write would
+#   block every bump. The detection is the same either way.
 #
-# WHY A SEPARATE WORKFLOW, and not a job in ci.yml:
-#
-#   The shared ci pipeline is not an option. dicom's `ci` job calls
-#   cosyte/.github/.github/workflows/ci.yml at a published reference, which runs a fixed
-#   ladder and no arbitrary repo script. The shared gate workflow this file calls exists
-#   for exactly that reason: it carries the plumbing, and the command it runs is ours.
-#
-#   Within dicom, the deciding factor is the trigger. The PR-text half below needs the
-#   `edited` activity type, which is not a default: without it, a title or body edited
-#   after the last push is never re-checked. What makes that matter is exactly what a
-#   squash merge lands here, which is a repo setting (read it with
-#   `gh api repos/cosyte/dicom`, never trust a copy): since 2026-11-07 the squash commit
-#   takes the PR title as its subject and the PR body as its message, so an edited title
-#   or body is exactly the text that lands on main. The branch commit messages are scanned
-#   as well, because they are what the branch carries until then. But ci.yml's
-#   triggers drive the shared pipeline over the Node 22, 24, and 26 matrix (typecheck, lint,
-#   format, PHI scan, test, coverage, build, attw, dual ESM/CJS smoke). Re-running all of that
-#   every time someone fixes a typo in a PR description is a large cost for no extra
-#   safety. Same call hl7, fhir, pathways, website, x12 and ncpdp made, for the same
-#   reason.
-#
-#   Both halves live here rather than splitting the file scan back into ci.yml (which
-#   is how website ended up): the file scan is a checkout and one grep, so it costs
-#   nothing to re-run on `edited`, and one file is one thing to read.
+# WHY A SEPARATE WORKFLOW, and not a job in ci.yml. The shared ci pipeline that
+# `ci.yml` calls runs a fixed list of steps and no repo script, and the trigger
+# differs. The pull request text half needs the `edited` activity type, which is
+# not a default: without it, a title or body edited after the last push is never
+# re-checked, and a squash merge writes the title and body into `main` (read the
+# merge settings with `gh api repos/cosyte/dicom`). The branch commit messages are
+# scanned as well. Re-running the whole `ci.yml` matrix on every edit of a pull
+# request description would cost a great deal for no extra safety, while the file
+# scan is a checkout and one command, so both halves live here.
 #
 # Run the file half locally with `pnpm check:no-emdash`.
 

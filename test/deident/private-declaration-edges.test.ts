@@ -29,7 +29,7 @@ import {
   buildDicom,
   type BuildDicomElement,
   type BuildDicomSqItem,
-} from "../helpers/build-dicom.js";
+} from "../_helpers/build-dicom.js";
 
 const EXPLICIT_LE = "1.2.840.10008.1.2.1";
 const EXPLICIT_BE = "1.2.840.10008.1.2.2";

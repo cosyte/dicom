@@ -34,7 +34,7 @@ import {
   buildDicom,
   type BuildDicomElement,
   type BuildDicomSqElement,
-} from "../helpers/build-dicom.js";
+} from "../_helpers/build-dicom.js";
 import { applyMutations, type Mutation } from "../property/_mutate.js";
 import { DICOM_TOKENS, SEED_CORPUS } from "../property/_seed-corpus.js";
 
@@ -155,7 +155,7 @@ function unordered(ts: string, undefinedLength: boolean): Buffer {
         elements: [
           { tag: "0040A160", vr: "UT", value: text("Synthetic finding text") },
           { tag: "0040A040", vr: "CS", value: text("TEXT") },
-          { tag: "0040A043", undefinedLength, items: [codeItem("SYN-2"), codeItem("SYN-1")] },
+          { tag: "0040A043", undefinedLength, items: [codeItem("SYN02"), codeItem("SYN01")] },
           { tag: "0040A010", vr: "CS", value: text("CONTAINS") },
         ],
       },
@@ -179,7 +179,7 @@ function unordered(ts: string, undefinedLength: boolean): Buffer {
       nested,
       { tag: "00090010", vr: "LO", value: text("SYNTHETIC VENDOR 1") },
       { tag: "00091001", vr: "LO", value: text("SYNTH PROTOCOL") },
-      { tag: "00081032", items: [codeItem("SYN-CT-001")] },
+      { tag: "00081032", items: [codeItem("SYNCT00001")] },
       { tag: "00080005", vr: "CS", value: text("ISO_IR 100") },
     ],
   });

@@ -40,11 +40,11 @@
  *     ...)`.
  *   - CPU DoS via pathological CP-246. tryParseUnAsSQ caps
  *     attempts at the same nesting-depth limit; on parse failure, state
- *     is restored - no infinite retry loop.
+ *     is restored: no infinite retry loop.
  *     **No primitive here parses the same bytes twice, and that is the
  *     invariant this threat reduces to once nesting is in play.** A descent
  *     that runs, fails and is retried costs 2x at one level and 2^depth across
- *     nested sequences - the same unbounded-CPU threat by a different route. An
+ *     nested sequences: the same unbounded-CPU threat by a different route. An
  *     earlier draft of the unbounded item-read fix tried a bounded
  *     reading of a defined-length `SQ` and re-parsed item-driven when it was not
  *     adopted, and was measured at 75,475 ms for a 606-byte file with 20 nested
@@ -57,7 +57,7 @@
  * (Implicit-LE / Explicit-LE / Explicit-BE), and those parsers ALSO call
  * `parseSequence`. The cycle is broken by passing the inner strategy in
  * via `ParseSequenceOptions.innerStrategy` rather than importing it
- * statically - each per-TS parser passes itself into parseSequence via
+ * statically: each per-TS parser passes itself into parseSequence via
  * the `innerStrategy` field.
  *
  * @module
@@ -89,7 +89,7 @@ import {
 
 const ITEM_TAG: Tag = "FFFEE000";
 // `(FFFE,E00D)` ItemDelim is consumed by the inner-strategy via the
-// `stopOnItemDelim` contract - never directly inside parseSequence. The two
+// `stopOnItemDelim` contract: never directly inside parseSequence. The two
 // tags read here are compared as numbers: `(FFFE,E000)` Item and `(FFFE,E0DD)`
 // Sequence Delimitation Item.
 const ITEM_ELEMENT = 0xe000;
@@ -110,7 +110,7 @@ export const NESTING_DEPTH_LIMIT = 64;
 
 /**
  * Inner-parser strategy signature consumed by `parseSequence`. Each per-TS
- * parser accepts a `stopOnItemDelim?: boolean` option - when set, the
+ * parser accepts a `stopOnItemDelim?: boolean` option; when set, the
  * inner element loop terminates upon reading `(FFFE,E00D)` ItemDelim
  * (cursor advanced past the delim's 4-byte length field) and the parser
  * returns the post-delim offset.
@@ -177,7 +177,7 @@ export interface ParseSequenceResult {
  * the item bodies + delimiters and returns the items array + the offset
  * where parsing finished.
  *
- * This surfaces only the structural shape - the per-TS strategy DOES
+ * This surfaces only the structural shape: the per-TS strategy DOES
  * NOT thread the resulting items onto the SQ Element. A structural SQ
  * Element exposes only `rawBytes` covering the on-wire span; navigation
  * re-parses lazily.
@@ -195,7 +195,7 @@ export function parseSequence(
   if (ctx.nestingDepth > NESTING_DEPTH_LIMIT) {
     // Decrement before throwing so caller `finally` rebalancing isn't
     // double-decremented (parseSequence's own try/finally below would
-    // decrement again - but we throw BEFORE the try block, so do it here).
+    // decrement again, but we throw BEFORE the try block, so do it here).
     ctx.nestingDepth -= 1;
     throw sqNestingDepthExceeded(ctx.frame, valueStart, NESTING_DEPTH_LIMIT);
   }
@@ -226,7 +226,7 @@ export function parseSequence(
   //
   // The direction of the failure is what makes this a parser defect and not a
   // tidiness one: the map feeds `resolveImplicitVR`, so a creator resolved from
-  // the wrong Data Set yields the wrong VR for the same bytes - a value decoded
+  // the wrong Data Set yields the wrong VR for the same bytes: a value decoded
   // as something the file does not say. Degrading to UN plus
   // `DICOM_PRIVATE_TAG_NO_CREATOR` is the fail-safe direction and the one an
   // unclaimed block gets, matching how `deidentify()` scopes the same rule.
@@ -270,7 +270,7 @@ export function parseSequence(
 
       // `(FFFE,E0DD)` and `(FFFE,E000)` are compared as numbers.
       if (group === 0xfffe && element === SEQ_DELIM_ELEMENT) {
-        // SeqDelim - skip the 4-byte length field (already consumed) and exit.
+        // SeqDelim: skip the 4-byte length field (already consumed) and exit.
         const itemFirst = table.closeItems(itemsMark);
         return { itemFirst, itemCount: itemIndex, endOffset: cursor.position, delimited: true };
       }
@@ -298,7 +298,7 @@ export function parseSequence(
 
       if (opts.encapsulatedPixelData === true) {
         // Pixel-data fragment: consume `itemLength` bytes verbatim, without
-        // reading them - PS3.5 2026c section A.4 says a decoder "may not scan
+        // reading them: PS3.5 2026c section A.4 says a decoder "may not scan
         // for a Sequence Delimitation Item", so bytes that look like one inside
         // a fragment are fragment bytes. The parser records each fragment as a
         // structural (empty) Item and advances the cursor past its raw bytes;
@@ -319,19 +319,19 @@ export function parseSequence(
       ctx.pixelRepresentation = parentPixelRepresentation;
       ctx.creators = NO_PRIVATE_CREATORS;
       if (itemLength === UNDEFINED_LENGTH) {
-        // Undefined-length item - call innerStrategy with stopOnItemDelim;
+        // Undefined-length item: call innerStrategy with stopOnItemDelim;
         // it returns the post-ItemDelim offset.
         const inner = opts.innerStrategy(buffer, cursor.position, ctx, emit, TO_ITEM_DELIMITER);
         table.addItem(inner, fileOffset);
         cursor.position = inner.endOffset;
       } else {
-        // Defined-length item - slice and parse exactly `itemLength` bytes.
+        // Defined-length item: slice and parse exactly `itemLength` bytes.
         //
         // PS3.5 2026c section 7.5.2 makes the `SQ` element's Value Length "the
         // total length resulting from the sequence of zero or more items
         // conveyed by this Data Element", and section 7.5.1 governs the Item's
         // own length field. A malformed file makes the two disagree, and this
-        // reader resolves the disagreement in favour of the ITEM's field - the
+        // reader resolves the disagreement in favour of the ITEM's field: the
         // reading every released version gives. `endLimit < buffer.length` is
         // what makes the disagreement consequential rather than academic: it
         // says this sequence is being read IN PLACE inside a larger Data Set,
@@ -339,10 +339,10 @@ export function parseSequence(
         // other descent primitive here is handed a slice already cut at the
         // declared end, where the two fields cannot reach past anything, and a
         // sequence that is the last thing in its buffer has nothing to reach
-        // into - so neither says anything and neither warns.
+        // into, so neither says anything and neither warns.
         //
         // **Disclosure only. Nothing is re-framed, and that is the whole change.** The
-        // two readings this file admits are byte-identical inputs - a file where
+        // two readings this file admits are byte-identical inputs: a file where
         // the ITEM over-declares and a file where the SEQUENCE under-declares are
         // the same bytes, proven in `test/integration/explicit-sq-item-bound.test.ts`
         // - so no bound can prefer one without also imposing it on the other.
@@ -356,7 +356,7 @@ export function parseSequence(
         // unclaimed block is removed. It is false: which direction leaks depends
         // on where the SENDER put the Private Creator, not on which length field
         // a reader follows. Put the creator in the item's genuine content and
-        // the absorb direction leaks too - the reservation leak,
+        // the absorb direction leaks too: the reservation leak,
         // measured on `164eb39` and closed at the de-identify boundary,
         // never here. The eject direction is still open and pinned as a
         // residual. Neither reading is safe by construction, which is exactly
@@ -371,9 +371,9 @@ export function parseSequence(
           // wire read on a file whose length fields are by definition lying. So
           // is the remainder this call site used to compute:
           // `endLimit - cursor.position` is the enclosing SEQUENCE's declared
-          // Value Length less the bytes of that sequence already consumed - just
+          // Value Length less the bytes of that sequence already consumed (just
           // the 8-byte Item header when this is the first item, more when items
-          // precede it - so an addition returns it. The `endLimit <
+          // precede it), so an addition returns it. The `endLimit <
           // buffer.length` conjunct above bounds that remainder's MAGNITUDE and
           // nothing about its CONTENT.
           // The factory takes a parameter for neither. See
@@ -385,7 +385,7 @@ export function parseSequence(
         }
         const itemSlice = buffer.subarray(cursor.position, cursor.position + itemLength);
         // The item is parsed from a SLICE, so every offset raised inside it is
-        // relative to the start of the SLICE - including a warning's `position.byteOffset`.
+        // relative to the start of the SLICE, including a warning's `position.byteOffset`.
         // `ctx.frame` is what `makeEmitter` cuts the `{ strict: true }` snippet
         // from AND what every diagnostic publishes as `offsetFrame`, so it has
         // to be the same SLICE or the snippet is an unrelated element's bytes and
@@ -444,7 +444,7 @@ function isStrictEscalation(err: unknown): boolean {
  * the parser state is restored, every warning the failed descent emitted is
  * dropped (they describe bytes we are no longer interpreting as elements), and
  * `success: false` tells the caller to keep the declared byte range as an opaque
- * value - exactly what the pre-descent parser did for every defined-length SQ.
+ * value: exactly what the pre-descent parser did for every defined-length SQ.
  *
  * The undefined-length form gets no such fallback and must not: without a
  * declared length there is no other way to find the end of the value, which is
@@ -462,7 +462,7 @@ function isStrictEscalation(err: unknown): boolean {
  * nothing inside may read it. `parseSequence` computes `endLimit` from the
  * declared length but bounds each item's value read against `buffer.length`, so
  * an item that **over-declares** its own length would otherwise reach past the
- * sequence and swallow the next root element - which the caller then reads a
+ * sequence and swallow the next root element, which the caller then reads a
  * second time, because it resumes at the declared end. The result is a root
  * attribute silently reported as a per-item one AND emitted twice: a confident,
  * wrong structural read with no warning, not even under `{ strict: true }`.
@@ -513,7 +513,7 @@ export function tryParseDefinedLengthSQ(
     // Value Length (PS3.5 section 7.5.2). See the note above.
     const slice = buffer.subarray(valueStart, valueStart + valueLength);
     // The descent's offsets are slice-relative, so the frame `makeEmitter` cuts
-    // the strict snippet from - and names as `offsetFrame` - moves with it. See
+    // the strict snippet from, and names as `offsetFrame`, moves with it. See
     // `ParseContext.frame`.
     const enclosingFrame = ctx.frame;
     let result;
@@ -544,7 +544,7 @@ export function tryParseDefinedLengthSQ(
     table.rollBack(savedTable);
     // Emitted AFTER the rollback so it is the one warning that survives, and
     // emitted at all because a silently undescended sequence is invisible to
-    // `deidentify()` - which is the defect this whole path exists to close.
+    // `deidentify()`, which is the defect this whole path exists to close.
     emit(sqNotDescended({ byteOffset: valueStart }, tag));
     return { success: false, itemFirst: 0, itemCount: 0 };
   }
@@ -626,11 +626,11 @@ export function tryParseUnAsSQ(
     // `DicomParseError` carrying a Tier-2 `WarningCode` when ctx.strict is
     // true. Those throws must propagate. Tier-3 structural fatals
     // (`FatalCode`) thrown mid-descent indicate the bytes don't actually
-    // form a valid SQ - fall back to UN-as-bytes as designed.
+    // form a valid SQ: fall back to UN-as-bytes as designed.
     if (isStrictEscalation(err)) {
       throw err;
     }
-    // Restore state - drop any warnings emitted during the failed descent.
+    // Restore state: drop any warnings emitted during the failed descent.
     ctx.nestingDepth = savedDepth;
     // `parseSequence` pops what it pushed in a `finally`, so a throw leaves the stack balanced.
     /* v8 ignore start -- unreachable: `parseSequence` restores the stack before rethrowing. */

@@ -33,7 +33,7 @@ import {
   buildDicom,
   type BuildDicomElement,
   type BuildDicomSqElement,
-} from "../../helpers/build-dicom.js";
+} from "../../_helpers/build-dicom.js";
 
 const TS_IMPLICIT_LE = "1.2.840.10008.1.2";
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
@@ -60,7 +60,7 @@ const PATIENT_NAME: BuildDicomElement = { tag: "00100010", vr: "PN", value: NAME
 const PATIENT_ID: BuildDicomElement = {
   tag: "00100020",
   vr: "LO",
-  value: Buffer.from("SYN-0001", "latin1"),
+  value: Buffer.from("SYN00001", "latin1"),
 };
 const COMMENTS: BuildDicomElement = { tag: "00104000", vr: "LT", value: COMMENT_BYTES };
 
@@ -118,7 +118,7 @@ describe("a Latin-1 name with no Specific Character Set", () => {
     const [w] = assumed as [(typeof ds.warnings)[number]];
     expect(w.message).toContain("(00100010)");
     expect(w.message).toContain("fallbackCharacterSet");
-    for (const fragment of ["DOE", "JOS", "Fictive", "caf", "SYN-0001", "ISO_IR 100"]) {
+    for (const fragment of ["DOE", "JOS", "Fictive", "caf", "SYN00001", "ISO_IR 100"]) {
       expect(w.message).not.toContain(fragment);
     }
     // The PN header follows the 132-byte preamble and the File Meta group.
@@ -540,7 +540,7 @@ describe("an invalid option is refused with a coded error", () => {
       const ascii = parseDicom(file([PATIENT_ID]));
       expect(toDicomJson(ascii, { fallbackCharacterSet: term })["00100020"]).toEqual({
         vr: "LO",
-        Value: ["SYN-0001"],
+        Value: ["SYN00001"],
       });
     }
   });

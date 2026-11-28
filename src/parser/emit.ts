@@ -12,7 +12,7 @@
  *     escalates the code, the closure throws `DicomParseError` carrying the
  *     warning's own code, which `DicomParseError.code` admits by type
  *     (`FatalCode | WarningCode`). An escalated warning bypasses
- *     `ctx.warnings` entirely - no residue. Two codes are never escalated:
+ *     `ctx.warnings` entirely: no residue. Two codes are never escalated:
  *     `DICOM_PARSE_STOPPED_BEFORE_TAG` and `DICOM_CHARSET_ASSUMED`, which
  *     report a stop and a character set the caller asked for rather than a
  *     deviation in the file.
@@ -22,11 +22,11 @@
  * that field is mutable and follows the frame rather than naming the file. See
  * its JSDoc: an offset, the bytes cut at it and the name of its coordinate
  * system have to agree, or a diagnostic hands back an element the reader was
- * never asked about - or, worse, hands back a correct offset a consumer then
+ * never asked about, or, worse, hands back a correct offset a consumer then
  * reads in the wrong frame.
  *
  * Threat model: a consumer-supplied `onWarning` that throws
- * MUST NOT corrupt parser state - wrapped in try/catch with silent swallow.
+ * MUST NOT corrupt parser state: wrapped in try/catch with silent swallow.
  *
  * @module
  */
@@ -57,7 +57,7 @@ export function makeEmitter(ctx: ParseContext): (w: DicomParseWarning) => void {
       w.position.byteOffset,
       // Both come off the SAME frame object, so an escalation cannot name one
       // frame and cut its bytes from another. `DicomParseWarning.position`
-      // itself carries no frame - that is `PRE-EXISTING` and stated on
+      // itself carries no frame: that is `PRE-EXISTING` and stated on
       // `DicomPosition`, not closed here.
       ctx.frame.name,
       buildSnippet(ctx.frame.buffer, w.position.byteOffset),
@@ -87,7 +87,7 @@ export function makeEmitter(ctx: ParseContext): (w: DicomParseWarning) => void {
       try {
         ctx.onWarning(w);
       } catch {
-        // Silent swallow - a noisy handler must not corrupt parser
+        // Silent swallow: a noisy handler must not corrupt parser
         // state. Mirrors @cosyte/hl7 sibling.
       }
     }

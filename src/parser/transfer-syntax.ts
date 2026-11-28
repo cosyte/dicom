@@ -1,5 +1,5 @@
 /**
- * Transfer Syntax dispatch table - maps TS UIDs to per-strategy parsers.
+ * Transfer Syntax dispatch table: maps TS UIDs to per-strategy parsers.
  *
  * A frozen `Readonly<Record<string, ParserStrategy>>`. Three groups of UIDs are
  * registered, and every other UID is refused with `UNSUPPORTED_TRANSFER_SYNTAX`:
@@ -45,7 +45,7 @@ export { parseImplicitLE, parseExplicitLE, parseExplicitBE, parseDeflatedLE };
 /**
  * A single transfer-syntax parser strategy.
  *
- * `endOffset` is OPTIONAL - the top-level `parseDicom` dispatch ignores
+ * `endOffset` is OPTIONAL: the top-level `parseDicom` dispatch ignores
  * it (the dataset is parsed to end-of-buffer), but SQ-inner descents
  * (via the {@link InnerParser} contract in `parser/sequence.ts`) require
  * it. Every shipped implementation populates it.

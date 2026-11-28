@@ -7,7 +7,7 @@ import { type Tag, type VR } from "../../../src/dictionary/types.js";
 import { Element } from "../../../src/dataset/element.js";
 import { Item } from "../../../src/dataset/item.js";
 import { decodeElementValue } from "../../../src/dataset/vr/decode.js";
-import { checkPropertyAtDepth } from "../../helpers/property.js";
+import { checkPropertyAtDepth } from "../../_helpers/property.js";
 
 function el(
   vr: VR,

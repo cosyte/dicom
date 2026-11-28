@@ -8,7 +8,7 @@
  * Until this rule a Table E.1-1 miss read as "keep", so such an element went into
  * de-identified output verbatim under a report that said nothing about it.
  *
- * Every fixture here is SYNTHETIC, built in memory by `test/helpers/build-dicom.ts`
+ * Every fixture here is SYNTHETIC, built in memory by `test/_helpers/build-dicom.ts`
  * or through the public `Element` constructor; nothing is real and nothing is
  * anonymised. The payload names an invented person, because a PHI test whose
  * payload names nobody proves nothing, and every absence assertion on it has a
@@ -45,7 +45,7 @@ import {
   buildDicom,
   type BuildDicomElement,
   type BuildDicomSqElement,
-} from "../helpers/build-dicom.js";
+} from "../_helpers/build-dicom.js";
 
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
 const TS_IMPLICIT_LE = "1.2.840.10008.1.2";

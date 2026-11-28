@@ -57,7 +57,7 @@ import { describe, expect, it } from "vitest";
 import { DicomParseError, WARNING_CODES, parseDicom } from "../../src/index.js";
 import { type Tag, type VR } from "../../src/dictionary/types.js";
 import { strict as strictProfile } from "../../src/profiles/index.js";
-import { buildDicom } from "../helpers/build-dicom.js";
+import { buildDicom } from "../_helpers/build-dicom.js";
 
 const IMPLICIT_LE = "1.2.840.10008.1.2";
 const EXPLICIT_LE = "1.2.840.10008.1.2.1";

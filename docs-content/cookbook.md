@@ -2,7 +2,6 @@
 id: cookbook
 title: Use the cookbook for warnings, animal patients and dates
 sidebar_label: Cookbook
-sidebar_position: 5
 description: Steps for triaging parse warnings, reading a veterinary patient, and checking what a de-identified object says about its dates.
 ---
 
