@@ -35,8 +35,12 @@ export const VALUE_ERROR_CODES = {
 } as const;
 
 /**
- * Discriminant for {@link DicomValueError.code}, enabling exhaustive
- * `switch` narrowing (the `switch-exhaustiveness-check` lint rule).
+ * Discriminant for {@link DicomValueError.code}.
+ *
+ * **Treat the union as open.** A release can add a code, which widens this
+ * union, so a `switch` that lists every current member stops compiling, or
+ * misses the new code, on an upgrade. Handle the codes you care about by name
+ * and give the `switch` a `default` branch for the rest.
  *
  * @example
  * ```ts
@@ -45,8 +49,8 @@ export const VALUE_ERROR_CODES = {
  *   switch (code) {
  *     case "FRAME_INDEX_OUT_OF_RANGE":
  *       return "frame index outside [0, numberOfFrames)";
- *     case "MISSING_REQUIRED_FUNCTIONAL_GROUP":
- *       return "enhanced object lacks a required geometry macro";
+ *     default:
+ *       return `value error: ${code}`;
  *   }
  * }
  * ```

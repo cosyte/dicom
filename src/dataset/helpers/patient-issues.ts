@@ -35,7 +35,12 @@ export const PATIENT_ISSUE_CODES = {
 } as const;
 
 /**
- * Discriminant for {@link PatientIssue.code}, so a `switch` over it is exhaustive.
+ * Discriminant for {@link PatientIssue.code}.
+ *
+ * **Treat the union as open.** A release can add a code, which widens this
+ * union, so a `switch` that lists every current member stops compiling, or
+ * misses the new code, on an upgrade. Handle the codes you care about by name
+ * and give the `switch` a `default` branch for the rest.
  *
  * @example
  * ```ts
