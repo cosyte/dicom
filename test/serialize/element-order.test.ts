@@ -1,5 +1,5 @@
 /**
- * S0361-dicom-5: `serializeDicom` emits every Data Set in ascending tag order.
+ * `serializeDicom` emits every Data Set in ascending tag order.
  *
  * PS3.5 2026c section 7.1 orders a Data Set's elements "by increasing Data
  * Element Tag Number"; section 7.5.1 repeats it inside every Item, and section
@@ -12,7 +12,7 @@
  * name-bearing value is an invented, allow-listed placeholder. No real patient
  * data is used. Tiers (`standards-conformance` S4): the out-of-order fixtures
  * are Tier 2 (a vendor quirk reproduced synthetically), the already-ascending
- * control (AC-5) and the de-identify round trip (AC-12) are Tier 3.
+ * control and the de-identify round trip are Tier 3.
  *
  * "Read back" means `parseDicom(output)` with default options, whose
  * `elements()` order is the order the bytes carry.
@@ -297,24 +297,24 @@ function outOfOrderBody(w: Wire, code: string): Buffer {
 }
 
 // ---------------------------------------------------------------------------
-// AC-1
+// The root Data Set is emitted in ascending order
 // ---------------------------------------------------------------------------
 
-describe("AC-1: the root Data Set is emitted in ascending order", () => {
+describe("the root Data Set is emitted in ascending order", () => {
   const ascendingRoot: BuiltElement[] = [
     text("00080060", "CS", "OT"),
-    text("00100020", "LO", "SYNTH-ID-1"),
+    text("00100020", "LO", "SYNTH_ID_1"),
     text("00200013", "IS", "7"),
   ];
 
-  it.each(ALL_TS)("AC-1: a root the source file wrote out of order, under %s", (ts) => {
+  it.each(ALL_TS)("a root the source file wrote out of order, under %s", (ts) => {
     const src = parseDicom(
       buildDicom({
         transferSyntax: ts,
         elements: [
           text("00200013", "IS", "7"),
           text("00080060", "CS", "OT"),
-          text("00100020", "LO", "SYNTH-ID-1"),
+          text("00100020", "LO", "SYNTH_ID_1"),
           text("00080016", "UI", "1.2.840.10008.5.1.4.1.1.7"),
         ],
       }),
@@ -324,7 +324,7 @@ describe("AC-1: the root Data Set is emitted in ascending order", () => {
     expect(tagsOf(back)).toEqual(["00080016", "00080060", "00100020", "00200013"]);
   });
 
-  it.each(ALL_TS)("AC-1: an element a caller added after the rest, under %s", (ts) => {
+  it.each(ALL_TS)("an element a caller added after the rest, under %s", (ts) => {
     const src = parseDicom(buildDicom({ transferSyntax: ts, elements: ascendingRoot }));
     const value = pad("1.2.840.10008.5.1.4.1.1.7");
     const added = scalar("00080016", "UI", value, ts !== TS_EXPLICIT_BE);
@@ -342,7 +342,7 @@ describe("AC-1: the root Data Set is emitted in ascending order", () => {
     expect(back.get("00080016")?.rawBytes.equals(value)).toBe(true);
   });
 
-  it.each(ALL_TS)("AC-1: the elements deidentify() inserted, under %s", (ts) => {
+  it.each(ALL_TS)("the elements deidentify() inserted, under %s", (ts) => {
     const src = parseDicom(buildDicom({ transferSyntax: ts, elements: ascendingRoot }));
     expect(isAscending(tagsOf(src))).toBe(true);
     const { dataset } = deidentify(src);
@@ -355,7 +355,7 @@ describe("AC-1: the root Data Set is emitted in ascending order", () => {
 });
 
 // ---------------------------------------------------------------------------
-// AC-2
+// Every Item's Data Set is emitted ascending, at every depth up to the bound
 // ---------------------------------------------------------------------------
 
 /**
@@ -416,8 +416,8 @@ function profileSqFile(ascending: boolean): Buffer {
   });
 }
 
-describe("AC-2: every Item's Data Set is emitted ascending, at every depth up to the bound", () => {
-  it("AC-2: an Item holding a private Sequence a Profile resolved is ordered around it, under Implicit VR LE", () => {
+describe("every Item's Data Set is emitted ascending, at every depth up to the bound", () => {
+  it("an Item holding a private Sequence a Profile resolved is ordered around it, under Implicit VR LE", () => {
     const src = parseDicom(profileSqFile(false), { profile: ACME_SQ_PROFILE });
     const inner = must(src.get(CONTENT_SEQ)?.items?.[0]?.get(PRIVATE_SQ), "private Sequence");
     // What the parse produced: a Sequence the reader descended, not a CP-246 `UN`.
@@ -442,12 +442,12 @@ describe("AC-2: every Item's Data Set is emitted ascending, at every depth up to
     [ts, 1],
   ]);
 
-  it.each(cases)("AC-2: a %s chain nested to the bound (phase %i)", (ts, phase) => {
+  it.each(cases)("a %s chain nested to the bound (phase %i)", (ts, phase) => {
     const src = parseDicom(
       buildDicom({
         transferSyntax: ts,
         elements: [
-          text("00100020", "LO", "SYNTH-ID-2"),
+          text("00100020", "LO", "SYNTH_ID_2"),
           chain(1, NESTING_DEPTH_LIMIT, phase),
           text("00080060", "CS", "OT"),
         ],
@@ -466,59 +466,56 @@ describe("AC-2: every Item's Data Set is emitted ascending, at every depth up to
 });
 
 // ---------------------------------------------------------------------------
-// AC-3
+// Items keep their source order
 // ---------------------------------------------------------------------------
 
-describe("AC-3: Items keep their source order", () => {
-  it.each(ALL_TS)(
-    "AC-3: Items are re-emitted in order while their elements move, under %s",
-    (ts) => {
-      const item = (label: string, extra: BuiltElement[] = []): BuildDicomOptions["elements"] => [
-        ...extra,
-        text("0040A040", "CS", "TEXT"),
-        text("00080100", "SH", label),
-      ];
-      const nested: BuildDicomSqElement = {
-        tag: CONTENT_SEQ,
-        items: [{ elements: item("NESTED-0") }, { elements: item("NESTED-1") }],
-      };
-      const src = parseDicom(
-        buildDicom({
-          transferSyntax: ts,
-          elements: [
-            {
-              tag: CONTENT_SEQ,
-              items: [
-                { elements: item("ITEM-0") },
-                { elements: item("ITEM-1", [nested]) },
-                { elements: item("ITEM-2") },
-              ],
-            },
-          ],
-        }),
-      );
-      const back = parseDicom(serializeDicom(src));
-      const code = (d: Dataset | undefined): string | undefined =>
-        d?.get("00080100")?.rawBytes.toString("latin1").trimEnd();
+describe("Items keep their source order", () => {
+  it.each(ALL_TS)("Items are re-emitted in order while their elements move, under %s", (ts) => {
+    const item = (label: string, extra: BuiltElement[] = []): BuildDicomOptions["elements"] => [
+      ...extra,
+      text("0040A040", "CS", "TEXT"),
+      text("00080100", "SH", label),
+    ];
+    const nested: BuildDicomSqElement = {
+      tag: CONTENT_SEQ,
+      items: [{ elements: item("NESTED_0") }, { elements: item("NESTED_1") }],
+    };
+    const src = parseDicom(
+      buildDicom({
+        transferSyntax: ts,
+        elements: [
+          {
+            tag: CONTENT_SEQ,
+            items: [
+              { elements: item("ITEM_0") },
+              { elements: item("ITEM_1", [nested]) },
+              { elements: item("ITEM_2") },
+            ],
+          },
+        ],
+      }),
+    );
+    const back = parseDicom(serializeDicom(src));
+    const code = (d: Dataset | undefined): string | undefined =>
+      d?.get("00080100")?.rawBytes.toString("latin1").trimEnd();
 
-      const items = back.get(CONTENT_SEQ)?.items ?? [];
-      expect(items.map(code)).toEqual(["ITEM-0", "ITEM-1", "ITEM-2"]);
-      const inner = items[1]?.get(CONTENT_SEQ)?.items ?? [];
-      expect(inner.map(code)).toEqual(["NESTED-0", "NESTED-1"]);
-      // The elements inside them did move.
-      expect([...items, ...inner].map((i) => isAscending(tagsOf(i)))).toEqual([
-        true,
-        true,
-        true,
-        true,
-        true,
-      ]);
-    },
-  );
+    const items = back.get(CONTENT_SEQ)?.items ?? [];
+    expect(items.map(code)).toEqual(["ITEM_0", "ITEM_1", "ITEM_2"]);
+    const inner = items[1]?.get(CONTENT_SEQ)?.items ?? [];
+    expect(inner.map(code)).toEqual(["NESTED_0", "NESTED_1"]);
+    // The elements inside them did move.
+    expect([...items, ...inner].map((i) => isAscending(tagsOf(i)))).toEqual([
+      true,
+      true,
+      true,
+      true,
+      true,
+    ]);
+  });
 });
 
 // ---------------------------------------------------------------------------
-// AC-4
+// An out-of-order source is emitted ascending with nothing dropped, added, merged or changed
 // ---------------------------------------------------------------------------
 
 /** Same tags in every Data Set, each element's VR and value bytes identical. */
@@ -548,8 +545,8 @@ function expectSameContent(a: Dataset, b: Dataset, path: string): void {
   }
 }
 
-describe("AC-4: an out-of-order source is emitted ascending with nothing dropped, added, merged or changed", () => {
-  it.each(ALL_TS)("AC-4: root and nested Items, under %s", (ts) => {
+describe("an out-of-order source is emitted ascending with nothing dropped, added, merged or changed", () => {
+  it.each(ALL_TS)("root and nested Items, under %s", (ts) => {
     const src = parseDicom(
       buildDicom({
         transferSyntax: ts,
@@ -577,11 +574,11 @@ describe("AC-4: an out-of-order source is emitted ascending with nothing dropped
                 ],
               },
               {
-                elements: [text("00100020", "LO", "SYNTH-ID-4"), text("00080100", "SH", "CODE-B")],
+                elements: [text("00100020", "LO", "SYNTH_ID_4"), text("00080100", "SH", "CODE-B")],
               },
             ],
           },
-          text("00100020", "LO", "SYNTH-ID-4"),
+          text("00100020", "LO", "SYNTH_ID_4"),
           text("00080060", "CS", "OT"),
         ],
       }),
@@ -598,7 +595,7 @@ describe("AC-4: an out-of-order source is emitted ascending with nothing dropped
   // Under Implicit VR LE the reader holds a defined-length Sequence as an opaque
   // value when anything inside it fails (`DICOM_SQ_NOT_DESCENDED`). Re-ordering
   // inside it would change that value's bytes on the next read.
-  it("AC-4: a Sequence the reader held as a value keeps its value bytes, under Implicit VR LE", () => {
+  it("a Sequence the reader held as a value keeps its value bytes, under Implicit VR LE", () => {
     const w = wireOf(TS_IMPLICIT_LE);
     // (0042,0011) is OB in PS3.6, so at undefined length the reader refuses the
     // descent, even though the bytes after it read as an Item stream.
@@ -624,7 +621,7 @@ describe("AC-4: an out-of-order source is emitted ascending with nothing dropped
     expect(after.rawBytes.equals(before.rawBytes)).toBe(true);
   });
 
-  it("AC-4: a level the reader rolled back at the bound keeps its value bytes, and the levels above it are ordered, under Implicit VR LE", () => {
+  it("a level the reader rolled back at the bound keeps its value bytes, and the levels above it are ordered, under Implicit VR LE", () => {
     const w = wireOf(TS_IMPLICIT_LE);
     const level = (nested: Buffer): Buffer =>
       wireSq(
@@ -664,7 +661,7 @@ describe("AC-4: an out-of-order source is emitted ascending with nothing dropped
   // A `UN` of undefined length that is not an Item stream is read to the end of
   // its Data Set, so anything moved after it would be read into its value.
   it.each(EXPLICIT_TS)(
-    "AC-4: a UN the reader could not read as a Sequence stays last in its Item, under %s",
+    "a UN the reader could not read as a Sequence stays last in its Item, under %s",
     (ts) => {
       const w = wireOf(ts);
       const opaque = Buffer.concat([
@@ -735,7 +732,7 @@ describe("AC-4: an out-of-order source is emitted ascending with nothing dropped
   );
 
   it.each(unclosedCases)(
-    "AC-4: %s with no Sequence Delimitation Item stays last at the root, under %s",
+    "%s with no Sequence Delimitation Item stays last at the root, under %s",
     (_what, ts, span) => {
       const w = wireOf(ts);
       const trailing = span(w);
@@ -755,17 +752,17 @@ describe("AC-4: an out-of-order source is emitted ascending with nothing dropped
 });
 
 // ---------------------------------------------------------------------------
-// AC-5
+// An already-ascending source is re-emitted byte-identical after File Meta
 // ---------------------------------------------------------------------------
 
-describe("AC-5: an already-ascending source is re-emitted byte-identical after File Meta", () => {
-  it("AC-5: Explicit VR LE with an undefined-length Sequence", () => {
+describe("an already-ascending source is re-emitted byte-identical after File Meta", () => {
+  it("Explicit VR LE with an undefined-length Sequence", () => {
     const buf = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
       elements: [
         text("00080016", "UI", "1.2.840.10008.5.1.4.1.1.7"),
         text("00080060", "CS", "OT"),
-        text("00100020", "LO", "SYNTH-ID-5"),
+        text("00100020", "LO", "SYNTH_ID_5"),
         {
           tag: CONTENT_SEQ,
           undefinedLength: true,
@@ -791,13 +788,13 @@ describe("AC-5: an already-ascending source is re-emitted byte-identical after F
     expect(bodyOf(out, TS_EXPLICIT_LE).equals(bodyOf(buf, TS_EXPLICIT_LE))).toBe(true);
   });
 
-  it("AC-5: Implicit VR LE with a defined-length Sequence", () => {
+  it("Implicit VR LE with a defined-length Sequence", () => {
     const buf = buildDicom({
       transferSyntax: TS_IMPLICIT_LE,
       elements: [
         text("00080016", "UI", "1.2.840.10008.5.1.4.1.1.7"),
         text("00080060", "CS", "OT"),
-        text("00100020", "LO", "SYNTH-ID-5"),
+        text("00100020", "LO", "SYNTH_ID_5"),
         {
           tag: CONTENT_SEQ,
           items: [
@@ -817,7 +814,7 @@ describe("AC-5: an already-ascending source is re-emitted byte-identical after F
     expect(bodyOf(out, TS_IMPLICIT_LE).equals(bodyOf(buf, TS_IMPLICIT_LE))).toBe(true);
   });
 
-  it("AC-5: Implicit VR LE with a private Sequence a Profile resolved inside an Item", () => {
+  it("Implicit VR LE with a private Sequence a Profile resolved inside an Item", () => {
     const buf = profileSqFile(true);
     const src = parseDicom(buf, { profile: ACME_SQ_PROFILE });
     const inner = must(src.get(CONTENT_SEQ)?.items?.[0]?.get(PRIVATE_SQ), "private Sequence");
@@ -829,12 +826,12 @@ describe("AC-5: an already-ascending source is re-emitted byte-identical after F
 });
 
 // ---------------------------------------------------------------------------
-// AC-6
+// A tag an Item carries twice is kept twice
 // ---------------------------------------------------------------------------
 
-describe("AC-6: a tag an Item carries twice is kept twice", () => {
+describe("a tag an Item carries twice is kept twice", () => {
   it.each(ALL_TS)(
-    "AC-6: both copies, in source relative order, same survivor on read back, under %s",
+    "both copies, in source relative order, same survivor on read back, under %s",
     (ts) => {
       const src = parseDicom(
         buildDicom({
@@ -874,7 +871,7 @@ describe("AC-6: a tag an Item carries twice is kept twice", () => {
   // The reader keeps the last copy only, so nothing records where it ended an
   // earlier undefined-length copy: that Item is emitted as read.
   it.each(RAW_TS)(
-    "AC-6: a repeated undefined-length Sequence keeps both copies, as read, under %s",
+    "a repeated undefined-length Sequence keeps both copies, as read, under %s",
     (ts) => {
       const w = wireOf(ts);
       const copy = wireSq(w, CONTENT_SEQ, wireItem(w, outOfOrderBody(w, "SAME")), true);
@@ -899,10 +896,10 @@ describe("AC-6: a tag an Item carries twice is kept twice", () => {
 });
 
 // ---------------------------------------------------------------------------
-// AC-7
+// A Sequence whose Item stream cannot be walked to its end is emitted unchanged
 // ---------------------------------------------------------------------------
 
-describe("AC-7: a Sequence whose Item stream cannot be walked to its end is emitted unchanged", () => {
+describe("a Sequence whose Item stream cannot be walked to its end is emitted unchanged", () => {
   /**
    * Serialize a Data Set holding the one `SQ` and return the emitted body. Each
    * `SQ` below carries a model Item for every Item on the wire, holding that
@@ -928,7 +925,7 @@ describe("AC-7: a Sequence whose Item stream cannot be walked to its end is emit
   }
 
   it.each(ALL_TS)(
-    "AC-7: an element or Item whose declared length runs past its container, under %s",
+    "an element or Item whose declared length runs past its container, under %s",
     (ts) => {
       const w = wireOf(ts);
       const good = outOfOrderMembers(w, "GOOD");
@@ -990,27 +987,24 @@ describe("AC-7: a Sequence whose Item stream cannot be walked to its end is emit
     },
   );
 
-  it.each(ALL_TS)(
-    "AC-7: an undefined-length Item with no Item Delimitation Item, under %s",
-    (ts) => {
-      const w = wireOf(ts);
-      const good = outOfOrderMembers(w, "GOOD");
-      const open = outOfOrderMembers(w, "OPEN");
-      const unterminated = Buffer.concat([
-        marker(w, 0xe000, UNDEFINED_LENGTH),
-        ...open.map((m) => m.wire),
-      ]);
-      const sq = seqOf(
-        ts,
-        CONTENT_SEQ,
-        [itemWire(w, good), unterminated],
-        [itemOf(good, 0), itemOf(open, 1)],
-      );
-      expect(emitOnly(ts, sq).equals(sq.wire)).toBe(true);
-    },
-  );
+  it.each(ALL_TS)("an undefined-length Item with no Item Delimitation Item, under %s", (ts) => {
+    const w = wireOf(ts);
+    const good = outOfOrderMembers(w, "GOOD");
+    const open = outOfOrderMembers(w, "OPEN");
+    const unterminated = Buffer.concat([
+      marker(w, 0xe000, UNDEFINED_LENGTH),
+      ...open.map((m) => m.wire),
+    ]);
+    const sq = seqOf(
+      ts,
+      CONTENT_SEQ,
+      [itemWire(w, good), unterminated],
+      [itemOf(good, 0), itemOf(open, 1)],
+    );
+    expect(emitOnly(ts, sq).equals(sq.wire)).toBe(true);
+  });
 
-  it.each(ALL_TS)("AC-7: bytes that are not an Item stream, under %s", (ts) => {
+  it.each(ALL_TS)("bytes that are not an Item stream, under %s", (ts) => {
     const w = wireOf(ts);
     const good = outOfOrderMembers(w, "GOOD");
     const notAnItem = leaf(w, "00080100", "SH", pad("NOT-AN-ITEM"));
@@ -1035,7 +1029,7 @@ describe("AC-7: a Sequence whose Item stream cannot be walked to its end is emit
 });
 
 // ---------------------------------------------------------------------------
-// AC-8
+// A value whose on-wire VR is not SQ is emitted unchanged
 // ---------------------------------------------------------------------------
 
 /** An Implicit VR LE Item stream (the CP-246 encoding) with one out-of-order Item. */
@@ -1056,8 +1050,8 @@ function undefinedLengthHeader(w: Wire, tag: Tag): Buffer {
   ]);
 }
 
-describe("AC-8: a value whose on-wire VR is not SQ is emitted unchanged", () => {
-  it.each([...EXPLICIT_TS, TS_DEFLATED_LE])("AC-8: encapsulated Pixel Data, under %s", (ts) => {
+describe("a value whose on-wire VR is not SQ is emitted unchanged", () => {
+  it.each([...EXPLICIT_TS, TS_DEFLATED_LE])("encapsulated Pixel Data, under %s", (ts) => {
     // A fragment whose bytes happen to read as two out-of-order Explicit VR LE elements.
     const fragment = outOfOrderBody({ le: true, explicit: true }, "FRAGMENT");
     const src = parseDicom(
@@ -1081,12 +1075,12 @@ describe("AC-8: a value whose on-wire VR is not SQ is emitted unchanged", () => 
     expect(body.subarray(body.length - before.length).equals(before)).toBe(true);
   });
 
-  it.each([TS_IMPLICIT_LE, ...EXPLICIT_TS])("AC-8: a CP-246 promoted UN, under %s", (ts) => {
+  it.each([TS_IMPLICIT_LE, ...EXPLICIT_TS])("a CP-246 promoted UN, under %s", (ts) => {
     const w = wireOf(ts);
     const src = parseDicom(
       buildDicom({
         transferSyntax: ts,
-        elements: [text("00100020", "LO", "SYNTH-ID-8")],
+        elements: [text("00100020", "LO", "SYNTH_ID_8")],
         trailingBytes: Buffer.concat([undefinedLengthHeader(w, PRIVATE_TAG), cp246Stream()]),
       }),
     );
@@ -1101,7 +1095,7 @@ describe("AC-8: a value whose on-wire VR is not SQ is emitted unchanged", () => 
   });
 
   it.each([TS_IMPLICIT_LE, ...EXPLICIT_TS])(
-    "AC-8: an undefined-length UN inside an Item the writer re-orders, under %s",
+    "an undefined-length UN inside an Item the writer re-orders, under %s",
     (ts) => {
       const w = wireOf(ts);
       const un = Buffer.concat([undefinedLengthHeader(w, PRIVATE_TAG), cp246Stream()]);
@@ -1135,7 +1129,7 @@ describe("AC-8: a value whose on-wire VR is not SQ is emitted unchanged", () => 
   // The reader takes such a value to the end of the Data Set, so it stays last
   // even though its tag sorts first: ahead of (0010,0020) it would swallow it.
   it.each(EXPLICIT_TS)(
-    "AC-8, AC-4: an undefined-length UN that is not an Item stream is emitted unchanged and last, under %s",
+    "an undefined-length UN that is not an Item stream is emitted unchanged and last, under %s",
     (ts) => {
       const w = wireOf(ts);
       const opaque = Buffer.concat([
@@ -1145,7 +1139,7 @@ describe("AC-8: a value whose on-wire VR is not SQ is emitted unchanged", () => 
       const src = parseDicom(
         buildDicom({
           transferSyntax: ts,
-          elements: [text("00100020", "LO", "SYNTH-ID-8")],
+          elements: [text("00100020", "LO", "SYNTH_ID_8")],
           trailingBytes: opaque,
         }),
       );
@@ -1160,11 +1154,11 @@ describe("AC-8: a value whose on-wire VR is not SQ is emitted unchanged", () => 
 });
 
 // ---------------------------------------------------------------------------
-// AC-9
+// Nothing the parsed items carry beyond rawBytes is emitted
 // ---------------------------------------------------------------------------
 
-describe("AC-9: nothing the parsed items carry beyond rawBytes is emitted", () => {
-  it.each(ALL_TS)("AC-9: a name only the model holds never reaches the output, under %s", (ts) => {
+describe("nothing the parsed items carry beyond rawBytes is emitted", () => {
+  it.each(ALL_TS)("a name only the model holds never reaches the output, under %s", (ts) => {
     const w = wireOf(ts);
     const le = w.le;
     const canary = pad(CANARY);
@@ -1227,7 +1221,7 @@ describe("AC-9: nothing the parsed items carry beyond rawBytes is emitted", () =
 });
 
 // ---------------------------------------------------------------------------
-// AC-10
+// Sequence bytes nested past NESTING_DEPTH_LIMIT
 // ---------------------------------------------------------------------------
 
 /**
@@ -1298,13 +1292,13 @@ function deepModel(span: Buffer, unit: number, undefinedLength: boolean): Elemen
   return must(next, "level 1");
 }
 
-describe("AC-10: Sequence bytes nested past NESTING_DEPTH_LIMIT", () => {
+describe("Sequence bytes nested past NESTING_DEPTH_LIMIT", () => {
   const LEVELS = 10_000;
 
   it.each([
     ["defined", false],
     ["undefined", true],
-  ] as const)("AC-10: a %s-length Sequence 10,000 levels deep", (_form, undefinedLength) => {
+  ] as const)("a %s-length Sequence 10,000 levels deep", (_form, undefinedLength) => {
     const { span, unit } = deepSequence(LEVELS, undefinedLength);
     const el = deepModel(span, unit, undefinedLength);
     let out: Buffer | undefined;
@@ -1331,7 +1325,7 @@ describe("AC-10: Sequence bytes nested past NESTING_DEPTH_LIMIT", () => {
 });
 
 // ---------------------------------------------------------------------------
-// AC-11
+// The input Dataset is left unchanged
 // ---------------------------------------------------------------------------
 
 /** Every element of every Data Set, in `elements()` order, with its bytes. */
@@ -1346,8 +1340,8 @@ function snapshotOf(ds: Dataset, path = "root"): string[] {
   return out;
 }
 
-describe("AC-11: the input Dataset is left unchanged", () => {
-  it.each(ALL_TS)("AC-11: same tags, same order, same bytes after serializing, under %s", (ts) => {
+describe("the input Dataset is left unchanged", () => {
+  it.each(ALL_TS)("same tags, same order, same bytes after serializing, under %s", (ts) => {
     const src = parseDicom(
       buildDicom({
         transferSyntax: ts,
@@ -1388,11 +1382,11 @@ describe("AC-11: the input Dataset is left unchanged", () => {
 });
 
 // ---------------------------------------------------------------------------
-// AC-12
+// deidentify() output is emitted ascending at every depth
 // ---------------------------------------------------------------------------
 
-describe("AC-12: deidentify() output is emitted ascending at every depth", () => {
-  it.each(ALL_TS)("AC-12: root, kept Sequences and inserted elements, under %s", (ts) => {
+describe("deidentify() output is emitted ascending at every depth", () => {
+  it.each(ALL_TS)("root, kept Sequences and inserted elements, under %s", (ts) => {
     // (0008,1115) and (0008,1199) are not in Table E.1-1, so both are kept and walked.
     // The kept Item also carries an odd-length value and a group length, which
     // deidentify() keeps in its model and writes padded and left out.
