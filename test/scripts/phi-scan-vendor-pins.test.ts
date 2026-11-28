@@ -96,6 +96,16 @@ function scan(root: string, paths: string[]): { code: number; stdout: string; st
 /** A page carrying every example once, one per line. */
 const PAGE = STANDARD_EXAMPLES.map((v) => `Example value: ${v}`).join("\n") + "\n";
 
+/** The offset each hit line of a run names. A hit names where it is, never the value it found. */
+function hitOffsets(stderr: string): number[] {
+  const out: number[] = [];
+  for (const line of stderr.split("\n")) {
+    const hit = /^ {2}tag=\S+ vr=\S+ offset=(\d+) \(/.exec(line);
+    if (hit?.[1] !== undefined) out.push(Number(hit[1]));
+  }
+  return out;
+}
+
 /** A synthetic standards text with a name and a date of the shape a patient's would have. */
 const PINNED_TEXT = `Worked example: ${pn("Example", "Sample")} born ${da(1981, 3, 4)}.\n`;
 
@@ -115,7 +125,8 @@ describe("phi-scan: the standard's worked examples are not excused outside vendo
       put(root, rel, PAGE);
       const r = scan(root, [rel]);
       expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-      for (const value of STANDARD_EXAMPLES) expect(r.stderr, value).toContain(value);
+      const reported = hitOffsets(r.stderr);
+      for (const value of STANDARD_EXAMPLES) expect(reported, value).toContain(PAGE.indexOf(value));
     });
   }
 

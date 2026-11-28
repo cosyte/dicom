@@ -200,12 +200,14 @@ async function row(scanner: string, files: number, size: number): Promise<[Run, 
 // The direction the copy COSTS on
 // ---------------------------------------------------------------------------
 //
-// 🛑 THE TABLE ABOVE IS THE FAVOURABLE AXIS AND IT IS NOT THE ONLY ONE. Retention falls when the
-// excerpts are few and the pages are large. It RISES when one file produces very many hits, because
-// a copy of up to `MAX_HIT_VALUE_LENGTH` is resident per hit where a pointer's header was, and the
-// `hits` array is still unbounded. That product is measured here rather than argued about.
+// 🛑 THE TABLE ABOVE IS THE FAVOURABLE AXIS AND IT IS NOT THE ONLY ONE. This one was written for a
+// scanner whose hits each held a copy of up to 194 units of the value they matched: retention fell
+// when those excerpts were few and the pages large, and ROSE when one file produced very many hits,
+// a copy per hit where a pointer's header was. A hit holds no value now, so on this tree the table
+// measures the `hits` array alone, which is still unbounded, and the copy only in a base tree that
+// still makes one. That product is measured here rather than argued about.
 
-/** One page of back-to-back PN tokens, each longer than the excerpt bound. */
+/** One page of back-to-back PN tokens, each `tokenChars` long. */
 function tokenPage(bytes: number, tokenChars: number): string {
   const half = Math.max(1, Math.floor((tokenChars - 1) / 2));
   const token = `${"A".repeat(half)}${CARET}${"B".repeat(tokenChars - half - 1)}`;
