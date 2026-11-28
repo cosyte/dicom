@@ -84,9 +84,9 @@ function nonSnippetText(err: DicomParseError): string {
   });
 }
 
-describe("AC-3: the Basic Offset Table and every fragment, as raw bytes in file order", () => {
+describe("the Basic Offset Table and every fragment, as raw bytes in file order", () => {
   it.each([JPEG_BASELINE, RLE_LOSSLESS, HTJ2K])(
-    "AC-3: a populated Basic Offset Table and three fragments under %s",
+    "a populated Basic Offset Table and three fragments under %s",
     (uid) => {
       const bytes = encapsulatedObject({
         transferSyntax: uid,
@@ -119,7 +119,7 @@ describe("AC-3: the Basic Offset Table and every fragment, as raw bytes in file 
     },
   );
 
-  it("AC-3: an empty Basic Offset Table reads as zero bytes", () => {
+  it("an empty Basic Offset Table reads as zero bytes", () => {
     const pixels = readPixelDataFragments(
       parseDicom(encapsulatedObject({ transferSyntax: JPEG_BASELINE })),
     );
@@ -130,9 +130,9 @@ describe("AC-3: the Basic Offset Table and every fragment, as raw bytes in file 
   });
 });
 
-describe("AC-4: a fragment is returned whole, whatever its bytes", () => {
+describe("a fragment is returned whole, whatever its bytes", () => {
   it.each([JPEG_BASELINE, RLE_LOSSLESS])(
-    "AC-4: filler and embedded Sequence Delimitation Item bytes under %s",
+    "filler and embedded Sequence Delimitation Item bytes under %s",
     (uid) => {
       const holdsDelimiter = Buffer.concat([
         Buffer.alloc(4, 0xaa),
@@ -161,15 +161,15 @@ describe("AC-4: a fragment is returned whole, whatever its bytes", () => {
   );
 });
 
-describe("AC-5: no encapsulated Pixel Data reads as a value no encapsulated result can be", () => {
-  it.each([TS_EXPLICIT_LE, JPEG_BASELINE])("AC-5: Pixel Data absent under %s", (uid) => {
+describe("no encapsulated Pixel Data reads as a value no encapsulated result can be", () => {
+  it.each([TS_EXPLICIT_LE, JPEG_BASELINE])("Pixel Data absent under %s", (uid) => {
     const ds = parseDicom(encapsulatedObject({ transferSyntax: uid, pixelDataElements: [] }));
     expect(ds.has("7FE00010")).toBe(false);
     expect(readPixelDataFragments(ds)).toBeUndefined();
   });
 
   it.each([TS_EXPLICIT_LE, JPEG_BASELINE])(
-    "AC-5: native Pixel Data with an explicit Value Length under %s",
+    "native Pixel Data with an explicit Value Length under %s",
     (uid) => {
       const ds = parseDicom(
         encapsulatedObject({
@@ -191,8 +191,8 @@ describe("AC-5: no encapsulated Pixel Data reads as a value no encapsulated resu
   );
 });
 
-describe("AC-6: copyValues keeps the fragments after the input is overwritten", () => {
-  it("AC-6: the original bytes survive an overwrite with { copyValues: true }, and do not without it", () => {
+describe("copyValues keeps the fragments after the input is overwritten", () => {
+  it("the original bytes survive an overwrite with { copyValues: true }, and do not without it", () => {
     const items = [BOT_TWO_OFFSETS, FRAGMENT_A, FRAGMENT_B, FRAGMENT_C];
     const copied = encapsulatedObject({ transferSyntax: JPEG_BASELINE, items });
     const ds = parseDicom(copied, { copyValues: true });
@@ -216,8 +216,8 @@ describe("AC-6: copyValues keeps the fragments after the input is overwritten", 
   });
 });
 
-describe("AC-7: an Item declaring a length past the bytes is a typed fatal that carries neither", () => {
-  it.each([JPEG_BASELINE, RLE_LOSSLESS])("AC-7: an over-declared fragment under %s", (uid) => {
+describe("an Item declaring a length past the bytes is a typed fatal that carries neither", () => {
+  it.each([JPEG_BASELINE, RLE_LOSSLESS])("an over-declared fragment under %s", (uid) => {
     const bytes = encapsulatedObject({
       transferSyntax: uid,
       items: [Buffer.alloc(0), NAME_FRAGMENT],
@@ -241,7 +241,7 @@ describe("AC-7: an Item declaring a length past the bytes is a typed fatal that 
   });
 
   it.each([JPEG_BASELINE, RLE_LOSSLESS])(
-    "AC-7: an over-declared Basic Offset Table Item under %s",
+    "an over-declared Basic Offset Table Item under %s",
     (uid) => {
       const bytes = encapsulatedObject({
         transferSyntax: uid,
@@ -259,7 +259,7 @@ describe("AC-7: an Item declaring a length past the bytes is a typed fatal that 
   );
 });
 
-describe("AC-8: a foreign tag in the Item stream, or an input cut inside an Item header, is fatal", () => {
+describe("a foreign tag in the Item stream, or an input cut inside an Item header, is fatal", () => {
   const cases: readonly (readonly [string, Buffer])[] = [
     ["an Item Delimitation Item (FFFE,E00D)", Buffer.from([0xfe, 0xff, 0x0d, 0xe0, 0, 0, 0, 0])],
     [
@@ -269,7 +269,7 @@ describe("AC-8: a foreign tag in the Item stream, or an input cut inside an Item
     ["half an Item header", Buffer.from([0xfe, 0xff, 0x00, 0xe0])],
   ];
   for (const uid of [JPEG_BASELINE, RLE_LOSSLESS]) {
-    it.each(cases)(`AC-8: %s after the last fragment under ${uid}`, (_label, tail) => {
+    it.each(cases)(`%s after the last fragment under ${uid}`, (_label, tail) => {
       const bytes = encapsulatedObject({
         transferSyntax: uid,
         omitSequenceDelim: true,
@@ -281,8 +281,8 @@ describe("AC-8: a foreign tag in the Item stream, or an input cut inside an Item
   }
 });
 
-describe("AC-9: a stream that ends before its Sequence Delimitation Item is a declared Tier-2 code", () => {
-  it.each([JPEG_BASELINE, RLE_LOSSLESS])("AC-9: under %s", (uid) => {
+describe("a stream that ends before its Sequence Delimitation Item is a declared Tier-2 code", () => {
+  it.each([JPEG_BASELINE, RLE_LOSSLESS])("under %s", (uid) => {
     const items = [Buffer.alloc(0), NAME_FRAGMENT, FRAGMENT_A];
     const bytes = encapsulatedObject({ transferSyntax: uid, items, omitSequenceDelim: true });
     // The input ends on the last fragment's bytes, not on a delimiter.
@@ -313,7 +313,7 @@ describe("AC-9: a stream that ends before its Sequence Delimitation Item is a de
     }
   });
 
-  it("AC-9: a delimited stream raises nothing, so the code is about the delimiter alone", () => {
+  it("a delimited stream raises nothing, so the code is about the delimiter alone", () => {
     const items = [Buffer.alloc(0), NAME_FRAGMENT, FRAGMENT_A];
     expect(
       parseDicom(encapsulatedObject({ transferSyntax: JPEG_BASELINE, items })).warnings,

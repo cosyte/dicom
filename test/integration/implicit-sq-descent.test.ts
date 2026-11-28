@@ -1,5 +1,5 @@
 /**
- * `DICOM-IMPLICIT-SQ-NOT-DESCENDED` - a defined-length `SQ` under Implicit VR LE
+ * The Implicit VR SQ descent fix - a defined-length `SQ` under Implicit VR LE
  * must be descended, because nothing that walks `Element.items` can see inside a
  * sequence the parser never opened.
  *
@@ -84,13 +84,13 @@ function nestedNameFixture(transferSyntax: string): Buffer {
   });
 }
 
-describe("DICOM-IMPLICIT-SQ-NOT-DESCENDED - the leak, constructed", () => {
+describe("the leak, constructed", () => {
   it("descends a defined-length SQ under Implicit VR LE into its items", () => {
     const ds = parseDicom(nestedNameFixture(IMPLICIT_LE));
     const sq = ds.get(CARRIER);
 
     expect(sq?.vr).toBe("SQ");
-    // The defect: `items` was `undefined`, so `vm` sat at the Phase 2 scalar
+    // The defect: `items` was `undefined`, so `vm` sat at the old scalar
     // placeholder of 1 and looked right while the sequence was never opened.
     expect(sq?.items).toBeDefined();
     expect(sq?.items).toHaveLength(1);
@@ -137,7 +137,7 @@ describe("DICOM-IMPLICIT-SQ-NOT-DESCENDED - the leak, constructed", () => {
   });
 });
 
-describe("DICOM-IMPLICIT-SQ-NOT-DESCENDED - descent shapes", () => {
+describe("descent shapes", () => {
   it("descends an undefined-length item inside a defined-length SQ", () => {
     // The two length forms are independent choices: section 7.5.2 lets the
     // sequence pick one, section 7.5.1 lets each item pick its own.
@@ -258,7 +258,7 @@ function carrierSpan(buf: Buffer): Buffer {
   return buf.subarray(at);
 }
 
-describe("DICOM-IMPLICIT-SQ-NOT-DESCENDED - serialization is unchanged", () => {
+describe("serialization is unchanged", () => {
   it("re-emits a descended defined-length SQ byte-for-byte", () => {
     // `rawBytes` for this shape stays VALUE-ONLY, which is what
     // `isFullSpanElement` assumes for Implicit VR: a full-span slice here would
@@ -270,7 +270,7 @@ describe("DICOM-IMPLICIT-SQ-NOT-DESCENDED - serialization is unchanged", () => {
   });
 });
 
-describe("DICOM-IMPLICIT-SQ-NOT-DESCENDED - a failed descent loses nothing", () => {
+describe("a failed descent loses nothing", () => {
   /**
    * A tag whose PS3.6 VR is `SQ` but whose defined-length value is not items.
    * Under Implicit VR the `SQ` is a **dictionary inference**, not something the
@@ -319,7 +319,7 @@ describe("DICOM-IMPLICIT-SQ-NOT-DESCENDED - a failed descent loses nothing", () 
   });
 });
 
-describe("DICOM-IMPLICIT-SQ-NOT-DESCENDED - the descent cannot read past the declared length", () => {
+describe("the descent cannot read past the declared length", () => {
   /**
    * An SQ whose declared Value Length ends **before** its item claims to. PS3.5
    * section 7.5.2 makes the sequence's own length the exact extent of the item

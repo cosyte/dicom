@@ -39,7 +39,7 @@ import {
   type RecordSpec,
 } from "../helpers/build-dicomdir.js";
 
-/** This spec's parse codes. */
+/** The DICOMDIR parse codes this file tests. */
 const DIRECTORY_CODES: readonly string[] = [
   WARNING_CODES.DICOM_DIRECTORY_OFFSET_UNRESOLVED,
   WARNING_CODES.DICOM_DIRECTORY_OFFSET_MALFORMED,
@@ -117,11 +117,11 @@ function withRecord(
   return buildDicomdir({ transferSyntax: ts, ...base });
 }
 
-describe("[AC-1] a DICOMDIR's Directory Records, their types, lower-level records and Referenced File IDs", () => {
+describe("a DICOMDIR's Directory Records, their types, lower-level records and Referenced File IDs", () => {
   for (const [name, ts] of SYNTAXES) {
     for (const sequenceUndefinedLength of [false, true]) {
       const form = sequenceUndefinedLength ? "undefined-length" : "defined-length";
-      it(`[AC-1] ${name}, ${form} Directory Record Sequence: the tree follows the offsets`, () => {
+      it(`${name}, ${form} Directory Record Sequence: the tree follows the offsets`, () => {
         const built = buildDicomdir({
           transferSyntax: ts,
           sequenceUndefinedLength,
@@ -162,14 +162,14 @@ describe("[AC-1] a DICOMDIR's Directory Records, their types, lower-level record
           expect(r.referencedFileId).toEqual(FILE_IDS[r.index]);
         }
 
-        // Tier 1: a well-formed DICOMDIR raises none of this spec's codes.
+        // Tier 1: a well-formed DICOMDIR raises none of these codes.
         expect(directoryWarnings(ds.warnings)).toEqual([]);
         expect(directoryWarnings(seen)).toEqual([]);
       });
     }
   }
 
-  it("[AC-1] a file read without its preamble still counts the 132 bytes it lacks", () => {
+  it("a file read without its preamble still counts the 132 bytes it lacks", () => {
     const built = buildDicomdir({
       transferSyntax: TS_EXPLICIT_LE,
       skipPreamble: true,
@@ -181,7 +181,7 @@ describe("[AC-1] a DICOMDIR's Directory Records, their types, lower-level record
     expect(directoryWarnings(ds.warnings)).toEqual([]);
   });
 
-  it("[AC-1] an object that is not a DICOMDIR has no directory", () => {
+  it("an object that is not a DICOMDIR has no directory", () => {
     const built = buildDicomdir({ transferSyntax: TS_EXPLICIT_LE, ...twoPatientRecords() });
     // Same bytes with the File Meta SOP Class rewritten: group 0004 alone does
     // not make a DICOMDIR (the (0002,0002) value is the one test).
@@ -226,9 +226,9 @@ const NESTED = {
   ],
 } as const satisfies Partial<RecordSpec>;
 
-describe("[AC-2] an offset that does not land on an Item of the Directory Record Sequence", () => {
+describe("an offset that does not land on an Item of the Directory Record Sequence", () => {
   for (const [landing, spec] of LANDINGS) {
-    it(`[AC-2] ${landing}: warns, resolves nothing from it, and every other record resolves`, () => {
+    it(`${landing}: warns, resolves nothing from it, and every other record resolves`, () => {
       const base = twoPatientRecords({ 5: { ...NESTED }, 8: { next: spec } });
       const built = buildDicomdir({ transferSyntax: TS_EXPLICIT_LE, ...base });
       // The nested landing is a real Item tag: a reader that scanned for one
@@ -258,7 +258,7 @@ describe("[AC-2] an offset that does not land on an Item of the Directory Record
     });
   }
 
-  it("[AC-2] a root offset that names no record leaves the root entity empty", () => {
+  it("a root offset that names no record leaves the root entity empty", () => {
     const base = twoPatientRecords();
     const built = buildDicomdir({ transferSyntax: TS_EXPLICIT_LE, ...base, firstRoot: "pastEnd" });
     const ds = parseDicom(built.bytes);
@@ -269,7 +269,7 @@ describe("[AC-2] an offset that does not land on an Item of the Directory Record
     expect(ds.directory?.records).toHaveLength(10);
   });
 
-  it("[AC-2] { strict: true } escalates it as it does every Tier-2 code", () => {
+  it("{ strict: true } escalates it as it does every Tier-2 code", () => {
     const base = twoPatientRecords({ 8: { next: { midRecord: 5 } } });
     const built = buildDicomdir({ transferSyntax: TS_EXPLICIT_LE, ...base });
     expect(() => parseDicom(built.bytes, { strict: true })).toThrow(DicomParseError);
@@ -281,13 +281,13 @@ describe("[AC-2] an offset that does not land on an Item of the Directory Record
   });
 });
 
-describe("[AC-3] an offset that would reach a record already reached", () => {
+describe("an offset that would reach a record already reached", () => {
   const CYCLES: readonly (readonly [string, Partial<Record<number, Partial<RecordSpec>>>])[] = [
     ["a record whose (0004,1400) names itself", { 8: { next: 8 } }],
     ["an IMAGE record whose (0004,1420) names its own PATIENT", { 9: { lower: 1 } }],
   ];
   for (const [name, overrides] of CYCLES) {
-    it(`[AC-3] ${name}: warns, exposes the record once, and finishes`, () => {
+    it(`${name}: warns, exposes the record once, and finishes`, () => {
       const built = buildDicomdir({
         transferSyntax: TS_EXPLICIT_LE,
         ...twoPatientRecords(overrides),
@@ -303,9 +303,9 @@ describe("[AC-3] an offset that would reach a record already reached", () => {
   }
 });
 
-describe("[AC-4] an offset attribute whose Value Length is not 4", () => {
+describe("an offset attribute whose Value Length is not 4", () => {
   for (const length of [0, 2, 8]) {
-    it(`[AC-4] (0004,1400) of Value Length ${String(length)}: warns and resolves no record`, () => {
+    it(`(0004,1400) of Value Length ${String(length)}: warns and resolves no record`, () => {
       // Built once for the layout, then again with the value naming IM22 in its
       // first four bytes where it has them: a reader that took those four bytes
       // would append IM22 after IM12.
