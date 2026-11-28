@@ -91,12 +91,7 @@ export function applySpecificCharacterSet(
  * and the 64-bit SV/UV (which are long-form, NOT short-form). The serializer
  * reuses this set for symmetric long-form encoding.
  *
- * @example
- * ```ts
- * import { LONG_FORM_VRS } from "@cosyte/dicom";
- * LONG_FORM_VRS.has("SQ"); // true
- * LONG_FORM_VRS.has("PN"); // false
- * ```
+ * @internal
  */
 export const LONG_FORM_VRS: ReadonlySet<VR> = new Set<VR>([
   "OB",

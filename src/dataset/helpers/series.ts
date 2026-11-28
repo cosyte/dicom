@@ -31,6 +31,8 @@ type Tag = string;
  * s.modality;            // "CT"
  * s.frameOfReferenceUid; // shared ⇒ co-registered with peers
  * ```
+ *
+ * @internal
  */
 export function buildSeries(ds: Dataset): SeriesView {
   const view: { -readonly [K in keyof SeriesView]: SeriesView[K] } = {};

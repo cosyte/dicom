@@ -286,7 +286,7 @@ function writeBody(out: Buffer, plan: BodyPlan, encoding: BodyEncoding, at: numb
  * {@link encodeFileMeta}), the Data Sets are ordered as above, odd-length values
  * are padded even, and retired `(gggg,0000)` group lengths are dropped.
  *
- * @throws {@link DicomSerializeError} with code `MISSING_TRANSFER_SYNTAX` when
+ * @throws {DicomSerializeError} with code `MISSING_TRANSFER_SYNTAX` when
  *   the dataset has no File Meta Transfer Syntax UID,
  *   `UNSUPPORTED_TRANSFER_SYNTAX` when that UID is neither one of the four
  *   native syntaxes nor a section A.4 one, `INVALID_ENCAPSULATED_PIXEL_DATA`
