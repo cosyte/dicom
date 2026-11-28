@@ -1,10 +1,10 @@
 /**
- * Tests for `parseImplicitLE` - Phase 2 plan 02-03 task 2.
+ * Tests for `parseImplicitLE`.
  *
- * Covers TS-01 (Implicit VR LE) end-to-end through `parseDicom`, plus
- * TOL-09 (private-tag-no-creator), TOL-10 (group-length-in-dataset),
- * the D-34 Element.privateCreator population path, and the threat-model
- * mitigations T-02-03-01 (truncation) and T-02-03-02 (length overflow).
+ * Covers Implicit VR LE end-to-end through `parseDicom`, plus a private tag
+ * with no creator, a group length in the dataset, the
+ * `Element.privateCreator` population path, and the truncation and length
+ * overflow mitigations.
  */
 
 import { Buffer } from "node:buffer";
@@ -20,9 +20,8 @@ import { WARNING_CODES } from "../../src/parser/warnings.js";
 import { serializeDicom } from "../../src/serialize/serialize.js";
 
 /**
- * Reach the protected `_elements` map for Phase 2 verification. Phase 3
- * promotes this to a public navigation surface (per D-42); until then,
- * tests cast through a structural shape that mirrors the protected slot.
+ * Reach the protected `_elements` map for verification. Tests cast through a
+ * structural shape that mirrors the protected slot.
  */
 interface DatasetWithElements {
   readonly _elements: ReadonlyMap<Tag, Element>;
@@ -31,7 +30,7 @@ function elementsOf(ds: Dataset): ReadonlyMap<Tag, Element> {
   return (ds as unknown as DatasetWithElements)._elements;
 }
 
-describe("parseImplicitLE - TS-01 happy path", () => {
+describe("parseImplicitLE - Implicit VR LE happy path", () => {
   it("parses (0010,0010) PatientName from a minimal Implicit VR LE buffer", () => {
     // 8-byte even-length value; Implicit VR LE has no on-wire VR so the
     // VR field on Element is resolved from the dictionary (PN).
@@ -66,7 +65,7 @@ describe("parseImplicitLE - TS-01 happy path", () => {
   });
 });
 
-describe("parseImplicitLE - D-16 buffer-view vs copy", () => {
+describe("parseImplicitLE - buffer-view vs copy", () => {
   it("default: rawBytes shares the source ArrayBuffer (zero-copy view)", () => {
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2",
@@ -109,7 +108,7 @@ describe("parseImplicitLE - D-16 buffer-view vs copy", () => {
   });
 });
 
-describe("parseImplicitLE - TOL-10 group-length-in-dataset", () => {
+describe("parseImplicitLE - group-length-in-dataset", () => {
   it("(0008,0000) group length in non-FM group emits DICOM_GROUP_LENGTH_IN_DATASET; element preserved", () => {
     const value = Buffer.alloc(4);
     value.writeUInt32LE(0, 0);
@@ -125,8 +124,8 @@ describe("parseImplicitLE - TOL-10 group-length-in-dataset", () => {
   });
 });
 
-describe("parseImplicitLE - TOL-09 + Case 4a private-tag-no-creator", () => {
-  it("private element with no creator emits both TOL-09 codes; element.vr === 'UN'", () => {
+describe("parseImplicitLE - Case 4a private-tag-no-creator", () => {
+  it("private element with no creator emits both codes; element.vr === 'UN'", () => {
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2",
       elements: [{ tag: "00191000", vr: "LO", value: Buffer.from("vendor-data", "ascii") }],
@@ -140,7 +139,7 @@ describe("parseImplicitLE - TOL-09 + Case 4a private-tag-no-creator", () => {
   });
 });
 
-describe("parseImplicitLE - D-33 / D-34 private-creator block-reservation", () => {
+describe("parseImplicitLE - private-creator block-reservation", () => {
   it("creator at (0019,0010)='ACME' covers (0019,1000): privateCreator withheld with no profile, vr='UN', no NO_CREATOR warning", () => {
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2",
@@ -161,7 +160,7 @@ describe("parseImplicitLE - D-33 / D-34 private-creator block-reservation", () =
     expect(el?.vr).toBe("UN");
     const codes = ds.warnings.map((w) => w.code);
     expect(codes).not.toContain(WARNING_CODES.DICOM_PRIVATE_TAG_NO_CREATOR);
-    // Still flagged for Phase 6 profile-supplied VR override.
+    // Still flagged, for a profile-supplied VR override.
     expect(codes).toContain(WARNING_CODES.DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR);
   });
 
@@ -206,7 +205,7 @@ describe("parseImplicitLE - a registered tag whose PS3.6 row lists no VR", () =>
   );
 });
 
-describe("parseImplicitLE - undefined-length SQ descent (D-21 + parseSequence)", () => {
+describe("parseImplicitLE - undefined-length SQ descent (parseSequence)", () => {
   it("(0040,A730) ContentSequence with undefined length descends into the item body", () => {
     // Implicit VR LE has no on-wire VR; the parser resolves SQ from the
     // dictionary for ContentSequence, sees length 0xFFFFFFFF, and delegates
@@ -236,10 +235,10 @@ describe("parseImplicitLE - undefined-length SQ descent (D-21 + parseSequence)",
   });
 
   it("explicit-length SQ also descends (defined item body, no SeqDelim)", () => {
-    // This test was VACUOUS until `DICOM-IMPLICIT-SQ-NOT-DESCENDED`, and how it
+    // This test was VACUOUS until Implicit VR SQ descent was fixed, and how it
     // passed is worth more than the case it covers. Its two assertions were
     // `vr === "SQ"`, which `resolveImplicitVR` answers from PS3.6 whether or not
-    // anything descends, and `vm === 1`, which was the Phase 2 SCALAR
+    // anything descends, and `vm === 1`, which was the old SCALAR
     // PLACEHOLDER - the literal `vm: 1` every non-SQ element gets. So a test
     // named "also descends" went green against a parser that never opened the
     // sequence. Assert the items, which is the only thing "descends" means.
@@ -316,7 +315,7 @@ describe("parseImplicitLE - undefined length on a non-SQ VR is fatal", () => {
 });
 
 describe("parseImplicitLE - threat model mitigations", () => {
-  it("T-02-03-01: truncated dataset throws DicomParseError(INVALID_FILE_META) not RangeError", () => {
+  it("truncated dataset throws DicomParseError(INVALID_FILE_META) not RangeError", () => {
     const buf = buildDicom({
       transferSyntax: "1.2.840.10008.1.2",
       elements: [{ tag: "00100010", vr: "PN", value: Buffer.from("DOE^JANE", "ascii") }],
@@ -333,7 +332,7 @@ describe("parseImplicitLE - threat model mitigations", () => {
     }
   });
 
-  it("T-02-03-01: buffer ending INSIDE an element header (not its value) → INVALID_FILE_META", () => {
+  it("buffer ending INSIDE an element header (not its value) → INVALID_FILE_META", () => {
     // Distinct from the value-overflow case: here the 8-byte element header
     // itself is truncated, so the group/element/length cursor reads overrun
     // and the RangeError is caught and re-thrown as a typed fatal.
@@ -349,7 +348,7 @@ describe("parseImplicitLE - threat model mitigations", () => {
     }
   });
 
-  it("T-02-03-02: declared element length exceeds remaining buffer → INVALID_FILE_META", () => {
+  it("declared element length exceeds remaining buffer → INVALID_FILE_META", () => {
     // Manually craft a buffer: valid Part 10 + File Meta from buildDicom,
     // then a single Implicit-LE header declaring length 999_999 with no
     // value bytes following.

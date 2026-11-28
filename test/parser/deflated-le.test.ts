@@ -1,16 +1,16 @@
 /**
- * Tests for `parseDeflatedLE` - Phase 2 plan 02-05 (TS-04).
+ * Tests for `parseDeflatedLE`.
  *
  * Covers:
  *   - Happy-path Deflated-LE round-trip through `parseDicom + buildDicom`
- *     (CONTEXT D-26 - `inflateRawSync` + delegate to parseExplicitLE).
- *   - Position annotation (D-27 - warnings emitted from inflated content
+ *     (`inflateRawSync` + delegate to parseExplicitLE).
+ *   - Position annotation (warnings emitted from inflated content
  *     carry `position.deflated === true`).
  *   - ParseContext propagation - strict-mode escalation works through the
  *     inner emit wrapper (proves it does NOT bypass the outer chokepoint).
- *   - Decompression-bomb mitigation (T-02-05-01 - 256 MiB cap; tested
+ *   - Decompression-bomb mitigation (256 MiB cap; tested
  *     against a 1 KiB cap via `parseDeflatedLEWithCap` for tractability).
- *   - Stream-corruption mitigation (T-02-05-02 - random non-deflate bytes
+ *   - Stream-corruption mitigation (random non-deflate bytes
  *     throw `INVALID_FILE_META`, NOT a raw zlib `RangeError`).
  *   - `inflateRawSync` invariant (NOT `inflateSync`) - verified by the
  *     symmetry of the round-trip test (encoder uses `deflateRawSync`,
@@ -57,7 +57,7 @@ function buildCtx(buffer: Buffer, opts: { strict?: boolean } = {}): ParseContext
   };
 }
 
-describe("parseDeflatedLE - TS-04 happy path (D-26)", () => {
+describe("parseDeflatedLE - Deflated Explicit VR LE happy path", () => {
   it("round-trips a single PN element through buildDicom + parseDicom", () => {
     const buf = buildDicom({
       transferSyntax: TS_DEFLATED_LE,
@@ -92,7 +92,7 @@ describe("parseDeflatedLE - TS-04 happy path (D-26)", () => {
   });
 });
 
-describe("parseDeflatedLE - D-27 position.deflated annotation", () => {
+describe("parseDeflatedLE - position.deflated annotation", () => {
   it("warnings emitted from inflated content carry position.deflated === true", () => {
     // VR mismatch: dictionary expects PN for (0010,0010); we encode as LO.
     const buf = buildDicom({
@@ -156,7 +156,7 @@ describe("parseDeflatedLE - strict-mode escalation through inner emit", () => {
   });
 });
 
-describe("parseDeflatedLE - T-02-05-01 decompression-bomb cap", () => {
+describe("parseDeflatedLE - decompression-bomb cap", () => {
   it("throws INVALID_FILE_META when inflated output exceeds the cap", () => {
     // Build a payload whose inflation exceeds a 1 KiB cap. ~2 KiB of
     // identical bytes deflates to a tiny buffer (the classic deflate-bomb
@@ -183,7 +183,7 @@ describe("parseDeflatedLE - T-02-05-01 decompression-bomb cap", () => {
   });
 });
 
-describe("parseDeflatedLE - T-02-05-02 stream corruption", () => {
+describe("parseDeflatedLE - stream corruption", () => {
   it("throws INVALID_FILE_META on random non-deflate bytes (NOT a raw zlib error)", () => {
     const garbage = Buffer.from([
       0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e,
@@ -207,14 +207,14 @@ describe("parseDeflatedLE - T-02-05-02 stream corruption", () => {
   });
 
   it("throws INVALID_FILE_META end-to-end through parseDicom for corrupted deflated payload", () => {
-    // Build a valid Part 10 + File Meta header pointing at TS-04, but
+    // Build a valid Part 10 + File Meta header pointing at Deflated Explicit VR LE, but
     // append non-deflate gibberish as the dataset payload.
     const valid = buildDicom({
       transferSyntax: TS_DEFLATED_LE,
       elements: [{ tag: "00100010", vr: "PN", value: Buffer.from("DOE^JANE", "ascii") }],
     });
     // Find where File Meta ends - the original deflate stream begins at
-    // some offset. Since buildDicom currently throws for TS-04 (RED phase
+    // some offset. Since buildDicom currently throws for Deflated Explicit VR LE (RED phase
     // baseline), this test will start passing once Step 3 wires the
     // encoder. Once it does, we splice gibberish over the deflate body.
     // We approximate by building a separate buffer: keep everything up to

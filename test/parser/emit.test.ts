@@ -29,7 +29,7 @@ const sampleWarning: DicomParseWarning = {
   position: { byteOffset: 0 },
 };
 
-describe("makeEmitter (D-03, D-11, D-35)", () => {
+describe("makeEmitter", () => {
   it("lenient mode pushes warning into ctx.warnings", () => {
     const ctx = makeCtx();
     const emit = makeEmitter(ctx);
@@ -38,7 +38,7 @@ describe("makeEmitter (D-03, D-11, D-35)", () => {
     expect(ctx.warnings[0]?.code).toBe(WARNING_CODES.DICOM_MISSING_PREAMBLE);
   });
 
-  it("D-03 ordering: onWarning fires AFTER push (sees warning already in ctx.warnings)", () => {
+  it("ordering: onWarning fires AFTER push (sees warning already in ctx.warnings)", () => {
     let observedLen = -1;
     const ctx: ParseContext = makeCtx({
       onWarning: () => {
@@ -50,7 +50,7 @@ describe("makeEmitter (D-03, D-11, D-35)", () => {
     expect(observedLen).toBe(1);
   });
 
-  it("throwing onWarning is silently swallowed; subsequent emits still succeed (T-02-01-02)", () => {
+  it("throwing onWarning is silently swallowed; subsequent emits still succeed", () => {
     const onWarning = vi.fn(() => {
       throw new Error("boom");
     });
@@ -62,7 +62,7 @@ describe("makeEmitter (D-03, D-11, D-35)", () => {
     expect(onWarning).toHaveBeenCalledTimes(2);
   });
 
-  it("strict mode throws DicomParseError carrying warning code (D-35)", () => {
+  it("strict mode throws DicomParseError carrying warning code", () => {
     const ctx = makeCtx({ strict: true });
     const emit = makeEmitter(ctx);
     expect(() => emit(sampleWarning)).toThrow(DicomParseError);

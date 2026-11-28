@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 
 import { ByteCursor } from "../../src/parser/byte-cursor.js";
 
-describe("ByteCursor (D-05; T-02-01-06 truncation mitigation)", () => {
+describe("ByteCursor (truncation mitigation)", () => {
   it("readUInt16 honours littleEndian flag", () => {
     const buf = Buffer.from([0x01, 0x02]);
     const le = new ByteCursor(buf, true);
@@ -71,7 +71,7 @@ describe("ByteCursor (D-05; T-02-01-06 truncation mitigation)", () => {
     expect(cur.remaining()).toBe(2);
   });
 
-  it("readUInt16 throws RangeError on read past end (T-02-01-06)", () => {
+  it("readUInt16 throws RangeError on read past end", () => {
     const cur = new ByteCursor(Buffer.from([0x01]), true);
     expect(() => cur.readUInt16()).toThrow(RangeError);
   });

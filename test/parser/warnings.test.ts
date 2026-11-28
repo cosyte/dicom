@@ -28,14 +28,11 @@ import {
   vrMismatch,
 } from "../../src/parser/warnings.js";
 
-describe("WARNING_CODES (D-08)", () => {
-  it("has at least 24 codes (D-08 - full TOL-03 catalog enumeration)", () => {
-    // 25 today. CONTEXT.md D-08 enumerated 24 unique codes: 13 actively-emitted + 7
-    // VR-decode-time (Phase 3) + 2 charset (Phase 4) + 2 reserved
-    // (Phase 6 PRIVATE_CREATOR_UNKNOWN + Phase 7 BURNED_IN_ANNOTATION_NOT_REMOVED).
-    // The plan's ≥25 verification grep counts lines containing "DICOM_" across
-    // both the registry and the factory references - that grep is satisfied
-    // independently of the unique-key count.
+describe("WARNING_CODES", () => {
+  it("has at least 24 codes (full catalog enumeration)", () => {
+    // 25 today. The first catalog enumerated 24 unique codes: 13 emitted by the
+    // structural parse + 7 at VR decode + 2 charset + 2 reserved
+    // (PRIVATE_CREATOR_UNKNOWN and BURNED_IN_ANNOTATION_NOT_REMOVED).
     expect(Object.keys(WARNING_CODES).length).toBeGreaterThanOrEqual(24);
   });
 
@@ -45,9 +42,9 @@ describe("WARNING_CODES (D-08)", () => {
     }
   });
 
-  it("contains every Phase-2 actively-emitted code", () => {
+  it("contains every code the structural parse emits", () => {
     const active: ReadonlyArray<keyof typeof WARNING_CODES> = [
-      // Added by `DICOM-TAG-COLLISION-DESTROYS-ELEMENT`: emitted by
+      // Emitted by
       // `defineElement` when an element replaces one the Data Set already holds.
       "DICOM_DUPLICATE_TAG_IN_DATA_SET",
       "DICOM_EMPTY_ITEM_IN_SEQUENCE",
@@ -69,9 +66,9 @@ describe("WARNING_CODES (D-08)", () => {
     }
   });
 
-  it("contains every reserved (declared but not emitted in Phase 2) code", () => {
+  it("contains every code the structural parse declares but does not emit", () => {
     const reserved: ReadonlyArray<keyof typeof WARNING_CODES> = [
-      // Phase 3 - VR-decode-time
+      // VR-decode-time
       "DICOM_BOM_IN_TEXT_VR",
       "DICOM_DA_LEGACY_FORMAT",
       "DICOM_DT_NONSTANDARD_OFFSET",
@@ -79,14 +76,14 @@ describe("WARNING_CODES (D-08)", () => {
       "DICOM_NON_ASCII_IN_ASCII_VR",
       "DICOM_TRAILING_NULL_IN_TEXT_VR",
       "DICOM_UI_TRAILING_SPACE",
-      // Phase 4 - charset-decode
+      // charset-decode
       "DICOM_CHARSET_AMBIGUOUS_SEPARATOR",
       "DICOM_UNSUPPORTED_CHARSET",
-      // ISO 2022 code-extension decode (AC-5, AC-6, AC-7): value-level codes
+      // ISO 2022 code-extension decode: value-level codes
       "DICOM_CHARSET_BYTES_UNDECODABLE",
       "DICOM_CHARSET_ESCAPE_UNDECLARED",
       "DICOM_CHARSET_EXTENSION_NOT_RESET",
-      // Phase 6 / Phase 7 - reserved
+      // reserved
       "DICOM_BURNED_IN_ANNOTATION_NOT_REMOVED",
       "DICOM_PRIVATE_CREATOR_UNKNOWN",
     ];
@@ -96,7 +93,7 @@ describe("WARNING_CODES (D-08)", () => {
   });
 });
 
-describe("warning factories (D-12 - one named factory per active-emit code)", () => {
+describe("warning factories (one named factory per active-emit code)", () => {
   const pos = { byteOffset: 0 } as const;
 
   it("missingPreamble", () => {
@@ -125,7 +122,7 @@ describe("warning factories (D-12 - one named factory per active-emit code)", ()
   });
 
   it("oddLengthValuePadded takes no declared length, so no call site can pass one", () => {
-    // The fifth instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`, and the worst of
+    // The fifth instance of a diagnostic that could carry a value from the file, and the worst of
     // the six: this message rendered a fabricated tag AND a fabricated 32-bit
     // declared length, eight consecutive payload bytes. The tag survives because
     // `renderTag` is a membership test now; the length cannot, because a raw
@@ -193,8 +190,8 @@ describe("warning factories (D-12 - one named factory per active-emit code)", ()
   });
 
   it("nonzeroReservedBytes takes neither a tag NOR the two byte values", () => {
-    // The SIXTH instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`, measured by this
-    // slice and filed nowhere before it. The tag was already bound out here
+    // The SIXTH instance of a diagnostic that could carry a value from the file, measured by this
+    // change and filed nowhere before it. The tag was already bound out here
     // because the trigger is "these bytes are not what PS3.5 7.1.2 requires", so
     // the header may not be a header - and the two reserved bytes come off that
     // same header. They shipped through `0.0.14` as two decimals, which is a
@@ -215,7 +212,7 @@ describe("warning factories (D-12 - one named factory per active-emit code)", ()
   });
 
   it("itemCrossesSequenceEnd takes NEITHER length, not even the bounded remainder", () => {
-    // The EIGHTH instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`. The Item's own
+    // The EIGHTH instance of a diagnostic that could carry a value from the file. The Item's own
     // declared length was bound out first; the remaining-bytes count stayed,
     // under a comment and a pinning test that both said the emit site's
     // `endLimit < buffer.length` conjunct bounded it by the buffer. It does
@@ -255,7 +252,7 @@ describe("warning factories (D-12 - one named factory per active-emit code)", ()
     // The third member of the family, and the shape is copied from its siblings
     // deliberately: `Element.rawBytes.length` EQUALS the declared Value Length
     // off the element header, so a new factory taking one would reopen exactly
-    // what `#91` bound out of the two below. The bound is the SIGNATURE - two
+    // what `` bound out of the two below. The bound is the SIGNATURE - two
     // parameters, neither of them a length - and the registry template has no
     // numeric slot for a call site to fill.
     expect(privateCarrierNotAuditable.length).toBe(2);
@@ -290,7 +287,7 @@ describe("warning factories (D-12 - one named factory per active-emit code)", ()
   });
 
   it("sequenceNotAuditable takes no byte span, so no call site can pass one", () => {
-    // The SEVENTH instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`. `{n}` was
+    // The SEVENTH instance of a diagnostic that could carry a value from the file. `{n}` was
     // `Element.rawBytes.length`, which EQUALS the declared Value Length off the
     // element header - and one of this code's two producers is a carrier whose
     // header the file's own length fields may have composed out of somebody's
@@ -346,7 +343,7 @@ describe("warning factories (D-12 - one named factory per active-emit code)", ()
 
   it("pixelDataLengthMismatch keeps the COMPUTED count and drops the DECLARED length", () => {
     // Not emitted by this build, which is the reason to bind it NOW: with no
-    // call site the change costs nothing, and a later phase switching the code
+    // call site the change costs nothing, and a later change switching the code
     // on would otherwise ship `oddLengthValuePadded`'s leak one code over. The
     // computed figure is a product this parser calculates, not a number it read.
     expect(pixelDataLengthMismatch.length).toBe(2);
@@ -367,7 +364,7 @@ describe("warning factories (D-12 - one named factory per active-emit code)", ()
     ["charsetBytesUndecodable", charsetBytesUndecodable, "DICOM_CHARSET_BYTES_UNDECODABLE"],
     ["charsetExtensionNotReset", charsetExtensionNotReset, "DICOM_CHARSET_EXTENSION_NOT_RESET"],
   ] as const)(
-    "AC-8: %s takes a position, a tag and a VR, and its template has no slot for a value",
+    "%s takes a position, a tag and a VR, and its template has no slot for a value",
     (_name, factory, code) => {
       // The bound is the signature: three parameters, none of them a string read
       // out of the value, and a registry template whose only tokens are {tag}
