@@ -1,7 +1,7 @@
 /**
  * The forward scanners in `scripts/phi-scan.ts` against the patterns they replaced.
  *
- * `DICOM-RESIDUALS` removed the last route by which a scan target's bytes became a `RegExp`
+ * An earlier fix removed the last route by which a scan target's bytes became a `RegExp`
  * subject, because a matched subject stays readable from `RegExp.input` and `RegExp.lastMatch`,
  * which are process globals; a later pass removed the last route by which the gate's own
  * CONFIGURATION became one, so the script now constructs no `RegExp` at all.
@@ -121,7 +121,7 @@ function assertNotExcused(values: readonly string[]): void {
 /**
  * What the three patterns say about `content`, in the order `scanText` pushes them: the ISO pass,
  * then the compact pass, then the PN pass. The filters applied after each match are the scanner's
- * own and are untouched by this slice.
+ * own and are untouched by this change.
  */
 function oracle(content: string): Expected[] {
   const out: Expected[] = [];
@@ -534,7 +534,7 @@ describe.skipIf(WINDOWS_PATHS)(
     /**
      * Lines chosen because they are where the pattern and a hand-written scan can part company: the
      * greedy `\s+` handing a character back to a lazy `(.+?)`, `.` refusing a `LineTerminator` that
-     * `\s` admits, `####` never being a `###` followed by whitespace, and - the cut this slice added
+     * `\s` admits, `####` never being a `###` followed by whitespace, and - the cut this change added
      * - whitespace that `\s` admits as the SEPARATOR and section 4.2 does not.
      *
      * Every one is a legal file name on this platform, because each accepted capture is written to
@@ -807,7 +807,7 @@ describe.skipIf(WINDOWS_PATHS)(
      * pattern did. Two readings of one document, and the gate whose job is to agree with a rendered
      * page cannot pick the losing one on prose alone.
      *
-     * A draft of this slice took the prose. It made `### x<NBSP>` name `x<NBSP>` where this parser
+     * A draft of this change took the prose. It made `### x<NBSP>` name `x<NBSP>` where this parser
      * names `x`, which EXEMPTED at exit 0 a target this parser refuses at exit 2 - a new invisible
      * route, in the remedy for an invisible route. It was refused by the gate and DELETED, not
      * reworded, and this case is the pin that stops it coming back by accident.
@@ -834,7 +834,7 @@ describe.skipIf(WINDOWS_PATHS)(
     });
 
     it("still registers nothing for a heading whose text is entirely whitespace", () => {
-      // NARROWING 2, unchanged by this slice and pinned because the refused draft would have undone
+      // NARROWING 2, unchanged by this change and pinned because the refused draft would have undone
       // it: under a strip that took only spaces and tabs, `###<space><space><NBSP>` has an `NBSP`
       // left in its text and the parser would name a path made of one invisible character. Every arm
       // in one run, and a real heading beside them so a parser that dropped everything fails too.
@@ -848,7 +848,7 @@ describe.skipIf(WINDOWS_PATHS)(
       // 🔴 THE LAST OF THE PATTERN'S `(.+?)`, AND IT WAS A SENTENCE UNTIL A GATE MEASURED IT. `.`
       // excludes `LineTerminator` where `\s` admits it, so an `LS` or `PS` inside the captured span
       // makes the whole pattern fail and this parser drops the entry. `splitCommonMarkLines` does not
-      // end a line at either, so they are the only two that reach it. Unchanged by this slice and
+      // end a line at either, so they are the only two that reach it. Unchanged by this change and
       // PRE-EXISTING - and pinned here because narrowing `isLineTerminatorCode` to `LF` and `CR` left
       // the WHOLE SUITE GREEN. It is the only thing between `### a<LS>b.dcm` and a live allow entry,
       // and a rule no test can break is a rule a later maintainer removes. Both directions, one run.
@@ -873,7 +873,7 @@ describe.skipIf(WINDOWS_PATHS)(
     /**
      * 🔴 WHAT THIS PARSER STILL DOES NOT MODEL, PINNED RATHER THAN DESCRIBED, IN BOTH DIRECTIONS.
      *
-     * Each unchanged by this slice and each `PRE-EXISTING`, and each is a case rather
+     * Each unchanged by this change and each `PRE-EXISTING`, and each is a case rather
      * than a sentence because a divergence nothing asserts is a divergence a later reader takes for
      * an accepted behaviour:
      *
@@ -889,8 +889,8 @@ describe.skipIf(WINDOWS_PATHS)(
      *   that does not exempt anything.
      *
      * None is swept in here, and the reason is the one thing that separates them from the separator
-     * this slice cut: **all three are VISIBLE to whoever reviews the rendered log.** Each is a
-     * `DICOM-RESIDUALS` row.
+     * this change cut: **all three are VISIBLE to whoever reviews the rendered log.** Each is a
+     * known, recorded residual.
      */
     it("models neither the closing sequence, inline parsing, nor container blocks", () => {
       const BS = String.fromCharCode(0x5c);
@@ -916,7 +916,7 @@ describe.skipIf(WINDOWS_PATHS)(
     });
 
     /**
-     * 🩺 THE SILENTLY EXEMPTED PHI TARGET. This is the residual `#115` filed and the reason this
+     * 🩺 THE SILENTLY EXEMPTED PHI TARGET. This is the residual `dicom#115` filed and the reason this
      * parser splits CommonMark's way rather than the allow list's.
      *
      * A LONE `CR` hides two different things from a `/\r?\n/` split, and the second one is the
@@ -1094,7 +1094,7 @@ describe.skipIf(WINDOWS_PATHS)(
     });
 
     it("refuses the path an HTML comment hides, and admits the one below it, LF and lone CR alike", () => {
-      // 🩺 THE FILED RESIDUAL. `#116` measured this exempting its target at exit 0 on head AND on
+      // 🩺 THE FILED RESIDUAL. `dicom#116` measured this exempting its target at exit 0 on head AND on
       // base in the `LF` form, and moving base exit 2 to head exit 0 in the lone-`CR` form, which is
       // the widening it disclosed against itself. Both forms are asserted here, in both directions.
       const body = (ending: string): string =>
@@ -1234,7 +1234,7 @@ describe.skipIf(WINDOWS_PATHS)(
     });
 
     it("moves entries BOTH ways against a fence-only reading, which is why no direction is claimed", () => {
-      // 🛑 THE DISJOINTNESS CASE, and the reason this slice claims a specification rather than a
+      // 🛑 THE DISJOINTNESS CASE, and the reason this change claims a specification rather than a
       // safer error. An ODD number of fence delimiters inside the comment: a reading that models the
       // comment sees `alpha` outside every block and `bravo` inside a fence, and a fence-only reading
       // sees exactly the reverse. Each exempts at exit 0 a target the other refuses at exit 2, so
@@ -1256,7 +1256,7 @@ describe.skipIf(WINDOWS_PATHS)(
     });
 
     /**
-     * 🔴 THE DIVERGENCE THIS SLICE SCOPES OUT, PINNED RATHER THAN DESCRIBED.
+     * 🔴 THE DIVERGENCE THIS CHANGE SCOPES OUT, PINNED RATHER THAN DESCRIBED.
      *
      * Start condition 7 is a complete open or closing tag alone on a line, and section 4.6 says
      * blocks of type 7 may not interrupt a paragraph. Modelling it needs paragraph state, which this
@@ -1268,7 +1268,7 @@ describe.skipIf(WINDOWS_PATHS)(
      * parsers agree. A case asserting the divergence alone would read as an accepted behaviour rather
      * than as a measured gap.
      *
-     * 🔴 AND THE THIRD ARM IS THIS SLICE WIDENING THE HOLE, DISCLOSED AGAINST ITSELF. A gate found it;
+     * 🔴 AND THE THIRD ARM IS THIS CHANGE WIDENING THE HOLE, DISCLOSED AGAINST ITSELF. A gate found it;
      * the class was disclosed and this INSTANCE of it was not. `</pre>` alone on a line is a complete
      * closing tag, so CommonMark starts a kind-7 block there that runs to the end of the document and
      * no heading below it exists at all. Neither tree models that. But the comment opener beneath it

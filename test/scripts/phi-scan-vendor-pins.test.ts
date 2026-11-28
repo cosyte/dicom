@@ -50,7 +50,7 @@ function iso(year: number, month: number, day: number): string {
 /**
  * PS3.5's own worked examples, as the text sweep matches them in the vendored DocBook: the PN
  * examples of section 6.2, the Chinese name example of Annex J, the DA example of section 6.2, and
- * the date in a WG-04 minutes URL. These were global allow-list entries and are not any more.
+ * the date in a DICOM Working Group 4 minutes URL. These were global allow-list entries and are not any more.
  */
 const STANDARD_EXAMPLES = [
   pn("Adams", "John"),
