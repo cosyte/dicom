@@ -30,7 +30,7 @@ jobs:
       contents: write # create tags / the GitHub release
       id-token: write # npm trusted publishing and provenance
       pull-requests: write # open the "Version Packages" PR
-    uses: cosyte/.github/.github/workflows/release.yml@398cd4ded647dddd9f2e220ceb042840f59e1426 # workflows-2026-11-10-398cd4ded647
+    uses: cosyte/.github/.github/workflows/release.yml@993cd5ea41380cb12dbeb463662527ab7ad1effc # workflows-2026-11-28-993cd5ea4138
     with:
       package-name: "@cosyte/dicom"
       # The release gates, each a step of the shared `version` job, run before anything publishes.

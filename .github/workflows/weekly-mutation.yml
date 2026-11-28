@@ -31,8 +31,8 @@ permissions:
 
 jobs:
   weekly:
-    # The release of commit 398cd4ded647, the same reference as ci.yml (see the note there).
-    uses: cosyte/.github/.github/workflows/weekly-mutation.yml@398cd4ded647dddd9f2e220ceb042840f59e1426 # the release of 398cd4ded647
+    # The same reference as ci.yml (see the note there).
+    uses: cosyte/.github/.github/workflows/weekly-mutation.yml@993cd5ea41380cb12dbeb463662527ab7ad1effc # workflows-2026-11-28-993cd5ea4138
     with:
       mutate-cmd: "pnpm mutate:full"
       # The parser, the dataset model, the serializer and the de-identifier, under a suite that
