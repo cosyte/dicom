@@ -17,11 +17,11 @@ import { TSX_CLI } from "./helpers/run-script.js";
 import { FIRST_USE_CT_NO_PREAMBLE, FIRST_USE_CT_OBJECT } from "./fixtures/first-use/ct-object.js";
 
 /**
- * Doc/code-agreement gate. Every ```` ```ts runnable ```` block in `docs-content/` is extracted,
- * compiled, and executed, and its inline `// =>` assertions are checked - so a documented example
- * can never silently drift from the shipped code (the documentation analog of the parser conformance
- * runners). Blocks tagged ` ```ts runnable throws ` must throw; plain ` ```ts ` blocks are
- * illustrative and are not executed.
+ * Doc/code-agreement gate. Every `ts` and `js` block in `docs-content/` is extracted, type-checked,
+ * and executed, and its inline `// =>` assertions are checked, so a documented example can never
+ * silently drift from the shipped code (the documentation analog of the parser conformance
+ * runners). Blocks tagged ` ```ts runnable throws ` must throw. A block that cannot run alone says
+ * why in its fence, ` ```ts no-run <reason> `, and is listed as skipped with that reason.
  *
  * Every snippet imports `@cosyte/dicom`, and the property-testing page `@cosyte/dicom/arbitraries`
  * too; each resolves against the **built** ESM artifact - exactly what an installer loads, not the
@@ -62,6 +62,7 @@ beforeAll(() => {
 docSnippetSuite({
   docsDir: join(root, "docs-content"),
   resolve: resolveEntry,
+  every: true,
 });
 
 /**

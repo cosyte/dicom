@@ -165,7 +165,7 @@ February has no 30th and April has no 31st, so each converts to nothing, never t
 
 Because the three names are identical across every `@cosyte/*` parser, a file importing two of them has to alias or namespace-import:
 
-```ts
+```ts no-run it imports @cosyte/hl7, which this package does not depend on
 import { parseDateTime, toISO as dicomToISO } from "@cosyte/dicom";
 import { parseDtm, toISO as hl7ToISO } from "@cosyte/hl7";
 

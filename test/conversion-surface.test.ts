@@ -886,7 +886,7 @@ describe("the access-patterns page's cross-package aliasing example is worked, n
   // owes a file that imports two of them. That example is the only place in the
   // package where another parser's call shape is written down, and it is
   // therefore the only place where one can be written down WRONG: `@cosyte/hl7`
-  // is not a dependency here and nothing compiles or runs the fence, so a
+  // is not a dependency here and nothing compiles or runs the fence (it is `no-run`), so a
   // decoder-return-shape mistake in it is invisible to every other gate.
   //
   // The shipped mistake this pins was `parseDtm(...).value`: `.value` is THIS
@@ -902,13 +902,13 @@ describe("the access-patterns page's cross-package aliasing example is worked, n
   // under npm's 65,536-character cut.
   const README = join(import.meta.dirname, "..", "docs-content", "access-patterns.md");
 
-  /** Every fenced ```ts block on the page, in document order. */
+  /** Every fenced ```ts block on the page, whatever its info string carries, in document order. */
   function fences(markdown: string): string[] {
     const out: string[] = [];
     let open = false;
     let buffer: string[] = [];
     for (const line of markdown.split("\n")) {
-      if (!open && /^```ts\s*$/u.test(line)) {
+      if (!open && /^```ts(?:\s.*)?$/u.test(line)) {
         open = true;
         buffer = [];
         continue;
