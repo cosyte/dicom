@@ -1,11 +1,10 @@
 /**
  * Tests for `resolveImplicitVR`, `resolvePrivateCreator`,
- * `registerPrivateCreator`, and `matchRepeatingGroup` - Phase 2 plan 02-03
- * task 1.
+ * `registerPrivateCreator`, and `matchRepeatingGroup`.
  *
- * Covers CONTEXT.md D-21 (5-case fallback), D-33 (private-creator stack),
- * D-34 (Element.privateCreator population), and PITFALLS §7.1
- * (block-reservation / off-by-0x1000 trap).
+ * Covers the five-case Implicit VR fallback, the private-creator stack,
+ * `Element.privateCreator` population, and the block-reservation rule of
+ * PS3.5 section 7.8.1 (the off-by-0x1000 trap).
  */
 
 import { Buffer } from "node:buffer";
@@ -40,7 +39,7 @@ function makeEmit(warnings: DicomParseWarning[]): (w: DicomParseWarning) => void
   return (w) => warnings.push(w);
 }
 
-describe("resolveImplicitVR - D-21 case 1: standard tag with single VR", () => {
+describe("resolveImplicitVR: standard tag with single VR", () => {
   it("returns PN for (0010,0010) PatientName", () => {
     const ctx = makeCtx();
     const captured: DicomParseWarning[] = [];
@@ -50,7 +49,7 @@ describe("resolveImplicitVR - D-21 case 1: standard tag with single VR", () => {
   });
 });
 
-describe("resolveImplicitVR - D-21 case 2: standard tag with multi-VR (US with no Pixel Representation read)", () => {
+describe("resolveImplicitVR: standard tag with multi-VR (US with no Pixel Representation read)", () => {
   it("returns US for (0028,0106) SmallestImagePixelValue (declared US/SS)", () => {
     const ctx = makeCtx();
     const captured: DicomParseWarning[] = [];
@@ -60,7 +59,7 @@ describe("resolveImplicitVR - D-21 case 2: standard tag with multi-VR (US with n
   });
 });
 
-describe("resolveImplicitVR - D-21 case 3: repeating-group family", () => {
+describe("resolveImplicitVR: repeating-group family", () => {
   it("returns OB (first array entry) for concrete (50A0,3000) matching (50xx,3000) Curve Data family", () => {
     const ctx = makeCtx();
     const captured: DicomParseWarning[] = [];
@@ -71,7 +70,7 @@ describe("resolveImplicitVR - D-21 case 3: repeating-group family", () => {
   });
 });
 
-describe("resolveImplicitVR - D-21 case 4a: private tag, no creator registered", () => {
+describe("resolveImplicitVR: private tag, no creator registered", () => {
   it("returns UN; emits BOTH DICOM_PRIVATE_TAG_NO_CREATOR and DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR", () => {
     const ctx = makeCtx();
     const captured: DicomParseWarning[] = [];
@@ -84,7 +83,7 @@ describe("resolveImplicitVR - D-21 case 4a: private tag, no creator registered",
   });
 });
 
-describe("resolveImplicitVR - D-21 case 4b: private creator slot itself", () => {
+describe("resolveImplicitVR: private creator slot itself", () => {
   it("returns LO with NO warnings for (0019,0010) (the creator declaration slot)", () => {
     const ctx = makeCtx();
     const captured: DicomParseWarning[] = [];
@@ -94,7 +93,7 @@ describe("resolveImplicitVR - D-21 case 4b: private creator slot itself", () => 
   });
 });
 
-describe("resolveImplicitVR - D-21 case 4c: private tag WITH creator registered", () => {
+describe("resolveImplicitVR: private tag WITH creator registered", () => {
   it("returns UN and emits ONLY DICOM_IMPLICIT_VR_FOR_PRIVATE_TAG_WITHOUT_VR (no NO_CREATOR)", () => {
     const ctx = makeCtx();
     registerPrivateCreator("00190010", Buffer.from("ACME", "ascii"), ctx);
@@ -106,7 +105,7 @@ describe("resolveImplicitVR - D-21 case 4c: private tag WITH creator registered"
   });
 });
 
-describe("resolveImplicitVR - D-21 case 5: unknown standard tag", () => {
+describe("resolveImplicitVR: unknown standard tag", () => {
   it("returns UN silently with no warnings", () => {
     const ctx = makeCtx();
     const captured: DicomParseWarning[] = [];
@@ -119,7 +118,7 @@ describe("resolveImplicitVR - D-21 case 5: unknown standard tag", () => {
   });
 });
 
-describe("resolvePrivateCreator - block-reservation rule (PITFALLS §7.1)", () => {
+describe("resolvePrivateCreator - block-reservation rule", () => {
   it("creator at (0019,0010) covers block (0019,1000)..(0019,10FF) only - off-by-0x1000 trap", () => {
     const ctx = makeCtx();
     registerPrivateCreator("00190010", Buffer.from("ACME", "ascii"), ctx);

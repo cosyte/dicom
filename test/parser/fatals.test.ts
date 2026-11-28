@@ -57,7 +57,7 @@ function rootFrame(size: number): ParseFrame {
 
 describe("the Tier-3 fatal registry", () => {
   it("names only the four locked Tier-3 codes", () => {
-    // D-09 locks the taxonomy at four. A key is not a code - several keys share
+    // The taxonomy is locked at four. A key is not a code - several keys share
     // `INVALID_FILE_META` - so this asserts the mapping stays inside the lock
     // rather than asserting a one-to-one relation that was never intended.
     const codes = new Set(Object.values(FATAL_MESSAGES).map((entry) => entry.code));
@@ -94,7 +94,7 @@ describe("the Tier-3 fatal registry", () => {
   });
 
   it("has no factory taking a count of the bytes remaining in the frame", () => {
-    // The ninth instance of `DICOM-DIAGNOSTIC-PHI-RESIDUALS`, asserted where it
+    // The ninth instance of a diagnostic that could carry a value from the file, asserted where it
     // is actually bound: the two factories that used to take one. `{n}` still
     // exists, and the two entries that keep it are the two whose number nobody
     // on the wire chose - `NESTING_DEPTH_LIMIT` and the caller's inflate cap -
@@ -178,7 +178,7 @@ describe("the Tier-3 fatal registry", () => {
     }
   });
 
-  it("AC-11: SUPPORTED_TRANSFER_SYNTAXES still describes exactly the dispatch table", () => {
+  it("SUPPORTED_TRANSFER_SYNTAXES still describes exactly the dispatch table", () => {
     // `fatals.ts` cannot import `transfer-syntax.ts` - the per-TS parsers import
     // `fatals.ts`, so the edge would close a cycle. The native list is therefore
     // a copy, and this is what keeps a copy honest: the table is exactly those
