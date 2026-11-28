@@ -655,12 +655,6 @@ function refuseChangedElements(json: Record<string, unknown>, ds: Dataset): void
 }
 
 /**
- * The File Meta a Data Set is written under when the caller names none: Explicit VR Little Endian
- * and no other element.
- */
-const DEFAULT_FILE_META: FileMeta = Object.freeze({ transferSyntaxUID: "1.2.840.10008.1.2.1" });
-
-/**
  * A {@link Dataset} from a DICOM JSON Model object (PS3.18 Annex F), written under the File Meta
  * the caller gives (Explicit VR Little Endian when it gives none) and read back by `parseDicom`,
  * so `serializeDicom` writes it as Part 10.
@@ -730,7 +724,10 @@ export function fromDicomJson(json: DicomJsonDataset, options: FromDicomJsonOpti
 }
 
 function datasetFrom(json: DicomJsonDataset, options: FromDicomJsonOptions): Dataset {
-  const fileMeta = options.fileMeta ?? DEFAULT_FILE_META;
+  // Built per call, not held in a module constant: a value made at import time runs before any
+  // test, so a mutation run would link its mutants to none. Explicit VR Little Endian, no other
+  // element, when the caller names no File Meta.
+  const fileMeta: FileMeta = options.fileMeta ?? { transferSyntaxUID: "1.2.840.10008.1.2.1" };
   const encoding = encodingOf(fileMeta.transferSyntaxUID);
   if (encoding === undefined) refuse(DICOM_JSON_ERROR_CODES.UNSUPPORTED_TRANSFER_SYNTAX, undefined);
   if (!isRecord(json)) refuse(DICOM_JSON_ERROR_CODES.INVALID_JSON, undefined);
