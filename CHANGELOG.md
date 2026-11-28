@@ -50,6 +50,8 @@
 
 ## 0.1.16
 
+This version was tagged and never published to npm; its changes first ship in the next published version.
+
 ### Patch Changes
 
 - 420e2f9: New `toDicomJson` and `fromDicomJson` convert a Data Set to the DICOM JSON Model and back, metadata only, refusing by code what the model cannot carry.
