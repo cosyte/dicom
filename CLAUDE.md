@@ -8,22 +8,9 @@ de-identification. Pixel data stays raw bytes; DIMSE and DICOMweb are out of sco
 
 ## Gate
 
-Required on `main`: `ci / verify (22, ubuntu-latest)`, `ci / verify (24, ubuntu-latest)`,
-`ci / actionlint`, and `no-emdash / tracked-files`; CI also runs Node 26, the `examples` and
-`standards` jobs, and the testing standard's `ci / coverage-ratchet` and `ci / mutation`
-(AGENTS.md). Use the pnpm `packageManager` pins (AGENTS.md says how). In CI order:
-
-```sh
-pnpm install --frozen-lockfile && pnpm typecheck && pnpm lint && pnpm format:check
-pnpm phi-scan && pnpm test && pnpm test:coverage && pnpm quality:check --base origin/main
-pnpm build && pnpm attw
-pnpm typecheck:examples && pnpm lint:examples && pnpm examples && pnpm phi-scan:examples
-pnpm check:readme && pnpm check:claude-card && pnpm check:catalog && pnpm check:process
-pnpm check:no-emdash && pnpm check:no-internal-refs
-```
-
-A change to `vendor/`, the generators, or `src/dictionary/generated/` also runs `pnpm gen:clean`,
-`pnpm gen:all`, then `git diff --exit-code src/dictionary/generated/`, which must print nothing.
+The gate is written once, under "The gate" in `AGENTS.md`, in CI's order. Run all of it before you
+push. Derive which checks are required from the ruleset, never from a file:
+`gh api repos/cosyte/dicom/rules/branches/main`.
 
 ## Hazard
 
