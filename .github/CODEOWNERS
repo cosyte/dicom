@@ -1,4 +1,3 @@
-# Default owner for everything in this repository.
-# (Code-owner review is not yet required by ruleset; see the org maturity plan.
-#  This records ownership and activates cleanly when a second reviewer exists.)
+# Default owner for everything in this repository. The branch ruleset does not
+# require code-owner review, so this line records ownership only.
 * @NSchatz
