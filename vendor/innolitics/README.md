@@ -1,6 +1,6 @@
 # Innolitics dicom-standard input artifacts
 
-This directory pins the Innolitics [`dicom-standard`](https://github.com/innolitics/dicom-standard) repository at a specific commit SHA. The committed JSON files are the **input** to `scripts/generate-dictionary.ts` (run via `pnpm gen:dictionary`) and `scripts/generate-annex-e.ts` (run via `pnpm gen:annex-e`). Runtime has zero dependency on these files: only the generated TypeScript modules under `src/dictionary/generated/` are imported by the library at runtime.
+This directory pins the Innolitics [`dicom-standard`](https://github.com/innolitics/dicom-standard) repository at a specific commit SHA. The committed JSON files are the **input** to `scripts/generate-dictionary.ts` (run via `pnpm generate:dictionary`) and `scripts/generate-annex-e.ts` (run via `pnpm generate:annex-e`). Runtime has zero dependency on these files: only the generated TypeScript modules under `src/dictionary/generated/` are imported by the library at runtime.
 
 > **This is a mirror, not the standard.** For the element registry (`tags.ts` / `keywords.ts`) it is now the *base* layer only: NEMA's PS3.6 DocBook, pinned in `vendor/nema/part06/`, is applied over it as a normative per-field overlay and wins wherever the two disagree. Read `vendor/nema/README.md` for the authority model. The same is now true of the UID registry (`uids.ts`), which is overlaid from PS3.6 Annex A. This directory remains the sole source for the PS3.15 Annex E action table.
 
@@ -29,7 +29,7 @@ Compared the committed `src/dictionary/generated/` against the NEMA DocBook sour
 
 **Compare tag keys case-insensitively.** DICOM tag values are hexadecimal and their case is not semantic. PS3.6 prints them uniformly uppercase (`(50xx,200A)`; of its 5,309 tag strings, 1,619 contain `A-F` and none contain `a-f`), and `tags.ts` agrees on 1,540 of its own 5,129 keys. The trap is that `tags.ts` is not internally consistent: it lowercases the 8 repeating-group keys whose trailing digits are hex letters (`50xx200a`, `50xx200c`, `50xx200e`, `7fxx0010`, `7fxx0011`, `7fxx0020`, `7fxx0030`, `7fxx0040`) and no others. A verbatim comparison therefore mis-classifies exactly those 8, which is what the first run of this measurement did, reporting them as dropped from the standard when all 8 are still in Table 6-1. Lowercase both sides before comparing.
 
-Element figures are taken on `86ab6c1` (`origin/main` at the time of measurement); this slice does not modify `tags.ts` or `keywords.ts`, so they hold unchanged on the current tree. The UID figures that used to sit beside them are deleted rather than re-measured: the UID registry is overlaid from Annex A now, and `pnpm gen:dictionary` prints the live figures on every run. A count typed here is a count that goes stale on the next re-pin, and these ones already had.
+Element figures are taken on `86ab6c1` (`origin/main` at the time of measurement); this slice does not modify `tags.ts` or `keywords.ts`, so they hold unchanged on the current tree. The UID figures that used to sit beside them are deleted rather than re-measured: the UID registry is overlaid from Annex A now, and `pnpm generate:dictionary` prints the live figures on every run. A count typed here is a count that goes stale on the next re-pin, and these ones already had.
 
 | Comparison | Result |
 | --- | --- |
@@ -76,7 +76,7 @@ The generator prints the overlay every run (shared / added / mirror-only, and th
 
 **No shipped name, type or retirement flag moved.** Every one of the 268 entries the previous generator emitted comes through the overlay byte identical. What the overlay added is coverage: the registry was a subset of Annex A and is now the whole of it, and the entries it had were already right.
 
-The figures are a **build output, not a line in this file**. `pnpm gen:dictionary` prints shared / added / mirror-only, the fields overridden broken out by field, the four toolkit short forms as they were applied, and the retired-and-unnamed rows it excluded. Read that rather than a number typed here: the previous version of this section carried six counts and every one of them was invalidated by this change.
+The figures are a **build output, not a line in this file**. `pnpm generate:dictionary` prints shared / added / mirror-only, the fields overridden broken out by field, the four toolkit short forms as they were applied, and the retired-and-unnamed rows it excluded. Read that rather than a number typed here: the previous version of this section carried six counts and every one of them was invalidated by this change.
 
 The one thing worth stating rather than deriving is the direction the merge fails in, because it is the same one the element registry takes: a UID **this mirror carries and Annex A does not** is KEPT, never dropped, because PS3.6 retires rather than deletes and an absence is far more likely to be a parse gap here than a withdrawal there. That set is empty today, and its size prints every run.
 
@@ -118,7 +118,7 @@ D-13 originally said "re-pin monthly, evaluated at minor releases"; see "Currenc
      "https://raw.githubusercontent.com/innolitics/dicom-standard/${INNOLITICS_SHA}/LICENSE.txt"
    ```
 3. Update `SHA.txt` to the new full 40-char SHA (single line, terminated by newline).
-4. Run `pnpm gen:all && git diff src/dictionary/generated/` and review the diff.
+4. Run `pnpm generate:all && git diff src/dictionary/generated/` and review the diff.
 5. Run `pnpm test` to confirm the hand-curated unit tests still pass against the new edition.
 6. Commit both the new `vendor/innolitics/<sha>/` tree AND the regenerated `src/dictionary/generated/` files together (CI gate in plan 05 enforces lockstep regen).
 7. Delete the old `<short>/` directory in the same commit.

@@ -42,7 +42,7 @@ NEMA publishes several editions of the standard a year, each named by year and l
    section below, and the regenerated `src/dictionary/generated/` rides in the same commit.
    `part05-2004/` is a frozen archive and does not move with the editions.
 2. **The Annex E rows of each edition are read for de-identification changes** before the re-pin
-   merges, whether or not the diff looks small. Read every Table E.1-1 row `pnpm gen:annex-e`
+   merges, whether or not the diff looks small. Read every Table E.1-1 row `pnpm generate:annex-e`
    reports as added, every action-code override it prints, and every row of the edition's
    correction proposals that touches PS3.15 Annex E. A changed or new action code changes what
    `deidentify()` removes, so it gets a test that fails on the previous pin and a changeset that
@@ -173,7 +173,7 @@ on a mismatch: the pin is a precondition, not a comment.
 ### Re-pinning procedure
 
 Same five steps as PS3.6 below, with `part05` / `part05.xml` (or `part05-2004` / `04_05pu.pdf`)
-substituted, then `pnpm gen:repeating-groups`, then `pnpm test`. Commit the new `vendor/nema/part05*`
+substituted, then `pnpm generate:repeating-groups`, then `pnpm test`. Commit the new `vendor/nema/part05*`
 tree and the regenerated `src/dictionary/generated/repeating-groups.ts` together; the regen gate
 requires lockstep.
 
@@ -318,7 +318,7 @@ refuses to generate if it does not match `part06/SHA.txt`. The pin is a precondi
 2. `mkdir -p "vendor/nema/part06/${NEMA_SHA}" && mv /tmp/part06.xml "vendor/nema/part06/${NEMA_SHA}/part06.xml"`
 3. `printf '%s\n' "${NEMA_SHA}" > vendor/nema/part06/SHA.txt`
 4. Delete the previous `vendor/nema/part06/<old-sha>/` directory in the same commit.
-5. `pnpm gen:dictionary`. It prints the edition it read and the overlay it applied: how many tags are
+5. `pnpm generate:dictionary`. It prints the edition it read and the overlay it applied: how many tags are
    shared, added, and mirror-only, and how many fields PS3.6 overrode, broken out by field. **Every
    VR override is printed individually**, because a changed VR is the one difference that changes how
    bytes become a value.
@@ -417,7 +417,7 @@ a mismatch: the pin is a precondition, not a comment.
 2. `mkdir -p "vendor/nema/part15/${NEMA_SHA}" && mv /tmp/part15.xml "vendor/nema/part15/${NEMA_SHA}/part15.xml"`
 3. `printf '%s\n' "${NEMA_SHA}" > vendor/nema/part15/SHA.txt`
 4. Delete the previous `vendor/nema/part15/<old-sha>/` directory in the same commit.
-5. `pnpm gen:annex-e`. It prints the edition it read and the overlay it applied: how many tags are
+5. `pnpm generate:annex-e`. It prints the edition it read and the overlay it applied: how many tags are
    shared, added, and mirror-only, and **every action-code override individually**, because a changed
    action code is the one difference that decides whether an identifier survives the call.
 6. Review `git diff src/dictionary/generated/annex-e.ts` against that summary, then `pnpm test`.
