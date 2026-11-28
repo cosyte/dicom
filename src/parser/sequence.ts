@@ -331,7 +331,7 @@ export function parseSequence(
         // total length resulting from the sequence of zero or more items
         // conveyed by this Data Element", and section 7.5.1 governs the Item's
         // own length field. A malformed file makes the two disagree, and this
-        // reader resolves the disagreement in favour of the ITEM's field - the
+        // reader resolves the disagreement in favor of the ITEM's field - the
         // reading every released version gives. `endLimit < buffer.length` is
         // what makes the disagreement consequential rather than academic: it
         // says this sequence is being read IN PLACE inside a larger Data Set,
@@ -389,7 +389,7 @@ export function parseSequence(
         // `ctx.frame` is what `makeEmitter` cuts the `{ strict: true }` snippet
         // from AND what every diagnostic publishes as `offsetFrame`, so it has
         // to be the same SLICE or the snippet is an unrelated element's bytes and
-        // the offset is labelled with a frame it is not counted in. Restored on
+        // the offset is labeled with a frame it is not counted in. Restored on
         // the way out, and in a `finally` so a Tier-3 fatal thrown inside the
         // item does not leave the frame dangling for the enclosing Data Set's
         // own diagnostics.
@@ -425,7 +425,7 @@ export function parseSequence(
  * The distinction is what makes a rollback safe: a Tier-3 fatal thrown mid-descent
  * means the bytes are not what we guessed and the caller may fall back, while a
  * strict-mode escalation is the caller's own `{ strict: true }` contract being
- * honoured at the `emit` chokepoint, and must propagate untouched. Swallowing
+ * honored at the `emit` chokepoint, and must propagate untouched. Swallowing
  * one would make `strict` silently weaker inside a sequence than outside it.
  */
 function isStrictEscalation(err: unknown): boolean {

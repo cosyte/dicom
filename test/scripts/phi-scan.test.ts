@@ -809,7 +809,7 @@ describe("phi-scan: the all-mode walk refuses a non-regular entry", () => {
   });
 
   it("refuses a link named README.md, which the file route's exemption would have skipped", () => {
-    // The `readme.md` exemption is a judgement about a file whose bytes the walk
+    // The `readme.md` exemption is a judgment about a file whose bytes the walk
     // could have read. A link's NAME is no evidence about what is on the other
     // side of it, so the exemption deliberately does not reach one.
     const root = makeRepo();
@@ -1133,7 +1133,7 @@ function shortElement(group: number, element: number, vr: string, value: string)
 
 /**
  * One short-form Explicit VR **Big Endian** element. Written out rather than reusing the LE writer
- * with a different `(0002,0010)`, because a fixture LABELLED big-endian while carrying little-endian
+ * with a different `(0002,0010)`, because a fixture LABELED big-endian while carrying little-endian
  * bytes proves nothing: the tag walk reads it happily and the case passes for the wrong reason. It
  * did, on the first draft of this block.
  */
@@ -2397,7 +2397,7 @@ describe("phi-scan: the hit report is capped PER FILE, and the cap cannot move t
 
   it("refuses a bad --max-hit-lines (exit 2) rather than falling back to the default", () => {
     // A run that quietly printed a different amount than it was told to is the
-    // same shape of unobservable behaviour this script exists to close. Exit 2
+    // same shape of unobservable behavior this script exists to close. Exit 2
     // is the invocation-error code, and it is NOT 1: nothing was scanned, so the
     // run says nothing about the corpus.
     const root = makeRepo();

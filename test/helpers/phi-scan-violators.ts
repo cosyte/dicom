@@ -23,7 +23,7 @@
  *     date run, so THIS FILE IS SCANNED like every other file under `test/` and needs no
  *     exemption at all, while the values themselves are plain to a reader. (The gate proved that
  *     the hard way: a first draft of this very paragraph spelled the PN shape out and the scanner
- *     reported it, which is the behaviour working.)
+ *     reported it, which is the behavior working.)
  *
  * Every value below is invented. None of them names a real person, and each is deliberately
  * name-bearing: a PHI test whose payload carries nothing identifying is vacuous by fixture, so

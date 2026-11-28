@@ -200,7 +200,7 @@ async function row(scanner: string, files: number, size: number): Promise<[Run, 
 // The direction the copy COSTS on
 // ---------------------------------------------------------------------------
 //
-// 🛑 THE TABLE ABOVE IS THE FAVOURABLE AXIS AND IT IS NOT THE ONLY ONE. This one was written for a
+// 🛑 THE TABLE ABOVE IS THE FAVORABLE AXIS AND IT IS NOT THE ONLY ONE. This one was written for a
 // scanner whose hits each held a copy of up to 194 units of the value they matched: retention fell
 // when those excerpts were few and the pages large, and ROSE when one file produced very many hits,
 // a copy per hit where a pointer's header was. A hit holds no value now, so on this tree the table

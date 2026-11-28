@@ -11,7 +11,7 @@ import type { Profile } from "../parser/types.js";
 import type { DicomParseWarning } from "../parser/warnings.js";
 
 /**
- * The PS3.15 Annex E option sets `deidentify` honours - the
+ * The PS3.15 Annex E option sets `deidentify` honors - the
  * *metadata-affecting* columns of Table E.1-1. The two pixel-level options
  * (`CleanPixelData` §E.3.1, `CleanRecognizableVisual` §E.3.2) are deliberately
  * excluded: this is a metadata-only de-identifier and cannot inspect pixels
@@ -973,7 +973,7 @@ export interface DeidentifyReport {
    * **It covers private sequences too.** A
    * private `SQ` a {@link Profile} vouches for under `RetainSafePrivate` used to
    * be kept verbatim and never appear here; it is now emptied and listed on the
-   * same terms as any other, because the profile's licence under PS3.15 §E.3.10
+   * same terms as any other, because the profile's license under PS3.15 §E.3.10
    * is over a private attribute and not over an item stream nothing could read.
    */
   readonly unauditableSequences: readonly UnauditableSequenceFinding[];

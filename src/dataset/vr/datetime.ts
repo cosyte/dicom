@@ -20,7 +20,7 @@ function inRange(n: number, lo: number, hi: number): boolean {
 /**
  * Decode a single `DA` value. `legacy` is `true` for any tolerated
  * non-canonical form (retired dotted `YYYY.MM.DD`, or an unparseable value
- * such as `"ANONYMIZED"`), signalling the caller to emit
+ * such as `"ANONYMIZED"`), signaling the caller to emit
  * `DICOM_DA_LEGACY_FORMAT`.
  *
  * @example
@@ -93,7 +93,7 @@ export function parseTime(raw: string): { value: DicomTime } {
 
 /**
  * Decode a single `DT` value. `nonstandardOffset` is `true` when a UTC
- * offset suffix is present but malformed / out of range, signalling the
+ * offset suffix is present but malformed / out of range, signaling the
  * caller to emit `DICOM_DT_NONSTANDARD_OFFSET`.
  *
  * @example

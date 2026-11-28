@@ -96,7 +96,7 @@ exactly the file offset of an Item of the Directory Record Sequence
 `(0004,1220)`; one that is not names no record, and `parseDicom` warns
 (`DICOM_DIRECTORY_OFFSET_UNRESOLVED`, `DICOM_DIRECTORY_OFFSET_MALFORMED`,
 `DICOM_DIRECTORY_RECORD_REVISITED`, `DICOM_DIRECTORY_OFFSET_DEFLATED`).
-Memoised on first read.
+Memoized on first read.
 
 Limits: record keys are not checked against PS3.3 F.5, the File-set
 Consistency Flag and `(0004,1202)`'s agreement with the end of the root
@@ -130,7 +130,7 @@ for (const patient of dir?.root ?? []) {
 Pixel-interpretation + geometry view. Surfaces exactly
 what a renderer needs without guessing: `rescaleSlope`/`signed`/
 `photometricInterpretation` stay absent rather than defaulted, and the
-three pixel-spacing tags are distinct. Memoised on first read.
+three pixel-spacing tags are distinct. Memoized on first read.
 
 ###### Example
 
@@ -152,7 +152,7 @@ img.rescaleSlope; // undefined ⇒ MUST NOT assume 1
 
 Patient-identity view. Fail-safe typed-absent fields; `id` is
 **not** globally unique - match on the `{id, issuerOfId, ...}` tuple
-plus `otherIds`, never on a bare `(0010,0020)`. Memoised on first read.
+plus `otherIds`, never on a bare `(0010,0020)`. Memoized on first read.
 
 ###### Example
 
@@ -174,7 +174,7 @@ p.name?.alphabetic.familyName; // structured PN, never flattened
 
 Series-identity & co-registration view. A shared
 `frameOfReferenceUid` means images are spatially co-registered.
-Memoised on first read.
+Memoized on first read.
 
 ###### Example
 
@@ -195,7 +195,7 @@ s.modality; // "CT"
 > **get** **study**(): [`StudyView`](#studyview)
 
 Study-identity view. `instanceUid` is the cross-system study
-key; `accessionNumber` ties it to the order. Memoised on first read.
+key; `accessionNumber` ties it to the order. Memoized on first read.
 
 ###### Example
 
@@ -233,7 +233,7 @@ for (const el of ds.elements()) console.log(el.tag, el.vr);
 
 > **get**(`tag`): [`Element`](#element) \| `undefined`
 
-Look up a single element by tag. Tags are normalised to 8-char
+Look up a single element by tag. Tags are normalized to 8-char
 uppercase hex, so `"7fe00010"` and `"7FE00010"` resolve to the same
 element. Returns `undefined` when the tag is absent.
 
@@ -750,7 +750,7 @@ Structural surface: `tag`, `vr`, `vm`, `length`, `rawBytes`,
 `byteOffset`, `privateCreator`. On top of it sits a lazy, memoized
 `.value` getter backed by the VR-aware decoders under `src/dataset/vr/`.
 
-`rawBytes` retention behaviour: zero-copy `Buffer.subarray` view by
+`rawBytes` retention behavior: zero-copy `Buffer.subarray` view by
 default (pins source ArrayBuffer); pass `{ copyValues: true }` to
 `parseDicom` for `Buffer.from(slice)` per element when the source
 needs to be released.
@@ -1024,7 +1024,7 @@ exactly the file offset of an Item of the Directory Record Sequence
 `(0004,1220)`; one that is not names no record, and `parseDicom` warns
 (`DICOM_DIRECTORY_OFFSET_UNRESOLVED`, `DICOM_DIRECTORY_OFFSET_MALFORMED`,
 `DICOM_DIRECTORY_RECORD_REVISITED`, `DICOM_DIRECTORY_OFFSET_DEFLATED`).
-Memoised on first read.
+Memoized on first read.
 
 Limits: record keys are not checked against PS3.3 F.5, the File-set
 Consistency Flag and `(0004,1202)`'s agreement with the end of the root
@@ -1062,7 +1062,7 @@ for (const patient of dir?.root ?? []) {
 Pixel-interpretation + geometry view. Surfaces exactly
 what a renderer needs without guessing: `rescaleSlope`/`signed`/
 `photometricInterpretation` stay absent rather than defaulted, and the
-three pixel-spacing tags are distinct. Memoised on first read.
+three pixel-spacing tags are distinct. Memoized on first read.
 
 ###### Example
 
@@ -1088,7 +1088,7 @@ img.rescaleSlope; // undefined ⇒ MUST NOT assume 1
 
 Patient-identity view. Fail-safe typed-absent fields; `id` is
 **not** globally unique - match on the `{id, issuerOfId, ...}` tuple
-plus `otherIds`, never on a bare `(0010,0020)`. Memoised on first read.
+plus `otherIds`, never on a bare `(0010,0020)`. Memoized on first read.
 
 ###### Example
 
@@ -1114,7 +1114,7 @@ p.name?.alphabetic.familyName; // structured PN, never flattened
 
 Series-identity & co-registration view. A shared
 `frameOfReferenceUid` means images are spatially co-registered.
-Memoised on first read.
+Memoized on first read.
 
 ###### Example
 
@@ -1139,7 +1139,7 @@ s.modality; // "CT"
 > **get** **study**(): [`StudyView`](#studyview)
 
 Study-identity view. `instanceUid` is the cross-system study
-key; `accessionNumber` ties it to the order. Memoised on first read.
+key; `accessionNumber` ties it to the order. Memoized on first read.
 
 ###### Example
 
@@ -1185,7 +1185,7 @@ for (const el of ds.elements()) console.log(el.tag, el.vr);
 
 > **get**(`tag`): [`Element`](#element) \| `undefined`
 
-Look up a single element by tag. Tags are normalised to 8-char
+Look up a single element by tag. Tags are normalized to 8-char
 uppercase hex, so `"7fe00010"` and `"7FE00010"` resolve to the same
 element. Returns `undefined` when the tag is absent.
 
@@ -2093,7 +2093,7 @@ record is not capped at all.
 **It covers private sequences too.** A
 private `SQ` a [Profile](#profile-2) vouches for under `RetainSafePrivate` used to
 be kept verbatim and never appear here; it is now emptied and listed on the
-same terms as any other, because the profile's licence under PS3.15 §E.3.10
+same terms as any other, because the profile's license under PS3.15 §E.3.10
 is over a private attribute and not over an item stream nothing could read.
 
 ##### undefinedVrElements
@@ -3100,13 +3100,14 @@ fromDicomJson({ "00080060": { vr: "CS", Value: ["CT"] } }, options);
 
 #### Properties
 
-##### fileMeta
+##### fileMeta?
 
-> `readonly` **fileMeta**: [`FileMeta`](#filemeta-3)
+> `readonly` `optional` **fileMeta?**: [`FileMeta`](#filemeta-3)
 
 The File Meta Information the Data Set is written under; its `transferSyntaxUID` picks the
 encoding. The JSON Model holds no File Meta, so a round trip passes the source's
-`Dataset.fileMeta` back here.
+`Dataset.fileMeta` back here. Left out, the Data Set is written under Explicit VR Little
+Endian (`1.2.840.10008.1.2.1`) with no other File Meta element.
 
 ##### resolveBulkData?
 
@@ -3406,7 +3407,7 @@ when an enhanced object lacks a required geometry macro in both groups.
 ### OtherPatientId
 
 One entry of Other Patient IDs Sequence `(0010,1002)` - a `{id, issuer,
-typeCode}` triple (PS3.3 §10.15, the DICOM analogue of an HL7 v2 CX
+typeCode}` triple (PS3.3 §10.15, the DICOM analog of an HL7 v2 CX
 repetition). Surfaced so a caller never matches on a bare `(0010,0020)`.
 
 #### Example
@@ -3535,7 +3536,7 @@ lenient parse throw outside the four Tier-3 fatals, and a private
 creator the profile does not recognize degrades to generic UN handling
 plus a `DICOM_PRIVATE_CREATOR_UNKNOWN` warning, never a wrong decode.
 
-Omit (do not pass `undefined`) for the unprofiled default behaviour.
+Omit (do not pass `undefined`) for the unprofiled default behavior.
 
 ##### stopBeforeTag?
 
@@ -4133,7 +4134,7 @@ lenient parse throw outside the four Tier-3 fatals, and a private
 creator the profile does not recognize degrades to generic UN handling
 plus a `DICOM_PRIVATE_CREATOR_UNKNOWN` warning, never a wrong decode.
 
-Omit (do not pass `undefined`) for the unprofiled default behaviour.
+Omit (do not pass `undefined`) for the unprofiled default behavior.
 
 ###### Inherited from
 
@@ -5072,7 +5073,7 @@ throw new DeidentifyError("unknown retain option", code);
 
 > **DeidentifyOption** = `Exclude`\<`AnnexEOption`, `"CleanPixelData"` \| `"CleanRecognizableVisual"`\>
 
-The PS3.15 Annex E option sets `deidentify` honours - the
+The PS3.15 Annex E option sets `deidentify` honors - the
 *metadata-affecting* columns of Table E.1-1. The two pixel-level options
 (`CleanPixelData` §E.3.1, `CleanRecognizableVisual` §E.3.2) are deliberately
 excluded: this is a metadata-only de-identifier and cannot inspect pixels
@@ -5199,9 +5200,12 @@ const term: FallbackCharacterSet = "ISO_IR 100";
 
 > **FatalCode** = *typeof* [`FATAL_CODES`](#fatal_codes)\[keyof *typeof* [`FATAL_CODES`](#fatal_codes)\]
 
-The four Tier-3 fatal codes, the type over the `FATAL_CODES` registry.
-`FATAL_CODES` is locked, so an exhaustive `switch` over a `FatalCode`
-value stays exhaustive.
+The Tier-3 fatal codes, the type over the `FATAL_CODES` registry.
+
+**Treat the union as open.** A release can add a code, which widens this
+union, so a `switch` that lists every current member stops compiling, or
+misses the new code, on an upgrade. Handle the codes you care about by name
+and give the `switch` a `default` branch for the rest.
 
 **It is not the whole type of `DicomParseError.code`.** A Tier-2 warning
 escalated by `{ strict: true }` or by a profile's `escalate` list is
@@ -5220,10 +5224,8 @@ function describe(code: FatalCode): string {
       return "input was empty";
     case "NOT_DICOM_PART_10":
       return "input is not a DICOM Part 10 file";
-    case "INVALID_FILE_META":
-      return "File Meta group or Data Set is cut short or unreadable";
-    case "UNSUPPORTED_TRANSFER_SYNTAX":
-      return "Transfer Syntax UID is not supported by v1";
+    default:
+      return `cannot read: ${code}`;
   }
 }
 ```
@@ -5292,7 +5294,12 @@ const onWarning: OnWarningCallback = (w) => {
 
 > **PatientIssueCode** = *typeof* [`PATIENT_ISSUE_CODES`](#patient_issue_codes)\[keyof *typeof* [`PATIENT_ISSUE_CODES`](#patient_issue_codes)\]
 
-Discriminant for [PatientIssue.code](#code-6), so a `switch` over it is exhaustive.
+Discriminant for [PatientIssue.code](#code-6).
+
+**Treat the union as open.** A release can add a code, which widens this
+union, so a `switch` that lists every current member stops compiling, or
+misses the new code, on an upgrade. Handle the codes you care about by name
+and give the `switch` a `default` branch for the rest.
 
 #### Example
 
@@ -5326,8 +5333,12 @@ const csa: ProfilePrivateTags = {
 
 > **SerializeErrorCode** = *typeof* [`SERIALIZE_ERROR_CODES`](#serialize_error_codes)\[keyof *typeof* [`SERIALIZE_ERROR_CODES`](#serialize_error_codes)\]
 
-Discriminant for [DicomSerializeError.code](#code-3), enabling exhaustive
-`switch` narrowing (the `switch-exhaustiveness-check` lint rule).
+Discriminant for [DicomSerializeError.code](#code-3).
+
+**Treat the union as open.** A release can add a code, which widens this
+union, so a `switch` that lists every current member stops compiling, or
+misses the new code, on an upgrade. Handle the codes you care about by name
+and give the `switch` a `default` branch for the rest.
 
 #### Example
 
@@ -5341,12 +5352,8 @@ function describe(code: SerializeErrorCode): string {
       return "Transfer Syntax UID is neither native nor a section A.4 one";
     case "INVALID_ENCAPSULATED_PIXEL_DATA":
       return "top-level Pixel Data is not a section A.4 fragment stream";
-    case "DIRECTORY_OFFSET_UNRESOLVED":
-      return "a DICOMDIR offset names no Directory Record the dataset holds";
-    case "DIRECTORY_OFFSET_DEFLATED":
-      return "a Deflated DICOMDIR carries a non-zero Directory Record offset";
-    case "VALUE_TOO_LONG_FOR_VR":
-      return "a Private Creator or File Meta value is too long for its VR";
+    default:
+      return `cannot serialize: ${code}`;
   }
 }
 ```
@@ -5357,8 +5364,12 @@ function describe(code: SerializeErrorCode): string {
 
 > **ValueErrorCode** = *typeof* [`VALUE_ERROR_CODES`](#value_error_codes)\[keyof *typeof* [`VALUE_ERROR_CODES`](#value_error_codes)\]
 
-Discriminant for [DicomValueError.code](#code-4), enabling exhaustive
-`switch` narrowing (the `switch-exhaustiveness-check` lint rule).
+Discriminant for [DicomValueError.code](#code-4).
+
+**Treat the union as open.** A release can add a code, which widens this
+union, so a `switch` that lists every current member stops compiling, or
+misses the new code, on an upgrade. Handle the codes you care about by name
+and give the `switch` a `default` branch for the rest.
 
 #### Example
 
@@ -5368,8 +5379,8 @@ function describe(code: ValueErrorCode): string {
   switch (code) {
     case "FRAME_INDEX_OUT_OF_RANGE":
       return "frame index outside [0, numberOfFrames)";
-    case "MISSING_REQUIRED_FUNCTIONAL_GROUP":
-      return "enhanced object lacks a required geometry macro";
+    default:
+      return `value error: ${code}`;
   }
 }
 ```
@@ -5860,10 +5871,10 @@ import { VERSION } from "@cosyte/dicom";
 Stable string codes for every Tier-2 warning the parser may emit.
 
 The registry is frozen via `as const` so TypeScript infers the exact
-string-literal union for `WarningCode` - there is zero runtime cost and
-no magic-string comparisons for consumers. Reserved-but-not-emitted
-codes carry inline comments documenting which stage activates them; the
-union is declared whole so the schema is stable for consumers.
+string-literal union for `WarningCode`, at no run-time cost. The set is
+open: a release can add a code, and a code once published keeps its name.
+Reserved codes that no stage emits yet carry inline comments naming the
+stage that will.
 
 #### Type Declaration
 
@@ -6285,7 +6296,7 @@ carries `(0028,7FE0)` is de-identified like any other, and keeps it.
 
 #### Throws
 
-[DeidentifyError](#deidentifyerror) (`UNSUPPORTED_TRANSFER_SYNTAX`) for a `Dataset`
+(`UNSUPPORTED_TRANSFER_SYNTAX`) for a `Dataset`
   whose File Meta Transfer Syntax UID is one of the four JPIP Referenced
   syntaxes, whatever the options; its message is a fixed string. Checked
   first, so it is the code such a call gets even when its options are
@@ -6293,13 +6304,13 @@ carries `(0028,7FE0)` is de-identified like any other, and keeps it.
 
 #### Throws
 
-[DeidentifyError](#deidentifyerror) (`INVALID_OPTIONS`) for an unknown Retain option,
+(`INVALID_OPTIONS`) for an unknown Retain option,
   for both PS3.15 §E.3.6 temporal Options in one call, or for a malformed
   `uidRoot`.
 
 #### Throws
 
-`DicomSerializeError` (`VALUE_TOO_LONG_FOR_VR`) when the run
+(`VALUE_TOO_LONG_FOR_VR`) when the run
   re-encodes a Sequence Item, under an Explicit VR syntax, that keeps a Private
   Creator Data Element whose value is longer than 65,534 bytes. Only a
   `RetainSafePrivate` run whose `Profile` names a creator that long keeps one;
@@ -6320,10 +6331,11 @@ console.log(report.attributes.length, "attributes acted on");
 
 ### fromDicomJson()
 
-> **fromDicomJson**(`json`, `options`): [`Dataset`](#dataset)
+> **fromDicomJson**(`json`, `options?`): [`Dataset`](#dataset)
 
 A [Dataset](#dataset) from a DICOM JSON Model object (PS3.18 Annex F), written under the File Meta
-the caller gives and read back by `parseDicom`, so `serializeDicom` writes it as Part 10.
+the caller gives (Explicit VR Little Endian when it gives none) and read back by `parseDicom`,
+so `serializeDicom` writes it as Part 10.
 
 Each attribute is written from its `vr` and its `Value`, `InlineBinary` or `BulkDataURI`, the
 inverse of `toDicomJson`: strings joined by backslashes and padded to even length (`UI` with a
@@ -6348,12 +6360,12 @@ default. Text is encoded under the `(0008,0005)` Specific Character Set of its D
 
 One Data Set of the DICOM JSON Model, as `JSON.parse` returns it.
 
-##### options
+##### options?
 
-[`FromDicomJsonOptions`](#fromdicomjsonoptions)
+[`FromDicomJsonOptions`](#fromdicomjsonoptions) = `{}`
 
 The File Meta to write under, how to delimit Sequences, and how to resolve a
-  `BulkDataURI`.
+  `BulkDataURI`. Optional: every field has a default.
 
 #### Returns
 
@@ -6363,7 +6375,7 @@ The Data Set, read by `parseDicom`.
 
 #### Throws
 
-[DicomJsonError](#dicomjsonerror) rather than guess: `INVALID_JSON` for an object of another shape,
+rather than guess: `INVALID_JSON` for an object of another shape,
   `UNSUPPORTED_TRANSFER_SYNTAX` for a Transfer Syntax other than the four uncompressed and
   Deflated ones, `UNSUPPORTED_VR` for an `SV` or `UV` `Value`, whose form we have not read in a
   pinned copy of PS3.18 and which a JSON number does not hold past 2^53, or a VR PS3.5 does not
@@ -6477,7 +6489,7 @@ remap.map("1.2.840.113619.2.55.3") === remap.map("1.2.840.113619.2.55.3"); // tr
 
 Decode a single `DA` value. `legacy` is `true` for any tolerated
 non-canonical form (retired dotted `YYYY.MM.DD`, or an unparseable value
-such as `"ANONYMIZED"`), signalling the caller to emit
+such as `"ANONYMIZED"`), signaling the caller to emit
 `DICOM_DA_LEGACY_FORMAT`.
 
 #### Parameters
@@ -6513,7 +6525,7 @@ parseDate("2024.01.15").legacy; // true
 > **parseDateTime**(`raw`): `object`
 
 Decode a single `DT` value. `nonstandardOffset` is `true` when a UTC
-offset suffix is present but malformed / out of range, signalling the
+offset suffix is present but malformed / out of range, signaling the
 caller to emit `DICOM_DT_NONSTANDARD_OFFSET`.
 
 #### Parameters
@@ -6956,7 +6968,7 @@ treating the list as complete.
 
 #### Throws
 
-`DicomParseError` with code `INVALID_FILE_META` when the element's
+with code `INVALID_FILE_META` when the element's
   bytes are not an Item stream (an Item header cut short, an Item reaching past
   the bytes, or a tag other than `(FFFE,E000)` / `(FFFE,E0DD)`). `parseDicom`
   refuses such bytes itself, so only a hand-built `Element` reaches this; the
@@ -7104,7 +7116,7 @@ are padded even, and retired `(gggg,0000)` group lengths are dropped.
 
 #### Throws
 
-[DicomSerializeError](#dicomserializeerror) with code `MISSING_TRANSFER_SYNTAX` when
+with code `MISSING_TRANSFER_SYNTAX` when
   the dataset has no File Meta Transfer Syntax UID,
   `UNSUPPORTED_TRANSFER_SYNTAX` when that UID is neither one of the four
   native syntaxes nor a section A.4 one, `INVALID_ENCAPSULATED_PIXEL_DATA`
@@ -7167,7 +7179,7 @@ The JSON text.
 
 #### Throws
 
-`DicomJsonError` with `CONVERSION_FAILED` for a value `JSON.stringify` cannot
+with `CONVERSION_FAILED` for a value `JSON.stringify` cannot
   write, such as a `bigint` or a cycle, for an error a `toJSON` method throws, and where the
   Data Set's own `toJSON` leaves no text; the error it replaces is not kept.
 
@@ -7289,7 +7301,7 @@ The Data Set as a DICOM JSON object.
 
 #### Throws
 
-[DicomJsonError](#dicomjsonerror) rather than change or guess a value: `UNSUPPORTED_VR` for `SV`
+rather than change or guess a value: `UNSUPPORTED_VR` for `SV`
   and `UV` values, whose form we have not read in a pinned copy of PS3.18, `UNSUPPORTED_ELEMENT` for encapsulated Pixel Data the `bulkDataUri` option gives no
   URI, or another undefined-length value that is not a read Sequence, `UNSUPPORTED_BYTE_ORDER` for an `OW`, `OF`, `OD`, `OL` or `OV`
   value under Explicit VR Big Endian, `UNREPRESENTABLE_NUMBER` for NaN, an infinity, an `FL` or

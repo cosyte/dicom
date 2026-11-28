@@ -148,7 +148,7 @@ export function parseDeflatedLEWithCap(
   // one, and that is not cosmetic: `makeEmitter` closes over `ctx.frame` to cut
   // the strict-mode snippet and to name the offset's frame, so forwarding meant
   // slicing the COMPRESSED source at an offset that indexes the INFLATED stream
-  // and labelling it `"input"`. The snippet was confidently wrong. `innerCtx` shares the outer `warnings` array, `onWarning` and
+  // and labeling it `"input"`. The snippet was confidently wrong. `innerCtx` shares the outer `warnings` array, `onWarning` and
   // `strict`, so every other semantic is unchanged.
   const innerChokepoint = makeEmitter(innerCtx);
   const innerEmit = (w: DicomParseWarning): void => {

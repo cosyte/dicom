@@ -36,7 +36,7 @@ import { describe, expect, it } from "vitest";
  * 🛑 **THIS GATE USED TO ASSERT THE OPPOSITE AND THE PAGES USED TO SAY IT.** It required the phrase
  * "never produces it" about `MODIFIED` on the README and the limitations page; that claim became
  * false when the second E.3.6 column landed, and leaving the gate green by leaving the pages alone
- * would have shipped a false limitation. The assertion moved in the same commit as the behaviour.
+ * would have shipped a false limitation. The assertion moved in the same commit as the behavior.
  *
  * @module
  */
@@ -151,7 +151,7 @@ describe("released prose: the temporal declaration the de-identified object carr
   });
 
   it("states that a source value is REPLACED rather than joined", () => {
-    // The behavioural difference from `(0012,0063)`, which a reader of these pages has just been
+    // The behavioral difference from `(0012,0063)`, which a reader of these pages has just been
     // told is added to. Getting the two backwards costs a prior sender's declaration or produces a
     // multi-valued `VM 1` attribute, so the pages have to separate them.
     const recipes = plain(

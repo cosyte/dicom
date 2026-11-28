@@ -21,7 +21,7 @@
  * headings, it moves every block boundary after it, so the two readings' entry sets can be
  * DISJOINT rather than nested and neither is the conservative one. That is why this instrument
  * reports `equal`, `a-subset-of-b`, `b-subset-of-a`, `disjoint` or `overlapping` and refuses to
- * summarise them as safer or less safe. A slice that wants to claim a direction has to earn it on
+ * summarize them as safer or less safe. A slice that wants to claim a direction has to earn it on
  * a stated input, and this prints the input.
  *
  * ## The instrument is verified before any figure it prints is believed

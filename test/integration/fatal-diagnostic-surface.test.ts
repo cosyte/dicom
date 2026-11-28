@@ -1127,7 +1127,7 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
     // it would cost every message its tag while withholding nothing an attacker
     // could not have read off the closed registry. These fixtures plant
     // `(0008,0008)` as the fabricated tag precisely so the fabricated header
-    // parses, so that membership hit is designed behaviour. Anything else - a
+    // parses, so that membership hit is designed behavior. Anything else - a
     // tag PS3.6 has no row for, a length, a VR, a raw byte - is a finding.
     const offenders: string[] = [];
     let messagesSeen = 0;
@@ -1176,7 +1176,7 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
     // published table. It is NOT the `report.removedPrivateTags` product call -
     // there, narrowing would empty the field on every well-formed file, because
     // a private tag is in no such table. Here the field's whole job is "which
-    // actionable attributes were hidden in this value", and the neighbours it
+    // actionable attributes were hidden in this value", and the neighbors it
     // used to list were attributes this run would have KEPT.
     const embedded = (tag: Buffer, vr: string, value: Buffer): Buffer => {
       const length = Buffer.alloc(2);
@@ -1259,7 +1259,7 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
       ).toContain("IN");
     }
     // And the ratified direction: a window that IS one of the 34 is out of scope,
-    // so the arm stays quiet on it rather than redding on designed behaviour.
+    // so the arm stays quiet on it rather than redding on designed behavior.
     expect(
       leaksIn("An element with VR=OB declares", "ROBE").filter((l) => l.kind === "vr"),
     ).toStrictEqual([]);
@@ -1454,7 +1454,7 @@ describe("PHI: a byteOffset names the frame it is counted in", () => {
   });
 
   it("is input at the root, where the two frames were always the same", () => {
-    // The other direction, so the change is not mistaken for one that relabelled
+    // The other direction, so the change is not mistaken for one that relabeled
     // every offset. At the root `byteOffset` is an index into the caller's own
     // buffer and always was, and the frame says so rather than leaving it to be
     // inferred from silence.
@@ -1545,7 +1545,7 @@ describe("PHI: a byteOffset names the frame it is counted in", () => {
     // consumer that only wants the bytes does not need the frame" reads as a
     // convenience and is a false universal: `unsupportedTransferSyntax` puts
     // PS3.6's own NAME for the UID in the snippet slot when the registry
-    // publishes one, which is the behaviour every released version has and is
+    // publishes one, which is the behavior every released version has and is
     // deliberate. It is pinned here rather than only disclosed, because a
     // prose-only exception is what "corrected twice then deleted" is made of.
     const raw = buildDicom({

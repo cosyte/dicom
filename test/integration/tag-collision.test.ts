@@ -42,7 +42,7 @@
  * base - but every fixture that reaches it there is reached through a length
  * lie. The plain duplicate, the collision inside an Item, the collision that
  * swallows a whole `SQ`, the frame the byte offset is in, and the `{ strict:
- * true }` behaviour are pinned here or nowhere.
+ * true }` behavior are pinned here or nowhere.
  *
  * Every fixture is synthetic and built in memory by `build-dicom`; the
  * deliberately fake identifiers exist only so a substitution is observable.
@@ -509,7 +509,7 @@ describe("the diagnostic itself", () => {
 
   it("the shipped `profiles.strict` preset does NOT escalate it", () => {
     // Adding a code to a shipped preset moves every `profiles.strict`
-    // consumer's parse and is a measured behaviour change of its own, not a
+    // consumer's parse and is a measured behavior change of its own, not a
     // side effect of adding a code.
     expect(strictProfile.escalations.has(WARNING_CODES.DICOM_DUPLICATE_TAG_IN_DATA_SET)).toBe(
       false,

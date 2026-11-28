@@ -314,7 +314,7 @@ describe("AC7: a DICOMDIR keeps its group 0004 and is told what was not discharg
   });
 
   it("keys the carve-out to the one UID and to nothing broader", () => {
-    // A neighbouring Media Storage UID must NOT buy the carve-out.
+    // A neighboring Media Storage UID must NOT buy the carve-out.
     for (const uid of [SOP_CLASS_CT, "1.2.840.10008.1.3", "1.2.840.10008.1.3.100"]) {
       const { report } = deidentify(
         parseDicom(buildDirectoryBearingFile({ mediaStorageSOPClassUID: uid })),

@@ -14,7 +14,7 @@
  *   pnpm exec tsx test/deident/regress_0350_F4.ts
  *
  * It exits non-zero while that sentence is still on the released page beside the
- * shipped behaviour that contradicts it. The control run below is what keeps the
+ * shipped behavior that contradicts it. The control run below is what keeps the
  * measurement from being vacuous: with the same profile and no declaration, the
  * same scalar IS removed and recorded, which is the case the sentence describes.
  */
@@ -77,7 +77,7 @@ function plain(text: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// 1. The shipped behaviour, WITH the profile the sentence is about.
+// 1. The shipped behavior, WITH the profile the sentence is about.
 // ---------------------------------------------------------------------------
 
 /** The profile vouches for (0009,1001), which is exactly the sentence's subject. */

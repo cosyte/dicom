@@ -164,7 +164,7 @@ function adversarialCarrier(size: number): Buffer {
 
 describe("an undescended sequence is not passed through", () => {
   it("the parse this all rests on: the descent is refused and the identifier is inside the span", () => {
-    // Not a behaviour claim about the remedy - a check that the fixture builds
+    // Not a behavior claim about the remedy - a check that the fixture builds
     // the situation at all. If this ever goes green for the wrong reason (the
     // sequence descends, or nothing is swallowed) every assertion below becomes
     // vacuous, which is the failure mode `dicom#50`'s "explicit-length SQ also
@@ -402,7 +402,7 @@ describe("the rule reaches a vouched-for private SQ too", () => {
     // The vouching is still the profile's to give, and this change does not
     // second-guess it with a content test. What it withdraws is the *implication*
     // that vouching for a private attribute also vouches for whatever Data Set
-    // the sender encoded inside it. PS3.15 2026c §E.3.10's licence is for
+    // the sender encoded inside it. PS3.15 2026c §E.3.10's license is for
     // "Private Attributes that are known by the de-identifier to be safe from
     // identity leakage" - and when the parser could not materialize the items,
     // nothing inside is known at all, which is exactly the condition

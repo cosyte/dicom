@@ -22,7 +22,7 @@
  * headings, it moves every boundary after it, so two readings' entry sets can be DISJOINT rather
  * than nested and neither is the conservative one. This lineage has had a fail-safe-direction
  * argument refuted three times, so this instrument reports `equal`, `a-subset-of-b`,
- * `b-subset-of-a`, `disjoint` or `overlapping` and refuses to summarise them as safer or less safe.
+ * `b-subset-of-a`, `disjoint` or `overlapping` and refuses to summarize them as safer or less safe.
  *
  * ## The instrument is verified before any figure it prints is believed
  *

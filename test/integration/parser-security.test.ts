@@ -296,7 +296,7 @@ describe("Security: decompression-bomb cap", () => {
       // `buf` is the ON-DISK compressed object, so the frame is the caller's
       // input. `parseDeflatedLEWithCap` swaps in the inflated stream itself,
       // after the cap check, and the fatal this test drives is raised BEFORE
-      // that swap. A graded pass caught this labelled `INFLATED_DATASET`, which
+      // that swap. A graded pass caught this labeled `INFLATED_DATASET`, which
       // asserted nothing and was still the wrong model for the next worker to
       // copy: this is what a real composition site passes. A first remedy said
       // there were "exactly four" of those and a graded pass measured five, so

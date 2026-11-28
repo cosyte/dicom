@@ -1,5 +1,5 @@
 /**
- * Source and vendor profile behaviour, end-to-end.
+ * Source and vendor profile behavior, end-to-end.
  *
  * Verifies the four acceptance pillars of the profile system against programmatic
  * fixtures (no curated `.dcm` files):

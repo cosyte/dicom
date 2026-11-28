@@ -35,7 +35,7 @@ export type ResolvedAction = "D" | "Z" | "X" | "K" | "C" | "U";
  * 🩺 **An Option the row does not publish a code for resolves to the Basic
  * Profile, never to a keep and never to another Option's code.** That is the
  * safe direction and it is the whole reason this reads `optionSet` by key
- * rather than falling back to a neighbouring column: PS3.15 §E.3.6's two
+ * rather than falling back to a neighboring column: PS3.15 §E.3.6's two
  * temporal Options have separate Table E.1-1 columns, and an attribute the
  * modified-dates column is silent about must NOT inherit what the full-dates
  * column says about it. Those two are mutually exclusive anyway, so at most one

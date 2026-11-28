@@ -14,7 +14,7 @@
  * temporal columns on exactly the same rows, so no live row has a full-dates
  * code with the modified-dates column silent beside it - and that is the row
  * that tells "fall back to the Basic Profile" apart from "fall back to the
- * neighbouring temporal column". An action table lagging the dictionary is this
+ * neighboring temporal column". An action table lagging the dictionary is this
  * repo's recorded silent-PHI-leak shape, so the safe direction is proved rather
  * than argued.
  *
@@ -32,12 +32,12 @@ vi.mock("../../src/dictionary/generated/annex-e.js", () => ({
   // action, then `Option=code` pairs joined by `;`; fields joined by `|`.
   //
   // (6000,4000) is inside the (60xx,4000) mask below. The real table has no such
-  // row; if PS3.15 ever adds one, this is the behaviour it will get.
+  // row; if PS3.15 ever adds one, this is the behavior it will get.
   //
   // (0008,0020) Study Date, rebuilt as the row PS3.15 2026c does not publish:
   // the full-dates column says keep, and the modified-dates column beside it
   // is EMPTY. Only this shape separates the Basic Profile fallback from the
-  // neighbouring-column one.
+  // neighboring-column one.
   ANNEX_E_ROWS: [
     "",
     "6000,4000|Constructed Exact Row|K|",

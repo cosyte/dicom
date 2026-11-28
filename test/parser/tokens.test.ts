@@ -54,7 +54,7 @@ describe("renderTag is a MEMBERSHIP test against PS3.6, not a shape test", () =>
   it("withholds a genuine repeating-group member too, and that is a real cost", () => {
     // `(6000,3000)` Overlay Data is a real attribute on real files. PS3.6 names
     // it only through the `60xx3000` family row, so no literal row vouches for
-    // this tag and the message loses it. Stated rather than minimised: the
+    // this tag and the message loses it. Stated rather than minimized: the
     // element is still in the Data Set under that tag and the warning's
     // `position.byteOffset` locates the header.
     expect(renderTag("60003000")).toBe(WITHHELD);

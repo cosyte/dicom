@@ -314,7 +314,7 @@ describe("PS3.15 E.3.6: the two Retain Longitudinal Temporal Options are mutuall
 
   it("rejects a call carrying both temporal options with the typed error", () => {
     // 🩺 §E.3.6 defines them as ALTERNATIVES. They select different Table E.1-1
-    // columns and different `(0028,0303)` Values, so honouring both would mean
+    // columns and different `(0028,0303)` Values, so honoring both would mean
     // picking one silently and stamping the object with a declaration the caller
     // did not choose.
     expect(() => deidentify(buildPhiDataset(), { retain: [FULL_DATES, MODIFIED_DATES] })).toThrow(
@@ -491,7 +491,7 @@ describe("deidentify - private attributes", () => {
     });
 
     it("removes an item's private element whose reservation exists only at the root", () => {
-      // The third direction, and a real behaviour change: a sender that declares
+      // The third direction, and a real behavior change: a sender that declares
       // the creator once at the root and puts private data in items (Per-Frame
       // Functional Groups do this) loses those elements. PS3.5 §7.8.1 scopes the
       // reservation to the Data Set the creator appears in, so the item has no

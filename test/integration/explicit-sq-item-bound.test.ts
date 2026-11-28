@@ -60,7 +60,7 @@
  * never in the parser. The eject direction is still open and still leaks
  * (`deident-private-reservation.test.ts` pins it as a residual).
  *
- * So `privateCreatorLeak` below proves one narrow thing and is labelled as
+ * So `privateCreatorLeak` below proves one narrow thing and is labeled as
  * proving one narrow thing: **on this file, with this creator placement, a
  * clamp would have retained a private element that the released reading
  * removes.** It is not evidence that the released reading is safe in general,
@@ -87,7 +87,7 @@
  *
  * **What replaces it is the pair of measurements below, and nothing else.** One
  * shape puts the element in the item with a `contextPath`, the other leaves it
- * at the root with none; both are asserted, neither is labelled the mistake.
+ * at the root with none; both are asserted, neither is labeled the mistake.
  *
  * ## What IS left on `contextPath`, and it is not this
  *
@@ -228,7 +228,7 @@ function fixture(transferSyntax: string, itemDelta: number, sqDelta = 0): Buffer
  * overwritten by `bytes` after the file is assembled.
  *
  * That is what a desynchronized read hands `parseSequence`: an `(FFFE,E000)` the
- * parser recognised, followed by four bytes of somebody's value standing in for
+ * parser recognized, followed by four bytes of somebody's value standing in for
  * a length. Four ASCII characters always read as a length past the end of the
  * buffer, so the parse then dies on the pre-existing truncation guard - the
  * warning reaches `onWarning` and never reaches `ds.warnings`. That asymmetry is
@@ -398,7 +398,7 @@ describe("the PHI leak a bound would open", () => {
    * `profiles.ge`, because nothing vouches for it.
    *
    * A clamp preferring section 7.5.2's extent hoists that creator to the root.
-   * The root block becomes reserved, `profiles.ge` recognises `GEMS_IDEN_01`'s
+   * The root block becomes reserved, `profiles.ge` recognizes `GEMS_IDEN_01`'s
    * `0009XX01` as safe, `(0009,1001)` is kept verbatim, and `SECRET-PRIVATE-PHI`
    * ships inside a de-identified object. Measured on the refused `e1e9515`:
    * `report.removedPrivateTags` went `["00091001"]` -> `[]`, and the value went
@@ -540,7 +540,7 @@ describe("the disagreement, disclosed", () => {
     // below.
     expect(w?.message).not.toContain(String(ITEM_ON_WIRE + TRAILING_ON_WIRE));
     expect(w?.message).not.toContain(String(ITEM_ON_WIRE));
-    // The `{tag}` slot is the Item tag, a constant this parser recognised - not
+    // The `{tag}` slot is the Item tag, a constant this parser recognized - not
     // four bytes read out of somebody's value, which is the trap
     // `DICOM_NONZERO_RESERVED_BYTES` and
     // `DICOM_DEIDENT_UNDEFINED_VR_NOT_AUDITABLE` were both remediated for.
@@ -919,7 +919,7 @@ describe("the disagreement, disclosed", () => {
 
   it("does NOT escalate under profiles.strict, only under the { strict: true } option", () => {
     // Disclosed rather than fixed. Adding a code to a shipped preset moves every
-    // `profiles.strict` consumer's parse and is a measured behaviour change of
+    // `profiles.strict` consumer's parse and is a measured behavior change of
     // its own, not a side effect of adding a code.
     const buf = fixture(EXPLICIT_LE, TRAILING_ON_WIRE);
 
@@ -1090,7 +1090,7 @@ describe("where it deliberately says nothing", () => {
     // BEFORE it is a different malformation entirely (the sequence's declared
     // extent is not tiled) and this code says nothing about it. Under-declaring
     // the ITEM by 6 leaves the reader mid-value and desynchronizes it, which is
-    // `origin/main`'s behaviour and stays that way.
+    // `origin/main`'s behavior and stays that way.
     expect(() => parseDicom(fixture(EXPLICIT_LE, -6))).toThrow(
       /An element declares a Value Length reaching past the end/u,
     );
@@ -1131,7 +1131,7 @@ describe("where it deliberately says nothing", () => {
     // buffer.length` inside it, so an item cannot reach anything and the descent
     // simply refuses. That asymmetry is deliberate: there `SQ` is this parser's
     // inference from PS3.6, not something the sender wrote. Unchanged by this
-    // change; `dicom#50`'s behaviour is the pin.
+    // change; `dicom#50`'s behavior is the pin.
     const ds = parseDicom(fixture(IMPLICIT_LE, TRAILING_ON_WIRE));
 
     expect(ds.get(TRAILING)?.rawBytes.toString("latin1").trimEnd()).toBe(TRAILING_VALUE);

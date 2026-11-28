@@ -49,7 +49,7 @@ import {
 /**
  * cosyte's Implementation Class UID, emitted as `(0002,0012)` when the source
  * dataset carried none. A UUID-derived UID under the `2.25` arc (PS3.5 §B.2),
- * which is globally unique without an organisationally registered root. Fixed
+ * which is globally unique without an organizationally registered root. Fixed
  * (not regenerated per call) so the writer is deterministic.
  *
  * @internal

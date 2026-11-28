@@ -87,7 +87,7 @@ interface SourceLine {
 const ENTRY_RE = /^([^:\s][^:]*):(?:\s+(.*))?$/u;
 const ITEM_RE = /^-(?:\s+(.*))?$/u;
 
-/** Drop a `#` comment, honouring quotes so a `#` inside a quoted scalar survives. */
+/** Drop a `#` comment, honoring quotes so a `#` inside a quoted scalar survives. */
 function stripComment(raw: string): string {
   let quote: string | null = null;
   for (let i = 0; i < raw.length; i += 1) {

@@ -177,7 +177,7 @@ describe("warning factories (one named factory per active-emit code)", () => {
   });
 
   it("groupLengthInDataset takes no tag, because the membership rule emptied the slot", () => {
-    // Not a judgement taken here. PS3.6 carries exactly one literal row ending
+    // Not a judgment taken here. PS3.6 carries exactly one literal row ending
     // `0000` - `(0002,0000)`, which is File Meta and never reaches this code -
     // so every tag this slot could have rendered was already withheld. A slot
     // that can never render invites a future call site to pass one.
@@ -224,7 +224,7 @@ describe("warning factories (one named factory per active-emit code)", () => {
     expect(itemCrossesSequenceEnd.length).toBe(2);
     const w = itemCrossesSequenceEnd(pos, "FFFEE000");
     expect(w.code).toBe(WARNING_CODES.DICOM_ITEM_CROSSES_SEQUENCE_END);
-    // The Item tag is a constant this parser recognised, so it still renders.
+    // The Item tag is a constant this parser recognized, so it still renders.
     expect(w.message).toContain("FFFEE000");
     expect(w.message).toContain("withheld");
     // Non-vacuity, and it is the shifted form rather than the raw one: rebuild

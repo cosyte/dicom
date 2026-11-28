@@ -24,7 +24,7 @@ import { Buffer } from "node:buffer";
  * exists to provide - releasing the source buffer and not co-locating a PHI
  * value with foreign bytes. `Buffer.allocUnsafeSlow` always allocates a
  * dedicated `ArrayBuffer`; copying the exact length over it leaves no
- * uninitialised bytes exposed.
+ * uninitialized bytes exposed.
  *
  * @internal
  */

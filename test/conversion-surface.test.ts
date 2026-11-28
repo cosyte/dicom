@@ -167,13 +167,13 @@ describe("the shared case table, in DICOM wire syntax", () => {
       expect(parts?.offsetMinutes, raw).toBe(0);
       // `-0000` decodes to negative zero, and `Object.is(-0, 0)` is false, so a
       // reviewer writing the obvious `toBe(0)` would be told the Contract's
-      // "present as 0" does not hold. The normalisation is what makes it hold.
+      // "present as 0" does not hold. The normalization is what makes it hold.
       expect(Object.is(parts?.offsetMinutes, 0), raw).toBe(true);
       expect("offsetMinutes" in (parts ?? {}), raw).toBe(true);
       expect(toISO(value), raw).toBe("2024-01-15T13:30:15Z");
       expect(toDate(value)?.toISOString(), raw).toBe("2024-01-15T13:30:15.000Z");
     }
-    // The decoder still reports what the wire said; only the projection normalises.
+    // The decoder still reports what the wire said; only the projection normalizes.
     expect(Object.is(parseDateTime("20240115133015-0000").value.offsetMinutes, -0)).toBe(true);
   });
 
@@ -476,7 +476,7 @@ describe("toDate is honest about the timezone", () => {
     () => {
       // The strongest available statement of "the host timezone is NEVER read":
       // the module cannot read it, because none of the routes to it occurs in the
-      // source. A behavioural test cannot say this without re-running the suite
+      // source. A behavioral test cannot say this without re-running the suite
       // under another TZ. Comments are stripped first, so a route NAMED in a doc
       // comment as the thing not to use cannot fail the scan that forbids CALLING
       // it, and so the scan cannot be satisfied by moving a call into a comment.
@@ -670,7 +670,7 @@ describe("component bounds: a point no calendar has converts to nothing", () => 
   // is `valid: true` with `day: 30`, and projecting that gave `"1870-02-30"`
   // and, with a zone, the instant for 2 March. PatientBirthDate (0010,0030) is
   // a `DA`. The refusal is in the conversion surface and NOT in the decoders,
-  // which keep the behaviour they were pinned at.
+  // which keep the behavior they were pinned at.
   //
   // 🩺 THE FIXTURE YEARS ARE BEFORE 1906 ON PURPOSE. `scripts/phi-scan.ts` flags
   // any 8-digit `YYYYMMDD` run whose year is inside the last 120 years, and the
@@ -946,7 +946,7 @@ describe("the access-patterns page's cross-package aliasing example is worked, n
 
   it("keeps this package's own .value, which its decoders really do return", () => {
     // The asymmetry is the point of the example and is not a slip to be
-    // normalised away: `parseDateTime` here answers a wrapper, `parseDtm` there
+    // normalized away: `parseDateTime` here answers a wrapper, `parseDtm` there
     // does not, and only the three conversion names are shared.
     expect(parseDateTime("20240115133015")).toHaveProperty("value");
     expect(aliasing.some((fence) => /parseDateTime\([^)]*\)\s*\.\s*value/u.test(fence))).toBe(true);

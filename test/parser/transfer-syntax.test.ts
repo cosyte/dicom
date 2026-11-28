@@ -110,7 +110,7 @@ describe("the accepted set is the native four, PS3.5 2026c section A.4 and the f
   });
 
   it("the dispatch table registers exactly that set and nothing unregistered", () => {
-    // The behavioural sweep above only visits registered UIDs; this row catches
+    // The behavioral sweep above only visits registered UIDs; this row catches
     // a UID added to the table that PS3.6 does not register at all.
     const expected = sortUnits(new Set([...NATIVE_TRANSFER_SYNTAXES, ...a4, ...jpip]));
     expect(sortUnits(Object.keys(TRANSFER_SYNTAX_PARSERS))).toStrictEqual(expected);
