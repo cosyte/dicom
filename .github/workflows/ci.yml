@@ -52,7 +52,7 @@ jobs:
   # A skipped job satisfies a required check, so require `ci / coverage-ratchet` or
   # `ci / mutation` only while its input below stays on.
   ci:
-    uses: cosyte/.github/.github/workflows/ci.yml@993cd5ea41380cb12dbeb463662527ab7ad1effc # workflows-2026-11-28-993cd5ea4138
+    uses: cosyte/.github/.github/workflows/ci.yml@ee3e8abed80294c3bb6bfcb4a6e54330be2df8b1 # workflows-2026-11-28-ee3e8abed802
     with:
       # `verify` on Linux, Windows and macOS, each on the shared default Node lines (22, 24 and 26;
       # 22 stays while `engines` says >=22): a path, line ending or spawn that works on one system
