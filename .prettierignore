@@ -8,3 +8,7 @@ src/dictionary/generated/
 vendor/
 reports/
 .stryker-tmp/
+
+# Names the synthetic violator values the PHI scan tests use; the scan leaves it out by this
+# path, and the commit hook would flag a rewrite of it, so it keeps its bytes.
+test/fixtures/phi-scan/README.md

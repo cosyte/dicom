@@ -77,13 +77,21 @@ assert.ok(remap.map("1.2.3").startsWith("2.25."), "UID remap not rooted at 2.25"
 
 // De-identify options + error taxonomy (Phase 7).
 assert.ok(DEIDENTIFY_OPTIONS.includes("RetainUIDs"), "RetainUIDs option missing");
-assert.strictEqual(DEIDENTIFY_ERROR_CODES.INVALID_OPTIONS, "INVALID_OPTIONS", "error code mismatch");
+assert.strictEqual(
+  DEIDENTIFY_ERROR_CODES.INVALID_OPTIONS,
+  "INVALID_OPTIONS",
+  "error code mismatch",
+);
 const dErr = new DeidentifyError("smoke", "INVALID_OPTIONS");
 assert.ok(dErr instanceof Error, "DeidentifyError not an Error");
 assert.strictEqual(dErr.code, "INVALID_OPTIONS", "DeidentifyError.code mismatch");
 
 // Stable code registries (Phases 1 to 5) present on the published surface.
-assert.strictEqual(WARNING_CODES.DICOM_MISSING_PREAMBLE, "DICOM_MISSING_PREAMBLE", "warning code mismatch");
+assert.strictEqual(
+  WARNING_CODES.DICOM_MISSING_PREAMBLE,
+  "DICOM_MISSING_PREAMBLE",
+  "warning code mismatch",
+);
 assert.strictEqual(FATAL_CODES.NOT_DICOM_PART_10, "NOT_DICOM_PART_10", "fatal code mismatch");
 assert.strictEqual(
   SERIALIZE_ERROR_CODES.MISSING_TRANSFER_SYNTAX,
