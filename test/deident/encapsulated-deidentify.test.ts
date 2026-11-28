@@ -75,12 +75,12 @@ function reportedBurnedIn(report: DeidentifyReport): boolean {
 const NAME = Buffer.from(PATIENT_NAME, "latin1");
 const ID = Buffer.from(PATIENT_ID, "latin1");
 
-describe("AC-13: deidentify() on every section A.4 syntax equals its Explicit-LE twin", () => {
-  it("AC-13: the set under test is the whole of section A.4", () => {
+describe("deidentify() on every section A.4 syntax equals its Explicit-LE twin", () => {
+  it("the set under test is the whole of section A.4", () => {
     expect(ENCAPSULATION_SET).toHaveLength(35);
   });
 
-  it.each(ENCAPSULATION_SET)("AC-13: %s", (uid) => {
+  it.each(ENCAPSULATION_SET)("%s", (uid) => {
     const source = parseDicom(encapsulatedObject({ transferSyntax: uid }));
     const twinSource = parseDicom(explicitLeTwin({ transferSyntax: uid }));
 
@@ -116,7 +116,7 @@ describe("AC-13: deidentify() on every section A.4 syntax equals its Explicit-LE
   });
 
   it.each(ENCAPSULATION_SET)(
-    "AC-13: burned-in annotation is reported when (0028,0301) is not NO, under %s",
+    "burned-in annotation is reported when (0028,0301) is not NO, under %s",
     (uid) => {
       const yes = deidentify(
         parseDicom(encapsulatedObject({ transferSyntax: uid, burnedInAnnotation: "YES" })),

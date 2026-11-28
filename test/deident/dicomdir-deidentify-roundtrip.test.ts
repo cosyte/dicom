@@ -70,9 +70,9 @@ function readUl(ds: Dataset, index: number | undefined, tag: string): number {
   return el.littleEndian ? el.rawBytes.readUInt32LE(0) : el.rawBytes.readUInt32BE(0);
 }
 
-describe("[AC-8] a de-identified DICOMDIR, written and re-read, resolves every record offset", () => {
+describe("a de-identified DICOMDIR, written and re-read, resolves every record offset", () => {
   for (const [name, ts] of SYNTAXES) {
-    it(`[AC-8] ${name}: the re-read tree is the source tree`, () => {
+    it(`${name}: the re-read tree is the source tree`, () => {
       const source = parseDicom(
         buildDicomdir({ transferSyntax: ts, ...twoPatientRecords() }).bytes,
       );
@@ -121,9 +121,9 @@ describe("[AC-8] a de-identified DICOMDIR, written and re-read, resolves every r
   }
 });
 
-describe("[AC-9] a de-identified DICOMDIR's PATIENT records carry no name or ID into the output", () => {
+describe("a de-identified DICOMDIR's PATIENT records carry no name or ID into the output", () => {
   for (const [name, ts] of SYNTAXES) {
-    it(`[AC-9] ${name}: neither value is anywhere in the written buffer`, () => {
+    it(`${name}: neither value is anywhere in the written buffer`, () => {
       const source = parseDicom(
         buildDicomdir({ transferSyntax: ts, ...twoPatientRecords() }).bytes,
       );
@@ -147,7 +147,7 @@ describe("[AC-9] a de-identified DICOMDIR's PATIENT records carry no name or ID 
   }
 });
 
-describe("[AC-10] DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED names the two File-set clauses", () => {
+describe("DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED names the two File-set clauses", () => {
   const MESSAGE = WARNING_MESSAGES.DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED;
 
   function fileSetWarnings(ds: Dataset): string[] {
@@ -158,14 +158,14 @@ describe("[AC-10] DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED names the two F
       .map((w) => w.message);
   }
 
-  it("[AC-10] raised on the two-patient DICOMDIR", () => {
+  it("raised on the two-patient DICOMDIR", () => {
     const ds = parseDicom(
       buildDicomdir({ transferSyntax: TS_EXPLICIT_LE, ...twoPatientRecords() }).bytes,
     );
     expect(fileSetWarnings(ds)).toEqual([MESSAGE]);
   });
 
-  it("[AC-10] raised on a DICOMDIR with no group-0004 element", () => {
+  it("raised on a DICOMDIR with no group-0004 element", () => {
     const bytes = buildDicom({
       transferSyntax: TS_EXPLICIT_LE,
       mediaStorageSOPClassUID: DICOMDIR_SOP_CLASS,
@@ -176,7 +176,7 @@ describe("[AC-10] DICOM_DEIDENT_DICOMDIR_FILE_SET_NOT_DISCHARGED names the two F
     expect(fileSetWarnings(ds)).toEqual([MESSAGE]);
   });
 
-  it("[AC-10] the message names both File-set clauses and neither retired claim", () => {
+  it("the message names both File-set clauses and neither retired claim", () => {
     // PS3.15 E.1.1: a DICOMDIR created from the de-identified files...
     expect(MESSAGE).toContain("no DICOMDIR was created from the de-identified DICOM Files");
     // ...and removal of the non-de-identified DICOMDIR from the File-set.
