@@ -1,5 +1,5 @@
 /**
- * Phase 7 metadata de-identification tests (PS3.15 Annex E).
+ * Metadata de-identification tests (PS3.15 Annex E).
  *
  * Everything is **synthetic** - fixtures are built in memory by `build-dicom`
  * (the repo ships zero curated `.dcm` files). The recognizable-but-fake PHI
@@ -277,7 +277,7 @@ describe("deidentify - Retain / Clean options", () => {
     expect(report.attributes.find((a) => a.tag === "00081030")?.applied).toBe("cleaned");
   });
 
-  it("AC-12: rejects an unknown retain option, with the same typed error as before", () => {
+  it("rejects an unknown retain option, with the same typed error as before", () => {
     // @ts-expect-error - not a valid option
     expect(() => deidentify(buildPhiDataset(), { retain: ["RetainEverything"] })).toThrow(
       DeidentifyError,
@@ -292,7 +292,7 @@ describe("deidentify - Retain / Clean options", () => {
     }
   });
 
-  it("AC-12: accepts the modified-dates option name at runtime validation", () => {
+  it("accepts the modified-dates option name at runtime validation", () => {
     // The other half of the criterion: the new name is a published option, so it
     // passes validation and is reported as retained rather than refused.
     const { report } = deidentify(buildPhiDataset(), {
@@ -312,7 +312,7 @@ describe("PS3.15 E.3.6: the two Retain Longitudinal Temporal Options are mutuall
   const FULL_DATES = "RetainLongitudinalTemporal" as const;
   const MODIFIED_DATES = "RetainLongitudinalTemporalModifiedDates" as const;
 
-  it("AC-3: rejects a call carrying both temporal options with the typed error", () => {
+  it("rejects a call carrying both temporal options with the typed error", () => {
     // 🩺 §E.3.6 defines them as ALTERNATIVES. They select different Table E.1-1
     // columns and different `(0028,0303)` Values, so honouring both would mean
     // picking one silently and stamping the object with a declaration the caller
@@ -329,7 +329,7 @@ describe("PS3.15 E.3.6: the two Retain Longitudinal Temporal Options are mutuall
     }
   });
 
-  it("AC-3: rejects them in either order, and beside any other option", () => {
+  it("rejects them in either order, and beside any other option", () => {
     // Order-independence, and the refusal must not be a property of a two-element
     // array: a caller activating half the profile must hit it too.
     for (const retain of [
@@ -344,7 +344,7 @@ describe("PS3.15 E.3.6: the two Retain Longitudinal Temporal Options are mutuall
     }
   });
 
-  it("AC-3: either one ALONE is accepted (the refusal is the pair, not the names)", () => {
+  it("either one ALONE is accepted (the refusal is the pair, not the names)", () => {
     // The mutation control. A validator that refused the modified-dates name
     // outright would pass every row above and fail this one.
     for (const option of [FULL_DATES, MODIFIED_DATES] as const) {
@@ -352,7 +352,7 @@ describe("PS3.15 E.3.6: the two Retain Longitudinal Temporal Options are mutuall
     }
   });
 
-  it("AC-13: the rejection carries only option names and structural constants", () => {
+  it("the rejection carries only option names and structural constants", () => {
     // 🩺 `phi-safety` P4. The fixture's PHI strings are the needles: none of them
     // may reach a message a caller logs, and neither may a tag read off the wire
     // or a source byte. `validateRetain` runs before the Data Set is touched.
@@ -794,7 +794,7 @@ describe("deidentify - PHI-free output", () => {
  *
  * All values below are synthetic and exist only to be proven absent.
  */
-describe("deidentify - PS3.15 2026c patient attributes (DICOM-ANNEX-E-DEID-LAG)", () => {
+describe("deidentify - PS3.15 2026c patient attributes", () => {
   const LATE: ReadonlyArray<{ tag: Tag; vr: "LT" | "UT" | "UC" | "UR"; value: string }> = [
     { tag: "00100012", vr: "LT", value: "PREFERRED-NAME-SYNTH" },
     { tag: "00100013", vr: "UT", value: "NAME-COMMENT-SYNTH" },
@@ -924,7 +924,7 @@ describe("deidentify - repeating-group family rows (PS3.15 Table E.1-1 masks)", 
     // over-matching removes data under a Table E.1-1 row PS3.15 never wrote.
     // (6020,4000) is not an attribute PS3.15 marks, so no audit line names it.
     //
-    // S0367-dicom-15 AC-10 moved the rest of this test's expectation: (6020,4000)
+    // Removing unregistered standard elements moved the rest of this test's expectation: (6020,4000)
     // is not an attribute PS3.6 registers either (the `60xx4000` row is bounded
     // by the same PS3.5 7.6 groups), so it is now REMOVED - by the
     // unregistered-element rule, on its own record, not by the mask.

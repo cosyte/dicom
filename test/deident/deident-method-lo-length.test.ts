@@ -1,5 +1,5 @@
 /**
- * `DICOM-LO-LENGTH-AND-SILENT-REPLACE` - the `(0012,0063)` length and
+ * The `(0012,0063)` length and
  * replacement defects, measured rather than argued.
  *
  * ## Half one: the library's own method text was too long for the VR it writes
@@ -11,14 +11,14 @@
  *
  * 🛑 **THAT ROW DESCRIBES A VALUE, AND `(0012,0063)` IS `1-n`, SO THE BOUND IS
  * PER VALUE AND EVERY MEASUREMENT HERE IS TOO.** Reading it as a bound on the
- * Value Field is the same misreading that left the fixed-point hole in `#74`
- * (where §6.4, a clause about where the ENCODER puts its pad, was read as a
+ * Value Field is the same misreading that left the fixed-point hole in an
+ * earlier fix (where PS3.5 §6.4, a clause about where the ENCODER puts its pad, was read as a
  * bound on a COMPARISON). A field of 247 bytes made of ten values of 61 or fewer
  * is conformant; a field of 76 bytes made of one value is not. The tests below
  * assert the value-wise figure and the field-wise one **at the same time**, so a
  * remedy that merely shortened the field could not pass them.
  *
- * Measured on `da1f209` (the base for this slice), through the built package:
+ * Measured on `da1f209` (the base for this change), through the built package:
  * the default was one value of **76** characters, **130** with `RetainUIDs +
  * RetainSafePrivate + RetainDeviceIdentity`, **272** with all nine, and **all
  * 512 option subsets** were over the maximum. Not an edge case and not
@@ -30,7 +30,7 @@
  *
  * `deidentify()` builds the provenance chain by concatenating `LO` values with
  * the `5CH` delimiter. Bytes under any other VR are not values it can join into,
- * so it replaces. That much is deliberate and unchanged. Until this slice it
+ * so it replaces. That much is deliberate and unchanged. Until this change it
  * replaced with `report.warnings` **empty** - the sender's earlier
  * de-identification record destroyed, under `(0012,0062) = YES`, with nothing
  * saying so.
@@ -47,7 +47,7 @@
  * is shortened, split or truncated: the act is unchanged and only the silence is
  * closed. The measurement is over **bytes**, so it can never miss a Value that
  * is genuinely over, and it over-reports on **any** conformant Value whose bytes
- * outnumber its counted characters - §6.2 specifies these lengths "in characters
+ * outnumber its counted characters - PS3.5 §6.2 specifies these lengths "in characters
  * rather than bytes" and excludes Code Extension escape sequences from the
  * count. The rows below measure that rather than enumerating it: **three drafts
  * of an enumeration were refuted in three graded passes, so there is none.**
@@ -121,7 +121,7 @@ function buildWithPriorMethod(prior?: { readonly vr: VR; readonly value: Buffer 
  * `(0012,0063)`'s Value Field exactly as it stands - pad bytes and all.
  *
  * 🛑 **NEVER THROUGH A TRIMMING HELPER.** `methodOf()` in the sibling file
- * strips trailing `[NUL SP]` and is what made `#73`'s fixed-point pin vacuous.
+ * strips trailing `[NUL SP]` and is what made an earlier fix's fixed-point pin vacuous.
  */
 function rawMethod(ds: Dataset): Buffer {
   return Buffer.from(ds.get(DEIDENT_METHOD)?.rawBytes ?? Buffer.alloc(0));
@@ -236,8 +236,8 @@ describe("(0012,0063) fits LO's 64-character maximum, and the bound is per Value
     expect(valueLengths(nine)).not.toContain(272);
   });
 
-  it("AC-11: every legal option subset, exhaustively: no Value over the maximum", () => {
-    // The whole input space, not a sample. `#74` established that this lineage
+  it("every legal option subset, exhaustively: no Value over the maximum", () => {
+    // The whole input space, not a sample. An earlier fix established that this lineage
     // proves fixed points by sweep rather than by example, and the same argument
     // applies to a bound. The domain is every `retain` a call may carry, which
     // excludes the quarter naming both mutually exclusive §E.3.6 Options.
@@ -264,7 +264,7 @@ describe("(0012,0063) fits LO's 64-character maximum, and the bound is per Value
     expect(longest).toBe(61);
   });
 
-  it("AC-11: the modified-dates option contributes its own Value, inside the maximum", () => {
+  it("the modified-dates option contributes its own Value, inside the maximum", () => {
     // The criterion's own row: a run under the new name and no caller method
     // text writes the Profile Value plus one naming that Option, and both are
     // inside `LO`'s per-Value maximum.
@@ -295,10 +295,10 @@ describe("(0012,0063) fits LO's 64-character maximum, and the bound is per Value
     expect(valueLengths(field).filter((n) => n > LO_VALUE_MAX_CHARS)).toStrictEqual([65]);
   });
 
-  it("AC-11: every option name is inside the maximum on its own, so no subset can breach it", () => {
+  it("every option name is inside the maximum on its own, so no subset can breach it", () => {
     // The mutation control for the sweep: an option with a 70-character name
     // would make the sweep red, and this row says why in one line. The longest
-    // published name is the one this slice added.
+    // published name is the one this change added.
     for (const option of DEIDENTIFY_OPTIONS) {
       expect(option.length, option).toBeLessThanOrEqual(LO_VALUE_MAX_CHARS);
     }
@@ -319,7 +319,7 @@ describe("(0012,0063) fits LO's 64-character maximum, and the bound is per Value
 describe("the multi-valued default is still a fixed point", () => {
   it("six wire round trips, default options: the raw byte count never moves", () => {
     // RAW BYTES over a real parse -> deidentify -> serialize -> parse loop. The
-    // regression `#73` shipped read 16 -> 32 -> 48 -> 64 -> 80 -> 96 on exactly
+    // regression an earlier fix shipped read 16 -> 32 -> 48 -> 64 -> 80 -> 96 on exactly
     // this measurement, and a helper that trimmed the pad could not see it.
     let ds = buildWithPriorMethod();
     const lengths: number[] = [];
@@ -394,7 +394,7 @@ describe("a (0012,0063) the file encoded under another VR is replaced, and says 
   );
 
   it("🛑 the disclosure carries no value, no length and no VR", () => {
-    // A DIAGNOSTIC ABOUT A DROPPED VALUE IS ITSELF A PHI SURFACE. `#55` put four
+    // A DIAGNOSTIC ABOUT A DROPPED VALUE IS ITSELF A PHI SURFACE. An earlier fix put four
     // letters of a surname into one, over a fixture that could not show it.
     // Name-bearing payload, non-vacuity first.
     const parsed = buildWithPriorMethod({ vr: "SH" as VR, value: even(NAMED_PRIOR) });
@@ -522,7 +522,7 @@ describe("an over-long Value this run did not compose is written through, and SA
     // on the first pass would leave every re-de-identification silent again,
     // which is the exact shape this row exists to catch. From the second pass
     // the input also carries the (0012,0064) Items the pass before it wrote, and
-    // their retention is disclosed by its own code (S0356-dicom-13 AC-7), after
+    // their retention is disclosed by its own code, after
     // the two (0012,0063) codes, which are unchanged.
     expect(codesPerPass).toStrictEqual(
       Array.from({ length: 4 }, (_, pass) => [
@@ -599,7 +599,7 @@ describe("an over-long Value this run did not compose is written through, and SA
   });
 
   it("the bound is per VALUE here too: ten values of 61 are clean, one of 65 is not", () => {
-    // The same misreading that left `#74`'s hole would make this row red: a
+    // The same misreading that left an earlier fix's hole would make this row red: a
     // detector that measured the Value FIELD would call the 619-byte chain of
     // conformant values a violation, and it is not one.
     const ten = Array.from({ length: 10 }, (_, i) => `Pass ${i} ${"C".repeat(54)}`);
@@ -620,7 +620,7 @@ describe("an over-long Value this run did not compose is written through, and SA
     ).toStrictEqual([WARNING_CODES.DICOM_DEIDENT_METHOD_VALUE_OVER_LENGTH]);
   });
 
-  it("AC-11: every legal option subset: the library's own text never raises it", () => {
+  it("every legal option subset: the library's own text never raises it", () => {
     // The union half of the change, proved rather than argued: the code is
     // additive, and on every run where the library composes the whole value it
     // adds nothing. The sweep above already proves no Value is over; this proves
@@ -684,7 +684,7 @@ describe("an over-long Value this run did not compose is written through, and SA
     // sequences", which a multi-valued `(0008,0005)` (Level 4) makes legal. So a
     // conformant 64-CHARACTER Value under a SINGLE-byte repertoire is 67 bytes
     // and raises the code. Reading a cell without its qualifying clauses is the
-    // same shape as the misreading that left `#74`'s hole.
+    // same shape as the misreading that left an earlier fix's hole.
     const esc = Buffer.from([0x1b, 0x2d, 0x41]); // ESC 2/13 4/1: designate ISO-IR 100 as G1
     const sixtyFour = "ACME Anonymizer v3, single byte throughout, no wide chars";
     expect(sixtyFour).toHaveLength(57);
@@ -823,15 +823,15 @@ describe("an over-long Value this run did not compose is written through, and SA
   });
 
   it("🩺 a later pass with FEWER options leaves no trace that the earlier one had more", () => {
-    // Disclosed here rather than left for a later slice to rediscover. Splitting
+    // Disclosed here rather than left for a later change to rediscover. Splitting
     // the record per option plus de-duplicating per value means a token written
     // by pass 1 is simply already present in pass 2, so the two runs are not
     // distinguishable in the attribute: `(0012,0063)` records the UNION of the
     // options ever applied, not a per-run history. The direction is
     // conservative - the union over-states what was retained, never understates
     // it - and the base's one-value-per-run text did distinguish them. It is a
-    // real reduction in what PS3.15 E.1.1's provenance carrier holds and is a
-    // backlog line, not a defect this slice takes on.
+    // real reduction in what PS3.15 E.1.1's provenance carrier holds, and a
+    // known limit, not a defect this change takes on.
     const first = deidentify(buildWithPriorMethod(), { retain: ["RetainUIDs"] }).dataset;
     const second = deidentify(parseDicom(serializeDicom(first)), {}).dataset;
 

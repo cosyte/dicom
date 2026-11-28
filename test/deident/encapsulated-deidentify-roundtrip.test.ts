@@ -63,12 +63,12 @@ function shape(ds: Dataset, pad: boolean): Shape[] {
 const NAME = Buffer.from(PATIENT_NAME, "latin1");
 const ID = Buffer.from(PATIENT_ID, "latin1");
 
-describe("AC-5: de-identified output under every section A.4 syntax re-reads to itself", () => {
-  it("AC-5: the set under test is the whole of section A.4", () => {
+describe("de-identified output under every section A.4 syntax re-reads to itself", () => {
+  it("the set under test is the whole of section A.4", () => {
     expect(ENCAPSULATION_SET).toHaveLength(35);
   });
 
-  it.each(ENCAPSULATION_SET)("AC-5: %s", (uid) => {
+  it.each(ENCAPSULATION_SET)("%s", (uid) => {
     const source = parseDicom(encapsulatedObject({ transferSyntax: uid }));
     const { dataset } = deidentify(source);
     const reread = parseDicom(serializeDicom(dataset));
@@ -88,8 +88,8 @@ describe("AC-5: de-identified output under every section A.4 syntax re-reads to 
   });
 });
 
-describe("AC-6: the written de-identified file carries neither planted identifier", () => {
-  it.each(ENCAPSULATION_SET)("AC-6: %s", (uid) => {
+describe("the written de-identified file carries neither planted identifier", () => {
+  it.each(ENCAPSULATION_SET)("%s", (uid) => {
     const source = parseDicom(encapsulatedObject({ transferSyntax: uid }));
 
     // Mutation control: the writer's output for the un-de-identified source carries both.
