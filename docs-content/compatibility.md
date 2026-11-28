@@ -2,7 +2,6 @@
 id: compatibility
 title: Compatibility
 sidebar_label: Compatibility
-sidebar_position: 16
 description: The DICOM editions this package reads, the transfer syntaxes it supports, the deviations it tolerates, and the source profiles it ships.
 ---
 

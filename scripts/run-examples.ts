@@ -1,8 +1,8 @@
 /**
  * Runs every example under `examples/` and exits non-zero if any of them fails.
  *
- * Each `examples/*.ts` file (depth 1: `examples/data/` holds their inputs, and a name starting with
- * `_` is skipped) imports the package by its published name, `@cosyte/dicom`, which Node resolves
+ * Each `examples/*.ts` file, and each `examples/<folder>/*.ts` file one folder down (`examples/data/`
+ * holds their inputs and is not run, and a name starting with `_` is skipped), imports the package by its published name, `@cosyte/dicom`, which Node resolves
  * through this package's own `exports` to the BUILT files in `dist/`. So the examples exercise what
  * a consumer installs, and `pnpm build` has to run first.
  *
@@ -16,7 +16,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync } from "node:fs";
+import { type Dirent, existsSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -30,10 +30,23 @@ if (!existsSync(BUILT_ENTRY)) {
   process.exit(1);
 }
 
-const examples = readdirSync(EXAMPLES_DIR, { withFileTypes: true })
-  .filter((d) => d.isFile() && d.name.endsWith(".ts") && !d.name.startsWith("_"))
-  .map((d) => d.name)
-  .sort();
+/** The folder of inputs the examples import, which is never run. */
+const DATA_DIR = "data";
+
+const isExample = (d: Dirent): boolean =>
+  d.isFile() && d.name.endsWith(".ts") && !d.name.startsWith("_");
+
+const top = readdirSync(EXAMPLES_DIR, { withFileTypes: true });
+const examples = [
+  ...top.filter(isExample).map((d) => d.name),
+  ...top
+    .filter((d) => d.isDirectory() && d.name !== DATA_DIR)
+    .flatMap((dir) =>
+      readdirSync(join(EXAMPLES_DIR, dir.name), { withFileTypes: true })
+        .filter(isExample)
+        .map((d) => `${dir.name}/${d.name}`),
+    ),
+].sort();
 
 if (examples.length === 0) {
   console.error("No examples found under examples/: refusing to report a pass.");

@@ -2,7 +2,6 @@
 id: recipes
 title: Use recipes for indexing, routing and sharing studies
 sidebar_label: Recipes
-sidebar_position: 4
 description: Steps for the jobs a metadata parser is asked to do, from indexing a folder of studies to de-identifying an object before sharing it.
 ---
 

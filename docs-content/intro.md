@@ -2,7 +2,6 @@
 id: intro
 title: Getting started
 sidebar_label: Getting started
-sidebar_position: 1
 description: What @cosyte/dicom is, who it is for, what it does not do, and where each part of these docs is.
 ---
 

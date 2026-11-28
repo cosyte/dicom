@@ -49,7 +49,7 @@ CI's other jobs run beside it:
 - `examples`, after `pnpm build`: `pnpm typecheck:examples`, `pnpm lint:examples`, `pnpm examples`,
   `pnpm phi-scan:examples`.
 - `standards`: `pnpm check:readme`, `pnpm check:claude-card`, `pnpm check:catalog`,
-  `pnpm check:process`.
+  `pnpm check:docs-content`, `pnpm check:process`.
 - The dash and internal-reference gates: `pnpm check:no-emdash`, `pnpm check:no-internal-refs`.
 - A change under `vendor/`, to the generators in `scripts/`, to `src/dictionary/generated/`, or to
   `package.json` also runs the regen check: `pnpm gen:clean`, `pnpm gen:all`, then

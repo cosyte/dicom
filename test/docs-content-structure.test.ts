@@ -52,17 +52,11 @@ const PACKAGE_FILE = join(root, "package.json");
  * Frontmatter keys every page carries, and the only ones any page carries. `description` is the
  * one-sentence summary the docs site shows in search results and link previews.
  */
-const REQUIRED_FRONTMATTER_KEYS = [
-  "id",
-  "title",
-  "sidebar_label",
-  "sidebar_position",
-  "description",
-] as const;
+const REQUIRED_FRONTMATTER_KEYS = ["id", "title", "sidebar_label", "description"] as const;
 
 /**
- * The per-page order declaration. `sidebars.json` fixes the order explicitly, so
- * a second, disagreeing source of it is what this gate exists to refuse.
+ * The per-page order declaration. `sidebars.json` fixes the order, so no page
+ * declares one: a second source of order is what this gate exists to refuse.
  */
 const ORDER_KEY = "sidebar_position";
 
@@ -713,19 +707,8 @@ describe("docs-content: page frontmatter", () => {
     expect(findDuplicates(pages.map((p) => p.frontmatter.get("id") ?? ""))).toEqual([]);
   });
 
-  it("takes page order from exactly one source", () => {
-    const declared = pages
-      .filter((p) => p.frontmatter.has(ORDER_KEY))
-      .map((p) => ({ file: p.file, order: p.frontmatter.get(ORDER_KEY) ?? "" }));
-    if (declared.length === 0) return;
-    expect(declared.length).toBe(pages.length);
-    expect(findDuplicates(declared.map((d) => d.order))).toEqual([]);
-    // A second source of order may exist only if it agrees with the first: sorted by position,
-    // the pages read in exactly the order sidebars.json declares them.
-    const byPosition = [...declared]
-      .sort((a, b) => Number(a.order) - Number(b.order))
-      .map((d) => d.file.replace(PAGE_EXTENSION, ""));
-    expect(byPosition).toEqual([...declaredIds]);
+  it("takes page order from sidebars.json alone", () => {
+    expect(pages.filter((p) => p.frontmatter.has(ORDER_KEY)).map((p) => p.file)).toEqual([]);
   });
 
   it("presents no two sidebar entries under the same name", () => {

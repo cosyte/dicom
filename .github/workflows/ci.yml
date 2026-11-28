@@ -94,6 +94,8 @@ jobs:
 
   # The house checks from @cosyte/script-utils, and `cosyte-process check`, which grades the
   # process wiring: the verb scripts, cosyte-process.config.json, and the direct vitest pin.
+  # `check:docs-content` (cosyte-docs-content, @cosyte/script-utils) grades docs-content/ against
+  # the docs standard: the sidebar, each page's front matter and kind, and what a sample prints.
   standards:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -108,4 +110,5 @@ jobs:
       - run: pnpm check:readme
       - run: pnpm check:claude-card
       - run: pnpm check:catalog
+      - run: pnpm check:docs-content
       - run: pnpm check:process

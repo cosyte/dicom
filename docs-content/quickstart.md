@@ -2,7 +2,6 @@
 id: quickstart
 title: Read your first DICOM object
 sidebar_label: Your first object
-sidebar_position: 3
 description: Read your first DICOM object and get who the patient is, which study and series it belongs to, and the image geometry.
 ---
 

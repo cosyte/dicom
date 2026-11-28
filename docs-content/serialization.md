@@ -2,7 +2,6 @@
 id: serialization
 title: Serialization to Part 10
 sidebar_label: Serialization
-sidebar_position: 13
 description: What serializeDicom guarantees when it writes a dataset back to Part 10 bytes, when it refuses, what it never does, and the DICOM JSON Model converters.
 ---
 
