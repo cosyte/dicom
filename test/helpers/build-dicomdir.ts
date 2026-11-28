@@ -246,7 +246,7 @@ function uid(s: string): Buffer {
   return b.length % 2 === 0 ? b : Buffer.concat([b, Buffer.from([0x00])]);
 }
 
-/** The synthetic identities the AC-9 test looks for in written bytes. */
+/** The synthetic identities the DICOMDIR PHI test looks for in written bytes. */
 export const PATIENTS = [
   { name: "SYNTHETIC^ALPHAWOLF", id: "SYNPID0001" },
   { name: "SYNTHETIC^BRAVOHAWK", id: "SYNPID0002" },

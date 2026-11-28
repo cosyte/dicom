@@ -23,25 +23,25 @@ and every diagnostic as a route out.
 ## Rules
 
 - Diagnostics take no string from the file: messages come by code from the frozen registries in
-  `src/parser/warnings.ts` and `src/parser/fatals.ts` (#48, #80).
+  `src/parser/warnings.ts` and `src/parser/fatals.ts`.
 - Name an element only through `renderTag` or `renderVr`, never a raw tag, length, or byte from
-  the wire (#55, #88, #90, #92, #93).
-- Cap a diagnostic a file can multiply once per run, on `DeidentifyContext` (#53, #54).
+  the wire.
+- Cap a diagnostic a file can multiply once per run, on `DeidentifyContext`.
 - Keep the Annex E table current with the dictionary, and move the PS3.6 and PS3.15 pins under
-  `vendor/nema/` together: a tag the table lacks is kept (#38, #146).
+  `vendor/nema/` together: a tag the table lacks is kept.
 - PS3.15 repeating-group rows are masks over the even groups `5000` to `501E` and `6000` to
-  `601E`, never exact tags (#39, #40).
-- Private block reservations are scoped per Data Set at every depth, on parse and de-identify (#48,
-  #49), and a retained private `SQ` is walked, never kept verbatim (#77).
-- A private value the run did not walk is removed and reported, never kept as clean (#119, #121).
+  `601E`, never exact tags.
+- Private block reservations are scoped per Data Set at every depth, on parse and de-identify,
+  and a retained private `SQ` is walked, never kept verbatim.
+- A private value the run did not walk is removed and reported, never kept as clean.
 - An over-declaring element is remedied at the de-identify boundary or by a warning, never by a
-  parser bound (#51, #70).
-- Hand a descent the slice cut at its declared end (#50), and descend in one pass (#51).
-- A PHI test needs a name-bearing payload and a mutation control that turns it red (#55); quote a
-  "red on base" count only with its sha, `src/` replaced rather than overlaid (#71).
-- Locate a spec section by its normative sentence (#40) and cite the clause that holds it, which
-  `test/docs/spec-citations.test.ts` checks (#50, #54, #66).
-- `pnpm attw` runs `cosyte-attw`, never the bare `attw` CLI, which exits 0 with no types (#59).
-- Never hand-edit `CHANGELOG.md` or add `[Unreleased]` (#82). A changeset is a patch, its first
-  sentence at most 400 characters (#42, #57), with `What a caller must change:` only when needed.
-- `packageManager` is the only pnpm pin in CI (#34).
+  parser bound.
+- Hand a descent the slice cut at its declared end, and descend in one pass.
+- A PHI test needs a name-bearing payload and a mutation control that turns it red; quote a
+  "red on base" count only with its sha, `src/` replaced rather than overlaid.
+- Locate a spec section by its normative sentence and cite the clause that holds it, which
+  `test/docs/spec-citations.test.ts` checks.
+- `pnpm attw` runs `cosyte-attw`, never the bare `attw` CLI, which exits 0 with no types.
+- Never hand-edit `CHANGELOG.md` or add `[Unreleased]`. A changeset is a patch, its first
+  sentence at most 400 characters, with `What a caller must change:` only when needed.
+- `packageManager` is the only pnpm pin in CI.

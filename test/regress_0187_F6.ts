@@ -5,8 +5,7 @@ import { join } from "node:path";
 import { parseDateTime, toISO } from "../src/index.js";
 
 /**
- * Refuter probe for S0187-consistent-date-conversion-surface-1 (impl gate,
- * loop 2), finding F6, adopted from the umbrella verdict folder.
+ * A regression probe for the date conversion surface, kept as a script.
  *
  * NOT a shipped vitest test: this repo's vitest `include` is
  * `test/[*][*]/[*].test.ts` and a `regress_*` artifact carries a single-dot

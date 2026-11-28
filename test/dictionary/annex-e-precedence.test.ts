@@ -10,7 +10,7 @@
  * row still resolves identically, because no exact row's group prefix is
  * `50` or `60`.
  *
- * The second is the one `AC-7` names. PS3.15 2026c publishes its two §E.3.6
+ * The second is the fall-back rule. PS3.15 2026c publishes its two §E.3.6
  * temporal columns on exactly the same rows, so no live row has a full-dates
  * code with the modified-dates column silent beside it - and that is the row
  * that tells "fall back to the Basic Profile" apart from "fall back to the
@@ -86,8 +86,8 @@ if (silentModifiedRow === undefined) {
   throw new Error("the constructed (0008,0020) row is missing from the mocked table");
 }
 
-describe("AC-7: a silent modified-dates column falls to the Basic Profile (constructed row)", () => {
-  it("AC-7: applies the Basic Profile action, never the full-dates one and never a keep", () => {
+describe("a silent modified-dates column falls to the Basic Profile (constructed row)", () => {
+  it("applies the Basic Profile action, never the full-dates one and never a keep", () => {
     // Non-vacuity: the row really is the shape the criterion is about - a
     // published full-dates code, nothing in the modified-dates column.
     expect(silentModifiedRow.optionSet.RetainLongitudinalTemporal).toBe("K");
@@ -101,7 +101,7 @@ describe("AC-7: a silent modified-dates column falls to the Basic Profile (const
     expect(resolved).not.toBe("K");
   });
 
-  it("AC-7: the full-dates Option still gets the full-dates code (the test can discriminate)", () => {
+  it("the full-dates Option still gets the full-dates code (the test can discriminate)", () => {
     // The mutation control. A resolver that ignored `active` entirely and always
     // returned `basicProfile` would pass the row above and fail this one.
     expect(effectiveCode(silentModifiedRow, new Set(["RetainLongitudinalTemporal"]))).toBe("K");

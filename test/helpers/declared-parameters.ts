@@ -3,8 +3,7 @@
  *
  * Shared by `test/parser/fatals.test.ts` and
  * `test/integration/fatal-diagnostic-surface.test.ts`, which both pin the
- * `DICOM-DIAGNOSTIC-PHI-RESIDUALS` bound that a fatal factory accepts no slot
- * for a wire-derived number. It lives here rather than being copied into both
+ * bound that a fatal factory accepts no slot for a wire-derived number. It lives here rather than being copied into both
  * because a copied detector goes stale on one side and reads clean there.
  *
  * @module

@@ -1,7 +1,7 @@
 /**
- * Unit tests for the Phase 1 public Dictionary namespace.
+ * Unit tests for the public Dictionary namespace.
  *
- * D-21: Phase 1 unit tests cover only `src/dictionary/`. These tests use a
+ * These unit tests cover only `src/dictionary/`. These tests use a
  * hand-curated set of
  * well-known tags / keywords / UIDs that are stable across DICOM editions.
  *
@@ -11,7 +11,7 @@
 import { describe, expect, it, vi } from "vitest";
 import * as Dictionary from "../../src/dictionary/index.js";
 
-describe("Dictionary.lookup (DICT-03 + DICT-04)", () => {
+describe("Dictionary.lookup", () => {
   it("resolves PatientName by tag '00100010'", () => {
     const e = Dictionary.lookup("00100010");
     expect(e).toBeDefined();
@@ -21,13 +21,13 @@ describe("Dictionary.lookup (DICT-03 + DICT-04)", () => {
     expect(e?.retired).toBe(false);
   });
 
-  it("resolves PatientName by keyword 'PatientName' (DICT-04 bidirectional)", () => {
+  it("resolves PatientName by keyword 'PatientName' (lookup works both ways)", () => {
     const e = Dictionary.lookup("PatientName");
     expect(e).toBeDefined();
     expect(e?.tag).toBe("00100010");
   });
 
-  it("returns identical entries for tag and keyword forms (DICT-04)", () => {
+  it("returns identical entries for tag and keyword forms", () => {
     const byTag = Dictionary.lookup("00100010");
     const byKw = Dictionary.lookup("PatientName");
     expect(byTag).toBeDefined();
@@ -49,23 +49,23 @@ describe("Dictionary.lookup (DICT-03 + DICT-04)", () => {
     expect(Dictionary.lookup("0010,0010")).toBeUndefined();
   });
 
-  it("returns undefined for unknown keyword (D-10 no-throw)", () => {
+  it("returns undefined for unknown keyword, and does not throw", () => {
     expect(Dictionary.lookup("ZZZ_NOT_REAL")).toBeUndefined();
   });
 
-  it("returns undefined for empty string (D-10 no-throw)", () => {
+  it("returns undefined for empty string, and does not throw", () => {
     expect(Dictionary.lookup("")).toBeUndefined();
   });
 
   it("does NOT resolve repeating-group placeholder tags via lookup() (concrete-tags only)", () => {
     // (50xx,xxxx) family entries are stored under lowercase-x ids and are
-    // intentionally not retrievable by concrete tag - Phase 2 will own
-    // family-resolution logic.
+    // intentionally not retrievable by concrete tag: the parser owns
+    // family resolution.
     expect(Dictionary.lookup("50000000")).toBeUndefined();
   });
 });
 
-describe("Dictionary.byKeyword (DICT-04)", () => {
+describe("Dictionary.byKeyword", () => {
   it("resolves StudyInstanceUID", () => {
     const e = Dictionary.byKeyword("StudyInstanceUID");
     expect(e).toBeDefined();
@@ -94,7 +94,7 @@ describe("Dictionary.byKeyword (DICT-04)", () => {
   });
 });
 
-describe("Dictionary.uid (DICT-06)", () => {
+describe("Dictionary.uid", () => {
   it("resolves Explicit VR Little Endian transfer syntax", () => {
     const u = Dictionary.uid("1.2.840.10008.1.2.1");
     expect(u).toBeDefined();
@@ -163,7 +163,7 @@ describe("Dictionary.uid (DICT-06)", () => {
  *   - two keywords truncated by the mirror, so the public `byKeyword` lookup
  *     missed on the spelling PS3.6 actually publishes.
  */
-describe("PS3.6 normative overlay (DICOM-UPSTREAM-EDITION-LAG)", () => {
+describe("PS3.6 normative overlay", () => {
   it("marks (0010,2160) EthnicGroup retired, as PS3.6 2025a did", () => {
     const e = Dictionary.lookup("00102160");
     expect(e).toBeDefined();
@@ -211,7 +211,7 @@ describe("PS3.6 normative overlay (DICOM-UPSTREAM-EDITION-LAG)", () => {
     expect(Dictionary.byKeyword("AnalogFilterType")).toBeUndefined();
   });
 
-  it("AC-4: resolves (3004,007F) Dose Calculation Model Name, which PS3.6 2026d added", () => {
+  it("resolves (3004,007F) Dose Calculation Model Name, which PS3.6 2026d added", () => {
     const e = Dictionary.lookup("3004007F");
     expect(e).toBeDefined();
     expect(e?.keyword).toBe("DoseCalculationModelName");

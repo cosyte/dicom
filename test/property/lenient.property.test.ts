@@ -15,7 +15,7 @@
  *   - isFatal       → `err instanceof DicomParseError && FATAL_CODES has err.code`
  *   - getWarnings   → `(ds) => ds.warnings`  (the frozen DicomParseWarning[])
  *   - isKnownCode   → membership in `WARNING_CODES`
- *   - hasPositional → `w.position.byteOffset` is a finite number (TOL-02)
+ *   - hasPositional → `w.position.byteOffset` is a finite number
  *
  * Depth and seed come from `COSYTE_PROPERTY_RUNS` and `COSYTE_PROPERTY_SEED`
  * (`test/helpers/property.ts`): 100 cases on a pull request, 10,000 nightly,
