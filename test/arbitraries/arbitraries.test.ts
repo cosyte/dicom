@@ -3,7 +3,8 @@
  * they produce, and their writer held byte for byte to the test encoder `buildDicom`.
  *
  * Every sample here is drawn from a fixed seed, so each test sees the same values on every run.
- * `digests.test.ts` pins what each generator draws from that seed.
+ * `digests.test.ts` pins what each generator draws from that seed. The writer's byte-for-byte
+ * property is the exception: it runs through the shared runner from a fresh seed it prints.
  */
 
 import { Buffer } from "node:buffer";
@@ -46,6 +47,7 @@ import {
   type BuildDicomElement,
   type BuildDicomSqElement,
 } from "../helpers/build-dicom.js";
+import { checkPropertyAtDepth } from "../helpers/property.js";
 
 const SEED = 20_261_111;
 
@@ -149,11 +151,12 @@ function throughBuildDicom(spec: Part10Spec): Buffer {
 
 describe("the arbitraries' Part 10 writer", () => {
   it("writes every file byte for byte as buildDicom does", () => {
-    fc.assert(
+    checkPropertyAtDepth(
+      "writes every file byte for byte as buildDicom does",
       fc.property(specArb, (spec) => {
         expect(writePart10(spec).toString("hex")).toBe(throughBuildDicom(spec).toString("hex"));
       }),
-      { seed: SEED, numRuns: 400 },
+      400,
     );
   });
 

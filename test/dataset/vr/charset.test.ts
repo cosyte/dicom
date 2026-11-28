@@ -10,6 +10,7 @@ import {
   resolveDecoderLabel,
 } from "../../../src/dataset/vr/charset.js";
 import { WITHHELD } from "../../../src/parser/tokens.js";
+import { checkPropertyAtDepth } from "../../helpers/property.js";
 
 describe("parseSpecificCharacterSet (0008,0005)", () => {
   it("splits a multi-valued CS on backslash and trims pad", () => {
@@ -159,7 +160,8 @@ describe("parseSpecificCharacterSet - linear time on a long pad run (polynomial 
         .split("\\")
         .map((t) => t.replace(/[\x00 ]+$/u, "").replace(/^[ ]+/u, ""))
         .map((t) => (t === "" || isKnownCharsetTerm(t) ? t : WITHHELD));
-    fc.assert(
+    checkPropertyAtDepth(
+      "trims every term exactly as the shipped patterns did",
       fc.property(
         fc.array(fc.constantFrom("\x00", " ", "\\", "X", "ISO_IR 192", "ISO 2022 IR 87"), {
           maxLength: 12,
@@ -169,7 +171,7 @@ describe("parseSpecificCharacterSet - linear time on a long pad run (polynomial 
           expect(parseSpecificCharacterSet(Buffer.from(raw, "latin1"))).toEqual(shipped(raw));
         },
       ),
-      { numRuns: 4_000 },
+      4_000,
     );
   });
 });
