@@ -21,10 +21,9 @@ import type { WarningCode } from "./warnings.js";
 /**
  * Stable string codes for every Tier-3 fatal the parser may throw.
  *
- * Locked at four codes per `PROJECT.md` "Fatal errors only for unrecoverable
- * structural corruption": anything less severe MUST be a Tier-2 warning
- * (see `./warnings.ts`). Consumers narrow on `err.code` to react to
- * specific structural failures.
+ * A fatal is kept for structural corruption the parser cannot recover from:
+ * anything less severe is a Tier-2 warning (see `./warnings.ts`). Callers
+ * narrow on `err.code` to react to a specific structural failure.
  *
  * @example
  * ```ts
