@@ -5845,7 +5845,7 @@ VALUE_ERROR_CODES.FRAME_INDEX_OUT_OF_RANGE; // "FRAME_INDEX_OUT_OF_RANGE"
 
 ### VERSION
 
-> `const` **VERSION**: `string` = `"0.1.16"`
+> `const` **VERSION**: `string` = `"0.1.17"`
 
 Package version string for `@cosyte/dicom`. Synchronized with `package.json#version` by
 `scripts/sync-version.mjs`, which the `version` script runs after `changeset version`
