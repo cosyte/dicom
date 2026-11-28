@@ -34,7 +34,7 @@
  * the same fact at length.
  *
  * **Every value planted here is synthetic and invented.** The caret is written as
- * `String.fromCharCode(0x5e)`, the technique `test/helpers/phi-scan-violators.ts` uses, so this
+ * `String.fromCharCode(0x5e)`, the technique `test/_helpers/phi-scan-violators.ts` uses, so this
  * file's own bytes carry no PN-shaped token. That is the whole of the shared provenance: the names
  * themselves are this file's, not that helper's.
  */

@@ -41,9 +41,9 @@ import {
   buildDicom,
   type BuildDicomElement,
   type BuildDicomSqElement,
-} from "../helpers/build-dicom.js";
-import { buildDicomdir } from "../helpers/build-dicomdir.js";
-import { checkPropertyAtDepth } from "../helpers/property.js";
+} from "../_helpers/build-dicom.js";
+import { buildDicomdir } from "../_helpers/build-dicomdir.js";
+import { checkPropertyAtDepth } from "../_helpers/property.js";
 
 const EXPLICIT_LE = "1.2.840.10008.1.2.1";
 

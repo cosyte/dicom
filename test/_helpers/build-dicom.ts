@@ -1,7 +1,7 @@
 /**
  * Programmatic Part 10 fixture builder - internal test utility.
  *
- * This helper lives in `test/helpers/` and is NOT exported from
+ * This helper lives in `test/_helpers/` and is NOT exported from
  * `src/index.ts`. The repository ships no curated `.dcm` fixture files;
  * everything is built in memory by this helper.
  *

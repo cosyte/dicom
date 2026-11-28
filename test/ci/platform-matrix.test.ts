@@ -7,7 +7,7 @@ import {
   readWorkflowSource,
   sharedWorkflowCalls,
   SHARED_RELEASE_WORKFLOW,
-} from "../helpers/release-workflow-caller.js";
+} from "../_helpers/release-workflow-caller.js";
 
 /**
  * What `ci.yml` and `release.yml` ask of the shared pipeline, read from the files themselves.

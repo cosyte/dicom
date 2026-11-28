@@ -18,7 +18,7 @@ const config = shared as ViteUserConfig;
  * - The fuzz targets (`test/property/*-fuzz.property.test.ts`): each case is held to a CPU-time
  *   budget, so a mutant that slows a path fails them on time rather than on what the code returns.
  *   The lenient, round-trip and immutability properties beside them stay in.
- * - `test/scripts/`, `test/ci/`, `test/helpers/run-script.test.ts` and
+ * - `test/scripts/`, `test/ci/`, `test/_helpers/run-script.test.ts` and
  *   `test/integration/phi-scan-regex-statics.test.ts`: this repository's own tooling (the PHI
  *   scan, the generators, the changelog, the workflows), most of it in a child process.
  * - `test/docs-content.test.ts` builds `dist/` and runs the docs samples against it, which is
@@ -30,8 +30,8 @@ const config = shared as ViteUserConfig;
  * through `DICOM_MUTATION_RUN`, since the text it would read is StrykerJS's instrumented copy.
  *
  * Every property runs from one fixed seed at the pull request depth of 100 cases
- * (`COSYTE_PROPERTY_SEED` and `COSYTE_PROPERTY_RUNS`, read by `test/helpers/property.ts`), and
- * every other `fast-check` run from a fixed global seed (`test/helpers/mutation-seed.ts`): a fresh
+ * (`COSYTE_PROPERTY_SEED` and `COSYTE_PROPERTY_RUNS`, read by `test/_helpers/property.ts`), and
+ * every other `fast-check` run from a fixed global seed (`test/_helpers/mutation-seed.ts`): a fresh
  * seed would let a mutant that only some cases reach be killed on one run and survive the next,
  * which moves a full score the ratchet compares exactly.
  *
@@ -49,14 +49,14 @@ const mutation: ViteUserConfig = {
       "test/property/*-fuzz.property.test.ts",
       "test/scripts/**",
       "test/ci/**",
-      "test/helpers/run-script.test.ts",
+      "test/_helpers/run-script.test.ts",
       "test/integration/phi-scan-regex-statics.test.ts",
       "test/docs-content.test.ts",
       "test/docs/**",
       "test/docs-content-structure.test.ts",
       "test/install-specifier.test.ts",
     ],
-    setupFiles: ["test/helpers/mutation-seed.ts"],
+    setupFiles: ["test/_helpers/mutation-seed.ts"],
     env: {
       ...config.test?.env,
       DICOM_MUTATION_RUN: "1",

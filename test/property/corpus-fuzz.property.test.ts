@@ -71,7 +71,7 @@ import {
   buildDicom,
   type BuildDicomElement,
   type BuildDicomSqElement,
-} from "../helpers/build-dicom.js";
+} from "../_helpers/build-dicom.js";
 
 import { fuzzParameters, fuzzTimeout, preview, withinBudget } from "./_fuzz-config.js";
 import { mutatedSeed } from "./_mutate.js";

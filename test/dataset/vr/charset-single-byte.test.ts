@@ -29,7 +29,7 @@ import { describe, expect, it } from "vitest";
 
 import { singleByteSetIn } from "../../../src/dataset/vr/charset.js";
 import { decodeText, parseDicom, type Element } from "../../../src/index.js";
-import { buildDicom } from "../../helpers/build-dicom.js";
+import { buildDicom } from "../../_helpers/build-dicom.js";
 import { PUBLISHED_G1_ROWS } from "./_unicode-single-byte-tables.js";
 
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";

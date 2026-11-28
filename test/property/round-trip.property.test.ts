@@ -20,7 +20,7 @@
  * a fidelity bug); it is covered by the lenient + fuzz invariants instead.
  *
  * Depth and seed come from `COSYTE_PROPERTY_RUNS` and `COSYTE_PROPERTY_SEED`
- * (`test/helpers/property.ts`): 100 cases on a pull request, 10,000 nightly,
+ * (`test/_helpers/property.ts`): 100 cases on a pull request, 10,000 nightly,
  * the seed printed before the run.
  *
  * @module
@@ -30,7 +30,7 @@ import { describe, it } from "vitest";
 import { roundTripProperty } from "@cosyte/test-utils";
 
 import { parseDicom } from "../../src/index.js";
-import { propertyRun } from "../helpers/property.js";
+import { propertyRun } from "../_helpers/property.js";
 
 import {
   type DicomModel,

@@ -27,7 +27,7 @@ import {
   type DirectoryRecord,
 } from "../../src/index.js";
 import { WARNING_MESSAGES } from "../../src/parser/warnings.js";
-import { buildDicom } from "../helpers/build-dicom.js";
+import { buildDicom } from "../_helpers/build-dicom.js";
 import {
   DICOMDIR_SOP_CLASS,
   PATIENTS,
@@ -35,7 +35,7 @@ import {
   TS_IMPLICIT_LE,
   buildDicomdir,
   twoPatientRecords,
-} from "../helpers/build-dicomdir.js";
+} from "../_helpers/build-dicomdir.js";
 
 const DIRECTORY_CODES: readonly string[] = [
   WARNING_CODES.DICOM_DIRECTORY_OFFSET_UNRESOLVED,

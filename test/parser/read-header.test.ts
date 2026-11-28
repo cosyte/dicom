@@ -24,7 +24,7 @@ import {
   type DicomFileHandle,
   type ParseOptions,
 } from "../../src/index.js";
-import { buildDicom, type BuildDicomElement } from "../helpers/build-dicom.js";
+import { buildDicom, type BuildDicomElement } from "../_helpers/build-dicom.js";
 
 const EXPLICIT_LE = "1.2.840.10008.1.2.1";
 const IMPLICIT_LE = "1.2.840.10008.1.2";

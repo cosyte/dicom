@@ -6,7 +6,7 @@
 import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
-import { buildDicom } from "../helpers/build-dicom.js";
+import { buildDicom } from "../_helpers/build-dicom.js";
 import { DicomParseError, OFFSET_FRAMES } from "../../src/parser/errors.js";
 import { parseFileMeta } from "../../src/parser/file-meta.js";
 import { parseDicom } from "../../src/parser/index.js";

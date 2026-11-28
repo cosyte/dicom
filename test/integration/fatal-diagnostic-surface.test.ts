@@ -50,8 +50,8 @@ import { FATAL_MESSAGES, elementLengthExceedsBuffer } from "../../src/parser/fat
 import { parseDicom } from "../../src/parser/index.js";
 import { renderTag } from "../../src/parser/tokens.js";
 import { WARNING_MESSAGES } from "../../src/parser/warnings.js";
-import { buildDicom } from "../helpers/build-dicom.js";
-import { declaredParameters } from "../helpers/declared-parameters.js";
+import { buildDicom } from "../_helpers/build-dicom.js";
+import { declaredParameters } from "../_helpers/declared-parameters.js";
 
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
 const TS_IMPLICIT_LE = "1.2.840.10008.1.2";
@@ -1107,7 +1107,7 @@ describe("PHI: Tier-3 fatal messages carry no document bytes", () => {
     // INSTANCE, AND `Function.prototype.length` STOPS AT THE FIRST DEFAULTED
     // PARAMETER - so `(frame, offset, remaining = 0)`, the exact slot it exists
     // to refuse, would have read `2` and passed. The declared list is read off
-    // the source instead, and `test/helpers/declared-parameters.ts` carries the
+    // the source instead, and `test/_helpers/declared-parameters.ts` carries the
     // controls that prove the reader sees what `length` cannot.
     expect(declaredParameters(elementLengthExceedsBuffer)).toStrictEqual(["frame", "offset"]);
   });

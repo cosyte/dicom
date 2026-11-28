@@ -25,8 +25,8 @@ import {
   encodeBuiltElement,
   type BuildDicomElement,
   type BuildDicomSqElement,
-} from "../helpers/build-dicom.js";
-import { buildDicomdir, twoPatientRecords } from "../helpers/build-dicomdir.js";
+} from "../_helpers/build-dicom.js";
+import { buildDicomdir, twoPatientRecords } from "../_helpers/build-dicomdir.js";
 import { encapsulatedObject, jpipObject } from "../fixtures/encapsulated/objects.js";
 import { FIRST_USE_CT_NO_PREAMBLE, FIRST_USE_CT_OBJECT } from "../fixtures/first-use/ct-object.js";
 

@@ -14,7 +14,7 @@
 
 import { Buffer } from "node:buffer";
 
-import { buildDicom } from "../helpers/build-dicom.js";
+import { buildDicom } from "../_helpers/build-dicom.js";
 import { SEED_CORPUS } from "../property/_seed-corpus.js";
 
 /** One document of the corpus. */

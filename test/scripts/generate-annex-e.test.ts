@@ -15,7 +15,7 @@
  *      printed rather than asserted in a comment, so a re-pin that moves one is
  *      visible in the run that moves it.
  *
- * The generator is invoked through `test/helpers/run-script.ts`, like the other
+ * The generator is invoked through `test/_helpers/run-script.ts`, like the other
  * script suites. It writes `annex-e.ts`; the run is deterministic, so the output is
  * asserted byte-identical to the COMMITTED `src/dictionary/generated/annex-e.ts`,
  * which is the local mirror of the CI regen gate.
@@ -24,7 +24,7 @@
  * ONLY. Proving the pin means mutating the document the pin covers, and vitest runs
  * test files in parallel, so an earlier shape of this file mutated
  * `vendor/nema/part15/` in place while other workers were reading it, a race
- * between test files. `test/helpers/generator-sandbox.ts` carries the
+ * between test files. `test/_helpers/generator-sandbox.ts` carries the
  * measurement and the reason the remedy is relocation rather than a softer pin on
  * either side. Do not reach back into `REPO_ROOT` for anything this suite writes.
  */
@@ -34,8 +34,8 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { createGeneratorSandbox, REPO_ROOT, type Sandbox } from "../helpers/generator-sandbox.js";
-import { UNDER_BUN, UNDER_DENO, runRepoScript, type ScriptResult } from "../helpers/run-script.js";
+import { createGeneratorSandbox, REPO_ROOT, type Sandbox } from "../_helpers/generator-sandbox.js";
+import { UNDER_BUN, UNDER_DENO, runRepoScript, type ScriptResult } from "../_helpers/run-script.js";
 
 /** The committed artifact, in the real tree. READ ONLY: this is the regen gate's answer. */
 const COMMITTED_ARTIFACT = join(REPO_ROOT, "src", "dictionary", "generated", "annex-e.ts");
@@ -57,7 +57,7 @@ const GENERATOR_TIMEOUT_MS = 120_000;
 /**
  * This generator is the one script in the repo that still needs `tsx`, because it
  * imports `"../src/dictionary/repeating-groups.js"` and Node's ESM resolver will not
- * rewrite that onto the `.ts` file. See `test/helpers/run-script.ts`; the test at the
+ * rewrite that onto the `.ts` file. See `test/_helpers/run-script.ts`; the test at the
  * bottom of this file pins the failure so the exception cannot outlive its reason.
  */
 function runGenerator(): ScriptResult {
@@ -146,7 +146,7 @@ const FULL_DATES_COLUMN = 10;
 const MODIFIED_DATES_COLUMN = 11;
 
 // Skipped under Deno: the generator runs through `tsx`, which a Deno child does not load. See
-// `UNDER_DENO` in `test/helpers/run-script.ts`.
+// `UNDER_DENO` in `test/_helpers/run-script.ts`.
 describe.skipIf(UNDER_DENO)("generate-annex-e", () => {
   // One happy-path invocation, asserted from many angles. The generator reads a
   // 3.5 MB DocBook, so re-spawning it per assertion is real wall-clock spent on

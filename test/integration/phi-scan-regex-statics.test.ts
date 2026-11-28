@@ -24,7 +24,7 @@
  * The corpus-scale figures, and the base-against-shipped comparison, are
  * `scripts/measure-phi-scan-regex-statics.ts`.
  *
- * Every value here is assembled at runtime, for the reason `test/helpers/phi-scan-violators.ts`
+ * Every value here is assembled at runtime, for the reason `test/_helpers/phi-scan-violators.ts`
  * gives: this file is under `test/`, so the gate scans it.
  */
 
@@ -34,7 +34,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, copyFileSy
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { UNDER_DENO, runRepoScript } from "../helpers/run-script.js";
+import { UNDER_DENO, runRepoScript } from "../_helpers/run-script.js";
 
 const REPO_ROOT = join(import.meta.dirname, "..", "..");
 const CARET = String.fromCharCode(0x5e);
@@ -132,7 +132,7 @@ function makeCorpus(): { root: string; target: string } {
 }
 
 // Skipped under Deno: the observer is preloaded with Node's `--require`, which a Deno child does not
-// take. See `UNDER_DENO` in `test/helpers/run-script.ts`.
+// take. See `UNDER_DENO` in `test/_helpers/run-script.ts`.
 describe.skipIf(UNDER_DENO)(
   "the PHI gate leaves no scan target in V8's legacy RegExp statics",
   () => {
