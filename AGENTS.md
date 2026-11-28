@@ -49,7 +49,7 @@ CI's other jobs run beside it:
 - `examples`, after `pnpm build`: `pnpm typecheck:examples`, `pnpm lint:examples`, `pnpm examples`,
   `pnpm phi-scan:examples`.
 - `standards`: `pnpm check:readme`, `pnpm check:claude-card`, `pnpm check:catalog`,
-  `pnpm check:process`.
+  `pnpm check:process`, `pnpm check:docs-reference`.
 - The dash and internal-reference gates: `pnpm check:no-emdash`, `pnpm check:no-internal-refs`.
 - A change under `vendor/`, to the generators in `scripts/`, to `src/dictionary/generated/`, or to
   `package.json` also runs the regen check: `pnpm gen:clean`, `pnpm gen:all`, then
@@ -65,6 +65,8 @@ CI's other jobs run beside it:
   weeks of its publication, the three parts together, and the Annex E rows of each edition are
   read for de-identification changes before the re-pin merges. `vendor/nema/README.md` ("Edition
   cadence") holds the full rule.
+- `docs-content/api/` is generated from TSDoc: after a change to an export or its comment, run
+  `pnpm docs:reference` and commit the pages. Never edit them by hand.
 - Explanation of how something works belongs in `docs-content/`, not in this file.
 
 ## Contributing
