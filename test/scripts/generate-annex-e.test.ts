@@ -23,8 +23,8 @@
  * 🛑 EVERY BYTE THIS FILE WRITES GOES INTO A SANDBOX, AND THE WORKING TREE IS READ
  * ONLY. Proving the pin means mutating the document the pin covers, and vitest runs
  * test files in parallel, so an earlier shape of this file mutated
- * `vendor/nema/part15/` in place while other workers were reading it -
- * `DICOM-ANNEX-E-TEST-RACE`. `test/helpers/generator-sandbox.ts` carries the
+ * `vendor/nema/part15/` in place while other workers were reading it, a race
+ * between test files. `test/helpers/generator-sandbox.ts` carries the
  * measurement and the reason the remedy is relocation rather than a softer pin on
  * either side. Do not reach back into `REPO_ROOT` for anything this suite writes.
  */
@@ -142,7 +142,7 @@ function headerCells(thead: string): readonly string[] {
 
 /** Index of `Rtn. Long. Full Dates Opt.` in Table E.1-1, per the generator. */
 const FULL_DATES_COLUMN = 10;
-/** Index of `Rtn. Long. Modif. Dates Opt.`, the column this slice carries. */
+/** Index of `Rtn. Long. Modif. Dates Opt.`, the column this change carries. */
 const MODIFIED_DATES_COLUMN = 11;
 
 // Skipped under Deno: the generator runs through `tsx`, which a Deno child does not load. See
@@ -293,13 +293,13 @@ describe.skipIf(UNDER_DENO)("generate-annex-e", () => {
   });
 
   it(
-    "AC-14: refuses when a header label is not at the column index the reader assumes",
+    "refuses when a header label is not at the column index the reader assumes",
     () => {
       // 🛑 A CELL COUNT CATCHES AN INSERTED OR DROPPED COLUMN AND NOT A REORDER,
       // and a reorder is what reads one Option's action code as another's. Every
       // index in the reader is positional, so the guard is proved by MOVING a
       // header rather than by a green regen: a stale bound leaves the output
-      // byte-identical, which is why AC-15 alone cannot see this.
+      // byte-identical, which is why the byte-identical regen alone cannot see this.
       //
       // The mutation swaps the two E.3.6 temporal headers, which is the exact
       // reorder that would hand `RetainLongitudinalTemporalModifiedDates` the
@@ -335,11 +335,11 @@ describe.skipIf(UNDER_DENO)("generate-annex-e", () => {
   );
 
   it(
-    "AC-14: refuses when the MODIFIED-DATES header alone is not where the reader expects it",
+    "refuses when the MODIFIED-DATES header alone is not where the reader expects it",
     () => {
       // The swap above moves two labels at once and reds at the first index it
       // reaches, so on its own it never proves the guard covers index 11 - the
-      // index this slice started reading. This mutation leaves every other
+      // index this change started reading. This mutation leaves every other
       // header alone and renames only that one, so the refusal can come from
       // nowhere else.
       withMutatedDocBook(
@@ -369,7 +369,7 @@ describe.skipIf(UNDER_DENO)("generate-annex-e", () => {
   );
 
   it(
-    "AC-14: the mutation route can go green (the two rows above are not vacuous)",
+    "the mutation route can go green (the two rows above are not vacuous)",
     () => {
       // The control for both. `withMutatedDocBook` rewrites `<thead>` wholesale,
       // so a rewrite that changed the markup's SHAPE would red the generator for
@@ -400,8 +400,8 @@ describe.skipIf(UNDER_DENO)("generate-annex-e", () => {
     GENERATOR_TIMEOUT_MS,
   );
 
-  it("AC-1: emits the modified-dates column as a per-attribute action", () => {
-    // The generator's half of AC-1: the column reaches the committed artifact at
+  it("emits the modified-dates column as a per-attribute action", () => {
+    // The generator's half of the modified-dates column: it reaches the committed artifact at
     // all. `test/dictionary/annex-e.test.ts` holds the resolution half.
     expect(artifactAfter).toContain("RetainLongitudinalTemporalModifiedDates=");
     expect(artifactAfter).toBe(artifactBefore);

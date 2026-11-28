@@ -25,7 +25,7 @@ function datasetWith(tags: readonly Tag[]): Dataset {
   return new Dataset({ warnings: [], elements: map });
 }
 
-describe("Dataset navigation API (D-42)", () => {
+describe("Dataset navigation API", () => {
   it("get() resolves a tag case-insensitively", () => {
     const ds = datasetWith(["00100010"]);
     expect(ds.get("00100010")?.tag).toBe("00100010");
