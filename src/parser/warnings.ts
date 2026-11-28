@@ -25,10 +25,10 @@ import type { DicomPosition } from "./types.js";
  * Stable string codes for every Tier-2 warning the parser may emit.
  *
  * The registry is frozen via `as const` so TypeScript infers the exact
- * string-literal union for `WarningCode` - there is zero runtime cost and
- * no magic-string comparisons for consumers. Reserved-but-not-emitted
- * codes carry inline comments documenting which stage activates them; the
- * union is declared whole so the schema is stable for consumers.
+ * string-literal union for `WarningCode`, at no run-time cost. The set is
+ * open: a release can add a code, and a code once published keeps its name.
+ * Reserved codes that no stage emits yet carry inline comments naming the
+ * stage that will.
  *
  * @example
  * ```ts
