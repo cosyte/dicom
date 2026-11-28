@@ -1,7 +1,7 @@
 name: Dictionary Regen
 
 # Standalone byte-identical regen gate.
-# Runs `pnpm gen:all && git diff --exit-code src/dictionary/generated/`
+# Runs `pnpm generate:all && git diff --exit-code src/dictionary/generated/`
 # to ensure the committed generated dictionary + Annex E artifacts stay
 # byte-for-byte equivalent to what the pinned vendor inputs would produce.
 
@@ -16,8 +16,8 @@ on:
       - "scripts/generate-encapsulated-transfer-syntaxes.ts"
       - "scripts/_annex-e-discovery.md"
       - "src/dictionary/generated/**"
-      # `gen:all` and the generators' entry points live in package.json. Without
-      # this, gutting `gen:all` to a no-op never triggers the gate at all.
+      # `generate:all` and the generators' entry points live in package.json. Without
+      # this, gutting `generate:all` to a no-op never triggers the gate at all.
       - "package.json"
       # The gate re-runs when the gate itself changes. Without this, a broken
       # workflow file cannot be proven fixed by the PR that fixes it.
@@ -65,13 +65,13 @@ jobs:
 
       # Delete the committed artifacts BEFORE regenerating, so the gate measures
       # what the generators actually produce rather than what happens to be on
-      # disk. The gate must do this itself, not delegate it to `gen:all`, which
+      # disk. The gate must do this itself, not delegate it to `generate:all`, which
       # is the thing under test. Two ways the gate went green for the wrong
       # reason without it:
       #
       #   1. A stale orphan - an artifact a generator used to emit and no longer
       #      does - was never rewritten and never diffed, so it passed forever.
-      #   2. Gutting `gen:all` to a no-op wrote nothing, left every committed
+      #   2. Gutting `generate:all` to a no-op wrote nothing, left every committed
       #      artifact untouched, and produced an empty `git diff`: permanently
       #      green while generating nothing at all.
       #
@@ -101,7 +101,7 @@ jobs:
           echo "Clean OK: only the hand-written README.md remains."
 
       - name: Regenerate repeating groups + dictionary + Annex E + A.4 transfer syntaxes
-        run: pnpm gen:all
+        run: pnpm generate:all
 
       - name: Verify byte-identical regen
         run: |
@@ -121,7 +121,7 @@ jobs:
 
           if [ "$drift" -ne 0 ]; then
             echo "::error::Generated dictionary or Annex E artifact drifted from committed output."
-            echo "Run 'pnpm gen:all' locally and commit the diff."
+            echo "Run 'pnpm generate:all' locally and commit the diff."
             echo "Pinned inputs are under vendor/innolitics/<sha>/, vendor/nema/part05/<sha>/, vendor/nema/part05-2004/<sha>/, vendor/nema/part06/<sha>/, and vendor/nema/part15/<sha>/."
             exit 1
           fi

@@ -1,6 +1,6 @@
 # Generated DICOM dictionary modules
 
-**DO NOT EDIT BY HAND.** All files in this directory are produced by `scripts/generate-dictionary.ts` (run via `pnpm gen:dictionary`), `scripts/generate-annex-e.ts` (run via `pnpm gen:annex-e`), `scripts/generate-repeating-groups.ts` (run via `pnpm gen:repeating-groups`) and `scripts/generate-encapsulated-transfer-syntaxes.ts` (run via `pnpm gen:encapsulated-transfer-syntaxes`). CI gates a byte-identical regen on every PR: see `.github/workflows/ci.yml` and `.github/workflows/dictionary-regen.yml`.
+**DO NOT EDIT BY HAND.** All files in this directory are produced by `scripts/generate-dictionary.ts` (run via `pnpm generate:dictionary`), `scripts/generate-annex-e.ts` (run via `pnpm generate:annex-e`), `scripts/generate-repeating-groups.ts` (run via `pnpm generate:repeating-groups`) and `scripts/generate-encapsulated-transfer-syntaxes.ts` (run via `pnpm generate:encapsulated-transfer-syntaxes`). CI gates a byte-identical regen on every PR: see `.github/workflows/ci.yml` and `.github/workflows/dictionary-regen.yml`.
 
 ## Files
 
@@ -10,9 +10,9 @@
 | `uids.ts`     | `scripts/generate-dictionary.ts` | `vendor/innolitics/<sha>/sops.json` + the curated table inside the generator. **Deliberately not overlaid** with PS3.6 Table A-1; see `vendor/nema/README.md` |
 | `repeating-groups.ts` | `scripts/generate-repeating-groups.ts` | **normative** `vendor/nema/part05/<sha>/part05.xml` (PS3.5 section 7.6) + `vendor/nema/part05-2004/<sha>/04_05pu.pdf` for the retired curve bound the current edition delegates to |
 | `annex-e.ts`  | `scripts/generate-annex-e.ts`    | **normative** `vendor/nema/part15/<sha>/part15.xml` (PS3.15 Table E.1-1), overlaid per field on `vendor/innolitics/<sha>/confidentiality_profile_attributes.json` |
-| `encapsulated-transfer-syntaxes.ts` | `scripts/generate-encapsulated-transfer-syntaxes.ts` | **normative** `vendor/nema/part05/<sha>/part05.xml` (PS3.5 section A.4, located by `xml:id="sect_A.4"`, exactly one match required), each UID cross-checked against `uids.ts` as a non-retired Transfer Syntax, so it runs last in `gen:all` |
+| `encapsulated-transfer-syntaxes.ts` | `scripts/generate-encapsulated-transfer-syntaxes.ts` | **normative** `vendor/nema/part05/<sha>/part05.xml` (PS3.5 section A.4, located by `xml:id="sect_A.4"`, exactly one match required), each UID cross-checked against `uids.ts` as a non-retired Transfer Syntax, so it runs last in `generate:all` |
 
-**`gen:repeating-groups` runs first in `gen:all`, because `scripts/generate-annex-e.ts` imports
+**`generate:repeating-groups` runs first in `generate:all`, because `scripts/generate-annex-e.ts` imports
 `src/dictionary/repeating-groups.ts`, which now reads its bound from `repeating-groups.ts` here.**
 Be precise about what that ordering does and does not buy, because the honest version is narrower
 than it first looks: a **missing** artifact fails the Annex E generator at import, which is the case
@@ -30,12 +30,12 @@ its pinned input and refuses to run if the bytes are not the pinned bytes.
 ## Re-generating
 
 ```bash
-pnpm gen:all                          # runs gen:repeating-groups, then gen:dictionary, gen:annex-e + gen:encapsulated-transfer-syntaxes in sequence
+pnpm generate:all                          # runs generate:repeating-groups, then generate:dictionary, generate:annex-e + generate:encapsulated-transfer-syntaxes in sequence
 git diff src/dictionary/generated/    # MUST be empty for the inputs at the pinned SHAs
 ```
 
-`pnpm gen:clean` deletes everything in this directory except this hand-written `README.md`. It is **not** chained into `gen:all`, deliberately. The CI gate runs its own delete before `gen:all` and that is where the cleaning matters: without it, a **stale orphan** (an artifact a generator used to emit and no longer does) is never rewritten and never diffed, so it survives every regen and passes indefinitely, and gutting `gen:all` to a no-op writes nothing, leaves the committed artifacts untouched, and produces an empty `git diff` while generating nothing at all. The gate must not delegate that delete to `gen:all`, because `gen:all` is the thing under test.
+`pnpm clean:generated` deletes everything in this directory except this hand-written `README.md`. It is **not** chained into `generate:all`, deliberately. The CI gate runs its own delete before `generate:all` and that is where the cleaning matters: without it, a **stale orphan** (an artifact a generator used to emit and no longer does) is never rewritten and never diffed, so it survives every regen and passes indefinitely, and gutting `generate:all` to a no-op writes nothing, leaves the committed artifacts untouched, and produces an empty `git diff` while generating nothing at all. The gate must not delegate that delete to `generate:all`, because `generate:all` is the thing under test.
 
-Keeping it out of `gen:all` also keeps a failed regen non-destructive. The generators throw on malformed or missing vendor input, which is exactly the state you are in part-way through the re-pinning procedure in `vendor/innolitics/README.md`; a `gen:clean` chained ahead of them would leave this directory empty and the build broken until `git checkout`. Run `pnpm gen:clean` by hand when you want to prove locally what CI proves, and `git checkout -- src/dictionary/generated/` restores everything, since every file here is reproducible from the pinned inputs.
+Keeping it out of `generate:all` also keeps a failed regen non-destructive. The generators throw on malformed or missing vendor input, which is exactly the state you are in part-way through the re-pinning procedure in `vendor/innolitics/README.md`; a `clean:generated` chained ahead of them would leave this directory empty and the build broken until `git checkout`. Run `pnpm clean:generated` by hand when you want to prove locally what CI proves, and `git checkout -- src/dictionary/generated/` restores everything, since every file here is reproducible from the pinned inputs.
 
 If the diff is non-empty after a fresh regen against unchanged inputs, the generator has non-determinism. File an issue. The byte-identical regen is a CI gate.

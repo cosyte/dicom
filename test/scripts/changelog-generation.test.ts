@@ -571,7 +571,7 @@ describe("the Prettier pass, derived for this repo rather than copied", () => {
     // ARGUMENT. In `deid`, `transform` and `synth` the `version` chain ends with a
     // `prettier --write` that names `CHANGELOG.md`, so a later link repairs the document before
     // the Version PR opens and the case for leaving the pass on is only that it is free. Here
-    // the trailing pass names `package.json` and `src/version.ts` and NOTHING ELSE, so there is
+    // the trailing pass names `package.json` and `src/index.ts` and NOTHING ELSE, so there is
     // no repair: with the pass off, the Version PR really does open red on a file no human
     // touched. The arm below measures that. If someone ever adds `CHANGELOG.md` to this list,
     // this case reds and the argument above has to be re-read rather than assumed.

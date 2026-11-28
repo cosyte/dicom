@@ -5847,18 +5847,14 @@ VALUE_ERROR_CODES.FRAME_INDEX_OUT_OF_RANGE; // "FRAME_INDEX_OUT_OF_RANGE"
 
 > `const` **VERSION**: `string` = `"0.1.17"`
 
-Package version string for `@cosyte/dicom`. Synchronized with `package.json#version` by
-`scripts/sync-version.mjs`, which the `version` script runs after `changeset version`
-so the bump and this constant land in the same "Version Packages" commit.
-
-Stays on the uniform `0.0.x`-until-first-alpha ladder (locked across the `@cosyte/*` suite):
-patch bumps via Changesets through pre-alpha, with no `0.1.0` milestone bump.
+The version of `@cosyte/dicom`, the same as its `package.json` `version`. The `version` script
+writes it with `cosyte-process sync-version` in the commit that bumps the package.
 
 #### Example
 
 ```ts
 import { VERSION } from "@cosyte/dicom";
-  console.log(`@cosyte/dicom v${VERSION}`);
+typeof VERSION; // => "string"
 ```
 
 ***
