@@ -9,8 +9,10 @@
  *   - a date inside a `workflows-YYYY-MM-DD-<12 hex>` release name;
  *   - a date in a comment on a `uses:` line, or on a comment-only line directly above or below one.
  *
- * Every case here gives each date its own value, so the hit list says which shapes were passed and
- * which were caught, and the same bytes are scanned outside `.github/workflows/` as the control.
+ * Every case here gives each date its own value, so each date stands at one offset of its own. A
+ * hit names that offset and never the date, so the offsets a run reports say which shapes were
+ * passed and which were caught, and the same bytes are scanned outside `.github/workflows/` as the
+ * control.
  *
  * 🛑 EVERY VALUE IS ASSEMBLED AT RUNTIME, for the reason `test/helpers/phi-scan-violators.ts` gives:
  * this file is under `test/`, so the gate scans it, and a spelled-out date run in it reds the suite.
@@ -158,20 +160,29 @@ function scan(files: Record<string, string>): { code: number; stdout: string; st
   });
 }
 
-/** The hit values reported under `path`, from the scanner's stderr. */
-function hitsFor(stderr: string, path: string): string[] {
-  const out: string[] = [];
+/** The offsets of the hits reported under `path`, from the scanner's stderr. */
+function hitsFor(stderr: string, path: string): number[] {
+  const out: number[] = [];
   let current: string | null = null;
   for (const line of stderr.split("\n")) {
-    const value = /^ {2}tag=\S+ vr=\S+ offset=\d+ value=("(?:[^"\\]|\\.)*")/.exec(line);
-    if (value?.[1] !== undefined) {
-      if (current === path) out.push(JSON.parse(value[1]) as string);
+    const hit = /^ {2}tag=\S+ vr=\S+ offset=(\d+) \(/.exec(line);
+    if (hit?.[1] !== undefined) {
+      if (current === path) out.push(Number(hit[1]));
       continue;
     }
     const heading = /^\[phi-scan\] HIT: (.+)$/.exec(line);
     current = heading?.[1] ?? null;
   }
   return out;
+}
+
+/** Where `date` stands in `content`. Every date in a case is written once, so this is its hit. */
+function at(content: string, date: string): number {
+  const offset = content.indexOf(date);
+  if (offset < 0 || content.includes(date, offset + 1)) {
+    throw new Error("at: the content does not carry this date exactly once");
+  }
+  return offset;
 }
 
 describe("phi-scan: a shared-workflow pin's date in .github/workflows", () => {
@@ -182,12 +193,13 @@ describe("phi-scan: a shared-workflow pin's date in .github/workflows", () => {
   ] as const) {
     it(`passes the two pin shapes and reports every other date (${label})`, () => {
       const path = ".github/workflows/ci.yml";
-      const r = scan({ [path]: workflow(eol) });
+      const content = workflow(eol);
+      const r = scan({ [path]: content });
       expect(r.code, `stderr: ${r.stderr}`).toBe(1);
       const hits = hitsFor(r.stderr, path);
       expect(hits.length, `stderr: ${r.stderr}`).toBeGreaterThan(0);
-      for (const date of PASSED) expect(hits, `passed ${date}`).not.toContain(date);
-      for (const date of CAUGHT) expect(hits, `caught ${date}`).toContain(date);
+      for (const date of PASSED) expect(hits, `passed ${date}`).not.toContain(at(content, date));
+      for (const date of CAUGHT) expect(hits, `caught ${date}`).toContain(at(content, date));
       expect(hits).toHaveLength(CAUGHT.length);
     });
   }
@@ -204,8 +216,9 @@ describe("phi-scan: a shared-workflow pin's date in .github/workflows", () => {
     // below is clean because of the pins and not because the scanner stopped reading.
     const control = scan({ ".github/workflows/a.yml": content });
     expect(control.code, `stderr: ${control.stderr}`).toBe(1);
-    expect(control.stderr).toContain(PASS_COMMENT_ABOVE_USES);
-    expect(control.stderr).not.toContain(PASS_RELEASE_ON_USES);
+    const reported = hitsFor(control.stderr, ".github/workflows/a.yml");
+    expect(reported).toContain(at(content, PASS_COMMENT_ABOVE_USES));
+    expect(reported).not.toContain(at(content, PASS_RELEASE_ON_USES));
 
     const clean = scan({
       ".github/workflows/a.yml": content.replace(`  # ${PASS_COMMENT_ABOVE_USES}\n`, ""),
@@ -227,11 +240,13 @@ describe("phi-scan: a shared-workflow pin's date in .github/workflows", () => {
     const r = scan(files);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     const nested = hitsFor(r.stderr, inside);
-    for (const date of PASSED) expect(nested).not.toContain(date);
+    for (const date of PASSED) expect(nested).not.toContain(at(content, date));
     expect(nested).toHaveLength(CAUGHT.length);
     for (const p of outside) {
       const hits = hitsFor(r.stderr, p);
-      for (const date of [...PASSED, ...CAUGHT]) expect(hits, `${p} ${date}`).toContain(date);
+      for (const date of [...PASSED, ...CAUGHT]) {
+        expect(hits, `${p} ${date}`).toContain(at(content, date));
+      }
     }
   });
 });

@@ -184,6 +184,77 @@ function runScanner(args: string[]): RunResult {
 }
 
 // ---------------------------------------------------------------------------
+// Hit lines
+// ---------------------------------------------------------------------------
+//
+// A hit line names the place (tag, VR, offset) and the rule that fired, and never the text it
+// matched. So a case that has to say WHICH finding a run reported builds the line the scanner must
+// print for it, from the bytes the case wrote, and looks for that line.
+
+/** The year both date rules cut at, computed the way the scanner computes it. */
+const CUTOFF_YEAR = new Date().getFullYear() - 120;
+
+/** The rule each recognizer names on its hit lines. */
+const RULE = {
+  tagPn: "PN not in allow-list",
+  tagDate: `DA/DT within last 120 years (>= ${String(CUTOFF_YEAR)})`,
+  textPn: "text PN not in allow-list",
+  textDate: `text date within last 120 years (>= ${String(CUTOFF_YEAR)})`,
+} as const;
+
+/** One hit line as the scanner prints it, without its line ending. */
+function hitLine(tag: string, vr: string, offset: number, rule: string): string {
+  return `  tag=${tag} vr=${vr} offset=${String(offset)} (${rule})`;
+}
+
+/**
+ * The line the tag walk prints for `value` under `tag` in `object`.
+ *
+ * The offset is the byte the value starts at in the object the walk read. For an object embedded
+ * in a page as base64 that is the decoded object, never the page.
+ */
+function tagHit(object: Buffer, tag: string, vr: "PN" | "DA" | "DT", value: string): string {
+  const offset = object.indexOf(value, 0, "latin1");
+  if (offset < 0) throw new Error(`tagHit: the object carries no such value for ${tag}`);
+  return hitLine(tag, vr, offset, vr === "PN" ? RULE.tagPn : RULE.tagDate);
+}
+
+/**
+ * The line the text sweep prints for `token` in `content`.
+ *
+ * The offset is the token's index in the UTF-8 decode the sweep reads, so it is taken from the
+ * same decode here. It is not a byte offset once the content holds bytes that are not ASCII.
+ */
+function textHit(content: Buffer | string, vr: "PN" | "DA", token: string): string {
+  const text = typeof content === "string" ? content : content.toString("utf8");
+  const offset = text.indexOf(token);
+  if (offset < 0) throw new Error("textHit: the content carries no such token");
+  return hitLine("(text)", vr, offset, vr === "PN" ? RULE.textPn : RULE.textDate);
+}
+
+/** The hit DETAIL lines of a run, in the order printed: no `HIT:` header and no summary. */
+function hitLines(stderr: string): string[] {
+  return stderr.split("\n").filter((l) => /^ {2}tag=/.test(l));
+}
+
+/** The offset each hit DETAIL line of a run names, in the order printed. */
+function hitOffsets(stderr: string): number[] {
+  return hitLines(stderr).map((l) => Number(/ offset=(\d+) /.exec(l)?.[1]));
+}
+
+/** The hit DETAIL lines printed under one file's `HIT:` header. */
+function hitLinesFor(stderr: string, path: string): string[] {
+  const out: string[] = [];
+  let current: string | null = null;
+  for (const line of stderr.split("\n")) {
+    const header = /^\[phi-scan\] HIT: (.+)$/.exec(line);
+    if (header !== null) current = header[1] ?? null;
+    else if (/^ {2}tag=/.test(line) && current === path) out.push(line);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
 
@@ -227,17 +298,19 @@ describe("phi-scan: synthetic / allow-listed fixtures (D-15 + TEST-09)", () => {
 
 describe("phi-scan: recent-date / non-allow-listed-PN violations (TEST-09)", () => {
   it("recent-date-violator.dcm exits 1 with structured stderr", () => {
-    const r = runScanner([join(FIX_DIR, "recent-date-violator.dcm")]);
+    const path = join(FIX_DIR, "recent-date-violator.dcm");
+    const r = runScanner([path]);
     expect(r.code).toBe(1);
     expect(r.stderr).toMatch(/0008,0020/);
-    expect(r.stderr).toContain(RECENT_DA);
+    expect(r.stderr).toContain(tagHit(readFileSync(path), "(0008,0020)", "DA", RECENT_DA));
   });
 
   it("recent-pn-violator.dcm exits 1 with structured stderr", () => {
-    const r = runScanner([join(FIX_DIR, "recent-pn-violator.dcm")]);
+    const path = join(FIX_DIR, "recent-pn-violator.dcm");
+    const r = runScanner([path]);
     expect(r.code).toBe(1);
     expect(r.stderr).toMatch(/0010,0010/);
-    expect(r.stderr).toContain(VIOLATOR_PN);
+    expect(r.stderr).toContain(tagHit(readFileSync(path), "(0010,0010)", "PN", VIOLATOR_PN));
   });
 });
 
@@ -248,9 +321,10 @@ describe("phi-scan: non-DICOM file regex sweep", () => {
   });
 
   it("non-dicom-violator.txt exits 1 (1990 date)", () => {
-    const r = runScanner([join(FIX_DIR, "non-dicom-violator.txt")]);
+    const path = join(FIX_DIR, "non-dicom-violator.txt");
+    const r = runScanner([path]);
     expect(r.code).toBe(1);
-    expect(r.stderr).toMatch(/1990/);
+    expect(r.stderr).toContain(textHit(readFileSync(path), "DA", TEXT_VIOLATOR_DATE));
   });
 });
 
@@ -514,7 +588,9 @@ describe("phi-scan: a withdrawn target withholds the verdict (completeness)", ()
     // The target it DID read is still reported in full. A refusal that swallowed the
     // finding would trade one silent corpus for another.
     expect(r.stderr).toContain(`HIT: ${c.violator}`);
-    expect(r.stderr).toContain(VIOLATOR_PN);
+    expect(hitLinesFor(r.stderr, c.violator)).toEqual([
+      textHit(readFileSync(join(c.root, c.violator)), "PN", VIOLATOR_PN),
+    ]);
   });
 
   it("refuses even when the withdrawn target was the corpus's ONLY violator", () => {
@@ -607,6 +683,13 @@ describe("phi-scan: a withdrawn target withholds the verdict (completeness)", ()
 const SYNTHETIC_PHI =
   [`Patient: ${CARET_PN}`, `DOB: ${VIOLATOR_DOB}`, `StudyDate: ${ALLOWED_DA}`].join("\n") + "\n";
 
+/**
+ * The lines a run prints for a file whose whole content is `SYNTHETIC_PHI`: one for the name and
+ * one for the date of birth. Its third value is a date the allow-list carries, so it has no line.
+ */
+const SYNTHETIC_NAME_HIT = textHit(SYNTHETIC_PHI, "PN", CARET_PN);
+const SYNTHETIC_DOB_HIT = textHit(SYNTHETIC_PHI, "DA", VIOLATOR_DOB);
+
 /** Tokens that must never appear in a refusal message. */
 const PHI_TOKENS = [...CARET_PN.split("^"), VIOLATOR_DOB, ALLOWED_DA, TARGET_NAME];
 
@@ -687,8 +770,8 @@ describe("phi-scan: the synthetic payload is genuinely detectable", () => {
     writeFileSync(join(root, "test", "fixtures", "violator.txt"), SYNTHETIC_PHI);
     const r = runIn(root, []);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain(CARET_PN);
-    expect(r.stderr).toContain(VIOLATOR_DOB);
+    expect(r.stderr).toContain(SYNTHETIC_NAME_HIT);
+    expect(r.stderr).toContain(SYNTHETIC_DOB_HIT);
   });
 
   it("a repo with no link and no violator scans clean (exit 0)", () => {
@@ -879,7 +962,7 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
 
     const r = runIn(root, ["--staged"]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain(CARET_PN);
+    expect(r.stderr).toContain(SYNTHETIC_NAME_HIT);
   });
 
   it("refuses a link RENAMED into the scan root, which rename detection hid entirely", () => {
@@ -922,7 +1005,7 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
     const r = runIn(root, ["--staged"]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toContain("test/fixtures/loose.txt");
-    expect(r.stderr).toContain(CARET_PN);
+    expect(r.stderr).toContain(SYNTHETIC_NAME_HIT);
   });
 
   it("refuses the fixture ROOT itself staged as a link, not just entries under it", () => {
@@ -985,7 +1068,7 @@ describe("phi-scan: the --staged route refuses a staged non-regular entry", () =
     const r = runIn(root, ["--staged"]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toContain("test/fixtures/violator.txt");
-    expect(r.stderr).toContain(CARET_PN);
+    expect(r.stderr).toContain(SYNTHETIC_NAME_HIT);
   });
 
   it("passes a staged ordinary clean fixture (exit 0)", () => {
@@ -1157,10 +1240,11 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
   });
 
   it("a preamble-less .dcm is a hit (exit 1)", () => {
-    const r = runScanner([writeObject("bare.dcm", buildPreamblelessFixture("19000101", BARE_PN))]);
+    const object = buildPreamblelessFixture("19000101", BARE_PN);
+    const r = runScanner([writeObject("bare.dcm", object)]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toMatch(/\(0010,0010\)/);
-    expect(r.stderr).toContain(BARE_PN);
+    expect(r.stderr).toContain(tagHit(object, "(0010,0010)", "PN", BARE_PN));
   });
 
   it("a preamble-less .bin is a hit (exit 1)", () => {
@@ -1178,12 +1262,11 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
   });
 
   it("a preamble-less recent StudyDate is a hit on the DA route as well (exit 1)", () => {
-    const r = runScanner([
-      writeObject("bare-date.dcm", buildPreamblelessFixture(RECENT_DA, "ANON^PATIENT")),
-    ]);
+    const object = buildPreamblelessFixture(RECENT_DA, "ANON^PATIENT");
+    const r = runScanner([writeObject("bare-date.dcm", object)]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toMatch(/\(0008,0020\)/);
-    expect(r.stderr).toContain(RECENT_DA);
+    expect(r.stderr).toContain(tagHit(object, "(0008,0020)", "DA", RECENT_DA));
   });
 
   it("a preamble-less object with an ALLOW-LISTED payload scans clean (exit 0)", () => {
@@ -1202,7 +1285,7 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
     // accident is the route that must still catch a genuinely non-DICOM one.
     const r = runScanner([writeObject("not-dicom.dcm", Buffer.from(SYNTHETIC_PHI, "utf8"))]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain(CARET_PN);
+    expect(r.stderr).toContain(SYNTHETIC_NAME_HIT);
   });
 
   it("a preamble-FUL object is still scanned as DICOM (exit 1)", () => {
@@ -1217,15 +1300,13 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
     // The cases above go through the paths route. This is the route the gate
     // itself uses, over a corpus root, in a throwaway repo.
     const root = makeRepo();
-    writeFileSync(
-      join(root, "test", "fixtures", "bare.dcm"),
-      buildPreamblelessFixture("19000101", BARE_PN),
-    );
+    const object = buildPreamblelessFixture("19000101", BARE_PN);
+    writeFileSync(join(root, "test", "fixtures", "bare.dcm"), object);
 
     const r = runIn(root, []);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toContain("test/fixtures/bare.dcm");
-    expect(r.stderr).toContain(BARE_PN);
+    expect(r.stderr).toContain(tagHit(object, "(0010,0010)", "PN", BARE_PN));
   });
 
   it("and the same corpus with an allow-listed payload is still clean (exit 0)", () => {
@@ -1270,9 +1351,11 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
 
     const r = runScanner([writeObject("sq-undefined.dcm", object)]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr, "the tag walk did not run, or did not reach (0008,0090)").toContain(BARE_PN);
+    expect(r.stderr, "the tag walk did not run, or did not reach (0008,0090)").toContain(
+      tagHit(object, "(0008,0090)", "PN", BARE_PN),
+    );
     expect(r.stderr, "the text sweep was subtracted: this is the refuted regression").toContain(
-      CARET_PN,
+      textHit(object, "PN", CARET_PN),
     );
   });
 
@@ -1285,7 +1368,7 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
 
     const r = runScanner([writeObject("sq-undefined.bin", object)]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain(CARET_PN);
+    expect(r.stderr).toContain(textHit(object, "PN", CARET_PN));
   });
 
   it("a non-LE transfer syntax stops the tag walk the same way, and is caught the same way", () => {
@@ -1305,7 +1388,7 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
 
     const r = runScanner([writeObject("explicit-be.dcm", object)]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain(CARET_PN);
+    expect(r.stderr).toContain(textHit(object, "PN", CARET_PN));
   });
 
   it("a PREAMBLE-FUL object gets BOTH routes now, and the DICOM one is unchanged", () => {
@@ -1329,7 +1412,7 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
     expect(swept.code, `stderr: ${swept.stderr}`).toBe(1);
     // Only the text route can report this one: `(0008,1030)` is in no tag table here.
     expect(swept.stderr).toMatch(/tag=\(text\)/);
-    expect(swept.stderr).toContain(CARET_PN);
+    expect(swept.stderr).toContain(textHit(description, "PN", CARET_PN));
 
     // The DICOM route, unchanged: the SAME value at a PN tag is still reported
     // UNDER ITS TAG, which the text sweep cannot do.
@@ -1342,7 +1425,7 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
     const hit = runScanner([writeObject("preambleful-pn.dcm", named)]);
     expect(hit.code, `stderr: ${hit.stderr}`).toBe(1);
     expect(hit.stderr).toMatch(/\(0010,0010\)/);
-    expect(hit.stderr).toContain(CARET_PN);
+    expect(hit.stderr).toContain(tagHit(named, "(0010,0010)", "PN", CARET_PN));
   });
 });
 
@@ -1428,9 +1511,10 @@ describe("phi-scan: a preamble-FUL object's silent halt", () => {
   ]);
 
   it("THE DEFECT: a name behind an undefined-length SQ is reported (exit 1)", () => {
-    const r = runScanner([writeObject("halt-sq.dcm", withPreamble(HALTED_NAME))]);
+    const object = withPreamble(HALTED_NAME);
+    const r = runScanner([writeObject("halt-sq.dcm", object)]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain(CARET_PN);
+    expect(r.stderr).toContain(textHit(object, "PN", CARET_PN));
   });
 
   it("CONTROL: the identical dataset WITHOUT the preamble was caught on base too", () => {
@@ -1439,7 +1523,7 @@ describe("phi-scan: a preamble-FUL object's silent halt", () => {
     const bare = Buffer.concat([preamblelessFileMeta("1.2.840.10008.1.2.1"), HALTED_NAME]);
     const r = runScanner([writeObject("halt-sq-bare.dcm", bare)]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain(CARET_PN);
+    expect(r.stderr).toContain(textHit(bare, "PN", CARET_PN));
   });
 
   it("CONTROL: a preamble-FUL PN with NO halt in front of it is caught under its TAG", () => {
@@ -1490,7 +1574,7 @@ describe("phi-scan: a preamble-FUL object's silent halt", () => {
     ]);
     const r = runScanner([writeObject("halt-be.dcm", object)]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain(CARET_PN);
+    expect(r.stderr).toContain(textHit(object, "PN", CARET_PN));
   });
 
   // -------------------------------------------------------------------------
@@ -1503,9 +1587,11 @@ describe("phi-scan: a preamble-FUL object's silent halt", () => {
   // the page's bytes. Measured on `21e25a0`: exit 0, `OK - no hits`.
 
   it("THE DEFECT, EMBEDDED: the same object base64'd into a .md is reported (exit 1)", () => {
-    const r = runScanner([writeObject("halt-sq.md", asDocPage(withPreamble(HALTED_NAME)))]);
+    const object = withPreamble(HALTED_NAME);
+    const r = runScanner([writeObject("halt-sq.md", asDocPage(object))]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain(CARET_PN);
+    // The offset is into the decoded object: the page's own bytes hold the name only as base64.
+    expect(r.stderr).toContain(textHit(object, "PN", CARET_PN));
   });
 
   it("CONTROL: the page's OWN text sweep cannot see the name, so the hit came from the decode", () => {
@@ -1564,18 +1650,19 @@ describe("phi-scan: a preamble-FUL object's silent halt", () => {
       x >>>= 0;
       run[i] = alphabet.charCodeAt(x % 64);
     }
+    const object = withPreamble(shortElement(0x0010, 0x0010, "PN", CARET_PN));
     const page = Buffer.concat([
       Buffer.from("# big\n\n", "utf8"),
       run,
       Buffer.from("\n\n", "utf8"),
-      Buffer.from(withPreamble(shortElement(0x0010, 0x0010, "PN", CARET_PN)).toString("base64")),
+      Buffer.from(object.toString("base64")),
       Buffer.from("\n", "utf8"),
     ]);
 
     const r = runScanner([writeObject("big-run.md", page)]);
     expect(r.code, `the scan refused instead of scanning; stderr: ${r.stderr}`).not.toBe(2);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain(CARET_PN);
+    expect(r.stderr).toContain(tagHit(object, "(0010,0010)", "PN", CARET_PN));
   });
 });
 
@@ -1643,6 +1730,8 @@ describe("phi-scan: a target is dispatched by CONTENT, never by its extension", 
   const FUL = buildDicomFixture("19000101", BARE_PN);
   /** The identical dataset with the 132 bytes off the front. */
   const LESS = buildPreamblelessFixture("19000101", BARE_PN);
+  /** The line the tag walk prints for the name in `FUL`. The text sweep cannot print it. */
+  const FUL_NAME_HIT = tagHit(FUL, "(0010,0010)", "PN", BARE_PN);
 
   it("the payload is invisible to the text sweep, so a hit can only come from the DICOM route", () => {
     // Non-vacuity for every case below, and it is the whole reason `BARE_PN` is
@@ -1671,7 +1760,7 @@ describe("phi-scan: a target is dispatched by CONTENT, never by its extension", 
     const r = runScanner([writeObject("by-name-control.dcm", FUL)]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toMatch(/\(0010,0010\)/);
-    expect(r.stderr).toContain(BARE_PN);
+    expect(r.stderr).toContain(FUL_NAME_HIT);
   });
 
   for (const ext of TEXT_EXTS) {
@@ -1681,7 +1770,7 @@ describe("phi-scan: a target is dispatched by CONTENT, never by its extension", 
       // Under its TAG, which is the half the text sweep cannot produce. Asserting
       // the exit code alone would pass on a hit from any recognizer at all.
       expect(r.stderr).toMatch(/\(0010,0010\)/);
-      expect(r.stderr).toContain(BARE_PN);
+      expect(r.stderr).toContain(FUL_NAME_HIT);
     });
 
     it(`THE DEFECT, PREAMBLE-LESS: the same dataset named ${ext} is reported (exit 1)`, () => {
@@ -1702,7 +1791,7 @@ describe("phi-scan: a target is dispatched by CONTENT, never by its extension", 
   it("NOT SUBTRACTED: a .md that is NOT a DICOM stream still gets the text sweep", () => {
     const r = runScanner([writeObject("by-name-prose.md", Buffer.from(SYNTHETIC_PHI, "utf8"))]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain(CARET_PN);
+    expect(r.stderr).toContain(SYNTHETIC_NAME_HIT);
   });
 
   it("NOT SUBTRACTED: a .md carrying a base64 object is still decoded", () => {
@@ -1722,7 +1811,7 @@ describe("phi-scan: a target is dispatched by CONTENT, never by its extension", 
 
     const r = runScanner([writeObject("by-name-embedded.md", page)]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain(CARET_PN);
+    expect(r.stderr).toContain(tagHit(embedded, "(0010,0010)", "PN", CARET_PN));
   });
 
   it("NOT SUBTRACTED: a .md whose name hides behind an undefined-length SQ is still reported", () => {
@@ -1741,7 +1830,7 @@ describe("phi-scan: a target is dispatched by CONTENT, never by its extension", 
     ]);
     const r = runScanner([writeObject("by-name-halt.md", halted)]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain(CARET_PN);
+    expect(r.stderr).toContain(textHit(halted, "PN", CARET_PN));
   });
 
   it("BOTH ROUTES: one .md, one name per route, and neither route can see the other's", () => {
@@ -1759,9 +1848,11 @@ describe("phi-scan: a target is dispatched by CONTENT, never by its extension", 
     ]);
     const r = runScanner([writeObject("by-name-both.md", both)]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr, "the tag walk did not run on a text-named file").toContain(BARE_PN);
+    expect(r.stderr, "the tag walk did not run on a text-named file").toContain(
+      tagHit(both, "(0008,0090)", "PN", BARE_PN),
+    );
     expect(r.stderr, "the text sweep was subtracted, which is the net-leak shape").toContain(
-      CARET_PN,
+      textHit(both, "PN", CARET_PN),
     );
   });
 
@@ -1774,7 +1865,7 @@ describe("phi-scan: a target is dispatched by CONTENT, never by its extension", 
     const r = runIn(root, []);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toContain("test/fixtures/report.md");
-    expect(r.stderr).toContain(BARE_PN);
+    expect(r.stderr).toContain(FUL_NAME_HIT);
   });
 
   it("and the same corpus with an allow-listed payload is still clean (exit 0)", () => {
@@ -1821,12 +1912,13 @@ describe("phi-scan: the walk root is test/, not test/fixtures/", () => {
   it("finds a violator in a tracked test file OUTSIDE test/fixtures (exit 1)", () => {
     const root = makeRepo();
     mkdirSync(join(root, "test", "unit"));
-    writeFileSync(join(root, "test", "unit", "leak.test.ts"), `const x = \`${SYNTHETIC_PHI}\`;\n`);
+    const source = `const x = \`${SYNTHETIC_PHI}\`;\n`;
+    writeFileSync(join(root, "test", "unit", "leak.test.ts"), source);
 
     const r = runIn(root, []);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toContain("test/unit/leak.test.ts");
-    expect(r.stderr).toContain(CARET_PN);
+    expect(r.stderr).toContain(textHit(source, "PN", CARET_PN));
   });
 
   it("the same file with an allow-listed payload is clean, so the root is not just always red", () => {
@@ -1872,7 +1964,7 @@ describe("phi-scan: the walk root is test/, not test/fixtures/", () => {
     const r = runIn(root, []);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toContain("test/fixtures/README.md");
-    expect(r.stderr).toContain(CARET_PN);
+    expect(r.stderr).toContain(SYNTHETIC_NAME_HIT);
   });
 
   it("🛑 --staged does NOT apply the exemption, because base did not and that is a detection", () => {
@@ -1890,7 +1982,7 @@ describe("phi-scan: the walk root is test/, not test/fixtures/", () => {
     const staged = runIn(root, ["--staged"]);
     expect(staged.code, `stderr: ${staged.stderr}`).toBe(1);
     expect(staged.stderr).toContain("test/fixtures/phi-scan/README.md");
-    expect(staged.stderr).toContain(CARET_PN);
+    expect(staged.stderr).toContain(SYNTHETIC_NAME_HIT);
 
     // And the other half of the disagreement, on the same tree, so the pair is
     // one measurement rather than two claims.
@@ -1908,7 +2000,7 @@ describe("phi-scan: the walk root is test/, not test/fixtures/", () => {
     const r = runIn(root, ["--staged"]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toContain("test/unit/leak.test.ts");
-    expect(r.stderr).toContain(CARET_PN);
+    expect(r.stderr).toContain(SYNTHETIC_NAME_HIT);
   });
 });
 
@@ -1930,13 +2022,14 @@ describe("phi-scan: an embedded base64 object is decoded outside markdown too", 
     // without this would have opened 81 `.ts` files and still read past every
     // object encoded in one.
     const root = makeRepo();
-    writeTsFixture(root, "object.ts", buildDicomFixture("19000101", VIOLATOR_PN));
+    const object = buildDicomFixture("19000101", VIOLATOR_PN);
+    writeTsFixture(root, "object.ts", object);
 
     const r = runIn(root, []);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toContain("test/unit/object.ts");
     expect(r.stderr).toMatch(/\(0010,0010\)/);
-    expect(r.stderr).toContain(VIOLATOR_PN);
+    expect(r.stderr).toContain(tagHit(object, "(0010,0010)", "PN", VIOLATOR_PN));
   });
 
   it("the text sweep alone cannot see it, so the decode is what does the work", () => {
@@ -2095,7 +2188,7 @@ describe("phi-scan: the walk is reconciled against git ls-files", () => {
     // catch: the very same bytes, in the working tree, are a hit.
     const staged = runIn(root, ["--staged"]);
     expect(staged.code, `stderr: ${staged.stderr}`).toBe(1);
-    expect(staged.stderr).toContain(CARET_PN);
+    expect(staged.stderr).toContain(SYNTHETIC_NAME_HIT);
   });
 });
 
@@ -2176,7 +2269,7 @@ describe("phi-scan: the hit report is capped PER FILE, and the cap cannot move t
     // file. The flood is scanned FIRST (paths mode preserves argv order, so the
     // ordering is the test's and not the filesystem's), and it carries far more
     // hits than the cap. A global budget would be spent inside it and the second
-    // file, whose hit names a person, would never be reached.
+    // file, whose hit is on a person's name, would never be reached.
     const root = makeRepo();
     const flood = join(root, "test", "fixtures", "flood.txt");
     const named = join(root, "test", "fixtures", "named.txt");
@@ -2187,7 +2280,7 @@ describe("phi-scan: the hit report is capped PER FILE, and the cap cannot move t
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toContain("flood.txt");
     expect(r.stderr).toContain("named.txt");
-    expect(r.stderr).toContain(CARET_PN);
+    expect(hitLinesFor(r.stderr, "test/fixtures/named.txt")).toContain(SYNTHETIC_NAME_HIT);
   });
 
   it("does not cap a file whose hits fit, so the suppression line is not always on", () => {
@@ -2197,7 +2290,7 @@ describe("phi-scan: the hit report is capped PER FILE, and the cap cannot move t
 
     const r = runIn(root, ["--max-hit-lines", "3", named]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain(CARET_PN);
+    expect(r.stderr).toContain(SYNTHETIC_NAME_HIT);
     expect(r.stderr).not.toContain("more hit(s) in this file");
     expect(r.stderr).not.toContain("were not printed");
   });
@@ -2216,25 +2309,27 @@ describe("phi-scan: the hit report is capped PER FILE, and the cap cannot move t
     expect(r.stdout).not.toContain("OK - no hits");
   });
 
-  it("🛑 A WITHHELD LINE IS WITHHELD: the name is off the default report and one flag away", () => {
-    // Stated rather than claimed away. The cap's cost is real: a hit line that
-    // names a person, sitting behind more hits than the cap, is NOT printed by
+  it("🛑 A WITHHELD LINE IS WITHHELD: the name's line is off the default report and one flag away", () => {
+    // Stated rather than claimed away. The cap's cost is real: the hit line for
+    // a person's name, sitting behind more hits than the cap, is NOT printed by
     // default. What makes that acceptable is the other half of this case. The
     // run still refuses, the count still includes it, the file is still named,
     // and `--max-hit-lines 0` prints it. What is never acceptable is a green run,
     // and the case above pins that this cannot produce one.
     const root = makeRepo();
     const mixed = join(root, "test", "fixtures", "mixed.txt");
-    writeFileSync(mixed, floodText() + SYNTHETIC_PHI);
+    const text = floodText() + SYNTHETIC_PHI;
+    writeFileSync(mixed, text);
+    const nameHit = textHit(text, "PN", CARET_PN);
 
     const capped = runIn(root, ["--max-hit-lines", "3", mixed]);
     expect(capped.code, `stderr: ${capped.stderr}`).toBe(1);
-    expect(capped.stderr).not.toContain(CARET_PN);
+    expect(capped.stderr).not.toContain(nameHit);
     expect(capped.stderr).toContain("more hit(s) in this file");
 
     const uncapped = runIn(root, ["--max-hit-lines", "0", mixed]);
     expect(uncapped.code, `stderr: ${uncapped.stderr}`).toBe(1);
-    expect(uncapped.stderr).toContain(CARET_PN);
+    expect(uncapped.stderr).toContain(nameHit);
     // Same verdict, same total, different amount printed. That is the whole
     // difference the flag makes.
     expect(countHitLines(uncapped.stderr)).toBeGreaterThan(countHitLines(capped.stderr));
@@ -2243,9 +2338,9 @@ describe("phi-scan: the hit report is capped PER FILE, and the cap cannot move t
   it("🛑 WHICH lines survive is SCAN order, not file order, and that is not obvious", () => {
     // Measured, and it contradicts the reading a reviewer arrives with. In the
     // fixture below the person name is at offset 0 of the appended block and the
-    // DOB two lines after it, yet the DOB is printed and the name is not. "The
-    // first n hits" is therefore not "the first n in the file", and a reader who
-    // assumed otherwise would mis-read every capped report.
+    // DOB two lines after it, yet the DOB's line is printed and the name's is not.
+    // "The first n hits" is therefore not "the first n in the file", and a reader
+    // who assumed otherwise would mis-read every capped report.
     //
     // 🛑 AN EARLIER DRAFT ENUMERATED THAT ORDER HERE AND ARGUED FROM IT THAT
     // PER-RECOGNIZER CAP SLOTS BUY NO SAFETY. A refuter falsified both halves and
@@ -2253,12 +2348,13 @@ describe("phi-scan: the hit report is capped PER FILE, and the cap cannot move t
     // assertions below are unchanged: they are the measurement, not the explanation.
     const root = makeRepo();
     const mixed = join(root, "test", "fixtures", "mixed.txt");
-    writeFileSync(mixed, floodText() + SYNTHETIC_PHI);
+    const text = floodText() + SYNTHETIC_PHI;
+    writeFileSync(mixed, text);
 
     const capped = runIn(root, ["--max-hit-lines", "3", mixed]);
     expect(capped.code, `stderr: ${capped.stderr}`).toBe(1);
-    expect(capped.stderr).toContain(VIOLATOR_DOB);
-    expect(capped.stderr).not.toContain(CARET_PN);
+    expect(capped.stderr).toContain(textHit(text, "DA", VIOLATOR_DOB));
+    expect(capped.stderr).not.toContain(textHit(text, "PN", CARET_PN));
 
     // The suppression line itself carries a count and the flag, and nothing off
     // the hits it stands for: no tag, no VR, no value, no offset. A diagnostic
@@ -2367,9 +2463,8 @@ function dateFloodText(n: number): string {
  * The reason field of every hit DETAIL line, in order.
  *
  * Read by walking back from the closing parenthesis and BALANCING, never by one regex: a date
- * reason carries a parenthesis of its own (`(>= 1906)`) and a value may carry either bracket, so
- * a greedy or lazy pattern reads part of the value as part of the reason. `parseHitLines` above
- * documents the same trap from the other end of the line.
+ * reason carries a parenthesis of its own (`(>= 1906)`) and the tag is written in parentheses
+ * too, so a greedy or lazy pattern reads the wrong span as the reason.
  */
 function hitReasons(stderr: string): string[] {
   const out: string[] = [];
@@ -2418,20 +2513,22 @@ describe("phi-scan: the print budget is spent PER RECOGNIZER, so no class spends
     const root = makeRepo();
     const quiet = join(root, "test", "fixtures", "quiet.txt");
     const loud = join(root, "test", "fixtures", "loud.txt");
-    writeFileSync(quiet, `Patient: ${CARET_PN}\n`);
-    writeFileSync(loud, dateFloodText(FLOOD_HITS) + `Patient: ${CARET_PN}\n`);
+    const quietText = `Patient: ${CARET_PN}\n`;
+    const loudText = dateFloodText(FLOOD_HITS) + quietText;
+    writeFileSync(quiet, quietText);
+    writeFileSync(loud, loudText);
 
+    // The quiet run prints one line, the name's. A line names the place and not the value, so
+    // the same finding is a different line in the loud file: the same rule, further down.
     const before = runIn(root, [quiet]);
     expect(before.code, `stderr: ${before.stderr}`).toBe(1);
-    const beforeValues = parseHitLines(before.stderr).map((l) => l.value);
-    expect(beforeValues).toContain(CARET_PN);
+    expect(hitLines(before.stderr)).toEqual([textHit(quietText, "PN", CARET_PN)]);
 
     const after = runIn(root, [loud]);
     expect(after.code, `stderr: ${after.stderr}`).toBe(1);
-    const afterValues = parseHitLines(after.stderr).map((l) => l.value);
     // The superset, in the smallest form the suite can state it: nothing the
     // quiet run printed went missing when the flood arrived.
-    for (const v of beforeValues) expect(afterValues).toContain(v);
+    expect(hitLines(after.stderr)).toContain(textHit(loudText, "PN", CARET_PN));
     // And the flood really did exceed the budget, so the case is not vacuous:
     // the run withheld lines and said so.
     expect(after.stderr).toContain("more hit(s) in this file");
@@ -2450,11 +2547,12 @@ describe("phi-scan: the print budget is spent PER RECOGNIZER, so no class spends
     const dataset = Buffer.concat(
       Array.from({ length: FLOOD_HITS }, () => shortElement(0x0008, 0x0020, "DA", RECENT_DA)),
     );
-    writeFileSync(p, Buffer.concat([part10(dataset), Buffer.from(`\nPatient: ${CARET_PN}\n`)]));
+    const bytes = Buffer.concat([part10(dataset), Buffer.from(`\nPatient: ${CARET_PN}\n`)]);
+    writeFileSync(p, bytes);
 
     const r = runIn(root, [p]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(parseHitLines(r.stderr).map((l) => l.value)).toContain(CARET_PN);
+    expect(hitLines(r.stderr)).toContain(textHit(bytes, "PN", CARET_PN));
     // Non-vacuity: the typed route really did flood, past the default cap.
     const counts = reasonCounts(r.stderr);
     expect(counts.get("PN not in allow-list") ?? 0).toBe(0);
@@ -2518,23 +2616,25 @@ describe("phi-scan: the print budget is spent PER RECOGNIZER, so no class spends
     // worse.
     const root = makeRepo();
     const both = join(root, "test", "fixtures", "both-dates.txt");
-    writeFileSync(
-      both,
+    const text =
       dateFloodText(FLOOD_HITS) +
-        Array.from({ length: FLOOD_HITS }, () => `seen ${COMPACT_VIOLATOR_DATE}`).join("\n") +
-        "\n",
-    );
+      Array.from({ length: FLOOD_HITS }, () => `seen ${COMPACT_VIOLATOR_DATE}`).join("\n") +
+      "\n";
+    writeFileSync(both, text);
+    // Every ISO date sits before the first compact one, so a line's offset says which pass
+    // printed it: at or past this one, it is the compact pass's.
+    const firstCompact = text.indexOf(COMPACT_VIOLATOR_DATE);
 
     const r = runIn(root, [both]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    const values = parseHitLines(r.stderr).map((l) => l.value);
-    expect(values).toContain(TEXT_VIOLATOR_DATE);
-    expect(values).not.toContain(COMPACT_VIOLATOR_DATE);
+    const printed = hitOffsets(r.stderr);
+    expect(printed).toContain(text.indexOf(TEXT_VIOLATOR_DATE));
+    expect(printed.filter((offset) => offset >= firstCompact)).toEqual([]);
     // And one flag away, which is what makes the cost acceptable rather than
     // hidden: the total counted it and `--max-hit-lines 0` prints it.
     expect(r.stderr).toContain(`${String(FLOOD_HITS * 2)} hits across 1 file(s).`);
     const uncapped = runIn(root, ["--max-hit-lines", "0", both]);
-    expect(parseHitLines(uncapped.stderr).map((l) => l.value)).toContain(COMPACT_VIOLATOR_DATE);
+    expect(hitOffsets(uncapped.stderr)).toContain(firstCompact);
   });
 
   it("cannot move the verdict, the totals, the files named or the withheld count", () => {
@@ -2554,7 +2654,7 @@ describe("phi-scan: the print budget is spent PER RECOGNIZER, so no class spends
     expect(r.stderr).toContain("loud.txt");
     expect(r.stderr).toContain("named.txt");
     const total = Number(/(\d+) hits across (\d+) file/.exec(r.stderr)?.[1]);
-    expect(total).toBe(FLOOD_HITS + parseHitLines(runIn(root, [named]).stderr).length);
+    expect(total).toBe(FLOOD_HITS + countHitLines(runIn(root, [named]).stderr));
     const withheld = Number(/(\d+) hit line\(s\) were not printed/.exec(r.stderr)?.[1]);
     expect(withheld).toBe(total - countHitLines(r.stderr));
   });
@@ -2568,23 +2668,25 @@ describe("phi-scan: the print budget is spent PER RECOGNIZER, so no class spends
     // still prints it.
     const root = makeRepo();
     const p = join(root, "test", "fixtures", "same-class.txt");
-    writeFileSync(p, floodText() + `Patient: ${CARET_PN}\n`);
+    const text = floodText() + `Patient: ${CARET_PN}\n`;
+    writeFileSync(p, text);
+    const nameHit = textHit(text, "PN", CARET_PN);
 
     const capped = runIn(root, ["--max-hit-lines", "3", p]);
     expect(capped.code, `stderr: ${capped.stderr}`).toBe(1);
-    expect(capped.stderr).not.toContain(CARET_PN);
+    expect(capped.stderr).not.toContain(nameHit);
     expect(countHitLines(capped.stderr)).toBe(3);
 
     const uncapped = runIn(root, ["--max-hit-lines", "0", p]);
     expect(uncapped.code, `stderr: ${uncapped.stderr}`).toBe(1);
-    expect(uncapped.stderr).toContain(CARET_PN);
+    expect(uncapped.stderr).toContain(nameHit);
   });
 
   it("the recognizer is NOT printed, so the budget added no field to the line", () => {
     // A diagnostic about a PHI leak is itself a PHI surface, and this change
     // answers a selection question, not a reporting one. The hit line's fields
-    // are what they were; the suppression line still carries a count and the
-    // flag and nothing else.
+    // are the place and the rule; the suppression line still carries a count and
+    // the flag and nothing else.
     const root = makeRepo();
     const p = join(root, "test", "fixtures", "shape.txt");
     writeFileSync(p, SYNTHETIC_PHI);
@@ -2592,7 +2694,7 @@ describe("phi-scan: the print budget is spent PER RECOGNIZER, so no class spends
     const r = runIn(root, [p]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     for (const line of r.stderr.split("\n").filter((l) => /^ {2}tag=/.test(l))) {
-      expect(line).toMatch(/^ {2}tag=\S+ vr=\S+ offset=\d+ value=".*" \([^()]*(\([^()]*\))?\)$/);
+      expect(line).toMatch(/^ {2}tag=\S+ vr=\S+ offset=\d+ \([^()]*(\([^()]*\))?\)$/);
     }
     for (const token of ["tag-pn", "tag-date", "text-pn", "text-date", "recognizer"]) {
       expect(r.stderr).not.toContain(token);
@@ -2787,6 +2889,7 @@ describe("phi-scan: the DICOM sweep reports the bytes it never read", () => {
 
     const r = runScanner([writeObject("behind-halt.dcm", buf)]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(0);
+    expect(hitLines(r.stderr)).toEqual([]);
     expect(r.stderr).not.toContain(BARE_PN);
     expect(partialLines(r.stderr)).toHaveLength(1);
     expect(r.stderr).toContain("an undefined-length value (0xFFFFFFFF)");
@@ -2797,10 +2900,11 @@ describe("phi-scan: the DICOM sweep reports the bytes it never read", () => {
   it("🛑 THE NON-VACUITY CONTROL: the same name with no halt IS found, so the payload is detectable", () => {
     // Without this the case above proves only that a scanner found nothing, which
     // it would also do over a payload carrying no name at all.
-    const r = runScanner([writeObject("no-halt.dcm", nameWithNoHalt())]);
+    const object = nameWithNoHalt();
+    const r = runScanner([writeObject("no-halt.dcm", object)]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
     expect(r.stderr).toMatch(/\(0010,0010\)/);
-    expect(r.stderr).toContain(BARE_PN);
+    expect(r.stderr).toContain(tagHit(object, "(0010,0010)", "PN", BARE_PN));
   });
 
   it("🛑 THE DETECTOR ZERO: silent on a complete object, loud on a halting one, in ONE run", () => {
@@ -3014,259 +3118,137 @@ describe("phi-scan: an unexpected error is an invocation error, never a hit", ()
 });
 
 // ---------------------------------------------------------------------------
-// The value excerpt
+// A hit names the place and the rule, never the matched text
 // ---------------------------------------------------------------------------
 //
-// A hit line used to echo the whole violating value, and how many characters
-// that was is decided by the payload: an element declares its own length, so a
-// `(0010,0010)` claiming the rest of the object put the rest of the object on
-// one stderr line. Every other field on that line is structural or comes from a
-// closed set. A diagnostic about a PHI leak is itself a PHI surface.
-//
-// 🛑 NO CASE BELOW WRITES THE BOUND AS A NUMERAL. The cases DERIVE it from a run
-// - a value the scanner cut announces exactly how much it withheld - and then use
-// that number to place the boundary cases. A numeral copied
-// here would be a second source of truth that drifts from the constant, which is
-// the reason `#104`'s cases do not name their default either.
+// This scan runs in CI, and the CI log of a public repository is public. A hit line that quoted
+// the value it found would write a patient's name or date of birth into that log on the one run
+// that catches it: a report about a leak that quotes the leak is a second copy of it, in a worse
+// place. So a finding says where it is and which rule fired, and nothing of what it matched. The
+// cases above find their hits by place for that reason, and these pin the absence itself.
 
-/**
- * The `value=...` field of one hit line, parsed as JSON, plus how much was withheld.
- *
- * The withheld amount carries NO UNIT in the output and none is invented here: the tag route
- * measures a latin1 decode (bytes) and the text sweep a UTF-8 one (UTF-16 code units), so the
- * cases below compare it against `String.length` of the value they wrote and never call it a
- * character count.
- */
-interface ParsedHitLine {
-  value: string;
-  withheld: number | null;
-}
+describe("phi-scan: a hit names the place and the rule, never the matched text", () => {
+  it("prints none of the planted values, on any route, to stdout or stderr", () => {
+    // One planted value per route that can make a hit, each of them one this scanner flags: the
+    // tag walk's PN, DA and DT, the text sweep's PN, ISO date and compact date, and a PN inside
+    // an object a page embeds as base64. No value is part of another, so a line carrying one
+    // could not hide behind a second.
+    const tagPn = BARE_PN;
+    const tagDa = RECENT_DA;
+    const tagDt = `${TEXT_VIOLATOR_DATE.replaceAll("-", "")}120000`;
+    const textPn = CARET_PN;
+    const textIso = VIOLATOR_DOB;
+    const textCompact = COMPACT_VIOLATOR_DATE;
+    const embeddedPn = VIOLATOR_PN;
 
-/**
- * Parse the hit DETAIL lines of a run.
- *
- * The reason text contains parentheses (`(>= 1906)`), so the value is read by
- * walking its JSON string to the closing quote rather than by one greedy regex.
- * A first draft of this helper read a `DT` line's reason as part of its value.
- */
-function parseHitLines(stderr: string): ParsedHitLine[] {
-  const head = /^ {2}tag=\S+ vr=\S+ offset=\d+ value=/;
-  const out: ParsedHitLine[] = [];
-  for (const line of stderr.split("\n")) {
-    const m = head.exec(line);
-    if (m === null) continue;
-    let i = m[0].length;
-    expect(line[i], `hit line value is not a JSON string: ${line.slice(0, 80)}`).toBe('"');
-    for (i += 1; i < line.length; i += 1) {
-      if (line[i] === "\\") i += 1;
-      else if (line[i] === '"') break;
+    const object = part10(
+      Buffer.concat([
+        shortElement(0x0008, 0x0020, "DA", tagDa),
+        shortElement(0x0008, 0x002a, "DT", tagDt),
+        shortElement(0x0010, 0x0010, "PN", tagPn),
+      ]),
+    );
+    const prose = `Patient: ${textPn}\nDOB: ${textIso}\nSeen: ${textCompact}\n`;
+    const embedded = part10(shortElement(0x0010, 0x0010, "PN", embeddedPn));
+    const page = `# fixture\n\n\`\`\`\n${embedded.toString("base64")}\n\`\`\`\n`;
+
+    const root = makeRepo();
+    const files = { object: "planted.dcm", prose: "planted.txt", page: "planted.md" };
+    writeFileSync(join(root, "test", "fixtures", files.object), object);
+    writeFileSync(join(root, "test", "fixtures", files.prose), prose);
+    writeFileSync(join(root, "test", "fixtures", files.page), page);
+
+    // What each file must report, in scan order. The object's study date is found twice, once
+    // under its tag and once by the text sweep, which reads every target's bytes as text too.
+    const expected = {
+      [files.object]: [
+        tagHit(object, "(0008,0020)", "DA", tagDa),
+        tagHit(object, "(0008,002a)", "DT", tagDt),
+        tagHit(object, "(0010,0010)", "PN", tagPn),
+        textHit(object, "DA", tagDa),
+      ],
+      [files.prose]: [
+        textHit(prose, "DA", textIso),
+        textHit(prose, "DA", textCompact),
+        textHit(prose, "PN", textPn),
+      ],
+      // Offsets into the DECODED object: the page's own bytes carry the name only as base64.
+      [files.page]: [
+        tagHit(embedded, "(0010,0010)", "PN", embeddedPn),
+        textHit(embedded, "PN", embeddedPn),
+      ],
+    };
+    expect(page).not.toContain(embeddedPn);
+
+    const r = runIn(root, [
+      "--max-hit-lines",
+      "0",
+      ...Object.keys(expected).map((name) => join(root, "test", "fixtures", name)),
+    ]);
+
+    // Non-vacuity first, and off the totals, which carry no value on any tree: every planted
+    // value was FOUND. A run that printed no value because it found none would prove nothing.
+    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
+    const total = Object.values(expected).reduce((n, lines) => n + lines.length, 0);
+    expect(r.stderr).toContain(`[phi-scan] ${String(total)} hits across 3 file(s).`);
+
+    // The whole output, both streams. Each value is looked for whole, each person name by its
+    // components as well, and the DT by the eight characters its rule reads, so an excerpt of a
+    // value is caught like the value.
+    const output = r.stdout + r.stderr;
+    const planted = [tagPn, tagDa, tagDt, textPn, textIso, textCompact, embeddedPn];
+    const parts = [...textPn.split("^"), ...embeddedPn.split("^"), tagDt.slice(0, 8)];
+    for (const token of [...planted, ...parts]) {
+      expect(output, "the output carries a planted value").not.toContain(token);
     }
-    const field = line.slice(m[0].length, i + 1);
-    const cut = /^ \[\+(\d+) not printed\]/.exec(line.slice(i + 1));
-    out.push({
-      value: JSON.parse(field) as string,
-      withheld: cut === null ? null : Number(cut[1]),
-    });
-  }
-  return out;
-}
 
-/** A PN-shaped token the text sweep matches, exactly `n` characters long. */
-function pnOfLength(n: number): string {
-  if (n < CARET_PN.length) throw new Error(`pnOfLength: ${String(n)} is shorter than the name`);
-  return CARET_PN + "A".repeat(n - CARET_PN.length);
-}
-
-/**
- * Run one text-route file through the scanner and hand back its single hit line.
- * Every caller asserts the exit code, so a case cannot pass off a run that found
- * nothing as a run that found something short.
- */
-function oneTextHit(value: string): ParsedHitLine {
-  const root = makeRepo();
-  const p = join(root, "test", "fixtures", "excerpt.txt");
-  writeFileSync(p, `Patient: ${value}\n`);
-  const r = runIn(root, [p]);
-  expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-  const lines = parseHitLines(r.stderr);
-  expect(lines).toHaveLength(1);
-  const only = lines[0];
-  if (only === undefined) throw new Error("unreachable: length asserted above");
-  return only;
-}
-
-describe("phi-scan: a hit line echoes an EXCERPT of the value, bounded at construction", () => {
-  it("prints part of the value and says exactly how much it did not print", () => {
-    // The arithmetic is the whole claim: excerpt + withheld = the value's own
-    // `length`. Nothing is dropped silently, and the line does not read as a
-    // complete value.
-    const whole = pnOfLength(5000);
-    const hit = oneTextHit(whole);
-    expect(hit.withheld).not.toBeNull();
-    expect(hit.value.length).toBeLessThan(whole.length);
-    expect(hit.value.length + (hit.withheld ?? 0)).toBe(whole.length);
-    expect(whole.startsWith(hit.value)).toBe(true);
+    // And what it prints instead, exactly: one line per finding, the place and the rule.
+    for (const [name, lines] of Object.entries(expected)) {
+      expect(hitLinesFor(r.stderr, `test/fixtures/${name}`), name).toEqual(lines);
+    }
   });
 
-  it("prints a value AT the bound WHOLE, and one character over as an excerpt", () => {
-    // 🛑 THE POSITIVE CONTROL FOR EVERY "no marker" ASSERTION IN THIS BLOCK. A
-    // run that printed no marker because it found no hit would satisfy the first
-    // half by accident, so the bound is derived from a run that DID cut, and the
-    // two cases sit either side of it.
-    const probe = oneTextHit(pnOfLength(5000));
-    const bound = probe.value.length;
-    expect(bound).toBeGreaterThan(CARET_PN.length);
-
-    const atBound = oneTextHit(pnOfLength(bound));
-    expect(atBound.withheld).toBeNull();
-    expect(atBound.value).toBe(pnOfLength(bound));
-
-    const overBound = oneTextHit(pnOfLength(bound + 1));
-    expect(overBound.withheld).toBe(1);
-    expect(overBound.value.length).toBe(bound);
-  });
-
-  it("bounds the DICOM TAG route, not only the text sweep", () => {
-    // 🛑 THE ROUTES ARE SCANNED FOR SEPARATELY BECAUSE THEY PUSH SEPARATELY, and
-    // a bound that reached one of them would be the shape `#97` paid for. The
-    // payload is single-component, so the text sweep has nothing to match and
-    // the hit proves the tag route ran.
+  it("bounds the LINE, however many bytes the value declared", () => {
+    // An element declares its own length, so a `(0010,0010)` claiming the rest of the object once
+    // put the rest of the object on one stderr line. With no value on the line its length is the
+    // place and the rule alone. The ceiling has room in it, and the value is far longer than it.
+    const value = BARE_PN + "A".repeat(60000 - BARE_PN.length);
     const root = makeRepo();
     const p = join(root, "test", "fixtures", "long-pn.dcm");
-    const value = BARE_PN + "A".repeat(60000 - BARE_PN.length);
     writeFileSync(p, part10(shortElement(0x0010, 0x0010, "PN", value)));
 
     const r = runIn(root, [p]);
     expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    const lines = parseHitLines(r.stderr);
-    expect(lines).toHaveLength(1);
-    expect(lines[0]?.value.length ?? 0).toBeLessThan(value.length);
-    expect((lines[0]?.value.length ?? 0) + (lines[0]?.withheld ?? 0)).toBe(value.length);
-  });
-
-  it("bounds the DT route, whose head is eight characters and whose value is not", () => {
-    // The third push site that can exceed the bound. `checkDate` reads the first
-    // eight characters of a `DT`, so everything after them is unexamined payload
-    // that the report used to print in full. The padding is letters, so no date
-    // or PN recognizer matches it and this file has exactly one hit.
-    const root = makeRepo();
-    const p = join(root, "test", "fixtures", "long-dt.dcm");
-    const value = RECENT_DA + "A".repeat(40000 - RECENT_DA.length);
-    writeFileSync(p, part10(shortElement(0x0008, 0x002a, "DT", value)));
-
-    const r = runIn(root, [p]);
-    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    const lines = parseHitLines(r.stderr);
-    expect(lines).toHaveLength(1);
-    expect(lines[0]?.withheld).toBe(value.length - (lines[0]?.value.length ?? 0));
-    expect(lines[0]?.value.length ?? 0).toBeLessThan(value.length);
-  });
-
-  it("bounds the LINE, however many bytes the value declared", () => {
-    // The number that actually matters. A 1 MiB value produced a 1 MiB stderr
-    // line; the printed field is now bounded by the excerpt through
-    // `JSON.stringify`, whose longest expansion of one character is a six-
-    // character escape. The assertion is a ceiling with room in it rather than a
-    // second copy of the constant, and it is non-vacuous: the value is four
-    // orders of magnitude larger.
-    const value = pnOfLength(1024 * 1024);
-    const root = makeRepo();
-    const p = join(root, "test", "fixtures", "huge.txt");
-    writeFileSync(p, `Patient: ${value}\n`);
-
-    const r = runIn(root, [p]);
-    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    const detail = r.stderr.split("\n").filter((l) => /^ {2}tag=/.test(l));
+    const detail = hitLines(r.stderr);
     expect(detail).toHaveLength(1);
-    expect(detail[0]?.length ?? 0).toBeLessThan(2000);
-    expect(parseHitLines(r.stderr)[0]?.withheld ?? 0).toBeGreaterThan(1_000_000);
+    expect(detail[0]?.length ?? 0).toBeLessThan(200);
+    expect(r.stderr).not.toContain("not printed]");
   });
 
-  it("🛑 CUTS A CONFORMANT 194-CHARACTER PN: the bound is in the SCANNER'S units", () => {
-    // The counter-example to the sentence this block's first draft carried, kept
-    // as a shape rather than as a disclosure. PS3.5 2026c Table 6.2-1 gives PN's
-    // length in CHARACTERS - its length cell cross-references `note_6.1-2-1`,
-    // which says the lengths of VRs whose Character Repertoire can be extended
-    // are `expressly specified in characters rather than bytes` - and this
-    // scanner decodes latin1, so it counts bytes. A single-valued, conformant PN
-    // of exactly three 64-character component groups under `ISO_IR 192` is
-    // therefore cut here. `194` bounds what the report prints; it says nothing
-    // about what the standard admits.
-    const groups = [pnOfLength(64), "\u5c71".repeat(64), "\u3042".repeat(64)];
-    const pn = groups.join("=");
-    // The spec arithmetic, written as arithmetic so it cannot be read as the
-    // scanner's constant: three component groups of 64 and two delimiters.
-    expect(pn.length).toBe(3 * 64 + 2);
-    const wire = Buffer.from(pn, "utf8");
-    expect(wire.length).toBeGreaterThan(pn.length);
-
-    const root = makeRepo();
-    const p = join(root, "test", "fixtures", "iso-ir-192.dcm");
-    writeFileSync(
-      p,
-      part10(
-        Buffer.concat([
-          shortElement(0x0008, 0x0005, "CS", "ISO_IR 192"),
-          shortElement(0x0010, 0x0010, "PN", wire.toString("latin1")),
-        ]),
-      ),
-    );
-
-    const r = runIn(root, [p]);
-    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    const tagLine = r.stderr.split("\n").find((l) => l.startsWith("  tag=(0010,0010)"));
-    expect(tagLine).toBeDefined();
-    const cut = /\[\+(\d+) not printed\]/.exec(tagLine ?? "");
-    expect(cut, "a conformant PN of the standard's maximum length was NOT cut").not.toBeNull();
-    // Withheld is measured against the WIRE length, which is what the scanner read,
-    // and against the bound DERIVED from a run rather than a numeral written here.
-    const bound = oneTextHit(pnOfLength(5000)).value.length;
-    expect(Number(cut?.[1])).toBe(wire.length - bound);
-  });
-
-  it("cannot move the verdict, the totals or the set of files named", () => {
-    // The property every bound in this script has to keep. The excerpt is a
-    // print-time shortening of one field: `main` derives the exit code from
-    // `hits`, the summary counts `hits`, and a file with a hit is still named.
-    const root = makeRepo();
-    const huge = join(root, "test", "fixtures", "huge.txt");
-    const named = join(root, "test", "fixtures", "named.txt");
-    writeFileSync(huge, `Patient: ${pnOfLength(200000)}\n`);
-    writeFileSync(named, SYNTHETIC_PHI);
-
-    const r = runIn(root, [huge, named]);
-    expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-    expect(r.stderr).toContain("huge.txt");
-    expect(r.stderr).toContain("named.txt");
-    // The short violator is under the bound, so its line is untouched.
-    expect(r.stderr).toContain(CARET_PN);
-    expect(r.stderr).toContain("hits across 2 file(s).");
-  });
-
-  it("🛑 THE SLOT IS BOUND, NOT THE PRINTER: every push goes through the factory", () => {
-    // A bound that held only where `report` is CALLED would leave `Hit.value`
-    // carrying the whole payload for the next consumer to print, which is the
-    // failure this lineage has watched relocate to a sibling twice. `Hit.value`
-    // is not a `string`, so the compiler refuses a raw one; this case pins the
-    // arithmetic the compiler cannot state, that no push site was left out.
+  it("holds no value on a hit, so there is nothing for a later printer to write", () => {
+    // Dropping the value where the report is printed would hold only from that one printer: the
+    // hit would still carry it for the next reader of the field. The compiler refuses a field the
+    // interface does not declare, so what is pinned here is the declaration: the place, the rule,
+    // and the key the print budget is spent on. A new field has to change this list on purpose.
     const src = readFileSync(SCANNER_PATH, "utf8");
-    expect(src).toContain("value: HitValue;");
-    const pushes = src.match(/hits\.push\(\{/g) ?? [];
-    const excerpted = src.match(/value: excerptValue\(/g) ?? [];
-    expect(pushes.length).toBeGreaterThan(0);
-    expect(excerpted).toHaveLength(pushes.length);
+    const body = /\binterface Hit \{([^}]*)\}/.exec(src)?.[1];
+    expect(body, "scripts/phi-scan.ts no longer declares `interface Hit`").toBeDefined();
+    const fields = [...(body ?? "").matchAll(/^[ \t]*(\w+)\??:/gm)].map((m) => m[1]);
+    expect(fields).toEqual(["path", "tag", "vr", "offset", "reason", "recognizer"]);
   });
 });
 
 // ---------------------------------------------------------------------------
-// The excerpt owns its bytes
+// A hit holds nothing of the file it was found in
 // ---------------------------------------------------------------------------
 //
-// The block above bounds what a hit line PRINTS. It did not bound what a hit
-// HOLDS: V8 answers `raw.slice(0, n)`, and a regexp match, with a string that
-// points into its parent, so an excerpt cut from a file's whole decoded text
-// kept that whole text alive for the rest of the run. The excerpt was bounded
-// logically while the hit still retained the payload.
+// The block above pins what a hit line PRINTS. This one pins what a hit HOLDS.
+// V8 answers `raw.slice(0, n)`, and a regexp match, with a string that points
+// into its parent, so a hit that kept a piece of a file's decoded text kept that
+// whole text alive for the rest of the run. A hit once kept an excerpt of the
+// value it matched, and the run held one whole file for every file with a hit.
+// A hit carries no text off the file now, and these cases are what would say so
+// if a field that does came back.
 //
 // 🛑 THE SCANNER IS SYNCHRONOUS END TO END, so nothing on its event loop runs
 // while it scans: a preloaded `setInterval` sampler fires once before the scan
@@ -3357,7 +3339,7 @@ function retainedPeak(files: number, withHit: boolean): RetainRun {
 // Skipped under Deno: the observer is preloaded with Node's `--require` and `--expose-gc`, which a
 // Deno child does not take. See `UNDER_DENO` in `test/helpers/run-script.ts`.
 describe.skipIf(UNDER_DENO)(
-  "phi-scan: a hit does NOT retain the payload its excerpt was cut from",
+  "phi-scan: a hit does NOT retain the payload of the file it was found in",
   () => {
     it("holds no more for nine hit-bearing files than for three", () => {
       // The property, stated as a difference so no absolute size is written down.
@@ -3390,40 +3372,6 @@ describe.skipIf(UNDER_DENO)(
       expect(clean.code, `a corpus of pure filler refused: ${String(clean.hits)} hits`).toBe(0);
       expect(clean.hits).toBe(0);
       expect(clean.samples).toBe(9);
-    });
-
-    it("round-trips every byte the value carried, so the copy is not a re-encode", () => {
-      // The copy that drops the parent is a round trip, and a round trip that
-      // changed a character would be the same class of wrong answer as printing
-      // too much: the report would name a value the file does not carry. The
-      // alphabet is every byte a latin1 decode can produce except the ones the
-      // trailing-pad trim eats, so it covers the whole range the TAG ROUTE can
-      // reach, and the bound is DERIVED from a run rather than written here.
-      //
-      // 🛑 WHAT THIS CASE DOES NOT DO, SAID PLAINLY RATHER THAN IMPLIED BY ITS
-      // NAME: it does not discriminate `utf16le` from `utf8` or from `latin1`.
-      // All three round-trip this alphabet identically, and no reachable input can
-      // do better, because the tag route decodes latin1 and the text sweep's
-      // recognizers match ASCII, so an unpaired surrogate cannot arrive here at
-      // all. The reason `excerptValue` uses `utf16le` anyway is on its JSDoc and
-      // is an argument about the SLOT, not a claim this suite pins.
-      const bound = oneTextHit(pnOfLength(5000)).value.length;
-      let alphabet = "";
-      for (let i = 0; alphabet.length < bound * 2; i += 1) {
-        alphabet += String.fromCharCode(0x21 + (i % (0xff - 0x21 + 1)));
-      }
-      expect([...alphabet].some((c) => c.charCodeAt(0) > 0x7f)).toBe(true);
-
-      const root = makeRepo();
-      const p = join(root, "test", "fixtures", "alphabet.dcm");
-      writeFileSync(p, part10(shortElement(0x0010, 0x0010, "PN", alphabet)));
-
-      const r = runIn(root, [p]);
-      expect(r.code, `stderr: ${r.stderr}`).toBe(1);
-      const lines = parseHitLines(r.stderr);
-      expect(lines).toHaveLength(1);
-      expect(lines[0]?.value).toBe(alphabet.slice(0, bound));
-      expect(lines[0]?.withheld).toBe(alphabet.length - bound);
     });
   },
 );

@@ -197,10 +197,10 @@ const CUTOFF_YEAR = new Date().getFullYear() - 120;
  * over a corpus carrying a real name and look calmer for it.
  *
  * 🛑 AND IT IS PER FILE, NEVER GLOBAL. A global cap is the net-leak shape: one flooding file would
- * consume the whole budget and every later file's hits - including a file whose hit names an actual
- * patient - would go unprinted, with the flooding file's path the only one on screen. Per file, the
- * set of PATHS reported is uncapped, every file with a hit still prints its header and its first
- * lines, and the suppression is bounded by a count the same line states exactly.
+ * consume the whole budget and every later file's hits would go unprinted, those of a file carrying
+ * an actual patient's name among them, with the flooding file's path the only one on screen. Per
+ * file, the set of PATHS reported is uncapped, every file with a hit still prints its header and
+ * its first lines, and the suppression is bounded by a count the same line states exactly.
  *
  * 🛑 AND IT IS PER RECOGNIZER WITHIN THAT FILE, WHICH IS THE SAME ARGUMENT ONE LEVEL DOWN. One
  * budget shared by every recognizer let a file's loud recognizer spend the quiet one's share, and
@@ -222,9 +222,9 @@ const CUTOFF_YEAR = new Date().getFullYear() - 120;
  * AGAIN on every object `scanEmbeddedObjects` decodes, so a doc page's own tokens and its embedded
  * objects' share one entry each. Measured, and IDENTICAL on base `7754a6c` and here: over 200 ISO
  * dates followed by 200 compact ones the report prints 20 ISO and 0 compact, and adding a 20th ISO
- * date in front of one compact DOB takes that DOB off the default report. Splitting the two date
- * passes is available; splitting per embedded object is NOT, because the number of objects is the
- * PAYLOAD's choice and a per-class budget times a payload-chosen class count is no budget.
+ * date in front of one compact DOB takes that DOB's line off the default report. Splitting the two
+ * date passes is available; splitting per embedded object is NOT, because the number of objects is
+ * the PAYLOAD's choice and a per-class budget times a payload-chosen class count is no budget.
  * `test/scripts/phi-scan.test.ts` pins both measurements rather than this comment claiming them
  * away.
  *
@@ -236,40 +236,6 @@ const CUTOFF_YEAR = new Date().getFullYear() - 120;
  * histogram and not about this script.
  */
 const DEFAULT_HIT_LINES_PER_RECOGNIZER = 20;
-
-/**
- * How much of a violating value one hit line may echo, in `String.length`.
- *
- * 🛑 THE VALUE WAS THE ONLY UNBOUNDED PAYLOAD-DERIVED SLOT ON THE LINE, AND A DIAGNOSTIC ABOUT A
- * PHI LEAK IS ITSELF A PHI SURFACE. Every other field is structural or comes from a closed set:
- * `path` is the path the enumeration chose, `tag` is `tagDisplay`'s rendering of two 16-bit
- * numbers, `offset` is a position, `reason` is one of this file's own literals, and `vr` is a
- * literal at each `hits.push` and never the two bytes off the wire. `value` is the bytes, and how
- * many of them was decided by the payload: an element declares its own length, so a
- * `(0010,0010)` claiming the rest of the object put the rest of the object - other elements'
- * values, pixel data, whatever follows - on one stderr line, to say that a name was not on the
- * allow-list.
- *
- * WHERE 194 COMES FROM, AND WHY IT IS AN ENGINEERING BOUND AND NOT THE STANDARD'S. PS3.5 2026c
- * Table 6.2-1's PN row - the one row of that table carrying `64 chars maximum per component group`,
- * `up to 3 groups of components` and `no more than two component group delimiters` - gives
- * 3 x 64 + 2 = 194 for one PN value, and PN is the longest of the three VRs this scanner reads.
- *
- * 🛑 BUT TABLE 6.2-1'S LENGTHS ARE IN CHARACTERS, AND THIS BOUND IS IN `String.length`. The PN
- * row's length cell cross-references `note_6.1-2-1`, which says the lengths of VRs whose Character
- * Repertoire can be extended or replaced are `expressly specified in characters rather than bytes`
- * precisely because the byte mapping depends on the character set. This script has no such unit:
- * the tag route decodes latin1, so it counts BYTES, and the text route counts UTF-16 code units.
- * A single conformant PN of exactly 194 characters under `(0008,0005) ISO_IR 192` is longer than
- * 194 in this script's units and IS cut here; how much longer depends on the characters, so no byte
- * figure is written here and a test pins the arithmetic. So 194 bounds what this script prints and
- * says nothing about what the standard admits. Every cut says how much was withheld.
- *
- * AND THE PRINTED FIELD IS BOUNDED, WHICH IS THE NUMBER THAT MATTERS: `report` writes the excerpt
- * through `JSON.stringify`, whose longest expansion of one unit is a six-character `\uXXXX` escape,
- * so the field is at most `6 x 194 + 2` however many bytes the element declared.
- */
-const MAX_HIT_VALUE_LENGTH = 194;
 
 /**
  * The TEST corpus root, repo-relative. `test`, not `test/fixtures`: see the banner.
@@ -533,7 +499,7 @@ function* base64Runs(text: string): Generator<string> {
  * `RegExp.leftContext`, `RegExp.rightContext`, `RegExp.lastParen` and `RegExp.$1` to `RegExp.$9`
  * are the rest of it. Those are readable properties of a global object. So a gate that hands text
  * to a regex leaves that text readable from anywhere in the process until something else matches,
- * with the matched value (a name, a date) NOT excerpted.
+ * the matched value (a name, a date) included.
  *
  * `DICOM-RESIDUALS` bounded what a hit line prints (`#109`), what a hit holds (`#110`), and then
  * took the scan route's own bytes out of every pattern (`#112`). `#112` left the gate's own
@@ -1134,67 +1100,6 @@ const LONG_FORM_VRS = new Set<string>(["OB", "OW", "OF", "OD", "OL", "SQ", "UT",
 // ---------------------------------------------------------------------------
 
 /**
- * A violating value, bounded AT CONSTRUCTION, with the length it had before it was bounded.
- *
- * 🛑 THE SLOT IS REMOVED, NOT THE PRINTED STRING FILTERED, AND THIS LINEAGE HAS PAID FOR THE
- * DIFFERENCE. Truncating inside `report` would be a bound that holds only from where the printer
- * is CALLED: the hit would still carry the whole payload, and the next thing to read `Hit.value` -
- * a second printer, a summary line, a JSON mode - would start from an unbounded string again.
- * `Hit.value` is this type, this type is not a `string`, and `excerptValue` is the only thing that
- * makes one, so there is no `hits.push` that can put an unbounded value on a hit.
- *
- * 🛑 AND IT IS ON EVERY PUSH SITE, NOT ON THE ONES THAT NEEDED IT. Three of the six can exceed the
- * bound today (the PN and DT tag routes, and the text sweep's PN token); the other three are held
- * under it by their own recognizers - the two text date passes match a fixed-width run, and
- * `checkDate` refuses a `DA` value that is not exactly eight digits. That is an analysis of what
- * each caller happens to pass, which is exactly the kind of bound this lineage has watched
- * relocate to a sibling. The type does not consult it.
- */
-declare const HIT_VALUE: unique symbol;
-interface HitValue {
-  /** At most `MAX_HIT_VALUE_LENGTH` of the value. */
-  readonly text: string;
-  /** What the value's `length` was. Never less than `text.length`. */
-  readonly length: number;
-  /** The brand. It has no runtime existence; `excerptValue` is the only way past it. */
-  readonly [HIT_VALUE]: true;
-}
-
-/**
- * Bound a value for the report.
- *
- * 🛑 THE UNIT IS `String.length` AND IT IS NOT ONE UNIT, WHICH IS WHY IT IS NAMED HERE RATHER THAN
- * IN THE MESSAGE. The tag route hands this a latin1 decode, so its length is BYTES; the text route
- * hands it a UTF-8 decode, so its length is UTF-16 CODE UNITS. Neither is the character count
- * PS3.5 Table 6.2-1 measures in (see `MAX_HIT_VALUE_LENGTH`).
- *
- * The assertion adds the brand and nothing else: the object literal below already IS every
- * readable field of the type, and the property being asserted in is one no caller can write.
- *
- * 🛑 THE COPY IS PART OF THE BOUND, AND WITHOUT IT THE BOUND WAS PRINTED-ONLY. V8 answers
- * `raw.slice(0, n)` and a regexp match alike with a string that POINTS INTO ITS PARENT, so an
- * excerpt cut from an 8 MiB decode kept the whole 8 MiB alive for the run. Measured: retention grew
- * by one whole file per hit-bearing file and did not grow at all once the excerpt owned its bytes.
- * `pnpm measure:phi-scan-retention` re-derives the tables. What this does not bound is the `hits`
- * array itself, which still grows with every hit.
- *
- * 🛑 AND THE ROUND TRIP IS `utf16le` BECAUSE `utf8` IS LOSSY AND WOULD HAVE BEEN A SILENT VALUE
- * CORRUPTION. `Buffer.from(s, "utf8")` turns an unpaired surrogate into U+FFFD, so the excerpt
- * would print a character the file does not contain, which is the same class of wrong answer as
- * printing too much. `utf16le` round-trips every one of the 65,536 code units, paired or not. That
- * no CALLER can hand this an unpaired surrogate today is exactly the reasoning this slot is built
- * to not depend on: it is one recognizer away from being false.
- */
-function excerptValue(raw: string): HitValue {
-  const cut = raw.length > MAX_HIT_VALUE_LENGTH ? raw.slice(0, MAX_HIT_VALUE_LENGTH) : raw;
-  const bounded = {
-    text: Buffer.from(cut, "utf16le").toString("utf16le"),
-    length: raw.length,
-  };
-  return bounded as HitValue;
-}
-
-/**
  * Which recognizer produced a hit. The print budget in `report` is spent PER ENTRY OF THIS TABLE,
  * so this table's size is the only thing that multiplies the per-file line bound.
  *
@@ -1202,9 +1107,8 @@ function excerptValue(raw: string): HitValue {
  * field cheaper and would not have been a bound: `reason` is assembled at the push site, so one
  * future recognizer interpolating a payload-derived token into it gives the payload a vote on how
  * many classes exist, and a per-class budget times an attacker-chosen class count is no budget.
- * The type refuses that instead of an analysis of what today's push sites happen to pass - the same
- * shape `HitValue` is built in, and this lineage's own rule: remove the slot, do not filter the
- * value.
+ * The type refuses that instead of an analysis of what today's push sites happen to pass, which is
+ * this lineage's own rule: remove the slot, do not filter the value.
  *
  * The entries are the recognizers, not the VRs. `tagPn` and `textPn` are one VR and two routes, and
  * separating them is the point: `scanDicom` appends before `scanText` within a file, so with one
@@ -1229,12 +1133,28 @@ const RECOGNIZERS = {
 
 type Recognizer = (typeof RECOGNIZERS)[keyof typeof RECOGNIZERS];
 
+/**
+ * One finding: where it is and which rule fired, and nothing of what was matched.
+ *
+ * THE MATCHED TEXT IS NOT A FIELD, AND THAT IS WHAT KEEPS IT OFF THE REPORT. A hit used to hold
+ * the value and `report` printed it, so the run that caught a real name wrote that name to stderr,
+ * which in CI is the log of a public repository: a report about a leak that quotes the leak is a
+ * second copy of it, in a worse place. Dropping the value in `report` alone would hold only from
+ * where that printer is called, and the next reader of the field (a second printer, a summary
+ * line, a JSON mode) would print it again. With no slot there is nothing on a hit for any printer
+ * to write. `path`, `tag`, `vr` and `offset` say where, `reason` says which rule, and the value is
+ * read in the file those name.
+ *
+ * Every field is structural or comes from a closed set: `path` is the path the enumeration chose,
+ * `tag` is `tagDisplay`'s rendering of two 16-bit numbers or the literal `(text)`, `vr` is a
+ * literal at each `hits.push` and never the two bytes off the wire, `offset` is a position, and
+ * `reason` is this file's own text with the cutoff year the clock gives.
+ */
 interface Hit {
   path: string;
   tag: string; // formatted "(gggg,eeee)"
   vr: string;
   offset: number;
-  value: HitValue;
   reason: string;
   /** Which recognizer found it. Budgeted on in `report`; never printed. */
   recognizer: Recognizer;
@@ -1259,8 +1179,8 @@ interface Hit {
  * 🩺 "NO OFFSET" IS NOT ON THAT LIST AND MUST NOT BE PUT BACK ON IT. No offset is PRINTED, but for
  * a file holding one object `bytes` is `objectLength - haltOffset`, and the object's length is the
  * file's own committed size, so the halt offset is recoverable. That is the same locus a hit line
- * already prints outright, beside a value; the honest statement is that the counts are structural
- * positions and not content, not that a position is absent.
+ * already prints outright; the honest statement is that the counts are structural positions and
+ * not content, not that a position is absent.
  *
  * 🛑 AND IT IS BOUNDED IN MEMORY, WHICH `hits` IS NOT. One entry per file, each holding two
  * numbers and a Set that cannot exceed the six literals in `HALT_REASONS`, so an attacker-chosen
@@ -2565,7 +2485,6 @@ function inspectElement(
         tag: tagDisplay(key),
         vr: "PN",
         offset: valueOffset,
-        value: excerptValue(value),
         reason: "PN not in allow-list",
         recognizer: RECOGNIZERS.tagPn,
       });
@@ -2578,7 +2497,6 @@ function inspectElement(
         tag: tagDisplay(key),
         vr: "DA",
         offset: valueOffset,
-        value: excerptValue(value),
         reason: violation,
         recognizer: RECOGNIZERS.tagDate,
       });
@@ -2593,7 +2511,6 @@ function inspectElement(
         tag: tagDisplay(key),
         vr: "DT",
         offset: valueOffset,
-        value: excerptValue(value),
         reason: violation,
         recognizer: RECOGNIZERS.tagDate,
       });
@@ -2748,7 +2665,6 @@ function scanText(
         tag: "(text)",
         vr: "DA",
         offset: index,
-        value: excerptValue(full),
         reason: `text date within last 120 years (>= ${String(CUTOFF_YEAR)})`,
         recognizer: RECOGNIZERS.textDate,
       });
@@ -2769,7 +2685,6 @@ function scanText(
         tag: "(text)",
         vr: "DA",
         offset: index,
-        value: excerptValue(full),
         reason: `text date within last 120 years (>= ${String(CUTOFF_YEAR)})`,
         recognizer: RECOGNIZERS.textDate,
       });
@@ -2785,7 +2700,6 @@ function scanText(
         tag: "(text)",
         vr: "PN",
         offset: start,
-        value: excerptValue(value),
         reason: "text PN not in allow-list",
         recognizer: RECOGNIZERS.textPn,
       });
@@ -2898,7 +2812,7 @@ function scanEmbeddedObjects(
  * way cost.)
  *
  * The cost is stated rather than left to be discovered, and it was taken deliberately. A DICOM object
- * can now report the same value twice, once under its tag and once as `(text)`; two lines naming one
+ * can now report the same value twice, once under its tag and once as `(text)`; two lines for one
  * value is not a defect in a gate whose output a human reads before committing, and a missing line is.
  *
  * 🛑 THE REAL PRICE IS FALSE POSITIVES OVER BINARY VALUES, AND NO SENTENCE HERE SAYS WHICH RECOGNIZER
@@ -3033,9 +2947,9 @@ function reportUnread(unread: UnreadByPath): void {
 }
 
 /**
- * Print the hits, at most `maxHitLines` of them per recognizer per file, each with an excerpt of
- * its value rather than the value - bounded where the hit is made, not here. See
- * `MAX_HIT_VALUE_LENGTH`.
+ * Print the hits, at most `maxHitLines` of them per recognizer per file. A hit line names the
+ * place (tag, VR, offset), under its file's `HIT:` header, and the rule that fired. It never
+ * carries the matched text, which a hit does not hold (see `Hit`).
  *
  * The properties that make the cap safe are stated at `DEFAULT_HIT_LINES_PER_RECOGNIZER` and
  * enforced here: the exit code and the totals are computed off `hits`, not off what was printed;
@@ -3095,14 +3009,9 @@ function report(hits: Hit[], maxHitLines: number, partialFiles: number): void {
         spent.set(h.recognizer, used + 1);
       }
       shown += 1;
-      // The value arrives bounded (`HitValue`), so this is a format and not a filter. The
-      // withheld amount is printed OUTSIDE the quotes: inside them it would read as content, and
-      // it carries NO UNIT, because the two routes measure in two different ones (`excerptValue`).
-      const withheld = h.value.length - h.value.text.length;
-      const cut = withheld > 0 ? ` [+${String(withheld)} not printed]` : "";
-      process.stderr.write(
-        `  tag=${h.tag} vr=${h.vr} offset=${String(h.offset)} value=${JSON.stringify(h.value.text)}${cut} (${h.reason})\n`,
-      );
+      // The place and the rule, and that is the whole line. There is no value to format: a hit
+      // does not hold one (see `Hit`).
+      process.stderr.write(`  tag=${h.tag} vr=${h.vr} offset=${String(h.offset)} (${h.reason})\n`);
     }
     const rest = group.length - shown;
     if (rest > 0) {

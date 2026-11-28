@@ -67,11 +67,21 @@ const pn = (): RegExp => /\b[A-Z][A-Za-z\-']+\^[A-Z][A-Za-z\-']+\b/g;
 /** `raw.replace(/[\0\s]+$/, "")`, the trim the tag route used to run. */
 const trimPad = (raw: string): string => raw.replace(/[\0\s]+$/, "");
 
+/** What one of the patterns matched: its VR, where the match starts, and the text of it. */
 interface Expected {
   vr: string;
   offset: number;
   value: string;
 }
+
+/** What one hit line names: the VR and where the match starts. A hit never carries the text. */
+interface Reported {
+  vr: string;
+  offset: number;
+}
+
+/** Where an expected match is reported. */
+const place = ({ vr, offset }: Expected): Reported => ({ vr, offset });
 
 const roots: string[] = [];
 afterAll(() => {
@@ -139,16 +149,21 @@ function oracle(content: string): Expected[] {
   return out;
 }
 
-/** A throwaway repository holding one text fixture, scanned with every hit line printed. */
-function scanText(content: string): Expected[] {
+/**
+ * A throwaway repository holding one text fixture, scanned with every hit line printed.
+ *
+ * `excused` is added to this repository's allow-list, one exact entry per line.
+ */
+function scanText(content: string, excused: readonly string[] = []): Reported[] {
   const root = mkdtempSync(join(tmpdir(), "dicom-phi-matchers-"));
   roots.push(root);
   mkdirSync(join(root, "scripts"));
   mkdirSync(join(root, "test", "fixtures"), { recursive: true });
   mkdirSync(join(root, "docs-content"));
-  copyFileSync(
-    join(REPO_ROOT, "scripts", "phi-allow-list.txt"),
+  writeFileSync(
     join(root, "scripts", "phi-allow-list.txt"),
+    excused.length === 0 ? ALLOW_LIST : `${ALLOW_LIST}\n${excused.join("\n")}\n`,
+    "utf8",
   );
   writeFileSync(join(root, "README.md"), "# throwaway\n");
   writeFileSync(join(root, "docs-content", "intro.md"), "# throwaway doc\n");
@@ -158,20 +173,48 @@ function scanText(content: string): Expected[] {
   return parseHits(r.stderr, "(text)");
 }
 
-function parseHits(stderr: string, tag: string): Expected[] {
-  const out: Expected[] = [];
+function parseHits(stderr: string, tag: string): Reported[] {
+  const out: Reported[] = [];
   for (const line of stderr.split("\n")) {
     if (!line.startsWith("  tag=")) continue;
-    const m = /^ {2}tag=(\S+) vr=(\S+) offset=(\d+) value=("(?:[^"\\]|\\.)*")/.exec(line);
+    const m = /^ {2}tag=(\S+) vr=(\S+) offset=(\d+) \(/.exec(line);
     if (m === null) throw new Error(`unparseable hit line: ${line}`);
     if (m[1] !== tag) continue;
-    out.push({
-      vr: m[2] as string,
-      offset: Number(m[3]),
-      value: JSON.parse(m[4] as string) as string,
-    });
+    out.push({ vr: m[2] as string, offset: Number(m[3]) });
   }
   return out;
+}
+
+/**
+ * Require every PN match to END where the pattern's does.
+ *
+ * A hit line names where a match starts and never its text, so where the match ends is not on the
+ * report. It is still observable, because the scanner looks the whole matched text up in the
+ * allow-list, and an exact entry excuses that text and no other. So the texts the pattern matched
+ * are listed as exact entries, and the scan must then report every match but the ones listed.
+ *
+ * Two texts that start at one offset are prefixes of one another, so a list holding a text beside
+ * a proper prefix of it could excuse a match that stopped early or ran on. The texts are therefore
+ * listed in rounds, and no round holds a text beside a proper prefix of it: a match a round
+ * excuses can only have matched the listed text exactly.
+ */
+function expectSameExtents(content: string, expected: readonly Expected[]): void {
+  const texts = [...new Set(expected.filter((e) => e.vr === "PN").map((e) => e.value))];
+  // A text's round is how many of the other texts are proper prefixes of it. A proper prefix of a
+  // text has fewer of them than the text does, so the two never share a round.
+  const rounds = new Map<number, string[]>();
+  for (const text of texts) {
+    const depth = texts.filter((other) => other !== text && text.startsWith(other)).length;
+    rounds.set(depth, [...(rounds.get(depth) ?? []), text]);
+  }
+  // Non-vacuity: with no PN text there is no extent to pin, and the loop would pass over nothing.
+  expect(rounds.size).toBeGreaterThan(0);
+  for (const round of rounds.values()) {
+    const listed = new Set(round);
+    expect(scanText(content, round)).toEqual(
+      expected.filter((e) => !(e.vr === "PN" && listed.has(e.value))).map(place),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -220,7 +263,8 @@ describe("phi-scan text recognizers match what the patterns they replaced matche
     const expected = oracle(content);
     // Non-vacuity: a corpus the patterns find nothing in would pass this against any scanner.
     expect(expected.length).toBeGreaterThan(10);
-    expect(scanText(content)).toEqual(expected);
+    expect(scanText(content)).toEqual(expected.map(place));
+    expectSameExtents(content, expected);
   });
 
   it("does not match a name whose second component would be left empty", () => {
@@ -280,7 +324,8 @@ describe("phi-scan text recognizers match what the patterns they replaced matche
     const expected = oracle(content);
     // A fuzz that produced nothing to compare would pass against any scanner at all.
     expect(expected.length).toBeGreaterThan(200);
-    expect(scanText(content)).toEqual(expected);
+    expect(scanText(content)).toEqual(expected.map(place));
+    expectSameExtents(content, expected);
   });
 });
 
@@ -327,28 +372,47 @@ describe("phi-scan trims a value's trailing pad the way the pattern did", () => 
     preamble.write("DICM", 128, "latin1");
     const object = Buffer.concat([preamble, groupLen, tsEl, ...elements]);
 
-    const root = mkdtempSync(join(tmpdir(), "dicom-phi-matchers-pad-"));
-    roots.push(root);
-    mkdirSync(join(root, "scripts"));
-    mkdirSync(join(root, "test", "fixtures"), { recursive: true });
-    mkdirSync(join(root, "docs-content"));
-    copyFileSync(
-      join(REPO_ROOT, "scripts", "phi-allow-list.txt"),
-      join(root, "scripts", "phi-allow-list.txt"),
-    );
-    writeFileSync(join(root, "README.md"), "# throwaway\n");
-    writeFileSync(join(root, "docs-content", "intro.md"), "# throwaway doc\n");
-    const target = join(root, "test", "fixtures", "pads.dcm");
-    writeFileSync(target, object);
-    const r = runRepoScript("phi-scan.ts", ["--max-hit-lines", "0", target], { cwd: root });
+    // Where each element's value starts, which is the offset its hit line names.
+    const first = preamble.length + groupLen.length + tsEl.length;
+    const offsetOf = (byte: number): number => first + byte * (8 + name.length + 1) + 8;
 
-    const printed = parseHits(r.stderr, "(0010,0010)").map((h) => h.value);
-    // A value that trims to nothing is skipped by the scanner (`value.length === 0`), so the
-    // comparison is against the non-empty ones. Both lists are built the same way.
-    expect(printed).toEqual(expected.filter((v) => v.length > 0));
+    /** Scan the object with `excused` added to the allow-list: the offsets still reported. */
+    const reported = (excused: readonly string[]): number[] => {
+      const root = mkdtempSync(join(tmpdir(), "dicom-phi-matchers-pad-"));
+      roots.push(root);
+      mkdirSync(join(root, "scripts"));
+      mkdirSync(join(root, "test", "fixtures"), { recursive: true });
+      mkdirSync(join(root, "docs-content"));
+      writeFileSync(
+        join(root, "scripts", "phi-allow-list.txt"),
+        excused.length === 0 ? ALLOW_LIST : `${ALLOW_LIST}\n${excused.join("\n")}\n`,
+        "utf8",
+      );
+      writeFileSync(join(root, "README.md"), "# throwaway\n");
+      writeFileSync(join(root, "docs-content", "intro.md"), "# throwaway doc\n");
+      const target = join(root, "test", "fixtures", "pads.dcm");
+      writeFileSync(target, object);
+      const r = runRepoScript("phi-scan.ts", ["--max-hit-lines", "0", target], { cwd: root });
+      return parseHits(r.stderr, "(0010,0010)").map((h) => h.offset);
+    };
+
+    // A hit line names where an element's value starts and never what the trim left of it, so
+    // that is read off the allow-list: an exact entry excuses an element only when its trimmed
+    // value IS that entry. Each value is the name and one byte, so the trim took the byte off or
+    // kept it.
+    const bytes = Array.from({ length: 256 }, (_, byte) => byte);
+    const trimmed = bytes.filter((byte) => expected[byte] === name);
+    const kept = bytes.filter((byte) => expected[byte] !== name);
+    // With nothing listed every element is reported: none trims to nothing, which the scanner
+    // would skip, and none is excused.
+    expect(reported([])).toEqual(bytes.map(offsetOf));
+    // With the bare name listed, what is still reported is every element whose byte was kept.
+    expect(reported([name])).toEqual(kept.map(offsetOf));
+    // With every kept value listed, it is every element whose byte was taken off.
+    expect(reported(kept.map((byte) => expected[byte] as string))).toEqual(trimmed.map(offsetOf));
     // Non-vacuity in both directions: some bytes are trimmed and most are not.
-    expect(expected.filter((v) => v === name).length).toBeGreaterThan(5);
-    expect(expected.filter((v) => v !== name).length).toBeGreaterThan(200);
+    expect(trimmed.length).toBeGreaterThan(5);
+    expect(kept.length).toBeGreaterThan(200);
   });
 });
 
@@ -1293,12 +1357,13 @@ describe("phi-scan splits its allow-list into lines the way the pattern did", ()
     const target = join(root, "test", "fixtures", "corpus.txt");
     writeFileSync(target, corpus, "utf8");
     const r = runRepoScript("phi-scan.ts", ["--max-hit-lines", "0", target], { cwd: root });
-    const reported = new Set(parseHits(r.stderr, "(text)").map((h) => h.value));
+    // A hit names where it is and never the name. Each name stands at one offset of the corpus.
+    const reported = new Set(parseHits(r.stderr, "(text)").map((h) => h.offset));
 
     // The oracle: a name is excused exactly when it is one of the pattern's lines.
     const excused = new Set(expected);
     for (const name of names) {
-      expect(reported.has(name), `${name} reported?`).toBe(!excused.has(name));
+      expect(reported.has(corpus.indexOf(name)), `${name} reported?`).toBe(!excused.has(name));
     }
     // Non-vacuity in both directions, so neither "everything excused" nor "nothing excused" passes.
     expect(reported.size).toBeGreaterThan(0);
