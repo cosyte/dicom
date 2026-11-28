@@ -34,7 +34,7 @@ import type { Tag } from "../../src/dictionary/types.js";
 import { makeEmitter } from "../../src/parser/emit.js";
 import { OFFSET_FRAMES } from "../../src/parser/errors.js";
 import type { ParseContext } from "../../src/parser/types.js";
-import { buildDicom } from "../helpers/build-dicom.js";
+import { buildDicom } from "../_helpers/build-dicom.js";
 
 // ---------------------------------------------------------------------------
 // Test-only structural accessor for parsed Dataset._elements (mirrors the

@@ -23,10 +23,10 @@ import {
   buildDicom,
   type BuildDicomElement,
   type BuildDicomSqElement,
-} from "../helpers/build-dicom.js";
-import { buildDicomdir, twoPatientRecords, type OffsetSpec } from "../helpers/build-dicomdir.js";
+} from "../_helpers/build-dicom.js";
+import { buildDicomdir, twoPatientRecords, type OffsetSpec } from "../_helpers/build-dicomdir.js";
 import { readHeaderFrom } from "../../src/parser/read-header.js";
-import { checkPropertyAtDepth } from "../helpers/property.js";
+import { checkPropertyAtDepth } from "../_helpers/property.js";
 
 const IMPLICIT_LE = "1.2.840.10008.1.2";
 const EXPLICIT_LE = "1.2.840.10008.1.2.1";

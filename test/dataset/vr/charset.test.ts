@@ -10,7 +10,7 @@ import {
   resolveDecoderLabel,
 } from "../../../src/dataset/vr/charset.js";
 import { WITHHELD } from "../../../src/parser/tokens.js";
-import { checkPropertyAtDepth } from "../../helpers/property.js";
+import { checkPropertyAtDepth } from "../../_helpers/property.js";
 
 describe("parseSpecificCharacterSet (0008,0005)", () => {
   it("splits a multi-valued CS on backslash and trims pad", () => {

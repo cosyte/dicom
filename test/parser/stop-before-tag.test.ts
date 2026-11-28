@@ -23,7 +23,7 @@ import {
   buildDicom,
   type BuildDicomElement,
   type BuildDicomSqElement,
-} from "../helpers/build-dicom.js";
+} from "../_helpers/build-dicom.js";
 import {
   buildDicomdir,
   twoPatientRecords,
@@ -31,7 +31,7 @@ import {
   TS_EXPLICIT_BE,
   TS_EXPLICIT_LE,
   TS_IMPLICIT_LE,
-} from "../helpers/build-dicomdir.js";
+} from "../_helpers/build-dicomdir.js";
 
 const IMPLICIT_LE = "1.2.840.10008.1.2";
 const EXPLICIT_LE = "1.2.840.10008.1.2.1";

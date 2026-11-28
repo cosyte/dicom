@@ -18,7 +18,7 @@
  *   - hasPositional → `w.position.byteOffset` is a finite number
  *
  * Depth and seed come from `COSYTE_PROPERTY_RUNS` and `COSYTE_PROPERTY_SEED`
- * (`test/helpers/property.ts`): 100 cases on a pull request, 10,000 nightly,
+ * (`test/_helpers/property.ts`): 100 cases on a pull request, 10,000 nightly,
  * each property's seed printed before it runs.
  *
  * @module
@@ -36,7 +36,7 @@ import {
   type Dataset,
 } from "../../src/index.js";
 
-import { propertyRun } from "../helpers/property.js";
+import { propertyRun } from "../_helpers/property.js";
 
 import { arbitraryBytes, recoverableInput, truncatedValidFile } from "./_arbitraries.js";
 

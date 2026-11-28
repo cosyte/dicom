@@ -30,7 +30,7 @@
  * each other.
  *
  * That is not a small gap, because this package has no committed `.dcm` files at all: every
- * fixture it owns is BUILT IN A `.ts` SOURCE FILE by `test/helpers/build-dicom.ts`, so the
+ * fixture it owns is BUILT IN A `.ts` SOURCE FILE by `test/_helpers/build-dicom.ts`, so the
  * whole committed fixture corpus lived in the 81 tracked files under `test/` that the walk
  * root excluded. Pointing this scanner at that root finds 81 PN/date hits across 20 files,
  * none of which any run of this gate had ever looked at. (Naming all 82 tracked files under
@@ -1454,7 +1454,7 @@ const HTML_BLOCK_LITERAL_TAGS: ReadonlySet<string> = new Set([
  * Start condition 6's tag names, verbatim from CommonMark 0.31.2 section 4.6.
  *
  * 🛑 MEMBERSHIP IN A CLOSED TABLE, WHICH IS THE ONLY SHAPE THIS REPOSITORY TRUSTS FOR A NAME, and
- * NO COUNT OF IT IS WRITTEN ANYWHERE. `test/helpers/commonmark-spec.ts` reads the list out of the
+ * NO COUNT OF IT IS WRITTEN ANYWHERE. `test/_helpers/commonmark-spec.ts` reads the list out of the
  * pinned document and `test/scripts/phi-scan-matchers.test.ts` drives one `--allow-fixture` run per
  * name through the membership oracle, so the table is checked against the spec rather than against
  * whoever typed it. The controls for the other direction are `<divx` and `<paramx`, each a listed

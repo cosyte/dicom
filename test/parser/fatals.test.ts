@@ -48,7 +48,7 @@ import {
   controlWithNoParameterList,
   controlWithRest,
   declaredParameters,
-} from "../helpers/declared-parameters.js";
+} from "../_helpers/declared-parameters.js";
 
 /** A root {@link ParseFrame} over `size` zero bytes, for the direct factory rows. */
 function rootFrame(size: number): ParseFrame {

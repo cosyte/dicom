@@ -184,7 +184,7 @@ import { Buffer } from "node:buffer";
 import { readFileSync, writeFileSync } from "node:fs";
 
 import { deidentify, parseDicom, profiles, serializeDicom } from "../src/index.js";
-import { buildDicom } from "../test/helpers/build-dicom.js";
+import { buildDicom } from "../test/_helpers/build-dicom.js";
 
 const IMPLICIT_LE = "1.2.840.10008.1.2";
 const EXPLICIT_LE = "1.2.840.10008.1.2.1";

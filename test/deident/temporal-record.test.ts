@@ -67,7 +67,7 @@ import type { Dataset } from "../../src/dataset/dataset.js";
 import { DEIDENTIFY_OPTIONS, type DeidentifyOption } from "../../src/deident/types.js";
 import type { Tag, VR } from "../../src/dictionary/types.js";
 import { COSYTE_IMPLEMENTATION_CLASS_UID } from "../../src/serialize/file-meta.js";
-import { buildDicom, type BuildDicomOptions } from "../helpers/build-dicom.js";
+import { buildDicom, type BuildDicomOptions } from "../_helpers/build-dicom.js";
 
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
 /** Media Storage Directory Storage - the one SOP Class the group-0004 carve-out is keyed to. */

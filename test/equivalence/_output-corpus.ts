@@ -34,7 +34,7 @@ import {
   buildDicom,
   type BuildDicomElement,
   type BuildDicomSqElement,
-} from "../helpers/build-dicom.js";
+} from "../_helpers/build-dicom.js";
 import { applyMutations, type Mutation } from "../property/_mutate.js";
 import { DICOM_TOKENS, SEED_CORPUS } from "../property/_seed-corpus.js";
 

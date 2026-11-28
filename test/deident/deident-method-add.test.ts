@@ -52,7 +52,7 @@ import {
   deidentMethodNotAdded,
   deidentMethodPriorRetained,
 } from "../../src/parser/warnings.js";
-import { buildDicom } from "../helpers/build-dicom.js";
+import { buildDicom } from "../_helpers/build-dicom.js";
 
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
 const PATIENT_NAME = "00100010" as Tag;

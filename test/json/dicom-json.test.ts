@@ -33,7 +33,7 @@ import {
   buildDicom,
   type BuildDicomElement,
   type BuildDicomSqElement,
-} from "../helpers/build-dicom.js";
+} from "../_helpers/build-dicom.js";
 import { SEED_CORPUS } from "../property/_seed-corpus.js";
 
 const TS_IMPLICIT_LE = "1.2.840.10008.1.2";

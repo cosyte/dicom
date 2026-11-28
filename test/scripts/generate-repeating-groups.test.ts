@@ -37,7 +37,7 @@
  * `part05-2004` is opened by nothing else in this repository except the generator
  * this suite invokes, so no live reader was ever exposed to it. That is the
  * race between test files;
- * `test/helpers/generator-sandbox.ts` carries the measurement and the reason the
+ * `test/_helpers/generator-sandbox.ts` carries the measurement and the reason the
  * remedy is relocation rather than a softer pin on either side. Do not reach back
  * into `REPO_ROOT` for anything this suite writes.
  *
@@ -64,8 +64,8 @@ import { deflateSync, inflateSync } from "node:zlib";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { createGeneratorSandbox, REPO_ROOT, type Sandbox } from "../helpers/generator-sandbox.js";
-import { runRepoScript, type ScriptResult } from "../helpers/run-script.js";
+import { createGeneratorSandbox, REPO_ROOT, type Sandbox } from "../_helpers/generator-sandbox.js";
+import { runRepoScript, type ScriptResult } from "../_helpers/run-script.js";
 
 /** The committed artifact, in the real tree. READ ONLY: this is the regen gate's answer. */
 const COMMITTED_ARTIFACT = join(REPO_ROOT, "src", "dictionary", "generated", "repeating-groups.ts");
@@ -87,7 +87,7 @@ let PART05_2004_SHA_FILE: string;
  * and was never re-measured against the global it claimed not to fit. */
 const GENERATOR_TIMEOUT_MS = 120_000;
 
-/** Runner choice and its cost: `test/helpers/run-script.ts`. */
+/** Runner choice and its cost: `test/_helpers/run-script.ts`. */
 function runGenerator(): ScriptResult {
   return runRepoScript("generate-repeating-groups.ts", [], { root: sandbox.root });
 }

@@ -17,7 +17,7 @@
  * pads that to 65,536 bytes, one past the field. The File Meta group is Explicit VR Little Endian
  * under every Transfer Syntax, so the Implicit body does not help it.
  *
- * Every object here is synthetic: built by `test/helpers/build-dicom.ts` from spaces and a fixed
+ * Every object here is synthetic: built by `test/_helpers/build-dicom.ts` from spaces and a fixed
  * marker string, with no name, date or identifier in it.
  *
  * @module
@@ -38,7 +38,7 @@ import {
   serializeDicom,
 } from "../../src/index.js";
 import { Element } from "../../src/dataset/element.js";
-import { buildDicom } from "../helpers/build-dicom.js";
+import { buildDicom } from "../_helpers/build-dicom.js";
 
 const TS_IMPLICIT_LE = "1.2.840.10008.1.2";
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";

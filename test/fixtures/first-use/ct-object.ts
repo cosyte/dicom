@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 
-import { buildDicom, type BuildDicomElement } from "../../helpers/build-dicom.js";
+import { buildDicom, type BuildDicomElement } from "../../_helpers/build-dicom.js";
 
 /**
  * The synthetic CT object the two first-use examples read, built the way every fixture in this

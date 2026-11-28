@@ -4,7 +4,7 @@
  * and never fetched, `deidentify` refuses the object, and the Deflate pair keeps every inflate
  * fatal and the decompression cap.
  *
- * The UID set is read out of the vendored PS3.5 by `test/helpers/ps35-section-a4.ts`, never typed
+ * The UID set is read out of the vendored PS3.5 by `test/_helpers/ps35-section-a4.ts`, never typed
  * here. The oracle for the metadata is the Explicit-LE twin: the byte-identical Data Set under
  * `1.2.840.10008.1.2.1`, which the parser read before any JPIP syntax was supported. Every fixture
  * is synthetic (`test/fixtures/encapsulated/objects.ts`).
@@ -51,7 +51,7 @@ import {
   providerUrl,
   urValueField,
 } from "../fixtures/encapsulated/objects.js";
-import { JPIP_SET } from "../helpers/ps35-section-a4.js";
+import { JPIP_SET } from "../_helpers/ps35-section-a4.js";
 
 /** Section A.6 and section A.11: the Data Set is Explicit VR LE. */
 const EXPLICIT_PAIR: readonly string[] = ["1.2.840.10008.1.2.4.94", "1.2.840.10008.1.2.4.204"];

@@ -30,7 +30,7 @@ import type { Tag, VR } from "../../src/dictionary/types.js";
 import { parseDicom } from "../../src/parser/index.js";
 import { WARNING_CODES } from "../../src/parser/warnings.js";
 import { serializeDicom } from "../../src/serialize/serialize.js";
-import { buildDicom } from "../helpers/build-dicom.js";
+import { buildDicom } from "../_helpers/build-dicom.js";
 
 const TS_IMPLICIT_LE = "1.2.840.10008.1.2";
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";

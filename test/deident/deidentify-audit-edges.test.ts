@@ -20,7 +20,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Tag, VR } from "../../src/dictionary/types.js";
 import { Dataset, Element, Item, deidentify, parseDicom, serializeDicom } from "../../src/index.js";
-import { buildDicom } from "../helpers/build-dicom.js";
+import { buildDicom } from "../_helpers/build-dicom.js";
 
 const EXPLICIT_LE = "1.2.840.10008.1.2.1";
 

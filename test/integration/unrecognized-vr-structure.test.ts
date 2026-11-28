@@ -76,7 +76,7 @@ import { deidentify } from "../../src/deident/deidentify.js";
 import { DicomParseError } from "../../src/parser/errors.js";
 import { parseDicom } from "../../src/parser/index.js";
 import { serializeDicom } from "../../src/serialize/serialize.js";
-import { buildDicom } from "../helpers/build-dicom.js";
+import { buildDicom } from "../_helpers/build-dicom.js";
 
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";
 const TS_EXPLICIT_BE = "1.2.840.10008.1.2.2";
@@ -133,7 +133,7 @@ interface Carrier {
 }
 
 /**
- * The carrier element's on-wire bytes, hand-assembled: `test/helpers/build-dicom.ts`
+ * The carrier element's on-wire bytes, hand-assembled: `test/_helpers/build-dicom.ts`
  * types its `vr` as the closed `VR` union and applies its own copy of the
  * long-form set, so it can express neither an unrecognized VR nor a deliberate
  * disagreement between the VR and the header shape. Both are the subject here.

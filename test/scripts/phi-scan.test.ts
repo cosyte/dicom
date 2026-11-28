@@ -34,7 +34,7 @@ import {
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { UNDER_DENO, runRepoScript } from "../helpers/run-script.js";
+import { UNDER_DENO, runRepoScript } from "../_helpers/run-script.js";
 import {
   VIOLATOR_PN,
   CARET_PN,
@@ -46,7 +46,7 @@ import {
   OVERRIDE_LOG_DATE,
   ALLOWED_DA,
   TARGET_NAME,
-} from "../helpers/phi-scan-violators.js";
+} from "../_helpers/phi-scan-violators.js";
 
 /**
  * This repository's root, from **this file's own location** rather than from
@@ -60,7 +60,7 @@ import {
  * and the next `git add -A` sweeps them up. Measured: a run whose cwd was an
  * enclosing checkout left them at `<parent>/test/fixtures/phi-scan/`.
  *
- * `test/helpers/run-script.ts` already derives its root this way and defaults the
+ * `test/_helpers/run-script.ts` already derives its root this way and defaults the
  * child's `cwd` to it, so the scanner subprocess was always rooted correctly;
  * this line is what made the two disagree.
  */
@@ -1468,7 +1468,7 @@ describe("phi-scan: a preamble-less object ON DISK reaches the DICOM route", () 
 //
 // 🛑 AND THE SHAPE IS NAMED, NEVER SPELLED. A draft of this paragraph wrote the
 // two-component token out and `pnpm phi-scan` reported it against this very file,
-// which is the gate working: `test/` is its walk root. `test/helpers/
+// which is the gate working: `test/` is its walk root. `test/_helpers/
 // phi-scan-violators.ts` exists so this suite carries no literal THE SCANNER MUST
 // REJECT - allow-listed ones like `ANON^PATIENT` are here in plain sight, and the
 // distinction is the whole point of that helper's header.
@@ -2213,7 +2213,7 @@ describe("phi-scan: the walk is reconciled against git ls-files", () => {
  * A PN-shaped token the text sweep matches, distinct per index.
  *
  * Assembled from parts, never written as a literal, for the reason
- * `test/helpers/phi-scan-violators.ts` gives at length: every tracked file under
+ * `test/_helpers/phi-scan-violators.ts` gives at length: every tracked file under
  * `test/` is in this scanner's own corpus, so a caret-joined person-name token in
  * this source would red the gate on the suite that proves the gate works. The PN
  * recognizer admits letters only, so the index is spelled in letters.
@@ -3337,7 +3337,7 @@ function retainedPeak(files: number, withHit: boolean): RetainRun {
 }
 
 // Skipped under Deno: the observer is preloaded with Node's `--require` and `--expose-gc`, which a
-// Deno child does not take. See `UNDER_DENO` in `test/helpers/run-script.ts`.
+// Deno child does not take. See `UNDER_DENO` in `test/_helpers/run-script.ts`.
 describe.skipIf(UNDER_DENO)(
   "phi-scan: a hit does NOT retain the payload of the file it was found in",
   () => {
