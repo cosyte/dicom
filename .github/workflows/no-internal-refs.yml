@@ -69,7 +69,7 @@ jobs:
     # reference every other caller in this directory names. That release is immutable,
     # so GitHub refuses to move or delete its tag, and the name keeps the release note
     # findable from here.
-    uses: cosyte/.github/.github/workflows/gate-no-internal-refs-install.yml@c0db8d8e5927269820de4401b3b5ad6141854b76 # workflows-2026-11-08-c0db8d8e5927
+    uses: cosyte/.github/.github/workflows/gate-no-internal-refs-install.yml@ee3e8abed80294c3bb6bfcb4a6e54330be2df8b1 # workflows-2026-11-28-ee3e8abed802
     # No more than the scan needs. A called workflow's GITHUB_TOKEN can only be
     # downgraded by its caller, and this gate reads the tree and nothing else.
     permissions:

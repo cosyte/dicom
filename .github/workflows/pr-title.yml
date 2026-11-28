@@ -17,4 +17,4 @@ jobs:
   pr-title:
     permissions:
       contents: read
-    uses: cosyte/.github/.github/workflows/pr-title.yml@c0db8d8e5927269820de4401b3b5ad6141854b76 # workflows-2026-11-08-c0db8d8e5927
+    uses: cosyte/.github/.github/workflows/pr-title.yml@ee3e8abed80294c3bb6bfcb4a6e54330be2df8b1 # workflows-2026-11-28-ee3e8abed802

@@ -26,8 +26,8 @@ permissions:
 
 jobs:
   nightly:
-    # The release of commit 398cd4ded647, the same reference as ci.yml (see the note there).
-    uses: cosyte/.github/.github/workflows/nightly-properties.yml@398cd4ded647dddd9f2e220ceb042840f59e1426 # the release of 398cd4ded647
+    # The same reference as ci.yml (see the note there).
+    uses: cosyte/.github/.github/workflows/nightly-properties.yml@ee3e8abed80294c3bb6bfcb4a6e54330be2df8b1 # workflows-2026-11-28-ee3e8abed802
     with:
       # The property suites without the fuzz targets: nothing else reads the depth, so the rest of
       # the suite would add time and no cases.
