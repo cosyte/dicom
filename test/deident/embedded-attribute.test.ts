@@ -26,7 +26,7 @@ import { describe, expect, it } from "vitest";
 
 import { deidentify } from "../../src/deident/deidentify.js";
 import { findEmbeddedAttributes } from "../../src/deident/embedded.js";
-import type { Tag, VR } from "../../src/dictionary/types.js";
+import { type Tag, type VR } from "../../src/dictionary/types.js";
 import { parseDicom } from "../../src/parser/index.js";
 import { WARNING_CODES } from "../../src/parser/warnings.js";
 import { serializeDicom } from "../../src/serialize/serialize.js";

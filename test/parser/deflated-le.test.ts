@@ -23,16 +23,15 @@ import { deflateRawSync } from "node:zlib";
 import { describe, expect, it, vi } from "vitest";
 
 import { buildDicom } from "../_helpers/build-dicom.js";
-import type { Dataset } from "../../src/dataset/dataset.js";
-import type { Element } from "../../src/dataset/element.js";
-import type { Tag } from "../../src/dictionary/types.js";
+import { type Dataset } from "../../src/dataset/dataset.js";
+import { type Element } from "../../src/dataset/element.js";
+import { type Tag } from "../../src/dictionary/types.js";
 import { parseDeflatedLEWithCap } from "../../src/parser/deflated-le.js";
 import { DicomParseError, FATAL_CODES, OFFSET_FRAMES } from "../../src/parser/errors.js";
 import { makeEmitter } from "../../src/parser/emit.js";
 import { parseDicom } from "../../src/parser/index.js";
-import type { ParseContext } from "../../src/parser/types.js";
-import type { DicomParseWarning } from "../../src/parser/warnings.js";
-import { WARNING_CODES } from "../../src/parser/warnings.js";
+import { type ParseContext } from "../../src/parser/types.js";
+import { WARNING_CODES, type DicomParseWarning } from "../../src/parser/warnings.js";
 
 interface DatasetWithElements {
   readonly _elements: ReadonlyMap<Tag, Element>;

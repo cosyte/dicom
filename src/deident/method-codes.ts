@@ -23,7 +23,7 @@
  * @module
  */
 
-import type { DeidentifyOption } from "./types.js";
+import { type DeidentifyOption } from "./types.js";
 
 /**
  * One row of PS3.16 CID 7050 "De-identification Method": the three Basic Coded

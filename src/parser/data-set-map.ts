@@ -21,9 +21,13 @@
  * @module
  */
 
-import type { CompactTable, ParsedDataSet, SetWriter } from "../dataset/compact.js";
-import type { VR } from "../dictionary/types.js";
-import { rowMeta } from "../dataset/compact.js";
+import { type VR } from "../dictionary/types.js";
+import {
+  rowMeta,
+  type CompactTable,
+  type ParsedDataSet,
+  type SetWriter,
+} from "../dataset/compact.js";
 import { duplicateTagInDataSet, type DicomParseWarning } from "./warnings.js";
 
 /**

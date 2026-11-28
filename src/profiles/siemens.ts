@@ -22,7 +22,7 @@
  */
 
 import { defineProfile } from "./define.js";
-import type { Profile } from "../parser/types.js";
+import { type Profile } from "../parser/types.js";
 
 /**
  * The Siemens source profile. Annotation-only: it adds private-VR resolution

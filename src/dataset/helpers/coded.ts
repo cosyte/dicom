@@ -11,9 +11,9 @@
  * @module
  */
 
-import type { Dataset } from "../dataset.js";
+import { type Dataset } from "../dataset.js";
 import { readString } from "./read.js";
-import type { CodedConcept } from "./types.js";
+import { type CodedConcept } from "./types.js";
 
 const CODE_VALUE: Tag = "00080100";
 const CODING_SCHEME_DESIGNATOR: Tag = "00080102";

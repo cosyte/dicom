@@ -40,8 +40,8 @@
 
 import { Buffer } from "node:buffer";
 
-import type { Dataset } from "../dataset/dataset.js";
-import type { Tag } from "../dictionary/types.js";
+import { type Dataset } from "../dataset/dataset.js";
+import { type Tag } from "../dictionary/types.js";
 import { DicomSerializeError, SERIALIZE_ERROR_CODES } from "./errors.js";
 
 /**

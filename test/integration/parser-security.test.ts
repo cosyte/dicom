@@ -30,10 +30,10 @@ import {
   type Element,
 } from "../../src/index.js";
 import { parseDeflatedLEWithCap } from "../../src/parser/deflated-le.js";
-import type { Tag } from "../../src/dictionary/types.js";
+import { type Tag } from "../../src/dictionary/types.js";
 import { makeEmitter } from "../../src/parser/emit.js";
 import { OFFSET_FRAMES } from "../../src/parser/errors.js";
-import type { ParseContext } from "../../src/parser/types.js";
+import { type ParseContext } from "../../src/parser/types.js";
 import { buildDicom } from "../_helpers/build-dicom.js";
 
 // ---------------------------------------------------------------------------

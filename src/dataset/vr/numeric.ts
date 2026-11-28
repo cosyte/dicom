@@ -13,9 +13,9 @@
  * @module
  */
 
-import type { Buffer } from "node:buffer";
+import { type Buffer } from "node:buffer";
 
-import type { Tag, VR } from "../../dictionary/types.js";
+import { type Tag, type VR } from "../../dictionary/types.js";
 import { joinTag } from "../tag.js";
 
 /**

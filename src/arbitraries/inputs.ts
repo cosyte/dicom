@@ -8,7 +8,7 @@
 import { Buffer } from "node:buffer";
 
 import fc from "fast-check";
-import type { Arbitrary } from "fast-check";
+import { type Arbitrary } from "fast-check";
 
 import {
   DEFLATED_LE,

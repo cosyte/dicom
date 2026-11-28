@@ -199,16 +199,15 @@ import { Buffer } from "node:buffer";
 
 import { annexE, type AnnexEAction } from "../dictionary/annex-e.js";
 import { isRegisteredTag } from "../dictionary/registered.js";
-import type { Tag, VR } from "../dictionary/types.js";
+import { type Tag, type VR } from "../dictionary/types.js";
 import { KNOWN_VRS } from "../parser/endian.js";
 import { Dataset, type DatasetInit } from "../dataset/dataset.js";
 import { Element, type ElementInit } from "../dataset/element.js";
-import type { FileMeta } from "../dataset/file-meta.js";
+import { type FileMeta } from "../dataset/file-meta.js";
 import { Item } from "../dataset/item.js";
 import { isPrivateTag, splitTag } from "../dataset/tag.js";
 import { JPIP_REFERENCED_UIDS } from "../parser/jpip-referenced.js";
-import type { Profile } from "../parser/types.js";
-import type { DicomParseWarning } from "../parser/warnings.js";
+import { type Profile } from "../parser/types.js";
 import {
   burnedInAnnotationNotRemoved,
   datesNotTransformed,
@@ -227,6 +226,7 @@ import {
   sequenceNotAuditable,
   undefinedVrNotAuditable,
   unregisteredElementRemoved,
+  type DicomParseWarning,
 } from "../parser/warnings.js";
 import { resolvePrivateTag } from "../profiles/lookup.js";
 import {

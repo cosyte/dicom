@@ -43,7 +43,7 @@
 
 import { hasRow, maskedKeys } from "./registry.js";
 import { REPEATING_GROUP_RANGES, matchesRepeatingPattern } from "./repeating-groups.js";
-import type { Tag } from "./types.js";
+import { type Tag } from "./types.js";
 
 const CONCRETE_TAG_RE = /^[0-9A-F]{8}$/;
 

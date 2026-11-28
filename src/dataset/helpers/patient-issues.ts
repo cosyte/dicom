@@ -11,7 +11,7 @@
  */
 
 import { renderTag } from "../../parser/tokens.js";
-import type { PatientIssue } from "./types.js";
+import { type PatientIssue } from "./types.js";
 
 /**
  * Stable codes for what the patient view reports about the non-human patient attributes. Compare

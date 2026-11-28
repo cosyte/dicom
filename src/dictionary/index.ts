@@ -31,7 +31,7 @@
 import { UIDS } from "./generated/uids.js";
 import { keywordTag, tagEntry } from "./registry.js";
 
-import type { DictionaryEntry, Tag, UidEntry, VR } from "./types.js";
+import { type DictionaryEntry, type Tag, type UidEntry, type VR } from "./types.js";
 
 export type { DictionaryEntry, Tag, UidEntry, VR };
 

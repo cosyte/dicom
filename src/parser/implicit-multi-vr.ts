@@ -40,7 +40,7 @@
  * @module
  */
 
-import type { DictionaryEntry, VR } from "../dictionary/types.js";
+import { type DictionaryEntry, type VR } from "../dictionary/types.js";
 
 /** The longest value the 16-bit Value Length of an Explicit VR US can declare (PS3.5 section 7.1.2). */
 const MAX_US_LENGTH = 0xfffe;

@@ -39,9 +39,9 @@ import {
   PATIENT_ISSUE_CODES,
   WARNING_CODES,
   parseDicom,
+  type Dataset,
 } from "../../src/index.js";
-import type { Dataset } from "../../src/index.js";
-import type { VR } from "../../src/dictionary/types.js";
+import { type VR } from "../../src/dictionary/types.js";
 import {
   buildDicom,
   type BuildDicomElement,

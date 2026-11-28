@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { Item } from "./item.js";
+import { type Item } from "./item.js";
 
 /**
  * One SQ (Sequence) element's structural body.

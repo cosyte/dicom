@@ -14,7 +14,7 @@
 // CleanPixelData, E.3.2 CleanRecognizableVisual) are not represented per-attribute
 // here; they are enforced at the pixel-decode layer.
 
-import type { AnnexERepeatingRule } from "../annex-e.js";
+import { type AnnexERepeatingRule } from "../annex-e.js";
 
 /**
  * Table E.1-1's exact-tag rows, one a line in ascending tag order: the tag as

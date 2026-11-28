@@ -27,10 +27,10 @@
 
 import { Buffer } from "node:buffer";
 
-import type { Tag, VR } from "../dictionary/types.js";
+import { type Tag, type VR } from "../dictionary/types.js";
 import { copyValueBytes } from "../parser/byte-cursor.js";
 import { KNOWN_VRS } from "../parser/endian.js";
-import type { ParseContext } from "../parser/types.js";
+import { type ParseContext } from "../parser/types.js";
 import { tagOf } from "../parser/wire-tokens.js";
 import { DATASET_SHAPES, datasetOverTable } from "./dataset.js";
 import { Element, elementOverRange, type ElementInit } from "./element.js";

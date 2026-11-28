@@ -82,14 +82,17 @@
 
 import { Buffer } from "node:buffer";
 
-import { PHI_MARKER_UNIT, assertNoDiagnosticPhiLeak } from "@cosyte/test-utils";
-import type { DiagnosticSlot } from "@cosyte/test-utils";
+import {
+  PHI_MARKER_UNIT,
+  assertNoDiagnosticPhiLeak,
+  type DiagnosticSlot,
+} from "@cosyte/test-utils";
 import { describe, expect, it } from "vitest";
 
 import { type Dataset } from "../../src/dataset/dataset.js";
 import { deidentify } from "../../src/deident/index.js";
-import type { DeidentifyReport } from "../../src/deident/types.js";
-import type { Tag, VR } from "../../src/dictionary/types.js";
+import { type DeidentifyReport } from "../../src/deident/types.js";
+import { type Tag, type VR } from "../../src/dictionary/types.js";
 import { parseDicom } from "../../src/parser/index.js";
 import { WARNING_CODES, WARNING_MESSAGES } from "../../src/parser/warnings.js";
 import { defineProfile } from "../../src/profiles/index.js";

@@ -30,7 +30,7 @@ import {
   type DeidentifyOption,
 } from "../../src/index.js";
 import { annexE } from "../../src/dictionary/annex-e.js";
-import type { Tag } from "../../src/dictionary/types.js";
+import { type Tag } from "../../src/dictionary/types.js";
 import { buildDicom, type BuildDicomOptions } from "../_helpers/build-dicom.js";
 
 const TS_EXPLICIT_LE = "1.2.840.10008.1.2.1";

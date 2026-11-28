@@ -63,10 +63,10 @@
  * @module
  */
 
-import type { Buffer } from "node:buffer";
+import { type Buffer } from "node:buffer";
 
 import { tableOf, type ParsedDataSet } from "../dataset/compact.js";
-import type { Tag } from "../dictionary/types.js";
+import { type Tag } from "../dictionary/types.js";
 import { ByteCursor } from "./byte-cursor.js";
 import { NO_PRIVATE_CREATORS } from "./element-header.js";
 import { DicomParseError, fileOffsetIn, valueSliceFrame } from "./errors.js";
@@ -77,7 +77,7 @@ import {
   sqNestingDepthExceeded,
   unexpectedTagInsideSequence,
 } from "./fatals.js";
-import type { ParseContext } from "./types.js";
+import { type ParseContext } from "./types.js";
 import {
   WARNING_CODES,
   emptyItemInSequence,

@@ -21,7 +21,7 @@ import {
   type DicomJsonDataset,
   type FromDicomJsonOptions,
 } from "../../src/index.js";
-import type { VR } from "../../src/dictionary/types.js";
+import { type VR } from "../../src/dictionary/types.js";
 import { decimalKey } from "../../src/json/vr.js";
 import { buildDicom, type BuildDicomElement } from "../_helpers/build-dicom.js";
 

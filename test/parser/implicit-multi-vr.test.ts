@@ -14,8 +14,8 @@
 import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
-import type { Dataset } from "../../src/dataset/dataset.js";
-import type { Tag, VR } from "../../src/dictionary/types.js";
+import { type Dataset } from "../../src/dataset/dataset.js";
+import { type Tag, type VR } from "../../src/dictionary/types.js";
 import { parseDicom } from "../../src/parser/index.js";
 import {
   type BuildDicomElement,

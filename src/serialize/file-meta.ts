@@ -34,8 +34,8 @@
 
 import { Buffer } from "node:buffer";
 
-import type { FileMeta } from "../dataset/file-meta.js";
-import type { Tag, VR } from "../dictionary/types.js";
+import { type FileMeta } from "../dataset/file-meta.js";
+import { type Tag, type VR } from "../dictionary/types.js";
 import { LONG_FORM_VRS } from "../parser/element-header.js";
 import { isRecognizedVr } from "../parser/endian.js";
 import {

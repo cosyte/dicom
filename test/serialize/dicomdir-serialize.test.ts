@@ -31,7 +31,7 @@ import {
   type FileMeta,
   Item,
 } from "../../src/index.js";
-import type { Tag } from "../../src/dictionary/types.js";
+import { type Tag } from "../../src/dictionary/types.js";
 import {
   DICOMDIR_SOP_CLASS,
   TS_DEFLATED_LE,

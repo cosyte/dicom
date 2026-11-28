@@ -22,7 +22,7 @@ import {
   TRANSFER_SYNTAX_PARSERS,
 } from "../../src/parser/transfer-syntax.js";
 import { DicomParseError, FATAL_CODES, OFFSET_FRAMES } from "../../src/parser/errors.js";
-import type { ParseContext } from "../../src/parser/types.js";
+import { type ParseContext } from "../../src/parser/types.js";
 import { buildDicom } from "../_helpers/build-dicom.js";
 import {
   JPIP_SECTION_IDS,

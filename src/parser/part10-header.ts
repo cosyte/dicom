@@ -16,9 +16,8 @@
 import { Buffer } from "node:buffer";
 
 import { notDicomPart10, notDicomPart10Required } from "./fatals.js";
-import type { ParseContext } from "./types.js";
-import type { DicomParseWarning } from "./warnings.js";
-import { missingPreamble } from "./warnings.js";
+import { type ParseContext } from "./types.js";
+import { missingPreamble, type DicomParseWarning } from "./warnings.js";
 
 const DICM_MAGIC = Buffer.from("DICM", "ascii");
 

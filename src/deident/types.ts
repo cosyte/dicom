@@ -5,10 +5,10 @@
  * @module
  */
 
-import type { AnnexEActionCode, AnnexEOption } from "../dictionary/annex-e.js";
-import type { Tag, VR } from "../dictionary/types.js";
-import type { Profile } from "../parser/types.js";
-import type { DicomParseWarning } from "../parser/warnings.js";
+import { type AnnexEActionCode, type AnnexEOption } from "../dictionary/annex-e.js";
+import { type Tag, type VR } from "../dictionary/types.js";
+import { type Profile } from "../parser/types.js";
+import { type DicomParseWarning } from "../parser/warnings.js";
 
 /**
  * The PS3.15 Annex E option sets `deidentify` honours - the

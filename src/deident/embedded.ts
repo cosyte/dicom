@@ -121,14 +121,14 @@
  * @module
  */
 
-import type { Buffer } from "node:buffer";
+import { type Buffer } from "node:buffer";
 
 import { joinTag } from "../dataset/tag.js";
 import { annexE } from "../dictionary/annex-e.js";
-import type { Tag, VR } from "../dictionary/types.js";
+import { type Tag, type VR } from "../dictionary/types.js";
 import { KNOWN_VRS } from "../parser/endian.js";
 import { LONG_FORM_VRS } from "../parser/element-header.js";
-import type { BodyEncoding } from "../serialize/element.js";
+import { type BodyEncoding } from "../serialize/element.js";
 
 const UNDEFINED_LENGTH = 0xffffffff;
 

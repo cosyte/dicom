@@ -40,7 +40,7 @@ import {
 } from "../../src/index.js";
 import { annexE, annexETags } from "../../src/dictionary/annex-e.js";
 import { tagEntry } from "../../src/dictionary/registry.js";
-import type { Tag } from "../../src/dictionary/types.js";
+import { type Tag } from "../../src/dictionary/types.js";
 import {
   buildDicom,
   type BuildDicomElement,

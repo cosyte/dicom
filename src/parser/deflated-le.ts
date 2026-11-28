@@ -39,16 +39,16 @@
  * @module
  */
 
-import type { Buffer } from "node:buffer";
+import { type Buffer } from "node:buffer";
 import { zlibModule } from "../builtins.js";
 
-import type { ParsedDataSet } from "../dataset/compact.js";
+import { type ParsedDataSet } from "../dataset/compact.js";
 import { makeEmitter } from "./emit.js";
 import { OFFSET_FRAMES } from "./errors.js";
 import { inflateFailed, inflatedPayloadExceedsCap } from "./fatals.js";
 import { parseExplicitLE } from "./explicit-le.js";
-import type { ParseContext } from "./types.js";
-import type { DicomParseWarning } from "./warnings.js";
+import { type ParseContext } from "./types.js";
+import { type DicomParseWarning } from "./warnings.js";
 
 /**
  * Default decompression-bomb cap: 256 MiB, set by the parser's own

@@ -42,7 +42,7 @@ import {
 } from "../../src/parser/fatals.js";
 import { JPIP_REFERENCED_UIDS } from "../../src/parser/jpip-referenced.js";
 import { TRANSFER_SYNTAX_PARSERS } from "../../src/parser/transfer-syntax.js";
-import type { VR } from "../../src/dictionary/types.js";
+import { type VR } from "../../src/dictionary/types.js";
 import {
   controlWithDefault,
   controlWithNoParameterList,

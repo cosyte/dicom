@@ -13,7 +13,7 @@
  * @module
  */
 
-import type { VR } from "../dictionary/types.js";
+import { type VR } from "../dictionary/types.js";
 
 /**
  * Byte-stride lookup for the Explicit VR Big Endian transfer syntax

@@ -16,8 +16,8 @@ import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
 import { deidentify, readPixelDataFragments, WARNING_CODES } from "../../src/index.js";
-import type { Dataset } from "../../src/dataset/dataset.js";
-import type { DeidentifyReport } from "../../src/deident/types.js";
+import { type Dataset } from "../../src/dataset/dataset.js";
+import { type DeidentifyReport } from "../../src/deident/types.js";
 import { parseDicom } from "../../src/parser/index.js";
 import {
   DEFAULT_FRAGMENT,

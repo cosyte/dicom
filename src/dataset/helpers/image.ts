@@ -17,11 +17,11 @@
  * @module
  */
 
-import type { Dataset } from "../dataset.js";
+import { type Dataset } from "../dataset.js";
 import { readCode } from "./coded.js";
 import { hasFunctionalGroups, resolveFrame } from "./functional-groups.js";
 import { readItems, readNumber, readNumberArray, readString } from "./read.js";
-import type { FrameFunctionalGroups, ImageView, RealWorldValueMap } from "./types.js";
+import { type FrameFunctionalGroups, type ImageView, type RealWorldValueMap } from "./types.js";
 
 const SOP_INSTANCE_UID: Tag = "00080018";
 const ROWS: Tag = "00280010";

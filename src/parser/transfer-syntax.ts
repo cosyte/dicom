@@ -25,9 +25,9 @@
  * @module
  */
 
-import type { Buffer } from "node:buffer";
+import { type Buffer } from "node:buffer";
 
-import type { ParsedDataSet } from "../dataset/compact.js";
+import { type ParsedDataSet } from "../dataset/compact.js";
 import { ENCAPSULATED_TRANSFER_SYNTAX_UIDS } from "../dictionary/generated/encapsulated-transfer-syntaxes.js";
 import { parseDeflatedLE } from "./deflated-le.js";
 import { parseExplicitBE } from "./explicit-be.js";
@@ -37,8 +37,8 @@ import {
   JPIP_REFERENCED_DEFLATE_UIDS,
   JPIP_REFERENCED_EXPLICIT_LE_UIDS,
 } from "./jpip-referenced.js";
-import type { ParseContext } from "./types.js";
-import type { DicomParseWarning } from "./warnings.js";
+import { type ParseContext } from "./types.js";
+import { type DicomParseWarning } from "./warnings.js";
 
 export { parseImplicitLE, parseExplicitLE, parseExplicitBE, parseDeflatedLE };
 

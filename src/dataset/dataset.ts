@@ -14,18 +14,23 @@
  * @module
  */
 
-import type { Tag } from "../dictionary/types.js";
-import type { DicomParseWarning } from "../parser/warnings.js";
-import type { CompactTable } from "./compact.js";
+import { type Tag } from "../dictionary/types.js";
+import { type DicomParseWarning } from "../parser/warnings.js";
+import { type CompactTable } from "./compact.js";
 import { analyzeDirectory, type DicomDirectory } from "./directory.js";
-import type { Element } from "./element.js";
-import type { FileMeta } from "./file-meta.js";
+import { type Element } from "./element.js";
+import { type FileMeta } from "./file-meta.js";
 import { buildImage } from "./helpers/image.js";
 import { buildPatient } from "./helpers/patient.js";
 import { buildSeries } from "./helpers/series.js";
 import { buildStudy } from "./helpers/study.js";
 import { tagNumber } from "./tag.js";
-import type { ImageView, PatientView, SeriesView, StudyView } from "./helpers/types.js";
+import {
+  type ImageView,
+  type PatientView,
+  type SeriesView,
+  type StudyView,
+} from "./helpers/types.js";
 
 /**
  * Initialiser shape accepted by the `Dataset` (and `Item`) constructor.

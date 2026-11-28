@@ -20,8 +20,8 @@
  * @module
  */
 
-import type { PrivateTagDefinition, Profile } from "../parser/types.js";
-import type { VR } from "../dictionary/types.js";
+import { type PrivateTagDefinition, type Profile } from "../parser/types.js";
+import { type VR } from "../dictionary/types.js";
 import { WARNING_CODES, type WarningCode } from "../parser/warnings.js";
 import { ProfileDefinitionError } from "./errors.js";
 

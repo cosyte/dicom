@@ -863,7 +863,7 @@ function emit(
   lines.push("// CleanPixelData, E.3.2 CleanRecognizableVisual) are not represented per-attribute");
   lines.push("// here; they are enforced at the pixel-decode layer.");
   lines.push("");
-  lines.push('import type { AnnexERepeatingRule } from "../annex-e.js";');
+  lines.push('import { type AnnexERepeatingRule } from "../annex-e.js";');
   lines.push("");
   lines.push("/**");
   lines.push(" * Table E.1-1's exact-tag rows, one a line in ascending tag order: the tag as");

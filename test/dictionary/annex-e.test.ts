@@ -17,7 +17,7 @@ import {
   matchesRepeatingPattern,
 } from "../../src/dictionary/repeating-groups.js";
 import { effectiveCode, resolveAction } from "../../src/deident/actions.js";
-import type { DeidentifyOption } from "../../src/deident/types.js";
+import { type DeidentifyOption } from "../../src/deident/types.js";
 
 describe("annexE (PS3.15 Annex E lookup)", () => {
   it("resolves Patient's Name (00100010) to a Basic-Profile Z action", () => {

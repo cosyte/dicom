@@ -24,13 +24,13 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { defineProfile, deidentify, parseDicom, serializeDicom } from "../../src/index.js";
-import type { DeidentifyOptions } from "../../src/deident/types.js";
-import type {
-  BuildDicomElement,
-  BuildDicomSqElement,
-  BuildDicomSqItem,
+import { type DeidentifyOptions } from "../../src/deident/types.js";
+import {
+  buildDicom,
+  type BuildDicomElement,
+  type BuildDicomSqElement,
+  type BuildDicomSqItem,
 } from "../_helpers/build-dicom.js";
-import { buildDicom } from "../_helpers/build-dicom.js";
 
 const REPO_ROOT = join(import.meta.dirname, "..", "..");
 const EXPLICIT_LE = "1.2.840.10008.1.2.1";

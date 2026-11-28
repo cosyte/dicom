@@ -11,7 +11,7 @@
  * @module
  */
 
-import type { DicomDate, DicomDateTime, DicomTime } from "./types.js";
+import { type DicomDate, type DicomDateTime, type DicomTime } from "./types.js";
 
 function inRange(n: number, lo: number, hi: number): boolean {
   return n >= lo && n <= hi;

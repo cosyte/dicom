@@ -15,17 +15,17 @@
  * @module
  */
 
-import type { Buffer } from "node:buffer";
+import { type Buffer } from "node:buffer";
 
-import type { Tag } from "../dictionary/types.js";
+import { type Tag } from "../dictionary/types.js";
 import { OFFSET_FRAMES, type ParseFrame } from "../parser/errors.js";
 import {
   encapsulatedFragmentExceedsBuffer,
   sqItemHeaderTruncated,
   unexpectedTagInsideSequence,
 } from "../parser/fatals.js";
-import type { Dataset } from "./dataset.js";
-import type { Element } from "./element.js";
+import { type Dataset } from "./dataset.js";
+import { type Element } from "./element.js";
 
 const PIXEL_DATA: Tag = "7FE00010";
 const UNDEFINED_LENGTH = 0xffffffff;

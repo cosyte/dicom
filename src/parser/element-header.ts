@@ -20,19 +20,19 @@
  */
 
 import { repeatingGroupEntries, tagEntry } from "../dictionary/registry.js";
-import type { Buffer } from "node:buffer";
+import { type Buffer } from "node:buffer";
 
 import {
   fallbackApplies,
   isKnownCharsetTerm,
   parseSpecificCharacterSet,
 } from "../dataset/vr/charset.js";
-import type { DictionaryEntry, Tag, VR } from "../dictionary/types.js";
-import type { ByteCursor } from "./byte-cursor.js";
+import { type DictionaryEntry, type Tag, type VR } from "../dictionary/types.js";
+import { type ByteCursor } from "./byte-cursor.js";
 import { isRecognizedVr } from "./endian.js";
 import { implicitMultiVr } from "./implicit-multi-vr.js";
 import { tagOf, vrAt } from "./wire-tokens.js";
-import type { DicomPosition, ParseContext } from "./types.js";
+import { type DicomPosition, type ParseContext } from "./types.js";
 import {
   implicitVRForPrivateTagWithoutVR,
   nonzeroReservedBytes,

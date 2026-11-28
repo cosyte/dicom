@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 import { joinTag, splitTag } from "../../src/dataset/tag.js";
 import { applySpecificCharacterSet } from "../../src/parser/element-header.js";
 import { OFFSET_FRAMES } from "../../src/parser/errors.js";
-import type { ParseContext } from "../../src/parser/types.js";
+import { type ParseContext } from "../../src/parser/types.js";
 import { tagOf, vrAt } from "../../src/parser/wire-tokens.js";
 import { tagNumber } from "../../src/serialize/order.js";
 

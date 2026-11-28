@@ -9,8 +9,7 @@ import { describe, expect, it } from "vitest";
 import { buildDicom } from "../_helpers/build-dicom.js";
 import { DicomParseError } from "../../src/parser/errors.js";
 import { parseDicom } from "../../src/parser/index.js";
-import type { DicomParseWarning } from "../../src/parser/warnings.js";
-import { WARNING_CODES } from "../../src/parser/warnings.js";
+import { WARNING_CODES, type DicomParseWarning } from "../../src/parser/warnings.js";
 
 describe("parseDicom - happy path", () => {
   it("returns a Dataset with fileMeta.transferSyntaxUID for valid Part 10 input", () => {

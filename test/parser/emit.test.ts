@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { DicomParseError, FATAL_CODES, OFFSET_FRAMES } from "../../src/parser/errors.js";
 import { makeEmitter } from "../../src/parser/emit.js";
-import type { ParseContext } from "../../src/parser/types.js";
+import { type ParseContext } from "../../src/parser/types.js";
 import { WARNING_CODES, type DicomParseWarning } from "../../src/parser/warnings.js";
 
 function makeCtx(overrides: Partial<ParseContext> = {}): ParseContext {

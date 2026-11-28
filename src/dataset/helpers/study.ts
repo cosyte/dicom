@@ -9,9 +9,9 @@
  * @module
  */
 
-import type { Dataset } from "../dataset.js";
+import { type Dataset } from "../dataset.js";
 import { readDate, readString, readTime } from "./read.js";
-import type { StudyView } from "./types.js";
+import { type StudyView } from "./types.js";
 
 const STUDY_INSTANCE_UID: Tag = "0020000D";
 const STUDY_ID: Tag = "00200010";

@@ -20,7 +20,7 @@ import { Buffer } from "node:buffer";
 
 import { describe, expect, it } from "vitest";
 
-import type { DeidentifyOptions } from "../../src/deident/types.js";
+import { type DeidentifyOptions } from "../../src/deident/types.js";
 import {
   WARNING_CODES,
   defineProfile,
@@ -28,8 +28,11 @@ import {
   parseDicom,
   serializeDicom,
 } from "../../src/index.js";
-import type { BuildDicomElement, BuildDicomSqItem } from "../_helpers/build-dicom.js";
-import { buildDicom } from "../_helpers/build-dicom.js";
+import {
+  buildDicom,
+  type BuildDicomElement,
+  type BuildDicomSqItem,
+} from "../_helpers/build-dicom.js";
 
 const EXPLICIT_LE = "1.2.840.10008.1.2.1";
 

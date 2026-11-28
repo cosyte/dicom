@@ -22,8 +22,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Element as ElementClass, type Element } from "../../../src/dataset/element.js";
 import { decodeText, resolveDecoderLabel } from "../../../src/dataset/vr/charset.js";
-import type { DicomValue, PersonNameGroup } from "../../../src/dataset/vr/types.js";
-import type { VR } from "../../../src/dictionary/types.js";
+import { type DicomValue, type PersonNameGroup } from "../../../src/dataset/vr/types.js";
+import { type VR } from "../../../src/dictionary/types.js";
 import { parseDicom } from "../../../src/index.js";
 import { buildDicom } from "../../_helpers/build-dicom.js";
 

@@ -18,7 +18,7 @@
 import { Buffer } from "node:buffer";
 import { deflateRawSync } from "node:zlib";
 
-import type { Tag, VR } from "../../src/dictionary/types.js";
+import { type Tag, type VR } from "../../src/dictionary/types.js";
 
 const LONG_FORM_VRS = new Set<VR>([
   "OB",

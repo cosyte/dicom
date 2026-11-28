@@ -63,9 +63,9 @@ import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
 import { WARNING_CODES, deidentify, parseDicom, serializeDicom } from "../../src/index.js";
-import type { Dataset } from "../../src/dataset/dataset.js";
+import { type Dataset } from "../../src/dataset/dataset.js";
 import { DEIDENTIFY_OPTIONS, type DeidentifyOption } from "../../src/deident/types.js";
-import type { Tag, VR } from "../../src/dictionary/types.js";
+import { type Tag, type VR } from "../../src/dictionary/types.js";
 import {
   WARNING_MESSAGES,
   deidentMethodNotLo,

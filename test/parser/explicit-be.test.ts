@@ -17,9 +17,9 @@ import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
 import { buildDicom } from "../_helpers/build-dicom.js";
-import type { Dataset } from "../../src/dataset/dataset.js";
-import type { Element } from "../../src/dataset/element.js";
-import type { Tag } from "../../src/dictionary/types.js";
+import { type Dataset } from "../../src/dataset/dataset.js";
+import { type Element } from "../../src/dataset/element.js";
+import { type Tag } from "../../src/dictionary/types.js";
 import { parseDicom } from "../../src/parser/index.js";
 import { WARNING_CODES } from "../../src/parser/warnings.js";
 

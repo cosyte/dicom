@@ -41,9 +41,9 @@ import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
 import { deidentify } from "../../src/deident/index.js";
-import type { DeidentifyReport } from "../../src/deident/types.js";
+import { type DeidentifyReport } from "../../src/deident/types.js";
 import { defineProfile } from "../../src/profiles/index.js";
-import type { VR } from "../../src/dictionary/types.js";
+import { type VR } from "../../src/dictionary/types.js";
 import { KNOWN_VRS } from "../../src/parser/endian.js";
 import { DicomParseError, FATAL_CODES, OFFSET_FRAMES } from "../../src/parser/errors.js";
 import { FATAL_MESSAGES, elementLengthExceedsBuffer } from "../../src/parser/fatals.js";

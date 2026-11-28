@@ -107,7 +107,7 @@
 
 import { ENCAPSULATED_TRANSFER_SYNTAX_EDITION } from "../dictionary/generated/encapsulated-transfer-syntaxes.js";
 import { uid as dictionaryUid } from "../dictionary/index.js";
-import type { VR } from "../dictionary/types.js";
+import { type VR } from "../dictionary/types.js";
 import {
   DicomParseError,
   FATAL_CODES,

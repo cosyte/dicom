@@ -16,7 +16,7 @@
 import { Buffer } from "node:buffer";
 import { describe, expect, it } from "vitest";
 
-import type { Tag } from "../../src/dictionary/types.js";
+import { type Tag } from "../../src/dictionary/types.js";
 import { DicomParseError, OFFSET_FRAMES } from "../../src/parser/errors.js";
 import {
   parseSequence,
@@ -24,7 +24,7 @@ import {
   type InnerParser,
   type ParseSequenceOptions,
 } from "../../src/parser/sequence.js";
-import type { ParseContext } from "../../src/parser/types.js";
+import { type ParseContext } from "../../src/parser/types.js";
 import { WARNING_CODES, type DicomParseWarning } from "../../src/parser/warnings.js";
 import { parseImplicitLE } from "../../src/parser/implicit-le.js";
 

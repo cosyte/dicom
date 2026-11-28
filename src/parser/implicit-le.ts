@@ -44,10 +44,10 @@
  * @module
  */
 
-import type { Buffer } from "node:buffer";
+import { type Buffer } from "node:buffer";
 
 import { tableOf, type ParsedDataSet } from "../dataset/compact.js";
-import type { Tag } from "../dictionary/types.js";
+import { type Tag } from "../dictionary/types.js";
 import { ByteCursor } from "./byte-cursor.js";
 import { defineRow } from "./data-set-map.js";
 import {
@@ -66,7 +66,7 @@ import {
 import { parseSequence, tryParseDefinedLengthSQ, tryParseUnAsSQ } from "./sequence.js";
 import { noteAssumedCharset } from "./fallback.js";
 import { stopsHere } from "./stop.js";
-import type { ParseContext } from "./types.js";
+import { type ParseContext } from "./types.js";
 import { groupLengthInDataset, type DicomParseWarning } from "./warnings.js";
 import { tagOf } from "./wire-tokens.js";
 

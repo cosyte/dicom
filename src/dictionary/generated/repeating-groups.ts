@@ -14,7 +14,7 @@
 // out of the documents above, not transcribed; the sentences it was read from
 // are reproduced verbatim on each entry below.
 
-import type { RepeatingGroupRange } from "../repeating-groups.js";
+import { type RepeatingGroupRange } from "../repeating-groups.js";
 
 /**
  * Every group-number mask PS3.5 section 7.6 defines, keyed by the printed

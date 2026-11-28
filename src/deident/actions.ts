@@ -15,8 +15,8 @@
 
 import { Buffer } from "node:buffer";
 
-import type { AnnexEAction, AnnexEActionCode } from "../dictionary/annex-e.js";
-import type { VR } from "../dictionary/types.js";
+import { type AnnexEAction, type AnnexEActionCode } from "../dictionary/annex-e.js";
+import { type VR } from "../dictionary/types.js";
 import { DEIDENTIFY_OPTIONS, type DeidentifyOption } from "./types.js";
 
 /**

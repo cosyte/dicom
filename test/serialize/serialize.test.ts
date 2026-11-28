@@ -24,9 +24,9 @@ import {
   deidentify,
   parseDicom,
   serializeDicom,
+  type Element,
 } from "../../src/index.js";
-import type { Element } from "../../src/index.js";
-import type { Tag, VR } from "../../src/dictionary/types.js";
+import { type Tag, type VR } from "../../src/dictionary/types.js";
 import { encapsulatedObject, jpipObject } from "../fixtures/encapsulated/objects.js";
 import { buildDicom, type BuildDicomOptions } from "../_helpers/build-dicom.js";
 import { ENCAPSULATION_SET, JPIP_SET } from "../_helpers/ps35-section-a4.js";

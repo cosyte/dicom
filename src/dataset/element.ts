@@ -13,10 +13,10 @@
 
 import { Buffer } from "node:buffer";
 
-import type { Tag, VR } from "../dictionary/types.js";
-import type { Item } from "./item.js";
+import { type Tag, type VR } from "../dictionary/types.js";
+import { type Item } from "./item.js";
 import { decodeElementValue } from "./vr/decode.js";
-import type { DicomValue } from "./vr/types.js";
+import { type DicomValue } from "./vr/types.js";
 
 /**
  * Initialiser shape accepted by the `Element` constructor.

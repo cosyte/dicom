@@ -9,10 +9,10 @@
 import { Buffer } from "node:buffer";
 
 import { fsPromisesModule } from "../builtins.js";
-import type { Dataset } from "../dataset/dataset.js";
+import { type Dataset } from "../dataset/dataset.js";
 import { parseDicom, parseDicomStopping } from "./index.js";
 import { stopTagNumber } from "./stop.js";
-import type { ParseOptions } from "./types.js";
+import { type ParseOptions } from "./types.js";
 
 /**
  * The tag `readDicomHeader` stops before when `stopBeforeTag` is not given: Float Pixel Data

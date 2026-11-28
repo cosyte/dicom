@@ -20,7 +20,7 @@
 
 import { Buffer } from "node:buffer";
 
-import type { Tag } from "../../src/dictionary/types.js";
+import { type Tag } from "../../src/dictionary/types.js";
 import {
   buildDicom,
   encodeBuiltElement,

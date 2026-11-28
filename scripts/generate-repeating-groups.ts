@@ -318,7 +318,7 @@ function emit(
   lines.push("// out of the documents above, not transcribed; the sentences it was read from");
   lines.push("// are reproduced verbatim on each entry below.");
   lines.push("");
-  lines.push('import type { RepeatingGroupRange } from "../repeating-groups.js";');
+  lines.push('import { type RepeatingGroupRange } from "../repeating-groups.js";');
   lines.push("");
   lines.push("/**");
   lines.push(" * Every group-number mask PS3.5 section 7.6 defines, keyed by the printed");

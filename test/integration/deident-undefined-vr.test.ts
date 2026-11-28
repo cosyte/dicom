@@ -70,7 +70,7 @@ import { MAX_UNDEFINED_VR_FINDINGS, deidentify } from "../../src/deident/deident
 import { annexE } from "../../src/dictionary/annex-e.js";
 import { registryKeys } from "../../src/dictionary/registry.js";
 import { isRegisteredTag } from "../../src/dictionary/registered.js";
-import type { Tag, VR } from "../../src/dictionary/types.js";
+import { type Tag, type VR } from "../../src/dictionary/types.js";
 import { defineProfile } from "../../src/index.js";
 import { parseDicom } from "../../src/parser/index.js";
 import { WARNING_CODES } from "../../src/parser/warnings.js";

@@ -4,7 +4,7 @@ import { join, relative } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import type { Dataset } from "../../src/dataset/dataset.js";
+import { type Dataset } from "../../src/dataset/dataset.js";
 import { annexE } from "../../src/dictionary/annex-e.js";
 import { parseDicom } from "../../src/index.js";
 
